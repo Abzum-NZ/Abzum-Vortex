@@ -81,6 +81,10 @@ export const versionImpactComponentKinds = [
   "shell",
   "shell_content_slot",
   "block_placement",
+  "flow",
+  "flow_node",
+  "flow_edge",
+  "flow_binding",
 ] as const;
 export const versionImpactComponentKindSchema = z.enum(versionImpactComponentKinds);
 

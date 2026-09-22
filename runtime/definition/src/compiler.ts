@@ -191,11 +191,16 @@ const sourceCollectionIdKeys: Readonly<Record<string, string>> = Object.freeze({
   steps: "id",
   workflows: "workflowId",
   nodes: "nodeId",
+  edges: "edgeId",
   pipelines: "pipelineId",
   connection_bindings: "bindingId",
   interfaces: "interfaceId",
   operations: "operationId",
   public_addresses: "addressId",
+  flows: "flowId",
+  flow_nodes: "nodeId",
+  flow_edges: "edgeId",
+  flow_bindings: "bindingId",
 });
 
 const directSourceKeyMap: Readonly<Record<string, string>> = Object.freeze({
@@ -431,6 +436,38 @@ function sourceToCanonicalPath(
     sourcePath[6] === "relationships"
   )
     mapped[6] = "relationshipIds";
+  if (
+    source.kind === "application" &&
+    sourcePath[0] === "body" &&
+    sourcePath[1] === "flows"
+  ) {
+    const leaf = sourcePath.at(-1);
+    const recordTypesIndex = sourcePath.lastIndexOf("record_types");
+    if (recordTypesIndex >= 0) mapped[recordTypesIndex] = "recordTypeIds";
+    if (sourcePath[3] === "nodes" && sourcePath[5] === "target") {
+      if (leaf === "module") mapped[mapped.length - 1] = "moduleRootId";
+      if (leaf === "version") mapped[mapped.length - 1] = "moduleReleaseVersion";
+      if (leaf === "form") mapped[mapped.length - 1] = "formId";
+      if (leaf === "continuation_event") mapped[mapped.length - 1] = "continuationEventId";
+    }
+    if (sourcePath[3] === "edges") {
+      if (leaf === "from_node") mapped[mapped.length - 1] = "fromNodeId";
+      if (leaf === "to_node") mapped[mapped.length - 1] = "toNodeId";
+    }
+  }
+  if (
+    source.kind === "application" &&
+    sourcePath[0] === "body" &&
+    sourcePath[1] === "flow_bindings"
+  ) {
+    const leaf = sourcePath.at(-1);
+    if (sourcePath[3] === "control") mapped[mapped.length - 1] = "controlId";
+    if (sourcePath[3] === "flow" && leaf === "flow") mapped[mapped.length - 1] = "flowId";
+    if (sourcePath[3] === "event") mapped[mapped.length - 1] = "event";
+    if (leaf === "record_type") mapped[mapped.length - 1] = "recordTypeId";
+    if (leaf === "control") mapped[mapped.length - 1] = "controlId";
+    if (leaf === "form") mapped[mapped.length - 1] = "formId";
+  }
   return resolveDynamicMapPath(source, canonical, sourcePath, mapped);
 }
 
@@ -560,6 +597,19 @@ function conditionRootPaths(
       sourceRoot: ["body", "workflows", first, "trigger", "condition"],
       canonicalRoot: ["content", "workflows", first, "trigger", "condition"],
     });
+  if (
+    collection === "flows" &&
+    sourcePath[3] === "nodes" &&
+    typeof sourcePath[4] === "number"
+  ) {
+    const flow = (asObject(source.body).flows as JsonObject[])[first];
+    const node = flow ? (flow.nodes as JsonObject[])[sourcePath[4]] : undefined;
+    if (node?.kind === "start")
+      fixedRoots.push({
+        sourceRoot: ["body", "flows", first, "nodes", sourcePath[4], "entry_condition"],
+        canonicalRoot: ["content", "flows", first, "nodes", sourcePath[4], "entryCondition"],
+      });
+  }
   if (collection === "pages") {
     if (sourcePath[3] === "blocks" && typeof sourcePath[4] === "number")
       fixedRoots.push({
@@ -806,6 +856,73 @@ function permissionFieldPolicyTargets(
   ];
 }
 
+function applicationFlowSourceTargets(
+  source: JsonObject,
+  sourcePath: Path,
+): Path[] | undefined {
+  if (source.kind !== "application" || sourcePath[0] !== "body") return undefined;
+  if (sourcePath[1] === "flows" && typeof sourcePath[2] === "number") {
+    const flowBase: Path = ["content", "flows", sourcePath[2]];
+    if (
+      ["inputs", "outputs", "variables"].includes(String(sourcePath[3])) &&
+      typeof sourcePath[4] === "string" &&
+      sourcePath[5] === "record_types" &&
+      typeof sourcePath[6] === "number"
+    )
+      return [
+        [
+          ...flowBase,
+          sourcePath[3],
+          sourcePath[4],
+          "recordTypeIds",
+          sourcePath[6],
+        ],
+      ];
+    if (
+      sourcePath[3] === "nodes" &&
+      typeof sourcePath[4] === "number" &&
+      sourcePath[5] === "outputs" &&
+      typeof sourcePath[6] === "string" &&
+      sourcePath[7] === "record_types" &&
+      typeof sourcePath[8] === "number"
+    )
+      return [
+        [
+          ...flowBase,
+          "nodes",
+          sourcePath[4],
+          "outputs",
+          sourcePath[6],
+          "recordTypeIds",
+          sourcePath[8],
+        ],
+      ];
+    if (
+      sourcePath[3] === "nodes" &&
+      typeof sourcePath[4] === "number" &&
+      sourcePath[5] === "target"
+    ) {
+      const targetBase: Path = [...flowBase, "nodes", sourcePath[4], "target"];
+      if (sourcePath[6] === "version") return [[...targetBase, "moduleReleaseVersion"]];
+      if (sourcePath.length === 7 && sourcePath[6] === "form")
+        return [[...targetBase, "applicationRootId"], [...targetBase, "formId"]];
+      if (sourcePath.length === 7 && sourcePath[6] === "workflow")
+        return [[...targetBase, "applicationRootId"], [...targetBase, "workflowId"]];
+    }
+  }
+  if (
+    sourcePath[1] === "flow_bindings" &&
+    typeof sourcePath[2] === "number" &&
+    sourcePath[3] === "flow" &&
+    sourcePath.length === 5 &&
+    sourcePath[4] === "flow"
+  ) {
+    const targetBase: Path = ["content", "flowBindings", sourcePath[2], "flow"];
+    return [[...targetBase, "applicationRootId"], [...targetBase, "flowId"]];
+  }
+  return undefined;
+}
+
 function explicitSourceTargets(
   source: JsonObject,
   canonical: unknown,
@@ -813,6 +930,8 @@ function explicitSourceTargets(
   positions: SourceContractPositions,
   resolution: Resolution,
 ): Path[] | undefined {
+  const flowTargets = applicationFlowSourceTargets(source, sourcePath);
+  if (flowTargets) return flowTargets;
   const fieldPolicyTargets = permissionFieldPolicyTargets(
     source,
     canonical,
@@ -1501,6 +1620,17 @@ const applicationSourceTransformPatterns = [
   /^body\/rules\/#\/effect\/(?:field|message|component|workflow|reason_code)$/,
   /^body\/rules\/#\/effect\/value(?:\/.*)?$/,
   /^body\/pipelines\/#\/stages\/#\/(?:entry_actions|exit_actions)\/#$/,
+  /^body\/flows\/#\/id$/,
+  /^body\/flows\/#\/(?:inputs|outputs|variables)\/[^/]+\/(?:record_types\/#|default_value(?:\/.*)?)$/,
+  /^body\/flows\/#\/nodes\/#\/outputs\/[^/]+\/record_types\/#$/,
+  /^body\/flows\/#\/nodes\/#\/id$/,
+  /^body\/flows\/#\/nodes\/#\/target\/(?:module|version(?:\/.*)?|query|form|continuation_event|workflow|action|release_version)$/,
+  /^body\/flows\/#\/nodes\/#\/(?:inputs|results)\/[^/]+\/(?:type|output|value\/(?:source|node|input|variable|value)(?:\/.*)?)$/,
+  /^body\/flows\/#\/nodes\/#\/results\/[^/]+\/(?:source|node|input|variable|value)(?:\/.*)?$/,
+  /^body\/flows\/#\/edges\/#\/(?:id|from_node|to_node)$/,
+  /^body\/flow_bindings\/#\/(?:id|control|event_id)$/,
+  /^body\/flow_bindings\/#\/flow\/(?:flow|flow_id|release_version)$/,
+  /^body\/flow_bindings\/#\/inputs\/[^/]+\/value\/(?:control|form|record_type|relationship|field)(?:\/.*)?$/,
 ] as const;
 
 const connectionSourceTransformPatterns = [
@@ -1531,6 +1661,7 @@ const conditionSourcePathPatterns = [
   "body/workflows/#/trigger/condition",
   "body/pages/#/blocks/#/visibility_condition",
   "body/pages/#/steps/#/blocks/#/visibility_condition",
+  "body/flows/#/nodes/#/entry_condition",
 ].map(conditionSourcePathPattern);
 const workflowConditionNodePathPattern = conditionSourcePathPattern(
   "body/workflows/#/nodes/#/config",
@@ -1630,6 +1761,18 @@ function sourceResolvesIdentity(sourcePath: Path, positions: SourceContractPosit
   );
 }
 
+function applicationFlowSourceResolvesIdentity(sourcePath: Path): boolean {
+  const path = sourcePath.map((segment) => (typeof segment === "number" ? "#" : segment)).join("/");
+  return (
+    /^body\/flows\/#\/(?:id|(?:inputs|outputs|variables)\/[^/]+\/record_types\/#)$/.test(path) ||
+    /^body\/flows\/#\/nodes\/#\/outputs\/[^/]+\/record_types\/#$/.test(path) ||
+    /^body\/flows\/#\/nodes\/#\/(?:id|target\/(?:module|version(?:\/.*)?|query|form|continuation_event|workflow)|(?:inputs|results)\/[^/]+\/value\/node)$/.test(path) ||
+    /^body\/flows\/#\/edges\/#\/(?:id|from_node|to_node)$/.test(path) ||
+    /^body\/flow_bindings\/#\/(?:id|control|event_id|flow\/flow)$/.test(path) ||
+    /^body\/flow_bindings\/#\/inputs\/[^/]+\/value\/(?:control|form|record_type|relationship|field)$/.test(path)
+  );
+}
+
 function recordScopeSourceResolvesIdentity(sourcePath: Path): boolean {
   const normalized = sourcePath.map((segment) => (typeof segment === "number" ? "#" : segment));
   const path = normalized.join("/");
@@ -1670,6 +1813,10 @@ function isFixedWorkflowDefaultPath(path: Path): boolean {
     /\.nodes\.\d+\.(?:timeoutSeconds|duplicateProtection|activityKey|redaction)$/.test(joined) ||
     /\.nodes\.\d+\.retry\./.test(joined)
   );
+}
+
+function isFixedApplicationFlowDefaultPath(path: Path): boolean {
+  return /^content\.flowBindings\.\d+\.contractVersion$/.test(path.join("."));
 }
 
 type SourceProvenanceMapping = {
@@ -1713,7 +1860,8 @@ function provenanceFor(
     const resolved =
       sourceResolvesIdentity(sourcePath, positions) ||
       recordScopeSourceResolvesIdentity(sourcePath) ||
-      fieldPolicySourceResolvesIdentity(sourcePath);
+      fieldPolicySourceResolvesIdentity(sourcePath) ||
+      applicationFlowSourceResolvesIdentity(sourcePath);
     const transformTargets = explicitTargets
       ? explicitTargets.map((target) =>
           applicationTypedValueTarget(sourceObject, sourcePath, target, canonicalLeafSet),
@@ -1777,7 +1925,13 @@ function provenanceFor(
       canonicalPath.at(-1) === "publishedRevision" ||
       canonicalPath.at(-1) === "contractFingerprint";
     const isFixedWorkflowDefault = isFixedWorkflowDefaultPath(canonicalPath);
-    if (isSystem || isPublicationMetadata || isFixedWorkflowDefault) {
+    const isFixedApplicationFlowDefault = isFixedApplicationFlowDefaultPath(canonicalPath);
+    if (
+      isSystem ||
+      isPublicationMetadata ||
+      isFixedWorkflowDefault ||
+      isFixedApplicationFlowDefault
+    ) {
       entries.push({
         canonicalPath,
         origin: isSystem || isPublicationMetadata ? "system_metadata" : "fixed_default",
@@ -1962,12 +2116,18 @@ class Resolution {
       role: "role",
       connection_binding: "connection",
       interface: "interface",
+      flow: "flow",
+      flow_node: "flow_node",
+      flow_edge: "flow_edge",
+      flow_binding: "flow_binding",
     };
     const segments = [...this.sourceLocation.segments];
     if (scope?.startsWith("record:"))
       segments.push({ kind: "record_type", key: scope.slice("record:".length) });
     else if (scope?.startsWith("workflow:"))
       segments.push({ kind: "workflow", key: scope.slice("workflow:".length) });
+    else if (scope?.startsWith("flow:"))
+      segments.push({ kind: "flow", key: scope.slice("flow:".length) });
     const componentKind = componentKinds[kind];
     if (componentKind) segments.push({ kind: componentKind, key });
     return { ...this.sourceLocation, segments };
@@ -2069,6 +2229,43 @@ class Resolution {
         this.location("permission", key),
       );
     return unique[0]!;
+  }
+
+  ownedIdentity(
+    ownerRootId: string,
+    identifier: string,
+    kinds: readonly string[],
+  ): { definitionKey: string; kind: string; alias: string; identifier: string } {
+    const definitions = this.snapshot.definitions.filter(
+      (definition) => String(definition.rootId) === String(ownerRootId),
+    );
+    if (definitions.length !== 1)
+      fail("vortex.definition.missing_definition", "unresolved_reference");
+    const matches = this.snapshot.identities.filter(
+      (identity) =>
+        String(identity.identifier) === String(identifier) &&
+        identity.definitionKey === definitions[0]!.key &&
+        kinds.includes(identity.kind),
+    );
+    const unique = [
+      ...new Set(
+        matches.map(
+          (identity) =>
+            `${identity.kind}:${identity.componentOwner}:${String(identity.identifier)}`,
+        ),
+      ),
+    ];
+    if (unique.length === 0)
+      fail("vortex.definition.missing_identity", "unresolved_reference");
+    if (unique.length > 1)
+      fail("vortex.definition.ambiguous_identity", "unresolved_reference");
+    const match = matches[0]!;
+    return {
+      definitionKey: match.definitionKey,
+      kind: match.kind,
+      alias: match.alias,
+      identifier: String(match.identifier),
+    };
   }
 
   exactOwnedReference(
@@ -3928,6 +4125,10 @@ function compileApplication(
   dependencyOutputs: readonly DefinitionCompilationOutput[],
   compositionV2: MaterialisedApplicationCompositionV2,
   valueIndex: ApplicationModuleValueIndex,
+  catalogueEvidence: Readonly<{
+    managedFlows: readonly JsonObject[];
+    platformOperations: readonly JsonObject[];
+  }> = { managedFlows: [], platformOperations: [] },
 ) {
   const body = asObject(source.body);
   const definitionKey = String(source.key);
@@ -4371,9 +4572,632 @@ function compileApplication(
       })),
       theme: compositionV2.theme,
       homePageId: pageId(String(body.home_page)),
+      flows: compileApplicationFlows(
+        source,
+        resolution,
+        valueIndex,
+        dependencyOutputs,
+        catalogueEvidence,
+      ),
+      flowBindings: compileApplicationFlowBindings(source, resolution, catalogueEvidence),
     },
   });
   return canonical;
+}
+
+function compileApplicationFlows(
+  source: JsonObject,
+  resolution: Resolution,
+  valueIndex: ApplicationModuleValueIndex,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+  catalogueEvidence: Readonly<{
+    managedFlows: readonly JsonObject[];
+    platformOperations: readonly JsonObject[];
+  }>,
+): JsonObject[] {
+  const body = asObject(source.body);
+  const definitionKey = String(source.key);
+  const rawFlows = body.flows as JsonObject[];
+  const appRoot = resolution.definition(definitionKey, "application");
+  const appVersion = appRoot.exactVersion;
+  const resolutionFingerprint = resolution.snapshot.fingerprint;
+  const sourceByKey = <Value extends JsonObject>(
+    values: readonly Value[],
+    key: string,
+  ): Value | undefined =>
+    values.find((value) => String(value.key) === key || String(value.id) === key);
+  const findPlacement = (alias: string): JsonObject | undefined => {
+    const visit = (value: unknown): JsonObject | undefined => {
+      if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+      const object = value as JsonObject;
+      const placements = object.placements;
+      if (placements !== null && typeof placements === "object" && !Array.isArray(placements)) {
+        const candidate = (placements as JsonObject)[alias];
+        if (candidate !== undefined) return asObject(candidate);
+      }
+      for (const child of Object.values(object)) {
+        const match = visit(child);
+        if (match !== undefined) return match;
+      }
+      return undefined;
+    };
+    return visit(body);
+  };
+  const targetContentFingerprint = (kind: string, value: unknown): string =>
+    fingerprintCanonicalValue({ kind, value });
+  const moduleQuery = (moduleRootId: string, queryId: string): JsonObject => {
+    const outputs = dependencyOutputs.filter((candidate) => candidate.kind === "module");
+    const matches = outputs.flatMap((candidate) => {
+      if (String(candidate.artifact.rootId) !== String(moduleRootId)) return [];
+      const queries = candidate.canonical.content.queries as readonly JsonObject[];
+      return queries.filter((query) => String(query.queryId) === queryId);
+    });
+    if (matches.length !== 1) fail("vortex.definition.missing_identity", "unresolved_reference");
+    return matches[0]!;
+  };
+  const catalogueOperation = (
+    serviceId: string,
+    operationId: string,
+    releaseVersion: string,
+  ): JsonObject => {
+    const matches = catalogueEvidence.platformOperations.filter(
+      (candidate) =>
+        String(candidate.serviceId) === serviceId &&
+        String(candidate.operationId) === operationId &&
+        String(candidate.releaseVersion) === releaseVersion,
+    );
+    if (matches.length !== 1)
+      fail("vortex.definition.missing_identity", "unresolved_reference");
+    return matches[0]!;
+  };
+  const compileProtectedOperation = (
+    reference: JsonObject,
+    selectedReleaseVersion: unknown,
+  ): JsonObject => {
+    const operation = asObject(reference);
+    const owner = asObject(operation.owner);
+    const operationId = String(operation.operationId);
+    if (owner.kind === "platform_service") {
+      const evidence = catalogueOperation(
+        String(owner.serviceId),
+        operationId,
+        String(selectedReleaseVersion),
+      );
+      return {
+        operation,
+        releaseVersion: evidence.releaseVersion,
+        contentFingerprint: evidence.contentFingerprint,
+        resolutionFingerprint,
+        catalogueFingerprint: evidence.catalogueFingerprint,
+      };
+    }
+    const ownerRootId = String(
+      owner.kind === "application" ? owner.applicationRootId : owner.moduleRootId,
+    );
+    const identity = resolution.ownedIdentity(ownerRootId, operationId, ["action"]);
+    const rawOwner = identity.definitionKey === definitionKey
+      ? (body.actions as JsonObject[]).find(
+          (action) => String(action.id) === identity.alias || String(action.key) === identity.alias,
+        )
+      : dependencyOutputs.find(
+          (candidate) =>
+            candidate.kind === "module" && candidate.artifact.definitionKey === identity.definitionKey,
+        )?.canonical;
+    const ownerOutput = dependencyOutputs.find(
+      (candidate) =>
+        candidate.kind === "module" && candidate.artifact.definitionKey === identity.definitionKey,
+    );
+    const content = rawOwner === undefined ? operation : asObject(rawOwner);
+    const action = identity.definitionKey === definitionKey
+      ? content
+      : ((asObject(content).content as JsonObject).actions as readonly JsonObject[]).find(
+          (candidate) => String(candidate.actionId) === operationId,
+        );
+    return {
+      operation,
+      releaseVersion:
+        identity.definitionKey === definitionKey
+          ? appVersion
+          : resolution.definition(identity.definitionKey, "module").exactVersion,
+      contentFingerprint: targetContentFingerprint(
+        "protected_operation",
+        action ?? { operationId, ownerRootId },
+      ),
+      resolutionFingerprint:
+        identity.definitionKey === definitionKey
+          ? resolutionFingerprint
+          : ownerOutput?.resolutionFingerprint ?? resolutionFingerprint,
+    };
+  };
+  return rawFlows.map((flow) => {
+    const flowId = resolution.id(definitionKey, "flow", String(flow.id), "content");
+    const flowScope = `flow:${flow.key}`;
+
+    const compileFlowValueDeclaration = (decl: JsonObject): JsonObject => ({
+      type: decl.type,
+      required: Boolean(decl.required),
+      ...(decl.record_types
+        ? {
+            recordTypeIds: (decl.record_types as string[]).map(
+              (rt) => resolution.recordType(rt).recordTypeId,
+            ),
+          }
+        : {}),
+    });
+
+    const compileFlowVariableDeclaration = (decl: JsonObject): JsonObject => ({
+      key: decl.key,
+      ...(decl.name ? { name: decl.name } : {}),
+      type: decl.type,
+      ...(decl.record_types
+        ? {
+            recordTypeIds: (decl.record_types as string[]).map(
+              (rt) => resolution.recordType(rt).recordTypeId,
+            ),
+          }
+        : {}),
+      ...(decl.default_value !== undefined
+        ? { defaultValue: decl.default_value }
+        : {}),
+    });
+
+    const compileNodeInputValue = (value: JsonObject): JsonObject => {
+      if (value.source === "literal") return { source: "literal", value: value.value };
+      if (value.source === "flow_input") return { source: "flow_input", input: value.input };
+      if (value.source === "flow_variable") return { source: "flow_variable", variable: value.variable };
+      if (value.source === "node_output") {
+        const nodeId = resolution.id(definitionKey, "flow_node", String(value.node), flowScope);
+        return { source: "node_output", nodeId, output: value.output };
+      }
+      return { source: "current_organization_account_id" };
+    };
+
+    const compileNodeInputBinding = (binding: JsonObject): JsonObject => ({
+      type: binding.type,
+      value: compileNodeInputValue(asObject(binding.value)),
+    });
+
+    const compileNode = (node: JsonObject): JsonObject => {
+      const nodeId = resolution.id(definitionKey, "flow_node", String(node.id), flowScope);
+      const base = {
+        nodeId,
+        key: node.key,
+        kind: node.kind,
+        ...(node.label ? { label: node.label } : {}),
+      };
+
+      if (node.kind === "start") {
+        return {
+          ...base,
+          runAs: { kind: "current_user" },
+          ...(node.entry_condition
+            ? {
+                entryCondition: condition(
+                  node.entry_condition,
+                  (reference) => qualifiedField(resolution, reference),
+                  valueIndex.context(),
+                ),
+              }
+            : {}),
+          outputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.outputs ?? {})).map(([k, v]) => [
+              k,
+              compileFlowValueDeclaration(asObject(v)),
+            ]),
+          ),
+        };
+      }
+
+      if (node.kind === "query") {
+        const target = asObject(node.target);
+        let compiledTarget: JsonObject;
+        if (target.kind === "application_query") {
+          const query = sourceByKey(body.queries as JsonObject[], String(target.query));
+          if (query === undefined)
+            fail("vortex.definition.missing_identity", "unresolved_reference");
+          const queryId = resolution.id(definitionKey, "query", String(target.query), "content");
+          compiledTarget = {
+            kind: "application_query",
+            applicationRootId: appRoot.rootId,
+            releaseVersion: appVersion,
+            queryId,
+            contentFingerprint: targetContentFingerprint("application_query", query),
+            resolutionFingerprint,
+          };
+        } else {
+          const moduleKey = String(target.module);
+          const requirement = target.version as Parameters<typeof compatibleVersion>[0];
+          const modDef = resolution.definition(moduleKey, "module");
+          const queryId = resolution.id(moduleKey, "query", String(target.query), "content");
+          const query = moduleQuery(String(modDef.rootId), queryId);
+          const moduleOutput = dependencyOutputs.find(
+            (candidate) =>
+              candidate.kind === "module" && String(candidate.artifact.rootId) === String(modDef.rootId),
+          );
+          compiledTarget = {
+            kind: "query",
+            moduleRootId: modDef.rootId,
+            moduleReleaseVersion: exactVersion(resolution, moduleKey, "module", requirement),
+            queryId,
+            declaredRequirement: requirement,
+            contentFingerprint: targetContentFingerprint("module_query", query),
+            resolutionFingerprint: moduleOutput?.resolutionFingerprint ?? resolutionFingerprint,
+          };
+        }
+        return {
+          ...base,
+          target: compiledTarget,
+          runAs: { kind: "current_user" },
+          inputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.inputs ?? {})).map(([k, v]) => [
+              k,
+              compileNodeInputBinding(asObject(v)),
+            ]),
+          ),
+          outputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.outputs ?? {})).map(([k, v]) => [
+              k,
+              compileFlowValueDeclaration(asObject(v)),
+            ]),
+          ),
+          results: node.results ?? {},
+        };
+      }
+
+      if (node.kind === "action") {
+        const target = asObject(node.target);
+        let compiledTarget: JsonObject;
+        if (target.kind === "protected_operation") {
+          const evidence = compileProtectedOperation(
+            asObject(target.operation),
+            target.release_version,
+          );
+          compiledTarget = {
+            kind: "protected_operation",
+            ...evidence,
+          };
+        } else if (target.kind === "form_continuation") {
+          const form = findPlacement(String(target.form));
+          if (form === undefined) fail("vortex.definition.missing_identity", "unresolved_reference");
+          compiledTarget = {
+            kind: "form_continuation",
+            applicationRootId: appRoot.rootId,
+            formId: resolution.id(definitionKey, "block_placement", String(target.form)),
+            continuationEventId: resolution.id(
+              definitionKey,
+              "event",
+              String(target.continuation_event),
+              "content",
+            ),
+            releaseVersion: appVersion,
+            contentFingerprint: targetContentFingerprint("application_form", form),
+            resolutionFingerprint,
+          };
+        } else if (target.kind === "durable_workflow_start") {
+          const workflow = sourceByKey(body.workflows as JsonObject[], String(target.workflow));
+          if (workflow === undefined)
+            fail("vortex.definition.missing_identity", "unresolved_reference");
+          compiledTarget = {
+            kind: "durable_workflow_start",
+            applicationRootId: appRoot.rootId,
+            workflowId: resolution.id(definitionKey, "workflow", String(target.workflow), "content"),
+            releaseVersion: appVersion,
+            contentFingerprint: targetContentFingerprint("application_workflow", workflow),
+            resolutionFingerprint,
+          };
+        } else {
+          const action = sourceByKey(body.actions as JsonObject[], String(target.action));
+          if (action === undefined)
+            fail("vortex.definition.missing_identity", "unresolved_reference");
+          const actionId = resolution.id(definitionKey, "action", String(target.action), "content");
+          compiledTarget = {
+            kind: "application_action",
+            actionKey: target.action,
+            applicationRootId: appRoot.rootId,
+            actionId,
+            releaseVersion: appVersion,
+            contentFingerprint: targetContentFingerprint("application_action", action),
+            resolutionFingerprint,
+          };
+        }
+        return {
+          ...base,
+          target: compiledTarget,
+          runAs: { kind: "current_user" },
+          inputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.inputs ?? {})).map(([k, v]) => [
+              k,
+              compileNodeInputBinding(asObject(v)),
+            ]),
+          ),
+          outputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.outputs ?? {})).map(([k, v]) => [
+              k,
+              compileFlowValueDeclaration(asObject(v)),
+            ]),
+          ),
+          results: node.results ?? {},
+        };
+      }
+
+      if (node.kind === "transform") {
+        return {
+          ...base,
+          inputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.inputs ?? {})).map(([k, v]) => [
+              k,
+              compileNodeInputBinding(asObject(v)),
+            ]),
+          ),
+          outputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.outputs ?? {})).map(([k, v]) => [
+              k,
+              compileFlowValueDeclaration(asObject(v)),
+            ]),
+          ),
+          results: node.results ?? {},
+        };
+      }
+
+      return {
+        ...base,
+        results: objectFromUniqueEntries(
+          Object.entries(asObject(node.results ?? {})).map(([k, v]) => [
+            k,
+            compileNodeInputValue(asObject(v)),
+          ]),
+        ),
+        outcome: node.outcome ?? "completed",
+      };
+    };
+
+    const nodes = (flow.nodes as JsonObject[]).map(compileNode);
+    const nodeByAlias = new Map(
+      (flow.nodes as JsonObject[]).map((n, idx) => [
+        String(n.id),
+        String(nodes[idx].nodeId),
+      ]),
+    );
+
+    const edges = (flow.edges as JsonObject[]).map((edge) => {
+      const edgeId = resolution.id(definitionKey, "flow_edge", String(edge.id), flowScope);
+      const fromNodeId = nodeByAlias.get(String(edge.from_node));
+      const toNodeId = nodeByAlias.get(String(edge.to_node));
+      if (fromNodeId === undefined || toNodeId === undefined)
+        fail("vortex.definition.missing_identity", "unresolved_reference");
+      return {
+        edgeId,
+        fromNodeId,
+        toNodeId,
+        ...(edge.outcome ? { outcome: edge.outcome } : {}),
+      };
+    });
+
+    const inputs = objectFromUniqueEntries(
+      Object.entries(asObject(flow.inputs ?? {})).map(([k, v]) => [
+        k,
+        compileFlowValueDeclaration(asObject(v)),
+      ]),
+    );
+    const outputs = objectFromUniqueEntries(
+      Object.entries(asObject(flow.outputs ?? {})).map(([k, v]) => [
+        k,
+        compileFlowValueDeclaration(asObject(v)),
+      ]),
+    );
+    const variables = objectFromUniqueEntries(
+      Object.entries(asObject(flow.variables ?? {})).map(([k, v]) => [
+        k,
+        compileFlowVariableDeclaration(asObject(v)),
+      ]),
+    );
+
+    return {
+      flowId,
+      key: flow.key,
+      name: flow.name,
+      releaseVersion: appVersion,
+      contentFingerprint: targetContentFingerprint("application_flow", flow),
+      resolutionFingerprint,
+      ...(flow.description ? { description: flow.description } : {}),
+      runAs: "current_user",
+      inputs,
+      outputs,
+      variables,
+      nodes,
+      edges,
+    };
+  });
+}
+
+function compileApplicationFlowBindings(
+  source: JsonObject,
+  resolution: Resolution,
+  catalogueEvidence: Readonly<{
+    managedFlows: readonly JsonObject[];
+    platformOperations: readonly JsonObject[];
+  }>,
+): JsonObject[] {
+  const body = asObject(source.body);
+  const definitionKey = String(source.key);
+  const root = resolution.definition(definitionKey, "application");
+  const rawBindings = body.flow_bindings as JsonObject[];
+  const appVersion = root.exactVersion;
+  const resolutionFingerprint = resolution.snapshot.fingerprint;
+  const managedFlow = (flowId: string, releaseVersion: string): JsonObject => {
+    const matches = catalogueEvidence.managedFlows.filter(
+      (candidate) =>
+        String(candidate.flowId) === flowId && String(candidate.releaseVersion) === releaseVersion,
+    );
+    if (matches.length !== 1)
+      fail("vortex.definition.missing_identity", "unresolved_reference");
+    return matches[0]!;
+  };
+  const sourceFlow = (alias: string): JsonObject | undefined =>
+    (body.flows as JsonObject[]).find(
+      (flow) => String(flow.id) === alias || String(flow.key) === alias,
+    );
+
+  return rawBindings.map((binding) => {
+    const bindingId = resolution.id(
+      definitionKey,
+      "flow_binding",
+      String(binding.id),
+      "content",
+    );
+    const controlId = resolution.id(
+      definitionKey,
+      "block_placement",
+      String(binding.control),
+    );
+    const eventId = resolution.id(
+      definitionKey,
+      "event",
+      String(binding.event_id),
+      "content",
+    );
+
+    const flowRef = asObject(binding.flow);
+    let compiledFlowRef: JsonObject;
+    if (flowRef.kind === "platform_managed") {
+      const evidence = managedFlow(String(flowRef.flow_id), String(flowRef.release_version));
+      compiledFlowRef = {
+        kind: "platform_managed",
+        flowId: flowRef.flow_id,
+        releaseVersion: flowRef.release_version,
+        contentFingerprint: evidence.contentFingerprint,
+        catalogueFingerprint: evidence.catalogueFingerprint,
+      };
+    } else {
+      const authoredFlow = sourceFlow(String(flowRef.flow));
+      if (authoredFlow === undefined)
+        fail("vortex.definition.missing_identity", "unresolved_reference");
+      compiledFlowRef = {
+        kind: "application_owned",
+        applicationRootId: root.rootId,
+        flowId: resolution.id(definitionKey, "flow", String(flowRef.flow), "content"),
+        releaseVersion: appVersion,
+        contentFingerprint: fingerprintCanonicalValue({
+          kind: "application_flow",
+          value: authoredFlow,
+        }),
+        resolutionFingerprint,
+      };
+    }
+
+    const compileBindingContext = (ctx: JsonObject): JsonObject => {
+      const kind = ctx.kind;
+      if (kind === "page_subject") {
+        return {
+          kind: "page_subject",
+          recordTypeId: resolution.recordType(String(ctx.record_type)).recordTypeId,
+        };
+      }
+      if (kind === "related_record") {
+        const recordType = resolution.recordType(String(ctx.record_type)).recordTypeId;
+        const [relationshipRecord, relationshipAlias] = splitMember(
+          String(ctx.relationship),
+          "vortex.definition.qualified_field_required",
+        );
+        const relId = resolution.relationship(relationshipRecord, relationshipAlias);
+        return {
+          kind: "related_record",
+          relationshipId: relId,
+          recordTypeId: recordType,
+        };
+      }
+      if (kind === "row") {
+        const cId = resolution.id(definitionKey, "block_placement", String(ctx.control));
+        return {
+          kind: "row",
+          controlId: cId,
+          recordTypeId: resolution.recordType(String(ctx.record_type)).recordTypeId,
+        };
+      }
+      if (kind === "selection") {
+        const cId = resolution.id(definitionKey, "block_placement", String(ctx.control));
+        return {
+          kind: "selection",
+          controlId: cId,
+          recordTypeId: resolution.recordType(String(ctx.record_type)).recordTypeId,
+          cardinality: ctx.cardinality,
+        };
+      }
+      if (kind === "form") {
+        const fId = resolution.id(definitionKey, "block_placement", String(ctx.form));
+        return {
+          kind: "form",
+          formId: fId,
+          recordTypeId: resolution.recordType(String(ctx.record_type)).recordTypeId,
+        };
+      }
+      const fId = resolution.id(definitionKey, "block_placement", String(ctx.form));
+      return {
+        kind: "response",
+        formId: fId,
+        ...(ctx.record_type || ctx.recordTypeId
+          ? {
+              recordTypeId: resolution.recordType(String(ctx.record_type)).recordTypeId,
+            }
+          : {}),
+      };
+    };
+
+    const compileBindingInputValue = (value: JsonObject): JsonObject => {
+      if (value.source === "literal") return { source: "literal", value: value.value };
+      if (value.source === "context_record") {
+        return {
+          source: "context_record",
+          context: compileBindingContext(asObject(value.context)),
+        };
+      }
+      if (value.source === "context_field") {
+        const ctx = asObject(value.context);
+        const compiledCtx = compileBindingContext(ctx);
+        const fieldId = resolution.field(String(ctx.record_type), String(value.field));
+        return {
+          source: "context_field",
+          context: compiledCtx,
+          fieldId,
+        };
+      }
+      if (value.source === "form_input") {
+        const formId = resolution.id(definitionKey, "block_placement", String(value.form));
+        return {
+          source: "form_input",
+          formId,
+          input: value.input,
+        };
+      }
+      if (value.source === "event_input") return { source: "event_input", input: value.input };
+      return { source: "current_organization_account_id" };
+    };
+
+    const inputs = objectFromUniqueEntries(
+      Object.entries(asObject(binding.inputs ?? {})).map(([k, v]) => {
+        const inp = asObject(v);
+        return [
+          k,
+          {
+            type: inp.type,
+            value: compileBindingInputValue(asObject(inp.value)),
+          },
+        ];
+      }),
+    );
+
+    return {
+      contractVersion: "1.0.0",
+      bindingId,
+      controlId,
+      eventId,
+      event: binding.event,
+      flow: compiledFlowRef,
+      inputs,
+      results: binding.results ?? {},
+      declaredEffects: binding.declaredEffects ?? binding.declared_effects,
+    };
+  });
 }
 
 function compileConnection(source: JsonObject, resolution: Resolution) {
@@ -4998,6 +5822,52 @@ function applicationProvenanceV2(
       });
       continue;
     }
+    if (
+      canonicalPath[0] === "content" &&
+      canonicalPath[1] === "flows" &&
+      typeof canonicalPath[2] === "number" &&
+      ["releaseVersion", "contentFingerprint", "resolutionFingerprint"].includes(
+        String(canonicalPath.at(-1)),
+      )
+    ) {
+      entries.push({
+        canonicalPath,
+        origin: "resolved",
+        sourcePath: ["body", "flows", canonicalPath[2], "id"],
+        ruleCode: RESOLUTION_RULE,
+      });
+      continue;
+    }
+    if (
+      canonicalPath[0] === "content" &&
+      canonicalPath[1] === "flows" &&
+      typeof canonicalPath[2] === "number" &&
+      canonicalPath[3] === "nodes" &&
+      typeof canonicalPath[4] === "number" &&
+      canonicalPath.includes("target")
+    ) {
+      entries.push({
+        canonicalPath,
+        origin: "resolved",
+        sourcePath: ["body", "flows", canonicalPath[2], "nodes", canonicalPath[4], "id"],
+        ruleCode: RESOLUTION_RULE,
+      });
+      continue;
+    }
+    if (
+      canonicalPath[0] === "content" &&
+      canonicalPath[1] === "flowBindings" &&
+      typeof canonicalPath[2] === "number" &&
+      canonicalPath.includes("flow")
+    ) {
+      entries.push({
+        canonicalPath,
+        origin: "resolved",
+        sourcePath: ["body", "flow_bindings", canonicalPath[2], "id"],
+        ruleCode: RESOLUTION_RULE,
+      });
+      continue;
+    }
     const placementsIndex = canonicalPath.lastIndexOf("placements");
     if (placementsIndex >= 0 && canonicalPath.includes("settings")) {
       const placement = asObject(
@@ -5034,6 +5904,10 @@ function compileApplicationV2Internal(
 function compileParsedApplicationV2Request(
   request: ParsedApplicationV2Request,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
+  catalogueEvidence: Readonly<{
+    managedFlows: readonly JsonObject[];
+    platformOperations: readonly JsonObject[];
+  }> = { managedFlows: [], platformOperations: [] },
 ): ApplicationCompilationOutputV2 {
   const source = request.source;
   const sourceObject = source as unknown as JsonObject;
@@ -5053,6 +5927,7 @@ function compileParsedApplicationV2Request(
         dependencyOutputs,
         composition,
         valueIndex,
+        catalogueEvidence,
       ),
     );
     const ownDefinition = resolution.definition(source.key, "application");
@@ -5243,6 +6118,10 @@ type DispatchableCompilationRequest =
 export function compileParsedDefinition(
   request: ApplicationCompilationRequestV2,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
+  catalogueEvidence?: Readonly<{
+    managedFlows: readonly JsonObject[];
+    platformOperations: readonly JsonObject[];
+  }>,
 ): ApplicationCompilationOutputV2;
 export function compileParsedDefinition(
   request: ModuleCompilationRequestV3,
@@ -5255,6 +6134,10 @@ export function compileParsedDefinition(
 export function compileParsedDefinition(
   request: DispatchableCompilationRequest,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
+  catalogueEvidence?: Readonly<{
+    managedFlows: readonly JsonObject[];
+    platformOperations: readonly JsonObject[];
+  }>,
 ): DefinitionCompilationOutput {
   assertDependencyOutputLimits(dependencyOutputs);
   const explicitKind = explicitCompilationKind(request);
@@ -5264,6 +6147,7 @@ export function compileParsedDefinition(
     return compileParsedApplicationV2Request(
       request as ParsedApplicationV2Request,
       dependencyOutputs,
+      catalogueEvidence,
     );
   return compileParsedConnectionRequest(request as ParsedConnectionRequest);
 }

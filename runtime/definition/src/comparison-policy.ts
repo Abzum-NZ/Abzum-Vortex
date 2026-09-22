@@ -922,6 +922,66 @@ const compareSimpleComponent = (
   );
 };
 
+const compareCurrentUserFlow = (
+  reasons: VersionImpactReason[],
+  previous: RecordValue,
+  candidate: RecordValue,
+): void => {
+  const flowId = candidate.flowId;
+  for (const key of ["name", "description"] as const)
+    pushChange(
+      reasons,
+      previous[key],
+      candidate[key],
+      "patch",
+      key === "description" ? "definition_text_changed" : "presentation_changed",
+      "flow",
+      key,
+      flowId,
+    );
+  pushChange(
+    reasons,
+    previous.key,
+    candidate.key,
+    "major",
+    "component_key_changed",
+    "flow",
+    "key",
+    flowId,
+  );
+  for (const key of ["runAs", "inputs", "outputs", "variables"] as const)
+    pushChange(
+      reasons,
+      previous[key],
+      candidate[key],
+      "major",
+      "existing_behavior_changed",
+      "flow",
+      "behavior",
+      flowId,
+    );
+  compareKeyed(
+    reasons,
+    previous.nodes as RecordValue[],
+    candidate.nodes as RecordValue[],
+    "nodeId",
+    "flow_node",
+    (left, right) =>
+      compareSimpleComponent(reasons, "flow_node", right.nodeId, left, right, ["label"]),
+    () => "major",
+  );
+  compareKeyed(
+    reasons,
+    previous.edges as RecordValue[],
+    candidate.edges as RecordValue[],
+    "edgeId",
+    "flow_edge",
+    (left, right) =>
+      compareSimpleComponent(reasons, "flow_edge", right.edgeId, left, right),
+    () => "major",
+  );
+};
+
 export const compareModuleContents = (
   previousContent: ModuleContent | ModuleContentV2 | ModuleContentV3,
   candidateContent: ModuleContent | ModuleContentV2 | ModuleContentV3,
@@ -1301,6 +1361,33 @@ const compareApplicationSharedContent = (
     "public_address",
     (left, right) =>
       compareSimpleComponent(reasons, "public_address", right.addressId, left, right),
+    () => "major",
+  );
+  compareKeyed(
+    reasons,
+    previous.flows as RecordValue[],
+    candidate.flows as RecordValue[],
+    "flowId",
+    "flow",
+    (left, right) => compareCurrentUserFlow(reasons, left, right),
+  );
+  const flowBindingKey = (item: RecordValue) => String(item.bindingId);
+  const previousFlowBindings = (previous.flowBindings as RecordValue[]).map((b) => ({
+    ...b,
+    _flowBindingKey: flowBindingKey(b),
+  }));
+  const candidateFlowBindings = (candidate.flowBindings as RecordValue[]).map((b) => ({
+    ...b,
+    _flowBindingKey: flowBindingKey(b),
+  }));
+  compareKeyed(
+    reasons,
+    previousFlowBindings,
+    candidateFlowBindings,
+    "_flowBindingKey",
+    "flow_binding",
+    (left, right) =>
+      compareSimpleComponent(reasons, "flow_binding", right._flowBindingKey, left, right),
     () => "major",
   );
   pushChange(
@@ -1879,7 +1966,30 @@ export const normaliseModuleContent = <T extends ModuleContent | ModuleContentV2
 
 /** Canonical ordering for the definition-wide fields every Application release shares. */
 const normaliseApplicationSharedContent = (content: ApplicationContentV2): RecordValue => {
-  const value = asRecord(content);
+  const value = asRecord(structuredClone(content));
+  for (const flow of value.flows as RecordValue[]) {
+    delete flow.releaseVersion;
+    delete flow.contentFingerprint;
+    delete flow.resolutionFingerprint;
+    for (const node of flow.nodes as RecordValue[]) {
+      const target = node.target as RecordValue | undefined;
+      if (target === undefined) continue;
+      delete target.contentFingerprint;
+      delete target.resolutionFingerprint;
+      delete target.catalogueFingerprint;
+      const operation = target.operation as RecordValue | undefined;
+      const owner = operation?.owner as RecordValue | undefined;
+      if (!(target.kind === "protected_operation" && owner?.kind === "platform_service"))
+        delete target.releaseVersion;
+    }
+  }
+  for (const binding of value.flowBindings as RecordValue[]) {
+    const flow = binding.flow as RecordValue;
+    delete flow.contentFingerprint;
+    delete flow.catalogueFingerprint;
+    delete flow.resolutionFingerprint;
+    if (flow.kind === "application_owned") delete flow.releaseVersion;
+  }
   return {
     ...value,
     moduleBindings: sorted(value.moduleBindings as unknown[], "moduleRootId"),
@@ -1931,6 +2041,18 @@ const normaliseApplicationSharedContent = (content: ApplicationContentV2): Recor
       "interfaceId",
     ),
     publicAddresses: sorted(value.publicAddresses as unknown[], "addressId"),
+    flows: sorted(
+      (value.flows as RecordValue[]).map((flow) => ({
+        ...flow,
+        nodes: sorted(flow.nodes as unknown[], "nodeId"),
+        edges: sorted(flow.edges as unknown[], "edgeId"),
+      })),
+      "flowId",
+    ),
+    flowBindings: sorted(
+      value.flowBindings as RecordValue[],
+      "bindingId",
+    ),
   };
 };
 
@@ -2048,6 +2170,7 @@ const assertUnambiguousApplicationSharedContent = (content: unknown): void => {
     ["connectionBindings", "bindingId"],
     ["interfaces", "interfaceId"],
     ["publicAddresses", "addressId"],
+    ["flows", "flowId"],
   ] as const)
     assertUnique(value[collection] as RecordValue[], key);
   assertUnique(value.permissions as RecordValue[], "key");
@@ -2060,6 +2183,19 @@ const assertUnambiguousApplicationSharedContent = (content: unknown): void => {
     assertUnique(workflow.nodes as RecordValue[], "nodeId");
     assertUniqueWorkflowEdges(workflow.edges as RecordValue[]);
   }
+  for (const flow of value.flows as RecordValue[]) {
+    assertUnique(flow.nodes as RecordValue[], "nodeId");
+    assertUnique(flow.edges as RecordValue[], "edgeId");
+  }
+  const flowBindings = value.flowBindings as RecordValue[];
+  const flowBindingKeys = flowBindings.map(
+    (binding) => `${binding.controlId}:${binding.eventId}`,
+  );
+  if (new Set(flowBindingKeys).size !== flowBindingKeys.length)
+    refuseVersionImpact("ambiguous_component_identity");
+  const flowBindingIds = flowBindings.map((binding) => binding.bindingId);
+  if (new Set(flowBindingIds).size !== flowBindingIds.length)
+    refuseVersionImpact("ambiguous_component_identity");
   for (const binding of value.connectionBindings as RecordValue[])
     assertUniqueValues(binding.requiredOperationKeys as unknown[]);
   for (const definition of value.interfaces as RecordValue[]) {
