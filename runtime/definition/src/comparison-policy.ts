@@ -1020,6 +1020,14 @@ export const compareModuleContents = (
     "extension_point",
     (left, right) => compareExtensionPoint(reasons, left, right),
   );
+  compareKeyed(
+    reasons,
+    ((previous.queries as RecordValue[] | undefined) ?? []),
+    ((candidate.queries as RecordValue[] | undefined) ?? []),
+    "queryId",
+    "query",
+    (left, right) => compareSimpleComponent(reasons, "query", right.queryId, left, right),
+  );
   return finaliseReasons(reasons);
 };
 
@@ -1847,6 +1855,11 @@ export const normaliseModuleContent = <T extends ModuleContent | ModuleContentV2
       })),
       "extensionPointId",
     ),
+    ...(value.queries === undefined
+      ? {}
+      : {
+          queries: sorted(((value.queries as unknown[]) ?? []), "queryId"),
+        }),
   } as T;
 };
 
@@ -1948,6 +1961,10 @@ export const assertUnambiguousModuleContent = (content: unknown): void => {
   ] as const)
     assertUnique(value[collection] as RecordValue[], key);
   assertUnique(value.permissions as RecordValue[], "key");
+  if (value.queries !== undefined) {
+    assertUnique(value.queries as RecordValue[], "queryId");
+    assertUnique(value.queries as RecordValue[], "key");
+  }
   for (const recordType of value.recordTypes as RecordValue[]) {
     assertUnique(recordType.fields as RecordValue[], "fieldId");
     assertUnique(recordType.relationships as RecordValue[], "relationshipId");

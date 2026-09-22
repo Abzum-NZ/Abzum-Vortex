@@ -133,6 +133,7 @@ export function extractSourceIdentityRequirements(
   }
   addTopLevel("extension_point", "extension_points");
   addTopLevel("sharing_condition", "sharing_conditions");
+  addTopLevel("query", "queries");
   return requirements;
 }
 

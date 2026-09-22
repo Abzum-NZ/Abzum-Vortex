@@ -689,6 +689,36 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
         )
           valid = false;
       }
+      for (const query of array(body.queries)) {
+        const rawRecord = String(query.record_type);
+        const isQualified = rawRecord.includes(":");
+        const record = isQualified
+          ? (qualifiedRecordValid(rawRecord)
+              ? records.get(rawRecord.slice(rawRecord.indexOf(":") + 1))
+              : undefined)
+          : records.get(rawRecord);
+        const isDependencyRecord = isQualified && qualifiedRecordValid(rawRecord);
+        if (!record && !isDependencyRecord) valid = false;
+        const inputs = new Map(
+          array(query.inputs).map((input) => [String(input.key), String(input.type)]),
+        );
+        const inputKeys = new Set(inputs.keys());
+        if (record) {
+          const fields = new Set(array(record.fields).map((field) => String(field.key)));
+          const selectFields = ((query.select ?? query.output_fields ?? []) as string[]).map(String);
+          if (selectFields.length === 0 || selectFields.some((field) => !fields.has(field)))
+            valid = false;
+          if (array(query.group_by).some((field) => !fields.has(String(field)))) valid = false;
+          if (array(query.sort).some((sort) => !fields.has(String(sort.field)))) valid = false;
+          if (
+            array(query.aggregates).some(
+              (aggregate) => aggregate.field && !fields.has(String(aggregate.field)),
+            )
+          )
+            valid = false;
+          if (query.filter && !conditionValid(query.filter, fields, inputKeys)) valid = false;
+        }
+      }
     } else if (source.kind === "application") {
       const moduleBindings = new Set(
         array(body.module_bindings).map((binding) => String(binding.module)),
@@ -2602,6 +2632,89 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         failures.push(
           failure(output, "vortex.definition.module_sharing_condition", "broken_reference"),
         );
+    }
+    for (const query of array(content.queries)) {
+      const location = { kind: "query" as const, key: String(query.key) };
+      const targetRecord = recordReference(query.recordType, allowedModuleRoots);
+      if (!targetRecord) {
+        failures.push(
+          failure(
+            output,
+            "vortex.definition.module_query_references",
+            "broken_reference",
+            location,
+          ),
+        );
+        continue;
+      }
+      const fieldMap = new Map(
+        array(targetRecord.fields).map((field) => [String(field.fieldId), field]),
+      );
+      const fields = new Set(fieldMap.keys());
+      const selectedFieldIds = (query.selectedFieldIds as string[]).map(String);
+      const outputFieldIds = ((query.outputFieldIds as string[] | undefined) ?? []).map(String);
+      const groupByFieldIds = (query.groupByFieldIds as string[]).map(String);
+      const sortFieldIds = array(query.sort).map((sort) => String(sort.fieldId));
+      const aggregateFieldIds = array(query.aggregates)
+        .filter((agg) => agg.fieldId !== undefined)
+        .map((agg) => String(agg.fieldId));
+
+      let queryValid = true;
+      if (selectedFieldIds.length === 0 || selectedFieldIds.some((id) => !fields.has(id))) {
+        queryValid = false;
+      }
+      if (outputFieldIds.some((id) => !fields.has(id))) {
+        queryValid = false;
+      }
+      if (groupByFieldIds.some((id) => !fields.has(id))) {
+        queryValid = false;
+      }
+      if (sortFieldIds.some((id) => !fields.has(id))) {
+        queryValid = false;
+      }
+      if (aggregateFieldIds.some((id) => !fields.has(id))) {
+        queryValid = false;
+      }
+      const aggregatesValid = array(query.aggregates).every((aggregate) => {
+        if (aggregate.operation === "count") return true;
+        if (!aggregate.fieldId) return false;
+        const field = fieldMap.get(String(aggregate.fieldId));
+        if (!field) return false;
+        if (aggregate.operation === "sum" || aggregate.operation === "average")
+          return ["number", "whole_number", "decimal_number", "money"].includes(String(field.type));
+        return !["formatted_text", "table", "attachment", "link_to_one_of_several"].includes(
+          String(field.type),
+        );
+      });
+      if (!aggregatesValid) {
+        queryValid = false;
+      }
+      if (query.filter) {
+        if (!fieldReferencesValid(query.filter, fields)) {
+          queryValid = false;
+        } else {
+          const inputTypes = new Map(
+            array(query.inputs).map((input) => [String(input.key), String(input.type)]),
+          );
+          if (
+            moduleV2
+              ? !conditionTypesValidV2(query.filter, fieldMap, inputTypes)
+              : !conditionTypesValid(query.filter, fieldMap, inputTypes)
+          ) {
+            queryValid = false;
+          }
+        }
+      }
+      if (!queryValid) {
+        failures.push(
+          failure(
+            output,
+            "vortex.definition.module_query_references",
+            "broken_reference",
+            location,
+          ),
+        );
+      }
     }
   }
   return failures;
@@ -4839,6 +4952,7 @@ const moduleRuleCodes = [
   "vortex.definition.module_extension_capabilities",
   "vortex.definition.module_extension_references",
   "vortex.definition.module_sharing_condition",
+  "vortex.definition.module_query_references",
 ] as const;
 const applicationRuleCodes = [
   "vortex.definition.application_identity_unique",
