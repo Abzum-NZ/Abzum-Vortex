@@ -1,5 +1,10 @@
 import "server-only";
 
+import {
+  resolvePageTheme,
+  resolvePlacementThemeTokens,
+} from "./page-theme-resolution";
+
 export {
   createAuthenticatedPageCapabilityService,
   type AuthenticatedPageCapabilityDependencies,
@@ -17,8 +22,14 @@ export {
   type StoredPageCapabilityDependencies,
   type StoredPageCapabilitySelection,
 } from "./stored-page-capability";
+export {
+  resolvePageTheme,
+  resolvePlacementThemeTokens,
+} from "./page-theme-resolution";
 
 export const PageService = Object.freeze({
   key: "page",
   boundary: "@vortex/page",
+  resolvePageTheme,
+  resolvePlacementThemeTokens,
 });
