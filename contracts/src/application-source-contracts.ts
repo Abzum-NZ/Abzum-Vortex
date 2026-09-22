@@ -1,17 +1,15 @@
 import { z } from "zod";
 import {
-  blockPaletteGroupSchema,
-  blockSettingControlSchema,
   listArrangementKeys,
   pageStateSchema,
   workflowNodeTypeKeys,
   workflowValueTypeSchema,
 } from "./catalogues";
+import { applicationSourceContractVersion } from "./application-contract-versions";
 import { builderKeySchema, namespacedKeySchema, semanticVersionSchema } from "./identifiers";
 import { jsonValueSchema } from "./common";
 import { versionRequirementSchema } from "./definitions";
 import {
-  authoredSourceBase,
   sourceActionEffectSchema,
   sourceAliasSchema,
   sourceConditionSchema,
@@ -37,33 +35,6 @@ import {
 } from "./application-composition-v2";
 
 const sourceFilterSchema = z.union([z.null(), sourceConditionSchema]);
-export const sourceBlockSettingValueSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("literal"), value: jsonValueSchema }).strict(),
-  z.object({ kind: z.literal("field_reference"), field: sourceQualifiedFieldSchema }).strict(),
-  z
-    .object({
-      kind: z.literal("relationship_reference"),
-      relationship: sourceQualifiedRelationshipSchema,
-    })
-    .strict(),
-  z.object({ kind: z.literal("action_reference"), action: namespacedKeySchema }).strict(),
-  z.object({ kind: z.literal("page_reference"), page: builderKeySchema }).strict(),
-  z.object({ kind: z.literal("query_reference"), query: builderKeySchema }).strict(),
-  z.object({ kind: z.literal("pipeline_reference"), pipeline: builderKeySchema }).strict(),
-  z
-    .object({
-      kind: z.literal("record_type_reference"),
-      record_type: sourceQualifiedRecordTypeSchema,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("record_reference"),
-      record_type: sourceQualifiedRecordTypeSchema,
-      record_id: z.uuid(),
-    })
-    .strict(),
-]);
 const sourceCalendarMappingSchema = z.union([
   z.object({ start: builderKeySchema, end: builderKeySchema }).strict(),
   z
@@ -74,39 +45,6 @@ const sourceCalendarMappingSchema = z.union([
     })
     .strict(),
 ]);
-const sourceResponsiveLayoutSchema = z
-  .object({
-    desktop: z
-      .object({ columns: z.literal(12), component_order: z.array(sourceAliasSchema) })
-      .strict(),
-    phone: z.object({ component_order: z.array(sourceAliasSchema) }).strict(),
-  })
-  .strict();
-const sourceBlockPlacementSchema = z
-  .object({
-    id: sourceAliasSchema,
-    block: sourceAliasSchema,
-    block_release_version: semanticVersionSchema,
-    settings: z.record(builderKeySchema, sourceBlockSettingValueSchema),
-    desktop: z
-      .object({
-        start_column: z.number().int().min(1).max(12),
-        span: z.number().int().min(1).max(12),
-        height: z.number().int().positive(),
-      })
-      .strict(),
-    phone: z
-      .object({
-        order: z.number().int().min(0),
-        behaviour: z.enum(["stack", "hide", "full_width"]),
-      })
-      .strict(),
-    visibility_condition: sourceQualifiedConditionSchema.optional(),
-    view_permission: namespacedKeySchema,
-    use_permission: namespacedKeySchema.optional(),
-    query: builderKeySchema.optional(),
-  })
-  .strict();
 const sourceStandardPageReplacementSchema = z
   .object({
     standard_page: z.enum(["list", "detail", "create_form"]),
@@ -147,97 +85,6 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
       .strict(),
   ]),
 );
-const sourcePageBase = {
-  id: sourceAliasSchema,
-  key: builderKeySchema,
-  name: z.string().min(1).max(120),
-  states: z.array(pageStateSchema).min(1),
-  layout: sourceResponsiveLayoutSchema,
-  standard_page_replacement: sourceStandardPageReplacementSchema.optional(),
-};
-const sourcePageSchema = z.discriminatedUnion("type", [
-  z
-    .object({
-      ...sourcePageBase,
-      type: z.literal("list"),
-      record_type: sourceQualifiedRecordTypeSchema,
-      permission: namespacedKeySchema,
-      query: builderKeySchema,
-      arrangements: z.array(z.enum(listArrangementKeys)).min(1),
-      calendar_mapping: sourceCalendarMappingSchema.optional(),
-    })
-    .strict()
-    .superRefine((value, context) => {
-      if (value.arrangements.includes("calendar") !== (value.calendar_mapping !== undefined))
-        context.addIssue({
-          code: "custom",
-          path: ["calendar_mapping"],
-          message: "Calendar mapping is required exactly for a calendar arrangement",
-        });
-    }),
-  z
-    .object({
-      ...sourcePageBase,
-      type: z.literal("detail"),
-      record_type: sourceQualifiedRecordTypeSchema,
-      permission: namespacedKeySchema,
-      blocks: z.array(sourceBlockPlacementSchema).min(1),
-    })
-    .strict(),
-  z
-    .object({
-      ...sourcePageBase,
-      type: z.literal("dashboard"),
-      permission: namespacedKeySchema,
-      blocks: z.array(sourceBlockPlacementSchema).min(1),
-    })
-    .strict(),
-  z
-    .object({
-      ...sourcePageBase,
-      type: z.literal("form"),
-      record_type: sourceQualifiedRecordTypeSchema,
-      permission: namespacedKeySchema,
-      commit_action: namespacedKeySchema,
-      blocks: z.array(sourceBlockPlacementSchema).min(1),
-    })
-    .strict(),
-  z
-    .object({
-      ...sourcePageBase,
-      type: z.literal("guided_form"),
-      record_type: sourceQualifiedRecordTypeSchema,
-      permission: namespacedKeySchema,
-      commit_action: namespacedKeySchema,
-      steps: z
-        .array(
-          z
-            .object({
-              id: sourceAliasSchema,
-              name: z.string().min(1).max(60),
-              summary: z.boolean(),
-              blocks: z.array(sourceBlockPlacementSchema).min(1),
-            })
-            .strict(),
-        )
-        .min(2)
-        .max(20),
-    })
-    .strict(),
-  z
-    .object({
-      ...sourcePageBase,
-      type: z.literal("public"),
-      permission: namespacedKeySchema,
-      record_type: sourceQualifiedRecordTypeSchema.optional(),
-      public_fields: z.array(builderKeySchema),
-      public_action: namespacedKeySchema.optional(),
-      blocks: z.array(sourceBlockPlacementSchema).min(1),
-      rate_limit_per_minute: z.number().int().min(1).max(10_000),
-    })
-    .strict(),
-]);
-
 const sourcePageV2Common = {
   id: sourceAliasSchema,
   key: builderKeySchema,
@@ -702,7 +549,7 @@ const sourceInterfaceOperationSchema = z
           message: `An ${value.target.kind} interface accepts only ${value.target.kind} output bindings`,
         });
   });
-const sourceApplicationBodySchema = z
+export const sourceApplicationBodyV2Schema = z
   .object({
     name: z.string().min(1).max(120),
     description: z.string().min(1).max(1_000),
@@ -723,29 +570,6 @@ const sourceApplicationBodySchema = z
           .strict(),
       )
       .min(1),
-    theme: z.discriminatedUnion("mode", [
-      z
-        .object({
-          mode: z.literal("application"),
-          light_and_dark: z.boolean(),
-          tokens: z
-            .object({
-              brand: builderKeySchema,
-              density: z.enum(["compact", "comfortable"]),
-              corners: z.enum(["square", "small", "medium", "large"]),
-              focus: z.literal("high_contrast"),
-            })
-            .strict(),
-        })
-        .strict(),
-      z
-        .object({
-          mode: z.literal("platform"),
-          catalogue_theme_id: z.uuid(),
-          version: semanticVersionSchema,
-        })
-        .strict(),
-    ]),
     permissions: z.array(
       z
         .object({
@@ -824,36 +648,6 @@ const sourceApplicationBodySchema = z
         })
         .strict(),
     ),
-    block_registrations: z.array(
-      z
-        .object({
-          id: sourceAliasSchema,
-          release_version: semanticVersionSchema,
-          name: z.string().min(1).max(60),
-          icon: z
-            .string()
-            .min(1)
-            .max(120)
-            .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-          palette_group: blockPaletteGroupSchema,
-          settings: z.array(
-            z
-              .object({
-                key: builderKeySchema,
-                control: blockSettingControlSchema,
-                required: z.boolean(),
-              })
-              .strict(),
-          ),
-          allowed_child_blocks: z.array(sourceAliasSchema),
-          phone_behaviour: z.enum(["stack", "hide", "full_width"]),
-          resizable_height: z.boolean(),
-          live_update: z.boolean(),
-          public_page: z.boolean(),
-        })
-        .strict(),
-    ),
-    pages: z.array(sourcePageSchema).min(1),
     workflows: z.array(
       z
         .object({
@@ -1060,19 +854,6 @@ const sourceApplicationBodySchema = z
         })
         .strict(),
     ),
-  })
-  .strict();
-export const applicationSourceDocumentV1Schema = z
-  .object({
-    ...authoredSourceBase,
-    kind: z.literal("application"),
-    body: sourceApplicationBodySchema,
-  })
-  .strict();
-
-export const sourceApplicationBodyV2Schema = sourceApplicationBodySchema
-  .omit({ pages: true, block_registrations: true, theme: true })
-  .extend({
     platform_block_dependencies: sourcePlatformBlockDependenciesV2Schema,
     shells: z.array(sourceApplicationShellV2Schema),
     pages: z.array(sourcePageDefinitionV2Schema).min(1),
@@ -1216,16 +997,13 @@ export const sourceApplicationBodyV2Schema = sourceApplicationBodySchema
 
 export const applicationSourceDocumentV2Schema = z
   .object({
-    source_contract_version: z.literal("2.0.0"),
+    source_contract_version: z.literal(applicationSourceContractVersion),
     root_alias: sourceAliasSchema,
     key: namespacedKeySchema,
     kind: z.literal("application"),
     body: sourceApplicationBodyV2Schema,
   })
   .strict();
-
-/** Backward-compatible name for the currently implemented Application source contract. */
-export const applicationSourceDocumentSchema = applicationSourceDocumentV1Schema;
 
 export type ApplicationSourceDocumentV2 = z.infer<typeof applicationSourceDocumentV2Schema>;
 export type SourceApplicationBodyV2 = z.infer<typeof sourceApplicationBodyV2Schema>;
