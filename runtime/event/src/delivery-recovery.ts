@@ -9,6 +9,13 @@ export const eventDeliveryRecoveryLimits = Object.freeze({
   maximumRetryAttempts: 20,
   minimumRetryBackoffSeconds: 1,
   maximumRetryBackoffSeconds: 86_400,
+  /**
+   * Platform ceiling on delivery claims for one occurrence, including
+   * interrupted attempts that never reported a failure. Storage terminalises a
+   * claim that reaches it, so a worker that keeps dying mid-delivery cannot
+   * retry forever or block its record sequence indefinitely.
+   */
+  maximumDeliveryAttempts: 20,
   maximumTerminalListLimit: 100,
 });
 
@@ -23,6 +30,21 @@ export const eventDeliveryFailureClassifications = [
 
 export type EventDeliveryFailureClassification =
   (typeof eventDeliveryFailureClassifications)[number];
+
+/**
+ * Why storage refused to treat a recovery request as authorised. No consumer
+ * or occurrence state is revealed alongside these; authority is resolved
+ * before the claim is read.
+ */
+export const eventDeliveryRecoveryRefusalReasons = [
+  "authority_not_configured",
+  "authority_disabled",
+  "authority_revoked",
+  "authority_session_unauthorised",
+] as const;
+
+export type EventDeliveryRecoveryRefusalReason =
+  (typeof eventDeliveryRecoveryRefusalReasons)[number];
 
 export const eventDeliveryRecoveryErrorCodes = [
   "INVALID_EVENT_DELIVERY_RECOVERY_INPUT",
@@ -45,6 +67,11 @@ export class EventDeliveryRecoveryError extends Error {
  * Input identifies an existing #639 claim by the same exact consumer and
  * occurrence identity the claim was issued under, authenticated by its claim
  * cursor. This never claims fresh work.
+ *
+ * `maxAttempts` counts total reported attempts including this one, so a budget
+ * of one makes the first reported failure terminal. `retryBackoffSeconds` is
+ * how long the reclaim lease is held before the same claim becomes eligible
+ * for #639's ordinary reclaim again.
  */
 export type EventDeliveryFailureReportInput = Readonly<{
   consumerKey: string;
@@ -68,13 +95,17 @@ export type EventDeliveryFailureReportResult =
 
 /**
  * Explicit authorised operator recovery of one exhausted claim, addressed by
- * the same exact consumer and occurrence identity. `expectedFailureCount`
- * guards against acting on a stale view of the claim.
+ * the same exact consumer and occurrence identity.
+ *
+ * There is deliberately no operator identifier here. Authority is resolved by
+ * storage from its private recovery registry and the immutable database
+ * session user, so a caller can neither assert an operator nor attribute the
+ * recovery to one. `expectedFailureCount` guards against acting on a stale
+ * view of the claim.
  */
 export type EventDeliveryRecoveryInput = Readonly<{
   consumerKey: string;
   occurrenceId: string;
-  operatorActorId: string;
   expectedFailureCount: number;
 }>;
 
@@ -82,9 +113,10 @@ export type EventDeliveryRecoveryResult =
   | Readonly<{ outcome: "claim_unavailable" }>
   | Readonly<{ outcome: "already_acknowledged" }>
   | Readonly<{ outcome: "active" }>
-  | Readonly<{ outcome: "unauthorised" }>
+  | Readonly<{ outcome: "not_exhausted" }>
+  | Readonly<{ outcome: "unauthorised"; reason: EventDeliveryRecoveryRefusalReason }>
   | Readonly<{ outcome: "stale"; failureCount: number }>
-  | Readonly<{ outcome: "recovered"; leaseExpiresAt: string }>;
+  | Readonly<{ outcome: "recovered"; recoveredBy: string; leaseExpiresAt: string }>;
 
 export type EventDeliveryRecoveryListInput = Readonly<{
   consumerKey: string;
@@ -93,6 +125,7 @@ export type EventDeliveryRecoveryListInput = Readonly<{
 
 export type TerminallyFailedConsumerOccurrence = Readonly<{
   occurrenceId: string;
+  attemptCount: number;
   failureCount: number;
   lastFailureCode: EventDeliveryFailureClassification;
   lastFailedAt: string;
@@ -120,6 +153,13 @@ const failureClassificationMatches = (
 ): value is EventDeliveryFailureClassification =>
   typeof value === "string" &&
   (eventDeliveryFailureClassifications as readonly string[]).includes(value);
+
+const refusalReasonMatches = (value: unknown): value is EventDeliveryRecoveryRefusalReason =>
+  typeof value === "string" &&
+  (eventDeliveryRecoveryRefusalReasons as readonly string[]).includes(value);
+
+const boundedCount = (value: unknown, maximum: number): value is number =>
+  Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) <= maximum;
 
 const record = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -173,9 +213,9 @@ const validateRecoveryInput = (input: EventDeliveryRecoveryInput): EventDelivery
   if (
     !consumerKeyMatches(input.consumerKey) ||
     !eventOccurrenceIdSchema.safeParse(input.occurrenceId).success ||
-    !actorIdSchema.safeParse(input.operatorActorId).success ||
     !Number.isInteger(input.expectedFailureCount) ||
-    input.expectedFailureCount < 0
+    input.expectedFailureCount < 0 ||
+    input.expectedFailureCount > eventDeliveryRecoveryLimits.maximumRetryAttempts
   )
     return inputInvalid();
   return input;
@@ -194,6 +234,10 @@ const validateListInput = (
   return input;
 };
 
+const storageUnavailable = (): never => {
+  throw new EventDeliveryRecoveryError("EVENT_DELIVERY_RECOVERY_STORAGE_UNAVAILABLE");
+};
+
 const parseFailureReportResult = (candidate: unknown): EventDeliveryFailureReportResult => {
   const unavailable = exactRecord(candidate, ["outcome"]);
   if (
@@ -206,30 +250,28 @@ const parseFailureReportResult = (candidate: unknown): EventDeliveryFailureRepor
   const terminal = exactRecord(candidate, ["outcome", "failureCount", "failureCode"]);
   if (
     terminal?.outcome === "terminal_failure" &&
-    Number.isSafeInteger(terminal.failureCount) &&
-    (terminal.failureCount as number) >= 0 &&
+    boundedCount(terminal.failureCount, eventDeliveryRecoveryLimits.maximumRetryAttempts) &&
     failureClassificationMatches(terminal.failureCode)
   )
     return {
       outcome: "terminal_failure",
-      failureCount: terminal.failureCount as number,
+      failureCount: terminal.failureCount,
       failureCode: terminal.failureCode,
     };
 
   const scheduled = exactRecord(candidate, ["outcome", "failureCount", "retryNotBefore"]);
   if (
     scheduled?.outcome === "retry_scheduled" &&
-    Number.isSafeInteger(scheduled.failureCount) &&
-    (scheduled.failureCount as number) >= 0 &&
+    boundedCount(scheduled.failureCount, eventDeliveryRecoveryLimits.maximumRetryAttempts) &&
     timestampMatches(scheduled.retryNotBefore)
   )
     return {
       outcome: "retry_scheduled",
-      failureCount: scheduled.failureCount as number,
+      failureCount: scheduled.failureCount,
       retryNotBefore: scheduled.retryNotBefore,
     };
 
-  throw new EventDeliveryRecoveryError("EVENT_DELIVERY_RECOVERY_STORAGE_UNAVAILABLE");
+  return storageUnavailable();
 };
 
 const parseRecoveryResult = (candidate: unknown): EventDeliveryRecoveryResult => {
@@ -238,60 +280,77 @@ const parseRecoveryResult = (candidate: unknown): EventDeliveryRecoveryResult =>
     stable?.outcome === "claim_unavailable" ||
     stable?.outcome === "already_acknowledged" ||
     stable?.outcome === "active" ||
-    stable?.outcome === "unauthorised"
+    stable?.outcome === "not_exhausted"
   )
     return { outcome: stable.outcome };
+
+  const unauthorised = exactRecord(candidate, ["outcome", "reason"]);
+  if (unauthorised?.outcome === "unauthorised" && refusalReasonMatches(unauthorised.reason))
+    return { outcome: "unauthorised", reason: unauthorised.reason };
 
   const stale = exactRecord(candidate, ["outcome", "failureCount"]);
   if (
     stale?.outcome === "stale" &&
-    Number.isSafeInteger(stale.failureCount) &&
-    (stale.failureCount as number) >= 0
+    boundedCount(stale.failureCount, eventDeliveryRecoveryLimits.maximumRetryAttempts)
   )
-    return { outcome: "stale", failureCount: stale.failureCount as number };
+    return { outcome: "stale", failureCount: stale.failureCount };
 
-  const recovered = exactRecord(candidate, ["outcome", "leaseExpiresAt"]);
-  if (recovered?.outcome === "recovered" && timestampMatches(recovered.leaseExpiresAt))
-    return { outcome: "recovered", leaseExpiresAt: recovered.leaseExpiresAt };
+  const recovered = exactRecord(candidate, ["outcome", "recoveredBy", "leaseExpiresAt"]);
+  if (
+    recovered?.outcome === "recovered" &&
+    actorIdSchema.safeParse(recovered.recoveredBy).success &&
+    timestampMatches(recovered.leaseExpiresAt)
+  )
+    return {
+      outcome: "recovered",
+      recoveredBy: recovered.recoveredBy as string,
+      leaseExpiresAt: recovered.leaseExpiresAt,
+    };
 
-  throw new EventDeliveryRecoveryError("EVENT_DELIVERY_RECOVERY_STORAGE_UNAVAILABLE");
+  return storageUnavailable();
 };
 
 const parseTerminallyFailedList = (
   candidate: unknown,
   maximumCount: number,
 ): readonly TerminallyFailedConsumerOccurrence[] => {
-  if (!Array.isArray(candidate) || candidate.length > maximumCount)
-    throw new EventDeliveryRecoveryError("EVENT_DELIVERY_RECOVERY_STORAGE_UNAVAILABLE");
-  return candidate.map((item) => {
-    const entry = exactRecord(item, [
-      "occurrenceId",
-      "failureCount",
-      "lastFailureCode",
-      "lastFailedAt",
-      "terminallyFailedAt",
-      "claimedAt",
-    ]);
-    if (
-      entry === undefined ||
-      !eventOccurrenceIdSchema.safeParse(entry.occurrenceId).success ||
-      !Number.isSafeInteger(entry.failureCount) ||
-      (entry.failureCount as number) < 0 ||
-      !failureClassificationMatches(entry.lastFailureCode) ||
-      !timestampMatches(entry.lastFailedAt) ||
-      !timestampMatches(entry.terminallyFailedAt) ||
-      !timestampMatches(entry.claimedAt)
-    )
-      throw new EventDeliveryRecoveryError("EVENT_DELIVERY_RECOVERY_STORAGE_UNAVAILABLE");
-    return {
-      occurrenceId: entry.occurrenceId as string,
-      failureCount: entry.failureCount as number,
-      lastFailureCode: entry.lastFailureCode as EventDeliveryFailureClassification,
-      lastFailedAt: entry.lastFailedAt as string,
-      terminallyFailedAt: entry.terminallyFailedAt as string,
-      claimedAt: entry.claimedAt as string,
-    };
-  });
+  if (!Array.isArray(candidate) || candidate.length > maximumCount) return storageUnavailable();
+  const occurrenceIds = new Set<string>();
+  return Object.freeze(
+    candidate.map((item) => {
+      const entry = exactRecord(item, [
+        "occurrenceId",
+        "attemptCount",
+        "failureCount",
+        "lastFailureCode",
+        "lastFailedAt",
+        "terminallyFailedAt",
+        "claimedAt",
+      ]);
+      if (
+        entry === undefined ||
+        !eventOccurrenceIdSchema.safeParse(entry.occurrenceId).success ||
+        occurrenceIds.has(entry.occurrenceId as string) ||
+        !boundedCount(entry.attemptCount, eventDeliveryRecoveryLimits.maximumDeliveryAttempts) ||
+        !boundedCount(entry.failureCount, eventDeliveryRecoveryLimits.maximumRetryAttempts) ||
+        !failureClassificationMatches(entry.lastFailureCode) ||
+        !timestampMatches(entry.lastFailedAt) ||
+        !timestampMatches(entry.terminallyFailedAt) ||
+        !timestampMatches(entry.claimedAt)
+      )
+        return storageUnavailable();
+      occurrenceIds.add(entry.occurrenceId as string);
+      return Object.freeze({
+        occurrenceId: entry.occurrenceId as string,
+        attemptCount: entry.attemptCount,
+        failureCount: entry.failureCount,
+        lastFailureCode: entry.lastFailureCode,
+        lastFailedAt: entry.lastFailedAt,
+        terminallyFailedAt: entry.terminallyFailedAt,
+        claimedAt: entry.claimedAt,
+      });
+    }),
+  );
 };
 
 const databaseCode = (error: unknown): string | undefined =>
@@ -309,7 +368,12 @@ const mapFailure = (error: unknown): EventDeliveryRecoveryError => {
 export interface EventDeliveryRecoveryRepository {
   /** Reports one failed delivery attempt against an existing claim. */
   reportFailure(input: EventDeliveryFailureReportInput): Promise<EventDeliveryFailureReportResult>;
-  /** Explicit authorised operator recovery of one exhausted claim. */
+  /**
+   * Requests operator recovery of one exhausted claim. Storage resolves the
+   * authority itself and refuses unless this database session is the consumer's
+   * registered recovery operator, so this call cannot present caller-supplied
+   * authorisation.
+   */
   recoverClaim(input: EventDeliveryRecoveryInput): Promise<EventDeliveryRecoveryResult>;
   /** Bounded inspection of currently exhausted, replayable claims. */
   listTerminallyFailed(
@@ -320,8 +384,9 @@ export interface EventDeliveryRecoveryRepository {
 /**
  * Event-owned runtime adapter over the #639 consumer claim/lease row. The
  * caller supplies the server-only runtime transaction; this adapter never
- * accepts a request context, direct SQL or an organisation selector from a
- * consumer, and it never claims fresh work or mutates an event_outbox row.
+ * accepts a request context, direct SQL, an organisation selector or an
+ * operator identity from a consumer, and it never claims fresh work or mutates
+ * an event_outbox row.
  */
 export const createEventDeliveryRecoveryRepository = (
   transaction: RuntimeDatabaseTransaction,
@@ -353,7 +418,6 @@ export const createEventDeliveryRecoveryRepository = (
           select vortex_event.recover_consumer_occurrence_claim(
             ${input.consumerKey}::text,
             ${input.occurrenceId}::uuid,
-            ${input.operatorActorId}::uuid,
             ${input.expectedFailureCount}::integer
           ) as result
         `;
