@@ -17,6 +17,13 @@ const nonNilUuidSchema = z
     message: "Identifier cannot be the nil UUID",
   });
 
+const jsonSafePositiveIntegerSchema = z
+  .number()
+  .int()
+  .positive()
+  .max(Number.MAX_SAFE_INTEGER);
+const jsonSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
+
 export const recordLifecyclePolicyIdSchema = nonNilUuidSchema.brand<"RecordLifecyclePolicyId">();
 export type RecordLifecyclePolicyId = z.infer<typeof recordLifecyclePolicyIdSchema>;
 
@@ -53,9 +60,9 @@ export type ArchiveDestinationReference = z.infer<typeof archiveDestinationRefer
 export const organizationLifecycleLimitsSchema = z
   .object({
     organizationId: organizationIdSchema,
-    settingsRevision: revisionSchema,
-    maxRetentionDays: z.number().int().positive().nullable().optional(),
-    maxRecordCount: z.number().int().positive().nullable().optional(),
+    settingsRevision: jsonSafeRevisionSchema,
+    maxRetentionDays: jsonSafePositiveIntegerSchema.nullable().optional(),
+    maxRecordCount: jsonSafePositiveIntegerSchema.nullable().optional(),
     allowUnlimitedRetentionDays: z.boolean(),
     allowUnlimitedRecordCount: z.boolean(),
     allowedActions: z.array(recordLifecycleActionSchema).min(1),
@@ -146,7 +153,7 @@ export type OrganizationLifecycleLimits = z.infer<typeof organizationLifecycleLi
 /**
  * Standard JSON-safe positive integer revision schema matching repository conventions.
  */
-export const policyRevisionSchema = revisionSchema;
+export const policyRevisionSchema = jsonSafeRevisionSchema;
 export type PolicyRevision = z.infer<typeof policyRevisionSchema>;
 
 const policyBaseFields = {
@@ -155,8 +162,8 @@ const policyBaseFields = {
   storageContractId: storageContractIdSchema,
   applicationRootId: applicationRootIdSchema.nullable(),
   policyRevision: policyRevisionSchema,
-  maxAgeDays: z.number().int().positive().nullable(),
-  maxCount: z.number().int().positive().nullable(),
+  maxAgeDays: jsonSafePositiveIntegerSchema.nullable(),
+  maxCount: jsonSafePositiveIntegerSchema.nullable(),
   allowUnlimitedAge: z.boolean(),
   allowUnlimitedCount: z.boolean(),
 };
@@ -225,10 +232,10 @@ export const archiveWorkflowRecordLifecyclePolicySchema = z
     ...policyBaseFields,
     action: z.literal("archive_workflow"),
     archiveWorkflowId: workflowIdSchema,
-    expectedWorkflowRevision: revisionSchema,
+    expectedWorkflowRevision: jsonSafeRevisionSchema,
     archiveConnectionInstanceId: connectionInstanceIdSchema,
     archiveDestination: archiveDestinationReferenceSchema,
-    expectedConnectionRevision: revisionSchema.max(Number.MAX_SAFE_INTEGER),
+    expectedConnectionRevision: jsonSafeRevisionSchema,
     expectedDestinationFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     expectedConnectionHealthOutcome: z.literal("healthy"),
   })
@@ -266,7 +273,7 @@ export type RecordTypeLifecyclePolicy = z.infer<typeof recordTypeLifecyclePolicy
 export const registeredWorkflowEvidenceSchema = z
   .object({
     workflowId: workflowIdSchema,
-    workflowRevision: revisionSchema,
+    workflowRevision: jsonSafeRevisionSchema,
     organizationId: organizationIdSchema,
     authorizedApplicationIds: z.array(applicationRootIdSchema).default([]),
     state: z.literal("active"),
@@ -286,7 +293,7 @@ export const activeConnectionEvidenceSchema = z
     organizationId: organizationIdSchema,
     authorizedApplicationIds: z.array(applicationRootIdSchema).min(1),
     state: z.literal("active"),
-    revision: revisionSchema.max(Number.MAX_SAFE_INTEGER),
+    revision: jsonSafeRevisionSchema,
     lastHealthOutcome: z.literal("healthy"),
     verifiedAt: timestampSchema.optional(),
   })
@@ -477,7 +484,7 @@ export const validateRecordTypeLifecyclePolicyDefinitionAgainstLimits = (
  * and typed runtime readiness evidence.
  *
  * Enforces:
- * 1. expectedSettingsRevision is MANDATORY, validated by revisionSchema, and must match limits.settingsRevision.
+ * 1. expectedSettingsRevision is MANDATORY, validated as a JSON-safe revision, and must match limits.settingsRevision.
  * 2. Policy and limits conform to their strict contracts.
  * 3. Organisation isolation: policy.organizationId MUST match organizationLimits.organizationId.
  * 4. Ceilings: maxAgeDays <= maxRetentionDays, maxCount <= maxRecordCount.
@@ -524,7 +531,7 @@ export const validateRecordTypeLifecyclePolicy = (
         "expectedSettingsRevision is mandatory for live policy validation to prevent stale or concurrent settings mutations",
     });
   } else {
-    const parsedExpectedRevision = revisionSchema.safeParse(rawExpectedRevision);
+    const parsedExpectedRevision = jsonSafeRevisionSchema.safeParse(rawExpectedRevision);
     if (!parsedExpectedRevision.success) {
       issues.push({
         code: "invalid_expected_settings_revision",
@@ -787,7 +794,7 @@ export const validateRecordTypeLifecyclePolicy = (
 export const lifecycleCandidateRecordSchema = z
   .object({
     recordId: recordIdSchema,
-    expectedRecordRevision: revisionSchema,
+    expectedRecordRevision: jsonSafeRevisionSchema,
     createdAt: timestampSchema,
     isHeld: z.boolean().default(false),
     isProtected: z.boolean().default(false),
@@ -845,7 +852,7 @@ const validateItemReasonsConsistency = (
 export const dueDeleteRecordHandoffItemSchema = z
   .object({
     recordId: recordIdSchema,
-    expectedRecordRevision: revisionSchema,
+    expectedRecordRevision: jsonSafeRevisionSchema,
     dueReasons: z.array(z.enum(["age", "count_excess"])).min(1),
     primaryReason: recordLifecycleDueReasonSchema,
     action: z.literal("delete"),
@@ -860,15 +867,15 @@ export const dueDeleteRecordHandoffItemSchema = z
 export const dueArchiveRecordHandoffItemSchema = z
   .object({
     recordId: recordIdSchema,
-    expectedRecordRevision: revisionSchema,
+    expectedRecordRevision: jsonSafeRevisionSchema,
     dueReasons: z.array(z.enum(["age", "count_excess"])).min(1),
     primaryReason: recordLifecycleDueReasonSchema,
     action: z.literal("archive_workflow"),
     archiveWorkflowId: workflowIdSchema,
-    expectedWorkflowRevision: revisionSchema,
+    expectedWorkflowRevision: jsonSafeRevisionSchema,
     archiveConnectionInstanceId: connectionInstanceIdSchema,
     archiveDestination: archiveDestinationReferenceSchema,
-    expectedConnectionRevision: revisionSchema.max(Number.MAX_SAFE_INTEGER),
+    expectedConnectionRevision: jsonSafeRevisionSchema,
     expectedDestinationFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     expectedConnectionHealthOutcome: z.literal("healthy"),
     createdAt: timestampSchema,
@@ -891,7 +898,7 @@ export type DueRecordHandoffItem = z.infer<typeof dueRecordHandoffItemSchema>;
 export const blockedRemovalRecordSchema = z
   .object({
     recordId: recordIdSchema,
-    expectedRecordRevision: revisionSchema,
+    expectedRecordRevision: jsonSafeRevisionSchema,
     dueReasons: z.array(z.enum(["age", "count_excess"])).min(1),
     primaryReason: recordLifecycleDueReasonSchema,
     blockReason: z.enum(["legal_hold", "recovery_protection", "held_and_protected"]),
@@ -937,7 +944,7 @@ export type LifecycleStatusReport = z.infer<typeof lifecycleStatusReportSchema>;
 export const recordLifecycleHandoffSchema = z
   .object({
     policyId: recordLifecyclePolicyIdSchema,
-    policyRevision: revisionSchema,
+    policyRevision: jsonSafeRevisionSchema,
     organizationId: organizationIdSchema,
     storageContractId: storageContractIdSchema,
     applicationRootId: applicationRootIdSchema.nullable(),
@@ -945,10 +952,10 @@ export const recordLifecycleHandoffSchema = z
     archiveMetadata: z
       .object({
         archiveWorkflowId: workflowIdSchema,
-        expectedWorkflowRevision: revisionSchema,
+        expectedWorkflowRevision: jsonSafeRevisionSchema,
         archiveConnectionInstanceId: connectionInstanceIdSchema,
         archiveDestination: archiveDestinationReferenceSchema,
-        expectedConnectionRevision: revisionSchema.max(Number.MAX_SAFE_INTEGER),
+        expectedConnectionRevision: jsonSafeRevisionSchema,
         expectedDestinationFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
         expectedConnectionHealthOutcome: z.literal("healthy"),
       })

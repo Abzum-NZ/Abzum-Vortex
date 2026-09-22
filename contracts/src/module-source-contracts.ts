@@ -1224,6 +1224,48 @@ export const moduleSourceSharingConditionSchema = z
   });
 
 // ---------------------------------------------------------------------------
+// Module queries.
+// ---------------------------------------------------------------------------
+
+export const moduleSourceQuerySortSchema = z
+  .object({
+    field: builderKeySchema,
+    direction: z.enum(["ascending", "descending"]),
+  })
+  .strict();
+
+export const moduleSourceQueryAggregateSchema = z
+  .object({
+    operation: z.enum(["count", "sum", "minimum", "maximum", "average"]),
+    field: builderKeySchema.optional(),
+    alias: builderKeySchema,
+  })
+  .strict();
+
+/**
+ * One authored Module-owned query. It names a local or dependency-qualified record type,
+ * typed inputs, the fields it returns, a typed filter tree, grouping, totals, a stable sort,
+ * a bounded page size and its declared relationship hops. It never carries a database target.
+ */
+export const moduleSourceQuerySchema = z
+  .object({
+    id: sourceAliasSchema,
+    key: builderKeySchema,
+    label: z.string().min(1).max(60).optional(),
+    description: z.string().min(1).max(1_000).optional(),
+    record_type: z.union([builderKeySchema, sourceQualifiedRecordTypeSchema]),
+    inputs: z.array(moduleSourceActionInputSchema).max(50),
+    select: z.array(builderKeySchema).min(1).max(200),
+    filter: z.union([z.null(), sourceConditionSchema]),
+    group_by: z.array(builderKeySchema).max(10),
+    aggregates: z.array(moduleSourceQueryAggregateSchema).max(20),
+    sort: z.array(moduleSourceQuerySortSchema).min(1).max(20),
+    page_size: z.number().int().min(1).max(200),
+    relationship_hops: z.number().int().min(0).max(2),
+  })
+  .strict();
+
+// ---------------------------------------------------------------------------
 // Module body and document.
 // ---------------------------------------------------------------------------
 
@@ -1299,6 +1341,7 @@ const moduleSourceBodySchema = z
         .strict(),
     ),
     sharing_conditions: z.array(moduleSourceSharingConditionSchema),
+    queries: z.array(moduleSourceQuerySchema).default([]),
   })
   .strict();
 
@@ -1316,5 +1359,8 @@ export type ModuleSourceActionInput = z.infer<typeof moduleSourceActionInputSche
 export type ModuleSourceAction = z.infer<typeof moduleSourceActionSchema>;
 export type ModuleSourceRecordType = z.infer<typeof moduleSourceRecordTypeSchema>;
 export type ModuleSourceSharingCondition = z.infer<typeof moduleSourceSharingConditionSchema>;
+export type ModuleSourceQuerySort = z.infer<typeof moduleSourceQuerySortSchema>;
+export type ModuleSourceQueryAggregate = z.infer<typeof moduleSourceQueryAggregateSchema>;
+export type ModuleSourceQuery = z.infer<typeof moduleSourceQuerySchema>;
 export type ModuleSourceBody = z.infer<typeof moduleSourceBodySchema>;
 export type ModuleSourceDocument = z.infer<typeof moduleSourceDocumentSchema>;

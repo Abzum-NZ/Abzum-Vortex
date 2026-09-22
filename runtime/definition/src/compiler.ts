@@ -867,7 +867,7 @@ function explicitSourceTargets(
   if (
     (source.kind === "module" || source.kind === "application") &&
     sourcePath[0] === "body" &&
-    sourcePath[1] === "actions" &&
+    (sourcePath[1] === "actions" || sourcePath[1] === "queries") &&
     typeof sourcePath[2] === "number" &&
     sourcePath[3] === "inputs" &&
     typeof sourcePath[4] === "number" &&
@@ -877,7 +877,7 @@ function explicitSourceTargets(
   ) {
     const targetPath: Path = [
       "content",
-      "actions",
+      sourcePath[1],
       sourcePath[2],
       "inputs",
       sourcePath[4],
@@ -1137,7 +1137,7 @@ function explicitSourceTargets(
     }
   }
   if (
-    source.kind === "application" &&
+    (source.kind === "application" || source.kind === "module") &&
     sourcePath[0] === "body" &&
     sourcePath[1] === "queries" &&
     typeof sourcePath[2] === "number"
@@ -1411,7 +1411,7 @@ function explicitSourceTargets(
 
 const moduleSourceTransformPatterns = [
   /^root_alias$/,
-  /^body\/(?:record_types|permissions|actions|events|rules|extension_points|sharing_conditions)\/#\/id$/,
+  /^body\/(?:record_types|permissions|actions|events|rules|extension_points|sharing_conditions|queries)\/#\/id$/,
   /^body\/record_types\/#\/(?:fields|relationships)\/#\/id$/,
   /^body\/dependencies\/#\/module$/,
   /^body\/record_types\/#\/(?:name|plural_name|custom_actions\/#|ownership_mode|storage_scope)$/,
@@ -1436,6 +1436,12 @@ const moduleSourceTransformPatterns = [
   /^body\/actions\/#\/effects\/#\/(?:field|record_type|relationships\/#|target_input|event)$/,
   /^body\/actions\/#\/effects\/#\/value\/(?:source|input|field|value)(?:\/.*)?$/,
   /^body\/actions\/#\/effects\/#\/values\/[^/]+\/(?:source|input|field|value)(?:\/.*)?$/,
+  /^body\/queries\/#\/(?:id|record_type|select\/#|group_by\/#)$/,
+  /^body\/queries\/#\/inputs\/#\/(?:type|record_types\/#)$/,
+  /^body\/queries\/#\/inputs\/#\/validation\/(?:minimum|maximum)$/,
+  /^body\/queries\/#\/filter$/,
+  /^body\/queries\/#\/sort\/#\/field$/,
+  /^body\/queries\/#\/aggregates\/#\/field$/,
   /^body\/rules\/#\/effect\/(?:field|message|component|workflow|reason_code)$/,
   /^body\/rules\/#\/effect\/value(?:\/.*)?$/,
   /^body\/sharing_conditions\/#\/(?:source_record_type|declared_fields\/#)$/,
@@ -3237,6 +3243,40 @@ function compileModule(
       ...(fieldPolicy === undefined ? {} : { fieldPolicy }),
     };
   });
+  const queries = (body.queries as JsonObject[]).map((query) => {
+    const authoredRecord = String(query.record_type);
+    // A local key names this module's own record; a qualified key names a declared dependency.
+    const record = authoredRecord.includes(":")
+      ? authoredRecord
+      : qualifiedForRecord(authoredRecord);
+    const localField = (alias: string) => resolution.field(record, alias);
+    const inputTypes = new Map(
+      (query.inputs as JsonObject[]).map((input) => [String(input.key), String(input.type)]),
+    );
+    const valueContext = valueContextFor(record, inputTypes);
+    return {
+      queryId: resolution.id(definitionKey, "query", String(query.id), "content"),
+      key: query.key,
+      ...(query.label ? { label: query.label } : {}),
+      ...(query.description ? { description: query.description } : {}),
+      recordType: resolution.recordType(record),
+      inputs: (query.inputs as JsonObject[]).map((input) => actionInput(input, resolution, true)),
+      selectedFieldIds: (query.select as string[]).map(localField),
+      filter: query.filter ? condition(query.filter, localField, valueContext) : null,
+      groupByFieldIds: (query.group_by as string[]).map(localField),
+      aggregates: (query.aggregates as JsonObject[]).map((aggregate) => ({
+        operation: aggregate.operation,
+        ...(aggregate.field ? { fieldId: localField(String(aggregate.field)) } : {}),
+        alias: aggregate.alias,
+      })),
+      sort: (query.sort as JsonObject[]).map((sort) => ({
+        fieldId: localField(String(sort.field)),
+        direction: sort.direction,
+      })),
+      pageSize: query.page_size,
+      relationshipHops: query.relationship_hops,
+    };
+  });
   const canonical = moduleDraftV3Schema.parse({
     envelope: {
       kind: "module",
@@ -3287,6 +3327,7 @@ function compileModule(
           .recordTypeId,
         accepts: point.accepts,
       })),
+      queries,
     },
   });
   return canonical;
