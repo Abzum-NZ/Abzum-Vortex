@@ -19,8 +19,6 @@ export {
 export * from "./application-v2-composition";
 export * from "./application-v2-resolution";
 export * from "./application-draft-conversion";
-export * from "./module-draft-conversion";
-export * from "./module-v3-draft-conversion";
 export * from "./validation";
 export * from "./definition-store";
 export * from "./source-identities";

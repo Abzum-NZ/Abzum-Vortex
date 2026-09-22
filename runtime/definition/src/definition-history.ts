@@ -8,8 +8,8 @@ import {
   storedDefinitionSourceSchema,
   fingerprintSchema,
   restoreDefinitionDraftCommandSchema,
+  assertModuleContractPair,
   selectApplicationContractPair,
-  selectModuleContractPair,
   selectStoredApplicationSourceContract,
   sessionContextSchema,
   sourceIdentityAssignmentV3Schema,
@@ -158,7 +158,7 @@ const selectRestoreContract = (candidate: unknown): void => {
     if (record.kind === "application") {
       selectStoredApplicationSourceContract(sourceContractVersion, intrinsicSourceContractVersion);
       selectApplicationContractPair(sourceContractVersion, validationContractVersion);
-    } else selectModuleContractPair(sourceContractVersion, validationContractVersion);
+    } else assertModuleContractPair(sourceContractVersion, validationContractVersion);
   } catch {
     throw new DefinitionHistoryError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   }
@@ -178,7 +178,7 @@ const selectStoredDraftContract = (candidate: unknown): void => {
     else {
       if (sourceContractVersion !== intrinsicSourceContractVersion)
         throw new TypeError("Stored source version mismatch");
-      selectModuleContractPair(sourceContractVersion, sourceContractVersion);
+      assertModuleContractPair(sourceContractVersion, sourceContractVersion);
     }
   } catch {
     throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");

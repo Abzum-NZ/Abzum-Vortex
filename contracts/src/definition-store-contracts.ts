@@ -3,9 +3,7 @@ import { correlationIdSchema } from "./common";
 import {
   applicationSourceDocumentV1Schema,
   applicationSourceDocumentV2Schema,
-  moduleSourceDocumentV2Schema,
-  moduleSourceDocumentV3Schema,
-  moduleSourceDocumentVersionedSchema,
+  moduleSourceDocumentSchema,
 } from "./definition-source";
 import {
   actorIdSchema,
@@ -31,7 +29,7 @@ export const storedApplicationSourceDocumentSchema = z.discriminatedUnion(
   "source_contract_version",
   [applicationSourceDocumentV1Schema, applicationSourceDocumentV2Schema],
 );
-export const storedModuleSourceDocumentSchema = moduleSourceDocumentVersionedSchema;
+export const storedModuleSourceDocumentSchema = moduleSourceDocumentSchema;
 export const storedDefinitionSourceSchema = z.union([
   storedModuleSourceDocumentSchema,
   storedApplicationSourceDocumentSchema,
@@ -50,27 +48,15 @@ export const saveDefinitionDraftCommandSchema = z
   })
   .strict();
 
-export const createModuleRootCommandV2Schema = z
-  .object({ source: moduleSourceDocumentV2Schema })
+export const createModuleRootCommandSchema = z
+  .object({ source: moduleSourceDocumentSchema })
   .strict();
 
-export const saveModuleDraftCommandV2Schema = z
+export const saveModuleDraftCommandSchema = z
   .object({
     rootId: moduleRootIdSchema,
     expectedDraftRevision: javascriptSafeRevisionSchema,
-    source: moduleSourceDocumentV2Schema,
-  })
-  .strict();
-
-export const createModuleRootCommandV3Schema = z
-  .object({ source: moduleSourceDocumentV3Schema })
-  .strict();
-
-export const saveModuleDraftCommandV3Schema = z
-  .object({
-    rootId: moduleRootIdSchema,
-    expectedDraftRevision: javascriptSafeRevisionSchema,
-    source: moduleSourceDocumentV3Schema,
+    source: moduleSourceDocumentSchema,
   })
   .strict();
 
@@ -158,21 +144,11 @@ export const storedDefinitionDraftSchema = z
   ])
   .superRefine(validateStoredDraftEvidence);
 
-export const storedModuleDefinitionDraftV2Schema = z
+export const storedModuleDefinitionDraftSchema = z
   .object({
     kind: z.literal("module"),
     rootId: moduleRootIdSchema,
-    source: moduleSourceDocumentV2Schema,
-    ...storedDraftMetadata,
-  })
-  .strict()
-  .superRefine(validateStoredDraftEvidence);
-
-export const storedModuleDefinitionDraftV3Schema = z
-  .object({
-    kind: z.literal("module"),
-    rootId: moduleRootIdSchema,
-    source: moduleSourceDocumentV3Schema,
+    source: moduleSourceDocumentSchema,
     ...storedDraftMetadata,
   })
   .strict()
@@ -314,15 +290,12 @@ export const publishDefinitionResultSchema = z
 
 export type CreateDefinitionRootCommand = z.infer<typeof createDefinitionRootCommandSchema>;
 export type SaveDefinitionDraftCommand = z.infer<typeof saveDefinitionDraftCommandSchema>;
-export type CreateModuleRootCommandV2 = z.infer<typeof createModuleRootCommandV2Schema>;
-export type SaveModuleDraftCommandV2 = z.infer<typeof saveModuleDraftCommandV2Schema>;
-export type CreateModuleRootCommandV3 = z.infer<typeof createModuleRootCommandV3Schema>;
-export type SaveModuleDraftCommandV3 = z.infer<typeof saveModuleDraftCommandV3Schema>;
+export type CreateModuleRootCommand = z.infer<typeof createModuleRootCommandSchema>;
+export type SaveModuleDraftCommand = z.infer<typeof saveModuleDraftCommandSchema>;
 export type StoredDefinitionSource = z.infer<typeof storedDefinitionSourceSchema>;
 export type StoredModuleSourceDocument = z.infer<typeof storedModuleSourceDocumentSchema>;
 export type StoredDefinitionDraft = z.infer<typeof storedDefinitionDraftSchema>;
-export type StoredModuleDefinitionDraftV2 = z.infer<typeof storedModuleDefinitionDraftV2Schema>;
-export type StoredModuleDefinitionDraftV3 = z.infer<typeof storedModuleDefinitionDraftV3Schema>;
+export type StoredModuleDefinitionDraft = z.infer<typeof storedModuleDefinitionDraftSchema>;
 export type ExactDefinitionDependency = z.infer<typeof exactDefinitionDependencySchema>;
 export type PrepareDefinitionPublicationCommand = z.infer<
   typeof prepareDefinitionPublicationCommandSchema

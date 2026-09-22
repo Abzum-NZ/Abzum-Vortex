@@ -8,14 +8,8 @@ import {
 import { publishedApplicationDefinitionSchema } from "./application-contracts";
 import { connectionTypeSourceDocumentSchema } from "./connection-source-contracts";
 import { connectionTypeSchema } from "./integration-contracts";
-import { moduleDraftSchema, publishedModuleDefinitionSchema } from "./module-contracts";
-import { moduleContractVersionPairV2Schema, moduleDraftV2Schema } from "./module-contracts-v2";
 import { moduleContractVersionPairV3Schema, moduleDraftV3Schema } from "./module-contracts-v3";
-import {
-  moduleSourceDocumentV1Schema,
-  moduleSourceDocumentV2Schema,
-  moduleSourceDocumentV3Schema,
-} from "./definition-source";
+import { moduleSourceDocumentSchema } from "./definition-source";
 import {
   actorIdSchema,
   applicationRootIdSchema,
@@ -31,10 +25,7 @@ import {
   semanticVersionSchema,
   timestampSchema,
 } from "./identifiers";
-import {
-  moduleVersionImpactHistoryEntryV2Schema,
-  moduleVersionImpactHistoryEntryV3Schema,
-} from "./version-impact";
+import { moduleVersionImpactHistoryEntryV3Schema } from "./version-impact";
 
 export const sourceIdentityKindSchema = z.enum([
   "root",
@@ -189,8 +180,8 @@ export const savedConditionRevisionAssignmentSchema = z
   })
   .strict();
 
+/** Module publication always uses the explicit current-contract request below. */
 const legacyDefinitionCompilationSourceSchema = z.discriminatedUnion("kind", [
-  moduleSourceDocumentV1Schema,
   applicationSourceDocumentSchema,
   connectionTypeSourceDocumentSchema,
 ]);
@@ -204,22 +195,11 @@ export const definitionCompilationRequestSchema = z
   })
   .strict();
 
-/** Explicit Module V2 request; runtime dispatch must select this exact version pair. */
-export const moduleCompilationRequestV2Schema = z
-  .object({
-    ...moduleContractVersionPairV2Schema.shape,
-    source: moduleSourceDocumentV2Schema,
-    resolution: definitionResolutionSnapshotV2Schema,
-    draftMetadata: definitionDraftMetadataSchema,
-    savedConditionRevisions: z.array(savedConditionRevisionAssignmentSchema).optional(),
-  })
-  .strict();
-
-/** Candidate Module V3 request; runtime publication dispatch is enabled separately. */
+/** The one current Module compilation request; runtime dispatch requires this exact pair. */
 export const moduleCompilationRequestV3Schema = z
   .object({
     ...moduleContractVersionPairV3Schema.shape,
-    source: moduleSourceDocumentV3Schema,
+    source: moduleSourceDocumentSchema,
     resolution: definitionResolutionSnapshotV3Schema,
     draftMetadata: definitionDraftMetadataSchema,
     savedConditionRevisions: z.array(savedConditionRevisionAssignmentSchema).optional(),
@@ -318,31 +298,6 @@ export const applicationCompilationOutputV2Schema = z
   })
   .strict();
 
-export const moduleCompilationOutputV1Schema = z
-  .object({
-    kind: z.literal("module"),
-    canonical: moduleDraftSchema,
-    artifact: compiledModuleArtifactSchema,
-    provenance: z.array(definitionProvenanceEntrySchema),
-    dependencyOrder: z.array(namespacedKeySchema),
-    resolvedDependencies: z.array(resolvedDefinitionSchema),
-    resolutionFingerprint: fingerprintSchema,
-  })
-  .strict();
-
-export const moduleCompilationOutputV2Schema = z
-  .object({
-    kind: z.literal("module"),
-    validationContractVersion: z.literal("2.0.0"),
-    canonical: moduleDraftV2Schema,
-    artifact: compiledModuleArtifactSchema,
-    provenance: z.array(definitionProvenanceEntrySchema),
-    dependencyOrder: z.array(namespacedKeySchema),
-    resolvedDependencies: z.array(resolvedDefinitionSchema),
-    resolutionFingerprint: fingerprintSchema,
-  })
-  .strict();
-
 export const moduleCompilationOutputV3Schema = z
   .object({
     kind: z.literal("module"),
@@ -357,8 +312,6 @@ export const moduleCompilationOutputV3Schema = z
   .strict();
 
 export const definitionCompilationOutputSchema = z.union([
-  moduleCompilationOutputV1Schema,
-  moduleCompilationOutputV2Schema,
   moduleCompilationOutputV3Schema,
   applicationCompilationOutputV1Schema,
   applicationCompilationOutputV2Schema,
@@ -375,11 +328,7 @@ export const definitionCompilationOutputSchema = z.union([
     .strict(),
 ]);
 
-const publishedModuleHistoryEntrySchema = z.union([
-  publishedModuleDefinitionSchema,
-  moduleVersionImpactHistoryEntryV2Schema,
-  moduleVersionImpactHistoryEntryV3Schema,
-]);
+const publishedModuleHistoryEntrySchema = moduleVersionImpactHistoryEntryV3Schema;
 
 export const publishedDefinitionHistorySchema = z.discriminatedUnion("kind", [
   z
@@ -521,12 +470,9 @@ export type SavedConditionRevisionAssignment = z.infer<
   typeof savedConditionRevisionAssignmentSchema
 >;
 export type DefinitionCompilationRequest = z.input<typeof definitionCompilationRequestSchema>;
-export type ModuleCompilationRequestV2 = z.input<typeof moduleCompilationRequestV2Schema>;
 export type ModuleCompilationRequestV3 = z.input<typeof moduleCompilationRequestV3Schema>;
 export type ApplicationCompilationRequestV2 = z.input<typeof applicationCompilationRequestV2Schema>;
 export type DefinitionCompilationOutput = z.infer<typeof definitionCompilationOutputSchema>;
-export type ModuleCompilationOutputV1 = z.infer<typeof moduleCompilationOutputV1Schema>;
-export type ModuleCompilationOutputV2 = z.infer<typeof moduleCompilationOutputV2Schema>;
 export type ModuleCompilationOutputV3 = z.infer<typeof moduleCompilationOutputV3Schema>;
 export type ApplicationCompilationOutputV2 = z.infer<typeof applicationCompilationOutputV2Schema>;
 export type CompiledDefinitionArtifact = z.infer<typeof compiledDefinitionArtifactSchema>;

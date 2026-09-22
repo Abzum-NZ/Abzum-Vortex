@@ -1,17 +1,39 @@
 import { z } from "zod";
 import { personalDataClassSchema, publicDisplaySchema, searchPrioritySchema } from "./catalogues";
-import { builderKeySchema, namespacedKeySchema, platformIdSchema } from "./identifiers";
-import { jsonValueSchema } from "./common";
+import { builderKeySchema, namespacedKeySchema, organizationAccountIdSchema } from "./identifiers";
+import { jsonValueSchema, safeHttpsUrlSchema } from "./common";
 import { versionRequirementSchema } from "./definitions";
 import {
   authoredSourceBase,
   sourceActionEffectSchema,
   sourceAliasSchema,
   sourceConditionSchema,
-  sourceQualifiedRelationshipSchema,
   sourceQualifiedRecordTypeSchema,
+  sourceQualifiedRelationshipSchema,
 } from "./definition-source-common";
+import { parseExactDecimal } from "./exact-decimal";
+import {
+  currencyCodeV2Schema,
+  exactDecimalFitsDigitsV2,
+  exactDecimalWithinBoundsV2,
+  inspectRecordRichTextV2,
+  recordRichTextDocumentV2Schema,
+  sourceExactDecimalTextV2Schema,
+  sourceMoneyValueV2Schema,
+  sourcePersonLinkValueV2Schema,
+  sourceRecordLinkValueV2Schema,
+  type FormattedTextAllowedBlockV2,
+} from "./module-field-values-v2";
 import { moduleSourceRecordOwnershipModeSchema } from "./record-ownership-compatibility";
+import { sourceRuleGraphSchema } from "./rule-graph-source-contracts";
+
+/** The one current Module source/validation contract pair. */
+export const moduleSourceContractVersion = "3.0.0" as const;
+
+// ---------------------------------------------------------------------------
+// Shared permission plumbing. Application source contracts import these
+// directly; their shape is not versioned per Module generation.
+// ---------------------------------------------------------------------------
 
 export const sourcePermissionRecordScopeRouteSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("all_records") }).strict(),
@@ -103,6 +125,139 @@ export const sourcePermissionFieldPolicySchema = z
       });
   });
 
+// ---------------------------------------------------------------------------
+// Shared action-input contract. Application source contracts import this
+// directly; it deliberately excludes the exact decimal_number/money input
+// types Module actions add below, so its shape stays fixed across Modules.
+// ---------------------------------------------------------------------------
+
+const sourceSharedActionInputBase = {
+  key: builderKeySchema,
+  label: z.string().min(1).max(60),
+  required: z.boolean(),
+};
+
+export const actionInputSchema = z
+  .discriminatedUnion("type", [
+    z
+      .object({
+        ...sourceSharedActionInputBase,
+        type: z.literal("text"),
+        validation: z
+          .object({
+            minimum_length: z.number().int().min(0).optional(),
+            maximum_length: z.number().int().positive().optional(),
+            pattern: z.string().min(1).max(500).optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict(),
+    z
+      .object({
+        ...sourceSharedActionInputBase,
+        type: z.literal("formatted_text"),
+        validation: z
+          .object({
+            allowed_blocks: z
+              .array(z.enum(["paragraph", "heading", "list", "link", "attachment"]))
+              .min(1),
+            maximum_length: z.number().int().positive().optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict(),
+    z
+      .object({
+        ...sourceSharedActionInputBase,
+        type: z.literal("number"),
+        validation: z
+          .object({
+            minimum: z.number().finite().optional(),
+            maximum: z.number().finite().optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict(),
+    z.object({ ...sourceSharedActionInputBase, type: z.literal("boolean") }).strict(),
+    z
+      .object({
+        ...sourceSharedActionInputBase,
+        type: z.literal("date"),
+        validation: z
+          .object({
+            earliest: z
+              .string()
+              .regex(/^\d{4}-\d{2}-\d{2}$/)
+              .optional(),
+            latest: z
+              .string()
+              .regex(/^\d{4}-\d{2}-\d{2}$/)
+              .optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict(),
+    z
+      .object({
+        ...sourceSharedActionInputBase,
+        type: z.literal("date_time"),
+        validation: z
+          .object({
+            earliest: z.string().datetime({ offset: true }).optional(),
+            latest: z.string().datetime({ offset: true }).optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict(),
+    z
+      .object({
+        ...sourceSharedActionInputBase,
+        type: z.literal("record_reference"),
+        record_types: z.array(sourceQualifiedRecordTypeSchema).min(1).max(20),
+      })
+      .strict(),
+    z
+      .object({
+        ...sourceSharedActionInputBase,
+        type: z.literal("organisation_account_reference"),
+      })
+      .strict(),
+  ])
+  .superRefine((value, context) => {
+    if (
+      value.type === "text" &&
+      value.validation?.minimum_length !== undefined &&
+      value.validation.maximum_length !== undefined &&
+      value.validation.minimum_length > value.validation.maximum_length
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["validation", "maximum_length"],
+        message: "Maximum length cannot be below minimum length",
+      });
+    if (
+      value.type === "number" &&
+      value.validation?.minimum !== undefined &&
+      value.validation.maximum !== undefined &&
+      value.validation.minimum > value.validation.maximum
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["validation", "maximum"],
+        message: "Maximum cannot be below minimum",
+      });
+  });
+
+// ---------------------------------------------------------------------------
+// Module field catalogue (current: exact-decimal text at every numeric
+// boundary, complete typed table columns).
+// ---------------------------------------------------------------------------
+
 const sourceOptionSchema = z
   .object({
     value: z.string().min(1).max(120),
@@ -110,31 +265,29 @@ const sourceOptionSchema = z
     required_permission: namespacedKeySchema.optional(),
   })
   .strict();
-const sourceFieldBase = {
-  id: sourceAliasSchema,
-  key: builderKeySchema,
-  label: z.string().min(1).max(60),
-  help_text: z.string().max(200).optional(),
-  required: z.boolean(),
-  default: jsonValueSchema.optional(),
-  unique: z.boolean(),
-  filterable: z.boolean(),
-  sortable: z.boolean(),
-  search_priority: searchPrioritySchema.optional(),
-  personal_data: personalDataClassSchema,
-  public_display: publicDisplaySchema,
-};
-const sourceField = <K extends string, S extends z.ZodType>(type: K, settings: S) =>
-  z.object({ ...sourceFieldBase, type: z.literal(type), settings }).strict();
-const numberRange = {
-  minimum: z.number().finite().optional(),
-  maximum: z.number().finite().optional(),
-};
-const empty = z.object({}).strict();
+const emptySettingsSchema = z.object({}).strict();
+const sourceTextFormatSchema = z.enum(["email_address", "web_address", "uuid"]);
 const sourceTextSettingsSchema = z
   .object({
     max_length: z.number().int().min(1).max(100_000),
-    format: builderKeySchema.optional(),
+    format: sourceTextFormatSchema.optional(),
+  })
+  .strict();
+const sourceLongTextSettingsSchema = z
+  .object({ max_length: z.number().int().min(1).max(1_000_000) })
+  .strict();
+const formattedTextAllowedBlockSchema = z.enum([
+  "paragraph",
+  "heading",
+  "list",
+  "table",
+  "link",
+  "attachment",
+]);
+const sourceFormattedTextSettingsSchema = z
+  .object({
+    allowed_blocks: z.array(formattedTextAllowedBlockSchema).min(1),
+    max_length: z.number().int().positive().optional(),
   })
   .strict();
 const sourceWholeNumberSettingsSchema = z
@@ -149,24 +302,38 @@ const sourceWholeNumberSettingsSchema = z
       value.minimum === undefined || value.maximum === undefined || value.maximum >= value.minimum,
     { path: ["maximum"], message: "Maximum cannot be below minimum" },
   );
+
+const exactRangeValid = (minimum?: string, maximum?: string): boolean => {
+  const parsedMinimum = minimum === undefined ? undefined : parseExactDecimal(minimum);
+  const parsedMaximum = maximum === undefined ? undefined : parseExactDecimal(maximum);
+  return (
+    parsedMinimum !== undefined &&
+    parsedMaximum !== undefined &&
+    exactDecimalWithinBoundsV2(parsedMinimum, undefined, parsedMaximum)
+  );
+};
+
 const sourceDecimalSettingsSchema = z
   .object({
-    ...numberRange,
     digits_before_decimal: z.number().int().min(1).max(30),
     decimal_places: z.number().int().min(0).max(12),
+    minimum: sourceExactDecimalTextV2Schema.optional(),
+    maximum: sourceExactDecimalTextV2Schema.optional(),
   })
   .strict()
   .refine(
     (value) =>
-      value.minimum === undefined || value.maximum === undefined || value.maximum >= value.minimum,
+      value.minimum === undefined ||
+      value.maximum === undefined ||
+      exactRangeValid(value.minimum, value.maximum),
     { path: ["maximum"], message: "Maximum cannot be below minimum" },
   );
 const sourceMoneySettingsSchema = z
   .object({
     currency_mode: z.enum(["fixed", "organisation_default"]),
-    currency: z.string().length(3).optional(),
-    minimum: z.number().finite().optional(),
-    maximum: z.number().finite().optional(),
+    currency: currencyCodeV2Schema.optional(),
+    minimum: sourceExactDecimalTextV2Schema.optional(),
+    maximum: sourceExactDecimalTextV2Schema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -176,7 +343,11 @@ const sourceMoneySettingsSchema = z
         path: ["currency"],
         message: "Fixed money requires exactly one currency",
       });
-    if (value.minimum !== undefined && value.maximum !== undefined && value.maximum < value.minimum)
+    if (
+      value.minimum !== undefined &&
+      value.maximum !== undefined &&
+      !exactRangeValid(value.minimum, value.maximum)
+    )
       context.addIssue({
         code: "custom",
         path: ["maximum"],
@@ -192,8 +363,29 @@ const sourceDateTimeSettingsSchema = z
 const sourceChoiceSettingsSchema = z
   .object({ options: z.array(sourceOptionSchema).min(1).max(200) })
   .strict();
+const sourceSeveralChoicesSettingsSchema = z
+  .object({
+    options: z.array(sourceOptionSchema).min(1).max(200),
+    maximum_selections: z.number().int().min(1).max(200).optional(),
+  })
+  .strict();
+const sourceReferenceNumberSettingsSchema = z
+  .object({
+    prefix: z.string().max(20).optional(),
+    suffix: z.string().max(20).optional(),
+    digits: z.number().int().min(1).max(20),
+    starting_number: z.number().int().positive().optional(),
+  })
+  .strict();
+const sourcePhoneSettingsSchema = z
+  .object({ default_country: z.string().length(2).optional() })
+  .strict();
+const sourceWebAddressSettingsSchema = z
+  .object({ allowed_schemes: z.array(z.literal("https")).min(1).optional() })
+  .strict();
+
 const sourceTableColumnBase = { key: builderKeySchema, required: z.boolean() };
-const typedSourceTableColumnSchema = z.discriminatedUnion("type", [
+const sourceTableColumnSchema = z.discriminatedUnion("type", [
   z
     .object({
       ...sourceTableColumnBase,
@@ -222,7 +414,13 @@ const typedSourceTableColumnSchema = z.discriminatedUnion("type", [
       settings: sourceMoneySettingsSchema,
     })
     .strict(),
-  z.object({ ...sourceTableColumnBase, type: z.literal("yes_no"), settings: empty }).strict(),
+  z
+    .object({
+      ...sourceTableColumnBase,
+      type: z.literal("yes_no"),
+      settings: emptySettingsSchema,
+    })
+    .strict(),
   z
     .object({
       ...sourceTableColumnBase,
@@ -245,12 +443,100 @@ const typedSourceTableColumnSchema = z.discriminatedUnion("type", [
     })
     .strict(),
 ]);
-// Stored V1 source documents may contain this incomplete historical shape.
-// Semantic validation prevents it being newly published until settings exist.
-const legacySourceTableColumnSchema = z
+const sourceTableSettingsSchema = z
   .object({
-    ...sourceTableColumnBase,
-    type: z.enum([
+    minimum_rows: z.number().int().min(0),
+    maximum_rows: z.number().int().min(1).max(1_000),
+    columns: z.array(sourceTableColumnSchema).min(1).max(40),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.maximum_rows < value.minimum_rows)
+      context.addIssue({
+        code: "custom",
+        path: ["maximum_rows"],
+        message: "Maximum rows cannot be below minimum rows",
+      });
+    const keys = value.columns.map((column) => column.key);
+    if (new Set(keys).size !== keys.length)
+      context.addIssue({
+        code: "custom",
+        path: ["columns"],
+        message: "Table column keys must be unique",
+      });
+  });
+const sourceLinkSettingsSchema = z
+  .object({
+    target: sourceQualifiedRecordTypeSchema,
+    reverse_key: builderKeySchema,
+    on_parent_delete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
+  })
+  .strict();
+const sourceMultiLinkSettingsSchema = z
+  .object({
+    targets: z.array(sourceQualifiedRecordTypeSchema).min(2).max(20),
+    on_parent_delete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
+  })
+  .strict();
+const sourcePersonLinkSettingsSchema = z
+  .object({
+    audience: z.enum([
+      "organisation_accounts",
+      "application_accounts",
+      "organisation_identities_and_external_requesters",
+    ]),
+    application_root_required: z.boolean(),
+    on_person_deactivation: z.enum(["retain_reference", "empty_optional", "refuse_deactivation"]),
+  })
+  .strict();
+
+const sourceCalculationNumberOperandSchema = z.discriminatedUnion("source", [
+  z.object({ source: z.literal("field"), field: builderKeySchema }).strict(),
+  z.object({ source: z.literal("literal"), value: sourceExactDecimalTextV2Schema }).strict(),
+]);
+const sourceCalculationExpressionSchema = z.discriminatedUnion("operation", [
+  z
+    .object({
+      operation: z.literal("subtract_percentage"),
+      amount_field: builderKeySchema,
+      percentage_field: builderKeySchema,
+    })
+    .strict(),
+  z
+    .object({
+      operation: z.literal("join_text"),
+      fields: z.array(builderKeySchema).min(1).max(20),
+      separator: z.string().max(20),
+    })
+    .strict(),
+  z
+    .object({
+      operation: z.literal("numeric"),
+      numeric_operation: z.enum(["add", "subtract", "multiply", "divide"]),
+      operands: z.array(sourceCalculationNumberOperandSchema).min(2).max(20),
+    })
+    .strict(),
+  z.object({ operation: z.literal("condition"), condition: sourceConditionSchema }).strict(),
+  z
+    .object({
+      operation: z.literal("date_offset"),
+      date_field: builderKeySchema,
+      amount: sourceCalculationNumberOperandSchema,
+      unit: z.enum(["days", "weeks", "months", "years"]),
+    })
+    .strict(),
+  z
+    .object({
+      operation: z.literal("deadline_passed"),
+      due_field: builderKeySchema,
+      status_field: builderKeySchema.optional(),
+      terminal_status_values: z.array(jsonValueSchema).max(20),
+    })
+    .strict(),
+]);
+const sourceCalculationSettingsSchema = z
+  .object({
+    result_type: z.enum([
       "text",
       "whole_number",
       "decimal_number",
@@ -258,88 +544,93 @@ const legacySourceTableColumnSchema = z
       "yes_no",
       "date",
       "date_time",
-      "choice",
     ]),
+    decimal_places: z.number().int().min(0).max(12).optional(),
+    expression: sourceCalculationExpressionSchema,
   })
-  .strict();
-const sourceTableColumnSchema = z.union([
-  typedSourceTableColumnSchema,
-  legacySourceTableColumnSchema,
-]);
-const sourceTableCellValid = (
-  column: z.infer<typeof sourceTableColumnSchema>,
-  value: unknown,
-): boolean => {
-  const parsed = typedSourceTableColumnSchema.safeParse(column);
-  if (!parsed.success) return false;
-  const typedColumn = parsed.data;
-  switch (typedColumn.type) {
-    case "text":
-      return typeof value === "string" && value.length <= typedColumn.settings.max_length;
-    case "whole_number":
-      return (
-        Number.isInteger(value) &&
-        (typedColumn.settings.minimum === undefined ||
-          (value as number) >= typedColumn.settings.minimum) &&
-        (typedColumn.settings.maximum === undefined ||
-          (value as number) <= typedColumn.settings.maximum) &&
-        (typedColumn.settings.step === undefined ||
-          ((value as number) - (typedColumn.settings.minimum ?? 0)) % typedColumn.settings.step ===
-            0)
-      );
-    case "decimal_number": {
-      if (typeof value !== "number" || !Number.isFinite(value)) return false;
-      const [whole, fraction = ""] = String(Math.abs(value)).split(".");
-      return (
-        !String(value).toLowerCase().includes("e") &&
-        whole!.length <= typedColumn.settings.digits_before_decimal &&
-        fraction.length <= typedColumn.settings.decimal_places &&
-        (typedColumn.settings.minimum === undefined || value >= typedColumn.settings.minimum) &&
-        (typedColumn.settings.maximum === undefined || value <= typedColumn.settings.maximum)
-      );
-    }
-    case "money":
-      return (
-        typeof value === "number" &&
-        Number.isFinite(value) &&
-        (typedColumn.settings.minimum === undefined || value >= typedColumn.settings.minimum) &&
-        (typedColumn.settings.maximum === undefined || value <= typedColumn.settings.maximum)
-      );
-    case "yes_no":
-      return typeof value === "boolean";
-    case "date":
-      return (
-        typeof value === "string" &&
-        z.iso.date().safeParse(value).success &&
-        (typedColumn.settings.earliest === undefined || value >= typedColumn.settings.earliest) &&
-        (typedColumn.settings.latest === undefined || value <= typedColumn.settings.latest)
-      );
-    case "date_time":
-      return typeof value === "string" && z.iso.datetime({ offset: true }).safeParse(value).success;
-    case "choice":
-      return (
-        typeof value === "string" &&
-        typedColumn.settings.options.some((option) => option.value === value)
-      );
-  }
-};
-const sourceTableDefaultValid = (
-  columns: readonly z.infer<typeof sourceTableColumnSchema>[],
-  rows: readonly unknown[],
-): boolean => {
-  const keys = new Set(columns.map((column) => column.key));
-  return rows.every((row) => {
-    if (row === null || typeof row !== "object" || Array.isArray(row)) return false;
-    const cells = row as Record<string, unknown>;
-    if (Object.keys(cells).some((key) => !keys.has(key))) return false;
-    return columns.every(
-      (column) =>
-        (!column.required && !Object.prototype.hasOwnProperty.call(cells, column.key)) ||
-        (Object.prototype.hasOwnProperty.call(cells, column.key) &&
-          sourceTableCellValid(column, cells[column.key])),
-    );
+  .strict()
+  .superRefine((value, context) => {
+    const operation = value.expression.operation;
+    const validResultTypes: Readonly<Record<typeof operation, readonly string[]>> = {
+      join_text: ["text"],
+      numeric: ["whole_number", "decimal_number", "money"],
+      subtract_percentage: ["decimal_number", "money"],
+      condition: ["yes_no"],
+      date_offset: ["date", "date_time"],
+      deadline_passed: ["yes_no"],
+    };
+    if (!validResultTypes[operation].includes(value.result_type))
+      context.addIssue({
+        code: "custom",
+        path: ["result_type"],
+        message: "Calculation result type must match its operation",
+      });
+    if (
+      value.decimal_places !== undefined &&
+      value.result_type !== "decimal_number" &&
+      value.result_type !== "money"
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["decimal_places"],
+        message: "Only decimal and money calculations declare result precision",
+      });
   });
-};
+const sourceTotalSettingsSchema = z
+  .object({
+    relationship: sourceQualifiedRelationshipSchema,
+    operation: z.enum(["count", "sum", "minimum", "maximum", "average"]),
+    result_type: z.enum([
+      "text",
+      "whole_number",
+      "decimal_number",
+      "money",
+      "yes_no",
+      "date",
+      "date_time",
+    ]),
+    field: builderKeySchema.optional(),
+    filter: sourceConditionSchema.optional(),
+    currency: currencyCodeV2Schema.optional(),
+    decimal_places: z.number().int().min(0).max(12).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const needsField = value.operation !== "count";
+    if (needsField !== (value.field !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["field"],
+        message: "Only non-count totals require a field",
+      });
+    if (value.currency !== undefined && value.operation !== "sum")
+      context.addIssue({
+        code: "custom",
+        path: ["currency"],
+        message: "Currency is supported only for sum totals",
+      });
+    if (value.decimal_places !== undefined && value.operation !== "average")
+      context.addIssue({
+        code: "custom",
+        path: ["decimal_places"],
+        message: "Only average totals declare result precision",
+      });
+    if (value.operation === "count" && value.result_type !== "whole_number")
+      context.addIssue({
+        code: "custom",
+        path: ["result_type"],
+        message: "Count totals produce a whole number",
+      });
+    if (
+      ["sum", "average"].includes(value.operation) &&
+      !["whole_number", "decimal_number", "money"].includes(value.result_type)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["result_type"],
+        message: "Sum and average totals require a numeric result type",
+      });
+  });
 const sourceAttachmentSettingsSchema = z
   .object({
     allowed_kinds: z
@@ -374,366 +665,397 @@ const sourceAttachmentSettingsSchema = z
         message: "max_files is required only for multiple attachments",
       });
   });
-const sourceCalculationNumberOperandSchema = z.discriminatedUnion("source", [
-  z.object({ source: z.literal("field"), field: builderKeySchema }).strict(),
-  z.object({ source: z.literal("literal"), value: z.number().finite() }).strict(),
-]);
-const sourceCalculationExpressionSchema = z.discriminatedUnion("operation", [
+
+const sourceFieldBase = {
+  id: sourceAliasSchema,
+  key: builderKeySchema,
+  label: z.string().min(1).max(60),
+  help_text: z.string().max(200).optional(),
+  required: z.boolean(),
+  unique: z.boolean(),
+  filterable: z.boolean(),
+  sortable: z.boolean(),
+  search_priority: searchPrioritySchema.optional(),
+  personal_data: personalDataClassSchema,
+  public_display: publicDisplaySchema,
+};
+const sourceField = <K extends string, S extends z.ZodType, D extends z.ZodType>(
+  type: K,
+  settings: S,
+  defaultValue: D,
+) =>
   z
     .object({
-      operation: z.literal("subtract_percentage"),
-      amount_field: builderKeySchema,
-      percentage_field: builderKeySchema,
+      ...sourceFieldBase,
+      type: z.literal(type),
+      settings,
+      default: defaultValue.optional(),
     })
-    .strict(),
-  z
-    .object({
-      operation: z.literal("join_text"),
-      fields: z.array(builderKeySchema).min(1).max(20),
-      separator: z.string().max(20),
-    })
-    .strict(),
-  z
-    .object({
-      operation: z.literal("numeric"),
-      numeric_operation: z.enum(["add", "subtract", "multiply", "divide"]),
-      operands: z.array(sourceCalculationNumberOperandSchema).min(2).max(20),
-    })
-    .strict(),
-  z
-    .object({
-      operation: z.literal("condition"),
-      condition: sourceConditionSchema,
-    })
-    .strict(),
-  z
-    .object({
-      operation: z.literal("date_offset"),
-      date_field: builderKeySchema,
-      amount: sourceCalculationNumberOperandSchema,
-      unit: z.enum(["days", "weeks", "months", "years"]),
-    })
-    .strict(),
-  z
-    .object({
-      operation: z.literal("deadline_passed"),
-      due_field: builderKeySchema,
-      status_field: builderKeySchema.optional(),
-      terminal_status_values: z.array(jsonValueSchema).max(20),
-    })
-    .strict(),
-]);
+    .strict();
+const noDefaultSchema = z.never();
+const sourceTableDefaultSchema = z.array(z.record(builderKeySchema, jsonValueSchema));
+
 const sourceFieldMembers = [
-  sourceField("text", sourceTextSettingsSchema),
-  sourceField(
-    "long_text",
-    z.object({ max_length: z.number().int().min(1).max(1_000_000) }).strict(),
-  ),
-  sourceField(
-    "formatted_text",
-    z
-      .object({
-        allowed_blocks: z
-          .array(z.enum(["paragraph", "heading", "list", "table", "link", "attachment"]))
-          .min(1),
-        max_length: z.number().int().positive().optional(),
-      })
-      .strict(),
-  ),
-  sourceField("whole_number", sourceWholeNumberSettingsSchema),
-  sourceField("decimal_number", sourceDecimalSettingsSchema),
-  sourceField("money", sourceMoneySettingsSchema),
-  sourceField("yes_no", empty),
-  sourceField("date", sourceDateSettingsSchema),
-  sourceField("date_time", sourceDateTimeSettingsSchema),
-  sourceField("choice", sourceChoiceSettingsSchema),
-  sourceField(
-    "several_choices",
-    z
-      .object({
-        options: z.array(sourceOptionSchema).min(1).max(200),
-        maximum_selections: z.number().int().min(1).max(200).optional(),
-      })
-      .strict(),
-  ),
-  sourceField(
-    "reference_number",
-    z
-      .object({
-        prefix: z.string().max(20).optional(),
-        suffix: z.string().max(20).optional(),
-        digits: z.number().int().min(1).max(20),
-        starting_number: z.number().int().positive().optional(),
-      })
-      .strict(),
-  ),
-  sourceField("email_address", empty),
-  sourceField(
-    "phone_number",
-    z.object({ default_country: z.string().length(2).optional() }).strict(),
-  ),
-  sourceField(
-    "web_address",
-    z.object({ allowed_schemes: z.array(z.literal("https")).min(1).optional() }).strict(),
-  ),
-  sourceField(
-    "table",
-    z
-      .object({
-        minimum_rows: z.number().int().min(0),
-        maximum_rows: z.number().int().min(1).max(1_000),
-        columns: z.array(sourceTableColumnSchema).min(1).max(40),
-      })
-      .strict()
-      .superRefine((value, context) => {
-        if (value.maximum_rows < value.minimum_rows)
-          context.addIssue({
-            code: "custom",
-            path: ["maximum_rows"],
-            message: "Maximum rows cannot be below minimum rows",
-          });
-        const keys = value.columns.map((column) => column.key);
-        if (
-          value.columns.every((column) => "settings" in column) &&
-          new Set(keys).size !== keys.length
-        )
-          context.addIssue({
-            code: "custom",
-            path: ["columns"],
-            message: "Table column keys must be unique",
-          });
-      }),
-  ),
-  sourceField(
-    "link",
-    z
-      .object({
-        target: sourceQualifiedRecordTypeSchema,
-        reverse_key: builderKeySchema,
-        on_parent_delete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
-      })
-      .strict(),
-  ),
+  sourceField("text", sourceTextSettingsSchema, z.string()),
+  sourceField("long_text", sourceLongTextSettingsSchema, z.string()),
+  sourceField("formatted_text", sourceFormattedTextSettingsSchema, recordRichTextDocumentV2Schema),
+  sourceField("whole_number", sourceWholeNumberSettingsSchema, z.number().int()),
+  sourceField("decimal_number", sourceDecimalSettingsSchema, sourceExactDecimalTextV2Schema),
+  sourceField("money", sourceMoneySettingsSchema, sourceExactDecimalTextV2Schema),
+  sourceField("yes_no", emptySettingsSchema, z.boolean()),
+  sourceField("date", sourceDateSettingsSchema, z.iso.date()),
+  sourceField("date_time", sourceDateTimeSettingsSchema, z.iso.datetime({ offset: true })),
+  sourceField("choice", sourceChoiceSettingsSchema, z.string()),
+  sourceField("several_choices", sourceSeveralChoicesSettingsSchema, z.array(z.string())),
+  sourceField("reference_number", sourceReferenceNumberSettingsSchema, noDefaultSchema),
+  sourceField("email_address", emptySettingsSchema, z.email()),
+  sourceField("phone_number", sourcePhoneSettingsSchema, z.string()),
+  sourceField("web_address", sourceWebAddressSettingsSchema, safeHttpsUrlSchema),
+  sourceField("table", sourceTableSettingsSchema, sourceTableDefaultSchema),
+  sourceField("link", sourceLinkSettingsSchema, sourceRecordLinkValueV2Schema),
   sourceField(
     "link_to_one_of_several",
-    z
-      .object({
-        targets: z.array(sourceQualifiedRecordTypeSchema).min(1).max(20),
-        on_parent_delete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
-      })
-      .strict(),
+    sourceMultiLinkSettingsSchema,
+    sourceRecordLinkValueV2Schema,
   ),
-  sourceField(
-    "link_to_person",
-    z
-      .object({
-        audience: z.enum([
-          "organisation_accounts",
-          "application_accounts",
-          "organisation_identities_and_external_requesters",
-        ]),
-        application_root_required: z.boolean(),
-        on_person_deactivation: z.enum([
-          "retain_reference",
-          "empty_optional",
-          "refuse_deactivation",
-        ]),
-      })
-      .strict(),
-  ),
-  sourceField(
-    "calculation",
-    z
-      .object({
-        result_type: z.enum([
-          "text",
-          "whole_number",
-          "decimal_number",
-          "money",
-          "yes_no",
-          "date",
-          "date_time",
-        ]),
-        expression: sourceCalculationExpressionSchema,
-      })
-      .strict(),
-  ),
-  sourceField(
-    "total",
-    z
-      .object({
-        relationship: sourceQualifiedRelationshipSchema,
-        operation: z.enum(["count", "sum", "minimum", "maximum", "average"]),
-        result_type: z.enum([
-          "text",
-          "whole_number",
-          "decimal_number",
-          "money",
-          "yes_no",
-          "date",
-          "date_time",
-        ]),
-        field: builderKeySchema.optional(),
-        filter: sourceConditionSchema.optional(),
-        currency: z.string().length(3).optional(),
-      })
-      .strict(),
-  ),
-  sourceField("attachment", sourceAttachmentSettingsSchema),
+  sourceField("link_to_person", sourcePersonLinkSettingsSchema, sourcePersonLinkValueV2Schema),
+  sourceField("calculation", sourceCalculationSettingsSchema, noDefaultSchema),
+  sourceField("total", sourceTotalSettingsSchema, noDefaultSchema),
+  sourceField("attachment", sourceAttachmentSettingsSchema, noDefaultSchema),
 ] as const;
+
+const textFormatValid = (
+  format: z.infer<typeof sourceTextFormatSchema> | undefined,
+  value: string,
+) =>
+  format === undefined ||
+  (format === "email_address" && z.email().safeParse(value).success) ||
+  (format === "web_address" &&
+    z.url().safeParse(value).success &&
+    new URL(value).protocol === "https:") ||
+  (format === "uuid" && z.uuid().safeParse(value).success);
+const wholeNumberValid = (
+  value: number,
+  settings: z.infer<typeof sourceWholeNumberSettingsSchema>,
+) =>
+  (settings.minimum === undefined || value >= settings.minimum) &&
+  (settings.maximum === undefined || value <= settings.maximum) &&
+  (settings.step === undefined || (value - (settings.minimum ?? 0)) % settings.step === 0);
+const decimalValid = (value: string, settings: z.infer<typeof sourceDecimalSettingsSchema>) => {
+  const parsed = parseExactDecimal(value);
+  if (parsed === undefined) return false;
+  return (
+    exactDecimalFitsDigitsV2(parsed, settings.digits_before_decimal, settings.decimal_places) &&
+    exactDecimalWithinBoundsV2(
+      parsed,
+      settings.minimum === undefined ? undefined : parseExactDecimal(settings.minimum),
+      settings.maximum === undefined ? undefined : parseExactDecimal(settings.maximum),
+    )
+  );
+};
+const moneyAmountValid = (value: string, settings: z.infer<typeof sourceMoneySettingsSchema>) => {
+  const parsed = parseExactDecimal(value);
+  if (parsed === undefined) return false;
+  return exactDecimalWithinBoundsV2(
+    parsed,
+    settings.minimum === undefined ? undefined : parseExactDecimal(settings.minimum),
+    settings.maximum === undefined ? undefined : parseExactDecimal(settings.maximum),
+  );
+};
+const formattedTextValid = (
+  value: z.infer<typeof recordRichTextDocumentV2Schema>,
+  settings: z.infer<typeof sourceFormattedTextSettingsSchema>,
+) => {
+  const inspected = inspectRecordRichTextV2(value);
+  const allowed = new Set<FormattedTextAllowedBlockV2>(settings.allowed_blocks);
+  return (
+    [...inspected.usedBlocks].every((kind) => allowed.has(kind)) &&
+    (settings.max_length === undefined || inspected.visibleTextLength <= settings.max_length)
+  );
+};
+const tableCellDefaultValid = (
+  column: z.infer<typeof sourceTableColumnSchema>,
+  value: unknown,
+): boolean => {
+  switch (column.type) {
+    case "text":
+      return (
+        typeof value === "string" &&
+        value.length <= column.settings.max_length &&
+        textFormatValid(column.settings.format, value)
+      );
+    case "whole_number":
+      return Number.isInteger(value) && wholeNumberValid(value as number, column.settings);
+    case "decimal_number":
+      return (
+        sourceExactDecimalTextV2Schema.safeParse(value).success &&
+        decimalValid(value as string, column.settings)
+      );
+    case "money":
+      return (
+        sourceExactDecimalTextV2Schema.safeParse(value).success &&
+        moneyAmountValid(value as string, column.settings)
+      );
+    case "yes_no":
+      return typeof value === "boolean";
+    case "date":
+      return (
+        z.iso.date().safeParse(value).success &&
+        (column.settings.earliest === undefined || (value as string) >= column.settings.earliest) &&
+        (column.settings.latest === undefined || (value as string) <= column.settings.latest)
+      );
+    case "date_time":
+      return z.iso.datetime({ offset: true }).safeParse(value).success;
+    case "choice":
+      return (
+        typeof value === "string" &&
+        column.settings.options.some((option) => option.value === value)
+      );
+  }
+};
+const tableDefaultValid = (
+  value: readonly Record<string, unknown>[],
+  settings: z.infer<typeof sourceTableSettingsSchema>,
+) => {
+  const keys = new Set(settings.columns.map((column) => column.key));
+  return (
+    value.length >= settings.minimum_rows &&
+    value.length <= settings.maximum_rows &&
+    value.every(
+      (row) =>
+        Object.keys(row).every((key) => keys.has(key)) &&
+        settings.columns.every(
+          (column) =>
+            (!column.required && !Object.prototype.hasOwnProperty.call(row, column.key)) ||
+            (Object.prototype.hasOwnProperty.call(row, column.key) &&
+              tableCellDefaultValid(column, row[column.key])),
+        ),
+    )
+  );
+};
+
 export const moduleSourceFieldSchema = z
   .discriminatedUnion("type", sourceFieldMembers)
   .superRefine((value, context) => {
+    if (value.default === undefined) return;
     const invalid = (message: string) =>
       context.addIssue({ code: "custom", path: ["default"], message });
-    if (value.default !== undefined) {
-      switch (value.type) {
-        case "text":
-        case "long_text":
-        case "formatted_text":
-        case "email_address":
-        case "phone_number":
-        case "web_address":
-          if (typeof value.default !== "string") invalid("Default must be text");
-          break;
-        case "whole_number":
-          if (!Number.isInteger(value.default)) invalid("Default must be a whole number");
-          break;
-        case "decimal_number":
-        case "money":
-          if (typeof value.default !== "number" || !Number.isFinite(value.default))
-            invalid("Default must be a number");
-          break;
-        case "yes_no":
-          if (typeof value.default !== "boolean") invalid("Default must be yes or no");
-          break;
-        case "date":
-          if (typeof value.default !== "string" || !z.iso.date().safeParse(value.default).success)
-            invalid("Default must be an ISO date");
-          break;
-        case "date_time":
-          if (
-            typeof value.default !== "string" ||
-            !z.iso.datetime({ offset: true }).safeParse(value.default).success
-          )
-            invalid("Default must be an ISO date and time with an offset");
-          break;
-        case "choice":
-          if (
-            typeof value.default !== "string" ||
-            !value.settings.options.some((option) => option.value === value.default)
-          )
-            invalid("Default must be one declared choice");
-          break;
-        case "several_choices":
-          if (
-            !Array.isArray(value.default) ||
-            !value.default.every(
-              (item) =>
-                typeof item === "string" &&
-                value.settings.options.some((option) => option.value === item),
-            ) ||
-            (value.settings.maximum_selections !== undefined &&
-              value.default.length > value.settings.maximum_selections)
-          )
-            invalid("Every default must be a declared choice within the selection limit");
-          break;
-        case "table": {
-          const completeSourceColumns = value.settings.columns.every(
-            (column) => "settings" in column,
-          );
-          if (
-            !Array.isArray(value.default) ||
-            value.default.length < value.settings.minimum_rows ||
-            value.default.length > value.settings.maximum_rows ||
-            (completeSourceColumns
-              ? !sourceTableDefaultValid(value.settings.columns, value.default)
-              : !value.default.every(
-                  (row) => typeof row === "object" && row !== null && !Array.isArray(row),
-                ))
-          )
-            invalid("Default must match the configured table columns and row limits");
-          break;
-        }
-        case "link":
-        case "link_to_one_of_several":
-        case "link_to_person":
-          if (
-            typeof value.default !== "string" ||
-            !platformIdSchema.safeParse(value.default).success
-          )
-            invalid("Default must be a platform-issued record or account identifier");
-          break;
-        case "reference_number":
-        case "calculation":
-        case "total":
-        case "attachment":
-          invalid("This field type does not accept a definition default");
-          break;
-      }
-    }
-    if (value.type === "calculation") {
-      const operation = value.settings.expression.operation;
-      const validResultTypes: Readonly<Record<typeof operation, readonly string[]>> = {
-        join_text: ["text"],
-        numeric: ["whole_number", "decimal_number", "money"],
-        subtract_percentage: ["decimal_number", "money"],
-        condition: ["yes_no"],
-        date_offset: ["date", "date_time"],
-        deadline_passed: ["yes_no"],
-      };
-      if (!validResultTypes[operation].includes(value.settings.result_type))
-        context.addIssue({
-          code: "custom",
-          path: ["settings", "result_type"],
-          message: "Calculation result type must match its operation",
-        });
-    }
-    if (value.type === "total") {
-      const needsField = value.settings.operation !== "count";
-      if (needsField !== (value.settings.field !== undefined))
-        context.addIssue({
-          code: "custom",
-          path: ["settings", "field"],
-          message: "Only non-count totals require a field",
-        });
-      if (value.settings.currency !== undefined && value.settings.operation !== "sum")
-        context.addIssue({
-          code: "custom",
-          path: ["settings", "currency"],
-          message: "Currency is supported only for sum totals",
-        });
-      if (value.settings.operation === "count" && value.settings.result_type !== "whole_number")
-        context.addIssue({
-          code: "custom",
-          path: ["settings", "result_type"],
-          message: "Count totals produce a whole number",
-        });
-      if (
-        ["sum", "average"].includes(value.settings.operation) &&
-        !["whole_number", "decimal_number", "money"].includes(value.settings.result_type)
-      )
-        context.addIssue({
-          code: "custom",
-          path: ["settings", "result_type"],
-          message: "Sum and average totals require a numeric result type",
-        });
+    switch (value.type) {
+      case "text":
+        if (
+          value.default.length > value.settings.max_length ||
+          !textFormatValid(value.settings.format, value.default)
+        )
+          invalid("Default must match the text length and format settings");
+        break;
+      case "long_text":
+        if (value.default.length > value.settings.max_length)
+          invalid("Default must match the long-text length setting");
+        break;
+      case "formatted_text":
+        if (!formattedTextValid(value.default, value.settings))
+          invalid("Default must match the formatted-text block and length settings");
+        break;
+      case "whole_number":
+        if (!wholeNumberValid(value.default, value.settings))
+          invalid("Default must match the whole-number range and step settings");
+        break;
+      case "decimal_number":
+        if (!decimalValid(value.default, value.settings))
+          invalid("Default must match the exact decimal precision and range settings");
+        break;
+      case "money":
+        if (!moneyAmountValid(value.default, value.settings))
+          invalid("Default amount must match the exact money range settings");
+        break;
+      case "date":
+        if (
+          (value.settings.earliest !== undefined && value.default < value.settings.earliest) ||
+          (value.settings.latest !== undefined && value.default > value.settings.latest)
+        )
+          invalid("Default must match the date range settings");
+        break;
+      case "choice":
+        if (!value.settings.options.some((option) => option.value === value.default))
+          invalid("Default must be one declared choice");
+        break;
+      case "several_choices":
+        if (
+          !value.default.every((item) =>
+            value.settings.options.some((option) => option.value === item),
+          ) ||
+          (value.settings.maximum_selections !== undefined &&
+            value.default.length > value.settings.maximum_selections)
+        )
+          invalid("Every default must be a declared choice within the selection limit");
+        break;
+      case "table":
+        if (!tableDefaultValid(value.default, value.settings))
+          invalid("Default must match the configured table columns and row limits");
+        break;
+      case "link":
+        if (value.default.record_type !== value.settings.target)
+          invalid("Default record type must match the configured link target");
+        break;
+      case "link_to_one_of_several":
+        if (!value.settings.targets.includes(value.default.record_type))
+          invalid("Default record type must be one configured link target");
+        break;
+      case "yes_no":
+      case "date_time":
+      case "email_address":
+      case "phone_number":
+      case "web_address":
+      case "link_to_person":
+        break;
     }
   });
-const moduleFixtureFieldSchema = moduleSourceFieldSchema;
 
-// Modules do not own application components or workflows. Those two rule effects
-// are therefore deliberately available only from the application source contract.
-const moduleSourceRuleEffectSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("refuse"), reason_code: builderKeySchema }).strict(),
-  z
-    .object({ kind: z.literal("set_value"), field: builderKeySchema, value: jsonValueSchema })
-    .strict(),
-  z.object({ kind: z.literal("require"), field: builderKeySchema }).strict(),
-  z.object({ kind: z.literal("warn"), message: builderKeySchema }).strict(),
-]);
+// ---------------------------------------------------------------------------
+// Module-only action inputs. Modules additionally accept exact decimal_number
+// and money inputs; the shared actionInputSchema above does not.
+// ---------------------------------------------------------------------------
 
-const moduleFixtureRecordTypeSchema = z
+const moduleSourceActionInputBase = {
+  key: builderKeySchema,
+  label: z.string().min(1).max(60),
+  required: z.boolean(),
+};
+const moduleSourceExactActionInputValidationSchema = z
+  .object({
+    minimum: sourceExactDecimalTextV2Schema.optional(),
+    maximum: sourceExactDecimalTextV2Schema.optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.minimum === undefined ||
+      value.maximum === undefined ||
+      exactRangeValid(value.minimum, value.maximum),
+    { path: ["maximum"], message: "Maximum cannot be below minimum" },
+  );
+
+export const moduleSourceActionInputSchema = z
+  .discriminatedUnion("type", [
+    z
+      .object({
+        ...moduleSourceActionInputBase,
+        type: z.literal("text"),
+        validation: z
+          .object({
+            minimum_length: z.number().int().min(0).optional(),
+            maximum_length: z.number().int().positive().optional(),
+            pattern: z.string().min(1).max(500).optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict(),
+    z
+      .object({
+        ...moduleSourceActionInputBase,
+        type: z.literal("formatted_text"),
+        validation: z
+          .object({
+            allowed_blocks: z.array(formattedTextAllowedBlockSchema).min(1),
+            maximum_length: z.number().int().positive().optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict(),
+    z
+      .object({
+        ...moduleSourceActionInputBase,
+        type: z.literal("number"),
+        validation: z
+          .object({
+            minimum: z.number().finite().optional(),
+            maximum: z.number().finite().optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict(),
+    z
+      .object({
+        ...moduleSourceActionInputBase,
+        type: z.literal("decimal_number"),
+        validation: moduleSourceExactActionInputValidationSchema.optional(),
+      })
+      .strict(),
+    z
+      .object({
+        ...moduleSourceActionInputBase,
+        type: z.literal("money"),
+        validation: moduleSourceExactActionInputValidationSchema.optional(),
+      })
+      .strict(),
+    z.object({ ...moduleSourceActionInputBase, type: z.literal("boolean") }).strict(),
+    z
+      .object({
+        ...moduleSourceActionInputBase,
+        type: z.literal("date"),
+        validation: z
+          .object({ earliest: z.iso.date().optional(), latest: z.iso.date().optional() })
+          .strict()
+          .optional(),
+      })
+      .strict(),
+    z
+      .object({
+        ...moduleSourceActionInputBase,
+        type: z.literal("date_time"),
+        validation: z
+          .object({
+            earliest: z.iso.datetime({ offset: true }).optional(),
+            latest: z.iso.datetime({ offset: true }).optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict(),
+    z
+      .object({
+        ...moduleSourceActionInputBase,
+        type: z.literal("record_reference"),
+        record_types: z.array(sourceQualifiedRecordTypeSchema).min(1).max(20),
+      })
+      .strict(),
+    z
+      .object({ ...moduleSourceActionInputBase, type: z.literal("organisation_account_reference") })
+      .strict(),
+  ])
+  .superRefine((value, context) => {
+    if (
+      value.type === "text" &&
+      value.validation?.minimum_length !== undefined &&
+      value.validation.maximum_length !== undefined &&
+      value.validation.minimum_length > value.validation.maximum_length
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["validation", "maximum_length"],
+        message: "Maximum length cannot be below minimum length",
+      });
+    if (
+      value.type === "number" &&
+      value.validation?.minimum !== undefined &&
+      value.validation.maximum !== undefined &&
+      value.validation.minimum > value.validation.maximum
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["validation", "maximum"],
+        message: "Maximum cannot be below minimum",
+      });
+  });
+
+// ---------------------------------------------------------------------------
+// Record types, actions and sharing conditions.
+// ---------------------------------------------------------------------------
+
+export const moduleSourceRecordTypeSchema = z
   .object({
     id: sourceAliasSchema,
     key: builderKeySchema,
@@ -748,7 +1070,7 @@ const moduleFixtureRecordTypeSchema = z
       .array(z.enum(["create", "read", "update", "soft_delete", "restore", "export"]))
       .min(1),
     custom_actions: z.array(sourceAliasSchema),
-    fields: z.array(moduleFixtureFieldSchema).min(1),
+    fields: z.array(moduleSourceFieldSchema).min(1),
     relationships: z.array(
       z
         .object({
@@ -789,126 +1111,122 @@ const moduleFixtureRecordTypeSchema = z
         message: "The ownership relationship must resolve to a link field on this record type",
       });
   });
-const sourceActionInputBase = {
-  key: builderKeySchema,
-  label: z.string().min(1).max(60),
-  required: z.boolean(),
-};
-export const actionInputSchema = z
-  .discriminatedUnion("type", [
-    z
-      .object({
-        ...sourceActionInputBase,
-        type: z.literal("text"),
-        validation: z
-          .object({
-            minimum_length: z.number().int().min(0).optional(),
-            maximum_length: z.number().int().positive().optional(),
-            pattern: z.string().min(1).max(500).optional(),
-          })
-          .strict()
-          .optional(),
-      })
-      .strict(),
-    z
-      .object({
-        ...sourceActionInputBase,
-        type: z.literal("formatted_text"),
-        validation: z
-          .object({
-            allowed_blocks: z
-              .array(z.enum(["paragraph", "heading", "list", "link", "attachment"]))
-              .min(1),
-            maximum_length: z.number().int().positive().optional(),
-          })
-          .strict()
-          .optional(),
-      })
-      .strict(),
-    z
-      .object({
-        ...sourceActionInputBase,
-        type: z.literal("number"),
-        validation: z
-          .object({
-            minimum: z.number().finite().optional(),
-            maximum: z.number().finite().optional(),
-          })
-          .strict()
-          .optional(),
-      })
-      .strict(),
-    z.object({ ...sourceActionInputBase, type: z.literal("boolean") }).strict(),
-    z
-      .object({
-        ...sourceActionInputBase,
-        type: z.literal("date"),
-        validation: z
-          .object({
-            earliest: z
-              .string()
-              .regex(/^\d{4}-\d{2}-\d{2}$/)
-              .optional(),
-            latest: z
-              .string()
-              .regex(/^\d{4}-\d{2}-\d{2}$/)
-              .optional(),
-          })
-          .strict()
-          .optional(),
-      })
-      .strict(),
-    z
-      .object({
-        ...sourceActionInputBase,
-        type: z.literal("date_time"),
-        validation: z
-          .object({
-            earliest: z.string().datetime({ offset: true }).optional(),
-            latest: z.string().datetime({ offset: true }).optional(),
-          })
-          .strict()
-          .optional(),
-      })
-      .strict(),
-    z
-      .object({
-        ...sourceActionInputBase,
-        type: z.literal("record_reference"),
-        record_types: z.array(sourceQualifiedRecordTypeSchema).min(1).max(20),
-      })
-      .strict(),
-    z
-      .object({
-        ...sourceActionInputBase,
-        type: z.literal("organisation_account_reference"),
-      })
-      .strict(),
-  ])
+
+export const moduleSourceActionSchema = z
+  .object({
+    id: sourceAliasSchema,
+    key: namespacedKeySchema,
+    label: z.string().min(1).max(120),
+    record_type: builderKeySchema,
+    permission: namespacedKeySchema.optional(),
+    permission_alternatives: z.array(namespacedKeySchema).min(2).optional(),
+    shareable: z.boolean(),
+    inputs: z.array(moduleSourceActionInputSchema),
+    precondition: sourceConditionSchema.optional(),
+    effects: z.array(sourceActionEffectSchema).min(1).max(10),
+  })
+  .strict()
   .superRefine((value, context) => {
-    if (
-      value.type === "text" &&
-      value.validation?.minimum_length !== undefined &&
-      value.validation.maximum_length !== undefined &&
-      value.validation.minimum_length > value.validation.maximum_length
-    )
+    if ((value.permission === undefined) === (value.permission_alternatives === undefined))
       context.addIssue({
         code: "custom",
-        path: ["validation", "maximum_length"],
-        message: "Maximum length cannot be below minimum length",
+        path: ["permission_alternatives"],
+        message: "An action requires either one permission or canonical alternatives",
+      });
+    const alternatives = value.permission_alternatives;
+    if (!alternatives) return;
+    if (new Set(alternatives).size !== alternatives.length)
+      context.addIssue({
+        code: "custom",
+        path: ["permission_alternatives"],
+        message: "Action permission alternatives must be unique",
       });
     if (
-      value.type === "number" &&
-      value.validation?.minimum !== undefined &&
-      value.validation.maximum !== undefined &&
-      value.validation.minimum > value.validation.maximum
+      alternatives.some((permission, index) => index > 0 && alternatives[index - 1]! >= permission)
     )
       context.addIssue({
         code: "custom",
-        path: ["validation", "maximum"],
-        message: "Maximum cannot be below minimum",
+        path: ["permission_alternatives"],
+        message: "Action permission alternatives must use canonical order",
       });
   });
+
+const moduleSourceSharingParameterSchema = z
+  .object({
+    key: builderKeySchema,
+    type: z.enum([
+      "text",
+      "number",
+      "decimal_number",
+      "money",
+      "boolean",
+      "date",
+      "date_time",
+      "organization_account_reference",
+    ]),
+  })
+  .strict();
+const moduleSourceSharingPublicationTestSchema = z
+  .object({
+    name: z.string().min(1).max(60),
+    parameters: z.record(builderKeySchema, jsonValueSchema),
+    field_values: z.record(builderKeySchema, jsonValueSchema),
+    expected: z.boolean(),
+  })
+  .strict();
+const sourceSharingParameterValueSchema = (
+  type: z.infer<typeof moduleSourceSharingParameterSchema>["type"],
+): z.ZodType => {
+  switch (type) {
+    case "text":
+      return z.string();
+    case "number":
+      return z.number().finite();
+    case "decimal_number":
+      return sourceExactDecimalTextV2Schema;
+    case "money":
+      return sourceMoneyValueV2Schema;
+    case "boolean":
+      return z.boolean();
+    case "date":
+      return z.iso.date();
+    case "date_time":
+      return z.iso.datetime({ offset: true });
+    case "organization_account_reference":
+      return organizationAccountIdSchema;
+  }
+};
+
+export const moduleSourceSharingConditionSchema = z
+  .object({
+    id: sourceAliasSchema,
+    source_record_type: builderKeySchema,
+    key: builderKeySchema,
+    parameters: z.array(moduleSourceSharingParameterSchema),
+    condition: sourceConditionSchema,
+    declared_fields: z.array(builderKeySchema),
+    publication_tests: z.array(moduleSourceSharingPublicationTestSchema).min(1),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    for (const [testIndex, publicationTest] of value.publication_tests.entries())
+      for (const parameter of value.parameters)
+        if (
+          !sourceSharingParameterValueSchema(parameter.type).safeParse(
+            publicationTest.parameters[parameter.key],
+          ).success
+        )
+          context.addIssue({
+            code: "custom",
+            path: ["publication_tests", testIndex, "parameters", parameter.key],
+            message: "Publication-test parameter must match its declared parameter type",
+          });
+  });
+
+// ---------------------------------------------------------------------------
+// Module body and document.
+// ---------------------------------------------------------------------------
+
 const moduleSourceBodySchema = z
   .object({
     name: z.string().min(1).max(120),
@@ -922,7 +1240,7 @@ const moduleSourceBodySchema = z
         })
         .strict(),
     ),
-    record_types: z.array(moduleFixtureRecordTypeSchema).min(1),
+    record_types: z.array(moduleSourceRecordTypeSchema).min(1),
     permissions: z.array(
       z
         .object({
@@ -957,48 +1275,7 @@ const moduleSourceBodySchema = z
             });
         }),
     ),
-    actions: z.array(
-      z
-        .object({
-          id: sourceAliasSchema,
-          key: namespacedKeySchema,
-          label: z.string().min(1).max(120),
-          record_type: builderKeySchema,
-          permission: namespacedKeySchema.optional(),
-          permission_alternatives: z.array(namespacedKeySchema).min(2).optional(),
-          shareable: z.boolean(),
-          inputs: z.array(actionInputSchema),
-          precondition: sourceConditionSchema.optional(),
-          effects: z.array(sourceActionEffectSchema).min(1).max(10),
-        })
-        .strict()
-        .superRefine((value, context) => {
-          if ((value.permission === undefined) === (value.permission_alternatives === undefined))
-            context.addIssue({
-              code: "custom",
-              path: ["permission_alternatives"],
-              message: "An action requires either one permission or canonical alternatives",
-            });
-          const alternatives = value.permission_alternatives;
-          if (!alternatives) return;
-          if (new Set(alternatives).size !== alternatives.length)
-            context.addIssue({
-              code: "custom",
-              path: ["permission_alternatives"],
-              message: "Action permission alternatives must be unique",
-            });
-          if (
-            alternatives.some(
-              (permission, index) => index > 0 && alternatives[index - 1]! >= permission,
-            )
-          )
-            context.addIssue({
-              code: "custom",
-              path: ["permission_alternatives"],
-              message: "Action permission alternatives must use canonical order",
-            });
-        }),
-    ),
+    actions: z.array(moduleSourceActionSchema),
     events: z.array(
       z
         .object({
@@ -1010,19 +1287,7 @@ const moduleSourceBodySchema = z
         })
         .strict(),
     ),
-    rules: z.array(
-      z
-        .object({
-          id: sourceAliasSchema,
-          key: builderKeySchema,
-          record_type: builderKeySchema,
-          trigger: z.enum(["create", "change", "delete", "form_change", "action"]),
-          priority: z.number().int().min(0).max(10_000),
-          condition: sourceConditionSchema,
-          effect: moduleSourceRuleEffectSchema,
-        })
-        .strict(),
-    ),
+    rules: z.array(sourceRuleGraphSchema).max(100),
     extension_points: z.array(
       z
         .object({
@@ -1033,47 +1298,23 @@ const moduleSourceBodySchema = z
         })
         .strict(),
     ),
-    sharing_conditions: z.array(
-      z
-        .object({
-          id: sourceAliasSchema,
-          source_record_type: builderKeySchema,
-          key: builderKeySchema,
-          parameters: z.array(
-            z
-              .object({
-                key: builderKeySchema,
-                type: z.enum([
-                  "text",
-                  "number",
-                  "boolean",
-                  "date",
-                  "date_time",
-                  "organization_account_reference",
-                ]),
-              })
-              .strict(),
-          ),
-          condition: sourceConditionSchema,
-          declared_fields: z.array(builderKeySchema),
-          publication_tests: z
-            .array(
-              z
-                .object({
-                  name: z.string().min(1).max(60),
-                  parameters: z.record(builderKeySchema, jsonValueSchema),
-                  field_values: z.record(builderKeySchema, jsonValueSchema),
-                  expected: z.boolean(),
-                })
-                .strict(),
-            )
-            .min(1),
-        })
-        .strict(),
-    ),
+    sharing_conditions: z.array(moduleSourceSharingConditionSchema),
   })
   .strict();
 
 export const moduleSourceDocumentSchema = z
-  .object({ ...authoredSourceBase, kind: z.literal("module"), body: moduleSourceBodySchema })
+  .object({
+    ...authoredSourceBase,
+    kind: z.literal("module"),
+    source_contract_version: z.literal(moduleSourceContractVersion),
+    body: moduleSourceBodySchema,
+  })
   .strict();
+
+export type ModuleSourceField = z.infer<typeof moduleSourceFieldSchema>;
+export type ModuleSourceActionInput = z.infer<typeof moduleSourceActionInputSchema>;
+export type ModuleSourceAction = z.infer<typeof moduleSourceActionSchema>;
+export type ModuleSourceRecordType = z.infer<typeof moduleSourceRecordTypeSchema>;
+export type ModuleSourceSharingCondition = z.infer<typeof moduleSourceSharingConditionSchema>;
+export type ModuleSourceBody = z.infer<typeof moduleSourceBodySchema>;
+export type ModuleSourceDocument = z.infer<typeof moduleSourceDocumentSchema>;

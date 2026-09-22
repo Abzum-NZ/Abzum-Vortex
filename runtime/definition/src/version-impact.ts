@@ -4,12 +4,8 @@ import {
   applicationVersionImpactPolicyVersionV2,
   applicationVersionImpactRequestV2Schema,
   definitionPublicationHistoryEvidenceSchema,
-  moduleContentSchema,
-  moduleContentV2Schema,
   moduleContentV3Schema,
-  moduleVersionImpactPolicyVersionV2,
   moduleVersionImpactPolicyVersionV3,
-  moduleVersionImpactRequestV2Schema,
   moduleVersionImpactRequestV3Schema,
   publishedDefinitionHistorySchema,
   unresolvedRecordTypeReferencePaths,
@@ -24,7 +20,6 @@ import {
   type DefinitionVersionImpactResult,
   type DefinitionVersionSubject,
   type ApplicationVersionImpactRequestV2,
-  type ModuleVersionImpactRequestV2,
   type ModuleVersionImpactRequestV3,
   type PublishedApplicationDefinition,
   type PublishedDefinitionHistory,
@@ -56,7 +51,6 @@ import {
 type SupportedVersionImpactRequest =
   | DefinitionVersionImpactRequest
   | ApplicationVersionImpactRequestV2
-  | ModuleVersionImpactRequestV2
   | ModuleVersionImpactRequestV3;
 
 type HistoryRelease = SupportedVersionImpactRequest["history"][number];
@@ -83,34 +77,12 @@ const isApplicationV2Request = (
   "validationContractVersion" in request &&
   request.validationContractVersion === "2.0.0";
 
-const isModuleV2Request = (
-  request: SupportedVersionImpactRequest,
-): request is ModuleVersionImpactRequestV2 =>
-  request.kind === "module" &&
-  "validationContractVersion" in request &&
-  request.validationContractVersion === "2.0.0";
-
-const isModuleV3Request = (
-  request: SupportedVersionImpactRequest,
-): request is ModuleVersionImpactRequestV3 =>
-  request.kind === "module" &&
-  "validationContractVersion" in request &&
-  request.validationContractVersion === "3.0.0";
-
 const isApplicationV2Release = (
   release: PublishedApplicationDefinition,
 ): release is Extract<
   PublishedApplicationDefinition,
   { publication: { validationContractVersion: "2.0.0" } }
 > => release.publication.validationContractVersion === "2.0.0";
-
-const isModuleV2Release = (release: {
-  publication: { validationContractVersion: string };
-}): boolean => release.publication.validationContractVersion === "2.0.0";
-
-const isModuleV3Release = (release: {
-  publication: { validationContractVersion: string };
-}): boolean => release.publication.validationContractVersion === "3.0.0";
 
 const subjectOf = (request: SupportedVersionImpactRequest): DefinitionVersionSubject =>
   request.kind === "module"
@@ -141,14 +113,7 @@ const assertHistoryRelease = (
   if (release.publication.contentFingerprint !== fingerprintCanonicalValue(release.content))
     refuseVersionImpact("content_fingerprint_mismatch");
   if (kind === "module") {
-    const releaseV2 = isModuleV2Release(release);
-    const releaseV3 = isModuleV3Release(release);
-    if (
-      unresolvedRecordTypeReferencePaths(
-        releaseV3 ? moduleContentV3Schema : releaseV2 ? moduleContentV2Schema : moduleContentSchema,
-        release.content,
-      ).length > 0
-    )
+    if (unresolvedRecordTypeReferencePaths(moduleContentV3Schema, release.content).length > 0)
       refuseVersionImpact("invalid_history");
     assertUnambiguousModuleContent(release.content);
   } else {
@@ -364,9 +329,7 @@ const parseVersionImpactRequest = (input: unknown): SupportedVersionImpactReques
       : undefined;
   const parsed =
     explicitKind === "module"
-      ? (input as { validationContractVersion?: unknown }).validationContractVersion === "3.0.0"
-        ? moduleVersionImpactRequestV3Schema.safeParse(input)
-        : moduleVersionImpactRequestV2Schema.safeParse(input)
+      ? moduleVersionImpactRequestV3Schema.safeParse(input)
       : explicitKind === "application"
         ? applicationVersionImpactRequestV2Schema.safeParse(input)
         : definitionVersionImpactRequestSchema.safeParse(input);
@@ -385,14 +348,7 @@ const assertEvidenceContractVersions = (
   request: SupportedVersionImpactRequest,
   evidence: DefinitionPublicationHistoryEvidence,
 ): void => {
-  const allowed =
-    request.kind === "module"
-      ? isModuleV3Request(request)
-        ? new Set(["1.0.0", "2.0.0", "3.0.0"])
-        : isModuleV2Request(request)
-          ? new Set(["1.0.0", "2.0.0"])
-          : new Set(["1.0.0"])
-      : new Set(["1.0.0", "2.0.0"]);
+  const allowed = request.kind === "module" ? new Set(["3.0.0"]) : new Set(["1.0.0", "2.0.0"]);
   if (evidence.validationContractVersions.some((version) => !allowed.has(version)))
     refuseVersionImpact("invalid_request");
 };
@@ -405,11 +361,7 @@ const compareParsedDefinitionVersionImpact = (
   if (
     unresolvedRecordTypeReferencePaths(
       request.kind === "module"
-        ? isModuleV3Request(request)
-          ? moduleContentV3Schema
-          : isModuleV2Request(request)
-            ? moduleContentV2Schema
-            : moduleContentSchema
+        ? moduleContentV3Schema
         : isApplicationV2Request(request)
           ? applicationContentV2Schema
           : applicationContentSchema,
@@ -438,11 +390,9 @@ const compareParsedDefinitionVersionImpact = (
         : normaliseApplicationContent(request.candidate.content);
   const policyVersion = isApplicationV2Request(request)
     ? applicationVersionImpactPolicyVersionV2
-    : isModuleV3Request(request)
+    : request.kind === "module"
       ? moduleVersionImpactPolicyVersionV3
-      : isModuleV2Request(request)
-        ? moduleVersionImpactPolicyVersionV2
-        : versionImpactPolicyVersion;
+      : versionImpactPolicyVersion;
 
   if (latest === undefined) {
     const resultWithoutFingerprint = {
@@ -468,34 +418,12 @@ const compareParsedDefinitionVersionImpact = (
   let representationChanged = false;
   if (request.kind === "module") {
     const latestModule = latest!;
-    const candidateVersion = isModuleV3Request(request)
-      ? "3.0.0"
-      : isModuleV2Request(request)
-        ? "2.0.0"
-        : "1.0.0";
-    representationChanged = candidateVersion !== latestModule.publication.validationContractVersion;
-    if (representationChanged) {
-      normalisedPrevious = latestModule.content;
-      reasons = [
-        {
-          impact: "major",
-          code: "existing_behavior_changed",
-          location: { componentKind: "module", property: "configuration" },
-        },
-      ];
-    } else {
-      const latestContent =
-        candidateVersion === "3.0.0"
-          ? moduleContentV3Schema.parse(latestModule.content)
-          : candidateVersion === "2.0.0"
-            ? moduleContentV2Schema.parse(latestModule.content)
-            : moduleContentSchema.parse(latestModule.content);
-      const comparablePrevious = normaliseModuleContent(latestContent);
-      const comparableCandidate = normaliseModuleContent(request.candidate.content);
-      normalisedPrevious = comparablePrevious;
-      assertUnambiguousModuleContent(latestModule.content);
-      reasons = compareModuleContents(comparablePrevious, comparableCandidate);
-    }
+    const latestContent = moduleContentV3Schema.parse(latestModule.content);
+    const comparablePrevious = normaliseModuleContent(latestContent);
+    const comparableCandidate = normaliseModuleContent(request.candidate.content);
+    normalisedPrevious = comparablePrevious;
+    assertUnambiguousModuleContent(latestModule.content);
+    reasons = compareModuleContents(comparablePrevious, comparableCandidate);
   } else {
     const latestApplication = latest! as PublishedApplicationDefinition;
     const candidateV2 = isApplicationV2Request(request);

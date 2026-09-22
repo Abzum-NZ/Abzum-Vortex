@@ -3,12 +3,8 @@ import {
   applicationDraftV2Schema,
   applicationSourceDocumentV2Schema,
   applicationCompilationRequestV2Schema,
-  moduleDraftSchema,
-  moduleDraftV2Schema,
   moduleDraftV3Schema,
-  moduleSourceDocumentV2Schema,
-  moduleSourceDocumentV3Schema,
-  moduleCompilationRequestV2Schema,
+  moduleSourceDocumentSchema,
   moduleCompilationRequestV3Schema,
   savedSharingConditionV2Schema,
   savedSharingConditionSchema,
@@ -36,10 +32,8 @@ import {
   type DefinitionCompilationOutput,
   type DefinitionCompilationRequest,
   type ApplicationCompilationRequestV2,
-  type ModuleCompilationRequestV2,
   type ModuleCompilationRequestV3,
-  type ModuleSourceDocumentV2,
-  type ModuleSourceDocumentV3,
+  type ModuleSourceDocument,
   type ModuleFieldV2,
   type ApplicationSourceDocumentV2,
   type ConditionNode,
@@ -76,14 +70,9 @@ type Output = DefinitionCompilationOutput;
 type PublicationCompilationRequest =
   | DefinitionCompilationRequest
   | ApplicationCompilationRequestV2
-  | ModuleCompilationRequestV2
   | ModuleCompilationRequestV3;
 type DefinitionPath = readonly (string | number)[];
-type EditSaveSource =
-  | DefinitionSourceDocument
-  | ApplicationSourceDocumentV2
-  | ModuleSourceDocumentV2
-  | ModuleSourceDocumentV3;
+type EditSaveSource = DefinitionSourceDocument | ApplicationSourceDocumentV2 | ModuleSourceDocument;
 
 const isV2ApplicationSource = (source: unknown): boolean =>
   source !== null &&
@@ -92,19 +81,11 @@ const isV2ApplicationSource = (source: unknown): boolean =>
   (source as JsonObject).kind === "application" &&
   (source as JsonObject).source_contract_version === "2.0.0";
 
-const isV2ModuleSource = (source: unknown): boolean =>
+const isModuleSource = (source: unknown): boolean =>
   source !== null &&
   typeof source === "object" &&
   !Array.isArray(source) &&
-  (source as JsonObject).kind === "module" &&
-  (source as JsonObject).source_contract_version === "2.0.0";
-
-const isV3ModuleSource = (source: unknown): boolean =>
-  source !== null &&
-  typeof source === "object" &&
-  !Array.isArray(source) &&
-  (source as JsonObject).kind === "module" &&
-  (source as JsonObject).source_contract_version === "3.0.0";
+  (source as JsonObject).kind === "module";
 
 const parseEditSaveSource = (
   source: unknown,
@@ -117,11 +98,9 @@ const parseEditSaveSource = (
   | Readonly<{ success: false; error: z.ZodError }> => {
   const schema = isV2ApplicationSource(source)
     ? applicationSourceDocumentV2Schema
-    : isV3ModuleSource(source)
-      ? moduleSourceDocumentV3Schema
-      : isV2ModuleSource(source)
-        ? moduleSourceDocumentV2Schema
-        : definitionSourceDocumentSchema;
+    : isModuleSource(source)
+      ? moduleSourceDocumentSchema
+      : definitionSourceDocumentSchema;
   const parsed = schema.safeParse(source);
   return parsed.success
     ? { success: true, data: parsed.data, schema }
@@ -174,11 +153,7 @@ const canonicalValueWalker = (context: DefinitionSetValidationContext) =>
     allValidationOutputs(context).map((output) => ({
       schema:
         output.kind === "module"
-          ? "validationContractVersion" in output
-            ? output.validationContractVersion === "3.0.0"
-              ? moduleDraftV3Schema
-              : moduleDraftV2Schema
-            : moduleDraftSchema
+          ? moduleDraftV3Schema
           : output.kind === "application"
             ? "validationContractVersion" in output
               ? applicationDraftV2Schema
@@ -685,28 +660,14 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
           });
         }
       }
-      for (const rule of array(body.rules)) {
-        if (isV3ModuleSource(source)) {
-          if (
-            !array(body.record_types).some(
-              (record) => record.key === rule.record_type || record.id === rule.record_type,
-            )
-          )
-            valid = false;
-          continue; // Graph references are resolved and checked by the graph publication rule.
-        }
-        const record = records.get(String(rule.record_type));
-        const fields = new Set(
-          record ? array(record.fields).map((field) => String(field.key)) : [],
-        );
-        if (!record || !conditionValid(rule.condition, fields)) valid = false;
-        const effect = object(rule.effect);
+      // Graph node and value references are resolved by the graph publication rule.
+      for (const rule of array(body.rules))
         if (
-          ["set_value", "require"].includes(String(effect.kind)) &&
-          !fields.has(String(effect.field))
+          !array(body.record_types).some(
+            (record) => record.key === rule.record_type || record.id === rule.record_type,
+          )
         )
           valid = false;
-      }
       for (const event of array(body.events)) {
         const record = records.get(String(event.record_type));
         const fields = new Set(
@@ -863,65 +824,12 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
   return failures;
 }
 
-function sourceConditionTypesValid(
-  value: unknown,
-  fields: ReadonlyMap<string, JsonObject>,
-  parameters: ReadonlyMap<string, string> = new Map(),
-): boolean {
-  const condition = object(value);
-  if (condition.all)
-    return array(condition.all).every((entry) =>
-      sourceConditionTypesValid(entry, fields, parameters),
-    );
-  if (condition.any)
-    return array(condition.any).every((entry) =>
-      sourceConditionTypesValid(entry, fields, parameters),
-    );
-  if (condition.not) return sourceConditionTypesValid(condition.not, fields, parameters);
-  const operandType = (operandValue: unknown): string | undefined => {
-    const operand = object(operandValue);
-    if (operand.source === "field") return fieldValueType(fields.get(String(operand.field)));
-    if (operand.source === "parameter") return parameters.get(String(operand.parameter));
-    return operand.source === "value" ? literalValueType(operand.value) : undefined;
-  };
-  const leftType = condition.left
-    ? operandType(condition.left)
-    : fieldValueType(fields.get(String(condition.field)));
-  if (!leftType) return false;
-  if (condition.operator === "is_empty" || condition.operator === "is_not_empty")
-    return (
-      condition.right === undefined &&
-      condition.parameter === undefined &&
-      condition.value === undefined
-    );
-  const rightType = condition.left
-    ? operandType(condition.right)
-    : condition.parameter !== undefined
-      ? parameters.get(String(condition.parameter))
-      : literalValueType(condition.value);
-  if (!rightType) return false;
-  if (["contains", "not_contains"].includes(String(condition.operator)))
-    return (
-      (leftType === "text" && (rightType === "text" || rightType === "json")) ||
-      (leftType === "json" && (rightType === "text" || rightType === "json"))
-    );
-  if (["in", "not_in"].includes(String(condition.operator))) return rightType === "json";
-  if (
-    ["greater_than", "greater_than_or_equal", "less_than", "less_than_or_equal"].includes(
-      String(condition.operator),
-    )
-  )
-    return leftType === rightType && ["number", "date", "date_time", "text"].includes(leftType);
-  return leftType === rightType || (leftType === "date_time" && rightType === "date");
-}
-
 function sourceTypeCompatibilityRule(context: PreparedValidationContext): DefinitionRuleFailure[] {
   const failures: DefinitionRuleFailure[] = [];
   for (const [index, raw] of editSaveSources(context).entries()) {
     const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(raw);
     if (!parsed.success || parsed.data.kind !== "module") continue;
     const source = parsed.data;
-    const moduleV2 = source.source_contract_version === "2.0.0" || isV3ModuleSource(source);
     const body = object(source.body);
     const records = new Map(
       array(body.record_types).map((record) => [String(record.key), record] as const),
@@ -973,15 +881,11 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
             ? settings.field !== undefined
             : aggregateField === undefined) ||
           (["sum", "average"].includes(String(settings.operation)) &&
-            (moduleV2
-              ? !["whole_number", "decimal_number", "money"].includes(
-                  fieldValueTypeV2(aggregateField) ?? "",
-                )
-              : fieldValueType(aggregateField) !== "number")) ||
+            !["whole_number", "decimal_number", "money"].includes(
+              fieldValueTypeV2(aggregateField) ?? "",
+            )) ||
           (settings.filter !== undefined &&
-            !(moduleV2
-              ? conditionTypesValidV2(settings.filter, aggregateFields, new Map(), "source")
-              : sourceConditionTypesValid(settings.filter, aggregateFields))) ||
+            !conditionTypesValidV2(settings.filter, aggregateFields, new Map(), "source")) ||
           !resultTypeValid
         )
           valid = false;
@@ -993,68 +897,23 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
         array(action.inputs).map((input) => [String(input.key), input] as const),
       );
       const inputTypes = new Map(
-        [...inputs].map(
-          ([key, input]) =>
-            [
-              key,
-              (moduleV2 ? semanticFieldTypeV2(input.type) : semanticFieldType(input.type)) ?? "",
-            ] as const,
-        ),
+        [...inputs].map(([key, input]) => [key, semanticFieldTypeV2(input.type) ?? ""] as const),
       );
       if (
         action.precondition &&
-        !(moduleV2
-          ? conditionTypesValidV2(action.precondition, subjectFields, inputTypes, "source")
-          : sourceConditionTypesValid(action.precondition, subjectFields, inputTypes))
+        !conditionTypesValidV2(action.precondition, subjectFields, inputTypes, "source")
       )
         valid = false;
-      const valueType = (candidate: unknown): string | undefined => {
-        const value = object(candidate);
-        if (value.source === "literal") return literalValueType(value.value);
-        if (value.source === "input") {
-          return semanticFieldType(inputs.get(String(value.input))?.type);
-        }
-        if (value.source === "subject_field")
-          return fieldValueType(subjectFields.get(String(value.field)));
-        if (value.source === "subject_record") return "record_reference";
-        if (value.source === "current_actor") return "organization_account_reference";
-        if (value.source === "current_time") return "date_time";
-        return undefined;
-      };
       const subjectRecordType = `${source.key}:${String(action.record_type)}`;
-      const valueRecordTypes = (candidate: unknown): string[] | undefined => {
-        const value = object(candidate);
-        if (value.source === "input") {
-          const input = inputs.get(String(value.input));
-          return input?.type === "record_reference"
-            ? array(input.record_types).map(String)
-            : undefined;
-        }
-        if (value.source === "subject_field")
-          return fieldRecordTypeIds(subjectFields.get(String(value.field)));
-        if (value.source === "subject_record") return [subjectRecordType];
-        return undefined;
-      };
-      const sourceValueCompatible = (candidate: unknown, targetField: JsonObject | undefined) => {
-        if (moduleV2)
-          return actionValueCompatibleV2(
-            candidate,
-            targetField,
-            subjectFields,
-            inputs,
-            subjectRecordType,
-            "source",
-          );
-        const compatible = valueTypeCompatible(valueType(candidate), fieldValueType(targetField));
-        const expectedRecordTypes = fieldRecordTypeIds(targetField);
-        if (!compatible || expectedRecordTypes === undefined) return compatible;
-        const actualRecordTypes = valueRecordTypes(candidate);
-        return (
-          actualRecordTypes !== undefined &&
-          actualRecordTypes.length > 0 &&
-          actualRecordTypes.every((recordType) => expectedRecordTypes.includes(recordType))
+      const sourceValueCompatible = (candidate: unknown, targetField: JsonObject | undefined) =>
+        actionValueCompatibleV2(
+          candidate,
+          targetField,
+          subjectFields,
+          inputs,
+          subjectRecordType,
+          "source",
         );
-      };
       for (const effect of array(action.effects)) {
         if (
           effect.kind === "set_field" &&
@@ -1085,27 +944,6 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
         }
       }
     }
-    for (const rule of array(body.rules)) {
-      if (isV3ModuleSource(source)) continue;
-      const fields = fieldsFor(records.get(String(rule.record_type)));
-      if (
-        !(moduleV2
-          ? conditionTypesValidV2(rule.condition, fields, new Map(), "source")
-          : sourceConditionTypesValid(rule.condition, fields))
-      )
-        valid = false;
-      const effect = object(rule.effect);
-      if (
-        effect.kind === "set_value" &&
-        !(moduleV2
-          ? fieldValueMatchesV2(effect.value, fields.get(String(effect.field)), "source")
-          : valueTypeCompatible(
-              literalValueType(effect.value),
-              fieldValueType(fields.get(String(effect.field))),
-            ))
-      )
-        valid = false;
-    }
     for (const sharingCondition of array(body.sharing_conditions)) {
       const fields = fieldsFor(records.get(String(sharingCondition.source_record_type)));
       const parameters = new Map(
@@ -1113,11 +951,7 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
           (parameter) => [String(parameter.key), String(parameter.type)] as const,
         ),
       );
-      if (
-        !(moduleV2
-          ? conditionTypesValidV2(sharingCondition.condition, fields, parameters, "source")
-          : sourceConditionTypesValid(sharingCondition.condition, fields, parameters))
-      )
+      if (!conditionTypesValidV2(sharingCondition.condition, fields, parameters, "source"))
         valid = false;
     }
     const sharingConditions = new Map(
@@ -1147,9 +981,7 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
             expected === undefined ||
             (binding.source === "current_organization_account_id"
               ? !["text", "organization_account_reference"].includes(expected)
-              : !(moduleV2
-                  ? valueMatchesTypeV2(binding.value, expected, "source")
-                  : valueMatchesType(binding.value, expected)))
+              : !valueMatchesTypeV2(binding.value, expected, "source"))
           );
         })
       )
@@ -5855,8 +5687,7 @@ export function compileDefinitionSet(
   const publicationContext = parsedContext.data;
   const parsedInputs = inputs.map((input) => {
     const source = object(input).source;
-    if (isV3ModuleSource(source)) return moduleCompilationRequestV3Schema.safeParse(input);
-    if (isV2ModuleSource(source)) return moduleCompilationRequestV2Schema.safeParse(input);
+    if (isModuleSource(source)) return moduleCompilationRequestV3Schema.safeParse(input);
     if (isV2ApplicationSource(source))
       return applicationCompilationRequestV2Schema.safeParse(input);
     return definitionCompilationRequestSchema.safeParse(input);

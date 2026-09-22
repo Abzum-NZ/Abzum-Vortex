@@ -29,11 +29,17 @@ import {
   savedSharingConditionSchema,
 } from "./module-contracts";
 import { moduleDefinitionEnvelopeSchema } from "./definitions";
-import { moduleSourceContractVersionV2 } from "./module-source-contracts-v2";
 
+/** Historical Module source-contract identity, retained only as a comparator literal. */
+const moduleSourceContractVersionV2 = "2.0.0" as const;
 export const moduleValidationContractVersionV2 = "2.0.0" as const;
 
-/** Exact V2 pair supported by Definition compilation and publication. */
+/**
+ * Historical field/action/record-type generation. The current Module
+ * definition pipeline (source, compile, publish, store, history, read) uses
+ * only the 3.0.0 pair in module-contracts-v3.ts; this V2 pair and its shapes
+ * remain because Record and Rule runtime consumers still read them directly.
+ */
 export const moduleContractVersionPairV2Schema = z
   .object({
     sourceContractVersion: z.literal(moduleSourceContractVersionV2),
