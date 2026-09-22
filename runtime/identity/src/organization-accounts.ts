@@ -461,11 +461,10 @@ const organizationAccountLifecycleStates = [
 ] as const;
 
 /**
- * Begins the account-closing fence: once accepted, `state` is 'closing' and
- * every ownership-target validation and transfer writer refuses assigning new
- * ownership to this account, because each already requires 'active'. Closing
- * is available from 'active', 'suspended' or 'closed'; it is not itself
- * deletion and can still be followed by ordinary administration.
+ * Begins the one-way account-closing fence from 'active', 'suspended' or
+ * 'closed'. Like closure it stops the account acting and invalidates the
+ * organisation's Access version. From then on no write can assign the account
+ * as a record owner, and the account can only proceed to deletion.
  */
 export interface BeginOrganizationAccountClosingCommand {
   readonly organizationAccountId: string;
@@ -478,6 +477,7 @@ export interface OrganizationAccountClosingResult {
   readonly organizationId: string;
   readonly state: "closing";
   readonly revision: number;
+  readonly accessVersion: number;
 }
 
 export type AccountDeletionFenceOutcome = "deleted" | "not_closing" | "records_remain";
@@ -485,14 +485,14 @@ export type AccountDeletionFenceOutcome = "deleted" | "not_closing" | "records_r
 const accountDeletionFenceOutcomes = ["deleted", "not_closing", "records_remain"] as const;
 
 /**
- * The final deletion fence. It requires the account to already be 'closing',
- * then runs a private, undisclosed inventory across every organisation-
- * account-owned storage contract pinned to the caller's current installation
- * (application-contained and organisation-shared alike, active or detached,
- * blind to lifecycle state and to the caller's own per-record disclosure). A
- * `records_remain` or `not_closing` outcome never identifies which record or
- * scope caused it. Deletion retains the account row and its historical
- * attribution; it never erases authored history.
+ * The final deletion fence. It locks a 'closing' account, then runs a private,
+ * undisclosed inventory over every Record table in the organisation (every
+ * application, installed or not, and organisation-shared storage; every
+ * lifecycle state; blind to the caller's own record visibility). It deletes
+ * only when that inventory proves nothing is owned, and fails instead when
+ * completeness cannot be proved. `records_remain` never identifies a record,
+ * type or scope. A retry after deletion reports `deleted` again. Deletion
+ * retains the account row and its historical attribution.
  */
 export interface AccountDeletionFenceResult {
   readonly outcome: AccountDeletionFenceOutcome;
@@ -1094,6 +1094,7 @@ interface BeginClosingSqlRow extends DatabaseRow {
   readonly state: unknown;
   readonly closing_at: unknown;
   readonly revision: unknown;
+  readonly access_version: unknown;
 }
 
 const executeBeginOrganizationAccountClosing = async (
@@ -1125,6 +1126,7 @@ const executeBeginOrganizationAccountClosing = async (
       organizationId: resultUuid(row.organization_id),
       state: "closing",
       revision: resultStoredInteger(row.revision),
+      accessVersion: resultStoredInteger(row.access_version),
     };
   } catch (error) {
     if (error instanceof OrganizationAccountError) throw error;
