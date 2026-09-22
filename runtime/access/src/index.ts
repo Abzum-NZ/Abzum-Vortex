@@ -83,10 +83,12 @@ export {
   platformPermissionCatalogue,
   platformPermissionCatalogueV1,
   platformPermissionCatalogueV1_0_1,
+  platformPermissionCatalogueV1_1_0,
   platformPermissionCatalogueOwnerId,
   platformPermissionCatalogueVersion,
   platformPermissionCatalogueVersionV1,
   platformPermissionCatalogueVersionV1_0_1,
+  platformPermissionCatalogueVersionV1_1_0,
 } from "./platform-permission-catalogue";
 export {
   createPermissionRegistryPrivateRepository,
