@@ -1,6 +1,6 @@
 # Development roadmap
 
-Work through the GitHub roadmap phases in numerical order and maintain numeric Pickup Order within each phase. The first objective is a visible definition-led application by the end of Phase 6: an authorized user navigates installed pages, browses/opens records, creates/edits a record, invokes declared actions and sees the installed theme. Generic engines render ordinary definitions; application names and business policies are not hardcoded.
+Roadmap phases and numeric Pickup Order are planning and reporting metadata: they describe sequence and progress, not dispatch permission. Dependency-ready bounded leaves are dispatched in parallel across phases. The first objective is a visible definition-led application by the end of Phase 6: an authorized user navigates installed pages, browses/opens records, creates/edits a record, invokes declared actions and sees the installed theme. Generic engines render ordinary definitions; application names and business policies are not hardcoded.
 
 [GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) · [Agent coordination](agent-coordination.md) · [Fleet procedure](agent-fleet.md) · [Workflow diagram](fleet-orchestration.html) · [Product specification](../specification/README.md)
 
@@ -26,11 +26,11 @@ The GitHub project roadmap is the execution plan. Issue bodies and native depend
 
 ## Pickup and phase completion
 
-Select the lowest unfinished leaf in the earliest incomplete phase. Parent/phase epics summarize their children and are not additional implementation assignments. Do not skip a blocked pickup, renumber the queue or advance phases without completing required work. A forward dependency, missing/duplicate number or cycle requires an explicit ordering correction, not silently selecting another issue. Follow the [strict pickup algorithm](agent-fleet.md#strict-pickup-algorithm).
+Select any unfinished leaf whose real dependencies are complete, preferring lower Pickup Order only to break ties between equally ready leaves, and keep several independent leaves moving at once. Parent/phase epics summarize their children and are not additional implementation assignments. Neither phase nor Pickup Order gates dispatch, so a blocked or missing number never idles Ready work; renumbering is a reporting correction, not a prerequisite. A forward dependency or cycle requires an explicit ordering correction against source and specification. Follow the [ready-work dispatch algorithm](agent-fleet.md#ready-work-dispatch-algorithm).
 
 A phase label does not replace a dependency. Confirm each selected leaf's real Blocked by issues and prerequisite child scopes are complete before dispatch.
 
-The orchestrator reads source before assignment, bounds the outcome/paths/exclusions/acceptance, chooses the cheapest capable model and updates metadata to match the actual assignment. One issue proceeds through implementation, reviewer-owned fixes/re-review, permitted integration, issue closure, board reconciliation and cleanup before the next pickup.
+The orchestrator reads source before assignment, bounds the outcome/paths/exclusions/acceptance, chooses the cheapest capable model and updates metadata to match the actual assignment. Each issue proceeds through implementation, reviewer-owned fixes/re-review, permitted integration, issue closure, board reconciliation and cleanup, while every other independent leaf continues in its own lane.
 
 Completion requires implemented functionality, independent source review and integration. No tests, database/hosted review, proof receipts, Kestra, Testing deployment or release gate is part of these phases. Phase 13 develops operational functionality in code; it does not authorize operating or deploying a hosted system.
 
