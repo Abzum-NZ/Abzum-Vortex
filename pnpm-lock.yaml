@@ -405,9 +405,9 @@ importers:
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
-      '@vortex/record':
+      '@vortex/db':
         specifier: workspace:*
-        version: link:../record
+        version: link:../../db
       server-only:
         specifier: 0.0.1
         version: 0.0.1

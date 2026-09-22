@@ -1,276 +1,243 @@
 import "server-only";
 
-import type {
-  ConditionNode,
-  FieldDefinition,
-  FieldId,
-  JsonValue,
-  RecordId,
+import { z } from "zod";
+import {
+  fieldIdSchema,
+  jsonValueSchema,
+  recordIdSchema,
+  stableDefinitionReleaseVersionSchema,
+  type IdentitySession,
+  type JsonValue,
+  type OrganizationSelectionCandidate,
+  type SelectedOrganizationScope,
 } from "@vortex/contracts";
-import { evaluateQueryCondition, QueryConditionRefusalError } from "./condition-evaluator";
+import {
+  createHumanOrganizationRequestService,
+  type HumanOrganizationRequestDependencies,
+  type HumanOrganizationRequestResult,
+} from "@vortex/access";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
   decodeQueryContinuationToken,
   encodeQueryContinuationToken,
+  fingerprintQueryInputs,
   QueryContinuationTokenError,
-  type QueryContinuationSigner,
+  type QueryContinuation,
+  type QueryContinuationKey,
 } from "./continuation-token";
 import {
-  compareTypedValues,
-  deriveFieldSemanticType,
-  QueryValueComparisonError,
-} from "./field-semantics";
-import {
-  protectedQueryRequestSchema,
-  ProtectedQueryRefusalOutcome,
-  protectedQueryScopeSchema,
+  protectedQueryCommandSchema,
+  protectedQueryRefusalReasonCodes,
+  type ProtectedQueryCommand,
   type ProtectedQueryRefusalReasonCode,
-  type ProtectedQueryRequest,
   type ProtectedQueryResult,
 } from "./protected-query-contracts";
-import type {
-  ProtectedQueryCandidateRecord,
-  ProtectedQueryCandidateSource,
-  ProtectedQueryFieldBoundsResolver,
-} from "./protected-query-ports";
-import { QueryInputRefusalError, validateQueryInputValues } from "./typed-input-validation";
+import {
+  parseQueryInputDeclarations,
+  QueryInputRefusalError,
+  validateQueryInputValues,
+} from "./typed-input-validation";
 
-export interface ProtectedQueryDependencies {
-  readonly fieldBounds: ProtectedQueryFieldBoundsResolver;
-  readonly candidateSource: ProtectedQueryCandidateSource;
-  readonly continuationSigner: QueryContinuationSigner;
-  /** The descriptor's record type's own field definitions, from the same installed release. */
-  readonly recordTypeFields: readonly FieldDefinition[];
-}
+export type ProtectedQueryServiceDependencies = HumanOrganizationRequestDependencies &
+  Readonly<{
+    /** Server-held AES-256-GCM key that makes continuation tokens opaque and bound. */
+    continuationKey: QueryContinuationKey;
+  }>;
 
-const refuse = (reasonCode: ProtectedQueryRefusalReasonCode): never => {
-  throw new ProtectedQueryRefusalOutcome(reasonCode);
+type ResultRow = DatabaseRow & { readonly result: unknown };
+
+const refusal = (reasonCode: ProtectedQueryRefusalReasonCode): ProtectedQueryResult => ({
+  outcome: "refused",
+  reasonCode,
+});
+
+const one = (rows: readonly ResultRow[]): unknown => {
+  if (rows.length !== 1 || rows[0] === undefined) throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+  return rows[0].result;
 };
 
-const collectFieldReferences = (condition: ConditionNode, into: Set<string>): void => {
-  if (condition.kind === "all" || condition.kind === "any") {
-    condition.conditions.forEach((child) => collectFieldReferences(child, into));
-    return;
-  }
-  if (condition.kind === "not") {
-    collectFieldReferences(condition.condition, into);
-    return;
-  }
-  const left = condition.left as { source: string; fieldId?: string };
-  if (left.source === "field" && left.fieldId) into.add(left.fieldId);
-  if (condition.right) {
-    const right = condition.right as { source: string; fieldId?: string };
-    if (right.source === "field" && right.fieldId) into.add(right.fieldId);
-  }
+const revisionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
+const refusedSchema = z
+  .object({ outcome: z.literal("refused"), reasonCode: z.enum(protectedQueryRefusalReasonCodes) })
+  .strict();
+const inputsReadSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("resolved"),
+      moduleReleaseRevision: revisionSchema,
+      moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
+      inputs: z.unknown(),
+    })
+    .strict(),
+  refusedSchema,
+]);
+const pageReadSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("completed"),
+      moduleReleaseRevision: revisionSchema,
+      moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
+      rows: z
+        .array(
+          z
+            .object({
+              recordId: recordIdSchema,
+              values: z.record(fieldIdSchema, jsonValueSchema),
+            })
+            .strict(),
+        )
+        .max(200),
+      next: z
+        .object({
+          sortKey: z.array(z.string().nullable()).min(1).max(20),
+          recordId: recordIdSchema,
+        })
+        .strict()
+        .nullable(),
+    })
+    .strict(),
+  refusedSchema,
+]);
+
+const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
+
+const readInputs = async (transaction: RequestDatabaseTransaction, command: ProtectedQueryCommand) => {
+  const rows = await transaction.query<ResultRow>`
+    select vortex_record.read_module_query_inputs(
+      ${command.moduleRootId}::uuid,
+      ${command.queryId}::uuid
+    ) as result
+  `;
+  return inputsReadSchema.parse(one(rows));
 };
 
-/** A tiebreaker-inclusive sort key: one typed value per descriptor sort entry, plus the record id. */
-const sortKeyFor = (
-  candidate: ProtectedQueryCandidateRecord,
-  sortFieldIds: readonly FieldId[],
-): readonly JsonValue[] => [...sortFieldIds.map((fieldId) => candidate.values[fieldId] ?? null)];
-
-const compareSortKeys = (
-  left: readonly JsonValue[],
-  right: readonly JsonValue[],
-  leftRecordId: string,
-  rightRecordId: string,
-  sortFields: readonly Readonly<{ fieldId: FieldId; direction: "ascending" | "descending" }>[],
-  fieldsById: ReadonlyMap<FieldId, FieldDefinition>,
-): number => {
-  for (let index = 0; index < sortFields.length; index += 1) {
-    const sortField = sortFields[index]!;
-    const field = fieldsById.get(sortField.fieldId);
-    if (!field) refuse("sort_invalid");
-    const type = deriveFieldSemanticType(field!);
-    let comparison: number;
-    try {
-      comparison = compareTypedValues(left[index] ?? null, right[index] ?? null, type);
-    } catch (error) {
-      if (error instanceof QueryValueComparisonError) return refuse("sort_invalid");
-      throw error;
-    }
-    if (comparison !== 0) return sortField.direction === "ascending" ? comparison : -comparison;
-  }
-  return leftRecordId.toLowerCase() < rightRecordId.toLowerCase()
-    ? -1
-    : leftRecordId.toLowerCase() > rightRecordId.toLowerCase()
-      ? 1
-      : 0;
+const readPage = async (
+  transaction: RequestDatabaseTransaction,
+  command: ProtectedQueryCommand,
+  releaseRevision: number,
+  inputValues: Readonly<Record<string, JsonValue>>,
+  after: QueryContinuation | undefined,
+) => {
+  const rows = await transaction.query<ResultRow>`
+    select vortex_record.run_module_query(
+      ${command.moduleRootId}::uuid,
+      ${command.queryId}::uuid,
+      ${releaseRevision}::bigint,
+      ${JSON.stringify(inputValues)}::text::jsonb,
+      ${JSON.stringify(command.requestedFieldIds)}::text::jsonb,
+      ${command.pageSize}::integer,
+      ${after === undefined ? null : JSON.stringify({ sortKey: after.sortKey, recordId: after.recordId })}::text::jsonb
+    ) as result
+  `;
+  return pageReadSchema.parse(one(rows));
 };
 
-const runProtectedQueryOrThrow = async (
-  requestCandidate: ProtectedQueryRequest,
-  dependencies: ProtectedQueryDependencies,
+const runCommand = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  command: ProtectedQueryCommand,
+  continuationKey: QueryContinuationKey,
 ): Promise<ProtectedQueryResult> => {
-  const parsedRequest = protectedQueryRequestSchema.safeParse(requestCandidate);
-  if (!parsedRequest.success) refuse("scope_invalid");
-  const request = parsedRequest.data!;
+  const applicationRootId = scope.applicationRootId;
+  if (applicationRootId === undefined) return refusal("request_invalid");
 
-  const parsedScope = protectedQueryScopeSchema.safeParse(request.scope);
-  if (!parsedScope.success) refuse("scope_invalid");
-  const scope = parsedScope.data!;
-
-  const descriptor = request.descriptor;
-  const query = descriptor.query;
-  if (query.recordType.state !== "resolved") refuse("descriptor_invalid");
-  const recordType = { moduleRootId: query.recordType.moduleRootId, recordTypeId: query.recordType.recordTypeId };
-
-  if (request.pageSize < 1 || request.pageSize > query.pageSize) refuse("page_size_invalid");
-  if (query.relationshipHops > 0) refuse("relationship_invalid");
-
-  let inputValues: Readonly<Record<string, JsonValue>>;
-  try {
-    inputValues = validateQueryInputValues(query.inputs, request.inputValues);
-  } catch (error) {
-    if (error instanceof QueryInputRefusalError) return refuse("input_invalid");
-    throw error;
-  }
-
-  const bounds = await dependencies.fieldBounds.resolveReadableFieldBounds({ scope, recordType });
-
-  if (!request.requestedFieldIds.every((fieldId) => query.selectedFieldIds.includes(fieldId)))
-    refuse("field_unbounded");
-  if (!request.requestedFieldIds.every((fieldId) => bounds.readableFieldIds.has(fieldId)))
-    refuse("field_unbounded");
-
-  const sortFieldIds = query.sort.map((entry) => entry.fieldId);
-  if (!sortFieldIds.every((fieldId) => bounds.readableFieldIds.has(fieldId))) refuse("sort_invalid");
-
-  const filterFieldIds = new Set<string>();
-  if (query.filter) collectFieldReferences(query.filter, filterFieldIds);
-  if (![...filterFieldIds].every((fieldId) => bounds.readableFieldIds.has(fieldId as FieldId)))
-    refuse("filter_invalid");
-
-  const referencedFieldIds = new Set<FieldId>([
-    ...request.requestedFieldIds,
-    ...sortFieldIds,
-    ...([...filterFieldIds] as FieldId[]),
-  ]);
-
-  const fieldsById = new Map<FieldId, FieldDefinition>(
-    dependencies.recordTypeFields.map((field) => [field.fieldId, field]),
-  );
-  for (const fieldId of referencedFieldIds) if (!fieldsById.has(fieldId)) refuse("descriptor_invalid");
-
-  let cursor: { sortKey: readonly JsonValue[]; tiebreakerRecordId: string } | undefined;
-  if (request.continuationToken !== undefined) {
-    let position;
+  // A continuation is accepted only for the same actor, installation, query,
+  // release and inputs it was issued for.
+  let after: QueryContinuation | undefined;
+  if (command.continuationToken !== undefined) {
     try {
-      position = decodeQueryContinuationToken(request.continuationToken, dependencies.continuationSigner);
+      after = decodeQueryContinuationToken(command.continuationToken, continuationKey);
     } catch (error) {
-      if (error instanceof QueryContinuationTokenError) return refuse("cursor_invalid");
+      if (error instanceof QueryContinuationTokenError) return refusal("cursor_invalid");
       throw error;
     }
     if (
-      position.organizationId !== scope.organizationId ||
-      position.applicationRootId !== scope.applicationRootId ||
-      position.moduleRootId !== descriptor.moduleRootId ||
-      position.moduleReleaseVersion !== descriptor.moduleReleaseVersion ||
-      position.queryId !== query.queryId ||
-      position.sortKey.length !== sortFieldIds.length
+      !sameId(after.organizationId, scope.organizationId) ||
+      !sameId(after.applicationRootId, applicationRootId) ||
+      !sameId(after.organizationAccountId, scope.organizationAccountId) ||
+      !sameId(after.moduleRootId, command.moduleRootId) ||
+      !sameId(after.queryId, command.queryId)
     )
-      refuse("cursor_stale");
-    cursor = { sortKey: position.sortKey, tiebreakerRecordId: position.tiebreakerRecordId };
+      return refusal("cursor_stale");
   }
 
-  const candidates = await dependencies.candidateSource.loadVisibleCandidates({
-    scope,
-    recordType,
-    fieldIds: referencedFieldIds,
-  });
+  const declared = await readInputs(transaction, command);
+  if (declared.outcome === "refused") return refusal(declared.reasonCode);
+  if (after !== undefined && after.moduleReleaseRevision !== declared.moduleReleaseRevision)
+    return refusal("cursor_stale");
+  const declarations = parseQueryInputDeclarations(declared.inputs);
+  if (declarations === undefined) return refusal("descriptor_invalid");
 
-  const filtered = query.filter
-    ? candidates.filter((candidate) => {
-        try {
-          return evaluateQueryCondition(query.filter!, {
-            fieldsById,
-            fieldValues: candidate.values,
-            parameterValues: inputValues,
-          });
-        } catch (error) {
-          if (error instanceof QueryConditionRefusalError) return refuse("filter_invalid");
-          throw error;
-        }
-      })
-    : candidates;
+  let inputValues: Readonly<Record<string, JsonValue>>;
+  try {
+    inputValues = validateQueryInputValues(declarations, command.inputValues);
+  } catch (error) {
+    if (error instanceof QueryInputRefusalError) return refusal("input_invalid");
+    throw error;
+  }
+  const inputFingerprint = fingerprintQueryInputs(inputValues);
+  if (after !== undefined && after.inputFingerprint !== inputFingerprint) return refusal("cursor_stale");
 
-  const sortFields = query.sort;
-  const decorated = filtered.map((candidate) => ({
-    candidate,
-    sortKey: sortKeyFor(candidate, sortFieldIds),
-  }));
-  decorated.sort((left, right) =>
-    compareSortKeys(
-      left.sortKey,
-      right.sortKey,
-      left.candidate.recordId,
-      right.candidate.recordId,
-      sortFields,
-      fieldsById,
-    ),
+  const page = await readPage(
+    transaction,
+    command,
+    declared.moduleReleaseRevision,
+    inputValues,
+    after,
   );
+  if (page.outcome === "refused") return refusal(page.reasonCode);
 
-  const afterCursor = cursor
-    ? decorated.filter(
-        (entry) =>
-          compareSortKeys(
-            entry.sortKey,
-            cursor!.sortKey,
-            entry.candidate.recordId,
-            cursor!.tiebreakerRecordId,
-            sortFields,
-            fieldsById,
-          ) > 0,
-      )
-    : decorated;
-
-  const page = afterCursor.slice(0, request.pageSize);
-  const hasMore = afterCursor.length > page.length;
-
-  const rows = page.map((entry) => ({
-    recordId: entry.candidate.recordId as RecordId,
-    values: Object.fromEntries(
-      request.requestedFieldIds.map((fieldId) => [fieldId, entry.candidate.values[fieldId] ?? null]),
-    ),
-  }));
-
-  const lastEntry = page.at(-1);
-  const nextContinuationToken =
-    hasMore && lastEntry
-      ? encodeQueryContinuationToken(
-          {
-            organizationId: scope.organizationId,
-            applicationRootId: scope.applicationRootId,
-            moduleRootId: descriptor.moduleRootId,
-            moduleReleaseVersion: descriptor.moduleReleaseVersion,
-            queryId: query.queryId,
-            sortKey: lastEntry.sortKey,
-            tiebreakerRecordId: lastEntry.candidate.recordId,
-          },
-          dependencies.continuationSigner,
-        )
-      : undefined;
-
-  return { outcome: "completed", rows, nextContinuationToken };
+  return {
+    outcome: "completed",
+    moduleRootId: command.moduleRootId,
+    moduleReleaseVersion: page.moduleReleaseVersion,
+    queryId: command.queryId,
+    rows: page.rows,
+    ...(page.next === null
+      ? {}
+      : {
+          nextContinuationToken: encodeQueryContinuationToken(
+            {
+              version: 1,
+              organizationId: scope.organizationId,
+              applicationRootId,
+              organizationAccountId: scope.organizationAccountId,
+              moduleRootId: command.moduleRootId,
+              queryId: command.queryId,
+              moduleReleaseRevision: page.moduleReleaseRevision,
+              inputFingerprint,
+              sortKey: page.next.sortKey,
+              recordId: page.next.recordId,
+            },
+            continuationKey,
+          ),
+        }),
+  };
 };
 
 /**
- * Executes one protected Query request: resolves field bounds once, builds
- * only allowlisted predicates/order/projection from the published descriptor,
- * and refuses the whole request neutrally before any row is exposed. Never
- * accepts authored SQL, raw table/column names or a caller-selected database
- * target; row visibility and physical storage access are the injected
- * ports' responsibility (see protected-query-ports.ts).
+ * Protected Query execution for one published Module query. The verified
+ * request supplies the organisation, Application and actor; the database
+ * resolves the query from the exact installed release, reads only rows the
+ * record projection admits, and returns one bounded keyset page with an opaque
+ * continuation, or one neutral refusal before any row is exposed.
  */
-export const runProtectedQuery = async (
-  request: ProtectedQueryRequest,
-  dependencies: ProtectedQueryDependencies,
-): Promise<ProtectedQueryResult> => {
-  try {
-    return await runProtectedQueryOrThrow(request, dependencies);
-  } catch (error) {
-    if (error instanceof ProtectedQueryRefusalOutcome)
-      return { outcome: "refused", reasonCode: error.reasonCode };
-    throw error;
-  }
+export const createProtectedQueryService = (dependencies: ProtectedQueryServiceDependencies) => {
+  const requests = createHumanOrganizationRequestService(dependencies);
+  const { continuationKey } = dependencies;
+
+  return Object.freeze({
+    async run(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: unknown,
+    ): Promise<HumanOrganizationRequestResult<ProtectedQueryResult>> {
+      const command = protectedQueryCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "available", value: refusal("request_invalid") };
+      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      return requests.run(session, selection, (transaction, scope) =>
+        runCommand(transaction, scope, command.data, continuationKey),
+      );
+    },
+  });
 };

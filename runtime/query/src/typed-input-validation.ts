@@ -1,64 +1,69 @@
 import "server-only";
 
+import { z } from "zod";
 import {
+  actionInputDefinitionV2Schema,
   compareExactDecimals,
+  normalizeExactDecimal,
   parseExactDecimal,
   recordRichTextDocumentV2Schema,
   type ActionInputDefinitionV2,
   type JsonValue,
 } from "@vortex/contracts";
 
-export const queryInputRefusalReasons = [
-  "input_unknown",
-  "input_missing",
-  "input_type_invalid",
-  "input_range_invalid",
-] as const;
-export type QueryInputRefusalReason = (typeof queryInputRefusalReasons)[number];
-
 export class QueryInputRefusalError extends Error {
-  constructor(
-    readonly reason: QueryInputRefusalReason,
-    readonly key?: string,
-  ) {
-    super(`vortex.query.input_${reason}`);
+  constructor() {
+    super("vortex.query.input_invalid");
     this.name = "QueryInputRefusalError";
   }
 }
 
-const refuse = (reason: QueryInputRefusalReason, key?: string): never => {
-  throw new QueryInputRefusalError(reason, key);
+const refuse = (): never => {
+  throw new QueryInputRefusalError();
 };
 
 const isPlainRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
+const hasExactKeys = (value: Readonly<Record<string, unknown>>, keys: readonly string[]): boolean =>
+  Object.keys(value).length === keys.length &&
+  keys.every((key) => Object.prototype.hasOwnProperty.call(value, key));
+
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isoDate = z.iso.date();
+const isoDateTime = z.iso.datetime({ offset: true });
+
+const inputDeclarationsSchema = z.array(actionInputDefinitionV2Schema).max(50);
+
+/** Parses the installed input contract the database returned; a malformed one is not guessed at. */
+export const parseQueryInputDeclarations = (
+  candidate: unknown,
+): readonly ActionInputDefinitionV2[] | undefined => {
+  const parsed = inputDeclarationsSchema.safeParse(candidate);
+  return parsed.success ? parsed.data : undefined;
+};
 
 /**
- * Validates and canonicalizes caller-supplied typed input values against the
- * exact input contract a published Module query declares. Refuses the whole
- * request on the first unknown, missing, mistyped or out-of-range input
- * rather than coercing or dropping it.
+ * Validates caller-supplied values against the exact input contract of the
+ * installed query and returns them in canonical form (exact decimal text). The
+ * whole request is refused on the first unknown, missing,
+ * mistyped or out-of-range value; nothing is coerced or dropped. The database
+ * reader checks the same values again against the condition engine's types.
  */
 export const validateQueryInputValues = (
   inputs: readonly ActionInputDefinitionV2[],
   suppliedValues: Readonly<Record<string, JsonValue>>,
 ): Readonly<Record<string, JsonValue>> => {
   const declaredKeys = new Set(inputs.map((input) => input.key));
-  for (const key of Object.keys(suppliedValues)) if (!declaredKeys.has(key)) refuse("input_unknown", key);
+  for (const key of Object.keys(suppliedValues)) if (!declaredKeys.has(key)) refuse();
 
   const canonical: Record<string, JsonValue> = {};
   for (const input of inputs) {
-    const hasValue = Object.prototype.hasOwnProperty.call(suppliedValues, input.key);
-    if (!hasValue) {
-      if (input.required) refuse("input_missing", input.key);
-      continue;
-    }
-    const value = suppliedValues[input.key]!;
+    const value = Object.prototype.hasOwnProperty.call(suppliedValues, input.key)
+      ? suppliedValues[input.key]!
+      : null;
     if (value === null) {
-      if (input.required) refuse("input_missing", input.key);
-      canonical[input.key] = null;
+      if (input.required) refuse();
       continue;
     }
     canonical[input.key] = validateOne(input, value);
@@ -66,105 +71,95 @@ export const validateQueryInputValues = (
   return canonical;
 };
 
+const exactWithinRange = (
+  amount: unknown,
+  validation: Readonly<{ minimum?: string | undefined; maximum?: string | undefined }> | undefined,
+): string => {
+  if (typeof amount !== "string") return refuse();
+  const normalized = normalizeExactDecimal(amount);
+  const exact = parseExactDecimal(amount);
+  if (normalized === undefined || exact === undefined) return refuse();
+  const minimum = validation?.minimum === undefined ? undefined : parseExactDecimal(validation.minimum);
+  const maximum = validation?.maximum === undefined ? undefined : parseExactDecimal(validation.maximum);
+  if (minimum !== undefined && compareExactDecimals(exact, minimum) < 0) refuse();
+  if (maximum !== undefined && compareExactDecimals(exact, maximum) > 0) refuse();
+  return normalized;
+};
+
 const validateOne = (input: ActionInputDefinitionV2, value: JsonValue): JsonValue => {
   switch (input.type) {
     case "text": {
-      if (typeof value !== "string") refuse("input_type_invalid", input.key);
-      if (input.validation?.minimumLength !== undefined && value.length < input.validation.minimumLength)
-        refuse("input_range_invalid", input.key);
-      if (input.validation?.maximumLength !== undefined && value.length > input.validation.maximumLength)
-        refuse("input_range_invalid", input.key);
-      if (input.validation?.pattern !== undefined && !new RegExp(input.validation.pattern).test(value))
-        refuse("input_range_invalid", input.key);
+      if (typeof value !== "string") return refuse();
+      const validation = input.validation;
+      if (validation?.minimumLength !== undefined && value.length < validation.minimumLength) refuse();
+      if (validation?.maximumLength !== undefined && value.length > validation.maximumLength) refuse();
+      if (validation?.pattern !== undefined) {
+        let pattern: RegExp;
+        try {
+          pattern = new RegExp(validation.pattern);
+        } catch {
+          return refuse();
+        }
+        if (!pattern.test(value)) refuse();
+      }
       return value;
     }
-    case "formatted_text": {
-      const parsed = recordRichTextDocumentV2Schema.safeParse(value);
-      if (!parsed.success) refuse("input_type_invalid", input.key);
-      return value;
-    }
+    case "formatted_text":
+      return recordRichTextDocumentV2Schema.safeParse(value).success ? value : refuse();
     case "number": {
-      if (typeof value !== "number" || !Number.isFinite(value)) refuse("input_type_invalid", input.key);
-      if (input.validation?.minimum !== undefined && value < input.validation.minimum)
-        refuse("input_range_invalid", input.key);
-      if (input.validation?.maximum !== undefined && value > input.validation.maximum)
-        refuse("input_range_invalid", input.key);
+      if (typeof value !== "number" || !Number.isFinite(value)) return refuse();
+      if (input.validation?.minimum !== undefined && value < input.validation.minimum) refuse();
+      if (input.validation?.maximum !== undefined && value > input.validation.maximum) refuse();
       return value;
     }
     case "decimal_number":
+      return exactWithinRange(value, input.validation);
     case "money": {
-      const amount = input.type === "money" ? (isPlainRecord(value) ? value.amount : undefined) : value;
-      const currency = input.type === "money" ? (isPlainRecord(value) ? value.currency : undefined) : undefined;
-      if (input.type === "money" && (typeof currency !== "string" || !/^[A-Z]{3}$/.test(currency)))
-        refuse("input_type_invalid", input.key);
-      const exact = typeof amount === "string" ? parseExactDecimal(amount) : undefined;
-      if (exact === undefined) refuse("input_type_invalid", input.key);
-      if (input.validation?.minimum !== undefined) {
-        const minimum = parseExactDecimal(input.validation.minimum);
-        if (minimum !== undefined && compareExactDecimals(exact!, minimum) < 0)
-          refuse("input_range_invalid", input.key);
-      }
-      if (input.validation?.maximum !== undefined) {
-        const maximum = parseExactDecimal(input.validation.maximum);
-        if (maximum !== undefined && compareExactDecimals(exact!, maximum) > 0)
-          refuse("input_range_invalid", input.key);
-      }
-      return value;
+      if (!isPlainRecord(value) || !hasExactKeys(value, ["amount", "currency"])) return refuse();
+      if (typeof value.currency !== "string" || !/^[A-Z]{3}$/.test(value.currency)) return refuse();
+      return { amount: exactWithinRange(value.amount, input.validation), currency: value.currency };
     }
-    case "boolean": {
-      if (typeof value !== "boolean") refuse("input_type_invalid", input.key);
-      return value;
-    }
+    case "boolean":
+      return typeof value === "boolean" ? value : refuse();
     case "date": {
-      if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
-        refuse("input_type_invalid", input.key);
-      if (input.validation?.earliest !== undefined && value < input.validation.earliest)
-        refuse("input_range_invalid", input.key);
-      if (input.validation?.latest !== undefined && value > input.validation.latest)
-        refuse("input_range_invalid", input.key);
+      if (typeof value !== "string" || !isoDate.safeParse(value).success) return refuse();
+      if (input.validation?.earliest !== undefined && value < input.validation.earliest) refuse();
+      if (input.validation?.latest !== undefined && value > input.validation.latest) refuse();
       return value;
     }
     case "date_time": {
-      if (typeof value !== "string" || Number.isNaN(Date.parse(value)))
-        refuse("input_type_invalid", input.key);
-      if (
-        input.validation?.earliest !== undefined &&
-        Date.parse(value) < Date.parse(input.validation.earliest)
-      )
-        refuse("input_range_invalid", input.key);
-      if (
-        input.validation?.latest !== undefined &&
-        Date.parse(value) > Date.parse(input.validation.latest)
-      )
-        refuse("input_range_invalid", input.key);
+      if (typeof value !== "string" || !isoDateTime.safeParse(value).success) return refuse();
+      const instant = Date.parse(value);
+      if (Number.isNaN(instant)) return refuse();
+      if (input.validation?.earliest !== undefined && instant < Date.parse(input.validation.earliest))
+        refuse();
+      if (input.validation?.latest !== undefined && instant > Date.parse(input.validation.latest))
+        refuse();
       return value;
     }
     case "record_reference": {
-      if (!isPlainRecord(value)) refuse("input_type_invalid", input.key);
-      const record = value as Readonly<Record<string, unknown>>;
-      const recordTypeId = record.recordTypeId;
-      const recordId = record.recordId;
+      if (!isPlainRecord(value) || !hasExactKeys(value, ["recordTypeId", "recordId"])) return refuse();
+      const { recordTypeId, recordId } = value;
       if (
         typeof recordTypeId !== "string" ||
         !uuidPattern.test(recordTypeId) ||
         typeof recordId !== "string" ||
         !uuidPattern.test(recordId)
       )
-        refuse("input_type_invalid", input.key);
+        return refuse();
       const allowed = input.recordTypes.some(
         (candidate) =>
           candidate.state === "resolved" &&
-          candidate.recordTypeId.toLowerCase() === (recordTypeId as string).toLowerCase(),
+          candidate.recordTypeId.toLowerCase() === recordTypeId.toLowerCase(),
       );
-      if (!allowed) refuse("input_type_invalid", input.key);
-      return value;
+      return allowed ? { recordTypeId, recordId } : refuse();
     }
     case "organization_account_reference": {
-      if (!isPlainRecord(value)) refuse("input_type_invalid", input.key);
-      const organizationAccountId = (value as Readonly<Record<string, unknown>>).organizationAccountId;
+      if (!isPlainRecord(value) || !hasExactKeys(value, ["organizationAccountId"])) return refuse();
+      const { organizationAccountId } = value;
       if (typeof organizationAccountId !== "string" || !uuidPattern.test(organizationAccountId))
-        refuse("input_type_invalid", input.key);
-      return value;
+        return refuse();
+      return { organizationAccountId };
     }
   }
 };
