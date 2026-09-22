@@ -101,25 +101,16 @@ export function validateApplicationTheme(
 export function resolveTheme(input: ThemeResolutionInput): ResolvedTheme;
 export function resolveTheme(
   theme: ApplicationThemeV2,
-  componentOverrideContext?:
-    | ComponentThemeOverrideContext
-    | Readonly<Record<string, ThemeTokenValueV2>>
-    | undefined,
+  componentOverrideContext?: ComponentThemeOverrideContext | undefined,
   options?: ThemeResolutionOptions | undefined,
 ): ResolvedTheme;
 export function resolveTheme(
   first: ApplicationThemeV2 | ThemeResolutionInput,
-  second?:
-    | ComponentThemeOverrideContext
-    | Readonly<Record<string, ThemeTokenValueV2>>
-    | undefined,
+  second?: ComponentThemeOverrideContext | undefined,
   third?: ThemeResolutionOptions | undefined,
 ): ResolvedTheme {
   let theme: ApplicationThemeV2;
-  let overrideContext:
-    | ComponentThemeOverrideContext
-    | Readonly<Record<string, ThemeTokenValueV2>>
-    | undefined;
+  let overrideContext: ComponentThemeOverrideContext | undefined;
   let options: ThemeResolutionOptions | undefined;
 
   if (isThemeResolutionInput(first)) {
@@ -138,11 +129,16 @@ export function resolveTheme(
   const allRuleFailures: DefinitionRuleFailure[] = [...baseValidation.ruleFailures];
 
   // 2. Process & Validate Component Overrides
-  let effectiveTokens: Record<string, ThemeTokenValueV2> = { ...theme.tokens };
+  const parsedTheme = applicationThemeV2Schema.safeParse(theme);
+  if (!parsedTheme.success) {
+    throw new ThemeValidationError(allFailures, allRuleFailures);
+  }
+  const canonicalTheme = parsedTheme.data;
+  let effectiveTokens: Record<string, ThemeTokenValueV2> = { ...canonicalTheme.tokens };
 
-  if (overrideContext !== undefined) {
+  if (overrideContext !== undefined && baseValidation.valid) {
     const overrideResult = validateComponentThemeOverrides(
-      theme.tokens,
+      canonicalTheme.tokens,
       overrideContext,
       options,
     );
@@ -184,9 +180,8 @@ export function resolveTheme(
   Object.freeze(deterministicTokens);
 
   return deepFreeze({
-    base: structuredClone(theme.base),
+    base: structuredClone(canonicalTheme.base),
     tokens: deterministicTokens,
-    mode: options?.mode ?? "runtime",
   });
 }
 
@@ -196,18 +191,12 @@ export function resolveTheme(
 export function resolveThemeTokens(input: ThemeResolutionInput): Readonly<Record<string, ThemeTokenValueV2>>;
 export function resolveThemeTokens(
   theme: ApplicationThemeV2,
-  componentOverrideContext?:
-    | ComponentThemeOverrideContext
-    | Readonly<Record<string, ThemeTokenValueV2>>
-    | undefined,
+  componentOverrideContext?: ComponentThemeOverrideContext | undefined,
   options?: ThemeResolutionOptions | undefined,
 ): Readonly<Record<string, ThemeTokenValueV2>>;
 export function resolveThemeTokens(
   first: ApplicationThemeV2 | ThemeResolutionInput,
-  second?:
-    | ComponentThemeOverrideContext
-    | Readonly<Record<string, ThemeTokenValueV2>>
-    | undefined,
+  second?: ComponentThemeOverrideContext | undefined,
   third?: ThemeResolutionOptions | undefined,
 ): Readonly<Record<string, ThemeTokenValueV2>> {
   const resolved = isThemeResolutionInput(first)

@@ -20,9 +20,7 @@ export const REGISTERED_THEME_TOKEN_KINDS: ReadonlySet<ThemeTokenKindV2> = new S
 
 export function validateComponentThemeOverrides(
   baseTokens: Readonly<Record<string, ThemeTokenValueV2>>,
-  overrideContext:
-    | ComponentThemeOverrideContext
-    | Readonly<Record<string, ThemeTokenValueV2>>,
+  context: ComponentThemeOverrideContext,
   options?: ThemeResolutionOptions | undefined,
 ): {
   effectiveOverrides: Record<string, ThemeTokenValueV2>;
@@ -31,17 +29,6 @@ export function validateComponentThemeOverrides(
 } {
   const failures: ThemeValidationFailure[] = [];
   const ruleFailures: DefinitionRuleFailure[] = [];
-
-  const isPlainRecord = (
-    value: unknown,
-  ): value is Readonly<Record<string, ThemeTokenValueV2>> => {
-    if (typeof value !== "object" || value === null) return false;
-    return !("overrides" in value || "permittedTokenKinds" in value);
-  };
-
-  const context: ComponentThemeOverrideContext = isPlainRecord(overrideContext)
-    ? { overrides: overrideContext }
-    : overrideContext;
 
   const rawOverrides = context.overrides ?? {};
   const effectiveOverrides: Record<string, ThemeTokenValueV2> = {};
@@ -52,11 +39,14 @@ export function validateComponentThemeOverrides(
       : undefined;
 
   const extraSegments = [
-    ...(context.componentId !== undefined
-      ? [{ kind: "block" as const, key: context.componentId }]
+    ...(context.pageKey !== undefined
+      ? [{ kind: "page" as const, key: context.pageKey }]
       : []),
-    ...(context.placementId !== undefined
-      ? [{ kind: "block" as const, key: context.placementId }]
+    ...(context.componentKey !== undefined
+      ? [{ kind: "block" as const, key: context.componentKey }]
+      : []),
+    ...(context.placementAlias !== undefined
+      ? [{ kind: "block" as const, key: context.placementAlias }]
       : []),
   ];
 
@@ -81,7 +71,22 @@ export function validateComponentThemeOverrides(
     ruleFailures.push(located.ruleFailure);
   };
 
-  for (const [key, rawValue] of Object.entries(rawOverrides)) {
+  if (context.permittedTokenKinds !== undefined) {
+    const invalidKinds = [...context.permittedTokenKinds]
+      .filter((kind) => !REGISTERED_THEME_TOKEN_KINDS.has(kind))
+      .sort();
+    if (invalidKinds.length > 0) {
+      addFailure({
+        code: "INVALID_PERMITTED_TOKEN_KIND",
+        family: "invalid_value",
+        message: `Component override permission includes unregistered token kinds: ${invalidKinds.join(", ")}`,
+      });
+    }
+  }
+
+  for (const key of Object.keys(rawOverrides).sort()) {
+    const rawValue = rawOverrides[key];
+    if (rawValue === undefined) continue;
     // 1. Check if token kind is registered
     const candidateKind = (rawValue as { kind?: unknown })?.kind;
     if (
@@ -91,7 +96,7 @@ export function validateComponentThemeOverrides(
       addFailure({
         code: "INVALID_TOKEN_KIND",
         family: "invalid_value",
-        message: `Component override for "${key}" has unregistered token kind "${String(candidateKind)}". Registered kinds are: ${Array.from(REGISTERED_THEME_TOKEN_KINDS).join(", ")}`,
+        message: `Component override for "${key}" has unregistered token kind "${String(candidateKind)}". Registered kinds are: ${Array.from(REGISTERED_THEME_TOKEN_KINDS).sort().join(", ")}`,
         tokenKey: key,
       });
       continue;
@@ -104,7 +109,7 @@ export function validateComponentThemeOverrides(
       addFailure({
         code: "UNPERMITTED_TOKEN_OVERRIDE",
         family: "invalid_value",
-        message: `Token kind "${tokenKind}" is not permitted for component override on "${key}". Permitted kinds: ${Array.from(permittedSet).join(", ")}`,
+        message: `Token kind "${tokenKind}" is not permitted for component override on "${key}". Permitted kinds: ${Array.from(permittedSet).sort().join(", ")}`,
         tokenKey: key,
       });
       continue;

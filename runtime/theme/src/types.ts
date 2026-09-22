@@ -1,22 +1,21 @@
 import "server-only";
 
-import type { z } from "zod";
 import type {
-  applicationThemeV2Schema,
-  exactPlatformThemeDependencyV2Schema,
-  themeTokenValueV2Schema,
-  themeTokenKindV2Schema,
-  platformThemeReleaseV2Schema,
+  ApplicationContentV2,
+  BuilderKey,
   DefinitionValidationLocation,
   DefinitionRuleFailure,
   DefinitionRuleFailureFamily,
+  NamespacedKey,
+  PlatformId,
+  PlatformThemeReleaseV2 as ContractPlatformThemeReleaseV2,
 } from "@vortex/contracts";
 
-export type ApplicationThemeV2 = z.infer<typeof applicationThemeV2Schema>;
-export type ExactPlatformThemeDependencyV2 = z.infer<typeof exactPlatformThemeDependencyV2Schema>;
-export type ThemeTokenValueV2 = z.infer<typeof themeTokenValueV2Schema>;
-export type ThemeTokenKindV2 = z.infer<typeof themeTokenKindV2Schema>;
-export type PlatformThemeReleaseV2 = z.infer<typeof platformThemeReleaseV2Schema>;
+export type ApplicationThemeV2 = ApplicationContentV2["theme"];
+export type ExactPlatformThemeDependencyV2 = ApplicationThemeV2["base"];
+export type ThemeTokenValueV2 = ApplicationThemeV2["tokens"][string];
+export type ThemeTokenKindV2 = ThemeTokenValueV2["kind"];
+export type PlatformThemeReleaseV2 = ContractPlatformThemeReleaseV2;
 
 export type ColorPairToken = Extract<ThemeTokenValueV2, { kind: "color_pair" }>;
 export type TypographyToken = Extract<ThemeTokenValueV2, { kind: "typography" }>;
@@ -28,11 +27,13 @@ export type FocusToken = Extract<ThemeTokenValueV2, { kind: "focus" }>;
 export type AssetToken = Extract<ThemeTokenValueV2, { kind: "asset" }>;
 export type DensityToken = Extract<ThemeTokenValueV2, { kind: "density" }>;
 
-export type ThemeResolutionMode = "runtime" | "preview";
+export type ContrastPairUsage = "normal_text" | "large_text" | "non_text";
 
 export type ContrastPairDeclaration = Readonly<{
   foregroundTokenKey: string;
   backgroundTokenKey: string;
+  usage?: ContrastPairUsage | undefined;
+  /** May strengthen, but never lower, the WCAG AA minimum for the declared usage. */
   minimumRatio?: number | undefined;
   label?: string | undefined;
 }>;
@@ -50,40 +51,30 @@ export type ComponentThemeOverrideContext = Readonly<{
     | ReadonlySet<ThemeTokenKindV2>
     | readonly ThemeTokenKindV2[]
     | undefined;
-  /**
-   * Component identifier or placement alias for error location.
-   */
-  componentId?: string | undefined;
-  placementId?: string | undefined;
+  /** Display-safe definition keys/aliases used only to locate a refusal. */
+  pageKey?: BuilderKey | undefined;
+  componentKey?: NamespacedKey | undefined;
+  placementAlias?: BuilderKey | undefined;
 }>;
 
-export type AssetApprovalChecker = (assetId: string) => boolean;
-
 export type ThemeResolutionOptions = Readonly<{
-  mode?: ThemeResolutionMode | undefined;
-  approvedAssetIds?: ReadonlySet<string> | readonly string[] | undefined;
-  unapprovedAssetIds?: ReadonlySet<string> | readonly string[] | undefined;
-  privateAssetIds?: ReadonlySet<string> | readonly string[] | undefined;
-  isAssetApproved?: AssetApprovalChecker | undefined;
-  isAssetPublic?: AssetApprovalChecker | undefined;
+  /** Exact approval evidence supplied by the trusted publication/runtime caller. */
+  approvedAssetIds?: ReadonlySet<PlatformId> | readonly PlatformId[] | undefined;
+  /** Exact public-visibility evidence supplied by the trusted publication/runtime caller. */
+  publicAssetIds?: ReadonlySet<PlatformId> | readonly PlatformId[] | undefined;
   contrastPairs?: readonly ContrastPairDeclaration[] | undefined;
-  documentKey?: string | undefined;
-  correlationId?: string | undefined;
+  documentKey?: NamespacedKey | undefined;
 }>;
 
 export type ThemeResolutionInput = Readonly<{
   theme: ApplicationThemeV2;
-  componentOverrideContext?:
-    | ComponentThemeOverrideContext
-    | Readonly<Record<string, ThemeTokenValueV2>>
-    | undefined;
+  componentOverrideContext?: ComponentThemeOverrideContext | undefined;
   options?: ThemeResolutionOptions | undefined;
 }>;
 
 export type ResolvedTheme = Readonly<{
   base: ExactPlatformThemeDependencyV2;
   tokens: Readonly<Record<string, ThemeTokenValueV2>>;
-  mode: ThemeResolutionMode;
 }>;
 
 export type ThemeValidationFailure = Readonly<{

@@ -3,8 +3,6 @@ import "server-only";
 import type { DefinitionRuleFailure } from "@vortex/contracts";
 import { createLocatedFailure } from "./errors";
 import type {
-  ColorPairToken,
-  ContrastPairDeclaration,
   ThemeResolutionOptions,
   ThemeTokenValueV2,
   ThemeValidationFailure,
@@ -14,24 +12,41 @@ export const WCAG_AA_NORMAL_TEXT_MIN_CONTRAST = 4.5;
 export const WCAG_AA_LARGE_TEXT_MIN_CONTRAST = 3.0;
 export const WCAG_AA_NON_TEXT_MIN_CONTRAST = 3.0;
 
-const DEFAULT_LIGHT_SURFACE = "#FFFFFF";
-const DEFAULT_DARK_SURFACE = "#000000";
+export const DEFAULT_LIGHT_SURFACE = "#FFFFFF";
+export const DEFAULT_DARK_SURFACE = "#000000";
 
-function parseHex(hex: string): { r: number; g: number; b: number } {
+type RgbaColor = Readonly<{ r: number; g: number; b: number; a: number }>;
+
+function parseHex(hex: string): RgbaColor {
   const clean = hex.startsWith("#") ? hex.slice(1) : hex;
-  if (clean.length === 3) {
-    const r = parseInt(clean[0]! + clean[0]!, 16);
-    const g = parseInt(clean[1]! + clean[1]!, 16);
-    const b = parseInt(clean[2]! + clean[2]!, 16);
-    return { r, g, b };
-  }
-  if (clean.length === 6) {
-    const r = parseInt(clean.slice(0, 2), 16);
-    const g = parseInt(clean.slice(2, 4), 16);
-    const b = parseInt(clean.slice(4, 6), 16);
-    return { r, g, b };
-  }
-  throw new Error(`Invalid hex color: "${hex}"`);
+  if (!/^(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(clean))
+    throw new Error(`Invalid hex color: "${hex}"`);
+  const expanded =
+    clean.length <= 4
+      ? [...clean].map((character) => character + character).join("")
+      : clean;
+  return {
+    r: parseInt(expanded.slice(0, 2), 16),
+    g: parseInt(expanded.slice(2, 4), 16),
+    b: parseInt(expanded.slice(4, 6), 16),
+    a: expanded.length === 8 ? parseInt(expanded.slice(6, 8), 16) / 255 : 1,
+  };
+}
+
+function composite(foreground: RgbaColor, background: RgbaColor): RgbaColor {
+  const alpha = foreground.a + background.a * (1 - foreground.a);
+  if (alpha === 0) return { r: 0, g: 0, b: 0, a: 0 };
+  return {
+    r: (foreground.r * foreground.a + background.r * background.a * (1 - foreground.a)) / alpha,
+    g: (foreground.g * foreground.a + background.g * background.a * (1 - foreground.a)) / alpha,
+    b: (foreground.b * foreground.a + background.b * background.a * (1 - foreground.a)) / alpha,
+    a: alpha,
+  };
+}
+
+function requireOpaque(color: RgbaColor, role: string): RgbaColor {
+  if (color.a !== 1) throw new Error(`${role} must resolve to an opaque color`);
+  return color;
 }
 
 function channelLuminance(channel: number): number {
@@ -39,8 +54,7 @@ function channelLuminance(channel: number): number {
   return sRGB <= 0.04045 ? sRGB / 12.92 : Math.pow((sRGB + 0.055) / 1.055, 2.4);
 }
 
-export function relativeLuminance(hex: string): number {
-  const { r, g, b } = parseHex(hex);
+function colorLuminance({ r, g, b }: RgbaColor): number {
   return (
     0.2126 * channelLuminance(r) +
     0.7152 * channelLuminance(g) +
@@ -48,12 +62,57 @@ export function relativeLuminance(hex: string): number {
   );
 }
 
-export function contrastRatio(colorA: string, colorB: string): number {
-  const lumA = relativeLuminance(colorA);
-  const lumB = relativeLuminance(colorB);
+/** Calculates luminance after composing a translucent color over an opaque background. */
+export function relativeLuminance(hex: string, background = DEFAULT_LIGHT_SURFACE): number {
+  const backdrop = requireOpaque(parseHex(background), "Luminance background");
+  return colorLuminance(composite(parseHex(hex), backdrop));
+}
+
+/**
+ * Calculates foreground/background contrast after alpha-compositing both layers onto
+ * an opaque canvas. Argument order is significant when either color is translucent.
+ */
+export function contrastRatio(
+  foreground: string,
+  background: string,
+  canvas = DEFAULT_LIGHT_SURFACE,
+): number {
+  const opaqueCanvas = requireOpaque(parseHex(canvas), "Contrast canvas");
+  const effectiveBackground = composite(parseHex(background), opaqueCanvas);
+  const effectiveForeground = composite(parseHex(foreground), effectiveBackground);
+  const lumA = colorLuminance(effectiveForeground);
+  const lumB = colorLuminance(effectiveBackground);
   const lighter = Math.max(lumA, lumB);
   const darker = Math.min(lumA, lumB);
   return (lighter + 0.05) / (darker + 0.05);
+}
+
+export function findThemeSurface(
+  tokens: Readonly<Record<string, ThemeTokenValueV2>>,
+): Readonly<{ key?: string; light: string; dark: string; name: string }> {
+  const colorEntries = Object.keys(tokens)
+    .sort()
+    .flatMap((key) => {
+      const token = tokens[key];
+      return token?.kind === "color_pair" ? [[key, token] as const] : [];
+    });
+  const exactPriority = ["background", "canvas", "surface", "bg", "page_background", "app_background"];
+  const selected =
+    exactPriority.flatMap((candidate) =>
+      colorEntries.filter(([key]) => key.toLowerCase() === candidate),
+    )[0] ?? colorEntries.find(([key]) => isBackgroundTokenKey(key));
+  if (selected === undefined)
+    return {
+      light: DEFAULT_LIGHT_SURFACE,
+      dark: DEFAULT_DARK_SURFACE,
+      name: "default surface",
+    };
+  return {
+    key: selected[0],
+    light: selected[1].light,
+    dark: selected[1].dark,
+    name: selected[0],
+  };
 }
 
 function isBackgroundTokenKey(key: string): boolean {
@@ -122,29 +181,31 @@ export function validateThemeContrast(
     ruleFailures.push(located.ruleFailure);
   };
 
-  // Find explicit or default background token
-  let backgroundToken: ColorPairToken | undefined;
-  let backgroundTokenKey: string | undefined;
-
-  for (const [key, token] of Object.entries(tokens)) {
-    if (token.kind === "color_pair" && isBackgroundTokenKey(key)) {
-      backgroundToken = token;
-      backgroundTokenKey = key;
-      break;
-    }
+  const surface = findThemeSurface(tokens);
+  const lightSurface = surface.light;
+  const darkSurface = surface.dark;
+  const surfaceName = surface.name;
+  const pairedForegroundKeys = new Set<string>();
+  for (const key of Object.keys(tokens).sort()) {
+    const token = tokens[key];
+    if (token?.kind !== "color_pair") continue;
+    const suffixPair = tokens[`${key}_foreground`];
+    if (suffixPair?.kind === "color_pair") pairedForegroundKeys.add(`${key}_foreground`);
+    const prefixPair = tokens[`on_${key}`];
+    if (prefixPair?.kind === "color_pair") pairedForegroundKeys.add(`on_${key}`);
   }
 
-  const lightSurface = backgroundToken?.light ?? DEFAULT_LIGHT_SURFACE;
-  const darkSurface = backgroundToken?.dark ?? DEFAULT_DARK_SURFACE;
-  const surfaceName = backgroundTokenKey ?? "default surface";
-
   // Validate text & brand color pairs against surface
-  for (const [key, token] of Object.entries(tokens)) {
+  for (const key of Object.keys(tokens).sort()) {
+    const token = tokens[key];
+    if (token === undefined) continue;
     if (token.kind !== "color_pair") continue;
-    if (key === backgroundTokenKey) continue;
+    if (key === surface.key) continue;
 
-    if (isTextTokenKey(key)) {
-      const lightRatio = contrastRatio(token.light, lightSurface);
+    // A paired foreground is evaluated against its declared companion below. It
+    // need not also contrast with the application surface on which it is not used.
+    if (isTextTokenKey(key) && !pairedForegroundKeys.has(key)) {
+      const lightRatio = contrastRatio(token.light, lightSurface, DEFAULT_LIGHT_SURFACE);
       if (lightRatio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST) {
         addFailure({
           code: "INSUFFICIENT_CONTRAST",
@@ -153,7 +214,7 @@ export function validateThemeContrast(
           tokenKey: key,
         });
       }
-      const darkRatio = contrastRatio(token.dark, darkSurface);
+      const darkRatio = contrastRatio(token.dark, darkSurface, DEFAULT_DARK_SURFACE);
       if (darkRatio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST) {
         addFailure({
           code: "INSUFFICIENT_CONTRAST",
@@ -163,7 +224,7 @@ export function validateThemeContrast(
         });
       }
     } else if (isBrandOrPrimaryTokenKey(key)) {
-      const lightRatio = contrastRatio(token.light, lightSurface);
+      const lightRatio = contrastRatio(token.light, lightSurface, DEFAULT_LIGHT_SURFACE);
       if (lightRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
         addFailure({
           code: "INSUFFICIENT_CONTRAST",
@@ -172,7 +233,7 @@ export function validateThemeContrast(
           tokenKey: key,
         });
       }
-      const darkRatio = contrastRatio(token.dark, darkSurface);
+      const darkRatio = contrastRatio(token.dark, darkSurface, DEFAULT_DARK_SURFACE);
       if (darkRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
         addFailure({
           code: "INSUFFICIENT_CONTRAST",
@@ -187,7 +248,7 @@ export function validateThemeContrast(
     const foregroundKey = `${key}_foreground`;
     const pairedForeground = tokens[foregroundKey];
     if (pairedForeground !== undefined && pairedForeground.kind === "color_pair") {
-      const lightRatio = contrastRatio(pairedForeground.light, token.light);
+      const lightRatio = contrastRatio(pairedForeground.light, token.light, lightSurface);
       if (lightRatio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST) {
         addFailure({
           code: "INSUFFICIENT_CONTRAST",
@@ -196,7 +257,7 @@ export function validateThemeContrast(
           tokenKey: foregroundKey,
         });
       }
-      const darkRatio = contrastRatio(pairedForeground.dark, token.dark);
+      const darkRatio = contrastRatio(pairedForeground.dark, token.dark, darkSurface);
       if (darkRatio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST) {
         addFailure({
           code: "INSUFFICIENT_CONTRAST",
@@ -211,7 +272,7 @@ export function validateThemeContrast(
     const onKey = `on_${key}`;
     const pairedOn = tokens[onKey];
     if (pairedOn !== undefined && pairedOn.kind === "color_pair") {
-      const lightRatio = contrastRatio(pairedOn.light, token.light);
+      const lightRatio = contrastRatio(pairedOn.light, token.light, lightSurface);
       if (lightRatio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST) {
         addFailure({
           code: "INSUFFICIENT_CONTRAST",
@@ -220,7 +281,7 @@ export function validateThemeContrast(
           tokenKey: onKey,
         });
       }
-      const darkRatio = contrastRatio(pairedOn.dark, token.dark);
+      const darkRatio = contrastRatio(pairedOn.dark, token.dark, darkSurface);
       if (darkRatio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST) {
         addFailure({
           code: "INSUFFICIENT_CONTRAST",
@@ -237,7 +298,27 @@ export function validateThemeContrast(
     for (const pair of options.contrastPairs) {
       const fgToken = tokens[pair.foregroundTokenKey];
       const bgToken = tokens[pair.backgroundTokenKey];
-      const minRatio = pair.minimumRatio ?? WCAG_AA_NORMAL_TEXT_MIN_CONTRAST;
+      const requiredRatio =
+        pair.usage === "large_text"
+          ? WCAG_AA_LARGE_TEXT_MIN_CONTRAST
+          : pair.usage === "non_text"
+            ? WCAG_AA_NON_TEXT_MIN_CONTRAST
+            : WCAG_AA_NORMAL_TEXT_MIN_CONTRAST;
+      if (
+        pair.minimumRatio !== undefined &&
+        (!Number.isFinite(pair.minimumRatio) ||
+          pair.minimumRatio < requiredRatio ||
+          pair.minimumRatio > 21)
+      ) {
+        addFailure({
+          code: "INVALID_CONTRAST_RATIO",
+          family: "invalid_value",
+          message: `Contrast pair "${pair.foregroundTokenKey}" on "${pair.backgroundTokenKey}" must use a finite minimum ratio from ${requiredRatio}:1 to 21:1 for ${pair.usage ?? "normal_text"}`,
+          tokenKey: pair.foregroundTokenKey,
+        });
+        continue;
+      }
+      const minRatio = pair.minimumRatio ?? requiredRatio;
 
       if (fgToken === undefined) {
         addFailure({
@@ -276,7 +357,7 @@ export function validateThemeContrast(
         continue;
       }
 
-      const lightRatio = contrastRatio(fgToken.light, bgToken.light);
+      const lightRatio = contrastRatio(fgToken.light, bgToken.light, lightSurface);
       if (lightRatio < minRatio) {
         addFailure({
           code: "INSUFFICIENT_CONTRAST",
@@ -285,7 +366,7 @@ export function validateThemeContrast(
           tokenKey: pair.foregroundTokenKey,
         });
       }
-      const darkRatio = contrastRatio(fgToken.dark, bgToken.dark);
+      const darkRatio = contrastRatio(fgToken.dark, bgToken.dark, darkSurface);
       if (darkRatio < minRatio) {
         addFailure({
           code: "INSUFFICIENT_CONTRAST",

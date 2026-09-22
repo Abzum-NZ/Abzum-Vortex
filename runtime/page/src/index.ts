@@ -25,6 +25,7 @@ export {
 export {
   resolvePageTheme,
   resolvePlacementThemeTokens,
+  type PlacementThemeResolutionContext,
 } from "./page-theme-resolution";
 
 export const PageService = Object.freeze({

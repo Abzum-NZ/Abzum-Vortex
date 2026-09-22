@@ -54,12 +54,12 @@ export {
 
 export type {
   ApplicationThemeV2,
-  AssetApprovalChecker,
   AssetToken,
   BorderToken,
   ColorPairToken,
   ComponentThemeOverrideContext,
   ContrastPairDeclaration,
+  ContrastPairUsage,
   CornersToken,
   DensityToken,
   ElevationToken,
@@ -69,7 +69,6 @@ export type {
   ResolvedTheme,
   SpacingToken,
   ThemeResolutionInput,
-  ThemeResolutionMode,
   ThemeResolutionOptions,
   ThemeTokenKindV2,
   ThemeTokenValueV2,

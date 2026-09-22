@@ -12,18 +12,15 @@ export const THEME_DEFAULT_RULE_CODE = "vortex.definition.application_block_sett
 export function createThemeLocation(
   documentKey: string,
   tokenKey?: string,
-  extraSegments?: readonly { kind: "block" | "setting" | "page"; key: string }[],
+  scopeSegments?: readonly { kind: "block" | "setting" | "page"; key: string }[],
 ): DefinitionValidationLocation {
   const segments: DefinitionValidationLocation["segments"] = [
-    { kind: "document", key: "theme" },
+    { kind: "application", key: documentKey },
+    { kind: "setting", key: "theme" },
   ];
+  if (scopeSegments !== undefined) segments.push(...scopeSegments);
   if (tokenKey !== undefined) {
     segments.push({ kind: "setting", key: tokenKey });
-  }
-  if (extraSegments !== undefined) {
-    for (const segment of extraSegments) {
-      segments.push(segment);
-    }
   }
   return {
     documentKind: "application",

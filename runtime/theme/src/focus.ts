@@ -1,44 +1,21 @@
 import "server-only";
 
 import type { DefinitionRuleFailure } from "@vortex/contracts";
-import { contrastRatio, WCAG_AA_NON_TEXT_MIN_CONTRAST } from "./contrast";
+import {
+  contrastRatio,
+  DEFAULT_DARK_SURFACE,
+  DEFAULT_LIGHT_SURFACE,
+  findThemeSurface,
+  WCAG_AA_NON_TEXT_MIN_CONTRAST,
+} from "./contrast";
 import { createLocatedFailure } from "./errors";
 import type {
-  ColorPairToken,
   ThemeResolutionOptions,
   ThemeTokenValueV2,
   ThemeValidationFailure,
 } from "./types";
 
-const DEFAULT_LIGHT_SURFACE = "#FFFFFF";
-const DEFAULT_DARK_SURFACE = "#000000";
-
 const MINIMUM_VISIBLE_FOCUS_WIDTH_REM = 0.0625; // 1px at 16px base
-
-function findSurface(tokens: Readonly<Record<string, ThemeTokenValueV2>>): {
-  light: string;
-  dark: string;
-  name: string;
-} {
-  for (const [key, token] of Object.entries(tokens)) {
-    if (
-      token.kind === "color_pair" &&
-      (key === "background" ||
-        key === "surface" ||
-        key === "canvas" ||
-        key === "bg" ||
-        key.endsWith("_background") ||
-        key.endsWith("_surface"))
-    ) {
-      return { light: token.light, dark: token.dark, name: key };
-    }
-  }
-  return {
-    light: DEFAULT_LIGHT_SURFACE,
-    dark: DEFAULT_DARK_SURFACE,
-    name: "default surface",
-  };
-}
 
 export function validateFocusVisibility(
   tokens: Readonly<Record<string, ThemeTokenValueV2>>,
@@ -62,11 +39,15 @@ export function validateFocusVisibility(
     ruleFailures.push(located.ruleFailure);
   };
 
-  const surface = findSurface(tokens);
+  const surface = findThemeSurface(tokens);
+  let foundFocusToken = false;
 
-  for (const [key, token] of Object.entries(tokens)) {
+  for (const key of Object.keys(tokens).sort()) {
+    const token = tokens[key];
+    if (token === undefined) continue;
     // Validate focus tokens
     if (token.kind === "focus") {
+      foundFocusToken = true;
       // 1. Width must be non-zero and visible
       if (token.widthRem <= 0 || token.widthRem < MINIMUM_VISIBLE_FOCUS_WIDTH_REM) {
         addFailure({
@@ -99,23 +80,30 @@ export function validateFocusVisibility(
       }
 
       // 3. Contrast of focus color against surface
-      const colorPair = colorToken as ColorPairToken;
-      const lightRatio = contrastRatio(colorPair.light, surface.light);
+      const lightRatio = contrastRatio(
+        colorToken.light,
+        surface.light,
+        DEFAULT_LIGHT_SURFACE,
+      );
       if (lightRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
         addFailure({
           code: "HIDDEN_FOCUS",
           family: "unsafe_content",
-          message: `Focus token "${key}" has hidden focus: light mode color "${colorPair.light}" has insufficient contrast ratio (${lightRatio.toFixed(2)}:1 < ${WCAG_AA_NON_TEXT_MIN_CONTRAST}:1) against ${surface.name} (${surface.light})`,
+          message: `Focus token "${key}" has hidden focus: light mode color "${colorToken.light}" has insufficient contrast ratio (${lightRatio.toFixed(2)}:1 < ${WCAG_AA_NON_TEXT_MIN_CONTRAST}:1) against ${surface.name} (${surface.light})`,
           tokenKey: key,
         });
       }
 
-      const darkRatio = contrastRatio(colorPair.dark, surface.dark);
+      const darkRatio = contrastRatio(
+        colorToken.dark,
+        surface.dark,
+        DEFAULT_DARK_SURFACE,
+      );
       if (darkRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
         addFailure({
           code: "HIDDEN_FOCUS",
           family: "unsafe_content",
-          message: `Focus token "${key}" has hidden focus: dark mode color "${colorPair.dark}" has insufficient contrast ratio (${darkRatio.toFixed(2)}:1 < ${WCAG_AA_NON_TEXT_MIN_CONTRAST}:1) against ${surface.name} (${surface.dark})`,
+          message: `Focus token "${key}" has hidden focus: dark mode color "${colorToken.dark}" has insufficient contrast ratio (${darkRatio.toFixed(2)}:1 < ${WCAG_AA_NON_TEXT_MIN_CONTRAST}:1) against ${surface.name} (${surface.dark})`,
           tokenKey: key,
         });
       }
@@ -140,6 +128,14 @@ export function validateFocusVisibility(
         });
       }
     }
+  }
+
+  if (!foundFocusToken) {
+    addFailure({
+      code: "MISSING_FOCUS_TOKEN",
+      family: "unsafe_content",
+      message: "The resolved application theme must declare a visible focus appearance",
+    });
   }
 
   return { failures, ruleFailures };

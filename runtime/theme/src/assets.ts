@@ -34,16 +34,14 @@ export function validatePublicPlatformAssets(
     options?.approvedAssetIds !== undefined
       ? new Set(options.approvedAssetIds)
       : undefined;
-  const unapprovedSet =
-    options?.unapprovedAssetIds !== undefined
-      ? new Set(options.unapprovedAssetIds)
-      : undefined;
-  const privateSet =
-    options?.privateAssetIds !== undefined
-      ? new Set(options.privateAssetIds)
+  const publicSet =
+    options?.publicAssetIds !== undefined
+      ? new Set(options.publicAssetIds)
       : undefined;
 
-  for (const [key, token] of Object.entries(tokens)) {
+  for (const key of Object.keys(tokens).sort()) {
+    const token = tokens[key];
+    if (token === undefined) continue;
     if (token.kind !== "asset") continue;
 
     // 1. Validate asset ID format
@@ -58,55 +56,39 @@ export function validatePublicPlatformAssets(
       continue;
     }
 
-    // 2. Validate approved / public status
-    if (approvedSet !== undefined && !approvedSet.has(token.assetId)) {
+    // Approval and public visibility are separate positive facts. Absence from a
+    // deny-list cannot prove either one, so asset-bearing themes fail closed when
+    // the trusted caller did not provide both exact evidence sets.
+    if (approvedSet === undefined) {
+      addFailure({
+        code: "ASSET_APPROVAL_UNVERIFIED",
+        family: "unsafe_content",
+        message: `Asset token "${key}" cannot be resolved without exact platform approval evidence for "${token.assetId}"`,
+        tokenKey: key,
+      });
+    } else if (!approvedSet.has(token.assetId)) {
       addFailure({
         code: "UNAPPROVED_ASSET",
         family: "unsafe_content",
         message: `Asset token "${key}" references unapproved asset identifier: "${token.assetId}"`,
         tokenKey: key,
       });
-      continue;
     }
 
-    if (unapprovedSet !== undefined && unapprovedSet.has(token.assetId)) {
+    if (publicSet === undefined) {
       addFailure({
-        code: "UNAPPROVED_ASSET",
+        code: "ASSET_VISIBILITY_UNVERIFIED",
         family: "unsafe_content",
-        message: `Asset token "${key}" references explicitly unapproved asset identifier: "${token.assetId}"`,
+        message: `Asset token "${key}" cannot be resolved without exact public-visibility evidence for "${token.assetId}"`,
         tokenKey: key,
       });
-      continue;
-    }
-
-    if (privateSet !== undefined && privateSet.has(token.assetId)) {
-      addFailure({
-        code: "PRIVATE_ASSET",
-        family: "unsafe_content",
-        message: `Asset token "${key}" references private asset identifier "${token.assetId}". Only public platform assets may be referenced by themes.`,
-        tokenKey: key,
-      });
-      continue;
-    }
-
-    if (options?.isAssetApproved !== undefined && !options.isAssetApproved(token.assetId)) {
-      addFailure({
-        code: "UNAPPROVED_ASSET",
-        family: "unsafe_content",
-        message: `Asset token "${key}" references unapproved asset identifier: "${token.assetId}"`,
-        tokenKey: key,
-      });
-      continue;
-    }
-
-    if (options?.isAssetPublic !== undefined && !options.isAssetPublic(token.assetId)) {
+    } else if (!publicSet.has(token.assetId)) {
       addFailure({
         code: "PRIVATE_ASSET",
         family: "unsafe_content",
         message: `Asset token "${key}" references non-public asset identifier "${token.assetId}". Only public platform assets may be referenced by themes.`,
         tokenKey: key,
       });
-      continue;
     }
   }
 
