@@ -963,25 +963,85 @@
         "id": "rule_lead_reason",
         "key": "unqualified_reason_required",
         "record_type": "lead",
-        "trigger": "change",
+        "profile": "before_save",
+        "graph_version": "1.0.0",
         "priority": 100,
-        "condition": {
-          "all": [
-            {
-              "field": "status",
-              "operator": "equals",
-              "value": "unqualified"
-            },
-            {
-              "field": "unqualified_reason",
-              "operator": "is_empty"
+        "inputs": [],
+        "variables": [],
+        "nodes": [
+          {
+            "id": "start",
+            "node_version": "1.0.0",
+            "type": "start",
+            "operations": [
+              "create",
+              "update"
+            ]
+          },
+          {
+            "id": "unqualified_without_reason",
+            "node_version": "1.0.0",
+            "type": "condition",
+            "condition": {
+              "kind": "all",
+              "conditions": [
+                {
+                  "kind": "comparison",
+                  "operator": "equals",
+                  "left": {
+                    "source": "current_field",
+                    "field": "status"
+                  },
+                  "right": {
+                    "source": "literal",
+                    "value": {
+                      "type": "choice",
+                      "value": "unqualified"
+                    }
+                  }
+                },
+                {
+                  "kind": "comparison",
+                  "operator": "is_empty",
+                  "left": {
+                    "source": "current_field",
+                    "field": "unqualified_reason"
+                  }
+                }
+              ]
             }
-          ]
-        },
-        "effect": {
-          "kind": "refuse",
-          "reason_code": "unqualified_reason_required"
-        }
+          },
+          {
+            "id": "refuse_without_reason",
+            "node_version": "1.0.0",
+            "type": "refuse",
+            "code": "unqualified_reason_required",
+            "message": "Give the reason this lead was unqualified.",
+            "field": "unqualified_reason"
+          },
+          {
+            "id": "finish",
+            "node_version": "1.0.0",
+            "type": "finish"
+          }
+        ],
+        "edges": [
+          {
+            "from": "start",
+            "port": "next",
+            "to": "unqualified_without_reason"
+          },
+          {
+            "from": "unqualified_without_reason",
+            "port": "true",
+            "to": "refuse_without_reason"
+          },
+          {
+            "from": "unqualified_without_reason",
+            "port": "false",
+            "to": "finish"
+          }
+        ]
       }
     ],
     "extension_points": [

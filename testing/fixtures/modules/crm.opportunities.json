@@ -904,17 +904,76 @@
         "id": "rule_opp_discount",
         "key": "large_discount_warning",
         "record_type": "opportunity",
-        "trigger": "change",
+        "profile": "before_save",
+        "graph_version": "1.0.0",
         "priority": 100,
-        "condition": {
-          "field": "discount_percent",
-          "operator": "greater_than",
-          "value": "15"
-        },
-        "effect": {
-          "kind": "warn",
-          "message": "large_discount_review"
-        }
+        "inputs": [],
+        "variables": [],
+        "nodes": [
+          {
+            "id": "start",
+            "node_version": "1.0.0",
+            "type": "start",
+            "operations": [
+              "create",
+              "update"
+            ]
+          },
+          {
+            "id": "large_discount",
+            "node_version": "1.0.0",
+            "type": "condition",
+            "condition": {
+              "kind": "comparison",
+              "operator": "greater_than",
+              "left": {
+                "source": "current_field",
+                "field": "discount_percent"
+              },
+              "right": {
+                "source": "literal",
+                "value": {
+                  "type": "decimal_number",
+                  "value": "15"
+                }
+              }
+            }
+          },
+          {
+            "id": "warn_review",
+            "node_version": "1.0.0",
+            "type": "warn",
+            "code": "large_discount_review",
+            "message": "A discount above 15 percent needs review before the opportunity is saved."
+          },
+          {
+            "id": "finish",
+            "node_version": "1.0.0",
+            "type": "finish"
+          }
+        ],
+        "edges": [
+          {
+            "from": "start",
+            "port": "next",
+            "to": "large_discount"
+          },
+          {
+            "from": "large_discount",
+            "port": "true",
+            "to": "warn_review"
+          },
+          {
+            "from": "large_discount",
+            "port": "false",
+            "to": "finish"
+          },
+          {
+            "from": "warn_review",
+            "port": "next",
+            "to": "finish"
+          }
+        ]
       }
     ],
     "extension_points": [

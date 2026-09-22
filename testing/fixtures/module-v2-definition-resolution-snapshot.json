@@ -1,6 +1,6 @@
 {
   "contractVersion": "3.0.0",
-  "fingerprint": "sha256:9ef149a8f21bf77001620310fee44592cc1405bd429c265857c0efd2c5d344c9",
+  "fingerprint": "sha256:d3168284ff94b4f5c9f1f7cca374232c8689f3525100b56c5d21dcbf0e40434f",
   "definitions": [
     {
       "kind": "module",
@@ -1063,6 +1063,38 @@
     },
     {
       "definitionKey": "vortex.crm.opportunities",
+      "scope": "rule:large_discount_warning",
+      "kind": "rule_node",
+      "alias": "start",
+      "identifier": "0ebf76ec-32df-4e6d-91a3-df2524a85a0a",
+      "componentOwner": "start"
+    },
+    {
+      "definitionKey": "vortex.crm.opportunities",
+      "scope": "rule:large_discount_warning",
+      "kind": "rule_node",
+      "alias": "large_discount",
+      "identifier": "9e64b6dc-2d4f-4a83-a2bb-0fe08cb99653",
+      "componentOwner": "large_discount"
+    },
+    {
+      "definitionKey": "vortex.crm.opportunities",
+      "scope": "rule:large_discount_warning",
+      "kind": "rule_node",
+      "alias": "warn_review",
+      "identifier": "235cdc7f-65e0-497b-814b-bec2575fc463",
+      "componentOwner": "warn_review"
+    },
+    {
+      "definitionKey": "vortex.crm.opportunities",
+      "scope": "rule:large_discount_warning",
+      "kind": "rule_node",
+      "alias": "finish",
+      "identifier": "f4f2f2e3-42df-435b-943f-67bca6a4cf8b",
+      "componentOwner": "finish"
+    },
+    {
+      "definitionKey": "vortex.crm.opportunities",
       "scope": "content",
       "kind": "event",
       "alias": "evt_opp_created",
@@ -1532,6 +1564,38 @@
       "alias": "company_name_required",
       "identifier": "72ed515b-1c3d-4130-ac8d-ed07768425c6",
       "componentOwner": "rule_company_name"
+    },
+    {
+      "definitionKey": "vortex.crm.organisations",
+      "scope": "rule:company_name_required",
+      "kind": "rule_node",
+      "alias": "start",
+      "identifier": "dc6792bd-2c12-4081-97b8-b989af32e7a2",
+      "componentOwner": "start"
+    },
+    {
+      "definitionKey": "vortex.crm.organisations",
+      "scope": "rule:company_name_required",
+      "kind": "rule_node",
+      "alias": "name_missing",
+      "identifier": "bf5327a3-9fa9-4343-a39c-de61e6a18bc0",
+      "componentOwner": "name_missing"
+    },
+    {
+      "definitionKey": "vortex.crm.organisations",
+      "scope": "rule:company_name_required",
+      "kind": "rule_node",
+      "alias": "refuse_without_name",
+      "identifier": "c9ba254a-5da4-4c55-960f-e70efb423b3b",
+      "componentOwner": "refuse_without_name"
+    },
+    {
+      "definitionKey": "vortex.crm.organisations",
+      "scope": "rule:company_name_required",
+      "kind": "rule_node",
+      "alias": "finish",
+      "identifier": "2cdc797e-2977-476b-9943-4140fd8ce6a2",
+      "componentOwner": "finish"
     },
     {
       "definitionKey": "vortex.crm.organisations",
@@ -2252,6 +2316,38 @@
       "alias": "unqualified_reason_required",
       "identifier": "c82a883a-89bf-4b13-a5df-b528aeb8f89c",
       "componentOwner": "rule_lead_reason"
+    },
+    {
+      "definitionKey": "vortex.crm.people",
+      "scope": "rule:unqualified_reason_required",
+      "kind": "rule_node",
+      "alias": "start",
+      "identifier": "8b1bd800-430f-4dbb-94fe-57656fca29e7",
+      "componentOwner": "start"
+    },
+    {
+      "definitionKey": "vortex.crm.people",
+      "scope": "rule:unqualified_reason_required",
+      "kind": "rule_node",
+      "alias": "unqualified_without_reason",
+      "identifier": "59f74d56-2c36-46f2-89eb-b3ed604dc6cc",
+      "componentOwner": "unqualified_without_reason"
+    },
+    {
+      "definitionKey": "vortex.crm.people",
+      "scope": "rule:unqualified_reason_required",
+      "kind": "rule_node",
+      "alias": "refuse_without_reason",
+      "identifier": "ce72312f-5a0b-4d01-803e-0f0440aff28f",
+      "componentOwner": "refuse_without_reason"
+    },
+    {
+      "definitionKey": "vortex.crm.people",
+      "scope": "rule:unqualified_reason_required",
+      "kind": "rule_node",
+      "alias": "finish",
+      "identifier": "96bb328b-e9df-426f-805b-0ade58c8db26",
+      "componentOwner": "finish"
     },
     {
       "definitionKey": "vortex.crm.people",
@@ -3535,6 +3631,38 @@
     },
     {
       "definitionKey": "vortex.service_desk.cases",
+      "scope": "rule:resolution_required",
+      "kind": "rule_node",
+      "alias": "start",
+      "identifier": "b298366e-1830-4025-910c-49389582954e",
+      "componentOwner": "start"
+    },
+    {
+      "definitionKey": "vortex.service_desk.cases",
+      "scope": "rule:resolution_required",
+      "kind": "rule_node",
+      "alias": "resolved_without_time",
+      "identifier": "f1ac2f45-e90d-48c6-8db9-18a036f65acc",
+      "componentOwner": "resolved_without_time"
+    },
+    {
+      "definitionKey": "vortex.service_desk.cases",
+      "scope": "rule:resolution_required",
+      "kind": "rule_node",
+      "alias": "refuse_without_resolution_time",
+      "identifier": "248fac13-f7cd-45c6-8f30-fb5c43d43904",
+      "componentOwner": "refuse_without_resolution_time"
+    },
+    {
+      "definitionKey": "vortex.service_desk.cases",
+      "scope": "rule:resolution_required",
+      "kind": "rule_node",
+      "alias": "finish",
+      "identifier": "6c04e38d-5c18-4822-be60-275308e0bfdf",
+      "componentOwner": "finish"
+    },
+    {
+      "definitionKey": "vortex.service_desk.cases",
       "scope": "content",
       "kind": "event",
       "alias": "evt_case_created",
@@ -4172,6 +4300,38 @@
       "alias": "only_published_articles_are_public",
       "identifier": "4a49398f-b282-42e9-a3ee-963e07e02062",
       "componentOwner": "rule_article_public"
+    },
+    {
+      "definitionKey": "vortex.service_desk.knowledge",
+      "scope": "rule:only_published_articles_are_public",
+      "kind": "rule_node",
+      "alias": "start",
+      "identifier": "67076a48-100f-4eb6-8c18-6882877dcee5",
+      "componentOwner": "start"
+    },
+    {
+      "definitionKey": "vortex.service_desk.knowledge",
+      "scope": "rule:only_published_articles_are_public",
+      "kind": "rule_node",
+      "alias": "public_before_publication",
+      "identifier": "fa09a1ba-f1a7-4751-8619-cd6969cb90f5",
+      "componentOwner": "public_before_publication"
+    },
+    {
+      "definitionKey": "vortex.service_desk.knowledge",
+      "scope": "rule:only_published_articles_are_public",
+      "kind": "rule_node",
+      "alias": "refuse_unpublished_public",
+      "identifier": "250b71f9-6acd-4920-9eea-269fd8f153ab",
+      "componentOwner": "refuse_unpublished_public"
+    },
+    {
+      "definitionKey": "vortex.service_desk.knowledge",
+      "scope": "rule:only_published_articles_are_public",
+      "kind": "rule_node",
+      "alias": "finish",
+      "identifier": "df70dccc-6a64-4cd1-ad0e-5151140459bc",
+      "componentOwner": "finish"
     },
     {
       "definitionKey": "vortex.service_desk.knowledge",

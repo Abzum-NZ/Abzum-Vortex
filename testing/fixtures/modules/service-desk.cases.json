@@ -1154,25 +1154,85 @@
         "id": "rule_case_resolution",
         "key": "resolution_required",
         "record_type": "case",
-        "trigger": "change",
+        "profile": "before_save",
+        "graph_version": "1.0.0",
         "priority": 100,
-        "condition": {
-          "all": [
-            {
-              "field": "status",
-              "operator": "equals",
-              "value": "resolved"
-            },
-            {
-              "field": "resolved_at",
-              "operator": "is_empty"
+        "inputs": [],
+        "variables": [],
+        "nodes": [
+          {
+            "id": "start",
+            "node_version": "1.0.0",
+            "type": "start",
+            "operations": [
+              "create",
+              "update"
+            ]
+          },
+          {
+            "id": "resolved_without_time",
+            "node_version": "1.0.0",
+            "type": "condition",
+            "condition": {
+              "kind": "all",
+              "conditions": [
+                {
+                  "kind": "comparison",
+                  "operator": "equals",
+                  "left": {
+                    "source": "current_field",
+                    "field": "status"
+                  },
+                  "right": {
+                    "source": "literal",
+                    "value": {
+                      "type": "choice",
+                      "value": "resolved"
+                    }
+                  }
+                },
+                {
+                  "kind": "comparison",
+                  "operator": "is_empty",
+                  "left": {
+                    "source": "current_field",
+                    "field": "resolved_at"
+                  }
+                }
+              ]
             }
-          ]
-        },
-        "effect": {
-          "kind": "refuse",
-          "reason_code": "resolution_time_required"
-        }
+          },
+          {
+            "id": "refuse_without_resolution_time",
+            "node_version": "1.0.0",
+            "type": "refuse",
+            "code": "resolution_time_required",
+            "message": "Record when the case was resolved.",
+            "field": "resolved_at"
+          },
+          {
+            "id": "finish",
+            "node_version": "1.0.0",
+            "type": "finish"
+          }
+        ],
+        "edges": [
+          {
+            "from": "start",
+            "port": "next",
+            "to": "resolved_without_time"
+          },
+          {
+            "from": "resolved_without_time",
+            "port": "true",
+            "to": "refuse_without_resolution_time"
+          },
+          {
+            "from": "resolved_without_time",
+            "port": "false",
+            "to": "finish"
+          }
+        ]
       }
     ],
     "extension_points": [

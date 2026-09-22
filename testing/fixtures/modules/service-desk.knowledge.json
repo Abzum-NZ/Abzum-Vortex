@@ -649,26 +649,92 @@
         "id": "rule_article_public",
         "key": "only_published_articles_are_public",
         "record_type": "article",
-        "trigger": "change",
+        "profile": "before_save",
+        "graph_version": "1.0.0",
         "priority": 100,
-        "condition": {
-          "all": [
-            {
-              "field": "public",
-              "operator": "equals",
-              "value": true
-            },
-            {
-              "field": "status",
-              "operator": "not_equals",
-              "value": "published"
+        "inputs": [],
+        "variables": [],
+        "nodes": [
+          {
+            "id": "start",
+            "node_version": "1.0.0",
+            "type": "start",
+            "operations": [
+              "create",
+              "update"
+            ]
+          },
+          {
+            "id": "public_before_publication",
+            "node_version": "1.0.0",
+            "type": "condition",
+            "condition": {
+              "kind": "all",
+              "conditions": [
+                {
+                  "kind": "comparison",
+                  "operator": "equals",
+                  "left": {
+                    "source": "current_field",
+                    "field": "public"
+                  },
+                  "right": {
+                    "source": "literal",
+                    "value": {
+                      "type": "yes_no",
+                      "value": true
+                    }
+                  }
+                },
+                {
+                  "kind": "comparison",
+                  "operator": "not_equals",
+                  "left": {
+                    "source": "current_field",
+                    "field": "status"
+                  },
+                  "right": {
+                    "source": "literal",
+                    "value": {
+                      "type": "choice",
+                      "value": "published"
+                    }
+                  }
+                }
+              ]
             }
-          ]
-        },
-        "effect": {
-          "kind": "refuse",
-          "reason_code": "published_state_required"
-        }
+          },
+          {
+            "id": "refuse_unpublished_public",
+            "node_version": "1.0.0",
+            "type": "refuse",
+            "code": "published_state_required",
+            "message": "Publish the article before making it public.",
+            "field": "status"
+          },
+          {
+            "id": "finish",
+            "node_version": "1.0.0",
+            "type": "finish"
+          }
+        ],
+        "edges": [
+          {
+            "from": "start",
+            "port": "next",
+            "to": "public_before_publication"
+          },
+          {
+            "from": "public_before_publication",
+            "port": "true",
+            "to": "refuse_unpublished_public"
+          },
+          {
+            "from": "public_before_publication",
+            "port": "false",
+            "to": "finish"
+          }
+        ]
       }
     ],
     "extension_points": [
