@@ -59,7 +59,7 @@ A Vortex module is an application definition; a workspace package is source code
 
 ## Development
 
-Use Node and the pnpm version pinned in [package.json](package.json). Dependency versions live in package manifests, the [workspace catalogue](pnpm-workspace.yaml) and the lockfile.
+Use Node 24 and the pnpm version pinned in [package.json](package.json). Dependency versions live in package manifests, the [workspace catalogue](pnpm-workspace.yaml) and the lockfile.
 
 ```sh
 pnpm install --frozen-lockfile
