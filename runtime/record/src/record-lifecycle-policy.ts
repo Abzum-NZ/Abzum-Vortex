@@ -1,6 +1,8 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import {
+  activityIdSchema,
   applicationRootIdSchema,
   archiveDestinationReferenceSchema,
   connectionInstanceIdSchema,
@@ -77,9 +79,12 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 const sameUuid = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
+const parseSafeRevision = (value: unknown) =>
+  revisionSchema.max(Number.MAX_SAFE_INTEGER).safeParse(value);
+
 const parseNullablePositiveInteger = (value: unknown): number | null | undefined => {
   if (value === null) return null;
-  if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return value;
   return undefined;
 };
 
@@ -129,6 +134,15 @@ const archiveWorkflowPolicyKeys = [
   "expectedConnectionHealthOutcome",
 ] as const;
 
+const saveCommandKeys = [
+  "organizationId",
+  "storageContractId",
+  "applicationRootId",
+  "expectedSettingsRevision",
+  "expectedPolicyRevision",
+  "policy",
+] as const;
+
 const parseRecordTypeLifecyclePolicyActionInput = (
   candidate: unknown,
 ): RecordTypeLifecyclePolicyActionInput | undefined => {
@@ -145,16 +159,14 @@ const parseRecordTypeLifecyclePolicyActionInput = (
 
   if (!hasOnlyKeys(candidate, archiveWorkflowPolicyKeys)) return undefined;
   const archiveWorkflowId = workflowIdSchema.safeParse(candidate.archiveWorkflowId);
-  const expectedWorkflowRevision = revisionSchema.safeParse(candidate.expectedWorkflowRevision);
+  const expectedWorkflowRevision = parseSafeRevision(candidate.expectedWorkflowRevision);
   const archiveConnectionInstanceId = connectionInstanceIdSchema.safeParse(
     candidate.archiveConnectionInstanceId,
   );
   const archiveDestination = archiveDestinationReferenceSchema.safeParse(
     candidate.archiveDestination,
   );
-  const expectedConnectionRevision = revisionSchema
-    .max(Number.MAX_SAFE_INTEGER)
-    .safeParse(candidate.expectedConnectionRevision);
+  const expectedConnectionRevision = parseSafeRevision(candidate.expectedConnectionRevision);
   const expectedDestinationFingerprint =
     typeof candidate.expectedDestinationFingerprint === "string" &&
     /^[a-f0-9]{64}$/.test(candidate.expectedDestinationFingerprint)
@@ -187,18 +199,18 @@ const parseRecordTypeLifecyclePolicyActionInput = (
 const parseSaveRecordTypeLifecyclePolicyCommand = (
   candidate: unknown,
 ): SaveRecordTypeLifecyclePolicyCommand | undefined => {
-  if (!isPlainObject(candidate)) return undefined;
+  if (!isPlainObject(candidate) || !hasOnlyKeys(candidate, saveCommandKeys)) return undefined;
   const organizationId = organizationIdSchema.safeParse(candidate.organizationId);
   const storageContractId = storageContractIdSchema.safeParse(candidate.storageContractId);
   const applicationRootId =
     candidate.applicationRootId === null
       ? { success: true as const, data: null }
       : applicationRootIdSchema.safeParse(candidate.applicationRootId);
-  const expectedSettingsRevision = revisionSchema.safeParse(candidate.expectedSettingsRevision);
+  const expectedSettingsRevision = parseSafeRevision(candidate.expectedSettingsRevision);
   const expectedPolicyRevision =
     candidate.expectedPolicyRevision === null
       ? { success: true as const, data: null }
-      : revisionSchema.safeParse(candidate.expectedPolicyRevision);
+      : parseSafeRevision(candidate.expectedPolicyRevision);
   const policy = parseRecordTypeLifecyclePolicyActionInput(candidate.policy);
 
   if (
@@ -227,7 +239,7 @@ const requireOneRow = <Row extends DatabaseRow>(rows: readonly Row[]): Row => {
   return rows[0];
 };
 
-type LimitsRow = DatabaseRow & { organization_id: unknown; limits: unknown };
+type LimitsRow = DatabaseRow & { limits: unknown };
 
 type RuntimeTransactionRunner = <Result>(
   operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
@@ -238,11 +250,9 @@ export interface RecordLifecycleLimitsStoreDependencies {
 }
 
 /**
- * Trusted (non-human-request) storage for organisation lifecycle ceilings.
- * This is not a permission-checked administration operation: like Identity's
- * `initializeOrganizationRuntimeSettings`, it is called only by trusted
- * server-only runtime code, never directly from request-scoped human input.
- * `expectedSettingsRevision` is `null` only for the first save (revision 1).
+ * Trusted explicit setup for organisation lifecycle ceilings. Like Identity's
+ * `initializeOrganizationRuntimeSettings`, it can create revision 1 or return
+ * an identical retry, but it cannot mutate an existing organisation's limits.
  */
 export const createOrganizationLifecycleLimitsStore = (
   dependencies: RecordLifecycleLimitsStoreDependencies = {},
@@ -250,35 +260,54 @@ export const createOrganizationLifecycleLimitsStore = (
   const runtimeTransaction = dependencies.runtimeTransaction ?? withRuntimeTransaction;
 
   return Object.freeze({
-    async set(
-      limitsCandidate: unknown,
-      expectedSettingsRevision: number | null,
-    ): Promise<OrganizationLifecycleLimits> {
+    async initialize(limitsCandidate: unknown): Promise<OrganizationLifecycleLimits> {
       const limits = organizationLifecycleLimitsSchema.safeParse(limitsCandidate);
       if (
         !limits.success ||
-        (expectedSettingsRevision === null && limits.data.settingsRevision !== 1) ||
-        (expectedSettingsRevision !== null &&
-          limits.data.settingsRevision !== expectedSettingsRevision + 1)
+        limits.data.settingsRevision !== 1 ||
+        (limits.data.maxRetentionDays !== null &&
+          limits.data.maxRetentionDays !== undefined &&
+          !Number.isSafeInteger(limits.data.maxRetentionDays)) ||
+        (limits.data.maxRecordCount !== null &&
+          limits.data.maxRecordCount !== undefined &&
+          !Number.isSafeInteger(limits.data.maxRecordCount))
       )
         throw new Error("INVALID_ORGANIZATION_LIFECYCLE_LIMITS");
 
+      const canonicalLimits: OrganizationLifecycleLimits = {
+        ...limits.data,
+        maxRetentionDays: limits.data.maxRetentionDays ?? null,
+        maxRecordCount: limits.data.maxRecordCount ?? null,
+      };
+
       return runtimeTransaction(async (transaction) => {
         const rows = await transaction.query<LimitsRow>`
-          select organization_id, limits
-          from vortex_record.set_organization_lifecycle_limits(
-            ${limits.data.organizationId}::uuid,
-            ${expectedSettingsRevision}::bigint,
-            ${JSON.stringify(limits.data)}::text::jsonb
-          )
+          select vortex_record.initialize_organization_lifecycle_limits(
+            ${canonicalLimits.organizationId}::uuid,
+            ${JSON.stringify(canonicalLimits)}::text::jsonb
+          ) as limits
         `;
         const row = requireOneRow(rows);
         const stored = organizationLifecycleLimitsSchema.safeParse(row.limits);
         if (
           !stored.success ||
-          typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, limits.data.organizationId) ||
-          stored.data.settingsRevision !== (expectedSettingsRevision ?? 0) + 1
+          !sameUuid(stored.data.organizationId, canonicalLimits.organizationId) ||
+          stored.data.settingsRevision !== 1 ||
+          stored.data.maxRetentionDays !== canonicalLimits.maxRetentionDays ||
+          stored.data.maxRecordCount !== canonicalLimits.maxRecordCount ||
+          stored.data.allowUnlimitedRetentionDays !==
+            canonicalLimits.allowUnlimitedRetentionDays ||
+          stored.data.allowUnlimitedRecordCount !== canonicalLimits.allowUnlimitedRecordCount ||
+          stored.data.allowedActions.length !== canonicalLimits.allowedActions.length ||
+          stored.data.allowedActions.some(
+            (action, index) => action !== canonicalLimits.allowedActions[index],
+          ) ||
+          stored.data.allowedArchiveDestinations.length !==
+            canonicalLimits.allowedArchiveDestinations.length ||
+          stored.data.allowedArchiveDestinations.some(
+            (destination, index) =>
+              destination !== canonicalLimits.allowedArchiveDestinations[index],
+          )
         )
           throw new Error("RECORD_LIFECYCLE_POLICY_STORAGE_UNAVAILABLE");
         return stored.data;
@@ -287,9 +316,29 @@ export const createOrganizationLifecycleLimitsStore = (
   });
 };
 
-type PolicyRow = DatabaseRow & { policy_id: unknown; policy: unknown };
+type PolicyRow = DatabaseRow & { policy: unknown };
 
-export type RecordTypeLifecyclePolicyServiceDependencies = HumanOrganizationRequestDependencies;
+export type RecordTypeLifecyclePolicyServiceDependencies = HumanOrganizationRequestDependencies &
+  Readonly<{ activityId?: () => string }>;
+
+const storedPolicyMatchesCommand = (
+  stored: RecordTypeLifecyclePolicy,
+  submitted: RecordTypeLifecyclePolicyActionInput,
+): boolean =>
+  stored.action === submitted.action &&
+  stored.maxAgeDays === submitted.maxAgeDays &&
+  stored.maxCount === submitted.maxCount &&
+  stored.allowUnlimitedAge === submitted.allowUnlimitedAge &&
+  stored.allowUnlimitedCount === submitted.allowUnlimitedCount &&
+  (stored.action === "delete" ||
+    (submitted.action === "archive_workflow" &&
+      sameUuid(stored.archiveWorkflowId, submitted.archiveWorkflowId) &&
+      stored.expectedWorkflowRevision === submitted.expectedWorkflowRevision &&
+      sameUuid(stored.archiveConnectionInstanceId, submitted.archiveConnectionInstanceId) &&
+      stored.archiveDestination === submitted.archiveDestination &&
+      stored.expectedConnectionRevision === submitted.expectedConnectionRevision &&
+      stored.expectedDestinationFingerprint === submitted.expectedDestinationFingerprint &&
+      stored.expectedConnectionHealthOutcome === submitted.expectedConnectionHealthOutcome));
 
 /**
  * Protected current record-type lifecycle policy storage (#566). Reuses the
@@ -302,6 +351,7 @@ export const createRecordTypeLifecyclePolicyService = (
   dependencies: RecordTypeLifecyclePolicyServiceDependencies,
 ) => {
   const requests = createHumanOrganizationRequestService(dependencies);
+  const newActivityId = dependencies.activityId ?? randomUUID;
 
   return Object.freeze({
     save: async (
@@ -310,6 +360,12 @@ export const createRecordTypeLifecyclePolicyService = (
     ): Promise<HumanOrganizationRequestResult<RecordTypeLifecyclePolicy>> => {
       const command = parseSaveRecordTypeLifecyclePolicyCommand(commandCandidate);
       if (command === undefined) return { kind: "unavailable" };
+      let activityId: string;
+      try {
+        activityId = activityIdSchema.parse(newActivityId());
+      } catch {
+        return { kind: "temporarily_unavailable" };
+      }
 
       const selection: OrganizationSelectionCandidate =
         command.applicationRootId === null
@@ -326,22 +382,20 @@ export const createRecordTypeLifecyclePolicyService = (
         // immediately before the call, the same as those existing callers.
         await transaction.query`set local role vortex_runtime`;
         const rows = await transaction.query<PolicyRow>`
-          select policy_id, policy
-          from vortex_record.save_record_type_lifecycle_policy_for_administration(
+          select vortex_record.save_record_type_lifecycle_policy_for_administration(
             ${command.storageContractId}::uuid,
             ${command.applicationRootId}::uuid,
             ${command.expectedSettingsRevision}::bigint,
             ${command.expectedPolicyRevision}::bigint,
+            ${activityId}::uuid,
             ${JSON.stringify(command.policy)}::text::jsonb
-          )
+          ) as policy
         `;
         const row = requireOneRow(rows);
         const parsed = recordTypeLifecyclePolicySchema.safeParse(row.policy);
         const expectedRevision = (command.expectedPolicyRevision ?? 0) + 1;
         if (
           !parsed.success ||
-          typeof row.policy_id !== "string" ||
-          !sameUuid(parsed.data.policyId, row.policy_id) ||
           !sameUuid(parsed.data.organizationId, scope.organizationId) ||
           !sameUuid(parsed.data.storageContractId, command.storageContractId) ||
           (parsed.data.applicationRootId === null) !== (command.applicationRootId === null) ||
@@ -349,7 +403,7 @@ export const createRecordTypeLifecyclePolicyService = (
             command.applicationRootId !== null &&
             !sameUuid(parsed.data.applicationRootId, command.applicationRootId)) ||
           parsed.data.policyRevision !== expectedRevision ||
-          parsed.data.action !== command.policy.action
+          !storedPolicyMatchesCommand(parsed.data, command.policy)
         )
           throw new Error("RECORD_LIFECYCLE_POLICY_STORAGE_UNAVAILABLE");
         return parsed.data;
