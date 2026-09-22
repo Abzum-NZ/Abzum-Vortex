@@ -32,7 +32,6 @@ import {
   type PublishDefinitionResult,
   type SessionContext,
   type StoredDefinitionSource,
-  type ExactDefinitionDependency,
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
@@ -40,6 +39,7 @@ import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
 import {
   hasAuthenticResolutionFingerprint,
   hasAuthenticStoredCustomerDefinitionRelease,
+  releaseManifestMatchesCanonicalContent,
   sameCanonicalJson,
 } from "./definition-release-integrity";
 import {
@@ -189,9 +189,7 @@ const rawPublishedModuleSchema = z
   .object({
     publication: publishedModuleReferenceSchema,
     content: requiredJsonSchema,
-    dependencyManifest: z
-      .array(z.union([publishedModuleReferenceSchema, exactDefinitionDependencySchema]))
-      .max(10_000),
+    dependencyManifest: z.array(publishedModuleReferenceSchema).max(10_000),
     releaseNote: z.string().min(1).max(2_000),
   })
   .strict();
@@ -265,29 +263,8 @@ const parseOneRow = <Value>(rows: readonly DatabaseRow[], schema: z.ZodType<Valu
 
 const dependencyReferencesMatch = (
   output: Exclude<z.infer<typeof definitionCompilationOutputSchema>, { kind: "connection_type" }>,
-  references: readonly ExactDefinitionDependency[],
-): boolean => {
-  const moduleReferences = references.filter((reference) => reference.kind === "module");
-  const expected = new Set(
-    (output.kind === "module"
-      ? output.canonical.content.dependencies
-      : output.canonical.content.moduleBindings
-    ).map((dependency) => `${dependency.moduleRootId}:${dependency.resolvedVersion}`),
-  );
-  const actual = new Set(
-    moduleReferences.map((reference) => `${reference.rootId}:${reference.releaseVersion}`),
-  );
-  return (
-    expected.size ===
-      (output.kind === "module"
-        ? output.canonical.content.dependencies.length
-        : output.canonical.content.moduleBindings.length) &&
-    actual.size === moduleReferences.length &&
-    expected.size === actual.size &&
-    [...expected].every((dependency) => actual.has(dependency)) &&
-    moduleReferences.every((reference) => reference.kind === "module")
-  );
-};
+  references: Parameters<typeof releaseManifestMatchesCanonicalContent>[1],
+): boolean => releaseManifestMatchesCanonicalContent(output, references);
 
 const currentIdentityLookupMatches = (
   source: StoredDefinitionSource,
@@ -610,7 +587,9 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
             ? publishedApplicationDefinitionSchema.safeParse({
                 publication: release.publication,
                 content: output.canonical.content,
-                dependencyManifest: release.dependencyManifest,
+                dependencyManifest: release.dependencyManifest.filter(
+                  (dependency) => dependency.kind === "module",
+                ),
                 releaseNote: release.releaseNote,
               })
             : undefined;

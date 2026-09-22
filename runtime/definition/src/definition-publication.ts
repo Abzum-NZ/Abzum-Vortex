@@ -203,10 +203,6 @@ export interface DefinitionPublicationCatalogue {
     operationId: string,
     releaseVersion: string,
   ): Promise<PlatformServiceOperationRelease | undefined>;
-  listPlatformServiceOperationReleases?(
-    serviceId: string,
-    operationId: string,
-  ): Promise<readonly PlatformServiceOperationRelease[]>;
 }
 
 export type DefinitionReleaseAppend = Readonly<{
@@ -766,26 +762,22 @@ const resolveDependencies = async (
         if (node.kind !== "action" || node.target.kind !== "protected_operation") continue;
         const owner = node.target.operation.owner;
         if (owner.kind !== "platform_service") continue;
-        const releases = await catalogue.listPlatformServiceOperationReleases?.(
+        const release = await catalogue.readPlatformServiceOperationRelease?.(
           owner.serviceId,
           node.target.operation.operationId,
+          node.target.release_version!,
         );
-        const stableReleases = (releases ?? []).filter((release) => stable(release.releaseVersion));
-        if (stableReleases.length === 0) refuse("DEFINITION_DEPENDENCY_MISSING");
-        const highestVersion = stableReleases
-          .map((release) => release.releaseVersion)
-          .sort(compare)
-          .at(-1)!;
-        const highest = stableReleases.filter(
-          (release) => release.releaseVersion === highestVersion,
-        );
-        if (highest.length !== 1) refuse("DEFINITION_DEPENDENCY_AMBIGUOUS");
-        const release = highest[0]!;
         if (
+          release === undefined ||
           release.serviceId !== owner.serviceId ||
-          release.operationId !== node.target.operation.operationId
+          release.operationId !== node.target.operation.operationId ||
+          release.releaseVersion !== node.target.release_version
         )
-          refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+          refuse(
+            release === undefined
+              ? "DEFINITION_DEPENDENCY_MISSING"
+              : "DEFINITION_DEPENDENCY_SUBSTITUTED",
+          );
         if (pinned !== undefined) {
           const exact = pinned.filter(
             (dependency) =>
@@ -1386,8 +1378,7 @@ const prepareFromReader = async (
     { assignedVersion: string }
   >;
   if (
-    finalImpact.assignedVersion !== confirmableImpact.assignedVersion ||
-    finalImpact.comparisonFingerprint !== confirmableImpact.comparisonFingerprint
+    finalImpact.assignedVersion !== confirmableImpact.assignedVersion
   )
     refuse("DEFINITION_VERSION_REFUSED");
   const confirmation = definitionPublicationConfirmationSchema.parse({

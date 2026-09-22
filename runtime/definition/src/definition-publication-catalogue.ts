@@ -376,13 +376,6 @@ export const createImmutableDefinitionPublicationCatalogue = (
       operationId: string,
       releaseVersion: string,
     ) => operationsByIdentity.get(`${serviceId}:${operationId}:${releaseVersion}`),
-    listPlatformServiceOperationReleases: async (serviceId: string, operationId: string) =>
-      [...operationsByIdentity.values()]
-        .filter(
-          (release) =>
-            String(release.serviceId) === serviceId && String(release.operationId) === operationId,
-        )
-        .sort((left, right) => compare(left.releaseVersion, right.releaseVersion)),
     readApplicationCompositionCatalogueSnapshotV2: async (
       selection: ApplicationCompositionCatalogueSelectionV2,
     ) => {

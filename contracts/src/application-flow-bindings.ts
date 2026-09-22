@@ -166,7 +166,7 @@ export const typedFlowResultMappingSchema = z
 /** Immutable evidence attached to every Definition-owned flow target. */
 export const resolvedFlowTargetEvidenceSchema = z
   .object({
-    releaseVersion: semanticVersionSchema,
+    releaseVersion: stableDefinitionReleaseVersionSchema,
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,
   })
@@ -185,7 +185,7 @@ export const frontendFlowReferenceSchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("platform_managed"),
       flowId: ruleIdSchema,
-      releaseVersion: semanticVersionSchema,
+      releaseVersion: stableDefinitionReleaseVersionSchema,
       contentFingerprint: fingerprintSchema,
       catalogueFingerprint: fingerprintSchema,
     })
@@ -421,7 +421,7 @@ export const frontendFlowNodeTargetSchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("query"),
       moduleRootId: moduleRootIdSchema,
-      moduleReleaseVersion: semanticVersionSchema,
+      moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
       queryId: queryIdSchema,
       declaredRequirement: versionRequirementSchema,
       contentFingerprint: fingerprintSchema,
@@ -535,7 +535,7 @@ export const currentUserFlowQueryTargetSchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("query"),
       moduleRootId: moduleRootIdSchema,
-      moduleReleaseVersion: semanticVersionSchema,
+      moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
       queryId: queryIdSchema,
       declaredRequirement: versionRequirementSchema,
       contentFingerprint: fingerprintSchema,
@@ -547,7 +547,7 @@ export const currentUserFlowQueryTargetSchema = z.discriminatedUnion("kind", [
       kind: z.literal("application_query"),
       queryId: queryIdSchema,
       applicationRootId: applicationRootIdSchema,
-      releaseVersion: semanticVersionSchema,
+      releaseVersion: stableDefinitionReleaseVersionSchema,
       contentFingerprint: fingerprintSchema,
       resolutionFingerprint: fingerprintSchema,
     })
@@ -981,7 +981,7 @@ export const currentUserFlowSchema = z
     flowId: ruleIdSchema,
     key: builderKeySchema,
     name: labelSchema,
-    releaseVersion: semanticVersionSchema,
+    releaseVersion: stableDefinitionReleaseVersionSchema,
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,
     description: z.string().max(1000).optional(),
@@ -1116,7 +1116,7 @@ export const sourceFrontendFlowReferenceSchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("platform_managed"),
       flow_id: ruleIdSchema,
-      release_version: semanticVersionSchema,
+      release_version: stableDefinitionReleaseVersionSchema,
     })
     .strict(),
 ]);
@@ -1234,8 +1234,19 @@ export const sourceCurrentUserFlowActionTargetSchema = z.discriminatedUnion("kin
     .object({
       kind: z.literal("protected_operation"),
       operation: protectedOperationReferenceSchema,
+      release_version: stableDefinitionReleaseVersionSchema.optional(),
     })
-    .strict(),
+    .strict()
+    .superRefine((value, context) => {
+      const platformManaged = value.operation.owner.kind === "platform_service";
+      if (platformManaged !== (value.release_version !== undefined))
+        context.addIssue({
+          code: "custom",
+          path: ["release_version"],
+          message:
+            "A platform-service operation requires one exact release; Definition-owned operations inherit their selected Definition release",
+        });
+    }),
   z
     .object({
       kind: z.literal("form_continuation"),

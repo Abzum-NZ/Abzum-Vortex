@@ -1624,7 +1624,7 @@ const applicationSourceTransformPatterns = [
   /^body\/flows\/#\/(?:inputs|outputs|variables)\/[^/]+\/(?:record_types\/#|default_value(?:\/.*)?)$/,
   /^body\/flows\/#\/nodes\/#\/outputs\/[^/]+\/record_types\/#$/,
   /^body\/flows\/#\/nodes\/#\/id$/,
-  /^body\/flows\/#\/nodes\/#\/target\/(?:module|version(?:\/.*)?|query|form|continuation_event|workflow|action)$/,
+  /^body\/flows\/#\/nodes\/#\/target\/(?:module|version(?:\/.*)?|query|form|continuation_event|workflow|action|release_version)$/,
   /^body\/flows\/#\/nodes\/#\/(?:inputs|results)\/[^/]+\/(?:type|output|value\/(?:source|node|input|variable|value)(?:\/.*)?)$/,
   /^body\/flows\/#\/nodes\/#\/results\/[^/]+\/(?:source|node|input|variable|value)(?:\/.*)?$/,
   /^body\/flows\/#\/edges\/#\/(?:id|from_node|to_node)$/,
@@ -2247,7 +2247,14 @@ class Resolution {
         identity.definitionKey === definitions[0]!.key &&
         kinds.includes(identity.kind),
     );
-    const unique = [...new Set(matches.map((identity) => String(identity.identifier)))];
+    const unique = [
+      ...new Set(
+        matches.map(
+          (identity) =>
+            `${identity.kind}:${identity.componentOwner}:${String(identity.identifier)}`,
+        ),
+      ),
+    ];
     if (unique.length === 0)
       fail("vortex.definition.missing_identity", "unresolved_reference");
     if (unique.length > 1)
@@ -4628,21 +4635,34 @@ function compileApplicationFlows(
     if (matches.length !== 1) fail("vortex.definition.missing_identity", "unresolved_reference");
     return matches[0]!;
   };
-  const catalogueOperation = (serviceId: string, operationId: string): JsonObject => {
+  const catalogueOperation = (
+    serviceId: string,
+    operationId: string,
+    releaseVersion: string,
+  ): JsonObject => {
     const matches = catalogueEvidence.platformOperations.filter(
       (candidate) =>
-        String(candidate.serviceId) === serviceId && String(candidate.operationId) === operationId,
+        String(candidate.serviceId) === serviceId &&
+        String(candidate.operationId) === operationId &&
+        String(candidate.releaseVersion) === releaseVersion,
     );
     if (matches.length !== 1)
       fail("vortex.definition.missing_identity", "unresolved_reference");
     return matches[0]!;
   };
-  const compileProtectedOperation = (reference: JsonObject): JsonObject => {
+  const compileProtectedOperation = (
+    reference: JsonObject,
+    selectedReleaseVersion: unknown,
+  ): JsonObject => {
     const operation = asObject(reference);
     const owner = asObject(operation.owner);
     const operationId = String(operation.operationId);
     if (owner.kind === "platform_service") {
-      const evidence = catalogueOperation(String(owner.serviceId), operationId);
+      const evidence = catalogueOperation(
+        String(owner.serviceId),
+        operationId,
+        String(selectedReleaseVersion),
+      );
       return {
         operation,
         releaseVersion: evidence.releaseVersion,
@@ -4828,7 +4848,10 @@ function compileApplicationFlows(
         const target = asObject(node.target);
         let compiledTarget: JsonObject;
         if (target.kind === "protected_operation") {
-          const evidence = compileProtectedOperation(asObject(target.operation));
+          const evidence = compileProtectedOperation(
+            asObject(target.operation),
+            target.release_version,
+          );
           compiledTarget = {
             kind: "protected_operation",
             ...evidence,
