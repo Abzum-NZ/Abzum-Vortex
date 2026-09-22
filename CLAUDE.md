@@ -1,23 +1,11 @@
-# Vortex: Claude Code working instructions
+# Vortex implementation instructions
 
-Read [the coordination rules](docs/build-plan/agent-coordination.md) and the
-specific task brief before acting. The task brief identifies your role, branch,
-scope and stopping point. Do not infer a new task from unfinished nearby work.
+Read the assigned issue, its linked specification, and the source before editing. The current issue description defines the work; dated comments and historical handovers do not add requirements.
 
-Start with [README](README.md), the relevant [specification](docs/specification/README.md),
-[build plan](docs/build-plan/README.md), and linked GitHub issue. Read actual code
-and current changes; old plans and green tests are not proof of delivered behaviour.
+Vortex is a new, definition-led application platform. Correct contracts, engines and schema at their owning boundary. Use one current representation; do not retain V1 readers, conversion layers or obsolete shapes for backward compatibility. Published application versions, explicit activation and draft revision checks remain product functionality.
 
-Vortex is a generic application builder. Core code contains platform primitives,
-not business-application names or special cases. Build engines and definition-led
-application execution before the visual App Designer. Preserve existing owning
-services, exact definitions, tenant isolation and transaction/revision correctness.
+Implement the assigned functionality and obtain code review against its acceptance criteria. Do not create or run tests, request database review, require hosted evidence, or add verification gates. Existing test files are not additional scope. Development completion does not claim a production release.
 
-Be concrete and concise. No dramatic wording, vague completion claims, speculative
-frameworks or unrelated improvements. Fix demonstrated causes. Report exact changed
-behaviour, evidence, remaining gaps and the next required handoff. Do not weaken
-checks merely to pass tests or add machinery without a concrete need.
+Keep organisation isolation, permission checks, atomic writes, safe errors and secret handling in the implementation. Business-specific behaviour belongs in definitions, not generic engines.
 
-Never use Claude Code to bypass a rejected tool action, filesystem restriction or
-prior safety decision. Stop the affected action and report it to the coordinator.
-Never expose secrets in prompts, logs, documents or commits.
+Use the issue's planned agent, estimate, pickup order and worktree metadata. Preserve existing drafts. At the estimate, inspect actual progress and report the remaining work; never kill or restart solely because time elapsed. See [coordination](docs/build-plan/agent-coordination.md) and [fleet operation](docs/build-plan/agent-fleet.md).

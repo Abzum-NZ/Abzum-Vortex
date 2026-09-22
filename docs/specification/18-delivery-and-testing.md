@@ -1,135 +1,35 @@
-# 18. Delivery environments, database changes and testing
+# 18. Development delivery and environment boundaries
 
-[Previous: Runtime services, storage and caching](17-runtime-storage-and-caching.md) · [Specification index](README.md) · Next: [Operations, backup and recovery](19-operations-backup-and-recovery.md)
+[Specification index](README.md) · [Code-review acceptance](20-quality-and-acceptance.md)
 
-## Environments
+## Current development policy
 
-The platform uses separate Local, Testing, and Production environments. Each has separate [Supabase](https://supabase.com/docs), [Vercel](https://vercel.com/docs), [Doppler](https://docs.doppler.com/docs), addresses, secrets, files, queues and connections. The operated workflow and delivery topology deliberately uses one [Kestra](https://kestra.io/docs) instance shared by Development, Testing, and Production; separate Kestra instances are not required. An ordinary commercial application may also use provider test modes in Local or Testing, but that is not a platform environment invariant. An environment may contain several Vortex clusters, but it has one shared [Vortex Identity Authority](02-people-organisations-and-sign-in.md#identity-across-clusters) and no identity, trust, or federation route crosses into another environment.
+The owner directed on 21 September 2026 that functionality is built first and completed through code review. Development issues do not require tests, database review, hosted verification, proof receipts, preview evidence or release gates. Do not create tests as part of these tasks. Existing verification tooling can remain in the repository without becoming a task prerequisite.
 
-The shared Kestra instance gives application-execution flows environment-scoped namespaces and uses target-specific flow identities, webhook authentication, Doppler configurations, least-privilege credentials and approval gates. Reviewed delivery flows may remain in the shared `vortex.operations` namespace: each has fixed flow and target-environment authority, and the Production gate may narrowly load the credential-free Testing delivery receipt required by the [branch flow](#branch-flow) and [database-delivery checks](#supabase-development-and-verification). That receipt is evidence, not a credential or Production approval. No application-execution flow may read another environment's database, file store, queue, workflow state, cache or secrets. This is logical and credential separation inside one trusted operated service, not strong process isolation, and it does not assume that a new Development credential has been provisioned.
-
-Authorised operators may restart or redeploy the shared Kestra instance when needed for service operation. [The version upgrade #198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198) stays deferred until a concrete compatibility, support, security or operational requirement, or planned infrastructure maintenance, justifies it. It is not a prerequisite for core Vortex work. Production delivery retains its named operator checkpoint and every ancestry, migration-set and evidence check. An operator acting under the project owner's standing delivery authority may complete that checkpoint without asking for fresh product approval; it does not authorise a reset or waive a failed check.
-
-[Hosted verification repair #266](https://github.com/Abzum-NZ/Abzum-Vortex/issues/266) must execute the selected commit's database, security and concurrency coverage before issuing promotion evidence. Repair the demonstrated coverage gap in the existing delivery path, not by building another delivery platform. Its reviewed same-version runner deployment does not change the Kestra or state-database versions, state schema or storage mounts, so [recovery work #271](https://github.com/Abzum-NZ/Abzum-Vortex/issues/271) is not a prerequisite. Before deployment, verify those facts against the live resource, record the previous image and check active deliveries. A concrete state-migration requirement would require only the recovery proof necessary for that change. Otherwise #271 stays deferred: its existing backup has not been proven restorable, and this decision does not claim that it has.
-
-```mermaid
-flowchart LR
-    FEATURE[Feature branch] --> CHECKS[Formatting, types, unit, contract and build checks]
-    CHECKS --> PREVIEW[Vercel preview]
-    PREVIEW --> REVIEW[Human and automated review]
-    REVIEW --> TESTING[Merge to testing]
-    TESTING --> TMIG[Test migration and access suite]
-    TMIG --> TAPP[Testing deployment and acceptance]
-    TAPP --> APPROVE[Production approval]
-    APPROVE --> PMIG[Backward-compatible production migration]
-    PMIG --> PAPP[Production deployment]
-    PAPP --> VERIFY[Smoke, separation and monitoring checks]
-```
-
-Pull requests do not start a database and do not run migrations or database access tests. Their required checks cover formatting, types, unit and contract tests, build, and preview. After merge to the shared `testing` branch, Kestra applies the ordered Testing migrations once and runs database constraints, row restrictions, service integration, and organisation-separation checks. A successful identified Testing revision is required before promotion to `main`.
-
-The following outcomes are required:
-
-- Database shape and access-rule tests run before production.
-- A failed migration or access test prevents promotion.
-- Testing and production migrations are applied once, in order, by [Kestra](https://kestra.io/docs).
-- Application and database releases can occur in either order during deployment without breaking the running system.
-- Production promotion requires an identified approved testing revision.
+This policy supersedes earlier Testing-first, hosted-proof and backward-compatibility instructions in dated plans and comments. It changes development acceptance, not the application's access, isolation or data-integrity requirements.
 
 ## Branch flow
 
-Feature branches merge into `testing`. The verified `testing` revision is promoted to `main`. Direct unreviewed changes to either protected branch are refused. An administrator bypass is retained only as a break-glass recovery control: its use requires an incident reference, the reason ordinary review could not be used, the exact commit, the operator, the time, and an immediate follow-up review. It is never the normal delivery path and cannot make a failed required check acceptable.
-
-The first installation of the delivery engine is a bounded bootstrap, not a promotion exception. Before its feature pull request merges, the operated Kestra resource may deploy only the pull request's exact reviewed commit SHA, with automatic branch redeployment disabled. Its Production flow may validate a `main` event and reach the approval hold, but it cannot open Production without successful Testing evidence for an ancestor with the identical migration set. After the exact commit merges to `testing`, the protected Testing event is delivered to that pinned engine and must pass. Only then may that verified revision be promoted to `main`; Coolify is returned to the protected `main` source at the same commit and normal automatic deployment begins. A moving feature branch, `testing`, or another unverified revision is never used as the bootstrap source.
-
-- Every feature branch gets a [Vercel preview](https://vercel.com/docs/deployments/preview-deployments).
-- Preview data is test data only and cannot use production credentials.
-- The repository states which checks run on pull requests and which run only after merge to Testing.
-- A pull request records the specification sections, decisions, migrations, tests, screenshots, privacy effect, and rollback or forward-fix plan it affects.
+Create a bounded issue branch from current `origin/main`, obtain code review, and target `main`. The project board records implementation completion after the reviewed code is merged. The `testing` branch and hosted environments are outside this development sequence. Code-review completion does not authorise Production deployment or claim release readiness; the actual effect of a push depends on the separately configured hosting and delivery triggers.
 
 ## Repository layout convention
 
-Deployable applications follow the official Turborepo convention and live under `apps/`; the single Next.js composition root is `apps/web`. Shared packages remain separate workspace members and cannot become additional deployment roots. A different layout requires an explicit architecture reason and updated boundary, build, deployment, and documentation checks in the same change.
-
-The Vercel project uses `apps/web` as its Root Directory and includes files outside that directory during the build. Its application-local `vercel.json` returns to the workspace root to install the frozen lockfile and run the one repository gate, `pnpm verify`, then publishes `.next` relative to `apps/web`. The matching Turborepo task declares `.next/**` except `.next/cache/**` as output so enabling task caching cannot omit the deployable application. Task caching is an optional build optimisation, not a release requirement. Vercel and local verification must not substitute a second command with different checks.
+`apps/web` is the Next.js composition and deployment root. Shared runtime packages expose public service interfaces. Browser code cannot import database credentials or privileged server implementations. Dependencies use the pinned workspace catalogue and lockfile.
 
 ## Database changes
 
-Platform database changes are immutable, ordered files. Once applied to a shared environment, a file is not edited. A correction is a later change. Supabase records each applied migration by filename in `supabase_migrations.schema_migrations` and skips a file it has already recorded even when that file's content has since changed, so editing an already-applied migration ships nothing: the edited file sits in the repository while delivery skips it by name, and the database never sees the change. A correction to an applied migration is always a new migration file, timestamped later than the newest migration already present on `testing`; editing one in place instead of adding a new one cost a 78-minute hosted run to diagnose (execution `PJVVAyMxsalFfVEWJTtLI`, [#511](https://github.com/Abzum-NZ/Abzum-Vortex/issues/511)).
+Change the owning schema and all affected current callers together. No old application representation or parallel compatibility reader is required. Ordered migration files describe schema changes. If a file has already been applied, express a correction in a new migration because the migration ledger will not rerun the old filename. Do not reset shared data as a shortcut.
 
-A missing migration older than the target's applied maximum requires an actual
-ordering review before application. The delivery runner normally refuses such
-gaps. The [reviewed consolidation exception](../build-plan/consolidation-handoff.md#existing-testing-migration-gap)
-admits only the exact storage-provisioning gap against the exact reviewed catalogue
-maximum using [Supabase's missing-migration option](https://supabase.com/docs/reference/cli/supabase-db-push).
-It does not rewrite applied history, admit arbitrary future gaps, skip verification
-or authorise a reset.
+Application installation invokes the generic Record storage provisioner over exact published definitions. It does not accept customer SQL or require per-customer repository migrations. Module field changes and populated record handling remain explicit product operations under [modules](05-modules-fields-and-relationships.md) and [runtime storage](17-runtime-storage-and-caching.md).
 
-Every change follows an expand-and-contract sequence:
+## Environments
 
-1. Add compatible storage or functions.
-2. Deploy code able to use old and new shapes.
-3. Backfill in bounded resumable batches where required.
-4. Switch reads and writes with measured verification.
-5. Remove old shape only after no deployed code or retained workflow version uses it.
+Local, Testing and Production have separate databases, addresses, secrets, files, queues and connection targets. The operated Kestra instance is shared, with environment-scoped application execution and target-specific credentials. No application flow accesses another environment's resources.
 
-Platform migrations install and update the generic [Record storage provisioner](17-runtime-storage-and-caching.md#record-storage-provisioning).
-Application installation may invoke that closed operation to create or evolve
-business-record storage from exact published definitions. It never submits SQL,
-receives DDL credentials or requires a per-customer repository migration. The
-Record catalogue tracks domain provisioning state; it does not append entries to
-`supabase_migrations.schema_migrations` or replace the platform migration ledger.
-Populated storage upgrades follow the same expand-and-contract lifecycle above.
+The development roadmap does not authorize deployment, shared-environment reset, secret rotation or Production operation. Those actions are scheduled separately when requested. Hosted behavior and release readiness are not implied by code-review completion.
 
-### Supabase development and verification
+## Credentials and runtime connections
 
-- Developers use the [Supabase CLI local stack and migrations](https://supabase.com/docs/guides/local-development/cli-workflows) for reproducible database work. The repository seed contains only synthetic test data.
-- The committed project uses Supabase's standard `supabase/config.toml`, `supabase/migrations/`, `supabase/seed.sql`, and `supabase/tests/` layout. The exact CLI version is pinned in the root workspace; no parallel migration directory or custom migration ledger exists.
-- Each database change includes [pgTAP database tests](https://supabase.com/docs/guides/database/testing) for its constraints, functions and row rules, and runs [database linting](https://supabase.com/docs/guides/local-development/cli/testing-and-linting) over every Vortex-owned schema before review. Supabase-managed schemas and extension functions are excluded from this repository-owned lint result.
-- Local tests prove fast database behaviour; they do not replace the linked Testing Supabase project. After merge to `testing`, Kestra applies the migration and runs the authoritative request-role, platform-service, and organisation-separation suite there.
-- Testing issues schema-3 evidence only after every required database check is covered. The committed selector compares the latest authenticated successful ancestor with the target across the complete intervening history, and executes the complete verification set when no successful ancestor exists to compare against: with no green run to fall back on, every run is a full run regardless of how small the change is. A direct edit to an existing SQL suite or concurrency proof may execute only that check; a migration, helper, configuration, selector, runner, new/deleted/replaced/reverted check, unmapped change or ambiguous history executes the complete set. Because any migration forces the complete set regardless of its own size, batch migrations deliberately rather than letting one ride along with unrelated work, and promote a migration that re-establishes a baseline on its own. The receipt names the current and baseline identities, selector/inventory/change digests, the complete required inventory, disjoint freshly executed and reused checks, direct immutable source receipts, reasons and per-check timings. Reused checks never appear as completed by the current execution.
-- Before accepting any reused check, Testing compares a credential-free fingerprint of the operated schemas, relations, columns, constraints, indexes, row policies, functions, default privileges, Vortex roles and extensions. The query includes no application rows or credentials. Missing, malformed, failed, foreign, replayed or chained source evidence, unexplained database-state drift, a PostgreSQL build change, or an incomplete coverage partition executes the complete verification set instead. Every successful receipt still names the exact repository, protected branch, complete commit, ordered migration files, migration-set fingerprint, Supabase CLI version, target PostgreSQL major and Kestra execution.
-- Production first validates and fingerprints the exact `main` commit without opening a database connection, then pauses for a named operator. The operator approves and identifies the Testing commit; Kestra records the authenticated resumer and loads the successful Testing evidence from its operational store rather than trusting retyped actor, execution or fingerprint values. Before connecting, the delivery process proves that the Testing commit is an ancestor of the Production commit and that their migration sets are identical. The current Production consumer accepts only its existing complete schema-3 `full` or direct-full-source `reused` form; it fails closed on selected or aggregate coverage receipts until a separately reviewed Production consumer can validate every direct check source. Remote migrations use Supabase's IPv4 session pooler on port 5432, which preserves the PostgreSQL session required by migrations and tests. Transaction mode on port 6543 is reserved for Vercel's serverless runtime and is not used for delivery. Both connections require full certificate and hostname verification against the project's Supabase root certificate.
-- The Vercel-synced Doppler root configs `stg` and `prd` hold the restricted `VORTEX_RUNTIME_DATABASE_URL`, public `VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT`, `VORTEX_SUPABASE_URL`, `VORTEX_SUPABASE_PUBLISHABLE_KEY`, `VORTEX_SITE_URL`, environment name, stable Identity Authority identifier, and other separately approved application settings required by that target. The database password appears only inside the complete runtime URL; there is no separate runtime-password variable. Migrations leave `vortex_runtime` passwordless. Hosted provisioning generates a different high-entropy password per environment, assigns it to that exact restricted role through Supabase administration, embeds it only in the matching transaction-pooler URL, saves the URL in Doppler, verifies the exact sync target, and redeploys the intended commit before any protected browser proof. A Vercel-synchronised config must not contain a project-owner, migration, general `DATABASE_*`, or Kestra credential. Database delivery uses a separate unsynced Doppler `Operations` environment because every Doppler branch config inherits its root secrets. Its `ops_stg` and `ops_prd` configs expose only a credential-free `VORTEX_MIGRATION_DATABASE_URL`, a separate raw `VORTEX_MIGRATION_DATABASE_PASSWORD`, and `VORTEX_DATABASE_SSL_ROOT_CERT` for the matching project-owner migration path. `ops_stg` inherits the three Testing values from the `Operations` root; `ops_prd` overrides the Production URL and password and inherits the common certificate. Kestra has one config-scoped, read-only service token per config and requests only those three named values. The Operations configs have no external sync. The four Kestra bootstrap values—the two service tokens and two distinct GitHub webhook keys—are protected Coolify runtime variables, unavailable during image builds. A webhook key authenticates only its matching GitHub-to-Kestra endpoint and grants no Doppler or database access. The delivery process validates the URL's owner, project, session-pooler host, port, and database, then supplies the password through `PGPASSWORD`, so reserved characters require no URL encoding. A migration credential never reaches Vercel, and a runtime credential is never used to apply a migration.
-- Local `supabase test db` uses Supabase's Docker-based pgTAP helper. The operated Kestra flow instead runs the committed SQL tests with the pinned `pg_prove` harness inside its own image, because Kestra must not receive the host Docker socket. Both paths execute the same files in `supabase/tests/` and fail delivery on any assertion failure.
-- Testing and Production each queue database delivery at concurrency one. Duplicate delivery is harmless because `supabase_migrations.schema_migrations` is the only platform migration history. After delivery, its ordered filenames must exactly equal the selected commit's migration filenames; an extra, missing or renamed remote entry fails the run. Normal delivery never resets a shared environment. A separately authorised Testing-only recovery may rebuild an empty disposable Testing database after a fail-closed preflight proves there are no application tables, identities or files; it records before-and-after fingerprints and replays only the reviewed migration set. Production is never reset and no Production seed path exists.
-- The Testing environment may use the [Index Advisor](https://supabase.com/docs/guides/database/extensions/index_advisor) against representative queries. A person reviews each suggestion and records an ordinary migration; no adviser creates a Production index directly.
-- Preview builds remain database-free. They validate migration files and contracts without opening a database connection. A deployed preview server may receive only its restricted Testing runtime URL and public verification values; no preview build or runtime receives a migration or table-owner credential. Operated Testing evidence also checks the synced variable-name allowlist, exact deployed revision and a real protected request so a successful build cannot conceal missing or inherited legacy configuration.
+Keep environment credentials in the configured secret-management system. Server runtime connections use restricted runtime credentials, not schema-owner or migration credentials. Migration and runtime connections retain their respective session/transaction semantics and certificate verification. Browser bundles contain only settings intended for public use.
 
-## Test layers
-
-The build separates tests by what they prove:
-
-- Contract tests validate every definition and stable error code without a database.
-- Unit tests validate pure business functions.
-- Database tests validate migrations, constraints, transactions, row restrictions, and service database functions.
-- Service tests validate boundaries such as file storage, queues, caches, connections, Kestra status reads, and protected workflow operations.
-- Browser tests validate complete application behaviour on desktop and phone.
-- Operational tests validate backup, restoration, alerting, and secret scanning.
-
-The [organisation separation suite](20-quality-and-acceptance.md#organisation-separation-suite) is deliberately split between database and end-to-end tests; it is not rerun wholesale as a table owner where files, caches, subscriptions, public requests, and server behaviour have no meaningful table-owner equivalent.
-
-## Release and recovery behaviour
-
-- A production change has a defined forward fix. Database rollbacks are used only when the reverse operation is known safe and does not lose accepted data.
-- Feature flags cannot bypass access, protected data handling, retention, or entitlement checks.
-- A failed post-deployment verification stops further promotion and alerts the operator.
-- Each environment's reviewed delivery flow binds its database connection to that environment's exact non-secret Supabase project reference. A correctly shaped connection for another project is refused before the database is opened.
-- The previous web deployment remains available for rollback only while it is compatible with the current database shape.
-- A deployment records code revision, migration set, definition-contract version, fixture version, operator, approvals, and verification outcome.
-
-## Federation compatibility during delivery
-
-The [Vortex Federation API](17-runtime-storage-and-caching.md#vortex-federation-between-clusters) is deployed with an overlap window: a cluster must continue accepting the previous compatible protocol and shared-contract version until every production cluster has moved beyond it. The cluster manifest advertises only versions the running deployment actually supports.
-
-Before promotion, Testing runs a two-cluster matrix with the new release against the current production-compatible release in both source and recipient directions. It proves signed identity and recipient assertions, grant reconciliation, queries, actions, files, revocation, replay refusal, and safe unsupported-version errors. A database change that makes the same shared contract mean something different in the two versions is refused.
-
-## Acceptance examples
-
-- The documented branch flow and actual required checks agree.
-- A migration that works only when the new web version deploys first is refused.
-- A migration passes local pgTAP and database lint before the same tests run through Kestra against the shared Testing project.
-- An access-rule test failure after merge to Testing prevents promotion to `main`; it does not retroactively fail the already merged feature pull request.
-- Testing cannot send a live customer message, submit a real external transaction, or call a production connection.
-- A released revision can be traced from Git commit through migration, test, deployment, and verification records.
-- A rolling deployment keeps cross-cluster sharing safe between adjacent supported releases and fails closed outside the declared compatibility range.
+The Identity Authority, selected organisation account, current permissions and installed definition determine request authority. A deployment variable, page parameter or stale browser cache cannot grant access.

@@ -51,7 +51,7 @@ Independent review found a direct-only dependency assumption in Module discovery
 and Event projection. Both now follow the complete exact reachable Module set,
 including Application-to-Module-to-shared-Module. The revised database proof
 includes that case and a missing transitive binding. The already-delivered
-provisioner still needs the separately recorded [transitive provisioning work](../build-plan/module-record-provisioning.md#integration-prerequisites);
+provisioner still needs the separately recorded [transitive provisioning work](../build-plan/module-record-provisioning.md#installation-and-storage);
 this reader correction does not claim to deliver it.
 
 ## Remaining acceptance

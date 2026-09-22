@@ -1,5 +1,7 @@
 # Landing Zone application
 
+[Current roadmap](README.md) · [Architecture review](architecture-review-2026-09-21.md). Current issue descriptions own scope and pickup order. Completion is implementation plus independent code review; no tests, database review, hosted proof or compatibility work is required.
+
 Tasks: [#376](https://github.com/Abzum-NZ/Abzum-Vortex/issues/376) blocks,
 [#377](https://github.com/Abzum-NZ/Abzum-Vortex/issues/377) application,
 [#378](https://github.com/Abzum-NZ/Abzum-Vortex/issues/378) record links,
@@ -71,7 +73,7 @@ cannot publish at all, so it can never appear.
 
 "Items needing my action" is one placement in that slot, delivered by
 [#379](https://github.com/Abzum-NZ/Abzum-Vortex/issues/379) once the Workflow Inbox exists.
-Making the rail a slot is what removes the Phase 7 dependency from the Landing Zone itself.
+The Landing Zone can ship its rail before the later Workflow Inbox placement is available.
 
 ## Tiles and live availability
 
@@ -115,14 +117,9 @@ opening a tile performs no write. Opening becomes a pure navigation.
 
 ## Sequencing
 
-The Landing Zone consumes the critical path rather than sitting on it. It cannot start before
-the application runtime [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64), the block
-runtime [#66](https://github.com/Abzum-NZ/Abzum-Vortex/issues/66) and page permission
-projection [#69](https://github.com/Abzum-NZ/Abzum-Vortex/issues/69).
-
-It follows rather than joins the definition-led application proof
-[#327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327). That proof is deliberately
-narrowed to the existing fixtures through the Phase 4–6 engines and creates no new engine;
-the Landing Zone needs new blocks and the default-application marker, so folding it in would
-widen the proof's acceptance and add risk to the critical path. It is instead the first
-definition-led application delivered after #327, reusing the same evidence pattern.
+The Landing Zone follows the phase-6 application and consumes Application runtime,
+registered blocks and page permission projection. #376 supplies generic blocks,
+#377 supplies the definition-led application and default installation, #378 supplies
+viewer-safe record links, and #379 adds the later Workflow Inbox placement.
+The current roadmap records their exact dependencies and pickup order. Landing
+Zone authoring introduces no requirement to delay the first visible application.
