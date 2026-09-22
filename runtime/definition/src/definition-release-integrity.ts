@@ -48,6 +48,30 @@ const manifestSubject = (dependency: ExactDefinitionDependency): string =>
     ? `${dependency.kind}:${dependency.catalogueThemeId}`
     : dependency.kind === "platform_block"
       ? `${dependency.kind}:${dependency.blockId}`
+      : dependency.kind === "platform_flow"
+        ? `${dependency.kind}:${dependency.flowId}`
+        : dependency.kind === "application_flow"
+          ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}`
+          : dependency.kind === "application_flow_node"
+            ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}:${dependency.nodeId}`
+            : dependency.kind === "application_query"
+              ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.queryId}`
+              : dependency.kind === "module_query"
+                ? `${dependency.kind}:${dependency.moduleRootId}:${dependency.queryId}`
+                : dependency.kind === "application_form"
+                  ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.formId}`
+                    : dependency.kind === "application_workflow"
+                      ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.workflowId}`
+                      : dependency.kind === "application_action"
+                        ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.actionId}`
+                    : dependency.kind === "protected_operation"
+                      ? `${dependency.kind}:${dependency.operation.owner.kind}:${
+                          dependency.operation.owner.kind === "application"
+                            ? dependency.operation.owner.applicationRootId
+                            : dependency.operation.owner.kind === "module"
+                              ? dependency.operation.owner.moduleRootId
+                              : dependency.operation.owner.serviceId
+                        }:${dependency.operation.operationId}`
       : `${dependency.kind}:${dependency.key}`;
 
 const sameStringSet = (left: readonly string[], right: readonly string[]): boolean => {
@@ -58,6 +82,135 @@ const sameStringSet = (left: readonly string[], right: readonly string[]): boole
     leftSet.size === left.length &&
     rightSet.size === right.length &&
     left.every((subject) => rightSet.has(subject))
+  );
+};
+
+const flowManifestSubject = (dependency: ExactDefinitionDependency): string => {
+  switch (dependency.kind) {
+    case "platform_flow":
+      return `${dependency.kind}:${dependency.flowId}`;
+    case "application_flow":
+      return `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}`;
+    case "application_flow_node":
+      return `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}:${dependency.nodeId}`;
+    case "application_query":
+      return `${dependency.kind}:${dependency.applicationRootId}:${dependency.queryId}`;
+    case "module_query":
+      return `${dependency.kind}:${dependency.moduleRootId}:${dependency.queryId}`;
+    case "application_form":
+      return `${dependency.kind}:${dependency.applicationRootId}:${dependency.formId}`;
+    case "application_workflow":
+      return `${dependency.kind}:${dependency.applicationRootId}:${dependency.workflowId}`;
+    case "application_action":
+      return `${dependency.kind}:${dependency.applicationRootId}:${dependency.actionId}`;
+    case "protected_operation":
+      return `${dependency.kind}:${dependency.operation.owner.kind}:${
+        dependency.operation.owner.kind === "application"
+          ? dependency.operation.owner.applicationRootId
+          : dependency.operation.owner.kind === "module"
+            ? dependency.operation.owner.moduleRootId
+            : dependency.operation.owner.serviceId
+      }:${dependency.operation.operationId}`;
+    default:
+      return "";
+  }
+};
+
+const exactApplicationFlowTargetsMatch = (
+  output: Extract<CustomerDefinitionOutput, { kind: "application" }>,
+  manifest: readonly ExactDefinitionDependency[],
+): boolean => {
+  const expected: ExactDefinitionDependency[] = [];
+  const add = (entry: ExactDefinitionDependency) => expected.push(entry);
+  const applicationRootId = output.canonical.envelope.rootId;
+  for (const flow of output.canonical.content.flows) {
+    add({
+      kind: "application_flow",
+      applicationRootId,
+      flowId: flow.flowId,
+      releaseVersion: flow.releaseVersion,
+      contentFingerprint: flow.contentFingerprint,
+      resolutionFingerprint: flow.resolutionFingerprint,
+    });
+    for (const node of flow.nodes) {
+      add({
+        kind: "application_flow_node",
+        applicationRootId,
+        flowId: flow.flowId,
+        nodeId: node.nodeId,
+        releaseVersion: flow.releaseVersion,
+        contentFingerprint: fingerprintCanonicalValue({ kind: "flow_node", node }),
+        resolutionFingerprint: flow.resolutionFingerprint,
+      });
+      const target = (node as unknown as { target?: Record<string, unknown> }).target;
+      if (target === undefined) continue;
+      const common = {
+        releaseVersion: String(target.releaseVersion),
+        contentFingerprint: String(target.contentFingerprint),
+        resolutionFingerprint: String(target.resolutionFingerprint),
+      };
+      switch (target.kind) {
+        case "application_query":
+          add({ kind: "application_query", applicationRootId, queryId: String(target.queryId), ...common });
+          break;
+        case "query":
+          add({
+            kind: "module_query",
+            moduleRootId: String(target.moduleRootId),
+            queryId: String(target.queryId),
+            declaredRequirement: target.declaredRequirement as never,
+            ...common,
+          });
+          break;
+        case "protected_operation":
+          add({
+            kind: "protected_operation",
+            operation: target.operation as never,
+            ...common,
+            ...(target.catalogueFingerprint === undefined
+              ? {}
+              : { catalogueFingerprint: String(target.catalogueFingerprint) }),
+          });
+          break;
+        case "form_continuation":
+          add({ kind: "application_form", applicationRootId, formId: String(target.formId), ...common });
+          break;
+        case "durable_workflow_start":
+          add({ kind: "application_workflow", applicationRootId, workflowId: String(target.workflowId), ...common });
+          break;
+        case "application_action":
+          add({ kind: "application_action", applicationRootId, actionId: String(target.actionId), ...common });
+          break;
+      }
+    }
+  }
+  for (const binding of output.canonical.content.flowBindings) {
+    if (binding.flow.kind === "application_owned")
+      add({
+        kind: "application_flow",
+        applicationRootId,
+        flowId: binding.flow.flowId,
+        releaseVersion: binding.flow.releaseVersion,
+        contentFingerprint: binding.flow.contentFingerprint,
+        resolutionFingerprint: binding.flow.resolutionFingerprint,
+      });
+    else
+      add({
+        kind: "platform_flow",
+        flowId: binding.flow.flowId,
+        releaseVersion: binding.flow.releaseVersion,
+        contentFingerprint: binding.flow.contentFingerprint,
+        catalogueFingerprint: binding.flow.catalogueFingerprint,
+      });
+  }
+  const expectedBySubject = new Map(expected.map((entry) => [flowManifestSubject(entry), entry]));
+  const actual = manifest.filter((entry) => flowManifestSubject(entry) !== "");
+  const actualBySubject = new Map(actual.map((entry) => [flowManifestSubject(entry), entry]));
+  if (expectedBySubject.size !== expected.length || actualBySubject.size !== actual.length)
+    return false;
+  if (expectedBySubject.size !== actualBySubject.size) return false;
+  return [...expectedBySubject].every(
+    ([subject, entry]) => sameCanonicalJson(entry, actualBySubject.get(subject)),
   );
 };
 
@@ -121,14 +274,26 @@ const exactApplicationDependenciesMatch = (
     theme[0]!.catalogueFingerprint !== base.catalogueFingerprint
   )
     return false;
-  return sameStringSet(
+  // The compiler places authoritative target evidence on each target. Target entries are
+  // checked one-for-one by the compiler output integrity path and catalogue verification below;
+  // this helper only keeps the legacy module/connection/theme set exact.
+  return (
+    exactApplicationFlowTargetsMatch(output, manifest) &&
+    sameStringSet(
     [
       ...moduleSubjects.map((entry) => `module:${entry!.key}`),
       ...connectionSubjects.map((entry) => `connection_type:${entry!.key}`),
       ...blockDependencies.map((entry) => `platform_block:${entry.blockId}`),
       `platform_theme:${base.catalogueThemeId}`,
     ],
-    manifest.map(manifestSubject),
+    manifest
+      .filter((entry) =>
+        ["module", "connection_type", "platform_block", "platform_theme"].includes(
+          entry.kind,
+        ),
+      )
+      .map(manifestSubject),
+    )
   );
 };
 

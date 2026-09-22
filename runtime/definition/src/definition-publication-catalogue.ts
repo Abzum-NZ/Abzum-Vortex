@@ -9,6 +9,8 @@ import {
   platformBlockReleaseV2Schema,
   platformIdSchema,
   platformThemeReleaseV2Schema,
+  platformManagedFlowDependencySchema,
+  platformServiceOperationReleaseSchema,
   stableDefinitionReleaseVersionSchema,
   type ApplicationCompositionCatalogueSnapshotV2,
   type ApplicationCompositionPolicyV2,
@@ -18,6 +20,8 @@ import {
   type PlatformId,
   type PlatformBlockReleaseV2,
   type PlatformThemeReleaseV2,
+  type PlatformManagedFlowDependency,
+  type PlatformServiceOperationRelease,
   type SemanticVersion,
 } from "@vortex/contracts";
 import { compare } from "semver";
@@ -38,6 +42,8 @@ export type PlatformConnectionTypeReleaseDefinition = Readonly<{
 export type ImmutableDefinitionPublicationCatalogueDefinition = Readonly<{
   connectionTypeReleases: readonly PlatformConnectionTypeReleaseDefinition[];
   applicationCompositionV2?: ApplicationCompositionCatalogueDefinitionV2;
+  platformManagedFlowReleases?: readonly PlatformManagedFlowDependency[];
+  platformServiceOperationReleases?: readonly PlatformServiceOperationRelease[];
 }>;
 
 export type PlatformBlockReleaseDefinitionV2 = Omit<
@@ -116,6 +122,14 @@ const catalogueDefinitionSchema = z
   .object({
     connectionTypeReleases: z.array(connectionTypeReleaseDefinitionSchema).max(10_000),
     applicationCompositionV2: applicationCompositionCatalogueDefinitionV2Schema.optional(),
+    platformManagedFlowReleases: z
+      .array(platformManagedFlowDependencySchema)
+      .max(10_000)
+      .optional(),
+    platformServiceOperationReleases: z
+      .array(platformServiceOperationReleaseSchema)
+      .max(10_000)
+      .optional(),
   })
   .strict();
 
@@ -288,6 +302,18 @@ export const createImmutableDefinitionPublicationCatalogue = (
   const definition = parsed.success ? parsed.data : duplicate();
   ensureUniqueConnectionTypeReleases(definition.connectionTypeReleases);
   ensureUniqueApplicationCompositionReleases(definition.applicationCompositionV2);
+  const managedFlowReleases = definition.platformManagedFlowReleases ?? [];
+  const managedFlowIdentities = new Set(
+    managedFlowReleases.map((release) => `${release.flowId}:${release.releaseVersion}`),
+  );
+  if (managedFlowIdentities.size !== managedFlowReleases.length) duplicate();
+  const operationReleases = definition.platformServiceOperationReleases ?? [];
+  const operationIdentities = new Set(
+    operationReleases.map(
+      (release) => `${release.serviceId}:${release.operationId}:${release.releaseVersion}`,
+    ),
+  );
+  if (operationIdentities.size !== operationReleases.length) duplicate();
 
   const connectionTypes = definition.connectionTypeReleases
     .map((release) => compileConnectionTypeRelease(release))
@@ -319,6 +345,18 @@ export const createImmutableDefinitionPublicationCatalogue = (
       release,
     ]),
   );
+  const managedFlowsByIdentity = new Map(
+    managedFlowReleases.map((release) => [
+      `${release.flowId}:${release.releaseVersion}`,
+      deepFreeze({ ...release }),
+    ]),
+  );
+  const operationsByIdentity = new Map(
+    operationReleases.map((release) => [
+      `${release.serviceId}:${release.operationId}:${release.releaseVersion}`,
+      deepFreeze({ ...release }),
+    ]),
+  );
 
   const readPlatformBlockReleaseV2 = async (blockId: BlockId, releaseVersion: string) =>
     blocksV2ByIdentity.get(`${blockId}:${releaseVersion}`);
@@ -331,6 +369,20 @@ export const createImmutableDefinitionPublicationCatalogue = (
       connectionsByIdentity.get(`${rootId}:${releaseVersion}`),
     readPlatformBlockReleaseV2,
     readPlatformThemeReleaseV2,
+    readPlatformManagedFlowRelease: async (flowId: string, releaseVersion: string) =>
+      managedFlowsByIdentity.get(`${flowId}:${releaseVersion}`),
+    readPlatformServiceOperationRelease: async (
+      serviceId: string,
+      operationId: string,
+      releaseVersion: string,
+    ) => operationsByIdentity.get(`${serviceId}:${operationId}:${releaseVersion}`),
+    listPlatformServiceOperationReleases: async (serviceId: string, operationId: string) =>
+      [...operationsByIdentity.values()]
+        .filter(
+          (release) =>
+            String(release.serviceId) === serviceId && String(release.operationId) === operationId,
+        )
+        .sort((left, right) => compare(left.releaseVersion, right.releaseVersion)),
     readApplicationCompositionCatalogueSnapshotV2: async (
       selection: ApplicationCompositionCatalogueSelectionV2,
     ) => {

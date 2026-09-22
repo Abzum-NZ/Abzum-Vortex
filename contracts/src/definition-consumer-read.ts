@@ -50,6 +50,30 @@ const dependencySubject = (entry: z.infer<typeof exactDefinitionDependencySchema
     ? `${entry.kind}:${entry.catalogueThemeId}`
     : entry.kind === "platform_block"
       ? `${entry.kind}:${entry.blockId}`
+      : entry.kind === "platform_flow"
+        ? `${entry.kind}:${entry.flowId}`
+        : entry.kind === "application_flow"
+          ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}`
+          : entry.kind === "application_flow_node"
+            ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}:${entry.nodeId}`
+            : entry.kind === "application_query"
+              ? `${entry.kind}:${entry.applicationRootId}:${entry.queryId}`
+              : entry.kind === "module_query"
+                ? `${entry.kind}:${entry.moduleRootId}:${entry.queryId}`
+                : entry.kind === "application_form"
+                  ? `${entry.kind}:${entry.applicationRootId}:${entry.formId}`
+                    : entry.kind === "application_workflow"
+                      ? `${entry.kind}:${entry.applicationRootId}:${entry.workflowId}`
+                      : entry.kind === "application_action"
+                        ? `${entry.kind}:${entry.applicationRootId}:${entry.actionId}`
+                    : entry.kind === "protected_operation"
+                      ? `${entry.kind}:${entry.operation.owner.kind}:${
+                          entry.operation.owner.kind === "application"
+                            ? entry.operation.owner.applicationRootId
+                            : entry.operation.owner.kind === "module"
+                              ? entry.operation.owner.moduleRootId
+                              : entry.operation.owner.serviceId
+                        }:${entry.operation.operationId}`
       : `${entry.kind}:${entry.key}`;
 
 /** A complete manifest in canonical subject order, using the publication contract's exact entries. */

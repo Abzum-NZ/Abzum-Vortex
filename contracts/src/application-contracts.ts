@@ -51,6 +51,8 @@ import {
 import {
   componentFlowBindingSchema,
   currentUserFlowSchema,
+  flowTargetDependencySchema,
+  platformManagedFlowDependencySchema,
 } from "./application-flow-bindings";
 
 export const moduleBindingSchema = z
@@ -638,7 +640,13 @@ export const publishedApplicationDefinitionV2Schema = z
       validationContractVersion: z.literal("2.0.0"),
     }),
     content: applicationContentV2Schema,
-    dependencyManifest: z.array(publishedDefinitionReferenceSchema),
+    dependencyManifest: z.array(
+      z.union([
+        publishedDefinitionReferenceSchema,
+        flowTargetDependencySchema,
+        platformManagedFlowDependencySchema,
+      ]),
+    ),
     releaseNote: z.string().min(1).max(2_000),
   })
   .strict()

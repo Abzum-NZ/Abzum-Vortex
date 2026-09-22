@@ -193,6 +193,55 @@ export const verifyDefinitionCatalogueDependencies = async (
         return "invalid";
       continue;
     }
+    if (dependency.kind === "platform_flow") {
+      if (validationContractVersion !== "2.0.0") return "invalid";
+      const release = await catalogue.readPlatformManagedFlowRelease?.(
+        dependency.flowId,
+        dependency.releaseVersion,
+      );
+      if (release === undefined) return "unavailable";
+      if (
+        release.kind !== "platform_flow" ||
+        release.flowId !== dependency.flowId ||
+        release.releaseVersion !== dependency.releaseVersion ||
+        release.contentFingerprint !== dependency.contentFingerprint ||
+        release.catalogueFingerprint !== dependency.catalogueFingerprint
+      )
+        return "invalid";
+      continue;
+    }
+    if (dependency.kind === "protected_operation" && dependency.operation.owner.kind === "platform_service") {
+      if (validationContractVersion !== "2.0.0") return "invalid";
+      const release = await catalogue.readPlatformServiceOperationRelease?.(
+        dependency.operation.owner.serviceId,
+        dependency.operation.operationId,
+        dependency.releaseVersion,
+      );
+      if (release === undefined) return "unavailable";
+      if (
+        release.serviceId !== dependency.operation.owner.serviceId ||
+        release.operationId !== dependency.operation.operationId ||
+        release.releaseVersion !== dependency.releaseVersion ||
+        release.contentFingerprint !== dependency.contentFingerprint ||
+        release.catalogueFingerprint !== dependency.catalogueFingerprint
+      )
+        return "invalid";
+      continue;
+    }
+    // Application-owned flows and their contained targets, plus module-owned targets, are
+    // authenticated against the stored canonical release by release-integrity checks. They are
+    // not platform catalogue entries and must not fall through to the platform-theme reader.
+    if (
+      dependency.kind === "application_flow" ||
+      dependency.kind === "application_flow_node" ||
+      dependency.kind === "application_query" ||
+      dependency.kind === "module_query" ||
+      dependency.kind === "application_form" ||
+      dependency.kind === "application_workflow" ||
+      dependency.kind === "application_action" ||
+      (dependency.kind === "protected_operation" && dependency.operation.owner.kind !== "platform_service")
+    )
+      continue;
     // A platform-theme dependency exists only in an Application manifest, and the sole
     // Application contract pair is 2.0.0.
     if (validationContractVersion !== "2.0.0") return "invalid";

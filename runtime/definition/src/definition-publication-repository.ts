@@ -32,6 +32,7 @@ import {
   type PublishDefinitionResult,
   type SessionContext,
   type StoredDefinitionSource,
+  type ExactDefinitionDependency,
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
@@ -79,6 +80,30 @@ const exactManifestSchema = z
         ? `${entry.kind}:${entry.catalogueThemeId}`
         : entry.kind === "platform_block"
           ? `${entry.kind}:${entry.blockId}`
+          : entry.kind === "platform_flow"
+            ? `${entry.kind}:${entry.flowId}`
+            : entry.kind === "application_flow"
+              ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}`
+              : entry.kind === "application_flow_node"
+                ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}:${entry.nodeId}`
+                : entry.kind === "application_query"
+                  ? `${entry.kind}:${entry.applicationRootId}:${entry.queryId}`
+                  : entry.kind === "module_query"
+                    ? `${entry.kind}:${entry.moduleRootId}:${entry.queryId}`
+                    : entry.kind === "application_form"
+                      ? `${entry.kind}:${entry.applicationRootId}:${entry.formId}`
+                        : entry.kind === "application_workflow"
+                          ? `${entry.kind}:${entry.applicationRootId}:${entry.workflowId}`
+                          : entry.kind === "application_action"
+                            ? `${entry.kind}:${entry.applicationRootId}:${entry.actionId}`
+                        : entry.kind === "protected_operation"
+                          ? `${entry.kind}:${entry.operation.owner.kind}:${
+                              entry.operation.owner.kind === "application"
+                                ? entry.operation.owner.applicationRootId
+                                : entry.operation.owner.kind === "module"
+                                  ? entry.operation.owner.moduleRootId
+                                  : entry.operation.owner.serviceId
+                            }:${entry.operation.operationId}`
           : `${entry.kind}:${entry.key}`,
     );
     if (new Set(subjects).size !== subjects.length)
@@ -126,7 +151,9 @@ const storedHistoryReleaseSchema = z
   .object({
     publication: z.union([publishedModuleReferenceSchema, publishedApplicationReferenceSchema]),
     content: requiredJsonSchema,
-    dependencyManifest: z.array(publishedModuleReferenceSchema).max(10_000),
+    dependencyManifest: z
+      .array(z.union([publishedModuleReferenceSchema, exactDefinitionDependencySchema]))
+      .max(10_000),
     releaseNote: z.string().min(1).max(2_000),
     evidence: storedReleaseEvidenceSchema,
   })
@@ -162,7 +189,9 @@ const rawPublishedModuleSchema = z
   .object({
     publication: publishedModuleReferenceSchema,
     content: requiredJsonSchema,
-    dependencyManifest: z.array(publishedModuleReferenceSchema).max(10_000),
+    dependencyManifest: z
+      .array(z.union([publishedModuleReferenceSchema, exactDefinitionDependencySchema]))
+      .max(10_000),
     releaseNote: z.string().min(1).max(2_000),
   })
   .strict();
@@ -236,8 +265,9 @@ const parseOneRow = <Value>(rows: readonly DatabaseRow[], schema: z.ZodType<Valu
 
 const dependencyReferencesMatch = (
   output: Exclude<z.infer<typeof definitionCompilationOutputSchema>, { kind: "connection_type" }>,
-  references: readonly z.infer<typeof publishedModuleReferenceSchema>[],
+  references: readonly ExactDefinitionDependency[],
 ): boolean => {
+  const moduleReferences = references.filter((reference) => reference.kind === "module");
   const expected = new Set(
     (output.kind === "module"
       ? output.canonical.content.dependencies
@@ -245,17 +275,17 @@ const dependencyReferencesMatch = (
     ).map((dependency) => `${dependency.moduleRootId}:${dependency.resolvedVersion}`),
   );
   const actual = new Set(
-    references.map((reference) => `${reference.rootId}:${reference.releaseVersion}`),
+    moduleReferences.map((reference) => `${reference.rootId}:${reference.releaseVersion}`),
   );
   return (
     expected.size ===
       (output.kind === "module"
         ? output.canonical.content.dependencies.length
         : output.canonical.content.moduleBindings.length) &&
-    actual.size === references.length &&
+    actual.size === moduleReferences.length &&
     expected.size === actual.size &&
     [...expected].every((dependency) => actual.has(dependency)) &&
-    references.every((reference) => reference.kind === "module")
+    moduleReferences.every((reference) => reference.kind === "module")
   );
 };
 
