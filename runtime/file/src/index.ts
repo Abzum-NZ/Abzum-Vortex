@@ -30,3 +30,9 @@ export {
   type FileRemovalResult,
   type FileStorageDeleter,
 } from "./object-removal";
+export {
+  runUploadCapabilityAdmission,
+  type UploadCapabilityAdmissionRequest,
+  type UploadCapabilityAdmissionResult,
+  type UploadCapabilityReservationPorts,
+} from "./upload-capability-admission";
