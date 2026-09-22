@@ -1,6 +1,6 @@
 import {
+  assertModuleContractPair,
   selectApplicationContractPair,
-  selectModuleContractPair,
   type ApplicationCompilationOutputV2,
   type DefinitionCompilationOutput,
   type DefinitionResolutionSnapshot,
@@ -213,16 +213,12 @@ export const hasAuthenticStoredCustomerDefinitionRelease = (
     )
       return false;
   } else {
-    let pair: "v1" | "v2" | "v3";
     try {
-      pair = selectModuleContractPair(
-        release.sourceContractVersion,
-        release.validationContractVersion,
-      ).schema;
+      assertModuleContractPair(release.sourceContractVersion, release.validationContractVersion);
     } catch {
       return false;
     }
-    const expectedVersion = pair === "v3" ? "3.0.0" : pair === "v2" ? "2.0.0" : "1.0.0";
+    const expectedVersion = "3.0.0";
     const outputVersion =
       "validationContractVersion" in output ? output.validationContractVersion : "1.0.0";
     if (

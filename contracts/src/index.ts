@@ -22,8 +22,6 @@ export * from "./loopback-hostname";
 export * from "./module-contracts";
 export * from "./module-contracts-v2";
 export * from "./module-contracts-v3";
-export * from "./module-source-contracts-v2";
-export * from "./module-source-contracts-v3";
 export * from "./named-actions";
 export * from "./module-field-values-v2";
 export * from "./exact-decimal";

@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { moduleContentV2Schema, moduleDraftV2Schema } from "./module-contracts-v2";
-import { moduleSourceContractVersionV3 } from "./module-source-contracts-v3";
+import { moduleSourceContractVersion as moduleSourceContractVersionV3 } from "./module-source-contracts";
 import { ruleGraphSchema } from "./rule-graph-contracts";
 
 export const moduleValidationContractVersionV3 = "3.0.0" as const;
 
-/** A candidate pair, not an assertion that Definition can publish it yet. */
+/** The one current Module source/validation contract pair. */
 export const moduleContractVersionPairV3Schema = z
   .object({
     sourceContractVersion: z.literal(moduleSourceContractVersionV3),

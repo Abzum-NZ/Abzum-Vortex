@@ -3,12 +3,8 @@ import {
   applicationDraftV2Schema,
   applicationSourceDocumentV2Schema,
   applicationCompilationRequestV2Schema,
-  moduleDraftSchema,
-  moduleDraftV2Schema,
   moduleDraftV3Schema,
-  moduleSourceDocumentV2Schema,
-  moduleSourceDocumentV3Schema,
-  moduleCompilationRequestV2Schema,
+  moduleSourceDocumentSchema,
   moduleCompilationRequestV3Schema,
   savedSharingConditionV2Schema,
   savedSharingConditionSchema,
@@ -36,10 +32,8 @@ import {
   type DefinitionCompilationOutput,
   type DefinitionCompilationRequest,
   type ApplicationCompilationRequestV2,
-  type ModuleCompilationRequestV2,
   type ModuleCompilationRequestV3,
-  type ModuleSourceDocumentV2,
-  type ModuleSourceDocumentV3,
+  type ModuleSourceDocument,
   type ModuleFieldV2,
   type ApplicationSourceDocumentV2,
   type ConditionNode,
@@ -76,14 +70,9 @@ type Output = DefinitionCompilationOutput;
 type PublicationCompilationRequest =
   | DefinitionCompilationRequest
   | ApplicationCompilationRequestV2
-  | ModuleCompilationRequestV2
   | ModuleCompilationRequestV3;
 type DefinitionPath = readonly (string | number)[];
-type EditSaveSource =
-  | DefinitionSourceDocument
-  | ApplicationSourceDocumentV2
-  | ModuleSourceDocumentV2
-  | ModuleSourceDocumentV3;
+type EditSaveSource = DefinitionSourceDocument | ApplicationSourceDocumentV2 | ModuleSourceDocument;
 
 const isV2ApplicationSource = (source: unknown): boolean =>
   source !== null &&
@@ -92,19 +81,11 @@ const isV2ApplicationSource = (source: unknown): boolean =>
   (source as JsonObject).kind === "application" &&
   (source as JsonObject).source_contract_version === "2.0.0";
 
-const isV2ModuleSource = (source: unknown): boolean =>
+const isModuleSource = (source: unknown): boolean =>
   source !== null &&
   typeof source === "object" &&
   !Array.isArray(source) &&
-  (source as JsonObject).kind === "module" &&
-  (source as JsonObject).source_contract_version === "2.0.0";
-
-const isV3ModuleSource = (source: unknown): boolean =>
-  source !== null &&
-  typeof source === "object" &&
-  !Array.isArray(source) &&
-  (source as JsonObject).kind === "module" &&
-  (source as JsonObject).source_contract_version === "3.0.0";
+  (source as JsonObject).kind === "module";
 
 const parseEditSaveSource = (
   source: unknown,
@@ -117,11 +98,9 @@ const parseEditSaveSource = (
   | Readonly<{ success: false; error: z.ZodError }> => {
   const schema = isV2ApplicationSource(source)
     ? applicationSourceDocumentV2Schema
-    : isV3ModuleSource(source)
-      ? moduleSourceDocumentV3Schema
-      : isV2ModuleSource(source)
-        ? moduleSourceDocumentV2Schema
-        : definitionSourceDocumentSchema;
+    : isModuleSource(source)
+      ? moduleSourceDocumentSchema
+      : definitionSourceDocumentSchema;
   const parsed = schema.safeParse(source);
   return parsed.success
     ? { success: true, data: parsed.data, schema }
@@ -174,11 +153,7 @@ const canonicalValueWalker = (context: DefinitionSetValidationContext) =>
     allValidationOutputs(context).map((output) => ({
       schema:
         output.kind === "module"
-          ? "validationContractVersion" in output
-            ? output.validationContractVersion === "3.0.0"
-              ? moduleDraftV3Schema
-              : moduleDraftV2Schema
-            : moduleDraftSchema
+          ? moduleDraftV3Schema
           : output.kind === "application"
             ? "validationContractVersion" in output
               ? applicationDraftV2Schema
@@ -686,7 +661,7 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
         }
       }
       for (const rule of array(body.rules)) {
-        if (isV3ModuleSource(source)) {
+        if (isModuleSource(source)) {
           if (
             !array(body.record_types).some(
               (record) => record.key === rule.record_type || record.id === rule.record_type,
@@ -921,7 +896,8 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
     const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(raw);
     if (!parsed.success || parsed.data.kind !== "module") continue;
     const source = parsed.data;
-    const moduleV2 = source.source_contract_version === "2.0.0" || isV3ModuleSource(source);
+    /** Module sources are always the current exact-decimal contract. */
+    const moduleV2 = true;
     const body = object(source.body);
     const records = new Map(
       array(body.record_types).map((record) => [String(record.key), record] as const),
@@ -1086,7 +1062,7 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
       }
     }
     for (const rule of array(body.rules)) {
-      if (isV3ModuleSource(source)) continue;
+      if (isModuleSource(source)) continue;
       const fields = fieldsFor(records.get(String(rule.record_type)));
       if (
         !(moduleV2
@@ -5855,8 +5831,7 @@ export function compileDefinitionSet(
   const publicationContext = parsedContext.data;
   const parsedInputs = inputs.map((input) => {
     const source = object(input).source;
-    if (isV3ModuleSource(source)) return moduleCompilationRequestV3Schema.safeParse(input);
-    if (isV2ModuleSource(source)) return moduleCompilationRequestV2Schema.safeParse(input);
+    if (isModuleSource(source)) return moduleCompilationRequestV3Schema.safeParse(input);
     if (isV2ApplicationSource(source))
       return applicationCompilationRequestV2Schema.safeParse(input);
     return definitionCompilationRequestSchema.safeParse(input);

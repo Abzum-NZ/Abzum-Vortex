@@ -1,8 +1,7 @@
 import type {
   ApplicationSourceDocumentV2,
   DefinitionSourceDocument,
-  ModuleSourceDocumentV2,
-  ModuleSourceDocumentV3,
+  ModuleSourceDocument,
   StoredDefinitionSource,
   SourceIdentityKind,
   SourceIdentityKindV2,
@@ -65,7 +64,7 @@ const objectValue = (value: unknown): SourceObject | undefined =>
  * Source `id` values are owners; mutable keys and paths are aliases of that owner.
  */
 export function extractSourceIdentityRequirements(
-  source: DefinitionSourceDocument | ModuleSourceDocumentV2 | ModuleSourceDocumentV3,
+  source: DefinitionSourceDocument | ModuleSourceDocument,
 ): SourceIdentityRequirement[] {
   const sourceObject = source as unknown as SourceObject;
   const definitionKey = source.key;
@@ -194,9 +193,9 @@ export function extractSourceIdentityRequirements(
   return requirements;
 }
 
-/** Adds graph-owned identities without changing the historical V1/V2 vocabulary. */
+/** Adds graph-owned identities to the shared vocabulary computed above. */
 export function extractModuleSourceIdentityRequirementsV3(
-  source: ModuleSourceDocumentV3,
+  source: ModuleSourceDocument,
 ): SourceIdentityRequirementV3[] {
   const requirements: SourceIdentityRequirementV3[] = extractSourceIdentityRequirements(source).map(
     (requirement) => ({ ...requirement }),
@@ -371,6 +370,6 @@ export function extractApplicationSourceIdentityRequirementsV2(
 export const extractStoredSourceIdentityRequirements = (source: StoredDefinitionSource) =>
   source.kind === "application" && source.source_contract_version === "2.0.0"
     ? extractApplicationSourceIdentityRequirementsV2(source)
-    : source.kind === "module" && source.source_contract_version === "3.0.0"
+    : source.kind === "module"
       ? extractModuleSourceIdentityRequirementsV3(source)
       : extractSourceIdentityRequirements(source);

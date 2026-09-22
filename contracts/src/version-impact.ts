@@ -18,14 +18,11 @@ import {
   platformIdSchema,
   semanticVersionSchema,
 } from "./identifiers";
-import { moduleDraftSchema, publishedModuleDefinitionSchema } from "./module-contracts";
-import { moduleContentV2Schema, moduleDraftV2Schema } from "./module-contracts-v2";
 import { moduleContentV3Schema, moduleDraftV3Schema } from "./module-contracts-v3";
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);
 export const versionImpactPolicyVersion = "1.0.0" as const;
 export const applicationVersionImpactPolicyVersionV2 = "2.0.0" as const;
-export const moduleVersionImpactPolicyVersionV2 = "2.0.0" as const;
 export const moduleVersionImpactPolicyVersionV3 = "3.0.0" as const;
 export const stableDefinitionReleaseVersionSchema = semanticVersionSchema.refine(
   (value) => !value.includes("-") && !value.includes("+"),
@@ -181,14 +178,6 @@ export const definitionVersionImpactFailureCodeSchema = z.enum([
 
 const historyLimit = 10_000;
 
-export const moduleVersionImpactRequestSchema = z
-  .object({
-    kind: z.literal("module"),
-    history: z.array(publishedModuleDefinitionSchema).max(historyLimit),
-    candidate: moduleDraftSchema,
-  })
-  .strict();
-
 export const applicationVersionImpactRequestSchema = z
   .object({
     kind: z.literal("application"),
@@ -221,22 +210,7 @@ export const applicationVersionImpactRequestV2Schema = z
   })
   .strict();
 
-/** Comparator-only Module V2 history evidence; it does not enable publication selection. */
-export const moduleVersionImpactHistoryEntryV2Schema = z
-  .object({
-    publication: publishedModuleReferenceSchema.extend({
-      validationContractVersion: z.literal("2.0.0"),
-    }),
-    content: moduleContentV2Schema,
-    dependencyManifest: z.array(publishedDefinitionReferenceSchema),
-    releaseNote: z.string().min(1).max(2_000),
-  })
-  .strict()
-  .superRefine((value, context) =>
-    requireResolvedRecordTypeReferences(moduleContentV2Schema, value.content, context, ["content"]),
-  );
-
-/** Comparator-only Module V3 history evidence; publication dispatch is enabled separately. */
+/** The one current Module history evidence; publication dispatch requires this exact pair. */
 export const moduleVersionImpactHistoryEntryV3Schema = z
   .object({
     publication: publishedModuleReferenceSchema.extend({
@@ -248,51 +222,20 @@ export const moduleVersionImpactHistoryEntryV3Schema = z
   })
   .strict()
   .superRefine((value, context) =>
-    requireResolvedRecordTypeReferences(
-      moduleContentV2Schema,
-      { ...value.content, rules: [] },
-      context,
-      ["content"],
-    ),
+    requireResolvedRecordTypeReferences(moduleContentV3Schema, value.content, context, ["content"]),
   );
-
-const moduleVersionImpactHistoryEntryV1Schema = publishedModuleDefinitionSchema.refine(
-  (value) => value.publication.validationContractVersion === "1.0.0",
-  "Module V1 history must use validation contract version 1.0.0",
-);
-
-export const moduleVersionImpactRequestV2Schema = z
-  .object({
-    kind: z.literal("module"),
-    validationContractVersion: z.literal(moduleVersionImpactPolicyVersionV2),
-    history: z
-      .array(
-        z.union([moduleVersionImpactHistoryEntryV1Schema, moduleVersionImpactHistoryEntryV2Schema]),
-      )
-      .max(historyLimit),
-    candidate: moduleDraftV2Schema,
-  })
-  .strict();
 
 export const moduleVersionImpactRequestV3Schema = z
   .object({
     kind: z.literal("module"),
     validationContractVersion: z.literal(moduleVersionImpactPolicyVersionV3),
-    history: z
-      .array(
-        z.union([
-          moduleVersionImpactHistoryEntryV1Schema,
-          moduleVersionImpactHistoryEntryV2Schema,
-          moduleVersionImpactHistoryEntryV3Schema,
-        ]),
-      )
-      .max(historyLimit),
+    history: z.array(moduleVersionImpactHistoryEntryV3Schema).max(historyLimit),
     candidate: moduleDraftV3Schema,
   })
   .strict();
 
 export const definitionVersionImpactRequestSchema = z.discriminatedUnion("kind", [
-  moduleVersionImpactRequestSchema,
+  moduleVersionImpactRequestV3Schema,
   applicationVersionImpactRequestSchema,
 ]);
 
@@ -389,11 +332,7 @@ export type DefinitionVersionImpactRequest = z.infer<typeof definitionVersionImp
 export type ApplicationVersionImpactRequestV2 = z.infer<
   typeof applicationVersionImpactRequestV2Schema
 >;
-export type ModuleVersionImpactRequestV2 = z.infer<typeof moduleVersionImpactRequestV2Schema>;
 export type ModuleVersionImpactRequestV3 = z.infer<typeof moduleVersionImpactRequestV3Schema>;
-export type ModuleVersionImpactHistoryEntryV2 = z.infer<
-  typeof moduleVersionImpactHistoryEntryV2Schema
->;
 export type ModuleVersionImpactHistoryEntryV3 = z.infer<
   typeof moduleVersionImpactHistoryEntryV3Schema
 >;

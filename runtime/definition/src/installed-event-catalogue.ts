@@ -3,8 +3,6 @@ import {
   applicationDefinitionConsumerReadResultV2Schema,
   activeApplicationInstallationEvidenceSchema,
   installedEventDescriptorSchema,
-  moduleDefinitionConsumerReadResultV1Schema,
-  moduleDefinitionConsumerReadResultV2Schema,
   moduleDefinitionConsumerReadResultV3Schema,
   systemApplicationBoundReleaseSetResultSchema,
   type DefinitionConsumerReadResult,
@@ -26,11 +24,7 @@ const applicationReadSchema = z.union([
   applicationDefinitionConsumerReadResultV1Schema,
   applicationDefinitionConsumerReadResultV2Schema,
 ]);
-const moduleReadSchema = z.union([
-  moduleDefinitionConsumerReadResultV1Schema,
-  moduleDefinitionConsumerReadResultV2Schema,
-  moduleDefinitionConsumerReadResultV3Schema,
-]);
+const moduleReadSchema = moduleDefinitionConsumerReadResultV3Schema;
 const rawInstallationEvidenceSchema = z
   .object(activeApplicationInstallationEvidenceSchema.shape)
   .strict();

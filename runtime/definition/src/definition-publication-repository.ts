@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   actorIdSchema,
+  assertModuleContractPair,
   definitionCompilationOutputSchema,
   definitionKindSchema,
   definitionResolutionSnapshotSchema,
@@ -17,14 +18,11 @@ import {
   publishDefinitionResultSchema,
   publishedApplicationDefinitionSchema,
   publishedApplicationReferenceSchema,
-  publishedModuleDefinitionSchema,
-  moduleVersionImpactHistoryEntryV2Schema,
   moduleVersionImpactHistoryEntryV3Schema,
   publishedModuleReferenceSchema,
   revisionSchema,
   semanticVersionSchema,
   selectApplicationContractPair,
-  selectModuleContractPair,
   stableDefinitionReleaseVersionSchema,
   sourceIdentityAssignmentV3Schema,
   storedDefinitionDraftSchema,
@@ -179,11 +177,7 @@ const rawModuleReleaseSchema = z
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,
     compilationOutput: definitionCompilationOutputSchema,
-    resolutionSnapshot: z.union([
-      definitionResolutionSnapshotSchema,
-      definitionResolutionSnapshotV2Schema,
-      definitionResolutionSnapshotV3Schema,
-    ]),
+    resolutionSnapshot: definitionResolutionSnapshotV3Schema,
     identities: z.array(sourceIdentityAssignmentV3Schema),
     published: rawPublishedModuleSchema,
   })
@@ -517,16 +511,15 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
           release.publication.kind !== "module"
         )
           return invalidStorage();
-        let schema: "v1" | "v2" | "v3";
         try {
-          schema = selectModuleContractPair(
+          assertModuleContractPair(
             release.evidence.sourceContractVersion,
             release.publication.validationContractVersion,
-          ).schema;
+          );
         } catch {
           return invalidStorage();
         }
-        const expectedVersion = schema === "v3" ? "3.0.0" : schema === "v2" ? "2.0.0" : "1.0.0";
+        const expectedVersion = "3.0.0";
         const outputVersion =
           "validationContractVersion" in output ? output.validationContractVersion : "1.0.0";
         if (outputVersion !== expectedVersion || resolution.contractVersion !== expectedVersion)
@@ -582,13 +575,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       if (!dependencyReferencesMatch(output, release.dependencyManifest)) return invalidStorage();
       const published =
         kind === "module" && output.kind === "module" && release.publication.kind === "module"
-          ? ("validationContractVersion" in output && output.validationContractVersion === "3.0.0"
-              ? moduleVersionImpactHistoryEntryV3Schema
-              : "validationContractVersion" in output &&
-                  output.validationContractVersion === "2.0.0"
-                ? moduleVersionImpactHistoryEntryV2Schema
-                : publishedModuleDefinitionSchema
-            ).safeParse({
+          ? moduleVersionImpactHistoryEntryV3Schema.safeParse({
               publication: release.publication,
               content: output.canonical.content,
               dependencyManifest: release.dependencyManifest,
@@ -618,12 +605,8 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     const validationContractVersion =
       "validationContractVersion" in output ? output.validationContractVersion : "1.0.0";
     const sourceContractVersion = validationContractVersion;
-    let moduleSchema: "v1" | "v2" | "v3";
     try {
-      moduleSchema = selectModuleContractPair(
-        sourceContractVersion,
-        validationContractVersion,
-      ).schema;
+      assertModuleContractPair(sourceContractVersion, validationContractVersion);
     } catch {
       return invalidStorage();
     }
@@ -672,13 +655,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       !dependencyReferencesMatch(output, release.published.dependencyManifest)
     )
       return invalidStorage();
-    const published = (
-      moduleSchema === "v3"
-        ? moduleVersionImpactHistoryEntryV3Schema
-        : moduleSchema === "v2"
-          ? moduleVersionImpactHistoryEntryV2Schema
-          : publishedModuleDefinitionSchema
-    ).safeParse({
+    const published = moduleVersionImpactHistoryEntryV3Schema.safeParse({
       publication: release.published.publication,
       content: output.canonical.content,
       dependencyManifest: release.published.dependencyManifest,

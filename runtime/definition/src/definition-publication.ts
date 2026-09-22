@@ -3,15 +3,13 @@ import "server-only";
 import {
   applicationCompilationRequestV2Schema,
   applicationCompositionCatalogueSnapshotV2Schema,
+  assertModuleContractPair,
   definitionCompilationOutputSchema,
   definitionCompilationRequestSchema,
   definitionPublicationConfirmationSchema,
   definitionResolutionSnapshotSchema,
-  definitionResolutionSnapshotV2Schema,
   definitionResolutionSnapshotV3Schema,
-  moduleCompilationRequestV2Schema,
   moduleCompilationRequestV3Schema,
-  selectModuleContractPair,
   prepareDefinitionPublicationCommandSchema,
   prepareDefinitionPublicationResultSchema,
   publishDefinitionCommandSchema,
@@ -34,8 +32,6 @@ import {
   type PrepareDefinitionPublicationCommand,
   type PrepareDefinitionPublicationResult,
   type PublishDefinitionCommand,
-  type PublishedModuleDefinition,
-  type ModuleVersionImpactHistoryEntryV2,
   type ModuleVersionImpactHistoryEntryV3,
   type PublishDefinitionResult,
   type SavedConditionRevisionAssignment,
@@ -56,7 +52,7 @@ import { compare, satisfies } from "semver";
 import type { z } from "zod";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
 import { createApplicationResolutionSnapshotV2 } from "./application-v2-resolution";
-import { compileDefinition, compileParsedDefinition } from "./compiler";
+import { compileParsedDefinition } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
 import { validateDefinitionSet } from "./validation";
 import {
@@ -129,12 +125,9 @@ export type ResolvableModuleRelease = Readonly<{
   releaseVersion: SemanticVersion;
   contentFingerprint: Fingerprint;
   resolutionFingerprint: Fingerprint;
-  published:
-    | PublishedModuleDefinition
-    | ModuleVersionImpactHistoryEntryV2
-    | ModuleVersionImpactHistoryEntryV3;
+  published: ModuleVersionImpactHistoryEntryV3;
   compilationOutput: ModuleOutput;
-  resolutionSnapshot: DefinitionResolution;
+  resolutionSnapshot: DefinitionResolutionSnapshotV3;
 }>;
 
 export type ModuleReleasePageCursor = Readonly<{
@@ -383,22 +376,17 @@ const verifyModuleRelease = (
 ): void => {
   const parsedOutput = definitionCompilationOutputSchema.safeParse(release.compilationOutput);
   const publication = release.published.publication;
-  let selectedSchema: "v1" | "v2" | "v3";
   try {
-    selectedSchema = selectModuleContractPair(
+    assertModuleContractPair(
       moduleOutputContractVersion(release.compilationOutput),
       publication.validationContractVersion,
-    ).schema;
+    );
   } catch {
     return refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
   }
-  const parsedResolution = (
-    selectedSchema === "v3"
-      ? definitionResolutionSnapshotV3Schema
-      : selectedSchema === "v2"
-        ? definitionResolutionSnapshotV2Schema
-        : definitionResolutionSnapshotSchema
-  ).safeParse(release.resolutionSnapshot);
+  const parsedResolution = definitionResolutionSnapshotV3Schema.safeParse(
+    release.resolutionSnapshot,
+  );
   const ownResolution = parsedResolution.success
     ? parsedResolution.data.definitions.filter(
         (definition) =>
@@ -928,10 +916,7 @@ const buildResolution = (
       ]),
     ),
   );
-  if (
-    candidate.draft.source.kind === "module" &&
-    candidate.draft.source.source_contract_version === "3.0.0"
-  ) {
+  if (candidate.draft.source.kind === "module") {
     const evidence = { contractVersion: "3.0.0" as const, definitions, identities: allIdentities };
     return definitionResolutionSnapshotV3Schema.parse({
       ...evidence,
@@ -939,7 +924,7 @@ const buildResolution = (
     });
   }
   if (
-    (candidate.draft.source.kind === "application" || candidate.draft.source.kind === "module") &&
+    candidate.draft.source.kind === "application" &&
     candidate.draft.source.source_contract_version === "2.0.0"
   )
     return createApplicationResolutionSnapshotV2({
@@ -1013,7 +998,6 @@ const assertFinalPublicationValidation = (
   request:
     | z.output<typeof definitionCompilationRequestSchema>
     | z.output<typeof applicationCompilationRequestV2Schema>
-    | z.output<typeof moduleCompilationRequestV2Schema>
     | z.output<typeof moduleCompilationRequestV3Schema>,
   output: Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
@@ -1122,82 +1106,14 @@ const compileCandidate = (
     );
     return output;
   }
-  if (
-    candidate.draft.source.kind === "module" &&
-    candidate.draft.source.source_contract_version === "2.0.0"
-  ) {
-    if (resolution.contractVersion !== "2.0.0") return refuse("DEFINITION_COMPILATION_REFUSED");
-    const common = {
-      sourceContractVersion: "2.0.0" as const,
-      validationContractVersion: "2.0.0" as const,
-      source: candidate.draft.source,
-      resolution,
-      draftMetadata: draftMetadata(candidate.draft),
-    };
-    const provisional = compileParsedDefinition(
-      parsedCompilationRequest(moduleCompilationRequestV2Schema, {
-        ...common,
-        savedConditionRevisions: provisionalSavedConditionRevisions(candidate),
-      }),
-      dependencyOutputs,
-    );
-    if (provisional.kind !== "module" || !("validationContractVersion" in provisional))
-      return refuse("DEFINITION_COMPILATION_REFUSED");
-    if (candidate.historyEvidence.kind !== "module") return refuse("DEFINITION_HISTORY_INVALID");
-    const savedConditionRevisions = deriveSavedConditionRevisionsFromHistoryEvidence(
-      candidate.historyEvidence,
-      candidate.draft.rootId,
-      provisional.canonical.content.sharingConditions,
-    );
-    const request = { ...common, savedConditionRevisions };
-    if (!final)
-      return compileParsedDefinition(
-        parsedCompilationRequest(moduleCompilationRequestV2Schema, request),
-        dependencyOutputs,
-      );
-    const parsedRequest = parsedCompilationRequest(moduleCompilationRequestV2Schema, request);
-    const output = compileParsedDefinition(parsedRequest, dependencyOutputs);
-    if (
-      output === undefined ||
-      output.kind !== "module" ||
-      !("validationContractVersion" in output)
-    )
-      return refuse("DEFINITION_COMPILATION_REFUSED");
-    assertFinalPublicationValidation(
-      parsedRequest,
-      output,
-      dependencyOutputs,
-      candidate.historyEvidence,
-    );
-    return output;
-  }
   if (resolution.contractVersion !== "1.0.0") return refuse("DEFINITION_COMPILATION_REFUSED");
   const source = candidate.draft.source;
   if (source.kind === "application" && source.source_contract_version !== "1.0.0")
     return refuse("DEFINITION_COMPILATION_REFUSED");
-  const common = {
+  const request = {
     source,
     resolution,
     draftMetadata: draftMetadata(candidate.draft),
-  };
-  let savedConditionRevisions: SavedConditionRevisionAssignment[] | undefined;
-  if (candidate.draft.kind === "module") {
-    const provisional = compileDefinition({
-      ...common,
-      savedConditionRevisions: provisionalSavedConditionRevisions(candidate),
-    });
-    if (provisional.kind !== "module") refuse("DEFINITION_COMPILATION_REFUSED");
-    const moduleOutput = provisional as ModuleOutput;
-    if (candidate.historyEvidence.kind !== "module") refuse("DEFINITION_HISTORY_INVALID");
-    savedConditionRevisions = deriveSavedConditionRevisionsFromHistoryEvidence(
-      candidate.historyEvidence,
-      candidate.draft.rootId,
-      moduleOutput.canonical.content.sharingConditions,
-    );
-  }
-  const request = {
-    ...common,
-    ...(savedConditionRevisions === undefined ? {} : { savedConditionRevisions }),
   };
   if (!final) {
     const output = compileParsedDefinition(

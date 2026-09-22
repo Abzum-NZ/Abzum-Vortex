@@ -11,8 +11,6 @@ import {
   revisionSchema,
   semanticVersionSchema,
 } from "./identifiers";
-import { moduleContentSchema } from "./module-contracts";
-import { moduleContentV2Schema } from "./module-contracts-v2";
 import { moduleContentV3Schema } from "./module-contracts-v3";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
@@ -107,26 +105,7 @@ export const applicationDefinitionConsumerReadResultV2Schema = z
   })
   .strict();
 
-export const moduleDefinitionConsumerReadResultV1Schema = z
-  .object({
-    kind: z.literal("module"),
-    rootId: moduleRootIdSchema,
-    content: moduleContentSchema,
-    ...definitionConsumerReadResultCommon,
-    validationContractVersion: z.literal("1.0.0"),
-  })
-  .strict();
-
-export const moduleDefinitionConsumerReadResultV2Schema = z
-  .object({
-    kind: z.literal("module"),
-    rootId: moduleRootIdSchema,
-    content: moduleContentV2Schema,
-    ...definitionConsumerReadResultCommon,
-    validationContractVersion: z.literal("2.0.0"),
-  })
-  .strict();
-
+/** The one current Module consumer-read result and exact release identity. */
 export const moduleDefinitionConsumerReadResultV3Schema = z
   .object({
     kind: z.literal("module"),
@@ -138,8 +117,6 @@ export const moduleDefinitionConsumerReadResultV3Schema = z
   .strict();
 
 export const definitionConsumerReadResultSchema = z.union([
-  moduleDefinitionConsumerReadResultV1Schema,
-  moduleDefinitionConsumerReadResultV2Schema,
   moduleDefinitionConsumerReadResultV3Schema,
   applicationDefinitionConsumerReadResultV1Schema,
   applicationDefinitionConsumerReadResultV2Schema,
@@ -161,11 +138,7 @@ const applicationDefinitionConsumerReadResultSchema = z.union([
   applicationDefinitionConsumerReadResultV1Schema,
   applicationDefinitionConsumerReadResultV2Schema,
 ]);
-const moduleDefinitionConsumerReadResultSchema = z.union([
-  moduleDefinitionConsumerReadResultV1Schema,
-  moduleDefinitionConsumerReadResultV2Schema,
-  moduleDefinitionConsumerReadResultV3Schema,
-]);
+const moduleDefinitionConsumerReadResultSchema = moduleDefinitionConsumerReadResultV3Schema;
 
 export const applicationBoundReleaseSetResultSchema = z
   .object({
@@ -220,12 +193,6 @@ export type SystemApplicationBoundReleaseSetCommand = z.infer<
 >;
 export type SystemApplicationBoundReleaseSetResult = z.infer<
   typeof systemApplicationBoundReleaseSetResultSchema
->;
-export type ModuleDefinitionConsumerReadResultV1 = z.infer<
-  typeof moduleDefinitionConsumerReadResultV1Schema
->;
-export type ModuleDefinitionConsumerReadResultV2 = z.infer<
-  typeof moduleDefinitionConsumerReadResultV2Schema
 >;
 export type ModuleDefinitionConsumerReadResultV3 = z.infer<
   typeof moduleDefinitionConsumerReadResultV3Schema

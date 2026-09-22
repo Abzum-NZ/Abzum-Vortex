@@ -13,8 +13,8 @@ import {
   organizationIdSchema,
   platformIdSchema,
   revisionSchema,
+  assertModuleContractPair,
   selectApplicationContractPair,
-  selectModuleContractPair,
   semanticVersionSchema,
   sessionContextSchema,
   stableDefinitionReleaseVersionSchema,
@@ -111,7 +111,7 @@ const selectReleaseContract = (candidate: unknown): void => {
   try {
     if (record.kind === "application")
       selectApplicationContractPair(record.sourceContractVersion, record.validationContractVersion);
-    else selectModuleContractPair(record.sourceContractVersion, record.validationContractVersion);
+    else assertModuleContractPair(record.sourceContractVersion, record.validationContractVersion);
   } catch {
     throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   }
