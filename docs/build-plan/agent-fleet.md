@@ -21,7 +21,7 @@ Phase labels and Pickup Order are preserved as planning/reporting metadata, whil
 | Work | Preferred model |
 | --- | --- |
 | Main orchestrator | GPT 5.6 Sol (Codex - High) |
-| Mechanical changes, explicit schemas/catalogues/adapters | GLM 5.3 Flash (OpenCode) |
+| Bounded implementation and explicit schemas/catalogues/adapters | DeepSeek 4.1 Flash (`deepseek/deepseek-flash`, OpenCode) or GLM 5.3 Flash (OpenCode) |
 | Bounded UI components, pages and wiring | Gemini 3.8 Flash (Antigravity - Max or High) |
 | Ordinary runtime/service implementation | Claude Sonnet 5 (High) |
 | Complex architecture, authorization or transactions | Claude Opus 5.5 (High), or GPT 5.6 Sol when capacity favours it |
@@ -32,7 +32,7 @@ Choose the cheapest capable model. Before dispatch, review handoff and each 30-m
 
 Treat a provider concurrency, rate-limit or model-unavailable response as a capacity result, not a tool-approval denial. One capacity response does not settle the attempt: retry the same terminal several times at about 20-second spacing and record each actual provider response. Only after repeated confirmed capacity failures preserve the branch/worktree, settle that attempt and move implementation to the next cheapest suitable authorized workhorse or an offered fallback, without waiting for user direction. Real permission and repository-protection denials remain non-bypassable: do not retry unchanged, change controls or route through another executor to evade them.
 
-For implementation waves, distribute work across qualified providers instead of filling every lane with one provider. Prefer GLM for mechanical contract/catalogue work, Gemini 3.8 Flash Max or High for bounded UI and wiring, Sonnet 5 High for ordinary runtime/service work, Terra for bounded general implementation, and Luna High only when the task is clearly defined and bounded. Unknown usage telemetry is not proof that an installed provider cannot execute, and unknown Gemini or Antigravity usage in particular is not evidence of inability; use a real bounded launch to establish availability when that model is the best fit, then record the actual result. Avoid assigning more than half of active implementer lanes to one provider when equally suitable alternatives are available. Opus 5.5 and GPT 5.6 Sol are reserved for review, complex decisions and orchestration.
+For implementation waves, distribute work across qualified providers instead of filling every lane with one provider. Primary workhorses are DeepSeek 4.1 Flash, GLM 5.3 Flash and Gemini 3.8 Flash Max or High. Use only `deepseek/deepseek-flash` for DeepSeek, never DeepSeek Pro. GLM handles suitable mechanical work when capacity is available; persistent GLM concurrency failures route the same preserved leaf to DeepSeek Flash. Sonnet 5 High, Terra and Luna High remain alternatives when appropriate, with Luna limited to clearly defined bounded work. Unknown usage telemetry is not proof that an installed provider cannot execute; use a real bounded launch to establish availability when that model is the best fit, then record the actual result. Avoid assigning more than half of active implementer lanes to one provider when equally suitable alternatives are available. Opus 5.5 and GPT 5.6 Sol are reserved for review, complex decisions and orchestration.
 
 Verify actual model/effort in launch/session; planned labels are not execution facts. Resolve provider and model identifiers from the current Orca runtime configuration at dispatch, confirm the actual session identity, and record it in the checkpoint. Never label another version as the requested model. Reassignment updates planned agent, estimate, actual worktree display name, issue metadata and parent row together. Retain an existing branch name accurately when appropriate.
 
@@ -43,9 +43,9 @@ Launch each provider through its normal supported path and judge readiness by ac
 | Provider | Normal launch | Readiness and recovery |
 | --- | --- | --- |
 | Antigravity Gemini 3.8 Flash | `agy-trusted.cmd` | Ready when the session reports `agentWait: None`. The sign-in banner is cosmetic; it is not a blocker, a capacity result or a permission denial. |
-| OpenCode GLM 5.3 Flash | `opencode` | A TinyCC or OpenTUI initialization failure means the Windows ARM64 architecture fix must be re-applied and that terminal relaunched. It is not a capacity or permission result. |
+| OpenCode DeepSeek 4.1 Flash or GLM 5.3 Flash | `opencode` | Orca headless `opencode run` uses the native ARM64 build; interactive screen uses x64. Confirm the actual selected model and turn start. TinyCC/OpenTUI failure, segfault or silent headless exit is an architecture failure, not capacity or permissions. |
 
-A GLM concurrency-capacity response is a capacity result on an otherwise healthy terminal: retry the same terminal several times at about 20-second spacing rather than relaunching it, reclassifying it as a permission problem or settling the leaf. Move the leaf to another workhorse or an offered fallback only after repeated confirmed capacity failures.
+A GLM concurrency-capacity response is a capacity result on an otherwise healthy terminal: retry the same worker several times at about 20-second spacing rather than relaunching it or reclassifying it as a permission problem. After repeated confirmed capacity failures, preserve work, settle the old owner and reassign the leaf to DeepSeek Flash when suitable. If an OpenCode architecture failure occurs, first settle and preserve every active OpenCode worker: `C:\Users\vijay\.orca\bin\opencode-fix-arch.cmd` stops all OpenCode processes. Only then run that fix once. Relaunch or reassign every interrupted preserved OpenCode leaf, verify actual starts and reconcile owner/session/board metadata; retry the triggering leaf as part of that recovery. Do not use historical Herdr instructions.
 
 ## Metadata
 
@@ -88,7 +88,7 @@ Every 15 minutes while active, compare actual workers with board owners and comp
 | Provider concurrency or capacity response | Retry the same terminal several times at about 20-second spacing; do not relaunch, settle or reclassify it as a permission denial |
 | Repeatedly confirmed capacity failure or quota refusal | Preserve work, settle/stop old attempt through Orca, reassign the same issue to another workhorse or offered fallback and update metadata |
 | Antigravity sign-in banner with `agentWait: None` | Treat the session as ready; do not relaunch, reassign or report a blocker |
-| OpenCode TinyCC/OpenTUI initialization failure | Re-apply the Windows ARM64 architecture fix and relaunch that terminal |
+| OpenCode TinyCC/OpenTUI, segfault or silent headless exit | Settle/preserve all active OpenCode workers before the one ARM64 repair, which stops all OpenCode processes; then relaunch/reassign every interrupted leaf, verify starts and reconcile ownership |
 | Reviewer finds defects | Reviewer fixes and re-reviews itself; no implementer ping-pong |
 | Conflicting editors/stale main | Establish exclusive ownership; reviewer resolves and re-reviews candidate |
 | Real permission/repository rejection | Name exact rule/action and supported resolution; no unchanged retry loop or bypass |
@@ -127,7 +127,8 @@ Request Opus 5.5/Sol review handoff. No issue closure, merge or shared board edi
 ```text
 You are the independent Opus 5.5 / GPT5.6 Sol review-and-fix owner of #<issue>.
 Candidate/worktree/branch: <actual>. Issue/spec: <links>. Implementer settled.
-Review the entire change and affected callers against bounded acceptance.
+First read the complete live GitHub issue, every comment and linked spec.
+Then review the entire candidate change, current main and affected callers against bounded acceptance.
 Fix findings yourself; commit and re-review the final candidate.
 No tests or test edits, builds/typechecks/lint, DB/hosted reviews,
 proof receipts, Kestra or deployment. Do not change permissions or protections.
@@ -135,9 +136,9 @@ Open the candidate PR if absent. Integrate reviewed PR into main through permitt
 If blocked, report exact cause; do not close the issue or claim Done.
 After merge, update assigned issue with implemented outcome/final review and close completed.
 Do not modify project fields or unrelated issues. Send once to orchestrator:
-  Issue/phase/pickup; PR; reviewed commit; merge commit; issue closure state.
+  Issue/phase/pickup; PR; final reviewed commit; merge commit; verified issue closure.
   Functionality built; findings fixed and re-reviewed; remaining limitations.
-  Please update board, unblock dependents, roll up parents, release my session,
+  Please verify these facts, update board, unblock dependents, roll up parents, release both settled agents,
   clean the safe completed worktree, recompute the eligible queue across phases,
   and refill every open implementation and review lane.
 Stop editing and idle for release; use Orca's exact completion contract.
