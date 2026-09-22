@@ -280,45 +280,83 @@ export const createOrganizationAccountStore = (
 
 export type OffboardingInventoryTargetKind = "organization_account" | "group";
 export type OffboardingInventorySectionKind = "application" | "organization_shared" | "all";
+export type OffboardingSectionKind = "application" | "organization_shared";
+export type OffboardingStorageScope = "application_contained" | "organization_shared";
+export type OffboardingLifecycleState = "active" | "soft_deleted" | "removal_pending";
+export type OffboardingInstallationState = "active" | "detached";
+export type OffboardingClassification = "transferable" | "refused_incompatible";
+
+const offboardingTargetKinds = ["organization_account", "group"] as const;
+const offboardingRequestedSections = ["application", "organization_shared", "all"] as const;
+const offboardingSectionKinds = ["application", "organization_shared"] as const;
+const offboardingStorageScopes = ["application_contained", "organization_shared"] as const;
+const offboardingLifecycleStates = ["active", "soft_deleted", "removal_pending"] as const;
+const offboardingInstallationStates = ["active", "detached"] as const;
+const offboardingClassifications = ["transferable", "refused_incompatible"] as const;
+
+const offboardingInventoryPageLimit = 50;
 
 export interface OffboardingOwnedRecordItem {
   readonly storageContractId: string;
   readonly recordTypeId: string;
   readonly recordId: string;
+  /** The stored revision this preview saw, for the transfer's expected revision. */
   readonly concurrencyNumber: number;
-  readonly lifecycleState: "active" | "soft_deleted" | "removal_pending";
-  readonly installationState: "active" | "detached";
-  readonly classification: "transferable" | "refused_incompatible";
-  readonly storageScope: "application_contained" | "organization_shared";
+  readonly lifecycleState: OffboardingLifecycleState;
+  readonly installationState: OffboardingInstallationState;
+  readonly classification: OffboardingClassification;
+  readonly storageScope: OffboardingStorageScope;
+  /**
+   * Every application this record is reachable from. An application-contained
+   * record affects the application containing it; an organisation-shared record
+   * affects every application its storage contract is installed into, which is
+   * the impact the administrator accepts by including it.
+   */
   readonly affectedApplications: readonly string[];
 }
 
-export interface OffboardingRecordTypeCount {
+export interface OffboardingRecordTypePageCount {
   readonly recordTypeId: string;
-  readonly storageScope: "application_contained" | "organization_shared";
+  readonly storageScope: OffboardingStorageScope;
   readonly transferable: number;
   readonly refusedIncompatible: number;
   readonly total: number;
-  readonly affectedApplications?: readonly string[];
+  readonly affectedApplications: readonly string[];
 }
 
-export interface OffboardingApplicationCount {
+export interface OffboardingApplicationPageCount {
   readonly applicationRootId: string;
   readonly transferable: number;
   readonly refusedIncompatible: number;
   readonly total: number;
 }
 
-export interface OffboardingSharedImpact {
+export interface OffboardingSharedPageImpact {
   readonly affectedApplications: readonly string[];
-  readonly sharedRecordCount: number;
+  readonly sharedRecords: number;
   readonly transferable: number;
   readonly refusedIncompatible: number;
   readonly recordTypeIds: readonly string[];
 }
 
+/**
+ * Aggregates of the records disclosed on this page, and of nothing else. A
+ * section-wide total would have to count records the caller may not read, so
+ * the inventory never presents one. A shared record contributes to
+ * `perApplication` once per affected application, so those counts describe
+ * organisation-wide reach rather than a number of records.
+ */
+export interface OffboardingInventoryPage {
+  readonly ownedRecords: number;
+  readonly transferable: number;
+  readonly refusedIncompatible: number;
+  readonly perRecordType: readonly OffboardingRecordTypePageCount[];
+  readonly perApplication: readonly OffboardingApplicationPageCount[];
+  readonly sharedImpact: OffboardingSharedPageImpact;
+}
+
 export interface OffboardingInventoryCursor {
-  readonly sectionKind: "application" | "organization_shared";
+  readonly sectionKind: OffboardingSectionKind;
   readonly storageContractId?: string;
   readonly recordId?: string;
 }
@@ -327,6 +365,7 @@ export interface OffboardingInventoryQuery {
   readonly sourceOrganizationAccountId: string;
   readonly targetKind: OffboardingInventoryTargetKind;
   readonly targetId: string;
+  /** Defaults to `all`, which walks the application section then the shared one. */
   readonly sectionKind?: OffboardingInventorySectionKind;
   readonly after?: OffboardingInventoryCursor | string;
   readonly limit?: number;
@@ -336,14 +375,14 @@ export interface OffboardingInventoryResult {
   readonly outcome: "listed";
   readonly accessVersion: number;
   readonly items: readonly OffboardingOwnedRecordItem[];
-  readonly perRecordType: readonly OffboardingRecordTypeCount[];
-  readonly perApplication: readonly OffboardingApplicationCount[];
-  readonly sharedImpact: OffboardingSharedImpact;
-  readonly summary: {
-    readonly totalOwned: number;
-    readonly transferable: number;
-    readonly refusedIncompatible: number;
-  };
+  readonly page: OffboardingInventoryPage;
+  /**
+   * True when the requested scope had no further disclosed page. It does not
+   * assert that the account owns nothing else: records hidden from this
+   * administrator stay concealed by design, and only the protected deletion
+   * fence decides that no owned record remains.
+   */
+  readonly complete: boolean;
   readonly next?: OffboardingInventoryCursor & { readonly token: string };
 }
 
@@ -351,394 +390,304 @@ interface OffboardingInventorySqlRow extends DatabaseRow {
   readonly result: unknown;
 }
 
+interface OffboardingInventorySelector {
+  readonly sourceOrganizationAccountId: string;
+  readonly targetKind: OffboardingInventoryTargetKind;
+  readonly targetId: string;
+  readonly sectionKind: OffboardingInventorySectionKind;
+  readonly after: OffboardingInventoryCursor | undefined;
+  readonly limit: number;
+}
+
+interface OffboardingInventorySection {
+  readonly items: readonly OffboardingOwnedRecordItem[];
+  readonly next?: { readonly storageContractId: string; readonly recordId: string };
+  readonly accessVersion: number;
+}
+
 const isUuid = (value: unknown): value is string =>
   typeof value === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) &&
   value !== "00000000-0000-0000-0000-000000000000";
 
-const encodeCursor = (cursor: OffboardingInventoryCursor): string =>
-  Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+const isMember = <Member extends string>(
+  value: unknown,
+  allowed: readonly Member[],
+): value is Member =>
+  typeof value === "string" && (allowed as readonly string[]).includes(value);
 
-const decodeCursor = (
-  after: OffboardingInventoryCursor | string | undefined,
-): OffboardingInventoryCursor | undefined => {
-  if (after === undefined || after === null) return undefined;
-  if (typeof after === "object") {
-    if (
-      after.sectionKind !== "application" &&
-      after.sectionKind !== "organization_shared"
-    ) {
-      throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
-    }
-    if (after.storageContractId !== undefined && !isUuid(after.storageContractId)) {
-      throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
-    }
-    if (after.recordId !== undefined && !isUuid(after.recordId)) {
-      throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
-    }
-    if ((after.storageContractId === undefined) !== (after.recordId === undefined)) {
-      throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
-    }
-    return {
-      sectionKind: after.sectionKind,
-      storageContractId: after.storageContractId,
-      recordId: after.recordId,
-    };
-  }
-  if (typeof after === "string") {
-    const trimmed = after.trim();
-    if (trimmed.length === 0) return undefined;
-    try {
-      const jsonStr = Buffer.from(trimmed, "base64url").toString("utf8");
-      const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
-      return decodeCursor(parsed as unknown as OffboardingInventoryCursor);
-    } catch {
-      try {
-        const parsed = JSON.parse(trimmed) as Record<string, unknown>;
-        return decodeCursor(parsed as unknown as OffboardingInventoryCursor);
-      } catch {
-        throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
-      }
-    }
-  }
+const invalidCommand = (): never => {
   throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
 };
 
-const validateOffboardingInventoryQuery = (query: unknown): OffboardingInventoryQuery => {
-  if (typeof query !== "object" || query === null) {
-    throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
-  }
-  const q = query as Record<string, unknown>;
-  if (!isUuid(q.sourceOrganizationAccountId)) {
-    throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
-  }
-  if (q.targetKind !== "organization_account" && q.targetKind !== "group") {
-    throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
-  }
-  if (!isUuid(q.targetId)) {
-    throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
-  }
-  const sectionKind: OffboardingInventorySectionKind =
-    q.sectionKind === undefined || q.sectionKind === "all"
-      ? "all"
-      : q.sectionKind === "application"
-        ? "application"
-        : q.sectionKind === "organization_shared"
-          ? "organization_shared"
-          : (() => {
-              throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
-            })();
+// The inventory decides what an administrator may see and what a later transfer
+// will be allowed to change. A missing or unrecognised value is a defect in the
+// protected read, never a default, so every reader below refuses rather than
+// guessing an ownership, lifecycle, installation or revision fact.
+const invalidResult = (): never => {
+  throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_STORAGE_RESULT");
+};
 
-  let limit = 50;
-  if (q.limit !== undefined) {
-    if (typeof q.limit !== "number" || !Number.isInteger(q.limit) || q.limit < 1 || q.limit > 50) {
-      throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
+const commandUuid = (value: unknown): string => (isUuid(value) ? value : invalidCommand());
+
+const commandMember = <Member extends string>(
+  value: unknown,
+  allowed: readonly Member[],
+): Member => (isMember(value, allowed) ? value : invalidCommand());
+
+const resultUuid = (value: unknown): string => (isUuid(value) ? value : invalidResult());
+
+const resultMember = <Member extends string>(
+  value: unknown,
+  allowed: readonly Member[],
+): Member => (isMember(value, allowed) ? value : invalidResult());
+
+/** A `bigint` column as the driver may present it: number, bigint or digits. */
+const resultStoredInteger = (value: unknown): number => {
+  const candidate =
+    typeof value === "bigint"
+      ? Number(value)
+      : typeof value === "string" && /^[1-9][0-9]*$/.test(value)
+        ? Number(value)
+        : value;
+  return typeof candidate === "number" && Number.isSafeInteger(candidate) && candidate >= 1
+    ? candidate
+    : invalidResult();
+};
+
+const resultUuidArray = (value: unknown): readonly string[] =>
+  Array.isArray(value) ? value.map(resultUuid) : invalidResult();
+
+const encodeCursor = (cursor: OffboardingInventoryCursor): string =>
+  Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+
+const readCursorFields = (fields: Record<string, unknown>): OffboardingInventoryCursor => {
+  const sectionKind = commandMember(fields.sectionKind, offboardingSectionKinds);
+  // A position is both keys or neither: one alone cannot address a keyset page.
+  if ((fields.storageContractId === undefined) !== (fields.recordId === undefined)) {
+    invalidCommand();
+  }
+  return fields.storageContractId === undefined
+    ? { sectionKind }
+    : {
+        sectionKind,
+        storageContractId: commandUuid(fields.storageContractId),
+        recordId: commandUuid(fields.recordId),
+      };
+};
+
+const decodeCursor = (after: unknown): OffboardingInventoryCursor | undefined => {
+  if (after === undefined || after === null) return undefined;
+  if (typeof after === "string") {
+    const trimmed = after.trim();
+    if (trimmed.length === 0) return undefined;
+    // Exactly the token this service issues: one base64url JSON object, decoded
+    // once. A token addresses a position, so a decoded string is not a token.
+    let decoded: unknown;
+    try {
+      decoded = JSON.parse(Buffer.from(trimmed, "base64url").toString("utf8"));
+    } catch {
+      return invalidCommand();
     }
-    limit = q.limit;
+    if (typeof decoded !== "object" || decoded === null || Array.isArray(decoded)) {
+      return invalidCommand();
+    }
+    return readCursorFields(decoded as Record<string, unknown>);
+  }
+  if (typeof after !== "object" || Array.isArray(after)) return invalidCommand();
+  return readCursorFields(after as Record<string, unknown>);
+};
+
+const readInventorySelector = (query: unknown): OffboardingInventorySelector => {
+  if (typeof query !== "object" || query === null) return invalidCommand();
+  const fields = query as Record<string, unknown>;
+
+  // The protected read refuses a limit outside 1..50; keep the same bound here
+  // so an out-of-range request is an invalid command, not a failed read.
+  if (
+    fields.limit !== undefined &&
+    (typeof fields.limit !== "number" ||
+      !Number.isInteger(fields.limit) ||
+      fields.limit < 1 ||
+      fields.limit > offboardingInventoryPageLimit)
+  ) {
+    invalidCommand();
   }
 
-  const after = decodeCursor(q.after as OffboardingInventoryCursor | string | undefined);
+  const sectionKind =
+    fields.sectionKind === undefined
+      ? "all"
+      : commandMember(fields.sectionKind, offboardingRequestedSections);
+  const after = decodeCursor(fields.after);
+  // A cursor addresses one section's keyset. Applying an application position to
+  // the shared section, or the reverse, would silently skip or repeat records.
+  if (after !== undefined && sectionKind !== "all" && after.sectionKind !== sectionKind) {
+    invalidCommand();
+  }
 
   return {
-    sourceOrganizationAccountId: q.sourceOrganizationAccountId,
-    targetKind: q.targetKind,
-    targetId: q.targetId,
+    sourceOrganizationAccountId: commandUuid(fields.sourceOrganizationAccountId),
+    targetKind: commandMember(fields.targetKind, offboardingTargetKinds),
+    targetId: commandUuid(fields.targetId),
     sectionKind,
     after,
-    limit,
+    limit:
+      typeof fields.limit === "number" ? fields.limit : offboardingInventoryPageLimit,
   };
 };
 
 const querySqlSection = async (
   transaction: RequestDatabaseTransaction,
-  sourceOrganizationAccountId: string,
-  targetKind: "organization_account" | "group",
-  targetId: string,
-  sectionKind: "application" | "organization_shared",
+  selector: OffboardingInventorySelector,
+  sectionKind: OffboardingSectionKind,
   afterContractId: string | null,
   afterRecordId: string | null,
   limit: number,
-): Promise<{
-  readonly outcome: string;
-  readonly section: { readonly kind: string; readonly applicationRootId?: string };
-  readonly installationState?: string;
-  readonly items: readonly OffboardingOwnedRecordItem[];
-  readonly affectedApplications: readonly string[];
-  readonly next?: { readonly storageContractId: string; readonly recordId: string };
-  readonly accessVersion: number;
-}> => {
+): Promise<OffboardingInventorySection> => {
   const rows = await transaction.query<OffboardingInventorySqlRow>`
     select vortex_record.list_offboarding_owned_records(
-      ${sourceOrganizationAccountId}::uuid,
-      ${targetKind}::text,
-      ${targetId}::uuid,
+      ${selector.sourceOrganizationAccountId}::uuid,
+      ${selector.targetKind}::text,
+      ${selector.targetId}::uuid,
       ${sectionKind}::text,
       ${afterContractId}::uuid,
       ${afterRecordId}::uuid,
       ${limit}::integer
     ) as result
   `;
-  const row = requireOne(rows);
-  const raw = row.result;
-  if (typeof raw !== "object" || raw === null) {
-    throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_STORAGE_RESULT");
-  }
+  const raw = requireOne(rows).result;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) invalidResult();
   const data = raw as Record<string, unknown>;
-  if (data.outcome !== "listed") {
-    throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_STORAGE_RESULT");
-  }
-  const rawSection = (data.section ?? {}) as Record<string, unknown>;
-  const sectionKindReturned = String(rawSection.kind ?? sectionKind);
+  if (data.outcome !== "listed") invalidResult();
+
+  if (typeof data.section !== "object" || data.section === null) invalidResult();
+  const section = data.section as Record<string, unknown>;
+  // The read must answer the section that was asked for; anything else would
+  // attribute one section's records and continuation to the other.
+  if (section.kind !== sectionKind) invalidResult();
   const applicationRootId =
-    typeof rawSection.applicationRootId === "string" ? rawSection.applicationRootId : undefined;
-  const rawInstallationState =
-    data.installationState === "detached" ? "detached" : "active";
-  const accessVersion =
-    typeof data.accessVersion === "number"
-      ? data.accessVersion
-      : typeof data.accessVersion === "bigint" || typeof data.accessVersion === "string"
-        ? Number(data.accessVersion)
-        : 1;
+    sectionKind === "application" ? resultUuid(section.applicationRootId) : undefined;
+  const sectionInstallationState = resultMember(
+    data.installationState,
+    offboardingInstallationStates,
+  );
+  const accessVersion = resultStoredInteger(data.accessVersion);
 
-  const rawItems = Array.isArray(data.items) ? data.items : [];
-  const items: OffboardingOwnedRecordItem[] = rawItems.map((itemRaw) => {
-    const item = (typeof itemRaw === "object" && itemRaw !== null ? itemRaw : {}) as Record<
-      string,
-      unknown
-    >;
-    const storageScope: "application_contained" | "organization_shared" =
-      item.storageScope === "organization_shared" || sectionKindReturned === "organization_shared"
-        ? "organization_shared"
-        : "application_contained";
-    const affectedApps: string[] = Array.isArray(item.affectedApplications)
-      ? (item.affectedApplications as unknown[]).filter((a): a is string => typeof a === "string")
-      : storageScope === "application_contained" && applicationRootId
-        ? [applicationRootId]
-        : [];
-    const classification: "transferable" | "refused_incompatible" =
-      item.classification === "transferable" ? "transferable" : "refused_incompatible";
-    const lifecycleState: "active" | "soft_deleted" | "removal_pending" =
-      item.lifecycleState === "soft_deleted"
-        ? "soft_deleted"
-        : item.lifecycleState === "removal_pending"
-          ? "removal_pending"
-          : "active";
-    const installationState: "active" | "detached" =
-      item.installationState === "detached" ? "detached" : rawInstallationState;
-
+  if (!Array.isArray(data.items)) invalidResult();
+  const items = (data.items as readonly unknown[]).map((entry): OffboardingOwnedRecordItem => {
+    if (typeof entry !== "object" || entry === null) invalidResult();
+    const item = entry as Record<string, unknown>;
+    const storageScope = resultMember(
+      item.storageScope ?? "application_contained",
+      offboardingStorageScopes,
+    );
+    if ((storageScope === "organization_shared") !== (sectionKind === "organization_shared")) {
+      invalidResult();
+    }
     return {
-      storageContractId: String(item.storageContractId),
-      recordTypeId: String(item.recordTypeId),
-      recordId: String(item.recordId),
-      concurrencyNumber: Number(item.concurrencyNumber ?? 1),
-      lifecycleState,
-      installationState,
-      classification,
+      storageContractId: resultUuid(item.storageContractId),
+      recordTypeId: resultUuid(item.recordTypeId),
+      recordId: resultUuid(item.recordId),
+      concurrencyNumber: resultStoredInteger(item.concurrencyNumber),
+      lifecycleState: resultMember(item.lifecycleState, offboardingLifecycleStates),
+      installationState: resultMember(
+        item.installationState ?? sectionInstallationState,
+        offboardingInstallationStates,
+      ),
+      classification: resultMember(item.classification, offboardingClassifications),
       storageScope,
-      affectedApplications: affectedApps,
+      // An application-contained record affects the application containing it,
+      // which the section itself names.
+      affectedApplications:
+        applicationRootId === undefined
+          ? resultUuidArray(item.affectedApplications)
+          : [applicationRootId],
     };
   });
 
-  const rawNext =
-    typeof data.next === "object" && data.next !== null
-      ? (data.next as Record<string, unknown>)
-      : undefined;
-  const next =
-    rawNext && typeof rawNext.storageContractId === "string" && typeof rawNext.recordId === "string"
-      ? {
-          storageContractId: rawNext.storageContractId,
-          recordId: rawNext.recordId,
-        }
-      : undefined;
-
-  const rawAffectedApps = Array.isArray(data.affectedApplications)
-    ? (data.affectedApplications as unknown[]).filter((a): a is string => typeof a === "string")
-    : [];
-
+  // A malformed continuation refuses rather than disappearing: dropping it would
+  // present a truncated page as the end of the section.
+  if (data.next === undefined) return { items, accessVersion };
+  if (typeof data.next !== "object" || data.next === null) invalidResult();
+  const next = data.next as Record<string, unknown>;
   return {
-    outcome: "listed",
-    section: {
-      kind: sectionKindReturned,
-      ...(applicationRootId ? { applicationRootId } : {}),
-    },
-    installationState: rawInstallationState,
     items,
-    affectedApplications: rawAffectedApps,
-    ...(next ? { next } : {}),
+    next: {
+      storageContractId: resultUuid(next.storageContractId),
+      recordId: resultUuid(next.recordId),
+    },
     accessVersion,
   };
 };
 
-const executeListOffboardingOwnedRecords = async (
-  transaction: RequestDatabaseTransaction,
-  rawQuery: OffboardingInventoryQuery,
-): Promise<OffboardingInventoryResult> => {
-  const query = validateOffboardingInventoryQuery(rawQuery);
-  const { sourceOrganizationAccountId, targetKind, targetId, sectionKind, after, limit } = query;
+const summarizeInventoryPage = (
+  items: readonly OffboardingOwnedRecordItem[],
+): OffboardingInventoryPage => {
+  const perRecordType = new Map<
+    string,
+    {
+      readonly recordTypeId: string;
+      readonly storageScope: OffboardingStorageScope;
+      transferable: number;
+      refusedIncompatible: number;
+      readonly affectedApplications: Set<string>;
+    }
+  >();
+  const perApplication = new Map<
+    string,
+    { readonly applicationRootId: string; transferable: number; refusedIncompatible: number }
+  >();
+  const sharedApplications = new Set<string>();
+  const sharedRecordTypeIds = new Set<string>();
+  let transferable = 0;
+  let refusedIncompatible = 0;
+  let sharedRecords = 0;
+  let sharedTransferable = 0;
+  let sharedRefusedIncompatible = 0;
 
-  try {
-    let combinedItems: OffboardingOwnedRecordItem[] = [];
-    let nextCursor: OffboardingInventoryCursor | undefined;
-    let accessVersion = 1;
+  for (const item of items) {
+    const isTransferable = item.classification === "transferable";
+    if (isTransferable) transferable += 1;
+    else refusedIncompatible += 1;
 
-    if (sectionKind === "application") {
-      const result = await querySqlSection(
-        transaction,
-        sourceOrganizationAccountId,
-        targetKind,
-        targetId,
-        "application",
-        after?.storageContractId ?? null,
-        after?.recordId ?? null,
-        limit,
-      );
-      accessVersion = result.accessVersion;
-      combinedItems = [...result.items];
-      if (result.next) {
-        nextCursor = {
-          sectionKind: "application",
-          storageContractId: result.next.storageContractId,
-          recordId: result.next.recordId,
-        };
-      }
-    } else if (sectionKind === "organization_shared") {
-      const result = await querySqlSection(
-        transaction,
-        sourceOrganizationAccountId,
-        targetKind,
-        targetId,
-        "organization_shared",
-        after?.storageContractId ?? null,
-        after?.recordId ?? null,
-        limit,
-      );
-      accessVersion = result.accessVersion;
-      combinedItems = [...result.items];
-      if (result.next) {
-        nextCursor = {
-          sectionKind: "organization_shared",
-          storageContractId: result.next.storageContractId,
-          recordId: result.next.recordId,
-        };
-      }
-    } else {
-      // sectionKind === "all"
-      if (after?.sectionKind === "organization_shared") {
-        const result = await querySqlSection(
-          transaction,
-          sourceOrganizationAccountId,
-          targetKind,
-          targetId,
-          "organization_shared",
-          after.storageContractId ?? null,
-          after.recordId ?? null,
-          limit,
-        );
-        accessVersion = result.accessVersion;
-        combinedItems = [...result.items];
-        if (result.next) {
-          nextCursor = {
-            sectionKind: "organization_shared",
-            storageContractId: result.next.storageContractId,
-            recordId: result.next.recordId,
-          };
-        }
-      } else {
-        // after is application or start
-        const appResult = await querySqlSection(
-          transaction,
-          sourceOrganizationAccountId,
-          targetKind,
-          targetId,
-          "application",
-          after?.storageContractId ?? null,
-          after?.recordId ?? null,
-          limit,
-        );
-        accessVersion = appResult.accessVersion;
-        combinedItems = [...appResult.items];
+    const recordType = perRecordType.get(item.recordTypeId) ?? {
+      recordTypeId: item.recordTypeId,
+      storageScope: item.storageScope,
+      transferable: 0,
+      refusedIncompatible: 0,
+      affectedApplications: new Set<string>(),
+    };
+    if (isTransferable) recordType.transferable += 1;
+    else recordType.refusedIncompatible += 1;
+    for (const application of item.affectedApplications) {
+      recordType.affectedApplications.add(application);
+    }
+    perRecordType.set(item.recordTypeId, recordType);
 
-        if (appResult.next) {
-          nextCursor = {
-            sectionKind: "application",
-            storageContractId: appResult.next.storageContractId,
-            recordId: appResult.next.recordId,
-          };
-        } else if (appResult.items.length >= limit) {
-          nextCursor = {
-            sectionKind: "organization_shared",
-          };
-        } else {
-          // Application scope exhausted in this page; drain shared scope with remainder
-          const remainingLimit = limit - appResult.items.length;
-          const sharedResult = await querySqlSection(
-            transaction,
-            sourceOrganizationAccountId,
-            targetKind,
-            targetId,
-            "organization_shared",
-            null,
-            null,
-            remainingLimit,
-          );
-          accessVersion = sharedResult.accessVersion;
-          combinedItems.push(...sharedResult.items);
-          if (sharedResult.next) {
-            nextCursor = {
-              sectionKind: "organization_shared",
-              storageContractId: sharedResult.next.storageContractId,
-              recordId: sharedResult.next.recordId,
-            };
-          }
-        }
-      }
+    for (const application of item.affectedApplications) {
+      const reach = perApplication.get(application) ?? {
+        applicationRootId: application,
+        transferable: 0,
+        refusedIncompatible: 0,
+      };
+      if (isTransferable) reach.transferable += 1;
+      else reach.refusedIncompatible += 1;
+      perApplication.set(application, reach);
     }
 
-    // Deduplicate items to guarantee each record is returned once
-    const uniqueItems: OffboardingOwnedRecordItem[] = [];
-    const seen = new Set<string>();
-    for (const item of combinedItems) {
-      if (!seen.has(item.recordId)) {
-        seen.add(item.recordId);
-        uniqueItems.push(item);
-      }
-    }
+    if (item.storageScope !== "organization_shared") continue;
+    sharedRecords += 1;
+    if (isTransferable) sharedTransferable += 1;
+    else sharedRefusedIncompatible += 1;
+    sharedRecordTypeIds.add(item.recordTypeId);
+    for (const application of item.affectedApplications) sharedApplications.add(application);
+  }
 
-    // Compute perRecordType
-    const recordTypeMap = new Map<
-      string,
-      {
-        recordTypeId: string;
-        storageScope: "application_contained" | "organization_shared";
-        transferable: number;
-        refusedIncompatible: number;
-        affectedApplications: Set<string>;
-      }
-    >();
-
-    for (const item of uniqueItems) {
-      let entry = recordTypeMap.get(item.recordTypeId);
-      if (!entry) {
-        entry = {
-          recordTypeId: item.recordTypeId,
-          storageScope: item.storageScope,
-          transferable: 0,
-          refusedIncompatible: 0,
-          affectedApplications: new Set<string>(),
-        };
-        recordTypeMap.set(item.recordTypeId, entry);
-      }
-      if (item.classification === "transferable") {
-        entry.transferable++;
-      } else {
-        entry.refusedIncompatible++;
-      }
-      for (const appId of item.affectedApplications) {
-        entry.affectedApplications.add(appId);
-      }
-    }
-
-    const perRecordType: OffboardingRecordTypeCount[] = Array.from(recordTypeMap.values())
+  return {
+    ownedRecords: items.length,
+    transferable,
+    refusedIncompatible,
+    perRecordType: Array.from(perRecordType.values())
       .map((entry) => ({
         recordTypeId: entry.recordTypeId,
         storageScope: entry.storageScope,
@@ -747,92 +696,114 @@ const executeListOffboardingOwnedRecords = async (
         total: entry.transferable + entry.refusedIncompatible,
         affectedApplications: Array.from(entry.affectedApplications).sort(),
       }))
-      .sort((a, b) => a.recordTypeId.localeCompare(b.recordTypeId));
-
-    // Compute perApplication
-    const applicationMap = new Map<
-      string,
-      {
-        applicationRootId: string;
-        transferable: number;
-        refusedIncompatible: number;
-      }
-    >();
-
-    for (const item of uniqueItems) {
-      const isTransferable = item.classification === "transferable";
-      for (const appId of item.affectedApplications) {
-        let appEntry = applicationMap.get(appId);
-        if (!appEntry) {
-          appEntry = { applicationRootId: appId, transferable: 0, refusedIncompatible: 0 };
-          applicationMap.set(appId, appEntry);
-        }
-        if (isTransferable) {
-          appEntry.transferable++;
-        } else {
-          appEntry.refusedIncompatible++;
-        }
-      }
-    }
-
-    const perApplication: OffboardingApplicationCount[] = Array.from(applicationMap.values())
+      .sort((left, right) => left.recordTypeId.localeCompare(right.recordTypeId)),
+    perApplication: Array.from(perApplication.values())
       .map((entry) => ({
         applicationRootId: entry.applicationRootId,
         transferable: entry.transferable,
         refusedIncompatible: entry.refusedIncompatible,
         total: entry.transferable + entry.refusedIncompatible,
       }))
-      .sort((a, b) => a.applicationRootId.localeCompare(b.applicationRootId));
+      .sort((left, right) => left.applicationRootId.localeCompare(right.applicationRootId)),
+    sharedImpact: {
+      affectedApplications: Array.from(sharedApplications).sort(),
+      sharedRecords,
+      transferable: sharedTransferable,
+      refusedIncompatible: sharedRefusedIncompatible,
+      recordTypeIds: Array.from(sharedRecordTypeIds).sort(),
+    },
+  };
+};
 
-    // Compute sharedImpact
-    const sharedItems = uniqueItems.filter((i) => i.storageScope === "organization_shared");
-    const sharedAffectedApps = new Set<string>();
-    const sharedRecordTypes = new Set<string>();
-    let sharedTransferable = 0;
-    let sharedRefusedIncompatible = 0;
+const cursorFor = (
+  sectionKind: OffboardingSectionKind,
+  next: OffboardingInventorySection["next"],
+): OffboardingInventoryCursor | undefined =>
+  next === undefined
+    ? undefined
+    : { sectionKind, storageContractId: next.storageContractId, recordId: next.recordId };
 
-    for (const item of sharedItems) {
-      if (item.classification === "transferable") {
-        sharedTransferable++;
+const executeListOffboardingOwnedRecords = async (
+  transaction: RequestDatabaseTransaction,
+  query: unknown,
+): Promise<OffboardingInventoryResult> => {
+  const selector = readInventorySelector(query);
+  const { sectionKind, after, limit } = selector;
+
+  try {
+    const items: OffboardingOwnedRecordItem[] = [];
+    let cursor: OffboardingInventoryCursor | undefined;
+    let accessVersion: number;
+
+    if (sectionKind !== "all" || after?.sectionKind === "organization_shared") {
+      // One section, addressed by its own keyset.
+      const only: OffboardingSectionKind =
+        sectionKind === "all" ? "organization_shared" : sectionKind;
+      const section = await querySqlSection(
+        transaction,
+        selector,
+        only,
+        after?.storageContractId ?? null,
+        after?.recordId ?? null,
+        limit,
+      );
+      accessVersion = section.accessVersion;
+      items.push(...section.items);
+      cursor = cursorFor(only, section.next);
+    } else {
+      // `all` walks the application section first and the shared section after
+      // it, so every disclosed record is reached exactly once across the pages.
+      const application = await querySqlSection(
+        transaction,
+        selector,
+        "application",
+        after?.storageContractId ?? null,
+        after?.recordId ?? null,
+        limit,
+      );
+      accessVersion = application.accessVersion;
+      items.push(...application.items);
+
+      if (application.next !== undefined) {
+        cursor = cursorFor("application", application.next);
+      } else if (application.items.length >= limit) {
+        // The page is full and the application section is finished, so the
+        // shared section starts at its own beginning on the next page.
+        cursor = { sectionKind: "organization_shared" };
       } else {
-        sharedRefusedIncompatible++;
-      }
-      sharedRecordTypes.add(item.recordTypeId);
-      for (const appId of item.affectedApplications) {
-        sharedAffectedApps.add(appId);
+        const shared = await querySqlSection(
+          transaction,
+          selector,
+          "organization_shared",
+          null,
+          null,
+          limit - application.items.length,
+        );
+        // Both reads run in one transaction under one admitted scope, so a
+        // divergent access version means the response cannot be attributed to a
+        // single authorisation state.
+        if (shared.accessVersion !== accessVersion) invalidResult();
+        items.push(...shared.items);
+        cursor = cursorFor("organization_shared", shared.next);
       }
     }
 
-    const sharedImpact: OffboardingSharedImpact = {
-      affectedApplications: Array.from(sharedAffectedApps).sort(),
-      sharedRecordCount: sharedItems.length,
-      transferable: sharedTransferable,
-      refusedIncompatible: sharedRefusedIncompatible,
-      recordTypeIds: Array.from(sharedRecordTypes).sort(),
-    };
-
-    const summary = {
-      totalOwned: uniqueItems.length,
-      transferable: uniqueItems.filter((i) => i.classification === "transferable").length,
-      refusedIncompatible: uniqueItems.filter((i) => i.classification === "refused_incompatible").length,
-    };
-
-    const next = nextCursor
-      ? {
-          ...nextCursor,
-          token: encodeCursor(nextCursor),
-        }
-      : undefined;
+    // The two sections address disjoint storage, so a repeat is a defect in the
+    // protected read rather than something to conceal by discarding a row.
+    const seen = new Set<string>();
+    for (const item of items) {
+      const identity = `${item.storageContractId}:${item.recordId}`;
+      if (seen.has(identity)) invalidResult();
+      seen.add(identity);
+    }
 
     return {
       outcome: "listed",
       accessVersion,
-      items: uniqueItems,
-      perRecordType,
-      perApplication,
-      sharedImpact,
-      summary,
-      ...(next ? { next } : {}),
+      items,
+      page: summarizeInventoryPage(items),
+      complete: cursor === undefined,
+      ...(cursor === undefined ? {} : { next: { ...cursor, token: encodeCursor(cursor) } }),
     };
   } catch (error) {
     if (error instanceof OrganizationAccountError) throw error;
@@ -847,5 +818,3 @@ export const readIdentityProjection = defaultStore.readIdentityProjection;
 export const createInvitationAfterAuthorization = defaultStore.createInvitationAfterAuthorization;
 export const revokeInvitationAfterAuthorization = defaultStore.revokeInvitationAfterAuthorization;
 export const listOffboardingOwnedRecords = defaultStore.listOffboardingOwnedRecords;
-export const listOffboardingInventory = defaultStore.listOffboardingOwnedRecords;
-
