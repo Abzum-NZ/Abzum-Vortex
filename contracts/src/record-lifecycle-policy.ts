@@ -1452,6 +1452,14 @@ export interface EvaluateRecordLifecycleHandoffInput {
   policy: RecordTypeLifecyclePolicy;
   records: readonly LifecycleCandidateRecord[];
   evaluatedAt?: string | Date;
+  /**
+   * Total retained records in the exact policy scope. Bounded callers that
+   * evaluate one deterministic page must supply this together with
+   * `recordOffset`; whole-scope callers may omit both.
+   */
+  totalRetainedCount?: number;
+  /** Zero-based global position of the first supplied record. */
+  recordOffset?: number;
 }
 
 const compareCanonicalUuids = (a: string, b: string): number => {
@@ -1474,6 +1482,12 @@ const compareCanonicalUuids = (a: string, b: string): number => {
 export const selectDueRecordsForLifecycleHandoff = (
   input: EvaluateRecordLifecycleHandoffInput,
 ): RecordLifecycleHandoff => {
+  if (
+    (input.totalRetainedCount === undefined) !==
+    (input.recordOffset === undefined)
+  ) {
+    throw new Error("Bounded lifecycle count and offset must be supplied together");
+  }
   const policy = recordTypeLifecyclePolicySchema.parse(input.policy);
   const evaluationDate =
     input.evaluatedAt instanceof Date
@@ -1512,6 +1526,18 @@ export const selectDueRecordsForLifecycleHandoff = (
     return compareCanonicalUuids(a.recordId, b.recordId);
   });
 
+  const totalRetainedCount = input.totalRetainedCount ?? sortedRecords.length;
+  const recordOffset = input.recordOffset ?? 0;
+  if (
+    !Number.isSafeInteger(totalRetainedCount) ||
+    totalRetainedCount < 0 ||
+    !Number.isSafeInteger(recordOffset) ||
+    recordOffset < 0 ||
+    recordOffset + sortedRecords.length > totalRetainedCount
+  ) {
+    throw new Error("Invalid bounded lifecycle candidate position");
+  }
+
   const ageDueSet = new Set<string>();
   const countDueSet = new Set<string>();
 
@@ -1529,12 +1555,12 @@ export const selectDueRecordsForLifecycleHandoff = (
 
   // 2. Excess count selection (oldest first, canonical tie-breaker)
   if (policy.maxCount !== null && !policy.allowUnlimitedCount) {
-    const totalCount = sortedRecords.length;
-    if (totalCount > policy.maxCount) {
-      const excessCountNeeded = totalCount - policy.maxCount;
-      const excessCandidates = sortedRecords.slice(0, excessCountNeeded);
-      for (const rec of excessCandidates) {
-        countDueSet.add(rec.recordId);
+    if (totalRetainedCount > policy.maxCount) {
+      const excessCountNeeded = totalRetainedCount - policy.maxCount;
+      for (let index = 0; index < sortedRecords.length; index++) {
+        if (recordOffset + index < excessCountNeeded) {
+          countDueSet.add(sortedRecords[index]!.recordId);
+        }
       }
     }
   }
@@ -1611,7 +1637,7 @@ export const selectDueRecordsForLifecycleHandoff = (
   const hasDue = dueRecords.length > 0;
   const excessCount =
     policy.maxCount !== null && !policy.allowUnlimitedCount
-      ? Math.max(0, sortedRecords.length - policy.maxCount)
+      ? countDueSet.size
       : 0;
   const expiredAgeCount = ageDueSet.size;
 
@@ -1666,7 +1692,7 @@ export const selectDueRecordsForLifecycleHandoff = (
         }
       : {}),
     evaluatedAt: evaluatedAtIso,
-    totalRetainedCount: sortedRecords.length,
+    totalRetainedCount,
     dueCount: dueRecords.length + blockedRecords.length,
     dueRecords,
     blockedRecords,
