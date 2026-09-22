@@ -2,7 +2,6 @@ import {
   eventOccurrenceEnvelopeV2Schema,
   type EventOccurrenceEnvelopeV2,
   type InstalledEventDescriptor,
-  type ModuleFieldV2,
 } from "@vortex/contracts";
 import {
   resolveInstalledEventDefinitionContext,
@@ -66,11 +65,13 @@ type ResolvedRecord =
   DefinitionContext["recordTypes"] extends ReadonlyMap<string, infer Record> ? Record : never;
 type ResolvedField = ResolvedRecord["recordType"]["fields"][number];
 
+/**
+ * Installed Module record types carry the sole current Module field model, so a
+ * carried or changed value is checked by exactly the same canonical semantics
+ * the Record service applies to a stored value.
+ */
 const fieldValueMatches = (field: ResolvedField, value: unknown): boolean =>
-  persistedRecordFieldValueMatches({
-    field: field as ModuleFieldV2,
-    value,
-  });
+  persistedRecordFieldValueMatches({ field, value });
 
 const expectedDefinitionRelease = (
   context: DefinitionContext,

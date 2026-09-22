@@ -31,7 +31,12 @@ export type NamedActionCreateTarget = Readonly<{
 }>;
 
 export type PreparedNamedAction = Readonly<{
-  validationContractVersion: "2.0.0" | "3.0.0";
+  /**
+   * The sole current Module validation contract the subject Record's owning
+   * Module release was published under. It is checked, never branched on: every
+   * value here follows the one exact Module field and action model.
+   */
+  validationContractVersion: "3.0.0";
   action: NamedActionDefinition;
   recordType: ReturnType<typeof recordTypeDefinitionV2Schema.parse>;
   recordId: string;

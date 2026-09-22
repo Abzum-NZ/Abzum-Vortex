@@ -7,6 +7,7 @@ import {
   eventOccurrenceIdSchema,
   executeNamedActionCommandV2Schema,
   executeNamedActionResultV2Schema,
+  moduleValidationContractVersionV3,
   recordTypeDefinitionV2Schema,
   saveRecordCommandV2Schema,
   type ExecuteNamedActionCommandV2,
@@ -146,8 +147,7 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     !actionV2.success ||
     !recordType.success ||
     createTargets === undefined ||
-    typeof value.validationContractVersion !== "string" ||
-    !["2.0.0", "3.0.0"].includes(value.validationContractVersion) ||
+    value.validationContractVersion !== moduleValidationContractVersionV3 ||
     typeof value.recordId !== "string" ||
     typeof value.existingValues !== "object" ||
     value.existingValues === null ||
@@ -161,7 +161,7 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     return { outcome: "refused", ...(correlationId ? { correlationId } : {}) };
   return {
     outcome: value.outcome,
-    validationContractVersion: value.validationContractVersion as "2.0.0" | "3.0.0",
+    validationContractVersion: moduleValidationContractVersionV3,
     action: actionV2.data,
     recordType: recordType.data,
     recordId: value.recordId,
