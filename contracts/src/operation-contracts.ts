@@ -1100,21 +1100,95 @@ export const entitlementDecisionSchema = z.discriminatedUnion("outcome", [
     })
     .strict(),
 ]);
+/** Route that produced a metering event; federation is the only cross-cluster route. */
+export const meteringEventSourceSchema = z.enum([
+  "web",
+  "workflow",
+  "interface",
+  "connection",
+  "federation",
+  "system",
+]);
+/**
+ * The single party an accepted quantity is allocated to. Local consumption is
+ * owned by the local organisation; federated consumption is owned by exactly one
+ * of the source or recipient organisation, so a linked pair is never counted twice.
+ */
+export const meteringAllocationOwnerSchema = z.enum([
+  "local",
+  "federated_source",
+  "federated_recipient",
+]);
+/** One bounded, non-secret dimension value available for later permitted grouping. */
+export const meteringDimensionValueSchema = z.union([
+  z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .regex(/^[\x20-\x7E]+$/, "Use bounded printable dimension text"),
+  z.boolean(),
+  z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+]);
+export const meteringEventDimensionsSchema = z
+  .record(builderKeySchema, meteringDimensionValueSchema)
+  .refine((value) => Object.keys(value).length <= 16, {
+    message: "A metering event accepts at most 16 bounded dimensions",
+  });
+const meteringAllocationMatchesRoute = (value: {
+  readonly source: z.infer<typeof meteringEventSourceSchema>;
+  readonly allocationOwner: z.infer<typeof meteringAllocationOwnerSchema>;
+}): boolean =>
+  value.source === "federation"
+    ? value.allocationOwner !== "local"
+    : value.allocationOwner === "local";
 export const meteringEventSchema = z
   .object({
     meteringEventId: meteringEventIdSchema,
+    operationId: platformIdSchema,
     tenantId: tenantIdSchema,
     organizationId: organizationIdSchema.optional(),
+    allocationOwner: meteringAllocationOwnerSchema,
     capabilityKey: namespacedKeySchema,
-    quantity: z.number().positive().finite(),
+    quantity: z.number().positive().finite().max(Number.MAX_SAFE_INTEGER),
     unit: builderKeySchema,
     occurredAt: timestampSchema,
+    source: meteringEventSourceSchema,
     sourceEventId: eventIdSchema.optional(),
-    duplicateProtectionKey: z.string().min(16).max(200),
+    dimensions: meteringEventDimensionsSchema,
+    duplicateProtectionKey: duplicateProtectionKeySchema,
     correlationId: correlationIdSchema,
+    correctsMeteringEventId: meteringEventIdSchema.optional(),
     acceptedAt: timestampSchema,
   })
-  .strict();
+  .strict()
+  .refine(meteringAllocationMatchesRoute, {
+    path: ["allocationOwner"],
+    message: "Federated consumption has one federated allocation owner and local consumption one local owner",
+  });
+/** The final committed operation supplies immutable metering input exactly once. */
+export const recordMeteringEventCommandSchema = z
+  .object({
+    operationId: platformIdSchema,
+    tenantId: tenantIdSchema,
+    organizationId: organizationIdSchema.optional(),
+    allocationOwner: meteringAllocationOwnerSchema,
+    capabilityKey: namespacedKeySchema,
+    quantity: z.number().positive().finite().max(Number.MAX_SAFE_INTEGER),
+    unit: builderKeySchema,
+    occurredAt: timestampSchema,
+    source: meteringEventSourceSchema,
+    sourceEventId: eventIdSchema.optional(),
+    dimensions: meteringEventDimensionsSchema,
+    duplicateProtectionKey: duplicateProtectionKeySchema,
+    correlationId: correlationIdSchema,
+    correctsMeteringEventId: meteringEventIdSchema.optional(),
+  })
+  .strict()
+  .refine(meteringAllocationMatchesRoute, {
+    path: ["allocationOwner"],
+    message: "Federated consumption has one federated allocation owner and local consumption one local owner",
+  });
 export const safeOperationErrorCatalogue = Object.freeze({
   invalid_request: "errors.invalid_request",
   not_found: "errors.not_found",
@@ -1183,5 +1257,9 @@ export type ProtectedRemovalCommand = z.infer<typeof protectedRemovalCommandSche
 export type EntitlementCheckRequest = z.infer<typeof entitlementCheckRequestSchema>;
 export type EntitlementDecision = z.infer<typeof entitlementDecisionSchema>;
 export type MeteringEvent = z.infer<typeof meteringEventSchema>;
+export type MeteringEventSource = z.infer<typeof meteringEventSourceSchema>;
+export type MeteringAllocationOwner = z.infer<typeof meteringAllocationOwnerSchema>;
+export type MeteringEventDimensions = z.infer<typeof meteringEventDimensionsSchema>;
+export type RecordMeteringEventCommand = z.infer<typeof recordMeteringEventCommandSchema>;
 export type SafeErrorResponse = z.infer<typeof safeErrorResponseSchema>;
 export type PerformanceMeasurement = z.infer<typeof performanceMeasurementSchema>;

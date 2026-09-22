@@ -163,6 +163,13 @@ export {
   type ReleaseCapabilityReservationCommand,
   type ReserveCapabilityCommand,
 } from "./capability-reservation";
+export {
+  meteringEventRecordResultSchema,
+  recordMeteringEvent,
+  type MeteringEvent,
+  type MeteringEventRecordResult,
+  type RecordMeteringEventCommand,
+} from "./metering-events";
 
 export const AccessService = Object.freeze({
   key: "access",
