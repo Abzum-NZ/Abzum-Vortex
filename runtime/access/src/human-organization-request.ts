@@ -2,7 +2,9 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  clampTelemetryDurationMs,
   correlationIdSchema,
+  countersForOutcome,
   identityAuthorityIdSchema,
   identitySessionSchema,
   organizationSelectionCandidateSchema,
@@ -12,7 +14,9 @@ import {
   type IdentitySession,
   type OrganizationSelectionCandidate,
   type SelectedOrganizationScope,
+  type ServiceTelemetryPort,
   type SessionContext,
+  type TelemetryOutcome,
 } from "@vortex/contracts";
 import {
   withResolvedRequestTransaction,
@@ -42,6 +46,7 @@ export type HumanOrganizationRequestDependencies = Readonly<{
   resolvedRequestTransaction?: ResolvedRequestTransactionRunner;
   clock?: () => Date;
   correlationId?: () => string;
+  telemetry?: ServiceTelemetryPort;
 }>;
 
 type HumanOrganizationRequestMode = "read" | "change";
@@ -89,6 +94,25 @@ export const createHumanOrganizationRequestService = (
   const runTransaction = dependencies.resolvedRequestTransaction ?? withResolvedRequestTransaction;
   const clock = dependencies.clock ?? (() => new Date());
   const newCorrelationId = dependencies.correlationId ?? randomUUID;
+  const appendTelemetry = (
+    correlationId: string,
+    outcome: TelemetryOutcome,
+    startedAtMs: number,
+  ): void => {
+    if (dependencies.telemetry === undefined) return;
+    try {
+      dependencies.telemetry.appendTelemetry({
+        correlationId: correlationIdSchema.parse(correlationId),
+        service: "access",
+        operation: "human_organization_request",
+        outcome,
+        durationMs: clampTelemetryDurationMs(startedAtMs, clock().valueOf()),
+        counters: countersForOutcome(outcome),
+      });
+    } catch {
+      // Telemetry must not change the protected request's safe outcome.
+    }
+  };
 
   const runWithMode = async <Result>(
     mode: HumanOrganizationRequestMode,
@@ -107,16 +131,20 @@ export const createHumanOrganizationRequestService = (
 
     let issuedAt: string;
     let correlationId: string;
+    let startedAtMs: number;
     try {
       const now = clock();
       if (!Number.isFinite(now.valueOf())) throw new Error("INVALID_CLOCK");
+      startedAtMs = now.valueOf();
       issuedAt = now.toISOString();
       correlationId = correlationIdSchema.parse(newCorrelationId());
     } catch {
       return { kind: "temporarily_unavailable" };
     }
-    if (Date.parse(verifiedSession.data.accessTokenExpiresAt) <= Date.parse(issuedAt))
+    if (Date.parse(verifiedSession.data.accessTokenExpiresAt) <= Date.parse(issuedAt)) {
+      appendTelemetry(correlationId, "refused", startedAtMs);
       return { kind: "unavailable" };
+    }
     const hasAuthenticationEvidence =
       verifiedSession.data.primaryAuthenticatedAt !== undefined ||
       verifiedSession.data.multiFactorAuthenticatedAt !== undefined;
@@ -125,8 +153,10 @@ export const createHumanOrganizationRequestService = (
         Date.parse(verifiedSession.data.primaryAuthenticatedAt) > Date.parse(issuedAt)) ||
       (verifiedSession.data.multiFactorAuthenticatedAt !== undefined &&
         Date.parse(verifiedSession.data.multiFactorAuthenticatedAt) > Date.parse(issuedAt))
-    )
+    ) {
+      appendTelemetry(correlationId, "refused", startedAtMs);
       return { kind: "unavailable" };
+    }
 
     try {
       const value = await runTransaction(
@@ -212,11 +242,12 @@ export const createHumanOrganizationRequestService = (
         },
         (transaction, scope) => operation(transaction, scope, issuedAt),
       );
+      appendTelemetry(correlationId, "success", startedAtMs);
       return { kind: "available", value };
     } catch (error) {
-      return databaseCode(error) === "42501"
-        ? { kind: "unavailable" }
-        : { kind: "temporarily_unavailable" };
+      const refused = databaseCode(error) === "42501";
+      appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAtMs);
+      return refused ? { kind: "unavailable" } : { kind: "temporarily_unavailable" };
     }
   };
 
