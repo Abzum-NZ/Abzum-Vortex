@@ -1,5 +1,4 @@
 import {
-  type actionDefinitionSchema,
   type actionDefinitionV2Schema,
   currencyCodeV2Schema,
   dateValueV2Schema,
@@ -17,11 +16,9 @@ import {
   type ConditionNode,
   type JsonValue,
 } from "@vortex/contracts";
-import { evaluateTypedCondition, evaluateTypedConditionV2 } from "@vortex/rule";
+import { evaluateTypedConditionV2 } from "@vortex/rule";
 
-type NamedActionDefinition =
-  | ReturnType<typeof actionDefinitionSchema.parse>
-  | ReturnType<typeof actionDefinitionV2Schema.parse>;
+type NamedActionDefinition = ReturnType<typeof actionDefinitionV2Schema.parse>;
 
 /**
  * One `create_record` target resolved by the database from the published
@@ -34,7 +31,7 @@ export type NamedActionCreateTarget = Readonly<{
 }>;
 
 export type PreparedNamedAction = Readonly<{
-  validationContractVersion: "1.0.0" | "2.0.0" | "3.0.0";
+  validationContractVersion: "2.0.0" | "3.0.0";
   action: NamedActionDefinition;
   recordType: ReturnType<typeof recordTypeDefinitionV2Schema.parse>;
   recordId: string;
@@ -77,7 +74,6 @@ const exactWithin = (
 const inputValue = (
   input: NamedActionDefinition["inputs"][number],
   candidate: unknown,
-  exactValues: boolean,
 ): JsonValue | undefined => {
   if (input.type === "text") {
     if (typeof candidate !== "string") return undefined;
@@ -98,13 +94,6 @@ const inputValue = (
     return candidate;
   }
   if (input.type === "formatted_text") {
-    if (!exactValues) {
-      if (typeof candidate !== "string") return undefined;
-      return input.validation?.maximumLength === undefined ||
-        candidate.length <= input.validation.maximumLength
-        ? candidate
-        : undefined;
-    }
     const parsed = recordRichTextDocumentV2Schema.safeParse(candidate);
     if (!parsed.success) return undefined;
     const inspected = inspectRecordRichTextV2(parsed.data);
@@ -127,22 +116,13 @@ const inputValue = (
       : undefined;
   }
   if (input.type === "decimal_number") {
-    if (!exactValues || typeof candidate !== "string") return undefined;
+    if (typeof candidate !== "string") return undefined;
     const normalized = normalizeExactDecimal(candidate);
     return normalized !== undefined && exactWithin(normalized, input.validation)
       ? normalized
       : undefined;
   }
   if (input.type === "money") {
-    if (!exactValues) {
-      if (typeof candidate !== "number" || !Number.isFinite(candidate)) return undefined;
-      const minimum = input.validation?.minimum;
-      const maximum = input.validation?.maximum;
-      return (typeof minimum !== "number" || candidate >= minimum) &&
-        (typeof maximum !== "number" || candidate <= maximum)
-        ? candidate
-        : undefined;
-    }
     const parsed = moneyValueV2Schema.safeParse(candidate);
     if (!parsed.success || !currencyCodeV2Schema.safeParse(parsed.data.currency).success)
       return undefined;
@@ -182,10 +162,6 @@ const inputValue = (
       ? (candidate as string)
       : undefined;
   if (input.type === "record_reference") {
-    if (!exactValues)
-      return typeof candidate === "string" && jsonValueSchema.safeParse(candidate).success
-        ? candidate
-        : undefined;
     const parsed = recordLinkValueV2Schema.safeParse(candidate);
     if (!parsed.success) return undefined;
     return input.recordTypes.some(
@@ -221,14 +197,13 @@ const actionInputs = (
 ): Readonly<Record<string, JsonValue>> | undefined => {
   const declared = new Set(prepared.action.inputs.map((input) => input.key));
   if (Object.keys(supplied).some((key) => !declared.has(key))) return undefined;
-  const exactValues = prepared.validationContractVersion !== "1.0.0";
   const result: Record<string, JsonValue> = {};
   for (const input of prepared.action.inputs) {
     if (!hasOwn(supplied, input.key)) {
       if (input.required) return undefined;
       continue;
     }
-    const parsed = inputValue(input, supplied[input.key], exactValues);
+    const parsed = inputValue(input, supplied[input.key]);
     if (parsed === undefined) return undefined;
     result[input.key] = parsed;
   }
@@ -251,19 +226,6 @@ const evaluatePrecondition = (
   const parameterValues = Object.fromEntries(
     declarations.map((input) => [input.key, inputs[input.key]]),
   );
-  if (prepared.validationContractVersion === "1.0.0")
-    return evaluateTypedCondition({
-      condition: prepared.action.precondition,
-      sourceRecordFields: fields as never,
-      declaredFieldIds: used.fieldIds,
-      parameterDeclarations: declarations.map((input) => ({
-        key: input.key,
-        type: input.type as
-          "text" | "number" | "boolean" | "date" | "date_time" | "organization_account_reference",
-      })),
-      fieldValues,
-      parameterValues,
-    });
   return evaluateTypedConditionV2({
     condition: prepared.action.precondition,
     sourceRecordFields: fields,

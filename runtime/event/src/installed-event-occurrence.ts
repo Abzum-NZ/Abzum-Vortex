@@ -1,7 +1,6 @@
 import {
   eventOccurrenceEnvelopeV2Schema,
   type EventOccurrenceEnvelopeV2,
-  type FieldDefinition,
   type InstalledEventDescriptor,
   type ModuleFieldV2,
 } from "@vortex/contracts";
@@ -67,22 +66,11 @@ type ResolvedRecord =
   DefinitionContext["recordTypes"] extends ReadonlyMap<string, infer Record> ? Record : never;
 type ResolvedField = ResolvedRecord["recordType"]["fields"][number];
 
-const fieldValueMatches = (
-  record: ResolvedRecord,
-  field: ResolvedField,
-  value: unknown,
-): boolean =>
-  record.module.validationContractVersion !== "1.0.0"
-    ? persistedRecordFieldValueMatches({
-        validationContractVersion: "2.0.0",
-        field: field as ModuleFieldV2,
-        value,
-      })
-    : persistedRecordFieldValueMatches({
-        validationContractVersion: "1.0.0",
-        field: field as FieldDefinition,
-        value,
-      });
+const fieldValueMatches = (field: ResolvedField, value: unknown): boolean =>
+  persistedRecordFieldValueMatches({
+    field: field as ModuleFieldV2,
+    value,
+  });
 
 const expectedDefinitionRelease = (
   context: DefinitionContext,
@@ -159,7 +147,7 @@ export const validateInstalledEventOccurrence = (
           !allowed.has(fieldId) ||
           field === undefined ||
           field.personalData !== "none" ||
-          !fieldValueMatches(record, field, carriedValue)
+          !fieldValueMatches(field, carriedValue)
         );
       })
     )
@@ -178,9 +166,9 @@ export const validateInstalledEventOccurrence = (
     const hasNew = value.payload.newValue !== undefined;
     const previousValid =
       !hasPrevious ||
-      (field !== undefined && fieldValueMatches(record, field, value.payload.previousValue));
+      (field !== undefined && fieldValueMatches(field, value.payload.previousValue));
     const newValid =
-      !hasNew || (field !== undefined && fieldValueMatches(record, field, value.payload.newValue));
+      !hasNew || (field !== undefined && fieldValueMatches(field, value.payload.newValue));
     if (
       field === undefined ||
       (field.personalData !== "none" && (hasPrevious || hasNew)) ||

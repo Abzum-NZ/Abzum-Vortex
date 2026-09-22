@@ -2,7 +2,6 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
-  actionDefinitionSchema,
   actionDefinitionV2Schema,
   activityIdSchema,
   eventOccurrenceIdSchema,
@@ -141,15 +140,14 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
   if (value.outcome !== "prepared" && value.outcome !== "previewed")
     return { outcome: "refused", ...(correlationId ? { correlationId } : {}) };
   const actionV2 = actionDefinitionV2Schema.safeParse(value.action);
-  const actionV1 = actionDefinitionSchema.safeParse(value.action);
   const recordType = recordTypeDefinitionV2Schema.safeParse(value.recordType);
   const createTargets = parseCreateTargets(value.createTargets);
   if (
-    (!actionV2.success && !actionV1.success) ||
+    !actionV2.success ||
     !recordType.success ||
     createTargets === undefined ||
     typeof value.validationContractVersion !== "string" ||
-    !["1.0.0", "2.0.0", "3.0.0"].includes(value.validationContractVersion) ||
+    !["2.0.0", "3.0.0"].includes(value.validationContractVersion) ||
     typeof value.recordId !== "string" ||
     typeof value.existingValues !== "object" ||
     value.existingValues === null ||
@@ -163,8 +161,8 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     return { outcome: "refused", ...(correlationId ? { correlationId } : {}) };
   return {
     outcome: value.outcome,
-    validationContractVersion: value.validationContractVersion as "1.0.0" | "2.0.0" | "3.0.0",
-    action: actionV2.success ? actionV2.data : actionV1.data!,
+    validationContractVersion: value.validationContractVersion as "2.0.0" | "3.0.0",
+    action: actionV2.data,
     recordType: recordType.data,
     recordId: value.recordId,
     existingValues: value.existingValues as Readonly<Record<string, unknown>>,

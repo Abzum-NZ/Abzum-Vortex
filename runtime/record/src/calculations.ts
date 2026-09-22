@@ -315,7 +315,6 @@ export const evaluateRecordCalculationsV2 = (
     if (
       !jsonValueSchema.safeParse(value).success ||
       !persistedRecordFieldValueMatches({
-        validationContractVersion: "2.0.0",
         field,
         value,
       })
@@ -529,7 +528,6 @@ export const evaluateRecordCalculationsV2 = (
     }
     if (
       !persistedRecordFieldValueMatches({
-        validationContractVersion: "2.0.0",
         field,
         value: calculated,
       })
