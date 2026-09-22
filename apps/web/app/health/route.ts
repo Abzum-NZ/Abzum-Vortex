@@ -1,43 +1,36 @@
 import { randomUUID } from "node:crypto";
-import { correlationIdSchema, type CorrelationId } from "@vortex/contracts";
+import {
+  clampTelemetryDurationMs,
+  correlationIdSchema,
+  countersForOutcome,
+} from "@vortex/contracts";
 import { createAppTelemetryCollector } from "@vortex/app";
 
 const telemetry = createAppTelemetryCollector();
 
-const appendHealthTelemetry = (
-  correlationId: CorrelationId,
-  outcome: "success" | "failure",
-  startedAt: number,
-): void => {
+/**
+ * Health answers a fixed safe status and has no failure outcome of its own. Measuring it
+ * must never introduce one, so every telemetry step is contained here. Health is not a
+ * protected request, so each observation carries its own correlation identifier.
+ */
+const appendHealthTelemetry = (startedAtMs: number): void => {
   try {
     telemetry.appendTelemetry({
-      correlationId,
+      correlationId: correlationIdSchema.parse(randomUUID()),
       service: "web",
       operation: "health",
-      outcome,
-      durationMs: Math.min(86_400_000, Math.max(0, Date.now() - startedAt)),
-      counters: {
-        requestCount: 1,
-        successCount: outcome === "success" ? 1 : 0,
-        failureCount: outcome === "failure" ? 1 : 0,
-        refusalCount: 0,
-        retryCount: 0,
-      },
+      outcome: "success",
+      durationMs: clampTelemetryDurationMs(startedAtMs, Date.now()),
+      counters: countersForOutcome("success"),
     });
   } catch {
-    // Telemetry must not change the health response's safe outcome.
+    // Telemetry must not change the health response.
   }
 };
 
 export function GET() {
   const startedAt = Date.now();
-  const correlationId = correlationIdSchema.parse(randomUUID());
-  try {
-    const response = Response.json({ status: "ok", service: "vortex-web" });
-    appendHealthTelemetry(correlationId, "success", startedAt);
-    return response;
-  } catch {
-    appendHealthTelemetry(correlationId, "failure", startedAt);
-    throw new Error("HEALTH_RESPONSE_UNAVAILABLE");
-  }
+  const response = Response.json({ status: "ok", service: "vortex-web" });
+  appendHealthTelemetry(startedAt);
+  return response;
 }

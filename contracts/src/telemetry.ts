@@ -17,13 +17,22 @@ export const telemetryCountersSchema = z
     refusalCount: boundedCounterSchema,
     retryCount: boundedCounterSchema,
   })
-  .strict();
+  .strict()
+  .refine(
+    (counters) =>
+      counters.successCount + counters.failureCount + counters.refusalCount <=
+      counters.requestCount,
+    { message: "Settled outcomes cannot exceed the counted requests" },
+  );
+
+/** Telemetry measures a single bounded operation, never an open-ended span. */
+export const telemetryMaximumDurationMs = 86_400_000;
 
 const telemetryDurationMillisecondsSchema = z
   .number()
   .int()
   .min(0)
-  .max(86_400_000);
+  .max(telemetryMaximumDurationMs);
 
 export const telemetryOutcomeSchema = z.enum([
   "success",
@@ -35,6 +44,7 @@ export const telemetryOutcomeSchema = z.enum([
 /**
  * Safe service telemetry contains request linkage and bounded measurements only.
  * It intentionally has no body, error, URL, credential, cookie, token, or metadata field.
+ * The deployment environment belongs to the collector's destination, not to each record.
  */
 export const telemetryInputSchema = z
   .object({
@@ -81,6 +91,29 @@ export type TelemetryOutcome = z.infer<typeof telemetryOutcomeSchema>;
 export type TelemetryInput = z.infer<typeof telemetryInputSchema>;
 export type AlertSeverity = z.infer<typeof alertSeveritySchema>;
 export type AlertRecord = z.infer<typeof alertRecordSchema>;
+
+/**
+ * Clamps an elapsed measurement into the accepted duration bound so an unusable clock
+ * reading degrades a measure instead of discarding an otherwise safe telemetry record.
+ */
+export const clampTelemetryDurationMs = (startedAtMs: number, endedAtMs: number): number => {
+  if (!Number.isFinite(startedAtMs) || !Number.isFinite(endedAtMs)) return 0;
+  return Math.min(telemetryMaximumDurationMs, Math.max(0, Math.round(endedAtMs - startedAtMs)));
+};
+
+/** The counters for one settled operation, so every producer reports an outcome the same way. */
+export const countersForOutcome = (
+  outcome: TelemetryOutcome,
+  retryCount = 0,
+): TelemetryCounters => ({
+  requestCount: 1,
+  successCount: outcome === "success" ? 1 : 0,
+  failureCount: outcome === "failure" || outcome === "temporarily_unavailable" ? 1 : 0,
+  refusalCount: outcome === "refused" ? 1 : 0,
+  retryCount: Number.isFinite(retryCount)
+    ? Math.min(1_000_000_000, Math.max(0, Math.round(retryCount)))
+    : 0,
+});
 
 /** The narrow dependency injected into service producers; App owns its implementation. */
 export type ServiceTelemetryPort = Readonly<{

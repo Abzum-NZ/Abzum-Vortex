@@ -4,6 +4,7 @@ import {
   resolveApplicationTheme,
   resolveApplicationThemeTokens,
 } from "./app-theme";
+import { createAppTelemetryCollector } from "./telemetry";
 
 export {
   resolveApplicationTheme,
