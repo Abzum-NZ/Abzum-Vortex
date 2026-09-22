@@ -14,6 +14,7 @@ import {
   fileIdSchema,
   fingerprintSchema,
   groupIdSchema,
+  identityIdSchema,
   meteringEventIdSchema,
   moduleRootIdSchema,
   namespacedKeySchema,
@@ -320,33 +321,85 @@ export const applicationSideEffectReceiptSchema = z
   })
   .strict();
 
+export const fileLifecycleStateSchema = z.enum([
+  "pending",
+  "uploaded",
+  "scanning",
+  "active",
+  "quarantined",
+  "abandoned",
+  "soft_deleted",
+  "removed",
+]);
+
+export const fileUploaderActorSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("human"),
+      organizationAccountId: organizationAccountIdSchema,
+      identityId: identityIdSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("system"),
+      systemActorId: actorIdSchema,
+    })
+    .strict(),
+]);
+
+export const fileStorageOperationSchema = z.enum(["upload", "read", "delete"]);
+
+export const fileStorageOperationClaimsSchema = z
+  .object({
+    role: z.literal("authenticated"),
+    iss: z.string().min(1).max(255),
+    tokenKind: z.literal("vortex_file_storage_operation"),
+    destinationProject: z.string().min(1).max(120),
+    organizationId: organizationIdSchema,
+    bucketId: z.string().min(1).max(120),
+    objectPath: z.string().min(1).max(1_000),
+    operation: fileStorageOperationSchema,
+    uploader: fileUploaderActorSchema,
+    correlationId: correlationIdSchema,
+    exp: z.number().int().positive(),
+    iat: z.number().int().positive().optional(),
+  })
+  .strict();
+
 export const fileRecordSchema = z
   .object({
     fileId: fileIdSchema,
     organizationId: organizationIdSchema,
-    lifecycleState: lifecycleStateSchema,
+    applicationRootId: applicationRootIdSchema.optional(),
+    lifecycleState: fileLifecycleStateSchema,
     originalSafeDisplayName: z.string().min(1).max(255),
     detectedMediaType: z.string().min(1).max(200),
     extension: z.string().regex(/^\.[a-z0-9]+$/),
     sizeBytes: z.number().int().min(0),
     checksum: fingerprintSchema,
     storageKey: z.string().min(1).max(1_000),
+    bucketId: z.string().min(1).max(120).default("private_files"),
     scannerName: z.string().min(1).max(120),
     scannerVersion: z.string().min(1).max(120),
     scannerResult: z.enum(["pending", "clean", "quarantined", "refused"]),
     previewReferences: z.array(secretReferenceSchema),
-    uploadedBy: organizationAccountIdSchema,
+    uploadedBy: fileUploaderActorSchema,
     createdAt: timestampSchema,
     activatedAt: timestampSchema.optional(),
     deletedAt: timestampSchema.optional(),
     removalDueAt: timestampSchema.optional(),
     owningAttachmentReferences: z.array(platformIdSchema),
+    ownerRecordTypeId: recordTypeIdSchema.optional(),
+    ownerRecordId: recordIdSchema.optional(),
+    ownerFieldId: fieldIdSchema.optional(),
     legalHold: z.boolean(),
   })
   .strict();
+
 const transferGrantBase = {
   organizationId: organizationIdSchema,
-  organizationAccountId: organizationAccountIdSchema,
+  organizationAccountId: organizationAccountIdSchema.optional(),
   recordTypeId: recordTypeIdSchema,
   recordId: recordIdSchema,
   fieldId: fieldIdSchema,
@@ -359,6 +412,7 @@ export const uploadGrantSchema = z
     policyFingerprint: fingerprintSchema,
     maximumBytes: z.number().int().positive(),
     oneTimeId: platformIdSchema,
+    uploader: fileUploaderActorSchema.optional(),
   })
   .strict();
 export const downloadGrantSchema = z
@@ -603,6 +657,10 @@ export type LiveInvalidation = z.infer<typeof liveInvalidationSchema>;
 export type CacheInvalidation = z.infer<typeof cacheInvalidationSchema>;
 export type OperationalStatus = z.infer<typeof operationalStatusSchema>;
 export type ApplicationSideEffectReceipt = z.infer<typeof applicationSideEffectReceiptSchema>;
+export type FileLifecycleState = z.infer<typeof fileLifecycleStateSchema>;
+export type FileUploaderActor = z.infer<typeof fileUploaderActorSchema>;
+export type FileStorageOperation = z.infer<typeof fileStorageOperationSchema>;
+export type FileStorageOperationClaims = z.infer<typeof fileStorageOperationClaimsSchema>;
 export type FileRecord = z.infer<typeof fileRecordSchema>;
 export type UploadGrant = z.infer<typeof uploadGrantSchema>;
 export type DownloadGrant = z.infer<typeof downloadGrantSchema>;
