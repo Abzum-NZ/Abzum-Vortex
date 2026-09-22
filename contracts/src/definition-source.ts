@@ -63,4 +63,9 @@ export const definitionSourceDocumentSchema = z.discriminatedUnion("kind", [
 export type ApplicationSourceDocument = z.infer<typeof applicationSourceDocumentSchema>;
 export type ConnectionTypeSourceDocument = z.infer<typeof connectionTypeSourceDocumentSchema>;
 export type DefinitionSourceDocument = z.infer<typeof definitionSourceDocumentSchema>;
-export type { ApplicationSourceDocumentV2, ModuleSourceDocument, SourceApplicationBodyV2, SourcePageDefinitionV2 };
+export type {
+  ApplicationSourceDocumentV2,
+  ModuleSourceDocument,
+  SourceApplicationBodyV2,
+  SourcePageDefinitionV2,
+};

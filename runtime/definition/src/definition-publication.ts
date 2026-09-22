@@ -259,8 +259,8 @@ type ResolvedDependencies = Readonly<{
 const stable = (version: string): boolean =>
   stableDefinitionReleaseVersionSchema.safeParse(version).success;
 
-const moduleOutputContractVersion = (output: ModuleOutput): "1.0.0" | "2.0.0" | "3.0.0" =>
-  "validationContractVersion" in output ? output.validationContractVersion : "1.0.0";
+const moduleOutputContractVersion = (output: ModuleOutput): "3.0.0" =>
+  output.validationContractVersion;
 
 const accepts = (requirements: readonly VersionRequirement[], version: string): boolean =>
   requirements.every((requirement) =>
@@ -1052,10 +1052,7 @@ const compileCandidate = (
       );
     return output;
   }
-  if (
-    candidate.draft.source.kind === "module" &&
-    candidate.draft.source.source_contract_version === "3.0.0"
-  ) {
+  if (candidate.draft.source.kind === "module") {
     if (resolution.contractVersion !== "3.0.0") return refuse("DEFINITION_COMPILATION_REFUSED");
     const common = {
       sourceContractVersion: "3.0.0" as const,
@@ -1177,6 +1174,16 @@ const validateCandidate = (
   return candidate;
 };
 
+/** The explicit comparator contract for a stored draft, defaulting to the original pair. */
+const candidateValidationContractVersion = (
+  source: StoredDefinitionDraft["source"],
+): Readonly<{ validationContractVersion?: "2.0.0" | "3.0.0" }> => {
+  if (source.kind === "module") return { validationContractVersion: "3.0.0" };
+  if (source.kind === "application" && source.source_contract_version === "2.0.0")
+    return { validationContractVersion: "2.0.0" };
+  return {};
+};
+
 const prepareFromReader = async (
   context: SessionContext,
   reader: DefinitionPublicationReader,
@@ -1194,14 +1201,7 @@ const prepareFromReader = async (
   const provisional = compileCandidate(candidate, dependencies, provisionalResolution, false);
   const impact = compareDefinitionVersionImpactWithEvidence({
     kind: candidate.draft.kind,
-    ...(candidate.draft.source.kind === "module" &&
-    candidate.draft.source.source_contract_version === "3.0.0"
-      ? { validationContractVersion: "3.0.0" as const }
-      : (candidate.draft.source.kind === "application" ||
-            candidate.draft.source.kind === "module") &&
-          candidate.draft.source.source_contract_version === "2.0.0"
-        ? { validationContractVersion: "2.0.0" as const }
-        : {}),
+    ...candidateValidationContractVersion(candidate.draft.source),
     historyEvidence: candidate.historyEvidence,
     candidate: provisional.canonical,
   });
@@ -1211,14 +1211,7 @@ const prepareFromReader = async (
   const compilationOutput = compileCandidate(candidate, dependencies, resolution, true);
   const confirmedImpact = compareDefinitionVersionImpactWithEvidence({
     kind: candidate.draft.kind,
-    ...(candidate.draft.source.kind === "module" &&
-    candidate.draft.source.source_contract_version === "3.0.0"
-      ? { validationContractVersion: "3.0.0" as const }
-      : (candidate.draft.source.kind === "application" ||
-            candidate.draft.source.kind === "module") &&
-          candidate.draft.source.source_contract_version === "2.0.0"
-        ? { validationContractVersion: "2.0.0" as const }
-        : {}),
+    ...candidateValidationContractVersion(candidate.draft.source),
     historyEvidence: candidate.historyEvidence,
     candidate: compilationOutput.canonical,
   });

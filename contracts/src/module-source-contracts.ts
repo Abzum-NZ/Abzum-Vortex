@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { personalDataClassSchema, publicDisplaySchema, searchPrioritySchema } from "./catalogues";
-import { builderKeySchema, namespacedKeySchema, organizationAccountIdSchema, platformIdSchema } from "./identifiers";
+import { builderKeySchema, namespacedKeySchema, organizationAccountIdSchema } from "./identifiers";
 import { jsonValueSchema, safeHttpsUrlSchema } from "./common";
 import { versionRequirementSchema } from "./definitions";
 import {

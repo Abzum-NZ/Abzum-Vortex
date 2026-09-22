@@ -348,8 +348,7 @@ const assertEvidenceContractVersions = (
   request: SupportedVersionImpactRequest,
   evidence: DefinitionPublicationHistoryEvidence,
 ): void => {
-  const allowed =
-    request.kind === "module" ? new Set(["3.0.0"]) : new Set(["1.0.0", "2.0.0"]);
+  const allowed = request.kind === "module" ? new Set(["3.0.0"]) : new Set(["1.0.0", "2.0.0"]);
   if (evidence.validationContractVersions.some((version) => !allowed.has(version)))
     refuseVersionImpact("invalid_request");
 };
@@ -419,24 +418,12 @@ const compareParsedDefinitionVersionImpact = (
   let representationChanged = false;
   if (request.kind === "module") {
     const latestModule = latest!;
-    representationChanged = latestModule.publication.validationContractVersion !== "3.0.0";
-    if (representationChanged) {
-      normalisedPrevious = latestModule.content;
-      reasons = [
-        {
-          impact: "major",
-          code: "existing_behavior_changed",
-          location: { componentKind: "module", property: "configuration" },
-        },
-      ];
-    } else {
-      const latestContent = moduleContentV3Schema.parse(latestModule.content);
-      const comparablePrevious = normaliseModuleContent(latestContent);
-      const comparableCandidate = normaliseModuleContent(request.candidate.content);
-      normalisedPrevious = comparablePrevious;
-      assertUnambiguousModuleContent(latestModule.content);
-      reasons = compareModuleContents(comparablePrevious, comparableCandidate);
-    }
+    const latestContent = moduleContentV3Schema.parse(latestModule.content);
+    const comparablePrevious = normaliseModuleContent(latestContent);
+    const comparableCandidate = normaliseModuleContent(request.candidate.content);
+    normalisedPrevious = comparablePrevious;
+    assertUnambiguousModuleContent(latestModule.content);
+    reasons = compareModuleContents(comparablePrevious, comparableCandidate);
   } else {
     const latestApplication = latest! as PublishedApplicationDefinition;
     const candidateV2 = isApplicationV2Request(request);

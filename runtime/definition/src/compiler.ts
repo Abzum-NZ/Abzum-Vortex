@@ -2977,9 +2977,8 @@ function compileModule(
   resolution: Resolution,
   metadata: JsonObject,
   savedConditionRevisions: readonly JsonObject[],
-  moduleV2 = false,
-  dependencyOutputs: readonly DefinitionCompilationOutput[] = [],
-  graphRules?: readonly RuleGraph[],
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+  rules: readonly RuleGraph[],
 ) {
   const body = asObject(source.body);
   const definitionKey = String(source.key);
@@ -3025,11 +3024,7 @@ function compileModule(
       ...(field.help_text ? { helpText: field.help_text } : {}),
       required: field.required,
       ...(field.default !== undefined
-        ? {
-            default: moduleV2
-              ? normaliseModuleFieldValueV2(field, field.default, valueContext, true)
-              : field.default,
-          }
+        ? { default: normaliseModuleFieldValueV2(field, field.default, valueContext, true) }
         : {}),
       unique: field.unique,
       filterable: field.filterable,
@@ -3038,14 +3033,7 @@ function compileModule(
       personalData: field.personal_data,
       publicDisplay: field.public_display,
       type: field.type,
-      settings: fieldSettings(
-        field,
-        qualified,
-        resolution,
-        permissionOwners,
-        moduleV2,
-        moduleV2 ? valueContext : undefined,
-      ),
+      settings: fieldSettings(field, qualified, resolution, permissionOwners, true, valueContext),
     }));
     const relationships = (recordType.relationships as JsonObject[]).map((relationship) => ({
       relationshipId: resolution.id(
@@ -3117,17 +3105,9 @@ function compileModule(
         ? { permissionKeys: action.permission_alternatives }
         : { permissionKey: action.permission }),
       sharing: action.shareable ? "allowed" : "refused",
-      inputs: (action.inputs as JsonObject[]).map((input) =>
-        actionInput(input, resolution, moduleV2),
-      ),
+      inputs: (action.inputs as JsonObject[]).map((input) => actionInput(input, resolution, true)),
       ...(action.precondition
-        ? {
-            precondition: condition(
-              action.precondition,
-              localField,
-              moduleV2 ? valueContext : undefined,
-            ),
-          }
+        ? { precondition: condition(action.precondition, localField, valueContext) }
         : {}),
       effects: (action.effects as JsonObject[]).map((effect) => {
         if (effect.kind === "set_field")
@@ -3136,12 +3116,7 @@ function compileModule(
             return {
               kind: "set_field",
               fieldId,
-              value: actionValue(
-                effect.value,
-                localField,
-                fieldsById.get(fieldId),
-                moduleV2 ? valueContext : undefined,
-              ),
+              value: actionValue(effect.value, localField, fieldsById.get(fieldId), valueContext),
             };
           })();
         if (effect.kind === "create_record") {
@@ -3154,12 +3129,7 @@ function compileModule(
                 const fieldId = resolution.field(target, key);
                 return [
                   fieldId,
-                  actionValue(
-                    value,
-                    localField,
-                    fieldsById.get(fieldId),
-                    moduleV2 ? valueContext : undefined,
-                  ),
+                  actionValue(value, localField, fieldsById.get(fieldId), valueContext),
                 ];
               }),
             ),
@@ -3189,52 +3159,6 @@ function compileModule(
       personalOrSensitiveValuesAllowed: false,
     };
   });
-  const rules =
-    graphRules ??
-    (body.rules as JsonObject[]).map((rule) => {
-      const record = qualifiedForRecord(String(rule.record_type));
-      const localField = (alias: string) => resolution.field(record, alias);
-      const valueContext = valueContextFor(record);
-      const effect = asObject(rule.effect);
-      let compiledEffect: unknown;
-      if (effect.kind === "set_value")
-        compiledEffect = {
-          kind: "set_value",
-          fieldId: localField(String(effect.field)),
-          value: moduleV2
-            ? normaliseModuleFieldValueV2(
-                fieldsById.get(localField(String(effect.field))),
-                effect.value,
-                valueContext,
-              )
-            : effect.value,
-        };
-      else if (effect.kind === "require")
-        compiledEffect = { kind: "require", fieldId: localField(String(effect.field)) };
-      else if (effect.kind === "show_or_hide")
-        compiledEffect = {
-          kind: "show_or_hide",
-          componentId: resolution.id(definitionKey, "extension_point", String(effect.component)),
-          visibility: effect.visibility,
-        };
-      else if (effect.kind === "warn")
-        compiledEffect = { kind: "warn", messageKey: effect.message };
-      else if (effect.kind === "start_background_work")
-        compiledEffect = {
-          kind: "start_background_work",
-          workflowId: resolution.id(definitionKey, "workflow", String(effect.workflow)),
-        };
-      else compiledEffect = { kind: "refuse", reasonCode: effect.reason_code };
-      return {
-        ruleId: resolution.id(definitionKey, "rule", String(rule.id), "content"),
-        key: rule.key,
-        subjectRecordTypeId: resolution.recordType(record).recordTypeId,
-        trigger: rule.trigger,
-        condition: condition(rule.condition, localField, moduleV2 ? valueContext : undefined),
-        priority: rule.priority,
-        effect: compiledEffect,
-      };
-    });
   const sharingConditions = (body.sharing_conditions as JsonObject[]).map((saved) => {
     const record = qualifiedForRecord(String(saved.source_record_type));
     const localField = (alias: string) => resolution.field(record, alias);
@@ -3245,11 +3169,7 @@ function compileModule(
       ]),
     );
     const valueContext = valueContextFor(record, parameterTypes);
-    const compiledCondition = condition(
-      saved.condition,
-      localField,
-      moduleV2 ? valueContext : undefined,
-    );
+    const compiledCondition = condition(saved.condition, localField, valueContext);
     const conditionId = resolution.id(
       definitionKey,
       "sharing_condition",
@@ -3271,20 +3191,16 @@ function compileModule(
       declaredFieldIds: (saved.declared_fields as string[]).map(localField),
       publicationTests: (saved.publication_tests as JsonObject[]).map((test) => ({
         name: test.name,
-        parameters: moduleV2
-          ? objectFromUniqueEntries(
-              Object.entries(asObject(test.parameters)).map(([key, value]) => [
-                key,
-                normaliseModuleTypedValueV2(parameterTypes.get(key), value, valueContext),
-              ]),
-            )
-          : test.parameters,
+        parameters: objectFromUniqueEntries(
+          Object.entries(asObject(test.parameters)).map(([key, value]) => [
+            key,
+            normaliseModuleTypedValueV2(parameterTypes.get(key), value, valueContext),
+          ]),
+        ),
         fieldValues: objectFromUniqueEntries(
           Object.entries(asObject(test.field_values)).map(([key, value]) => [
             localField(key),
-            moduleV2
-              ? normaliseModuleFieldValueV2(fieldFor(record, key), value, valueContext)
-              : value,
+            normaliseModuleFieldValueV2(fieldFor(record, key), value, valueContext),
           ]),
         ),
         expected: test.expected,
@@ -3301,9 +3217,7 @@ function compileModule(
       source,
       resolution,
       sharingConditions,
-      moduleV2
-        ? valueContextFor(`${definitionKey}:${String(permission.record_type ?? "")}`)
-        : undefined,
+      valueContextFor(`${definitionKey}:${String(permission.record_type ?? "")}`),
     );
     const fieldPolicy = compilePermissionFieldPolicy(permission, source, resolution);
     return {
@@ -5438,7 +5352,6 @@ function compileParsedModuleV3Request(
         resolution,
         request.draftMetadata as unknown as JsonObject,
         (request.savedConditionRevisions ?? []) as unknown as JsonObject[],
-        true,
         dependencyOutputs,
         rules.map(({ graph }) => graph),
       ),
