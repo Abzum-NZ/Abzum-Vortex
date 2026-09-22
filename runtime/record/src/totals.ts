@@ -416,7 +416,6 @@ export const evaluateRecordTotalsV2 = (
         if (
           !jsonValueSchema.safeParse(value).success ||
           !persistedRecordFieldValueMatches({
-            validationContractVersion: "2.0.0",
             field: sourceField,
             value,
           })
@@ -461,7 +460,6 @@ export const evaluateRecordTotalsV2 = (
           if (
             !jsonValueSchema.safeParse(value).success ||
             !persistedRecordFieldValueMatches({
-              validationContractVersion: "2.0.0",
               field: aggregateField!,
               value,
             })
@@ -498,7 +496,6 @@ export const evaluateRecordTotalsV2 = (
     if (
       !jsonValueSchema.safeParse(evaluated.value).success ||
       !persistedRecordFieldValueMatches({
-        validationContractVersion: "2.0.0",
         field,
         value: evaluated.value,
       })
