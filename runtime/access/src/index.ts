@@ -163,8 +163,41 @@ export {
   type ReleaseCapabilityReservationCommand,
   type ReserveCapabilityCommand,
 } from "./capability-reservation";
+export {
+  flowExecutionBindingAdministratorAuthoritySchema,
+  flowExecutionBindingEffectiveStateSchema,
+  flowExecutionBindingErrorCodes,
+  FlowExecutionBindingError,
+  flowExecutionBindingMutationResultSchema,
+  flowExecutionBindingReadResultSchema,
+  flowExecutionBindingSchema,
+  flowExecutionBindingStateSchema,
+  flowExecutionBindingSurfaceSchema,
+  flowExecutionInvokerSchema,
+  flowExecutionBindingActorSchema,
+  readFlowExecutionBinding,
+  readFlowExecutionBindingCommandSchema,
+  registerFlowExecutionBinding,
+  registerFlowExecutionBindingCommandSchema,
+  revokeFlowExecutionBinding,
+  revokeFlowExecutionBindingCommandSchema,
+  type FlowExecutionBinding,
+  type FlowExecutionBindingActor,
+  type FlowExecutionBindingAdministratorAuthority,
+  type FlowExecutionBindingEffectiveState,
+  type FlowExecutionBindingErrorCode,
+  type FlowExecutionBindingMutationResult,
+  type FlowExecutionBindingReadResult,
+  type FlowExecutionBindingState,
+  type FlowExecutionBindingSurface,
+  type FlowExecutionInvoker,
+  type ReadFlowExecutionBindingCommand,
+  type RegisterFlowExecutionBindingCommand,
+  type RevokeFlowExecutionBindingCommand,
+} from "./flow-execution-bindings";
 
 export const AccessService = Object.freeze({
   key: "access",
   boundary: "@vortex/access",
 });
+
