@@ -92,6 +92,9 @@ begin
 end
 $function$;
 
+alter function vortex_access.check_record_lifecycle_preview_authority()
+  owner to postgres;
+
 revoke all on function vortex_access.check_record_lifecycle_preview_authority()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_adapter, vortex_module_owner;
@@ -99,6 +102,122 @@ grant execute on function vortex_access.check_record_lifecycle_preview_authority
   to vortex_record_owner;
 comment on function vortex_access.check_record_lifecycle_preview_authority() is
   'Access-owned authority check for one protected record-type lifecycle policy preview transaction.';
+
+-- Dynamic Record tables force RLS and intentionally expose their scoped
+-- SELECT policy only to the fixed Record adapter. This private helper keeps
+-- that boundary intact: Record owner supplies a catalogue-derived table token
+-- and an already-authorised exact scope, while adapter-owned RLS independently
+-- binds the same request context. One statement produces both global ordinal
+-- positions/count and a bounded keyset page from one database snapshot.
+create function vortex_record.read_record_lifecycle_preview_candidates_internal(
+  p_physical_table_token text,
+  p_organization_id uuid,
+  p_storage_contract_id uuid,
+  p_application_root_id uuid,
+  p_after_created_at timestamptz,
+  p_after_record_id uuid,
+  p_limit integer
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $function$
+declare
+  result_value jsonb;
+begin
+  if p_physical_table_token is null
+    or p_physical_table_token !~ '^rt_[a-f0-9]{32}$'
+    or p_organization_id is null
+    or p_organization_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_storage_contract_id is null
+    or p_storage_contract_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or (p_application_root_id is not null
+      and p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid)
+    or p_limit is null
+    or p_limit not between 1 and 500
+    or ((p_after_created_at is null) <> (p_after_record_id is null))
+    or (p_after_record_id is not null
+      and p_after_record_id = '00000000-0000-0000-0000-000000000000'::uuid)
+    or p_organization_id <> vortex_context.organization_id()
+    or p_application_root_id is distinct from vortex_context.application_root_id(false) then
+    raise exception using errcode = '42501',
+      message = 'Record lifecycle preview candidates are unavailable';
+  end if;
+
+  execute pg_catalog.format(
+    'with ranked as materialized (
+       select stored.record_id,
+              stored.concurrency_number,
+              stored.created_at,
+              stored.lifecycle_state,
+              stored.deleted_at,
+              pg_catalog.row_number() over (
+                order by stored.created_at asc, stored.record_id asc
+              )::bigint as record_position,
+              pg_catalog.count(*) over ()::bigint as total_retained_count
+       from record_data.%I as stored
+       where stored.organisation_id = $1
+         and stored.storage_contract_id = $2
+         and stored.application_root_id is not distinct from $3
+         and stored.lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')
+     ), page as materialized (
+       select ranked.*
+       from ranked
+       where $5::timestamptz is null
+          or ranked.created_at > $5
+          or (ranked.created_at = $5 and ranked.record_id > $6)
+       order by ranked.created_at asc, ranked.record_id asc
+       limit $4 + 1
+     ), selected as materialized (
+       select page.*
+       from page
+       order by page.created_at asc, page.record_id asc
+       limit $4
+     )
+     select pg_catalog.jsonb_build_object(
+       ''totalRetainedCount'', pg_catalog.coalesce(
+         (select ranked.total_retained_count from ranked limit 1), 0
+       ),
+       ''records'', pg_catalog.coalesce((
+         select pg_catalog.jsonb_agg(
+           pg_catalog.jsonb_build_object(
+             ''recordId'', selected.record_id,
+             ''expectedRecordRevision'', selected.concurrency_number,
+             ''createdAt'', pg_catalog.to_jsonb(selected.created_at),
+             ''lifecycleState'', selected.lifecycle_state,
+             ''deletedAt'', pg_catalog.to_jsonb(selected.deleted_at),
+             ''recordPosition'', selected.record_position
+           ) order by selected.created_at asc, selected.record_id asc
+         )
+         from selected
+       ), ''[]''::jsonb),
+       ''hasMore'', (select pg_catalog.count(*) > $4 from page)
+     )',
+    p_physical_table_token
+  ) into strict result_value using
+    p_organization_id, p_storage_contract_id, p_application_root_id,
+    p_limit, p_after_created_at, p_after_record_id;
+
+  return result_value;
+end
+$function$;
+
+alter function vortex_record.read_record_lifecycle_preview_candidates_internal(
+  text, uuid, uuid, uuid, timestamptz, uuid, integer
+) owner to vortex_record_adapter;
+
+revoke all on function vortex_record.read_record_lifecycle_preview_candidates_internal(
+  text, uuid, uuid, uuid, timestamptz, uuid, integer
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_module_owner;
+grant execute on function vortex_record.read_record_lifecycle_preview_candidates_internal(
+  text, uuid, uuid, uuid, timestamptz, uuid, integer
+) to vortex_record_owner;
+comment on function vortex_record.read_record_lifecycle_preview_candidates_internal(
+  text, uuid, uuid, uuid, timestamptz, uuid, integer
+) is 'Private adapter-owned, forced-RLS lifecycle candidate page and global-position projection for Record owner.';
 
 set local role vortex_record_owner;
 
@@ -119,14 +238,7 @@ declare
   authority record;
   catalogue_row vortex_record.storage_catalogue%rowtype;
   policy_row vortex_record.record_type_lifecycle_policies%rowtype;
-  total_count bigint := 0;
-  has_more boolean := false;
-  records_json jsonb := '[]'::jsonb;
-  candidate_rec record;
-  last_created_at timestamptz;
-  last_record_id uuid;
-  row_num integer := 0;
-  query_sql text;
+  candidate_page jsonb;
 begin
   if p_storage_contract_id is null
     or p_storage_contract_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -189,91 +301,20 @@ begin
     );
   end if;
 
-  execute pg_catalog.format(
-    'select count(*)::bigint
-     from record_data.%I as stored
-     where stored.organisation_id = $1
-       and stored.storage_contract_id = $2
-       and stored.application_root_id is not distinct from $3
-       and stored.lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')',
-    catalogue_row.physical_table_token
-  ) into total_count using authority.organization_id, p_storage_contract_id, p_application_root_id;
-
-  query_sql := pg_catalog.format(
-    'select stored.record_id, stored.concurrency_number, stored.created_at,
-            stored.lifecycle_state, stored.deleted_at
-     from record_data.%I as stored
-     where stored.organisation_id = $1
-       and stored.storage_contract_id = $2
-       and stored.application_root_id is not distinct from $3
-       and stored.lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')
-       %s
-     order by stored.created_at asc, stored.record_id asc
-     limit $4',
+  candidate_page := vortex_record.read_record_lifecycle_preview_candidates_internal(
     catalogue_row.physical_table_token,
-    case
-      when p_after_created_at is not null and p_after_record_id is not null then
-        'and (stored.created_at > $5 or (stored.created_at = $5 and stored.record_id > $6))'
-      else ''
-    end
+    authority.organization_id,
+    p_storage_contract_id,
+    p_application_root_id,
+    p_after_created_at,
+    p_after_record_id,
+    p_limit
   );
-
-  if p_after_created_at is not null and p_after_record_id is not null then
-    for candidate_rec in execute query_sql
-      using authority.organization_id, p_storage_contract_id, p_application_root_id,
-        p_limit + 1, p_after_created_at, p_after_record_id
-    loop
-      row_num := row_num + 1;
-      if row_num <= p_limit then
-        records_json := records_json || pg_catalog.jsonb_build_array(
-          pg_catalog.jsonb_build_object(
-            'recordId', candidate_rec.record_id,
-            'expectedRecordRevision', candidate_rec.concurrency_number,
-            'createdAt', pg_catalog.to_jsonb(candidate_rec.created_at),
-            'lifecycleState', candidate_rec.lifecycle_state,
-            'deletedAt', pg_catalog.to_jsonb(candidate_rec.deleted_at)
-          )
-        );
-        last_created_at := candidate_rec.created_at;
-        last_record_id := candidate_rec.record_id;
-      else
-        has_more := true;
-      end if;
-    end loop;
-  else
-    for candidate_rec in execute query_sql
-      using authority.organization_id, p_storage_contract_id, p_application_root_id,
-        p_limit + 1
-    loop
-      row_num := row_num + 1;
-      if row_num <= p_limit then
-        records_json := records_json || pg_catalog.jsonb_build_array(
-          pg_catalog.jsonb_build_object(
-            'recordId', candidate_rec.record_id,
-            'expectedRecordRevision', candidate_rec.concurrency_number,
-            'createdAt', pg_catalog.to_jsonb(candidate_rec.created_at),
-            'lifecycleState', candidate_rec.lifecycle_state,
-            'deletedAt', pg_catalog.to_jsonb(candidate_rec.deleted_at)
-          )
-        );
-        last_created_at := candidate_rec.created_at;
-        last_record_id := candidate_rec.record_id;
-      else
-        has_more := true;
-      end if;
-    end loop;
-  end if;
 
   return pg_catalog.jsonb_build_object(
     'policyStatus', 'available',
-    'policy', policy_row.policy_body,
-    'totalRetainedCount', total_count,
-    'records', records_json,
-    'hasMore', has_more
-  ) || case when has_more then pg_catalog.jsonb_build_object(
-    'nextAfterCreatedAt', pg_catalog.to_jsonb(last_created_at),
-    'nextAfterRecordId', last_record_id
-  ) else '{}'::jsonb end;
+    'policy', policy_row.policy_body
+  ) || candidate_page;
 end
 $function$;
 
@@ -284,7 +325,7 @@ revoke all on function vortex_record.preview_record_lifecycle_candidates(
 
 grant execute on function vortex_record.preview_record_lifecycle_candidates(
   uuid, uuid, timestamptz, uuid, integer
-) to vortex_request, vortex_runtime;
+) to vortex_request;
 
 comment on function vortex_record.preview_record_lifecycle_candidates(
   uuid, uuid, timestamptz, uuid, integer
