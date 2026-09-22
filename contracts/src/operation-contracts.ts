@@ -332,12 +332,17 @@ export const fileLifecycleStateSchema = z.enum([
   "removed",
 ]);
 
-export const fileUploaderActorSchema = z.discriminatedUnion("kind", [
+/**
+ * Verified file actor. A private file is attributed either to a verified human
+ * organisation account with its global identity, or to a registered system
+ * actor. A system operation never fabricates an organisation account.
+ */
+export const verifiedFileActorSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("human"),
       organizationAccountId: organizationAccountIdSchema,
-      identityId: identityIdSchema.optional(),
+      identityId: identityIdSchema,
     })
     .strict(),
   z
@@ -348,7 +353,25 @@ export const fileUploaderActorSchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
+/** Business files live only in the private bucket; published public assets are a separate variant. */
+export const PRIVATE_FILE_BUCKET = "private_files";
+export const privateFileBucketSchema = z.literal(PRIVATE_FILE_BUCKET);
+
+/** A private object path is `<organizationId>/<fileId>/<128 bits of hexadecimal entropy>`. */
+const privateFilePathSegment =
+  "[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+export const privateFileObjectPathSchema = z
+  .string()
+  .max(1_000)
+  .regex(
+    new RegExp(`^${privateFilePathSegment}/${privateFilePathSegment}/[0-9a-f]{32}$`),
+    "A private object path is organisation-scoped, unguessable and never carries the original file name",
+  );
+
 export const fileStorageOperationSchema = z.enum(["upload", "read", "delete"]);
+
+/** The Storage credential bridge mints operation claims valid for at most 60 seconds. */
+export const MAXIMUM_FILE_STORAGE_OPERATION_SECONDS = 60;
 
 export const fileStorageOperationClaimsSchema = z
   .object({
@@ -357,15 +380,35 @@ export const fileStorageOperationClaimsSchema = z
     tokenKind: z.literal("vortex_file_storage_operation"),
     destinationProject: z.string().min(1).max(120),
     organizationId: organizationIdSchema,
-    bucketId: z.string().min(1).max(120),
-    objectPath: z.string().min(1).max(1_000),
+    bucketId: privateFileBucketSchema,
+    objectPath: privateFileObjectPathSchema,
     operation: fileStorageOperationSchema,
-    uploader: fileUploaderActorSchema,
+    actor: verifiedFileActorSchema,
     correlationId: correlationIdSchema,
+    iat: z.number().int().positive(),
     exp: z.number().int().positive(),
-    iat: z.number().int().positive().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.exp <= value.iat)
+      context.addIssue({
+        code: "custom",
+        path: ["exp"],
+        message: "A storage operation credential must expire after it is issued",
+      });
+    else if (value.exp - value.iat > MAXIMUM_FILE_STORAGE_OPERATION_SECONDS)
+      context.addIssue({
+        code: "custom",
+        path: ["exp"],
+        message: `A storage operation credential is valid for at most ${MAXIMUM_FILE_STORAGE_OPERATION_SECONDS} seconds`,
+      });
+    if (!value.objectPath.startsWith(`${value.organizationId}/`))
+      context.addIssue({
+        code: "custom",
+        path: ["objectPath"],
+        message: "A storage operation credential scopes its object path to its own organisation",
+      });
+  });
 
 export const fileRecordSchema = z
   .object({
@@ -378,13 +421,13 @@ export const fileRecordSchema = z
     extension: z.string().regex(/^\.[a-z0-9]+$/),
     sizeBytes: z.number().int().min(0),
     checksum: fingerprintSchema,
-    storageKey: z.string().min(1).max(1_000),
-    bucketId: z.string().min(1).max(120).default("private_files"),
+    storageKey: privateFileObjectPathSchema,
+    bucketId: privateFileBucketSchema,
     scannerName: z.string().min(1).max(120),
     scannerVersion: z.string().min(1).max(120),
     scannerResult: z.enum(["pending", "clean", "quarantined", "refused"]),
     previewReferences: z.array(secretReferenceSchema),
-    uploadedBy: fileUploaderActorSchema,
+    uploadedBy: verifiedFileActorSchema,
     createdAt: timestampSchema,
     activatedAt: timestampSchema.optional(),
     deletedAt: timestampSchema.optional(),
@@ -395,11 +438,70 @@ export const fileRecordSchema = z
     ownerFieldId: fieldIdSchema.optional(),
     legalHold: z.boolean(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (!value.storageKey.startsWith(`${value.organizationId}/${value.fileId}/`))
+      context.addIssue({
+        code: "custom",
+        path: ["storageKey"],
+        message:
+          "A private file object path is scoped to its own organisation and file identifier",
+      });
+
+    const ownerParts = [value.ownerRecordTypeId, value.ownerRecordId, value.ownerFieldId];
+    if (
+      ownerParts.some((part) => part !== undefined) &&
+      ownerParts.some((part) => part === undefined)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["ownerFieldId"],
+        message: "Owner record type, record and attachment field travel together or not at all",
+      });
+
+    if (value.lifecycleState === "active") {
+      if (value.scannerResult !== "clean")
+        context.addIssue({
+          code: "custom",
+          path: ["scannerResult"],
+          message: "A file becomes active only after its safety check passes",
+        });
+      if (value.activatedAt === undefined)
+        context.addIssue({
+          code: "custom",
+          path: ["activatedAt"],
+          message: "An active file records when it was activated",
+        });
+      if (value.deletedAt !== undefined)
+        context.addIssue({
+          code: "custom",
+          path: ["deletedAt"],
+          message: "An active file carries no deletion time",
+        });
+    }
+
+    if (
+      value.lifecycleState === "quarantined" &&
+      value.scannerResult !== "quarantined" &&
+      value.scannerResult !== "refused"
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["scannerResult"],
+        message: "A quarantined file records the safety result that quarantined it",
+      });
+
+    if (value.lifecycleState === "soft_deleted" && value.deletedAt === undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["deletedAt"],
+        message: "A soft-deleted file records when it was deleted",
+      });
+  });
 
 const transferGrantBase = {
   organizationId: organizationIdSchema,
-  organizationAccountId: organizationAccountIdSchema.optional(),
+  actor: verifiedFileActorSchema,
   recordTypeId: recordTypeIdSchema,
   recordId: recordIdSchema,
   fieldId: fieldIdSchema,
@@ -412,7 +514,6 @@ export const uploadGrantSchema = z
     policyFingerprint: fingerprintSchema,
     maximumBytes: z.number().int().positive(),
     oneTimeId: platformIdSchema,
-    uploader: fileUploaderActorSchema.optional(),
   })
   .strict();
 export const downloadGrantSchema = z
@@ -658,7 +759,8 @@ export type CacheInvalidation = z.infer<typeof cacheInvalidationSchema>;
 export type OperationalStatus = z.infer<typeof operationalStatusSchema>;
 export type ApplicationSideEffectReceipt = z.infer<typeof applicationSideEffectReceiptSchema>;
 export type FileLifecycleState = z.infer<typeof fileLifecycleStateSchema>;
-export type FileUploaderActor = z.infer<typeof fileUploaderActorSchema>;
+export type VerifiedFileActor = z.infer<typeof verifiedFileActorSchema>;
+export type PrivateFileBucket = z.infer<typeof privateFileBucketSchema>;
 export type FileStorageOperation = z.infer<typeof fileStorageOperationSchema>;
 export type FileStorageOperationClaims = z.infer<typeof fileStorageOperationClaimsSchema>;
 export type FileRecord = z.infer<typeof fileRecordSchema>;

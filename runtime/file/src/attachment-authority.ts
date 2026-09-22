@@ -2,86 +2,101 @@ import "server-only";
 
 import type {
   FieldId,
-  FileUploaderActor,
+  OrganizationId,
   SessionContext,
+  VerifiedFileActor,
 } from "@vortex/contracts";
 
-export type ResolveUploaderResult =
-  | Readonly<{ authorized: true; uploader: FileUploaderActor }>
+export type ResolveVerifiedFileActorResult =
+  | Readonly<{ authorized: true; actor: VerifiedFileActor }>
   | Readonly<{ authorized: false; reason: string }>;
 
 /**
- * Extracts a verified uploader actor union directly from trusted server session context.
- * Replaces human-only uploader with verified union for human and scoped system uploads.
- * Never fabricates an organization account for system actors.
- * Ordinary auth tokens, browser metadata, and anonymous callers confer no authority.
+ * Resolves the verified file actor from trusted server-side request context, for the
+ * organisation that will own the file. A human caller is attributed to its verified
+ * organisation account and global identity; a scoped system caller is attributed to
+ * its registered system actor and never to an invented organisation account.
+ *
+ * Request parameters, browser-supplied metadata and an ordinary Auth token are not
+ * accepted here: only the already-resolved server context is. A caller acting in a
+ * different organisation than the file's confers no authority over that file, and a
+ * federated caller's cross-organisation upload is admitted by the source File
+ * service rather than attributed directly here.
  */
-export const resolveUploaderActorFromContext = (
+export const resolveVerifiedFileActor = (
   context: SessionContext,
-): ResolveUploaderResult => {
-  if (context.callerKind === "human") {
-    if (!context.organizationAccountId) {
-      return {
-        authorized: false,
-        reason: "Human caller missing required verified organization account",
-      };
-    }
+  owningOrganizationId: OrganizationId,
+): ResolveVerifiedFileActorResult => {
+  if (context.organizationId !== owningOrganizationId) {
     return {
-      authorized: true,
-      uploader: {
-        kind: "human",
-        organizationAccountId: context.organizationAccountId,
-        ...(context.identityId ? { identityId: context.identityId } : {}),
-      },
+      authorized: false,
+      reason: "Caller organisation does not own the file being recorded",
     };
   }
 
-  if (context.callerKind === "system") {
-    if (!context.systemActorId) {
+  switch (context.callerKind) {
+    case "human":
+      return {
+        authorized: true,
+        actor: {
+          kind: "human",
+          organizationAccountId: context.organizationAccountId,
+          identityId: context.identityId,
+        },
+      };
+    case "system":
+      return {
+        authorized: true,
+        actor: { kind: "system", systemActorId: context.systemActorId },
+      };
+    case "federated":
       return {
         authorized: false,
-        reason: "System caller missing required registered system actor ID",
+        reason:
+          "A federated caller's attachment upload is admitted by the source File service, not attributed as a local uploader",
       };
-    }
-    return {
-      authorized: true,
-      uploader: {
-        kind: "system",
-        systemActorId: context.systemActorId,
-      },
-    };
+    default:
+      return {
+        authorized: false,
+        reason: "Public and anonymous callers confer no private file authority",
+      };
   }
-
-  return {
-    authorized: false,
-    reason: "Public or anonymous callers confer no private file authority",
-  };
 };
 
-export type VerifyAttachmentFieldAccessInput = Readonly<{
+export type VerifyAttachmentFieldAuthorityInput = Readonly<{
   fieldId: FieldId;
-  permittedFieldIds: readonly FieldId[];
+  readableFieldIds: readonly FieldId[];
+  changeableFieldIds: readonly FieldId[];
   operation: "read" | "write" | "delete";
 }>;
 
-export type AttachmentFieldAccessResult =
+export type AttachmentFieldAuthorityResult =
   | Readonly<{ authorized: true }>
   | Readonly<{ authorized: false; reason: string }>;
 
 /**
- * Enforces attachment field authority matching record and field access rules.
- * A user or share grant with record access but without the attachment field named
- * cannot access or view file metadata or content.
+ * Applies the current record and field authority to one attachment field. File
+ * metadata is not more visible than the field that holds it: access to the record
+ * without the attachment field named readable lists and reveals nothing, and
+ * changing or removing its files additionally needs the field changeable. The same
+ * check covers a record-sharing grant, which must name the attachment field.
  */
 export const verifyAttachmentFieldAuthority = (
-  input: VerifyAttachmentFieldAccessInput,
-): AttachmentFieldAccessResult => {
-  const isFieldPermitted = input.permittedFieldIds.includes(input.fieldId);
-  if (!isFieldPermitted) {
+  input: VerifyAttachmentFieldAuthorityInput,
+): AttachmentFieldAuthorityResult => {
+  if (!input.readableFieldIds.includes(input.fieldId)) {
     return {
       authorized: false,
-      reason: `Attachment field '${input.fieldId}' is not permitted for operation '${input.operation}' by current record/field authority`,
+      reason: `Attachment field '${input.fieldId}' is not readable under the current record and field authority`,
     };
   }
+
+  if (input.operation !== "read" && !input.changeableFieldIds.includes(input.fieldId)) {
+    return {
+      authorized: false,
+      reason: `Attachment field '${input.fieldId}' is not changeable under the current record and field authority, so '${input.operation}' is refused`,
+    };
+  }
+
   return { authorized: true };
 };

@@ -2,117 +2,102 @@ import "server-only";
 
 import { randomBytes } from "node:crypto";
 import {
+  MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
+  PRIVATE_FILE_BUCKET,
   fileStorageOperationClaimsSchema,
-  fileStorageOperationSchema,
+  privateFileObjectPathSchema,
+  type FileId,
   type FileStorageOperation,
   type FileStorageOperationClaims,
-  type FileUploaderActor,
-  type FileId,
   type OrganizationId,
+  type VerifiedFileActor,
 } from "@vortex/contracts";
 
-export const PRIVATE_STORAGE_BUCKET = "private_files";
-export const MAXIMUM_STORAGE_OPERATION_TTL_SECONDS = 60;
+export { MAXIMUM_FILE_STORAGE_OPERATION_SECONDS, PRIVATE_FILE_BUCKET };
 
-const STORAGE_KEY_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?:\/[a-f0-9]{16,64})?$/;
+/** Issuance is accepted a few seconds ahead of this clock to absorb verified clock skew. */
+const ISSUED_AT_SKEW_SECONDS = 5;
 
 /**
- * Creates an unguessable storage object key strictly scoped under the organization identifier.
- * The original file name is never included in the storage path.
+ * Creates an unguessable storage object key strictly scoped under the organisation
+ * identifier and its file identifier. The original file name is never part of the path.
  */
 export const createUnguessableStorageKey = (
   organizationId: OrganizationId,
   fileId: FileId,
-): string => {
-  const entropyToken = randomBytes(16).toString("hex");
-  return `${organizationId}/${fileId}/${entropyToken}`;
-};
+): string => `${organizationId}/${fileId}/${randomBytes(16).toString("hex")}`;
 
 /**
- * Validates that an object key begins with the expected organization ID and uses
- * an unguessable platform format with no path traversal.
+ * Validates that an object key belongs to the expected organisation and uses the
+ * unguessable platform format, with no traversal and no original file name.
  */
 export const validateStorageKey = (
   storageKey: string,
   organizationId: OrganizationId,
-): boolean => {
-  if (typeof storageKey !== "string" || storageKey.length === 0 || storageKey.length > 1_000) {
-    return false;
-  }
-  if (!storageKey.startsWith(`${organizationId}/`)) {
-    return false;
-  }
-  if (storageKey.includes("..") || storageKey.includes("\\")) {
-    return false;
-  }
-  return STORAGE_KEY_PATTERN.test(storageKey);
-};
+): boolean =>
+  privateFileObjectPathSchema.safeParse(storageKey).success &&
+  storageKey.startsWith(`${organizationId}/`);
 
 export type CreateSignedStorageOperationClaimsInput = Readonly<{
   destinationProject: string;
   issuer: string;
   organizationId: OrganizationId;
-  bucketId?: string;
   objectPath: string;
   operation: FileStorageOperation;
-  uploader: FileUploaderActor;
+  actor: VerifiedFileActor;
   correlationId: string;
   ttlSeconds?: number;
   clock?: () => Date;
 }>;
 
 /**
- * Mints exact signed operation claims for the Supabase Storage credential bridge.
- * Per specification:
- * - valid for at most 60 seconds
- * - role = authenticated
- * - file-specific token kind = vortex_file_storage_operation
- * - exact destination project, source organisation, bucket, object path, operation, and correlation ID
- * - actor attribution identifying verified human/account or registered system actor (never a fabricated org account)
+ * Mints the exact operation claims for the Supabase Storage credential bridge, per
+ * the storage credential bridge in the files specification: `role=authenticated`,
+ * a File-specific token kind, the destination project and its issuer, the source
+ * organisation, the exact private bucket, object path and single allowed operation,
+ * a correlation identifier, and a lifetime of at most 60 seconds. Actor attribution
+ * names the verified human account or registered system actor and never invents one.
+ *
+ * This mints claims only. Signing keys, token emission and object access belong to
+ * the credential bridge slice and stay out of this module.
  */
 export const createSignedStorageOperationClaims = (
   input: CreateSignedStorageOperationClaimsInput,
 ): FileStorageOperationClaims => {
   const clock = input.clock ?? (() => new Date());
-  const nowMs = clock().getTime();
-  const nowEpochSeconds = Math.floor(nowMs / 1000);
+  const issuedAtEpochSeconds = Math.floor(clock().getTime() / 1000);
 
   const ttlSeconds = Math.min(
-    Math.max(1, input.ttlSeconds ?? MAXIMUM_STORAGE_OPERATION_TTL_SECONDS),
-    MAXIMUM_STORAGE_OPERATION_TTL_SECONDS,
+    Math.max(1, Math.floor(input.ttlSeconds ?? MAXIMUM_FILE_STORAGE_OPERATION_SECONDS)),
+    MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
   );
-
-  const bucketId = input.bucketId ?? PRIVATE_STORAGE_BUCKET;
 
   if (!validateStorageKey(input.objectPath, input.organizationId)) {
     throw new Error(
-      `Invalid storage key for organization ${input.organizationId}: object path must begin with organization and follow unguessable pattern`,
+      `Refusing a storage operation credential for organisation ${input.organizationId}: the object path is not an organisation-scoped unguessable private path`,
     );
   }
 
-  const rawClaims = {
+  return fileStorageOperationClaimsSchema.parse({
     role: "authenticated",
     iss: input.issuer,
     tokenKind: "vortex_file_storage_operation",
     destinationProject: input.destinationProject,
     organizationId: input.organizationId,
-    bucketId,
+    bucketId: PRIVATE_FILE_BUCKET,
     objectPath: input.objectPath,
     operation: input.operation,
-    uploader: input.uploader,
+    actor: input.actor,
     correlationId: input.correlationId,
-    iat: nowEpochSeconds,
-    exp: nowEpochSeconds + ttlSeconds,
-  };
-
-  return fileStorageOperationClaimsSchema.parse(rawClaims);
+    iat: issuedAtEpochSeconds,
+    exp: issuedAtEpochSeconds + ttlSeconds,
+  });
 };
 
 export type VerifySignedStorageOperationClaimsExpected = Readonly<{
-  destinationProject?: string;
+  destinationProject: string;
+  issuer: string;
   organizationId: OrganizationId;
-  bucketId?: string;
   objectPath: string;
   operation: FileStorageOperation;
   nowEpochSeconds?: number;
@@ -123,9 +108,11 @@ export type VerifyStorageClaimsResult =
   | Readonly<{ valid: false; reason: string }>;
 
 /**
- * Verifies that incoming Storage claims strictly match expected destination, organization,
- * bucket, object path, operation, and expiry boundaries.
- * Denies ordinary Auth tokens, wrong operations, expired tokens, and cross-organization attempts.
+ * Verifies that presented Storage claims match the expected destination project and
+ * issuer, organisation, private bucket, exact object path and single operation, and
+ * that they are inside the 60-second boundary. An ordinary Auth token, a token from
+ * another project, a token for another object or operation, and a long-lived or
+ * not-yet-valid token all fail.
  */
 export const verifySignedStorageOperationClaims = (
   claims: unknown,
@@ -135,39 +122,47 @@ export const verifySignedStorageOperationClaims = (
   if (!parseResult.success) {
     return {
       valid: false,
-      reason: "Missing, malformed, or unauthorized storage operation claims; ordinary Auth tokens confer no file authority",
+      reason:
+        "Missing, malformed or out-of-boundary storage operation claims; an ordinary Auth token confers no file authority",
     };
   }
 
   const parsed = parseResult.data;
   const nowEpochSeconds = expected.nowEpochSeconds ?? Math.floor(Date.now() / 1000);
 
+  if (parsed.iat > nowEpochSeconds + ISSUED_AT_SKEW_SECONDS) {
+    return { valid: false, reason: "Storage operation claims are not yet valid" };
+  }
+
   if (parsed.exp < nowEpochSeconds) {
     return { valid: false, reason: "Storage operation claims have expired" };
   }
 
-  if (parsed.organizationId !== expected.organizationId) {
-    return { valid: false, reason: "Organization identifier does not match expected scope" };
+  if (parsed.destinationProject !== expected.destinationProject) {
+    return { valid: false, reason: "Destination project does not match this destination" };
   }
 
-  const expectedBucket = expected.bucketId ?? PRIVATE_STORAGE_BUCKET;
-  if (parsed.bucketId !== expectedBucket) {
-    return { valid: false, reason: "Bucket identifier does not match private storage bucket" };
+  if (parsed.iss !== expected.issuer) {
+    return { valid: false, reason: "Issuer does not match the destination project issuer" };
+  }
+
+  if (parsed.organizationId !== expected.organizationId) {
+    return { valid: false, reason: "Organisation identifier does not match the expected scope" };
   }
 
   if (parsed.objectPath !== expected.objectPath) {
-    return { valid: false, reason: "Object path does not match expected exact target" };
+    return { valid: false, reason: "Object path does not match the expected exact target" };
+  }
+
+  if (!parsed.objectPath.startsWith(`${expected.organizationId}/`)) {
+    return { valid: false, reason: "Object path is outside the expected organisation scope" };
   }
 
   if (parsed.operation !== expected.operation) {
     return {
       valid: false,
-      reason: `Operation mismatch: token authorizes '${parsed.operation}', requested '${expected.operation}'`,
+      reason: `Operation mismatch: the credential authorises '${parsed.operation}', the request is '${expected.operation}'`,
     };
-  }
-
-  if (expected.destinationProject && parsed.destinationProject !== expected.destinationProject) {
-    return { valid: false, reason: "Destination project mismatch" };
   }
 
   return { valid: true, claims: parsed };

@@ -2,61 +2,62 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  PRIVATE_FILE_BUCKET,
   fileRecordSchema,
   type ApplicationRootId,
   type FieldId,
   type FileId,
   type FileLifecycleState,
   type FileRecord,
-  type FileUploaderActor,
   type Fingerprint,
   type OrganizationId,
   type PlatformId,
   type RecordId,
   type RecordTypeId,
+  type VerifiedFileActor,
 } from "@vortex/contracts";
+import { createUnguessableStorageKey } from "./storage-policy";
 import {
-  PRIVATE_STORAGE_BUCKET,
-  createUnguessableStorageKey,
-  validateStorageKey,
-} from "./storage-policy";
-import {
+  normalizeFileExtension,
   verifyContentSafety,
   type ContentKind,
 } from "./content-safety";
 
+/** The preflight safety check this module performs before any external scanner runs. */
+export const PREFLIGHT_SCANNER_NAME = "vortex_file_preflight";
+export const PREFLIGHT_SCANNER_VERSION = "1";
+
 /**
- * Sanitizes an untrusted filename into a safe display name.
- * Strips path separators, directory traversal, null bytes, and non-printable control characters.
- * Enforces maximum length of 255 characters.
+ * Turns an untrusted file name into a safe display name. Directory prefixes,
+ * traversal, control characters and shell/path metacharacters are removed, and the
+ * result is bounded to the 255 characters the file contract stores. The display
+ * name is metadata only; it never becomes part of a storage path.
  */
 export const sanitizeFileDisplayName = (
   rawFilename: string,
   fallbackExtension = "",
 ): string => {
+  const fallback = `unnamed_file${fallbackExtension}`;
   if (typeof rawFilename !== "string" || rawFilename.trim().length === 0) {
-    return `unnamed_file${fallbackExtension}`;
+    return fallback;
   }
 
-  // Remove directory prefixes and path traversals
   const basename = rawFilename.split(/[/\\]/).pop() ?? rawFilename;
 
-  // Strip control characters, null bytes, and dangerous characters
   const sanitized = basename
     .replace(/[\u0000-\u001F\u007F-\u009F]/g, "")
     .replace(/[<>:"/\\|?*]/g, "_")
     .trim();
 
-  if (sanitized.length === 0 || sanitized === "." || sanitized === "..") {
-    return `unnamed_file${fallbackExtension}`;
+  if (sanitized.length === 0 || /^\.+$/.test(sanitized)) {
+    return fallback;
   }
 
   if (sanitized.length > 255) {
-    const extIndex = sanitized.lastIndexOf(".");
-    if (extIndex > 0 && extIndex > sanitized.length - 20) {
-      const ext = sanitized.slice(extIndex);
-      const stem = sanitized.slice(0, 255 - ext.length);
-      return `${stem}${ext}`;
+    const extensionIndex = sanitized.lastIndexOf(".");
+    if (extensionIndex > 0 && extensionIndex > sanitized.length - 20) {
+      const extension = sanitized.slice(extensionIndex);
+      return `${sanitized.slice(0, 255 - extension.length)}${extension}`;
     }
     return sanitized.slice(0, 255);
   }
@@ -64,29 +65,32 @@ export const sanitizeFileDisplayName = (
   return sanitized;
 };
 
-/** Canonical state transitions per specification file lifecycle diagram */
+/** The canonical file lifecycle of the files specification. */
 const ALLOWED_LIFECYCLE_TRANSITIONS: ReadonlyMap<
   FileLifecycleState,
   ReadonlySet<FileLifecycleState>
 > = new Map([
-  ["pending", new Set(["uploaded", "abandoned"])],
-  ["uploaded", new Set(["scanning", "abandoned"])],
-  ["scanning", new Set(["active", "quarantined"])],
-  ["active", new Set(["soft_deleted"])],
-  ["quarantined", new Set(["removed"])],
-  ["abandoned", new Set(["removed"])],
-  ["soft_deleted", new Set(["active", "removed"])],
-  ["removed", new Set()],
+  ["pending", new Set<FileLifecycleState>(["uploaded", "abandoned"])],
+  ["uploaded", new Set<FileLifecycleState>(["scanning", "abandoned"])],
+  ["scanning", new Set<FileLifecycleState>(["active", "quarantined"])],
+  ["active", new Set<FileLifecycleState>(["soft_deleted"])],
+  ["quarantined", new Set<FileLifecycleState>(["removed"])],
+  ["abandoned", new Set<FileLifecycleState>(["removed"])],
+  ["soft_deleted", new Set<FileLifecycleState>(["active", "removed"])],
+  ["removed", new Set<FileLifecycleState>()],
 ]);
 
 export const isValidFileLifecycleTransition = (
   from: FileLifecycleState,
   to: FileLifecycleState,
-): boolean => {
-  const allowed = ALLOWED_LIFECYCLE_TRANSITIONS.get(from);
-  return allowed !== undefined && allowed.has(to);
-};
+): boolean => ALLOWED_LIFECYCLE_TRANSITIONS.get(from)?.has(to) === true;
 
+/**
+ * Moves one file to its next lifecycle state. Illegal transitions are refused, a
+ * file only becomes active once its safety result is clean, activation and deletion
+ * times are recorded, and restoring inside the recovery period clears the deletion
+ * time the soft deletion set.
+ */
 export const transitionFileLifecycleState = (
   fileRecord: FileRecord,
   nextState: FileLifecycleState,
@@ -98,21 +102,61 @@ export const transitionFileLifecycleState = (
     );
   }
 
+  if (nextState === "active" && fileRecord.scannerResult !== "clean") {
+    throw new Error(
+      `Refusing to activate file ${fileRecord.fileId}: its safety result is '${fileRecord.scannerResult}'`,
+    );
+  }
+
   const clock = options?.clock ?? (() => new Date());
   const nowIso = clock().toISOString();
 
-  const updated: FileRecord = {
+  if (nextState === "active") {
+    // Restoring inside the recovery period clears the deletion the soft delete recorded.
+    const { deletedAt, ...restored } = fileRecord;
+    return fileRecordSchema.parse({
+      ...restored,
+      lifecycleState: nextState,
+      activatedAt: fileRecord.activatedAt ?? nowIso,
+    });
+  }
+
+  return fileRecordSchema.parse({
     ...fileRecord,
     lifecycleState: nextState,
-    ...(nextState === "active" && !fileRecord.activatedAt
-      ? { activatedAt: nowIso }
-      : {}),
     ...(nextState === "soft_deleted" ? { deletedAt: nowIso } : {}),
-  };
-
-  return fileRecordSchema.parse(updated);
+  });
 };
 
+/**
+ * Records the outcome of the safety check on a file that is being scanned. A clean
+ * result leaves the file scanning, ready for the activation the record save commits;
+ * any other result quarantines it for review.
+ */
+export const recordFileSafetyResult = (
+  fileRecord: FileRecord,
+  outcome: Readonly<{
+    scannerName: string;
+    scannerVersion: string;
+    scannerResult: "clean" | "quarantined" | "refused";
+  }>,
+): FileRecord => {
+  if (fileRecord.lifecycleState !== "scanning") {
+    throw new Error(
+      `Refusing a safety result for file ${fileRecord.fileId}: it is '${fileRecord.lifecycleState}', not scanning`,
+    );
+  }
+
+  return fileRecordSchema.parse({
+    ...fileRecord,
+    lifecycleState: outcome.scannerResult === "clean" ? "scanning" : "quarantined",
+    scannerName: outcome.scannerName,
+    scannerVersion: outcome.scannerVersion,
+    scannerResult: outcome.scannerResult,
+  });
+};
+
+/** The canonical attachment settings of the field contract. */
 export type FileAttachmentConstraints = Readonly<{
   allowedKinds?: readonly ContentKind[];
   allowedExtensions?: readonly string[];
@@ -124,121 +168,114 @@ export type FileAttachmentConstraints = Readonly<{
 export type CreateFileRecordInput = Readonly<{
   organizationId: OrganizationId;
   applicationRootId?: ApplicationRootId;
-  ownerRecordTypeId?: RecordTypeId;
-  ownerRecordId?: RecordId;
-  ownerFieldId?: FieldId;
+  owner?: Readonly<{
+    recordTypeId: RecordTypeId;
+    recordId: RecordId;
+    fieldId: FieldId;
+  }>;
   attachmentConstraints?: FileAttachmentConstraints;
+  existingAttachmentCount: number;
   rawFilename: string;
   detectedMediaType: string;
   extension: string;
   sizeBytes: number;
   checksum: Fingerprint;
-  uploader: FileUploaderActor;
+  uploader: VerifiedFileActor;
   fileId?: FileId;
-  storageKey?: string;
-  bucketId?: string;
-  scannerName?: string;
-  scannerVersion?: string;
-  scannerResult?: "pending" | "clean" | "quarantined" | "refused";
-  initialState?: FileLifecycleState;
   owningAttachmentReferences?: readonly PlatformId[];
   legalHold?: boolean;
   clock?: () => Date;
 }>;
 
 /**
- * Creates and validates a private organization-owned FileRecord.
- * Stores owner record/field, safe name, detected type, size, checksum, uploader,
- * and lifecycle state under organization-scoped unguessable object paths.
- * Enforces canonical attachment constraints and safety checks.
+ * Creates one private, organisation-owned file record: its owning record type,
+ * record and attachment field, its safe display name, verified media type,
+ * extension, size and checksum, its verified human or registered system uploader,
+ * and its private bucket and organisation-scoped unguessable object path.
+ *
+ * The file starts pending. Executable content and settings the field cannot accept
+ * are refused outright; content that disagrees with its name or with the field's
+ * allowed kinds and extensions is created quarantined for review. Activation is a
+ * later lifecycle transition that a clean safety result gates, so this function
+ * never returns an active file.
  */
-export const createFileRecord = (
-  input: CreateFileRecordInput,
-): FileRecord => {
+export const createFileRecord = (input: CreateFileRecordInput): FileRecord => {
   const clock = input.clock ?? (() => new Date());
   const nowIso = clock().toISOString();
 
-  // Normalize extension (must begin with dot and contain only lowercase alphanumeric)
-  let normalizedExt = input.extension.toLowerCase().trim();
-  if (!normalizedExt.startsWith(".")) {
-    normalizedExt = `.${normalizedExt}`;
-  }
+  const normalizedExtension = normalizeFileExtension(input.extension);
+  const safeDisplayName = sanitizeFileDisplayName(input.rawFilename, normalizedExtension);
 
-  // Sanitize original display name
-  const safeDisplayName = sanitizeFileDisplayName(
-    input.rawFilename,
-    normalizedExt,
-  );
-
-  // Content safety and canonical attachment settings verification
   const safetyResult = verifyContentSafety({
     detectedMediaType: input.detectedMediaType,
-    extension: normalizedExt,
+    extension: normalizedExtension,
     sizeBytes: input.sizeBytes,
-    allowedKinds: input.attachmentConstraints?.allowedKinds,
-    allowedExtensions: input.attachmentConstraints?.allowedExtensions,
-    maxFileSizeMb: input.attachmentConstraints?.maxFileSizeMb,
+    existingAttachmentCount: input.existingAttachmentCount,
+    ...(input.attachmentConstraints?.allowedKinds === undefined
+      ? {}
+      : { allowedKinds: input.attachmentConstraints.allowedKinds }),
+    ...(input.attachmentConstraints?.allowedExtensions === undefined
+      ? {}
+      : { allowedExtensions: input.attachmentConstraints.allowedExtensions }),
+    ...(input.attachmentConstraints?.maxFileSizeMb === undefined
+      ? {}
+      : { maxFileSizeMb: input.attachmentConstraints.maxFileSizeMb }),
+    ...(input.attachmentConstraints?.multiple === undefined
+      ? {}
+      : { multiple: input.attachmentConstraints.multiple }),
+    ...(input.attachmentConstraints?.maxFiles === undefined
+      ? {}
+      : { maxFiles: input.attachmentConstraints.maxFiles }),
   });
 
   if (!safetyResult.accepted && safetyResult.outcome === "refused") {
-    throw new Error(
-      `File metadata creation refused: ${safetyResult.reason}`,
-    );
+    throw new Error(`File metadata creation refused: ${safetyResult.reason}`);
   }
 
   const fileId = input.fileId ?? (randomUUID() as FileId);
 
-  // Storage key must be organization-scoped and unguessable
-  const storageKey =
-    input.storageKey ?? createUnguessableStorageKey(input.organizationId, fileId);
-
-  if (!validateStorageKey(storageKey, input.organizationId)) {
+  // Object paths are built from these identifiers, and a private path has one
+  // canonical lowercase form, so a differently cased identifier is refused here
+  // rather than producing a path the storage policy would later reject.
+  if (
+    input.organizationId !== input.organizationId.toLowerCase() ||
+    fileId !== fileId.toLowerCase()
+  ) {
     throw new Error(
-      `Invalid storage key for organization ${input.organizationId}: must start with organization ID and use unguessable format`,
+      "File metadata creation refused: organisation and file identifiers must be in their canonical lowercase form",
     );
   }
 
-  const scannerResult =
-    safetyResult.outcome === "quarantined"
-      ? "quarantined"
-      : input.scannerResult ?? "pending";
+  const quarantined = !safetyResult.accepted;
 
-  const lifecycleState =
-    scannerResult === "quarantined"
-      ? "quarantined"
-      : input.initialState ?? "pending";
-
-  const candidate = {
+  return fileRecordSchema.parse({
     fileId,
     organizationId: input.organizationId,
-    ...(input.applicationRootId
-      ? { applicationRootId: input.applicationRootId }
-      : {}),
-    lifecycleState,
+    ...(input.applicationRootId === undefined
+      ? {}
+      : { applicationRootId: input.applicationRootId }),
+    lifecycleState: quarantined ? "quarantined" : "pending",
     originalSafeDisplayName: safeDisplayName,
     detectedMediaType: input.detectedMediaType,
-    extension: normalizedExt,
+    extension: normalizedExtension,
     sizeBytes: input.sizeBytes,
     checksum: input.checksum,
-    storageKey,
-    bucketId: input.bucketId ?? PRIVATE_STORAGE_BUCKET,
-    scannerName: input.scannerName ?? "vortex_safety_preflight",
-    scannerVersion: input.scannerVersion ?? "1.0.0",
-    scannerResult,
+    storageKey: createUnguessableStorageKey(input.organizationId, fileId),
+    bucketId: PRIVATE_FILE_BUCKET,
+    scannerName: PREFLIGHT_SCANNER_NAME,
+    scannerVersion: PREFLIGHT_SCANNER_VERSION,
+    scannerResult: quarantined ? "quarantined" : "pending",
     previewReferences: [],
     uploadedBy: input.uploader,
     createdAt: nowIso,
-    ...(lifecycleState === "active" ? { activatedAt: nowIso } : {}),
-    owningAttachmentReferences: input.owningAttachmentReferences
-      ? [...input.owningAttachmentReferences]
-      : [],
-    ...(input.ownerRecordTypeId
-      ? { ownerRecordTypeId: input.ownerRecordTypeId }
-      : {}),
-    ...(input.ownerRecordId ? { ownerRecordId: input.ownerRecordId } : {}),
-    ...(input.ownerFieldId ? { ownerFieldId: input.ownerFieldId } : {}),
+    owningAttachmentReferences: [...(input.owningAttachmentReferences ?? [])],
+    ...(input.owner === undefined
+      ? {}
+      : {
+          ownerRecordTypeId: input.owner.recordTypeId,
+          ownerRecordId: input.owner.recordId,
+          ownerFieldId: input.owner.fieldId,
+        }),
     legalHold: input.legalHold ?? false,
-  };
-
-  return fileRecordSchema.parse(candidate);
+  });
 };
