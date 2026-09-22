@@ -5,6 +5,7 @@ import {
   workflowNodeTypeKeys,
   workflowValueTypeSchema,
 } from "./catalogues";
+import { applicationSourceContractVersion } from "./application-contract-versions";
 import { builderKeySchema, namespacedKeySchema, semanticVersionSchema } from "./identifiers";
 import { jsonValueSchema } from "./common";
 import { versionRequirementSchema } from "./definitions";
@@ -548,7 +549,7 @@ const sourceInterfaceOperationSchema = z
           message: `An ${value.target.kind} interface accepts only ${value.target.kind} output bindings`,
         });
   });
-const sourceApplicationBodySharedFieldsSchema = z
+export const sourceApplicationBodyV2Schema = z
   .object({
     name: z.string().min(1).max(120),
     description: z.string().min(1).max(1_000),
@@ -853,10 +854,6 @@ const sourceApplicationBodySharedFieldsSchema = z
         })
         .strict(),
     ),
-  })
-  .strict();
-export const sourceApplicationBodyV2Schema = sourceApplicationBodySharedFieldsSchema
-  .extend({
     platform_block_dependencies: sourcePlatformBlockDependenciesV2Schema,
     shells: z.array(sourceApplicationShellV2Schema),
     pages: z.array(sourcePageDefinitionV2Schema).min(1),
@@ -1000,7 +997,7 @@ export const sourceApplicationBodyV2Schema = sourceApplicationBodySharedFieldsSc
 
 export const applicationSourceDocumentV2Schema = z
   .object({
-    source_contract_version: z.literal("2.0.0"),
+    source_contract_version: z.literal(applicationSourceContractVersion),
     root_alias: sourceAliasSchema,
     key: namespacedKeySchema,
     kind: z.literal("application"),
