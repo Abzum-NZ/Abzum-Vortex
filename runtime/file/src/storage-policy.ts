@@ -80,6 +80,7 @@ export const createSignedStorageOperationClaims = (
 
   return fileStorageOperationClaimsSchema.parse({
     role: "authenticated",
+    aud: "authenticated",
     iss: input.issuer,
     tokenKind: "vortex_file_storage_operation",
     destinationProject: input.destinationProject,
@@ -134,7 +135,7 @@ export const verifySignedStorageOperationClaims = (
     return { valid: false, reason: "Storage operation claims are not yet valid" };
   }
 
-  if (parsed.exp < nowEpochSeconds) {
+  if (parsed.exp <= nowEpochSeconds) {
     return { valid: false, reason: "Storage operation claims have expired" };
   }
 
