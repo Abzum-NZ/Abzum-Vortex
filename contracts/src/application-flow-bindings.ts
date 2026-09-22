@@ -22,7 +22,6 @@ import {
   queryIdSchema,
   recordTypeIdSchema,
   ruleIdSchema,
-  semanticVersionSchema,
   stableDefinitionReleaseVersionSchema,
   versionRequirementSchema,
   workflowIdSchema,
@@ -736,9 +735,7 @@ export const currentUserFlowActionTargetSchema = z.discriminatedUnion("kind", [
       actionKey: namespacedKeySchema,
       applicationRootId: applicationRootIdSchema,
       actionId: containedComponentIdSchema,
-      releaseVersion: semanticVersionSchema,
-      contentFingerprint: fingerprintSchema,
-      resolutionFingerprint: fingerprintSchema,
+      ...resolvedFlowTargetEvidenceSchema.shape,
     })
     .strict(),
 ]);
