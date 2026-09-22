@@ -1,8 +1,8 @@
 # Complete definition fixtures
 
-[Worked examples](../../docs/specification/appendices/worked-examples.md) · [Build plan Gate 0](../../docs/build-plan/README.md#phases)
+[Worked examples](../../docs/specification/appendices/worked-examples.md) · [Development roadmap](../../docs/build-plan/README.md#phases)
 
-This directory contains the complete, self-consistent JSON dependency set for CRM and Service Desk. The eight current Module sources use source and validation contract `2.0.0`; the two Application sources and three connection-type sources retain contract `1.0.0`. It is a contract gate: the full set must pass the production source parser, deterministic compiler and publication validator before Phase 2 begins.
+This directory contains the complete, self-consistent JSON dependency set for CRM and Service Desk. The eight current Module sources use source and validation contract `2.0.0`; the two Application sources and three connection-type sources retain contract `1.0.0`. The set is the reference contract example: it is shaped to pass the production source parser, deterministic compiler and publication validator. It is existing repository material, not a development completion gate.
 
 These files are definition-source documents, not runtime API messages. Their readable snake-case aliases are local to this fixture set. The strict production schemas in [`@vortex/contracts`](../../contracts/README.md) validate the complete closed shape. The shipping [compiler](../../runtime/definition/src/compiler.ts) resolves each alias and version requirement only from the checked-in immutable snapshot, then the [publication validator](../../runtime/definition/src/validation.ts) proves cross-definition semantics before any runtime service may accept the result.
 
