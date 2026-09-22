@@ -1,5 +1,7 @@
 # 9. Workflows and process pipelines
 
+> Product workflow-engine specification. It does not authorize agents to operate Kestra, deploy, run hosted checks or require delivery receipts. The [current fleet policy](../build-plan/agent-coordination.md) governs development completion; historical operational statements below are not fleet instructions.
+
 [Previous: Forms, actions, rules and events](08-forms-actions-rules-and-events.md) · [Specification index](README.md) · Next: [Queries, reports, search and live updates](10-queries-reports-search.md)
 
 ## Purpose and authority

@@ -1,11 +1,7 @@
-# Vortex implementation instructions
+# Vortex: Claude Code working instructions
 
-Read the assigned issue, its linked specification, and the source before editing. The current issue description defines the work; dated comments and historical handovers do not add requirements.
+Read [AGENTS.md](AGENTS.md), [agent coordination](docs/build-plan/agent-coordination.md) and [fleet operations](docs/build-plan/agent-fleet.md), then your assigned issue and relevant specification. These are the current development instructions. Archived handoffs, operational runbooks and old issue comments do not add gates.
 
-Vortex is a new, definition-led application platform. Correct contracts, engines and schema at their owning boundary. Use one current representation; do not retain V1 readers, conversion layers or obsolete shapes for backward compatibility. Published application versions, explicit activation and draft revision checks remain product functionality.
+Implement only your bounded assignment. As an independent Opus 5 reviewer, fix your findings yourself, re-review the final candidate, integrate through permitted repository operations and update/close the assigned issue. Return a completion summary asking the orchestrator to reconcile the board/dependencies, release your session, clean the completed worktree and take the next strict pickup. Do not edit shared project fields.
 
-Implement the assigned functionality and obtain code review against its acceptance criteria. Do not create or run tests, request database review, require hosted evidence, or add verification gates. Existing test files are not additional scope. Development completion does not claim a production release.
-
-Keep organisation isolation, permission checks, atomic writes, safe errors and secret handling in the implementation. Business-specific behaviour belongs in definitions, not generic engines.
-
-Use the issue's planned agent, estimate, pickup order and worktree metadata. Preserve existing drafts. At the estimate, inspect actual progress and report the remaining work; never kill or restart solely because time elapsed. See [coordination](docs/build-plan/agent-coordination.md) and [fleet operation](docs/build-plan/agent-fleet.md).
+No tests, database execution/review, hosted verification, proof receipts, Kestra or Testing/Production deployment. Product safety and correctness remain functional requirements. Respect real permission controls and report exact rejections; never disguise or reroute a denied operation. Keep secrets out of files, prompts and logs.

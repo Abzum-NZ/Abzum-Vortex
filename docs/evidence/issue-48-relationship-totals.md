@@ -1,7 +1,7 @@
 # Relationship totals — bounded implementation evidence
 
 [Calculated values and totals #48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48) ·
-[Implementation plan](../build-plan/issue-48-calculation-engine.md#next-delivery-relationship-totals)
+[Implementation plan](../build-plan/issue-48-calculation-engine.md)
 
 ## Stage 2B transactional save integration — 14 September 2026
 

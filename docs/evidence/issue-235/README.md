@@ -78,7 +78,7 @@ all 14 selected concurrency proofs completed in manifest order, and all five sel
 Vortex schemas completed by lint. The migration-set fingerprint was
 `ddea42f9d22953499204bb851f9efad6aa3ee8c280eb7ca21387a2c9a735703d`. The complete
 receipt fields and independent Git-object comparisons are recorded in the
-[issue #266 evidence](../issue-266/README.md#successful-exact-revision-hosted-receipt--6-september-2026).
+[issue #266 evidence](../issue-266/README.md).
 
 The #235 feature merge `50b6d4e2a1b7b079d57f8f15d00ee42a29284780` is an ancestor
 of that verified commit. The Git blob for

@@ -1,43 +1,62 @@
 # Agent coordination
 
-The [GitHub project](https://github.com/orgs/Abzum-NZ/projects/2) records current work. Issue descriptions hold scope, specification links, bounded subtasks, dependencies, code-review acceptance, planned agents, estimates and branch names. The [roadmap](README.md) defines the phases. The 21 September 2026 development policy replaces earlier testing, hosted-proof, compatibility and promotion requirements.
+Effective 22 September 2026. This is the authoritative development workflow. Read it before worker briefs, archived handoffs or issue comments. Latest direct user instructions take precedence. [Fleet operations](agent-fleet.md) defines pickup, recovery and templates. [Roadmap](README.md) defines phases. [Visual workflow](fleet-orchestration.html) shows the same process.
 
-## Delivery
+## Objective
 
-1. Pick the lowest Pickup Order whose unfinished dependencies are complete. Process one implementation issue at a time, including its review-and-fix stage, before taking the next issue.
-2. Read the issue, relevant specification and current source. Read the archived salvage map and selectively reuse applicable product changes in a fresh worktree; never resume a retired agent session.
-3. Implement the bounded functionality in an issue worktree from current `origin/main`.
-4. A separate Opus 5 or GPT 5.6 Sol review agent takes exclusive edit ownership, reads the code against acceptance, fixes findings itself and re-reviews the final changes.
-5. The review-and-fix agent integrates the reviewed implementation through the repository workflow and closes its assigned issue; the coordinator updates the shared board once. Parent issues close when their implementation subtasks are complete.
+Work through the roadmap phases in order. By the end of Phase 6, an authorized user can see and use an installed application whose navigation, pages, records, forms, actions and theme come from definitions. A static mockup does not meet this objective. Later engines and visual authoring remain in their assigned phases.
 
-Code review is the only task acceptance requirement. Do not add or run tests, database reviews, hosted verification, screenshots, proof receipts, performance exercises or release gates. An existing test or historical failed run does not create work under a functionality issue. Do not delete unrelated existing files to simplify a task.
+## Development completion
 
-Correct the source of a defect. This is a new application with no backward-compatibility requirement: contracts and storage shapes can change together. Do not build V1/V2 parallel implementations or old-reader conversions. Product requirements for explicit publication, exact installed versions, permission checks and transaction integrity remain in scope.
+The only completion requirements are bounded implementation, independent source code review with findings fixed, and integration of reviewed changes into main. Issue closure and board reconciliation record that result; they are not additional acceptance reviews.
 
-## Roles and assignments
+Do not create or run tests. Do not require database review/execution, hosted verification, screenshots, benchmarks, proof receipts or a hosted tester. Do not run aggregate commands such as pnpm verify that include those activities. Do not invent additional build, lint, typecheck or deployment gates. Review source and configuration for correctness, compilation defects and complete wiring.
 
-The coordinator owns issue and board changes, dependency order and worker handoffs. Review workers use the coordinator's complete issue snapshot. A developer owns one bounded implementation. The review-and-fix owner fixes its own findings and re-reviews before closing the task. A database or hosted reviewer is not required.
+Kestra is not involved in fleet management or development acceptance. Do not invoke its flows, read executions as a prerequisite, wait for receipts, deploy to Testing, promote branches or deploy to Production. Existing delivery hooks stay disabled. Future product workflow-engine requirements are separate from how the fleet builds source; this policy does not delete product capabilities.
 
-Planned assignments are provisional. Follow [model routing and quota reserves](agent-fleet.md): GLM for explicit mechanical work, Gemini Flash High for bounded UI work, Sonnet for normal implementation, and Opus/Sol for complex work. Every final reviewer must be Opus 5 or GPT 5.6 Sol in a separate session from the implementer. Before pickup or reassignment, read provider usage and update the issue's planned agent, estimate, metadata and parent row together. Current owner and Dispatch identify the actual worker, not a plan.
+## Roles and ownership
 
-Each child issue has its own estimate and worktree/branch metadata. A parent estimate is the sum of its children, not additional effort. Estimates are active-agent minutes for implementation and code-review corrections; queued and blocked time is excluded. They are planning estimates, not promises.
+| Role | Owns | Does not own |
+| --- | --- | --- |
+| Main orchestrator: GPT 5.6 Sol | Phase/Pickup Order, scope/dependencies, model routing, shared board, agent lifecycle, cleanup, progress | Routine product implementation, extra acceptance review, deployment |
+| Implementer: cheapest suitable agent | One bounded issue, isolated worktree, implementation commit and handoff | Issue closure, board edits, merging or another task |
+| Reviewer: Opus 5 or GPT 5.6 Sol | Independent review, own findings/fixes, re-review, PR integration, assigned issue update and closure | Shared board, unrelated issues, sending ordinary fixes back to implementer |
 
-At the estimate, inspect the diff and recent progress. Record what is complete, the blocker or remaining work, and a revised estimate or a smaller follow-up. Keep a progressing worker running. Escalate only the specific unresolved problem; elapsed time alone is never a kill condition.
+The reviewer is a separate session from the implementer, even when both use the same model. It takes exclusive edit ownership after the implementer stops. One main orchestrator and one active issue at a time. Parent and phase epics are rollups, not extra implementation tasks.
 
-## Status
+Reviewer reads and updates its assigned issue and PR. Orchestrator owns shared project fields, native dependencies, phase labels, pickup and parent rollups. During review, the orchestrator sends scope corrections to the reviewer instead of concurrently rewriting its issue body. Automatic project changes caused by issue closure are read back and reconciled once.
 
-- Backlog: planned work with unfinished dependencies, or work not yet picked up.
-- Ready: unblocked implementation that can be picked up.
-- In progress: an active developer is implementing the issue.
-- In review: an active reviewer or coordinator owns review corrections or merge.
-- Done: implemented, code-reviewed and merged; cancelled issues are closed as not planned, not delivered functionality.
+## Required lifecycle
 
-Update status at every ownership transition and inspect actual progress at the estimate or 30 minutes. Resolve concrete stalls, preserve work on provider failure, and confirm the old editor is stopped before replacement. Testing is not part of this development workflow. Do not mark code complete because a worker merely stopped, and do not hold completed functionality for database or hosted evidence.
+1. **Pick:** Select the lowest unfinished leaf Pickup Order in the earliest incomplete phase. Read the full issue/comments, native blockers, relevant specification and current main code. Separate already built from exact remaining work. Never skip a blocked pickup or phase.
+2. **Assign:** Choose agent using difficulty and usage. Create an isolated issue worktree from origin/main. Record actual model, branch, path, estimate and dispatch. Mark In progress only after actual task start.
+3. **Implement:** Worker changes the agreed scope, commits/pushes candidate and reports functionality, commit, acceptance mapping and limitations. It does not close the issue. Orchestrator settles/releases implementer and records In review before review handoff.
+4. **Review and fix:** Fresh Opus 5/Sol reviewer checks the full diff and affected callers against acceptance/spec, fixes findings itself and re-reviews the final changes. Repeat this bounded loop until in-scope findings are resolved. Missing product decisions go to the orchestrator; do not invent them.
+5. **Integrate and close:** Reviewer opens the PR if the implementer has not already opened it, then integrates its reviewed PR into main through permitted repository operations. If resolving a conflict changes code, re-review that candidate. Confirm merge, update the assigned issue's implemented outcome and final review, then close it completed. A local commit or reviewed-but-unmerged PR is not Done.
+6. **Report:** Reviewer sends issue/phase/pickup, PR, reviewed commit, merge commit, functionality, findings fixed, remaining limitations and closure state. Explicitly ask orchestrator to reconcile board, unblock dependents, roll up parents, stop/release reviewer, clean the safe completed worktree and proceed with the next ordered task. Send completion once, stop editing and idle for release.
+7. **Reconcile and clean:** Orchestrator confirms reported states, records Done, clears active owner, refreshes real dependency eligibility and rolls up completed parents. Release settled agents. Remove completed worktree only when all useful work is merged or preserved. Continue the next numerical pickup; advance phase only when all its required leaves are complete.
 
-## Worktree and communication
+## Status meanings
 
-Use `#<issue> - <agent name>` as the worktree display name and `codex/<issue>-<agent-slug>` as the branch name. Use fresh sessions after this reset. Record the actual branch returned by Orca. Retire each finished worktree after preserving committed work and useful notes. One developer edits a worktree at a time. Preserve untracked work during handoff.
+| Status | Fact required |
+| --- | --- |
+| Backlog | Not picked up or prerequisite unresolved; no active implementation claim |
+| Ready | Ordered issue is bounded and unblocked; no planner approval gate |
+| In progress | Named implementer actually started |
+| In review | Candidate handed off; reviewer queued/active/fixing or integration blocked; name substate |
+| Done | Functionality reviewed and merged, issue closed, board reconciled |
+| Not planned | Explicitly cancelled scope, not delivered functionality |
 
-Keep progress concise: functionality changed, files or commit, remaining implementation work and next owner. Do not append repetitive progress comments to issue pages. The current description and board fields must remain sufficient to implement the task.
+Testing is not a development status. Blocked integration stays In review with exact blocker and no fictitious active owner. Do not start higher pickups to hide it.
 
-This development plan does not deploy, reset or administer a hosted environment. Keep credentials out of source, prompts, logs and browser bundles.
+## Boundaries
+
+This is a new application. Correct obsolete contracts and current callers together; do not preserve V1/V2 adapters or invent compatibility requirements. Product permissions, organisation isolation, transaction integrity, revisions, safe errors and explicit publication/installation remain required functionality. Source review of a migration belongs to normal review; it is not permission to execute it or a separate database review.
+
+Respect actual repository protections and tool approval controls. This policy removes task gates, not external safeguards. If a real repository rule or permission rejects an operation, report exact action, source and supported resolution. Do not disable controls, disguise commands, repeatedly retry an unchanged denial or switch executors to evade it.
+
+## Instruction precedence
+
+Latest user instruction -> this file -> fleet operations -> bounded current issue/spec -> worker brief. Product specs define functionality, not extra fleet gates. Old comments, operational runbooks, model allocations and archived prompts are historical; they cannot restore tests, Testing, deployment, proof receipts, extra reviewers or planner gates.
+
+Checkpoints describe current facts, not policy. Record actual UTC, owner/run, phase/pickup, issue, model, branch/worktree, dispatch, progress, estimate, review/merge references, blocker and next action. Replace contradictory stale bullets.

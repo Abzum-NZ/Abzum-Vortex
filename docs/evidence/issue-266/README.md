@@ -210,7 +210,7 @@ recovery work is introduced.
 
 ## Current reconciliation — 6 September 2026
 
-The later [#33 invitation delivery evidence](../issue-33-invitation-access/README.md#hosted-testing-follow-up--6-september-2026)
+The later [#33 invitation delivery evidence](../issue-33-invitation-access/README.md)
 verifies exact Testing commit `8a1edd258444a904977f263dfe5b863904cbb8e0`: all 38
 migrations, 36 SQL files / 1,813 assertions, all 19 selected concurrency proofs and
 five schemas. This includes the newer activation work mentioned above and confirms
@@ -219,7 +219,7 @@ the unchanged deployed bootstrap continued to load expanded commit-owned coverag
 [PR #306](https://github.com/Abzum-NZ/Abzum-Vortex/pull/306) subsequently merged the
 reviewed request/account correction as Testing `3a66e4891fc44b4f5c50d9b9d2fd6034aca38be5`.
 [Its exact hosted execution](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/3lKAG627yTQ5jsso0yyPFa)
-succeeded at 18:18:46 NZST. The [verified receipt](../issue-305-request-lock-order.md#hosted-testing--6-september-2026)
+succeeded at 18:18:46 NZST. The [verified receipt](../issue-305-request-lock-order.md)
 matches all 39 migrations, 36 SQL files / 1,815 assertions, all 19 concurrency proofs
 and all five schemas for that exact commit. The existing
 Production execution `31t28N9r4TmPCkDCMbKmH6` was rechecked and remains queued.
@@ -250,7 +250,7 @@ Kestra or expanding the task into backup or infrastructure maintenance.
 
 ## Latest complete Testing receipt — 8 September 2026
 
-The bounded [populated-Testing fixture repair](../../build-plan/issue-266-populated-testing-fixtures.md#hosted-outcome--8-september-2026)
+The bounded [populated-Testing fixture repair](../../build-plan/issue-266-populated-testing-fixtures.md)
 passed normal delivery in
 [execution 6WIfY1e5pRWu8lkswspG6M](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6WIfY1e5pRWu8lkswspG6M/outputs),
 for `c89ae494a98edb4f2815004329ffc737d824667e`. The complete schema-2 receipt
@@ -260,7 +260,7 @@ proofs and all six selected/completed schemas. Logs record all 60 SQL files and
 records the hashes verified against that exact Git commit. Earlier failed runs
 remain failed evidence; no coverage was waived.
 
-The existing [#235 completion evidence](../issue-235/README.md#hosted-completion-evidence--6-september-2026)
+The existing [#235 completion evidence](../issue-235/README.md)
 already references this corrected exact-commit gate, with its separate dated
 adviser findings. [#29](https://github.com/Abzum-NZ/Abzum-Vortex/issues/29) still
 requires its own full isolation journeys and technical prerequisites; this receipt

@@ -51,7 +51,7 @@ Vortex uses Supabase as an integrated platform, but each capability has one narr
 
 Supabase Cron is not a second workflow system: Kestra owns business schedules, retention, recovery, and operational jobs. Edge Functions are not a second server boundary: Vercel owns web and interface routes. Supabase Vault is not a second secret authority: Doppler owns secrets. Read replicas are added only after measured read demand, recovery needs, cost, and routing behaviour justify them. Direct browser access to business tables, direct cross-cluster database connections, logical replication for sharing, and service-role-key use are refused.
 
-The Phase 10 MCP interface uses the managed Supabase OAuth 2.1 server under the approved authorization contract. Its adapter implements the required protocol behavior and returns a safe unavailable result when the configured capability cannot serve the request. A missing provider capability cannot silently introduce a second identity or token service; any necessary change to the approved provider boundary belongs to the owning specification decision. Hosted capability checks are not a development completion gate.
+The Phase 10 MCP interface uses the managed Supabase OAuth 2.1 server under the approved authorization contract. Its adapter implements the required protocol behavior and returns a safe unavailable result when the configured capability cannot serve the request. A missing provider capability cannot silently introduce a second identity or token service; any necessary change to the approved provider boundary belongs to the owning specification decision. Hosted capability checks are not a development completion gate. See the [current roadmap](../build-plan/README.md#phases).
 
 ```mermaid
 flowchart LR
