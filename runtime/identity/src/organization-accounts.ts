@@ -282,6 +282,20 @@ export const createOrganizationAccountStore = (
     ): Promise<OffboardingTransferBatchResult> {
       return executeTransferOffboardingOwnedRecords(transaction, command);
     },
+
+    async beginOrganizationAccountClosing(
+      transaction: RequestDatabaseTransaction,
+      command: BeginOrganizationAccountClosingCommand,
+    ): Promise<OrganizationAccountClosingResult> {
+      return executeBeginOrganizationAccountClosing(transaction, command);
+    },
+
+    async finalizeOrganizationAccountDeletion(
+      transaction: RequestDatabaseTransaction,
+      organizationAccountId: string,
+    ): Promise<AccountDeletionFenceResult> {
+      return executeFinalizeOrganizationAccountDeletion(transaction, organizationAccountId);
+    },
   });
 };
 
@@ -431,6 +445,63 @@ export interface OffboardingTransferBatchResult {
   readonly next?: OffboardingInventoryCursor & { readonly token: string };
 }
 
+export type OrganizationAccountLifecycleState =
+  | "active"
+  | "suspended"
+  | "closed"
+  | "closing"
+  | "deleted";
+
+const organizationAccountLifecycleStates = [
+  "active",
+  "suspended",
+  "closed",
+  "closing",
+  "deleted",
+] as const;
+
+/**
+ * Begins the account-closing fence: once accepted, `state` is 'closing' and
+ * every ownership-target validation and transfer writer refuses assigning new
+ * ownership to this account, because each already requires 'active'. Closing
+ * is available from 'active', 'suspended' or 'closed'; it is not itself
+ * deletion and can still be followed by ordinary administration.
+ */
+export interface BeginOrganizationAccountClosingCommand {
+  readonly organizationAccountId: string;
+  readonly expectedRevision: number;
+}
+
+export interface OrganizationAccountClosingResult {
+  readonly outcome: "closing";
+  readonly organizationAccountId: string;
+  readonly organizationId: string;
+  readonly state: "closing";
+  readonly revision: number;
+}
+
+export type AccountDeletionFenceOutcome = "deleted" | "not_closing" | "records_remain";
+
+const accountDeletionFenceOutcomes = ["deleted", "not_closing", "records_remain"] as const;
+
+/**
+ * The final deletion fence. It requires the account to already be 'closing',
+ * then runs a private, undisclosed inventory across every organisation-
+ * account-owned storage contract pinned to the caller's current installation
+ * (application-contained and organisation-shared alike, active or detached,
+ * blind to lifecycle state and to the caller's own per-record disclosure). A
+ * `records_remain` or `not_closing` outcome never identifies which record or
+ * scope caused it. Deletion retains the account row and its historical
+ * attribution; it never erases authored history.
+ */
+export interface AccountDeletionFenceResult {
+  readonly outcome: AccountDeletionFenceOutcome;
+  readonly organizationAccountId?: string;
+  readonly state?: OrganizationAccountLifecycleState;
+  readonly revision?: number;
+  readonly accessVersion: number;
+}
+
 interface OffboardingInventorySqlRow extends DatabaseRow {
   readonly result: unknown;
 }
@@ -482,6 +553,11 @@ const invalidResult = (): never => {
 };
 
 const commandUuid = (value: unknown): string => (isUuid(value) ? value : invalidCommand());
+
+const commandRevision = (value: unknown): number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 9007199254740991
+    ? value
+    : invalidCommand();
 
 const commandMember = <Member extends string>(
   value: unknown,
@@ -1012,6 +1088,89 @@ const executeTransferOffboardingOwnedRecords = async (
   }
 };
 
+interface BeginClosingSqlRow extends DatabaseRow {
+  readonly organization_account_id: unknown;
+  readonly organization_id: unknown;
+  readonly state: unknown;
+  readonly closing_at: unknown;
+  readonly revision: unknown;
+}
+
+const executeBeginOrganizationAccountClosing = async (
+  transaction: RequestDatabaseTransaction,
+  command: unknown,
+): Promise<OrganizationAccountClosingResult> => {
+  if (typeof command !== "object" || command === null || Array.isArray(command)) {
+    invalidCommand();
+  }
+  const fields = command as Record<string, unknown>;
+  const organizationAccountId = commandUuid(fields.organizationAccountId);
+  const expectedRevision = commandRevision(fields.expectedRevision);
+
+  try {
+    const rows = await transaction.query<BeginClosingSqlRow>`
+      select *
+      from vortex_access.begin_organization_account_closing_for_administration(
+        ${organizationAccountId}::uuid,
+        ${expectedRevision}::bigint
+      )
+    `;
+    const row = requireOne(rows);
+    if (resultMember(row.state, organizationAccountLifecycleStates) !== "closing") {
+      invalidResult();
+    }
+    return {
+      outcome: "closing",
+      organizationAccountId: resultUuid(row.organization_account_id),
+      organizationId: resultUuid(row.organization_id),
+      state: "closing",
+      revision: resultStoredInteger(row.revision),
+    };
+  } catch (error) {
+    if (error instanceof OrganizationAccountError) throw error;
+    throw mapStorageFailure(error);
+  }
+};
+
+interface FinalizeAccountDeletionSqlRow extends DatabaseRow {
+  readonly result: unknown;
+}
+
+const executeFinalizeOrganizationAccountDeletion = async (
+  transaction: RequestDatabaseTransaction,
+  organizationAccountIdCandidate: unknown,
+): Promise<AccountDeletionFenceResult> => {
+  const organizationAccountId = commandUuid(organizationAccountIdCandidate);
+
+  try {
+    const rows = await transaction.query<FinalizeAccountDeletionSqlRow>`
+      select vortex_record.finalize_account_deletion_fence(
+        ${organizationAccountId}::uuid
+      ) as result
+    `;
+    const raw = requireOne(rows).result;
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) invalidResult();
+    const data = raw as Record<string, unknown>;
+    const outcome = resultMember(data.outcome, accountDeletionFenceOutcomes);
+    return {
+      outcome,
+      ...(data.organizationAccountId === undefined || data.organizationAccountId === null
+        ? {}
+        : { organizationAccountId: resultUuid(data.organizationAccountId) }),
+      ...(data.state === undefined || data.state === null
+        ? {}
+        : { state: resultMember(data.state, organizationAccountLifecycleStates) }),
+      ...(data.revision === undefined || data.revision === null
+        ? {}
+        : { revision: resultStoredInteger(data.revision) }),
+      accessVersion: resultStoredInteger(data.accessVersion),
+    };
+  } catch (error) {
+    if (error instanceof OrganizationAccountError) throw error;
+    throw mapStorageFailure(error);
+  }
+};
+
 const defaultStore = createOrganizationAccountStore();
 
 export const ensureIdentityProjection = defaultStore.ensureIdentityProjection;
@@ -1020,3 +1179,5 @@ export const createInvitationAfterAuthorization = defaultStore.createInvitationA
 export const revokeInvitationAfterAuthorization = defaultStore.revokeInvitationAfterAuthorization;
 export const listOffboardingOwnedRecords = defaultStore.listOffboardingOwnedRecords;
 export const transferOffboardingOwnedRecords = defaultStore.transferOffboardingOwnedRecords;
+export const beginOrganizationAccountClosing = defaultStore.beginOrganizationAccountClosing;
+export const finalizeOrganizationAccountDeletion = defaultStore.finalizeOrganizationAccountDeletion;
