@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { PageDefinition, PageDefinitionV2 } from "@vortex/contracts";
+import type { PageDefinitionV2 } from "@vortex/contracts";
 import type { ResolvedPageComposition } from "./page-composition-resolution";
 
 export type PlacementCapabilityState = Readonly<{
@@ -81,62 +81,8 @@ const projectV2Slot = (
   return { placements: projected, order };
 };
 
-const projectV1 = (page: PageDefinition, states: PageCapabilityState["placements"]): JsonObject => {
-  const source = object(page);
-  const projectPlacement = (candidate: unknown): JsonObject | undefined => {
-    const placement = object(candidate);
-    const placementId = String(placement.placementId);
-    const state = states[placementId];
-    if (
-      state === undefined ||
-      !state.viewAllowed ||
-      (placement.visibilityCondition !== undefined && state.conditionAllowed !== true)
-    )
-      return undefined;
-    return {
-      ...withoutKeys(placement, ["viewPermissionKey", "usePermissionKey", "visibilityCondition"]),
-      ...placementAvailability(state, placement.usePermissionKey !== undefined),
-    };
-  };
-  const projectLayout = (retained: ReadonlySet<string>): JsonObject => ({
-    ...page.layout,
-    desktop: {
-      ...page.layout.desktop,
-      componentOrder: page.layout.desktop.componentOrder.filter((id) => retained.has(id)),
-    },
-    phone: {
-      ...page.layout.phone,
-      componentOrder: page.layout.phone.componentOrder.filter((id) => retained.has(id)),
-    },
-  });
-  if (page.type === "guided_form") {
-    const steps = page.steps.map((step) => ({
-      ...step,
-      blocks: step.blocks.map(projectPlacement).filter((value) => value !== undefined),
-    }));
-    const retained = new Set(
-      steps.flatMap((step) => step.blocks.map((candidate) => String(candidate.placementId))),
-    );
-    return {
-      ...withoutKeys(source, ["accessPermissionKey"]),
-      layout: projectLayout(retained),
-      steps,
-    };
-  }
-  if ("blocks" in page) {
-    const blocks = page.blocks.map(projectPlacement).filter((value) => value !== undefined);
-    const retained = new Set(blocks.map((candidate) => String(candidate.placementId)));
-    return {
-      ...withoutKeys(source, ["accessPermissionKey"]),
-      layout: projectLayout(retained),
-      blocks,
-    };
-  }
-  return withoutKeys(source, ["accessPermissionKey"]);
-};
-
 const projectV2 = (
-  resolved: Extract<ResolvedPageComposition, { version: "2" }>,
+  resolved: ResolvedPageComposition,
   states: PageCapabilityState["placements"],
 ): JsonObject => {
   const page: PageDefinitionV2 = resolved.page;
@@ -168,7 +114,5 @@ export const projectPageCapability = (
   capability: PageCapabilityState,
 ): ProjectedPageCapability => {
   if (!capability.pageAllowed) return undefined;
-  return resolved.version === "2"
-    ? projectV2(resolved, capability.placements)
-    : projectV1(resolved.page, capability.placements);
+  return projectV2(resolved, capability.placements);
 };

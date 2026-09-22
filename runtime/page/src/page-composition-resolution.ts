@@ -1,17 +1,14 @@
 import "server-only";
 
-import type { ApplicationShellV2, PageDefinition, PageDefinitionV2 } from "@vortex/contracts";
+import type { ApplicationShellV2, PageDefinitionV2 } from "@vortex/contracts";
 
 export type PlacementSlotV2 = ApplicationShellV2["layout"];
-export type ResolvedPageComposition =
-  | Readonly<{ version: "1"; page: PageDefinition }>
-  | Readonly<{
-      version: "2";
-      page: PageDefinitionV2;
-      roots:
-        | Readonly<{ kind: "page"; main: PlacementSlotV2 }>
-        | Readonly<{ kind: "guided"; stepContent: Readonly<Record<string, PlacementSlotV2>> }>;
-    }>;
+export type ResolvedPageComposition = Readonly<{
+  page: PageDefinitionV2;
+  roots:
+    | Readonly<{ kind: "page"; main: PlacementSlotV2 }>
+    | Readonly<{ kind: "guided"; stepContent: Readonly<Record<string, PlacementSlotV2>> }>;
+}>;
 
 const emptySlot = (): PlacementSlotV2 => ({
   placements: {},
@@ -103,10 +100,9 @@ const resolvedShellRoot = (
 };
 
 export const resolvePageComposition = (
-  page: PageDefinition | PageDefinitionV2,
+  page: PageDefinitionV2,
   shells: readonly ApplicationShellV2[] = [],
 ): ResolvedPageComposition => {
-  if ("layout" in page) return { version: "1", page };
   const composition = page.composition;
   if (composition.shellKind === "default") {
     requireUniquePlacementOwnership(
@@ -114,8 +110,8 @@ export const resolvePageComposition = (
       "main" in composition ? [composition.main] : Object.values(composition.stepContent),
     );
     return "main" in composition
-      ? { version: "2", page, roots: { kind: "page", main: composition.main } }
-      : { version: "2", page, roots: { kind: "guided", stepContent: composition.stepContent } };
+      ? { page, roots: { kind: "page", main: composition.main } }
+      : { page, roots: { kind: "guided", stepContent: composition.stepContent } };
   }
 
   const matches = shells.filter((shell) => shell.shellId === composition.shellId);
@@ -125,7 +121,6 @@ export const resolvePageComposition = (
   if ("content" in composition) {
     requireUniquePlacementOwnership(shell, Object.values(composition.content));
     return {
-      version: "2",
       page,
       roots: { kind: "page", main: resolvedShellRoot(shell, composition.content) },
     };
@@ -147,7 +142,6 @@ export const resolvePageComposition = (
     Object.values(stepContent).flatMap((content) => Object.values(content)),
   );
   return {
-    version: "2",
     page,
     roots: {
       kind: "guided",

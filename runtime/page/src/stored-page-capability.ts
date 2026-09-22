@@ -1,7 +1,6 @@
 import "server-only";
 
 import {
-  applicationDefinitionConsumerReadResultV1Schema,
   applicationDefinitionConsumerReadResultV2Schema,
   applicationRootIdSchema,
   pageIdSchema,
@@ -89,11 +88,9 @@ export const createStoredPageCapabilityService = (
     source
       .readExact()
       .then(({ applicationRelease: release, permissionRegistration: registration }) => {
-        const parsedV2 = applicationDefinitionConsumerReadResultV2Schema.safeParse(release);
-        const parsedV1 = applicationDefinitionConsumerReadResultV1Schema.safeParse(release);
-        if (!parsedV2.success && !parsedV1.success)
-          throw new Error("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
-        const applicationRelease = parsedV2.success ? parsedV2.data : parsedV1.data!;
+        const parsed = applicationDefinitionConsumerReadResultV2Schema.safeParse(release);
+        if (!parsed.success) throw new Error("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
+        const applicationRelease = parsed.data;
         const pages = applicationRelease.content.pages.filter((page) =>
           sameUuid(page.pageId, selectedPageId),
         );
@@ -107,23 +104,14 @@ export const createStoredPageCapabilityService = (
           return matches[0];
         };
         const pageEntry = permission(page.accessPermissionKey);
-        const resolved = resolvePageComposition(
-          page,
-          parsedV2.success ? parsedV2.data.content.shells : [],
-        );
+        const resolved = resolvePageComposition(page, applicationRelease.content.shells);
         const placements: Record<string, unknown>[] =
-          resolved.version === "1"
-            ? resolved.page.type === "guided_form"
-              ? resolved.page.steps.flatMap((step) => step.blocks)
-              : "blocks" in resolved.page
-                ? resolved.page.blocks
-                : []
-            : resolved.roots.kind === "page"
-              ? v2Placements(resolved.roots.main)
-              : Object.values(resolved.roots.stepContent).flatMap(v2Placements);
+          resolved.roots.kind === "page"
+            ? v2Placements(resolved.roots.main)
+            : Object.values(resolved.roots.stepContent).flatMap(v2Placements);
         return {
           page,
-          ...(parsedV2.success ? { applicationShells: parsedV2.data.content.shells } : {}),
+          applicationShells: applicationRelease.content.shells,
           sourceCorrelationId: applicationRelease.correlationId,
           pagePermission: {
             permissionKey: page.accessPermissionKey,

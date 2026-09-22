@@ -216,10 +216,10 @@ begin
     and root.organization_id = initial_authority.organization_id
     and root.kind = 'application'
     and release.release_revision = p_application_release_revision
-    and release.validation_contract_version = '1.0.0'
+    and release.validation_contract_version = '2.0.0'
     and release.compilation_output #>> '{kind}' = 'application'
     and release.compilation_output #>> '{canonical,envelope,rootId}' = p_application_root_id::text
-    and release.compilation_output #>> '{validationContractVersion}' = '1.0.0';
+    and release.compilation_output #>> '{validationContractVersion}' = '2.0.0';
 
   select pg_catalog.count(*)::integer into pin_count
   from vortex_definition.reachable_module_dependency_edges(
@@ -505,10 +505,10 @@ begin
       and root.organization_id = initial_authority.organization_id
       and root.kind = 'application'
       and release.release_revision = p_application_release_revision
-      and release.validation_contract_version = '1.0.0'
+      and release.validation_contract_version = '2.0.0'
       and release.compilation_output #>> '{kind}' = 'application'
       and release.compilation_output #>> '{canonical,envelope,rootId}' = p_application_root_id::text
-      and release.compilation_output #>> '{validationContractVersion}' = '1.0.0'
+      and release.compilation_output #>> '{validationContractVersion}' = '2.0.0'
   ) then
     raise exception using errcode = 'P0002',
       message = 'Exact Application release is unavailable';

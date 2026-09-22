@@ -1,13 +1,11 @@
 import "server-only";
 
 import {
-  pageDefinitionSchema,
   pageDefinitionV2Schema,
   type ApplicationShellV2,
   type IdentitySession,
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
-  type PageDefinition,
   type PageDefinitionV2,
   type SelectedOrganizationScope,
 } from "@vortex/contracts";
@@ -34,7 +32,7 @@ type PermissionBinding = Readonly<{
 }>;
 
 export type FixedAuthenticatedPageCapability = Readonly<{
-  page: PageDefinition | PageDefinitionV2;
+  page: PageDefinitionV2;
   applicationShells?: readonly ApplicationShellV2[];
   sourceCorrelationId?: string;
   pagePermission: PermissionBinding;
@@ -89,23 +87,6 @@ const collectV2Slot = (slot: Record<string, unknown>, result: RequiredPlacement[
 
 const requiredPlacements = (resolved: ResolvedPageComposition): RequiredPlacement[] => {
   const result: RequiredPlacement[] = [];
-  const page = resolved.page;
-  if ("layout" in page) {
-    const placements =
-      page.type === "guided_form"
-        ? page.steps.flatMap((step) => step.blocks)
-        : "blocks" in page
-          ? page.blocks
-          : [];
-    return placements.map((placement) => ({
-      placementId: placement.placementId,
-      viewPermissionKey: placement.viewPermissionKey,
-      ...(placement.usePermissionKey === undefined
-        ? {}
-        : { usePermissionKey: placement.usePermissionKey }),
-    }));
-  }
-  if (resolved.version !== "2") return result;
   if (resolved.roots.kind === "page")
     collectV2Slot(resolved.roots.main as unknown as Record<string, unknown>, result);
   else
@@ -144,8 +125,7 @@ export const createAuthenticatedPageCapabilityService = <Command>(
     ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> =>
       requests.run(session, candidate, async (transaction, scope) => {
         const loaded = await dependencies.adapter.load(transaction, scope, command);
-        const parsed = pageDefinitionV2Schema.safeParse(loaded.page);
-        const page = parsed.success ? parsed.data : pageDefinitionSchema.parse(loaded.page);
+        const page = pageDefinitionV2Schema.parse(loaded.page);
         const resolved = resolvePageComposition(page, loaded.applicationShells);
         if (!sameKey(loaded.pagePermission.permissionKey, page.accessPermissionKey))
           throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
