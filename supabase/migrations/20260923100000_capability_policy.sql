@@ -6,9 +6,12 @@ create function vortex_access.capability_policy_quantity_is_valid(p_quantity num
 returns boolean
 language sql immutable strict parallel safe security invoker set search_path = ''
 as $function$
-  select p_quantity > 0
+  select p_quantity <> 'NaN'::numeric
+    and p_quantity > 0
     and p_quantity <= 9007199254740991::numeric
-    and p_quantity <> 'NaN'::numeric;
+    -- A stored limit must survive the double-precision contract quantity
+    -- exactly, so no reader ever silently rounds a limit it cannot represent.
+    and p_quantity = (p_quantity::float8)::numeric;
 $function$;
 
 create function vortex_access.capability_policy_key_is_valid(p_key text)
@@ -134,6 +137,8 @@ create table vortex_access.capability_policy_assignments (
   )
 );
 
+-- One live assignment per exact subject and capability scope.  Effective
+-- resolution therefore never has to choose between overlapping assignments.
 create unique index capability_policy_assignments_live_scope_unique
   on vortex_access.capability_policy_assignments (
     tenant_id, coalesce(organization_id, '00000000-0000-0000-0000-000000000000'::uuid),
@@ -162,6 +167,45 @@ revoke execute on function
 from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
+-- Administration authority is re-established from the owner-only request
+-- context, never from the caller's own identity or account arguments.  Those
+-- arguments are only a cross-check: no runtime, request or Data API role can
+-- establish or edit that context, so none of them can name another
+-- administrator or reach outside the established tenant and organisation.
+create function vortex_access.capability_policy_actor_context(
+  p_tenant_id uuid,
+  p_organization_id uuid,
+  p_actor_identity_id uuid,
+  p_actor_organization_account_id uuid
+)
+returns jsonb
+language plpgsql stable security definer set search_path = ''
+as $function$
+declare
+  established jsonb := vortex_context.current_context();
+begin
+  if established ->> 'callerKind' is distinct from 'human'
+    or (established ->> 'identityId')::uuid is distinct from p_actor_identity_id
+    or (established ->> 'tenantId')::uuid is distinct from p_tenant_id then
+    raise exception using errcode = '42501',
+      message = 'Capability policy administrator authority is unavailable';
+  end if;
+  if p_organization_id is null then
+    if p_actor_organization_account_id is not null then
+      raise exception using errcode = '42501',
+        message = 'Capability policy administrator authority is unavailable';
+    end if;
+  elsif p_actor_organization_account_id is null
+    or (established ->> 'organizationId')::uuid is distinct from p_organization_id
+    or (established ->> 'organizationAccountId')::uuid
+      is distinct from p_actor_organization_account_id then
+    raise exception using errcode = '42501',
+      message = 'Capability policy administrator authority is unavailable';
+  end if;
+  return established;
+end
+$function$;
+
 create function vortex_access.publish_capability_policy_definition(
   p_actor_identity_id uuid,
   p_duplicate_key uuid,
@@ -180,6 +224,7 @@ language plpgsql volatile security definer set search_path = ''
 as $function$
 declare
   evaluated_at timestamptz := pg_catalog.clock_timestamp();
+  current_definition vortex_access.capability_policy_definitions%rowtype;
   current_revision bigint;
   resulting_revision bigint;
   correlation uuid := pg_catalog.gen_random_uuid();
@@ -197,10 +242,13 @@ begin
       and p_expected_revision not between 1 and 9007199254740991) then
     raise exception using errcode = '22023', message = 'Capability policy definition is invalid';
   end if;
-  perform 1 from vortex_identity.tenants where tenant_id = p_tenant_id for update;
+  perform 1 from vortex_identity.tenants tenant where tenant.tenant_id = p_tenant_id for update;
   if not found then
     raise exception using errcode = 'V3101', message = 'Capability policy tenant is unavailable';
   end if;
+  perform vortex_access.capability_policy_actor_context(
+    p_tenant_id, null::uuid, p_actor_identity_id, null::uuid
+  );
   perform vortex_identity.require_current_tenant_capability(
     p_actor_identity_id, p_tenant_id, 'platform.tenant.administrators.manage', evaluated_at
   );
@@ -231,9 +279,11 @@ begin
     end if;
     return;
   end if;
-  select max(definition.revision) into current_revision
+  select definition.* into current_definition
   from vortex_access.capability_policy_definitions as definition
-  where definition.tenant_id = p_tenant_id and definition.policy_id = p_policy_id;
+  where definition.tenant_id = p_tenant_id and definition.policy_id = p_policy_id
+  order by definition.revision desc limit 1;
+  current_revision := current_definition.revision;
   if (current_revision is null and p_expected_revision is not null)
     or (current_revision is not null and p_expected_revision is distinct from current_revision)
     or (current_revision is null and p_expected_revision is null and exists (
@@ -241,6 +291,15 @@ begin
       where definition.policy_id = p_policy_id
     )) then
     raise exception using errcode = 'V3102', message = 'Capability policy definition revision is stale';
+  end if;
+  -- A policy names one capability and unit for its whole life.  Only the
+  -- quantity limit is revisable, so publishing a later revision can never
+  -- re-point an assignment that pinned an earlier one at another capability.
+  if current_revision is not null
+    and (current_definition.capability_key <> p_capability_key
+      or current_definition.unit <> p_unit) then
+    raise exception using errcode = '22023',
+      message = 'Capability policy scope cannot change between revisions';
   end if;
   resulting_revision := coalesce(current_revision, 0) + 1;
   if resulting_revision > 9007199254740991 then
@@ -275,7 +334,8 @@ create function vortex_access.assign_capability_policy(
   p_policy_id uuid,
   p_policy_revision bigint,
   p_starts_at timestamptz,
-  p_expires_at timestamptz default null
+  p_expires_at timestamptz,
+  p_activity_id uuid
 )
 returns table (
   outcome text, assignment_id uuid, policy_id uuid, policy_revision bigint,
@@ -286,13 +346,15 @@ language plpgsql volatile security definer set search_path = ''
 as $function$
 declare
   evaluated_at timestamptz := pg_catalog.clock_timestamp();
-  actor_id uuid := p_actor_identity_id;
-  organization_scope uuid;
-  organization_account uuid;
-  policy record;
+  established jsonb;
+  acting_actor_id uuid := p_actor_identity_id;
+  decision record;
+  policy vortex_access.capability_policy_definitions%rowtype;
   receipt vortex_identity.accepted_administration_receipts%rowtype;
   correlation uuid := pg_catalog.gen_random_uuid();
   command_fingerprint text;
+  activity_subjects uuid[];
+  activity_result text;
 begin
   if p_actor_identity_id is null or not vortex_context.is_non_nil_uuid(p_actor_identity_id::text)
     or (p_actor_organization_account_id is not null
@@ -305,23 +367,27 @@ begin
     or p_policy_revision is null or p_policy_revision not between 1 and 9007199254740991
     or p_starts_at is null or p_starts_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
     or (p_expires_at is not null and (p_expires_at <= p_starts_at
-      or p_expires_at in ('-infinity'::timestamptz, 'infinity'::timestamptz))) then
+      or p_expires_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)))
+    -- Organisation administration carries Activity evidence; tenant
+    -- administration is evidenced by its accepted-administration receipt and
+    -- has no organisation Activity ledger to append to.
+    or (p_organization_id is null) <> (p_activity_id is null)
+    or (p_activity_id is not null and not vortex_context.is_non_nil_uuid(p_activity_id::text)) then
     raise exception using errcode = '22023', message = 'Capability policy assignment is invalid';
   end if;
-  perform 1 from vortex_identity.tenants where tenant_id = p_tenant_id for update;
+  perform 1 from vortex_identity.tenants tenant where tenant.tenant_id = p_tenant_id for update;
   if not found then
     raise exception using errcode = 'V3101', message = 'Capability policy tenant is unavailable';
   end if;
+  established := vortex_access.capability_policy_actor_context(
+    p_tenant_id, p_organization_id, p_actor_identity_id, p_actor_organization_account_id
+  );
   if p_organization_id is null then
-    if p_actor_organization_account_id is not null then
-      raise exception using errcode = '42501', message = 'Capability policy tenant authority is unavailable';
-    end if;
     perform vortex_identity.require_current_tenant_capability(
       p_actor_identity_id, p_tenant_id, 'platform.tenant.administrators.manage', evaluated_at
     );
   else
-    select organization_decision.organization_id, organization_decision.organization_account_id
-      into strict organization_scope, organization_account
+    select evaluated.* into strict decision
     from vortex_access.evaluate_organization_permission_eligibility(
       pg_catalog.jsonb_build_object(
         'operationKey', 'platform.organization.assignments.manage',
@@ -334,17 +400,17 @@ begin
         'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
         'authority', pg_catalog.jsonb_build_object('kind', 'permission')
       )
-    ) as organization_decision
-    where organization_decision.outcome = 'eligible';
-    if organization_scope <> p_organization_id
-      or (vortex_context.current_context() ->> 'identityId')::uuid is distinct from p_actor_identity_id then
-      raise exception using errcode = '42501', message = 'Capability policy organization authority is unavailable';
+    ) as evaluated;
+    if decision.outcome is distinct from 'eligible'
+      or decision.operation_key is distinct from 'platform.organization.assignments.manage'
+      or decision.organization_id is distinct from p_organization_id
+      or decision.organization_account_id is distinct from p_actor_organization_account_id
+      or decision.access_version is distinct from (established ->> 'accessVersion')::bigint
+      or decision.correlation_id is distinct from (established ->> 'correlationId')::uuid then
+      raise exception using errcode = '42501',
+        message = 'Capability policy organization authority is unavailable';
     end if;
-    if p_actor_organization_account_id is null
-      or organization_account <> p_actor_organization_account_id then
-      raise exception using errcode = '42501', message = 'Capability policy organization actor is unavailable';
-    end if;
-    actor_id := p_actor_organization_account_id;
+    acting_actor_id := p_actor_organization_account_id;
     perform 1 from vortex_identity.organizations organization
     where organization.organization_id = p_organization_id
       and organization.tenant_id = p_tenant_id and organization.state = 'active';
@@ -352,10 +418,14 @@ begin
       raise exception using errcode = '42501', message = 'Capability policy organization is unavailable';
     end if;
   end if;
-  select definition.* into strict policy
+  select definition.* into policy
   from vortex_access.capability_policy_definitions definition
   where definition.tenant_id = p_tenant_id and definition.policy_id = p_policy_id
     and definition.revision = p_policy_revision;
+  if not found then
+    raise exception using errcode = 'V3101',
+      message = 'Capability policy definition revision is unavailable';
+  end if;
   command_fingerprint := 'sha256:' || pg_catalog.encode(extensions.digest(
     pg_catalog.convert_to(pg_catalog.concat_ws(E'\x1f', 'assign_capability_policy',
       p_tenant_id::text, coalesce(p_organization_id::text, ''), p_assignment_id::text,
@@ -363,7 +433,7 @@ begin
       coalesce(p_expires_at::text, '')), 'UTF8'), 'sha256'), 'hex');
   select stored.* into receipt
   from vortex_identity.accepted_administration_receipts stored
-  where stored.actor_id = actor_id and stored.tenant_id = p_tenant_id
+  where stored.actor_id = acting_actor_id and stored.tenant_id = p_tenant_id
     and stored.operation_key = 'assign_capability_policy'
     and stored.duplicate_key = p_duplicate_key for update;
   if found then
@@ -400,15 +470,29 @@ begin
   ) values (
     p_assignment_id, p_tenant_id, p_organization_id, p_policy_id, p_policy_revision,
     policy.capability_key, policy.unit, p_starts_at, p_expires_at, 1, evaluated_at,
-    actor_id, correlation, evaluated_at, actor_id, correlation
+    acting_actor_id, correlation, evaluated_at, acting_actor_id, correlation
   );
   insert into vortex_identity.accepted_administration_receipts(
     receipt_id, actor_id, tenant_id, operation_key, duplicate_key,
     command_fingerprint, subject_ids, subject_revisions, accepted_at
   ) values (
-    correlation, actor_id, p_tenant_id, 'assign_capability_policy', p_duplicate_key,
+    correlation, acting_actor_id, p_tenant_id, 'assign_capability_policy', p_duplicate_key,
     command_fingerprint, array[p_assignment_id], array[1::bigint], evaluated_at
   );
+  if p_organization_id is not null then
+    select pg_catalog.array_agg(distinct subject.subject_id order by subject.subject_id)
+    into activity_subjects
+    from pg_catalog.unnest(array[p_assignment_id, p_policy_id]) as subject(subject_id);
+    activity_result := vortex_activity.append_organization_activity_entry(
+      p_organization_id, p_activity_id, evaluated_at, 'organization_account', acting_actor_id,
+      'assign_capability_policy', activity_subjects, array[]::uuid[], 'web',
+      (established ->> 'correlationId')::uuid, 'completed'
+    );
+    if activity_result is distinct from 'inserted' then
+      raise exception using errcode = '40001',
+        message = 'Capability policy assignment Activity is stale';
+    end if;
+  end if;
   return query select 'accepted'::text, p_assignment_id, p_policy_id, p_policy_revision,
     p_tenant_id, p_organization_id, 1::bigint, correlation, evaluated_at;
 end
@@ -416,43 +500,60 @@ $function$;
 
 create function vortex_access.revoke_capability_policy_assignment(
   p_actor_identity_id uuid, p_actor_organization_account_id uuid,
-  p_duplicate_key uuid, p_assignment_id uuid,
-  p_expected_revision bigint
+  p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid,
+  p_assignment_id uuid, p_expected_revision bigint, p_activity_id uuid
 )
 returns table (outcome text, assignment_id uuid, revision bigint, correlation_id uuid, accepted_at timestamptz)
 language plpgsql volatile security definer set search_path = ''
 as $function$
 declare
   evaluated_at timestamptz := pg_catalog.clock_timestamp();
-  target record;
-  actor_id uuid := p_actor_identity_id;
+  target vortex_access.capability_policy_assignments%rowtype;
+  established jsonb;
+  decision record;
+  acting_actor_id uuid := p_actor_identity_id;
   receipt vortex_identity.accepted_administration_receipts%rowtype;
   correlation uuid := pg_catalog.gen_random_uuid();
   command_fingerprint text;
+  activity_subjects uuid[];
+  activity_result text;
 begin
   if p_actor_identity_id is null or not vortex_context.is_non_nil_uuid(p_actor_identity_id::text)
     or (p_actor_organization_account_id is not null
       and not vortex_context.is_non_nil_uuid(p_actor_organization_account_id::text))
     or p_duplicate_key is null or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
+    or p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
+    or (p_organization_id is not null and not vortex_context.is_non_nil_uuid(p_organization_id::text))
     or p_assignment_id is null or not vortex_context.is_non_nil_uuid(p_assignment_id::text)
-    or p_expected_revision is null or p_expected_revision not between 1 and 9007199254740991 then
+    or p_expected_revision is null or p_expected_revision not between 1 and 9007199254740991
+    or (p_organization_id is null) <> (p_activity_id is null)
+    or (p_activity_id is not null and not vortex_context.is_non_nil_uuid(p_activity_id::text)) then
     raise exception using errcode = '22023', message = 'Capability policy revocation is invalid';
   end if;
-  select assignment.* into strict target
+  select assignment.* into target
   from vortex_access.capability_policy_assignments assignment
   where assignment.assignment_id = p_assignment_id for update;
-  if target.revoked_at is not null or target.revision <> p_expected_revision then
-    raise exception using errcode = 'V3102', message = 'Capability policy assignment is stale';
+  if not found then
+    raise exception using errcode = 'V3101', message = 'Capability policy assignment is unavailable';
   end if;
-  if target.organization_id is null then
-    if p_actor_organization_account_id is not null then
-      raise exception using errcode = '42501', message = 'Capability policy tenant authority is unavailable';
-    end if;
+  -- The command names the subject it believes it is revoking, so a tenant
+  -- administrator can never settle an organisation assignment, or the reverse,
+  -- by naming only its identifier.
+  if target.tenant_id <> p_tenant_id
+    or target.organization_id is distinct from p_organization_id then
+    raise exception using errcode = '42501',
+      message = 'Capability policy assignment scope is unavailable';
+  end if;
+  established := vortex_access.capability_policy_actor_context(
+    p_tenant_id, p_organization_id, p_actor_identity_id, p_actor_organization_account_id
+  );
+  if p_organization_id is null then
     perform vortex_identity.require_current_tenant_capability(
-      p_actor_identity_id, target.tenant_id, 'platform.tenant.administrators.manage', evaluated_at
+      p_actor_identity_id, p_tenant_id, 'platform.tenant.administrators.manage', evaluated_at
     );
   else
-    perform 1 from vortex_access.evaluate_organization_permission_eligibility(
+    select evaluated.* into strict decision
+    from vortex_access.evaluate_organization_permission_eligibility(
       pg_catalog.jsonb_build_object(
         'operationKey', 'platform.organization.assignments.manage',
         'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
@@ -464,51 +565,71 @@ begin
         'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
         'authority', pg_catalog.jsonb_build_object('kind', 'permission')
       )
-    ) evaluated
-    where evaluated.outcome = 'eligible'
-      and evaluated.organization_id = target.organization_id;
-    if not found or (vortex_context.current_context() ->> 'identityId')::uuid is distinct from p_actor_identity_id then
-      raise exception using errcode = '42501', message = 'Capability policy organization authority is unavailable';
+    ) as evaluated;
+    if decision.outcome is distinct from 'eligible'
+      or decision.operation_key is distinct from 'platform.organization.assignments.manage'
+      or decision.organization_id is distinct from p_organization_id
+      or decision.organization_account_id is distinct from p_actor_organization_account_id
+      or decision.access_version is distinct from (established ->> 'accessVersion')::bigint
+      or decision.correlation_id is distinct from (established ->> 'correlationId')::uuid then
+      raise exception using errcode = '42501',
+        message = 'Capability policy organization authority is unavailable';
     end if;
-    actor_id := (vortex_context.current_context() ->> 'organizationAccountId')::uuid;
-    if actor_id is null or not vortex_context.is_non_nil_uuid(actor_id::text)
-      or p_actor_organization_account_id is null
-      or actor_id <> p_actor_organization_account_id then
-      raise exception using errcode = '42501', message = 'Capability policy organization actor is unavailable';
-    end if;
+    acting_actor_id := p_actor_organization_account_id;
   end if;
   command_fingerprint := 'sha256:' || pg_catalog.encode(extensions.digest(
     pg_catalog.convert_to(pg_catalog.concat_ws(E'\x1f', 'revoke_capability_policy_assignment',
-      target.tenant_id::text, target.organization_id::text, p_assignment_id::text,
+      p_tenant_id::text, coalesce(p_organization_id::text, ''), p_assignment_id::text,
       p_expected_revision::text), 'UTF8'), 'sha256'), 'hex');
+  -- The accepted receipt is consulted before the staleness test so an
+  -- identical retry of an accepted revocation replays its receipt instead of
+  -- refusing the assignment it already revoked as stale.
   select stored.* into receipt
   from vortex_identity.accepted_administration_receipts stored
-  where stored.actor_id = actor_id and stored.tenant_id = target.tenant_id
+  where stored.actor_id = acting_actor_id and stored.tenant_id = p_tenant_id
     and stored.operation_key = 'revoke_capability_policy_assignment'
     and stored.duplicate_key = p_duplicate_key for update;
   if found then
     if receipt.command_fingerprint <> command_fingerprint
-      or receipt.subject_ids <> array[p_assignment_id] then
+      or receipt.subject_ids <> array[p_assignment_id]
+      or receipt.subject_revisions[1] is null then
       raise exception using errcode = 'V3001', message = 'Capability policy revocation duplicate conflicts';
     end if;
     return query select 'replayed'::text, p_assignment_id, receipt.subject_revisions[1],
       receipt.receipt_id, receipt.accepted_at;
     return;
   end if;
+  if target.revoked_at is not null or target.revision <> p_expected_revision then
+    raise exception using errcode = 'V3102', message = 'Capability policy assignment is stale';
+  end if;
   update vortex_access.capability_policy_assignments assignment
   set revision = p_expected_revision + 1, changed_at = evaluated_at,
-      changed_by_actor_id = actor_id, change_correlation_id = correlation,
-      revoked_at = evaluated_at, revoked_by_actor_id = actor_id,
+      changed_by_actor_id = acting_actor_id, change_correlation_id = correlation,
+      revoked_at = evaluated_at, revoked_by_actor_id = acting_actor_id,
       revocation_correlation_id = correlation
   where assignment.assignment_id = p_assignment_id;
   insert into vortex_identity.accepted_administration_receipts(
     receipt_id, actor_id, tenant_id, operation_key, duplicate_key,
     command_fingerprint, subject_ids, subject_revisions, accepted_at
   ) values (
-    correlation, actor_id, target.tenant_id, 'revoke_capability_policy_assignment',
+    correlation, acting_actor_id, p_tenant_id, 'revoke_capability_policy_assignment',
     p_duplicate_key, command_fingerprint, array[p_assignment_id],
     array[(p_expected_revision + 1)::bigint], evaluated_at
   );
+  if p_organization_id is not null then
+    select pg_catalog.array_agg(distinct subject.subject_id order by subject.subject_id)
+    into activity_subjects
+    from pg_catalog.unnest(array[p_assignment_id, target.policy_id]) as subject(subject_id);
+    activity_result := vortex_activity.append_organization_activity_entry(
+      p_organization_id, p_activity_id, evaluated_at, 'organization_account', acting_actor_id,
+      'revoke_capability_policy', activity_subjects, array[]::uuid[], 'web',
+      (established ->> 'correlationId')::uuid, 'completed'
+    );
+    if activity_result is distinct from 'inserted' then
+      raise exception using errcode = '40001',
+        message = 'Capability policy revocation Activity is stale';
+    end if;
+  end if;
   return query select 'accepted'::text, p_assignment_id, p_expected_revision + 1,
     correlation, evaluated_at;
 end
@@ -519,14 +640,16 @@ create function vortex_access.resolve_effective_capability_policy(
 )
 returns table (
   outcome text, tenant_id uuid, organization_id uuid, capability_key text, unit text,
-  policy_id uuid, policy_revision bigint, assignment_id uuid, assignment_revision bigint,
-  quantity_limit numeric, resolved_at timestamptz, reason_code text
+  applied_scope text, policy_id uuid, policy_revision bigint, assignment_id uuid,
+  assignment_revision bigint, quantity_limit numeric, resolved_at timestamptz, reason_code text
 )
 language plpgsql volatile security definer set search_path = ''
 as $function$
 declare
   evaluated_at timestamptz := pg_catalog.clock_timestamp();
   context jsonb := vortex_context.current_context();
+  context_organization_id uuid;
+  effective_organization_id uuid;
   selected record;
 begin
   if p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
@@ -535,35 +658,40 @@ begin
     or not vortex_access.capability_policy_unit_is_valid(p_unit) then
     raise exception using errcode = '22023', message = 'Capability policy resolution is invalid';
   end if;
+  context_organization_id := (context ->> 'organizationId')::uuid;
+  -- The established organisation always belongs to the resolved scope.  An
+  -- organisation-scoped request can never omit its organisation and fall back
+  -- to the wider tenant limit that its own assignment narrows.
+  effective_organization_id := coalesce(p_organization_id, context_organization_id);
   if (context ->> 'tenantId')::uuid is distinct from p_tenant_id
-    or (p_organization_id is not null and (context ->> 'organizationId')::uuid is distinct from p_organization_id) then
+    or effective_organization_id is distinct from context_organization_id then
     raise exception using errcode = '42501', message = 'Capability policy scope is unavailable';
   end if;
-  if p_organization_id is not null and not exists (
+  if effective_organization_id is not null and not exists (
     select 1 from vortex_identity.organizations organization
     where organization.tenant_id = p_tenant_id
-      and organization.organization_id = p_organization_id
+      and organization.organization_id = effective_organization_id
       and organization.state = 'active'
   ) then
     raise exception using errcode = '42501', message = 'Capability policy scope is unavailable';
   end if;
   with candidates as (
-    select 0 as priority, assignment.organization_id, assignment.policy_id,
-      assignment.policy_revision, assignment.assignment_id, assignment.revision as assignment_revision,
-      definition.quantity_limit
+    select 0 as priority, 'organization'::text as applied_scope, assignment.policy_id,
+      assignment.policy_revision, assignment.assignment_id,
+      assignment.revision as assignment_revision, definition.quantity_limit
     from vortex_access.capability_policy_assignments assignment
     join vortex_access.capability_policy_definitions definition
       on definition.policy_id = assignment.policy_id
       and definition.revision = assignment.policy_revision
       and definition.tenant_id = assignment.tenant_id
-    where p_organization_id is not null
+    where effective_organization_id is not null
       and assignment.tenant_id = p_tenant_id
-      and assignment.organization_id = p_organization_id
+      and assignment.organization_id = effective_organization_id
       and assignment.capability_key = p_capability_key and assignment.unit = p_unit
       and assignment.revoked_at is null and assignment.starts_at <= evaluated_at
       and (assignment.expires_at is null or assignment.expires_at > evaluated_at)
     union all
-    select 1 as priority, null::uuid, assignment.policy_id,
+    select 1 as priority, 'tenant'::text, assignment.policy_id,
       assignment.policy_revision, assignment.assignment_id, assignment.revision,
       definition.quantity_limit
     from vortex_access.capability_policy_assignments assignment
@@ -576,39 +704,50 @@ begin
       and assignment.revoked_at is null and assignment.starts_at <= evaluated_at
       and (assignment.expires_at is null or assignment.expires_at > evaluated_at)
   )
-  select candidates.* into selected from candidates order by priority, assignment_id limit 1;
+  select candidates.* into selected from candidates
+  order by candidates.priority, candidates.assignment_id limit 1;
   if not found then
-    return query select 'refused'::text, p_tenant_id, p_organization_id,
-      p_capability_key, p_unit, null::uuid, null::bigint, null::uuid, null::bigint,
-      null::numeric, evaluated_at, 'capability_not_assigned'::text;
+    return query select 'refused'::text, p_tenant_id, effective_organization_id,
+      p_capability_key, p_unit, null::text, null::uuid, null::bigint, null::uuid,
+      null::bigint, null::numeric, evaluated_at, 'capability_not_assigned'::text;
     return;
   end if;
-  return query select 'available'::text, p_tenant_id, selected.organization_id,
-    p_capability_key, p_unit, selected.policy_id, selected.policy_revision,
-    selected.assignment_id, selected.assignment_revision, selected.quantity_limit,
-    evaluated_at, null::text;
+  return query select 'available'::text, p_tenant_id, effective_organization_id,
+    p_capability_key, p_unit, selected.applied_scope, selected.policy_id,
+    selected.policy_revision, selected.assignment_id, selected.assignment_revision,
+    selected.quantity_limit, evaluated_at, null::text;
 end
 $function$;
 
-revoke execute on function vortex_access.publish_capability_policy_definition(
-  uuid, uuid, uuid, uuid, text, text, numeric, bigint
-), vortex_access.assign_capability_policy(
-  uuid, uuid, uuid, uuid, uuid, uuid, uuid, bigint, timestamptz, timestamptz
-), vortex_access.revoke_capability_policy_assignment(uuid, uuid, uuid, uuid, bigint),
-vortex_access.resolve_effective_capability_policy(uuid, uuid, text, text)
-from public, anon, authenticated, service_role, vortex_runtime,
+-- The commands trust no caller-supplied authority, so they are reachable only
+-- from the request role that carries an established human request context.
+revoke execute on function
+  vortex_access.capability_policy_actor_context(uuid, uuid, uuid, uuid),
+  vortex_access.publish_capability_policy_definition(
+    uuid, uuid, uuid, uuid, text, text, numeric, bigint
+  ), vortex_access.assign_capability_policy(
+    uuid, uuid, uuid, uuid, uuid, uuid, uuid, bigint, timestamptz, timestamptz, uuid
+  ), vortex_access.revoke_capability_policy_assignment(
+    uuid, uuid, uuid, uuid, uuid, uuid, bigint, uuid
+  ),
+  vortex_access.resolve_effective_capability_policy(uuid, uuid, text, text)
+from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 grant execute on function vortex_access.publish_capability_policy_definition(
   uuid, uuid, uuid, uuid, text, text, numeric, bigint
 ), vortex_access.assign_capability_policy(
-  uuid, uuid, uuid, uuid, uuid, uuid, uuid, bigint, timestamptz, timestamptz
-), vortex_access.revoke_capability_policy_assignment(uuid, uuid, uuid, uuid, bigint),
+  uuid, uuid, uuid, uuid, uuid, uuid, uuid, bigint, timestamptz, timestamptz, uuid
+), vortex_access.revoke_capability_policy_assignment(
+    uuid, uuid, uuid, uuid, uuid, uuid, bigint, uuid
+  ),
 vortex_access.resolve_effective_capability_policy(uuid, uuid, text, text)
-to vortex_runtime, vortex_request;
+to vortex_request;
 
 comment on table vortex_access.capability_policy_definitions is
   'Immutable generic capability limits; policy revisions contain no commercial or provider state.';
 comment on table vortex_access.capability_policy_assignments is
   'Protected tenant or organisation policy assignments pinned to one exact policy revision.';
+comment on function vortex_access.capability_policy_actor_context(uuid, uuid, uuid, uuid) is
+  'Fails closed unless the established human request context is the exact administrator, tenant and organisation the command names.';
 comment on function vortex_access.resolve_effective_capability_policy(uuid, uuid, text, text) is
-  'Returns the most-specific active tenant/organisation policy revision for the current request scope.';
+  'Returns the most specific active organisation-then-tenant policy revision for the established request scope.';

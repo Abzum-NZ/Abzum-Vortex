@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import {
+  activityIdSchema,
   administrationDuplicateKeySchema,
   builderKeySchema,
   correlationIdSchema,
@@ -36,6 +37,9 @@ export const capabilityPolicyScopeSchema = z
 
 export const capabilityPolicyQuantitySchema = z.number().positive().finite();
 
+/** Which assignment a resolved limit came from, so the narrower scope is visible. */
+export const capabilityPolicyAppliedScopeSchema = z.enum(["organization", "tenant"]);
+
 /** Authority is explicit and no authority can silently cross its target scope. */
 export const capabilityPolicyAdministratorAuthoritySchema = z.discriminatedUnion("kind", [
   z
@@ -67,6 +71,17 @@ const authorityMatchesSubject = (
     subject.kind === "organization" &&
     authority.tenantId.toLowerCase() === subject.tenantId.toLowerCase() &&
     authority.organizationId.toLowerCase() === subject.organizationId.toLowerCase());
+
+/**
+ * Organisation administration is Activity-evidenced. Tenant administration is
+ * evidenced by its accepted-administration receipt and has no organisation
+ * Activity ledger to append to, so the identifier belongs to exactly one of
+ * the two authorities and is never carried unused.
+ */
+const activityEvidenceMatchesAuthority = (
+  authority: z.infer<typeof capabilityPolicyAdministratorAuthoritySchema>,
+  activityId: string | undefined,
+): boolean => (authority.kind === "organization_administrator") === (activityId !== undefined);
 
 export const capabilityPolicyDefinitionCommandSchema = z
   .object({
@@ -100,6 +115,7 @@ export const capabilityPolicyAssignmentCommandSchema = z
     startsAt: timestampSchema,
     expiresAt: timestampSchema.optional(),
     duplicateKey: administrationDuplicateKeySchema,
+    activityId: activityIdSchema.optional(),
     authority: capabilityPolicyAdministratorAuthoritySchema,
   })
   .strict()
@@ -109,6 +125,12 @@ export const capabilityPolicyAssignmentCommandSchema = z
         code: "custom",
         path: ["authority"],
         message: "Administrator authority must cover the exact assignment subject",
+      });
+    if (!activityEvidenceMatchesAuthority(value.authority, value.activityId))
+      context.addIssue({
+        code: "custom",
+        path: ["activityId"],
+        message: "Organisation assignments carry exactly one Activity identifier",
       });
     if (value.expiresAt !== undefined && Date.parse(value.expiresAt) <= Date.parse(value.startsAt))
       context.addIssue({
@@ -123,9 +145,18 @@ export const capabilityPolicyRevocationCommandSchema = z
     assignmentId: platformIdSchema,
     expectedRevision: revisionSchema,
     duplicateKey: administrationDuplicateKeySchema,
+    activityId: activityIdSchema.optional(),
     authority: capabilityPolicyAdministratorAuthoritySchema,
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (!activityEvidenceMatchesAuthority(value.authority, value.activityId))
+      context.addIssue({
+        code: "custom",
+        path: ["activityId"],
+        message: "Organisation revocations carry exactly one Activity identifier",
+      });
+  });
 
 export const capabilityPolicyDefinitionSchema = z
   .object({
@@ -164,6 +195,7 @@ export const effectiveCapabilityPolicySchema = z.discriminatedUnion("outcome", [
     .object({
       outcome: z.literal("available"),
       ...effectiveCapabilityPolicyRequestSchema.shape,
+      appliedScope: capabilityPolicyAppliedScopeSchema,
       policyId: platformIdSchema,
       policyRevision: revisionSchema,
       assignmentId: platformIdSchema,
@@ -176,7 +208,7 @@ export const effectiveCapabilityPolicySchema = z.discriminatedUnion("outcome", [
     .object({
       outcome: z.literal("refused"),
       ...effectiveCapabilityPolicyRequestSchema.shape,
-      reasonCode: z.enum(["capability_not_assigned", "policy_unavailable"]),
+      reasonCode: z.enum(["capability_not_assigned"]),
       resolvedAt: timestampSchema,
     })
     .strict(),
@@ -220,6 +252,7 @@ export const capabilityPolicyRevocationResultSchema = z
   .strict();
 
 export type CapabilityPolicySubject = z.infer<typeof capabilityPolicySubjectSchema>;
+export type CapabilityPolicyAppliedScope = z.infer<typeof capabilityPolicyAppliedScopeSchema>;
 export type CapabilityPolicyAdministratorAuthority = z.infer<
   typeof capabilityPolicyAdministratorAuthoritySchema
 >;
@@ -252,6 +285,7 @@ type EffectivePolicyRow = DatabaseRow & {
   organization_id: unknown;
   capability_key: unknown;
   unit: unknown;
+  applied_scope: unknown;
   policy_id: unknown;
   policy_revision: unknown;
   assignment_id: unknown;
@@ -293,16 +327,47 @@ type RevocationMutationRow = DatabaseRow & {
   accepted_at: unknown;
 };
 
+/**
+ * A revision is only converted when the exact whole number survives; anything
+ * wider than a safe integer is returned unchanged so the contract parse
+ * refuses it instead of accepting a rounded revision.
+ */
 const revision = (value: unknown): unknown => {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
-  return value;
+  if (typeof value === "bigint")
+    return value > 0n && value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : value;
+  if (typeof value !== "string" || !/^[1-9][0-9]*$/.test(value)) return value;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && String(parsed) === value ? parsed : value;
 };
 
+const decimalPattern = /^[+-]?\d+(?:\.\d*)?$/;
+
+/** Plain decimal text without its leading, trailing or negative-zero noise. */
+const canonicalDecimal = (text: string): string | undefined => {
+  if (!decimalPattern.test(text)) return undefined;
+  const digits = text.replace(/^[+-]/, "");
+  const [whole = "", fraction = ""] = digits.split(".");
+  const significantWhole = whole.replace(/^0+(?=\d)/, "");
+  const significantFraction = fraction.replace(/0+$/, "");
+  const magnitude =
+    significantFraction === "" ? significantWhole : `${significantWhole}.${significantFraction}`;
+  return `${text.startsWith("-") && /[1-9]/.test(digits) ? "-" : ""}${magnitude}`;
+};
+
+/**
+ * A stored limit is numeric, so it is only accepted when the contract's
+ * double-precision quantity reproduces it exactly. A value that would need
+ * rounding is returned unchanged and refused by the contract parse rather
+ * than silently coerced into a different limit.
+ */
 const quantity = (value: unknown): unknown => {
   if (typeof value === "number") return value;
-  if (typeof value === "string" && value.trim() !== "") return Number(value);
-  return value;
+  if (typeof value !== "string") return value;
+  const canonical = canonicalDecimal(value.trim());
+  if (canonical === undefined) return value;
+  const parsed = Number(canonical);
+  if (!Number.isFinite(parsed)) return value;
+  return canonicalDecimal(String(parsed)) === canonical ? parsed : value;
 };
 
 const timestamp = (value: unknown): unknown =>
@@ -316,7 +381,7 @@ const parseOne = <Row>(rows: readonly Row[], error: string): Row => {
 export const publishCapabilityPolicyDefinition = async (
   transaction: RequestDatabaseTransaction,
   commandCandidate: CapabilityPolicyDefinitionCommand,
-): Promise<z.infer<typeof capabilityPolicyMutationResultSchema>> => {
+): Promise<CapabilityPolicyMutationResult> => {
   const command = capabilityPolicyDefinitionCommandSchema.safeParse(commandCandidate);
   if (!command.success) throw new Error("CAPABILITY_POLICY_COMMAND_INVALID");
   if (command.data.authority.kind !== "tenant_administrator")
@@ -349,7 +414,7 @@ export const publishCapabilityPolicyDefinition = async (
 export const assignCapabilityPolicy = async (
   transaction: RequestDatabaseTransaction,
   commandCandidate: CapabilityPolicyAssignmentCommand,
-): Promise<z.infer<typeof capabilityPolicyAssignmentResultSchema>> => {
+): Promise<CapabilityPolicyAssignmentResult> => {
   const command = capabilityPolicyAssignmentCommandSchema.safeParse(commandCandidate);
   if (!command.success) throw new Error("CAPABILITY_POLICY_COMMAND_INVALID");
   const value = command.data;
@@ -363,7 +428,7 @@ export const assignCapabilityPolicy = async (
       ${value.subject.kind === "organization" ? value.subject.organizationId : null}::uuid,
       ${value.assignmentId}::uuid, ${value.policyId}::uuid,
       ${value.policyRevision}::bigint, ${value.startsAt}::timestamptz,
-      ${value.expiresAt ?? null}::timestamptz
+      ${value.expiresAt ?? null}::timestamptz, ${value.activityId ?? null}::uuid
     )
   `;
   const row = parseOne(rows, "CAPABILITY_POLICY_ASSIGNMENT_UNAVAILABLE");
@@ -387,19 +452,22 @@ export const assignCapabilityPolicy = async (
 export const revokeCapabilityPolicyAssignment = async (
   transaction: RequestDatabaseTransaction,
   commandCandidate: CapabilityPolicyRevocationCommand,
-): Promise<z.infer<typeof capabilityPolicyRevocationResultSchema>> => {
+): Promise<CapabilityPolicyRevocationResult> => {
   const command = capabilityPolicyRevocationCommandSchema.safeParse(commandCandidate);
   if (!command.success) throw new Error("CAPABILITY_POLICY_COMMAND_INVALID");
   const value = command.data;
-  const identityId = value.authority.identityId;
   const rows = await transaction.query<RevocationMutationRow>`
     select * from vortex_access.revoke_capability_policy_assignment(
-      ${identityId}::uuid,
+      ${value.authority.identityId}::uuid,
       ${value.authority.kind === "organization_administrator"
         ? value.authority.organizationAccountId
         : null}::uuid,
-      ${value.duplicateKey}::uuid,
-      ${value.assignmentId}::uuid, ${value.expectedRevision}::bigint
+      ${value.duplicateKey}::uuid, ${value.authority.tenantId}::uuid,
+      ${value.authority.kind === "organization_administrator"
+        ? value.authority.organizationId
+        : null}::uuid,
+      ${value.assignmentId}::uuid, ${value.expectedRevision}::bigint,
+      ${value.activityId ?? null}::uuid
     )
   `;
   const row = parseOne(rows, "CAPABILITY_POLICY_REVOCATION_UNAVAILABLE");
@@ -414,7 +482,11 @@ export const revokeCapabilityPolicyAssignment = async (
   return parsed.data;
 };
 
-/** Resolve only the current request's tenant/organisation scope; #650 owns admission. */
+/**
+ * Resolves only the tenant and organisation the request context already
+ * established, and reports which assignment scope supplied the limit so the
+ * organisation-over-tenant choice stays visible. #650 owns admission.
+ */
 export const resolveEffectiveCapabilityPolicy = async (
   transaction: RequestDatabaseTransaction,
   requestCandidate: EffectiveCapabilityPolicyRequest,
@@ -424,7 +496,7 @@ export const resolveEffectiveCapabilityPolicy = async (
   let rows: readonly EffectivePolicyRow[];
   try {
     rows = await transaction.query<EffectivePolicyRow>`
-      select outcome, tenant_id, organization_id, capability_key, unit,
+      select outcome, tenant_id, organization_id, capability_key, unit, applied_scope,
         policy_id, policy_revision, assignment_id, assignment_revision,
         quantity_limit, resolved_at, reason_code
       from vortex_access.resolve_effective_capability_policy(
@@ -447,6 +519,7 @@ export const resolveEffectiveCapabilityPolicy = async (
     unit: row.unit,
     ...(row.outcome === "available"
       ? {
+          appliedScope: row.applied_scope,
           policyId: row.policy_id,
           policyRevision: revision(row.policy_revision),
           assignmentId: row.assignment_id,
@@ -460,8 +533,6 @@ export const resolveEffectiveCapabilityPolicy = async (
   if (!parsed.success) throw new Error("CAPABILITY_POLICY_UNAVAILABLE");
   return parsed.data;
 };
-
-export const readEffectiveCapabilityPolicy = resolveEffectiveCapabilityPolicy;
 
 /** Preserve the shared entitlement request shape while keeping admission in #650. */
 export const resolveEffectiveCapabilityPolicyForEntitlement = async (
