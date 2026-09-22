@@ -166,7 +166,10 @@ begin
   -- bounded for interrupted work as well as for reported failures, and moves
   -- a blocked sequence to an operator-visible failure state rather than
   -- retrying it forever.  This must be its own statement: a data-modifying CTE
-  -- in the claim query below would still read the pre-update snapshot.
+  -- in the claim query below would still read the pre-update snapshot.  The
+  -- sweep is bounded and skips locked rows, so the reclaim below independently
+  -- refuses to issue attempt maximum_delivery_attempts + 1; anything the sweep
+  -- did not reach this time is simply terminalised on a later claim.
   update vortex_event.consumer_occurrence_progress as progress
   set last_failed_at = pg_catalog.coalesce(progress.last_failed_at, claim_time),
       last_failure_code = pg_catalog.coalesce(progress.last_failure_code, 'unclassified'),
@@ -294,6 +297,7 @@ begin
           attempt_count = consumer_occurrence_progress.attempt_count + 1
       where consumer_occurrence_progress.acknowledged_at is null
         and consumer_occurrence_progress.terminally_failed_at is null
+        and consumer_occurrence_progress.attempt_count < maximum_delivery_attempts
         and consumer_occurrence_progress.lease_expires_at <= claim_time
     returning occurrence_id, lease_expires_at
   )

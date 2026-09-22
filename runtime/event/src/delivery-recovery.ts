@@ -342,12 +342,12 @@ const parseTerminallyFailedList = (
       occurrenceIds.add(entry.occurrenceId as string);
       return Object.freeze({
         occurrenceId: entry.occurrenceId as string,
-        attemptCount: entry.attemptCount,
-        failureCount: entry.failureCount,
-        lastFailureCode: entry.lastFailureCode,
-        lastFailedAt: entry.lastFailedAt,
-        terminallyFailedAt: entry.terminallyFailedAt,
-        claimedAt: entry.claimedAt,
+        attemptCount: entry.attemptCount as number,
+        failureCount: entry.failureCount as number,
+        lastFailureCode: entry.lastFailureCode as EventDeliveryFailureClassification,
+        lastFailedAt: entry.lastFailedAt as string,
+        terminallyFailedAt: entry.terminallyFailedAt as string,
+        claimedAt: entry.claimedAt as string,
       });
     }),
   );
