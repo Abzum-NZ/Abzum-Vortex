@@ -20,6 +20,11 @@ import {
   type VerifiedFileActor,
 } from "@vortex/contracts";
 import { createSignedStorageOperationClaims, validateStorageKey } from "./storage-policy";
+import {
+  evaluateResolvedFileRemovalAuthority,
+  type FileRemovalAuthoritySnapshot,
+  type FileRemovalOwnerBinding,
+} from "./removal-eligibility";
 
 /**
  * The request presented to the trusted, server-injected authority resolver.
@@ -54,7 +59,16 @@ export type CurrentStorageAuthority =
         operation: "upload" | "read";
         transferGrantId: UploadGrant["oneTimeId"];
       }>)
-  | (CurrentStorageAuthorityBase & Readonly<{ operation: "delete" }>);
+  | (CurrentStorageAuthorityBase &
+      Readonly<{
+        operation: "delete";
+        /**
+         * Complete live state resolved with the FileRecord by trusted server
+         * wiring. A request or previously returned eligibility decision is never
+         * accepted in its place.
+         */
+        removalAuthority: FileRemovalAuthoritySnapshot;
+      }>);
 
 export type StorageAuthorityResolution =
   | CurrentStorageAuthority
@@ -188,6 +202,20 @@ const ownerMatches = (
   fileRecord.ownerRecordId === grant.recordId &&
   fileRecord.ownerFieldId === grant.fieldId;
 
+const removalOwnerMatches = (
+  fileRecord: FileRecord,
+  owner: FileRemovalOwnerBinding | null,
+): boolean =>
+  owner === null
+    ? fileRecord.ownerRecordTypeId === undefined &&
+      fileRecord.ownerRecordId === undefined &&
+      fileRecord.ownerFieldId === undefined
+    : owner.sourceOrganizationId === fileRecord.organizationId &&
+      owner.applicationRootId === fileRecord.applicationRootId &&
+      owner.recordTypeId === fileRecord.ownerRecordTypeId &&
+      owner.recordId === fileRecord.ownerRecordId &&
+      owner.fieldId === fileRecord.ownerFieldId;
+
 /** Creates a standards-compliant ES256 signer and keeps its private key in the closure. */
 export const createStorageSignerFromPrivateKey = (
   privateKeyInput: KeyObject | string | Buffer,
@@ -274,8 +302,9 @@ type ValidatedAuthority = Readonly<{
 const validateCurrentAuthority = (
   request: StorageCredentialRequest,
   resolution: StorageAuthorityResolution,
-  nowSeconds: number,
+  now: Date,
 ): ValidatedAuthority => {
+  const nowSeconds = Math.floor(now.getTime() / 1_000);
   if (resolution.authorized !== true) {
     throw new Error("Storage credential minting refused by current authority");
   }
@@ -367,11 +396,56 @@ const validateCurrentAuthority = (
       if (
         !fileIdResult.success ||
         fileIdResult.data !== fileRecord.fileId ||
-        fileRecord.lifecycleState === "removed" ||
-        fileRecord.legalHold
+        fileRecord.lifecycleState === "removed"
       ) {
         throw new Error("Storage credential minting refused: removal scope is not current");
       }
+      if (!("removalAuthority" in resolution)) {
+        throw new Error("Storage credential minting refused: removal authority is unavailable");
+      }
+      const decision = evaluateResolvedFileRemovalAuthority(
+        resolution.removalAuthority,
+        now,
+      );
+      if (!decision.eligible) {
+        throw new Error("Storage credential minting refused: file is not eligible for removal");
+      }
+      const removalAuthority = resolution.removalAuthority;
+      if (
+        removalAuthority.organizationId !== fileRecord.organizationId ||
+        removalAuthority.sourceOrganizationId !== fileRecord.organizationId ||
+        removalAuthority.fileId !== fileRecord.fileId ||
+        removalAuthority.bucketId !== fileRecord.bucketId ||
+        removalAuthority.objectPath !== fileRecord.storageKey ||
+        removalAuthority.lifecycleState !== fileRecord.lifecycleState ||
+        removalAuthority.applicationRootId !== fileRecord.applicationRootId ||
+        !removalOwnerMatches(fileRecord, removalAuthority.owner) ||
+        fileRecord.owningAttachmentReferences.length !== 0 ||
+        removalAuthority.recoveryPolicy?.recoveryDeadline !== fileRecord.removalDueAt
+      ) {
+        throw new Error("Storage credential minting refused: removal binding is not current");
+      }
+      const removalAuthorityExpiry = timestampSeconds(removalAuthority.validUntil);
+      const holdAuthorityExpiry =
+        removalAuthority.holdAuthority === null
+          ? undefined
+          : timestampSeconds(removalAuthority.holdAuthority.validUntil);
+      const recoveryPolicyExpiry =
+        removalAuthority.recoveryPolicy === null
+          ? undefined
+          : timestampSeconds(removalAuthority.recoveryPolicy.validUntil);
+      if (
+        removalAuthorityExpiry === undefined ||
+        holdAuthorityExpiry === undefined ||
+        recoveryPolicyExpiry === undefined
+      ) {
+        throw new Error("Storage credential minting refused: removal authority is unavailable");
+      }
+      grantExpiry = Math.min(
+        removalAuthorityExpiry,
+        holdAuthorityExpiry,
+        recoveryPolicyExpiry,
+      );
       break;
     }
     default: {
@@ -477,7 +551,11 @@ export const createStorageCredentialBridge = (
     } catch {
       throw new Error("Storage credential current authority is unavailable");
     }
-    const authority = validateCurrentAuthority(request, resolution, nowSeconds);
+    const authority = validateCurrentAuthority(
+      request,
+      resolution,
+      now,
+    );
     const ttlSeconds = Math.min(
       requestedTtl(input.ttlSeconds),
       authority.expiresAtSeconds - nowSeconds,

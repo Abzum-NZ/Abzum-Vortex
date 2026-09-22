@@ -7,6 +7,7 @@ import {
   type ApplicationRootId,
   type FieldId,
   type FileId,
+  type FileLegalHoldProjection,
   type FileLifecycleState,
   type FileRecord,
   type Fingerprint,
@@ -183,7 +184,7 @@ export type CreateFileRecordInput = Readonly<{
   uploader: VerifiedFileActor;
   fileId?: FileId;
   owningAttachmentReferences?: readonly PlatformId[];
-  legalHold?: boolean;
+  legalHold?: FileLegalHoldProjection;
   clock?: () => Date;
 }>;
 
@@ -276,6 +277,6 @@ export const createFileRecord = (input: CreateFileRecordInput): FileRecord => {
           ownerRecordId: input.owner.recordId,
           ownerFieldId: input.owner.fieldId,
         }),
-    legalHold: input.legalHold ?? false,
+    legalHold: input.legalHold ?? { isHeld: false },
   });
 };

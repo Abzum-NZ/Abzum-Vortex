@@ -10,3 +10,14 @@ export * from "./storage-policy";
 export * from "./content-safety";
 export * from "./attachment-authority";
 export * from "./storage-credentials";
+export {
+  createFileRemovalEligibilityService,
+  matchesProtectedLegalHold,
+  type FileHoldEvaluationScope,
+  type FileRemovalAuthorityResolution,
+  type FileRemovalEligibilityDecision,
+  type FileRemovalEligibilityRequest,
+  type FileRemovalEligibilityService,
+  type FileRemovalRefusalReason,
+  type ResolveCurrentFileRemovalAuthority,
+} from "./removal-eligibility";
