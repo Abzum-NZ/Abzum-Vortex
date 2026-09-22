@@ -1,0 +1,31 @@
+id: event_dispatch_recovery
+namespace: vortex.operations
+description: >-
+  Scheduled recovery tick for the platform event dispatcher. Calls the
+  protected Vercel dispatch route so missed database-webhook hints recover
+  automatically. Kestra holds only its route credential and never receives
+  database credentials.
+
+concurrency:
+  limit: 1
+  behavior: QUEUE
+
+tasks:
+  - id: recover_missed_wakeups
+    type: io.kestra.plugin.core.http.Request
+    uri: "{{ secret('VORTEX_EVENT_DISPATCH_WAKEUP_URL') }}"
+    method: POST
+    contentType: application/json
+    headers:
+      Authorization: "Bearer {{ secret('VORTEX_EVENT_DISPATCH_WAKEUP_CREDENTIAL') }}"
+      X-Vortex-Wakeup-Source: scheduled_recovery
+    body: '{"source":"scheduled_recovery"}'
+    options:
+      allowFailed: false
+
+triggers:
+  - id: scheduled_recovery
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "*/5 * * * *"
+    timezone: Etc/UTC
+    recoverMissedSchedules: ALL

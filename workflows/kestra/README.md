@@ -64,13 +64,28 @@ Every secret is supplied by the environment. Nothing in this directory holds one
 | `VORTEX_PRODUCTION_MIGRATION_WEBHOOK_KEY_BASE64` | Base64 encoding of a different unpredictable key for the protected Production push webhook |
 | `VORTEX_TESTING_DOPPLER_TOKEN_BASE64` | Base64 encoding of the read-only service token limited to `abzum-vortex` / `ops_stg` |
 | `VORTEX_PRODUCTION_DOPPLER_TOKEN_BASE64` | Base64 encoding of the separate read-only service token limited to `abzum-vortex` / `ops_prd` |
+| `VORTEX_EVENT_DISPATCH_WAKEUP_URL_BASE64` | Base64 encoding of the protected Vercel dispatch route address for scheduled event recovery |
+| `VORTEX_EVENT_DISPATCH_WAKEUP_CREDENTIAL_BASE64` | Base64 encoding of the dispatcher route bearer credential, the same value whose SHA-256 digest is configured in Vercel and whose raw value is a database server setting |
 
-These four Kestra bootstrap values are stored only as protected Coolify runtime variables. Doppler
+These Kestra bootstrap values are stored only as protected Coolify runtime variables. Doppler
 remains the source of record for the database values that the two service tokens can read. The
 Kestra API credential is also provided to the web application so it can reach the engine.
 
+`event_dispatch_recovery` is the scheduled recovery half of the event dispatch boundary. Its
+schedule trigger calls the protected Vercel dispatch route on a fixed cadence, so an event
+occurrence committed while a database-webhook hint or a web deployment was unavailable is still
+delivered. The flow holds only two values: the route address and the route bearer credential. It
+never receives a database URL, migration credential or application secret, and it never reads the
+database. The same route credential authenticates the normal database-webhook hint: the database
+server carries the raw credential as the `vortex.event_dispatch_wakeup_bearer` setting while Vercel
+carries only its SHA-256 digest in `VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256`. The database hint is
+installed by the `20260923160000_event_dispatch_wakeup` migration, reads
+`vortex.event_dispatch_wakeup_url` and `vortex.event_dispatch_wakeup_bearer` at runtime, and sends
+nothing when either setting is absent, so missing configuration fails closed without breaking a
+committed record save.
+
 Kestra open source recognises sensitive flow values only when the container variable begins
-`SECRET_` and its value is base64-encoded. Coolify therefore stores the four `_BASE64` values above;
+`SECRET_` and its value is base64-encoded. Coolify therefore stores the `_BASE64` values above;
 the compose file maps them to Kestra's required names and each flow reads them with `secret()`. Base64
 is not encryption, so Coolify remains the protected host boundary. Kestra masks resolved secrets in
 execution logs.
