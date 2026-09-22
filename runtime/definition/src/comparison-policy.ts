@@ -1,5 +1,4 @@
 import type {
-  ApplicationContent,
   ApplicationContentV2,
   ModuleContent,
   ModuleContentV2,
@@ -1150,9 +1149,13 @@ const compareSharingCondition = (
     );
 };
 
-export const compareApplicationContents = (
-  previousContent: ApplicationContent,
-  candidateContent: ApplicationContent,
+/**
+ * The definition-wide comparison every Application release shares. Shells, pages, placements and
+ * the theme carry their own current-contract comparison in compareApplicationContentsV2.
+ */
+const compareApplicationSharedContent = (
+  previousContent: ApplicationContentV2,
+  candidateContent: ApplicationContentV2,
 ): VersionImpactReason[] => {
   const reasons: VersionImpactReason[] = [];
   const previous = asRecord(previousContent);
@@ -1192,16 +1195,6 @@ export const compareApplicationContents = (
   );
   compareKeyed(
     reasons,
-    previous.pages as RecordValue[],
-    candidate.pages as RecordValue[],
-    "pageId",
-    "page",
-    (left, right) => comparePage(reasons, left, right),
-    (item) =>
-      item.type === "public" || item.standardPageReplacement !== undefined ? "major" : "minor",
-  );
-  compareKeyed(
-    reasons,
     previous.roles as RecordValue[],
     candidate.roles as RecordValue[],
     "roleId",
@@ -1220,19 +1213,6 @@ export const compareApplicationContents = (
     "queryId",
     "query",
     (left, right) => compareSimpleComponent(reasons, "query", right.queryId, left, right),
-  );
-  compareKeyed(
-    reasons,
-    previous.blockRegistrations as RecordValue[],
-    candidate.blockRegistrations as RecordValue[],
-    "blockId",
-    "block_registration",
-    (left, right) =>
-      compareSimpleComponent(reasons, "block_registration", right.blockId, left, right, [
-        "name",
-        "icon",
-        "paletteGroup",
-      ]),
   );
   compareKeyed(
     reasons,
@@ -1311,15 +1291,6 @@ export const compareApplicationContents = (
   );
   pushChange(
     reasons,
-    previous.theme,
-    candidate.theme,
-    "patch",
-    "presentation_changed",
-    "theme",
-    "theme",
-  );
-  pushChange(
-    reasons,
     previous.homePageId,
     candidate.homePageId,
     "patch",
@@ -1391,201 +1362,6 @@ const compareNavigation = (
     else if (candidatePosition.order !== previousPosition.order)
       reasons.push(makeReason("patch", "presentation_changed", "navigation_item", "order", id));
   }
-};
-
-const pageBlocks = (page: RecordValue): RecordValue[] => {
-  if (Array.isArray(page.blocks)) return page.blocks as RecordValue[];
-  if (Array.isArray(page.steps))
-    return (page.steps as RecordValue[]).flatMap((step) => step.blocks as RecordValue[]);
-  return [];
-};
-
-const comparePage = (
-  reasons: VersionImpactReason[],
-  previous: RecordValue,
-  candidate: RecordValue,
-): void => {
-  const id = candidate.pageId;
-  for (const key of ["name"])
-    pushChange(
-      reasons,
-      previous[key],
-      candidate[key],
-      "patch",
-      "presentation_changed",
-      "page",
-      "name",
-      id,
-    );
-  pushChange(
-    reasons,
-    previous.key,
-    candidate.key,
-    "major",
-    "component_key_changed",
-    "page",
-    "key",
-    id,
-  );
-  for (const key of [
-    "type",
-    "accessPermissionKey",
-    "recordType",
-    "queryId",
-    "commitActionKey",
-    "publicFieldIds",
-    "publicActionKey",
-    "rateLimitPerMinute",
-    "calendarMapping",
-    "standardPageReplacement",
-  ])
-    pushChange(
-      reasons,
-      previous[key],
-      candidate[key],
-      "major",
-      key === "accessPermissionKey" || key === "publicFieldIds" || key === "publicActionKey"
-        ? "permission_changed"
-        : "existing_behavior_changed",
-      "page",
-      key === "accessPermissionKey" ? "permission" : "behavior",
-      id,
-    );
-  for (const key of ["states", "arrangements"])
-    pushChange(
-      reasons,
-      previous[key],
-      candidate[key],
-      "patch",
-      "presentation_changed",
-      "page",
-      "configuration",
-      id,
-    );
-  comparePageLayout(reasons, id, previous.layout, candidate.layout);
-  compareKeyed(
-    reasons,
-    pageBlocks(previous),
-    pageBlocks(candidate),
-    "placementId",
-    "page_block",
-    (left, right) => comparePageBlock(reasons, left, right),
-    () => (candidate.type === "guided_form" ? "major" : "minor"),
-  );
-  if (Array.isArray(previous.steps) || Array.isArray(candidate.steps)) {
-    const before = (previous.steps as RecordValue[] | undefined) ?? [];
-    const after = (candidate.steps as RecordValue[] | undefined) ?? [];
-    const beforeIds = before.map((step) => step.id);
-    const afterIds = after.map((step) => step.id);
-    if (!same([...beforeIds].sort(compareUnknownText), [...afterIds].sort(compareUnknownText)))
-      reasons.push(makeReason("major", "existing_behavior_changed", "page", "behavior", id));
-    else if (!same(beforeIds, afterIds))
-      reasons.push(makeReason("patch", "presentation_changed", "page", "order", id));
-    for (const step of after) {
-      const old = before.find((entry) => entry.id === step.id);
-      if (old)
-        pushChange(
-          reasons,
-          old.summary,
-          step.summary,
-          "major",
-          "existing_behavior_changed",
-          "page",
-          "behavior",
-          id,
-        );
-      if (old)
-        pushChange(
-          reasons,
-          old.name,
-          step.name,
-          "patch",
-          "presentation_changed",
-          "page",
-          "name",
-          id,
-        );
-    }
-  }
-};
-
-const comparePageLayout = (
-  reasons: VersionImpactReason[],
-  pageId: unknown,
-  previous: unknown,
-  candidate: unknown,
-): void => {
-  const before = asRecord(previous);
-  const after = asRecord(candidate);
-  for (const device of ["desktop", "phone"] as const) {
-    const beforeDevice = asRecord(before[device]);
-    const afterDevice = asRecord(after[device]);
-    if (!same(beforeDevice.componentOrder, afterDevice.componentOrder))
-      reasons.push(makeReason("patch", "presentation_changed", "page", "order", pageId));
-    const beforePresentation = { ...beforeDevice };
-    const afterPresentation = { ...afterDevice };
-    delete beforePresentation.componentOrder;
-    delete afterPresentation.componentOrder;
-    pushChange(
-      reasons,
-      beforePresentation,
-      afterPresentation,
-      "patch",
-      "presentation_changed",
-      "page",
-      "configuration",
-      pageId,
-    );
-  }
-};
-
-const comparePageBlock = (
-  reasons: VersionImpactReason[],
-  previous: RecordValue,
-  candidate: RecordValue,
-): void => {
-  const id = candidate.placementId;
-  pushChange(
-    reasons,
-    previous.desktop,
-    candidate.desktop,
-    "patch",
-    "presentation_changed",
-    "page_block",
-    "configuration",
-    id,
-  );
-  const previousPhone = asRecord(previous.phone);
-  const candidatePhone = asRecord(candidate.phone);
-  if (
-    previousPhone.behaviour !== candidatePhone.behaviour &&
-    (previousPhone.behaviour === "hide" || candidatePhone.behaviour === "hide")
-  )
-    reasons.push(makeReason("major", "permission_changed", "page_block", "visibility", id));
-  else
-    pushChange(
-      reasons,
-      previous.phone,
-      candidate.phone,
-      "patch",
-      "presentation_changed",
-      "page_block",
-      "configuration",
-      id,
-    );
-  const ignored = new Set(["placementId", "desktop", "phone"]);
-  const before = Object.fromEntries(Object.entries(previous).filter(([key]) => !ignored.has(key)));
-  const after = Object.fromEntries(Object.entries(candidate).filter(([key]) => !ignored.has(key)));
-  pushChange(
-    reasons,
-    before,
-    after,
-    "major",
-    "existing_behavior_changed",
-    "page_block",
-    "behavior",
-    id,
-  );
 };
 
 const compareRole = (
@@ -2074,31 +1850,12 @@ export const normaliseModuleContent = <T extends ModuleContent | ModuleContentV2
   } as T;
 };
 
-const normalisePage = (page: RecordValue): RecordValue => ({
-  ...page,
-  states: sorted(page.states as unknown[]),
-  ...(Array.isArray(page.publicFieldIds)
-    ? { publicFieldIds: sorted(page.publicFieldIds as unknown[]) }
-    : {}),
-  ...(Array.isArray(page.blocks)
-    ? { blocks: sorted(page.blocks as unknown[], "placementId") }
-    : {}),
-  ...(Array.isArray(page.steps)
-    ? {
-        steps: (page.steps as RecordValue[]).map((step) => ({
-          ...step,
-          blocks: sorted(step.blocks as unknown[], "placementId"),
-        })),
-      }
-    : {}),
-});
-
-export const normaliseApplicationContent = (content: ApplicationContent): ApplicationContent => {
+/** Canonical ordering for the definition-wide fields every Application release shares. */
+const normaliseApplicationSharedContent = (content: ApplicationContentV2): RecordValue => {
   const value = asRecord(content);
   return {
     ...value,
     moduleBindings: sorted(value.moduleBindings as unknown[], "moduleRootId"),
-    pages: sorted((value.pages as RecordValue[]).map(normalisePage), "pageId"),
     roles: sorted(
       (value.roles as RecordValue[]).map((role) => ({
         ...role,
@@ -2107,14 +1864,6 @@ export const normaliseApplicationContent = (content: ApplicationContent): Applic
       "roleId",
     ),
     queries: sorted(value.queries as unknown[], "queryId"),
-    blockRegistrations: sorted(
-      (value.blockRegistrations as RecordValue[]).map((block) => ({
-        ...block,
-        settings: sorted(block.settings as unknown[], "key"),
-        allowedChildBlockIds: sorted(block.allowedChildBlockIds as unknown[]),
-      })),
-      "blockId",
-    ),
     permissions: sorted(value.permissions as unknown[], "permissionId"),
     pipelines: sorted(value.pipelines as unknown[], "pipelineId"),
     actions: sorted((value.actions as RecordValue[]).map(normaliseAction), "actionId"),
@@ -2155,7 +1904,7 @@ export const normaliseApplicationContent = (content: ApplicationContent): Applic
       "interfaceId",
     ),
     publicAddresses: sorted(value.publicAddresses as unknown[], "addressId"),
-  } as ApplicationContent;
+  };
 };
 
 const assertUnique = (values: RecordValue[], key: string): void => {
@@ -2242,14 +1991,13 @@ export const assertUnambiguousModuleContent = (content: unknown): void => {
     assertUniqueValues(point.accepts as unknown[]);
 };
 
-export const assertUnambiguousApplicationContent = (content: unknown): void => {
+/** Identity uniqueness for the definition-wide fields every Application release shares. */
+const assertUnambiguousApplicationSharedContent = (content: unknown): void => {
   const value = asRecord(content);
   for (const [collection, key] of [
     ["moduleBindings", "moduleRootId"],
-    ["pages", "pageId"],
     ["roles", "roleId"],
     ["queries", "queryId"],
-    ["blockRegistrations", "blockId"],
     ["permissions", "permissionId"],
     ["pipelines", "pipelineId"],
     ["actions", "actionId"],
@@ -2263,18 +2011,8 @@ export const assertUnambiguousApplicationContent = (content: unknown): void => {
     assertUnique(value[collection] as RecordValue[], key);
   assertUnique(value.permissions as RecordValue[], "key");
   assertUnique(flattenNavigation(value.navigation as RecordValue[]), "id");
-  for (const page of value.pages as RecordValue[]) {
-    assertUnique(pageBlocks(page), "placementId");
-    if (Array.isArray(page.steps)) assertUnique(page.steps as RecordValue[], "id");
-    assertUniqueValues(page.states as unknown[]);
-    if (Array.isArray(page.publicFieldIds)) assertUniqueValues(page.publicFieldIds as unknown[]);
-  }
   for (const role of value.roles as RecordValue[])
     assertUniqueValues(role.permissionKeys as unknown[]);
-  for (const block of value.blockRegistrations as RecordValue[]) {
-    assertUnique(block.settings as RecordValue[], "key");
-    assertUniqueValues(block.allowedChildBlockIds as unknown[]);
-  }
   for (const pipeline of value.pipelines as RecordValue[])
     assertUnique(pipeline.stages as RecordValue[], "key");
   for (const workflow of value.workflows as RecordValue[]) {
@@ -2815,22 +2553,11 @@ const comparePageV2 = (
   }
 };
 
-const applicationV2CommonView = (content: ApplicationContentV2): ApplicationContent =>
-  ({
-    ...content,
-    pages: [],
-    blockRegistrations: [],
-    theme: null,
-  }) as unknown as ApplicationContent;
-
 export const compareApplicationContentsV2 = (
   previousContent: ApplicationContentV2,
   candidateContent: ApplicationContentV2,
 ): VersionImpactReason[] => {
-  const reasons = compareApplicationContents(
-    applicationV2CommonView(previousContent),
-    applicationV2CommonView(candidateContent),
-  );
+  const reasons = compareApplicationSharedContent(previousContent, candidateContent);
   const previous = asRecord(previousContent);
   const candidate = asRecord(candidateContent);
   compareKeyed(
@@ -2878,7 +2605,7 @@ export const normaliseApplicationContentV2 = (
         ([, slot]) => Object.keys(asRecord(asRecord(slot).placements)).length > 0,
       ),
     );
-  const common = asRecord(normaliseApplicationContent(applicationV2CommonView(comparisonContent)));
+  const common = normaliseApplicationSharedContent(comparisonContent);
   const value = asRecord(comparisonContent);
   return {
     ...value,
@@ -2924,8 +2651,7 @@ export const normaliseApplicationContentV2 = (
 
 export const assertUnambiguousApplicationContentV2 = (content: unknown): void => {
   const value = asRecord(content);
-  const common = applicationV2CommonView(value as ApplicationContentV2);
-  assertUnambiguousApplicationContent(common);
+  assertUnambiguousApplicationSharedContent(value);
   assertUnique(value.pages as RecordValue[], "pageId");
   assertUnique(value.platformBlockDependencies as RecordValue[], "blockId");
   assertUnique(value.shells as RecordValue[], "shellId");

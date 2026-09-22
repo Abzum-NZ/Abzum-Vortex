@@ -177,7 +177,10 @@ export const savedConditionRevisionAssignmentSchema = z
   })
   .strict();
 
-/** Module and Application publication always use the explicit current-contract requests below. */
+/**
+ * The platform connection-type compilation request. Application and Module publication use the
+ * explicit current-contract requests below; neither is accepted here.
+ */
 export const definitionCompilationRequestSchema = z
   .object({
     source: connectionTypeSourceDocumentSchema,

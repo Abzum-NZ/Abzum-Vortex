@@ -8,12 +8,7 @@ import {
   versionRequirementSchema,
 } from "./definitions";
 import type { ResolveRecordTypeReferences } from "./definitions";
-import {
-  blockPaletteGroupSchema,
-  blockSettingControlSchema,
-  listArrangementSchema,
-  pageStateSchema,
-} from "./catalogues";
+import { listArrangementSchema, pageStateSchema } from "./catalogues";
 import {
   actionDefinitionSchema,
   conditionNodeSchema,
@@ -24,7 +19,6 @@ import { workflowDefinitionSchema } from "./automation-contracts";
 import { interfaceDefinitionSchema } from "./integration-contracts";
 import {
   builderKeySchema,
-  blockIdSchema,
   clusterIdSchema,
   connectionTypeIdSchema,
   containedComponentIdSchema,
@@ -37,7 +31,6 @@ import {
   organizationIdSchema,
   pageIdSchema,
   pipelineIdSchema,
-  platformIdSchema,
   queryIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
@@ -161,226 +154,12 @@ export const calendarMappingSchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-/** A placed block setting is always explicitly literal or one typed platform reference. */
-export const blockSettingValueSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("literal"), value: jsonValueSchema }).strict(),
-  z.object({ kind: z.literal("field_reference"), fieldId: fieldIdSchema }).strict(),
-  z
-    .object({
-      kind: z.literal("relationship_reference"),
-      relationshipId: containedComponentIdSchema,
-    })
-    .strict(),
-  z.object({ kind: z.literal("action_reference"), actionKey: namespacedKeySchema }).strict(),
-  z.object({ kind: z.literal("page_reference"), pageId: pageIdSchema }).strict(),
-  z.object({ kind: z.literal("query_reference"), queryId: queryIdSchema }).strict(),
-  z.object({ kind: z.literal("pipeline_reference"), pipelineId: pipelineIdSchema }).strict(),
-  z
-    .object({ kind: z.literal("record_type_reference"), recordType: recordTypeReferenceSchema })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("record_reference"),
-      recordType: recordTypeReferenceSchema,
-      recordId: recordIdSchema,
-    })
-    .strict(),
-]);
-export const blockSettingDeclarationSchema = z
-  .object({
-    key: builderKeySchema,
-    control: blockSettingControlSchema,
-    required: z.boolean(),
-  })
-  .strict();
-
-/** Used by publication validation to match a registered control to its placed value kind. */
-export const blockSettingReferenceKindByControl = Object.freeze({
-  data_reading: "query_reference",
-  record_type_picker: "record_type_reference",
-  record_picker: "record_reference",
-  field_picker: "field_reference",
-  relationship_picker: "relationship_reference",
-  action_picker: "action_reference",
-  page_picker: "page_reference",
-  process_pipeline_picker: "pipeline_reference",
-} as const);
-
-export const blockRegistrationSchema = z
-  .object({
-    blockId: blockIdSchema,
-    releaseVersion: semanticVersionSchema,
-    name: labelSchema,
-    icon: z
-      .string()
-      .min(1)
-      .max(120)
-      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-    paletteGroup: blockPaletteGroupSchema,
-    settings: z.array(blockSettingDeclarationSchema).max(40),
-    allowedChildBlockIds: z.array(blockIdSchema),
-    phoneBehaviour: z.enum(["stack", "hide", "full_width"]),
-    resizableHeight: z.boolean(),
-    liveUpdate: z.boolean(),
-    publicPage: z.boolean(),
-  })
-  .strict();
-
-export const blockPlacementSchema = z
-  .object({
-    placementId: containedComponentIdSchema,
-    blockId: blockIdSchema,
-    blockReleaseVersion: semanticVersionSchema,
-    settings: z.record(builderKeySchema, blockSettingValueSchema),
-    desktop: z
-      .object({
-        startColumn: z.number().int().min(1).max(12),
-        span: z.number().int().min(1).max(12),
-        height: z.number().int().positive(),
-      })
-      .strict(),
-    phone: z
-      .object({
-        order: z.number().int().min(0),
-        behaviour: z.enum(["stack", "hide", "full_width"]),
-      })
-      .strict(),
-    visibilityCondition: conditionNodeSchema.optional(),
-    viewPermissionKey: namespacedKeySchema,
-    usePermissionKey: namespacedKeySchema.optional(),
-    queryId: queryIdSchema.optional(),
-  })
-  .strict()
-  .refine((value) => value.desktop.startColumn + value.desktop.span <= 13, {
-    path: ["desktop", "span"],
-    message: "Block exceeds the twelve-column grid",
-  });
-
-export const responsivePageLayoutSchema = z
-  .object({
-    desktop: z
-      .object({
-        columns: z.literal(12),
-        componentOrder: z.array(containedComponentIdSchema).max(200),
-      })
-      .strict(),
-    phone: z.object({ componentOrder: z.array(containedComponentIdSchema).max(200) }).strict(),
-  })
-  .strict();
 export const standardPageReplacementSchema = z
   .object({
     standardPage: z.enum(["list", "detail", "create_form"]),
     recordType: recordTypeReferenceSchema,
   })
   .strict();
-
-const pageBase = {
-  pageId: pageIdSchema,
-  key: builderKeySchema,
-  name: labelSchema,
-  accessPermissionKey: namespacedKeySchema,
-  states: z.array(pageStateSchema).min(1),
-  layout: responsivePageLayoutSchema,
-  standardPageReplacement: standardPageReplacementSchema.optional(),
-};
-const listPageSchema = z
-  .object({
-    ...pageBase,
-    type: z.literal("list"),
-    recordType: recordTypeReferenceSchema,
-    queryId: queryIdSchema,
-    arrangements: z.array(listArrangementSchema).min(1),
-    calendarMapping: calendarMappingSchema.optional(),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    const usesCalendar = value.arrangements.includes("calendar");
-    if (usesCalendar !== (value.calendarMapping !== undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["calendarMapping"],
-        message: "Calendar mapping is required exactly when the calendar arrangement is enabled",
-      });
-  });
-const detailPageSchema = z
-  .object({
-    ...pageBase,
-    type: z.literal("detail"),
-    recordType: recordTypeReferenceSchema,
-    blocks: z.array(blockPlacementSchema).min(1).max(200),
-  })
-  .strict();
-const dashboardPageSchema = z
-  .object({
-    ...pageBase,
-    type: z.literal("dashboard"),
-    blocks: z.array(blockPlacementSchema).min(1).max(200),
-  })
-  .strict();
-const formPageSchema = z
-  .object({
-    ...pageBase,
-    type: z.literal("form"),
-    recordType: recordTypeReferenceSchema,
-    commitActionKey: namespacedKeySchema,
-    blocks: z.array(blockPlacementSchema).min(1).max(200),
-  })
-  .strict();
-const guidedFormPageSchema = z
-  .object({
-    ...pageBase,
-    type: z.literal("guided_form"),
-    recordType: recordTypeReferenceSchema,
-    commitActionKey: namespacedKeySchema,
-    steps: z
-      .array(
-        z
-          .object({
-            id: containedComponentIdSchema,
-            name: labelSchema,
-            summary: z.boolean(),
-            blocks: z.array(blockPlacementSchema).min(1).max(40),
-          })
-          .strict(),
-      )
-      .min(2)
-      .max(20),
-  })
-  .strict()
-  .refine((value) => value.steps.filter((step) => step.summary).length === 1, {
-    path: ["steps"],
-    message: "A guided form has exactly one summary step",
-  });
-const publicPageSchema = z
-  .object({
-    ...pageBase,
-    type: z.literal("public"),
-    recordType: recordTypeReferenceSchema.optional(),
-    publicFieldIds: z.array(fieldIdSchema),
-    publicActionKey: namespacedKeySchema.optional(),
-    blocks: z.array(blockPlacementSchema).min(1).max(40),
-    rateLimitPerMinute: z.number().int().min(1).max(10_000),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if (
-      value.recordType === undefined &&
-      (value.publicFieldIds.length > 0 || value.publicActionKey !== undefined)
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["recordType"],
-        message: "A public record field or action requires an explicit record type",
-      });
-  });
-export const pageDefinitionSchema = z.discriminatedUnion("type", [
-  listPageSchema,
-  detailPageSchema,
-  dashboardPageSchema,
-  formPageSchema,
-  guidedFormPageSchema,
-  publicPageSchema,
-]);
 
 const pageV2Common = {
   pageId: pageIdSchema,
@@ -522,29 +301,6 @@ export const applicationRoleSchema = z
         message: "Compiled application-role permissions must be unique exact keys",
       });
   });
-export const themeSchema = z.discriminatedUnion("mode", [
-  z
-    .object({
-      mode: z.literal("platform"),
-      catalogueThemeId: platformIdSchema,
-      version: semanticVersionSchema,
-    })
-    .strict(),
-  z
-    .object({
-      mode: z.literal("application"),
-      lightAndDark: z.boolean(),
-      tokens: z
-        .object({
-          brand: builderKeySchema,
-          density: z.enum(["compact", "comfortable"]),
-          corners: z.enum(["square", "small", "medium", "large"]),
-          focus: z.literal("high_contrast"),
-        })
-        .strict(),
-    })
-    .strict(),
-]);
 export const applicationConnectionBindingSchema = z
   .object({
     bindingId: containedComponentIdSchema,
@@ -637,7 +393,12 @@ export const pipelineSchema = z
         });
   });
 
-export const applicationContentV1Schema = z
+/**
+ * The definition-wide fields every Application release carries beside its shells, pages,
+ * platform-block dependencies and theme. It is the current contract's own base, not a
+ * separately decodable representation: only applicationContentV2Schema is ever parsed.
+ */
+const applicationSharedContentSchema = z
   .object({
     name: z.string().min(1).max(120),
     description: z.string().min(1).max(1_000),
@@ -648,10 +409,8 @@ export const applicationContentV1Schema = z
       .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
     moduleBindings: z.array(moduleBindingSchema),
     navigation: z.array(navigationItemSchema),
-    pages: z.array(pageDefinitionSchema).min(1),
     roles: z.array(applicationRoleSchema).min(1),
     queries: z.array(queryDefinitionSchema),
-    blockRegistrations: z.array(blockRegistrationSchema),
     pipelines: z.array(pipelineSchema),
     permissions: z.array(permissionDeclarationSchema),
     actions: z.array(actionDefinitionSchema),
@@ -661,13 +420,11 @@ export const applicationContentV1Schema = z
     connectionBindings: z.array(applicationConnectionBindingSchema),
     interfaces: z.array(interfaceDefinitionSchema),
     publicAddresses: z.array(publicAddressSchema),
-    theme: themeSchema,
     homePageId: pageIdSchema,
   })
   .strict();
 
-export const applicationContentV2Schema = applicationContentV1Schema
-  .omit({ pages: true, blockRegistrations: true, theme: true })
+export const applicationContentV2Schema = applicationSharedContentSchema
   .extend({
     platformBlockDependencies: platformBlockDependenciesV2Schema,
     shells: z.array(applicationShellV2Schema),
@@ -812,13 +569,6 @@ export const applicationContentV2Schema = applicationContentV1Schema
       });
   });
 
-/** Backward-compatible name for the currently implemented canonical Application content. */
-export const applicationContentSchema = applicationContentV1Schema;
-
-export const applicationDraftV1Schema = z
-  .object({ envelope: applicationDefinitionEnvelopeSchema, content: applicationContentV1Schema })
-  .strict();
-
 export const applicationDraftV2Schema = z
   .object({ envelope: applicationDefinitionEnvelopeSchema, content: applicationContentV2Schema })
   .strict();
@@ -830,35 +580,6 @@ export const applicationCanonicalDocumentV2Schema = z
     canonical: applicationDraftV2Schema,
   })
   .strict();
-
-/** Backward-compatible name for the currently implemented canonical Application draft. */
-export const applicationDraftSchema = applicationDraftV1Schema;
-
-export const publishedApplicationDefinitionV1Schema = z
-  .object({
-    publication: publishedApplicationReferenceSchema.extend({
-      validationContractVersion: z.literal("1.0.0"),
-    }),
-    content: applicationContentV1Schema,
-    dependencyManifest: z.array(publishedDefinitionReferenceSchema),
-    releaseNote: z.string().min(1).max(2_000),
-  })
-  .strict()
-  .superRefine((value, context) =>
-    requireResolvedRecordTypeReferences(applicationContentV1Schema, value.content, context, [
-      "content",
-    ]),
-  )
-  .transform(
-    (
-      value,
-    ): Omit<typeof value, "content"> & {
-      content: ResolveRecordTypeReferences<typeof value.content>;
-    } =>
-      value as unknown as Omit<typeof value, "content"> & {
-        content: ResolveRecordTypeReferences<typeof value.content>;
-      },
-  );
 
 export const publishedApplicationDefinitionV2Schema = z
   .object({
@@ -886,40 +607,8 @@ export const publishedApplicationDefinitionV2Schema = z
       },
   );
 
-/** Select the exact immutable Application representation from publication metadata. */
-export const publishedApplicationDefinitionSchema = z.unknown().transform((value, context) => {
-  const candidate =
-    value !== null && typeof value === "object" && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : undefined;
-  const publication =
-    candidate?.publication !== null &&
-    typeof candidate?.publication === "object" &&
-    !Array.isArray(candidate.publication)
-      ? (candidate.publication as Record<string, unknown>)
-      : undefined;
-  const validationContractVersion = publication?.validationContractVersion;
-  const schema =
-    validationContractVersion === "1.0.0"
-      ? publishedApplicationDefinitionV1Schema
-      : validationContractVersion === "2.0.0"
-        ? publishedApplicationDefinitionV2Schema
-        : undefined;
-  if (schema === undefined) {
-    context.addIssue({
-      code: "custom",
-      path: ["publication", "validationContractVersion"],
-      message: "Published Application validation contract version is unsupported",
-    });
-    return z.NEVER;
-  }
-  const parsed = schema.safeParse(value);
-  if (!parsed.success) {
-    for (const issue of parsed.error.issues) context.addIssue({ ...issue });
-    return z.NEVER;
-  }
-  return parsed.data;
-});
+/** The sole immutable Application release representation Definition consumers decode. */
+export const publishedApplicationDefinitionSchema = publishedApplicationDefinitionV2Schema;
 
 export const sharedRecordProjectionSchema = z
   .object({
@@ -940,28 +629,16 @@ export type Aggregate = z.infer<typeof aggregateSchema>;
 export type ModuleBinding = z.infer<typeof moduleBindingSchema>;
 export type NavigationItem = z.infer<typeof navigationItemSchema>;
 export type CalendarMapping = z.infer<typeof calendarMappingSchema>;
-export type PageDefinition = z.infer<typeof pageDefinitionSchema>;
 export type PageDefinitionV2 = z.infer<typeof pageDefinitionV2Schema>;
-export type ApplicationContent = z.infer<typeof applicationContentSchema>;
 export type ApplicationContentV2 = z.infer<typeof applicationContentV2Schema>;
 export type ApplicationDraftV2 = z.infer<typeof applicationDraftV2Schema>;
 export type ApplicationCanonicalDocumentV2 = z.infer<typeof applicationCanonicalDocumentV2Schema>;
-export type ApplicationDraft = z.infer<typeof applicationDraftSchema>;
-export type PublishedApplicationDefinitionV1 = z.infer<
-  typeof publishedApplicationDefinitionV1Schema
->;
 export type PublishedApplicationDefinitionV2 = z.infer<
   typeof publishedApplicationDefinitionV2Schema
 >;
 export type PublishedApplicationDefinition = z.infer<typeof publishedApplicationDefinitionSchema>;
-export type BlockSettingValue = z.infer<typeof blockSettingValueSchema>;
-export type BlockSettingDeclaration = z.infer<typeof blockSettingDeclarationSchema>;
-export type BlockRegistration = z.infer<typeof blockRegistrationSchema>;
-export type BlockPlacement = z.infer<typeof blockPlacementSchema>;
-export type ResponsivePageLayout = z.infer<typeof responsivePageLayoutSchema>;
 export type StandardPageReplacement = z.infer<typeof standardPageReplacementSchema>;
 export type ApplicationRole = z.infer<typeof applicationRoleSchema>;
-export type Theme = z.infer<typeof themeSchema>;
 export type Pipeline = z.infer<typeof pipelineSchema>;
 export type ApplicationConnectionBinding = z.infer<typeof applicationConnectionBindingSchema>;
 export type PublicAddress = z.infer<typeof publicAddressSchema>;

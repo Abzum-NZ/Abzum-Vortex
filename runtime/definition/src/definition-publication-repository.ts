@@ -515,10 +515,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         } catch {
           return invalidStorage();
         }
-        if (
-          output.validationContractVersion !== "3.0.0" ||
-          resolution.contractVersion !== "3.0.0"
-        )
+        if (output.validationContractVersion !== "3.0.0" || resolution.contractVersion !== "3.0.0")
           return invalidStorage();
       }
       const ownResolution = resolution.definitions.filter(

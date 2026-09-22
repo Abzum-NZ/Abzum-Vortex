@@ -4467,12 +4467,14 @@ function compileDefinitionInternal(
 ): DefinitionCompilationOutput {
   const parsed = definitionCompilationRequestSchema.safeParse(input);
   if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
-  return compileParsedLegacyRequest(parsed.data, parseDefinitionCompilationContext(context));
+  // A connection type has no definition dependencies; the context is still parsed so a malformed
+  // one is refused exactly as it is on the Application and Module entry points.
+  parseDefinitionCompilationContext(context);
+  return compileParsedConnectionRequest(parsed.data);
 }
 
-function compileParsedLegacyRequest(
-  request: ParsedLegacyRequest,
-  _dependencyOutputs: readonly DefinitionCompilationOutput[],
+function compileParsedConnectionRequest(
+  request: ParsedConnectionRequest,
 ): DefinitionCompilationOutput {
   const sourceDocument = request.source;
   const source = sourceDocument as unknown as JsonObject;
@@ -4480,15 +4482,12 @@ function compileParsedLegacyRequest(
     const resolution = new Resolution(request.resolution, source);
     const canonical: unknown = compileConnection(source, resolution);
     const ownDefinition = resolution.definition(sourceDocument.key, sourceDocument.kind);
-    const canonicalObject = asObject(canonical);
     const artifact = {
       kind: sourceDocument.kind,
       definitionKey: sourceDocument.key,
       rootId: ownDefinition.rootId,
       exactVersion: ownDefinition.exactVersion,
-      contentFingerprint: fingerprintCanonicalValue(
-        sourceDocument.kind === "connection_type" ? canonicalObject : canonicalObject.content,
-      ),
+      contentFingerprint: fingerprintCanonicalValue(asObject(canonical)),
       resolutionFingerprint: request.resolution.fingerprint,
     };
     const output = definitionCompilationOutputSchema.safeParse({
@@ -5184,7 +5183,7 @@ const explicitCompilationKind = (input: unknown): "module" | "application" | und
 };
 
 /** Requests as this package's own schemas return them, carrying the ids compiling needs. */
-type ParsedLegacyRequest = ReturnType<typeof definitionCompilationRequestSchema.parse>;
+type ParsedConnectionRequest = ReturnType<typeof definitionCompilationRequestSchema.parse>;
 type ParsedApplicationV2Request = ReturnType<typeof applicationCompilationRequestV2Schema.parse>;
 type ParsedModuleV3Request = ReturnType<typeof moduleCompilationRequestV3Schema.parse>;
 
@@ -5225,7 +5224,7 @@ export function compileParsedDefinition(
       request as ParsedApplicationV2Request,
       dependencyOutputs,
     );
-  return compileParsedLegacyRequest(request as ParsedLegacyRequest, dependencyOutputs);
+  return compileParsedConnectionRequest(request as ParsedConnectionRequest);
 }
 
 export function compileDefinition(

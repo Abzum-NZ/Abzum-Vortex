@@ -1,5 +1,4 @@
 import {
-  applicationContentSchema,
   applicationContentV2Schema,
   applicationVersionImpactPolicyVersionV2,
   applicationVersionImpactRequestV2Schema,
@@ -13,7 +12,6 @@ import {
   definitionVersionImpactRequestSchema,
   definitionVersionImpactResultSchema,
   stableDefinitionReleaseVersionSchema,
-  versionImpactPolicyVersion,
   type DefinitionVersionConfirmation,
   type DefinitionPublicationHistoryEvidence,
   type DefinitionVersionImpactRequest,
@@ -28,7 +26,6 @@ import {
 } from "@vortex/contracts";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
 import {
-  assertUnambiguousApplicationContent,
   assertUnambiguousApplicationContentV2,
   assertUnambiguousModuleContent,
   compareApplicationContentsV2,
@@ -68,13 +65,6 @@ const activeHistoryFolds = new WeakSet<object>();
 const verifiedHistoryEvidence = new WeakSet<object>();
 const savedConditionEvidence = new WeakMap<object, SavedConditionRevisionFold>();
 
-const isApplicationV2Release = (
-  release: PublishedApplicationDefinition,
-): release is Extract<
-  PublishedApplicationDefinition,
-  { publication: { validationContractVersion: "2.0.0" } }
-> => release.publication.validationContractVersion === "2.0.0";
-
 const subjectOf = (request: SupportedVersionImpactRequest): DefinitionVersionSubject =>
   request.kind === "module"
     ? { definitionKind: "module", rootId: request.candidate.envelope.rootId }
@@ -109,16 +99,12 @@ const assertHistoryRelease = (
     assertUnambiguousModuleContent(release.content);
   } else {
     const applicationRelease = release as PublishedApplicationDefinition;
-    const v2 = isApplicationV2Release(applicationRelease);
     if (
-      unresolvedRecordTypeReferencePaths(
-        v2 ? applicationContentV2Schema : applicationContentSchema,
-        applicationRelease.content,
-      ).length > 0
+      unresolvedRecordTypeReferencePaths(applicationContentV2Schema, applicationRelease.content)
+        .length > 0
     )
       refuseVersionImpact("invalid_history");
-    if (v2) assertUnambiguousApplicationContentV2(applicationRelease.content);
-    else assertUnambiguousApplicationContent(applicationRelease.content);
+    assertUnambiguousApplicationContentV2(applicationRelease.content);
   }
   if (
     previous &&
@@ -291,9 +277,8 @@ const comparisonFingerprint = (
   exactCandidateContentFingerprint: `sha256:${string}`,
   resultWithoutFingerprint: unknown,
   policyVersion:
-    | typeof versionImpactPolicyVersion
     | typeof applicationVersionImpactPolicyVersionV2
-    | typeof moduleVersionImpactPolicyVersionV3 = versionImpactPolicyVersion,
+    | typeof moduleVersionImpactPolicyVersionV3,
 ): `sha256:${string}` =>
   fingerprintCanonicalValue({
     policyVersion,
@@ -339,7 +324,7 @@ const assertEvidenceContractVersions = (
   request: SupportedVersionImpactRequest,
   evidence: DefinitionPublicationHistoryEvidence,
 ): void => {
-  const allowed = request.kind === "module" ? new Set(["3.0.0"]) : new Set(["1.0.0", "2.0.0"]);
+  const allowed = request.kind === "module" ? new Set(["3.0.0"]) : new Set(["2.0.0"]);
   if (evidence.validationContractVersions.some((version) => !allowed.has(version)))
     refuseVersionImpact("invalid_request");
 };
@@ -372,7 +357,9 @@ const compareParsedDefinitionVersionImpact = (
       ? normaliseModuleContent(request.candidate.content)
       : normaliseApplicationContentV2(request.candidate.content);
   const policyVersion =
-    request.kind === "module" ? moduleVersionImpactPolicyVersionV3 : applicationVersionImpactPolicyVersionV2;
+    request.kind === "module"
+      ? moduleVersionImpactPolicyVersionV3
+      : applicationVersionImpactPolicyVersionV2;
 
   if (latest === undefined) {
     const resultWithoutFingerprint = {
@@ -395,7 +382,6 @@ const compareParsedDefinitionVersionImpact = (
 
   let normalisedPrevious: unknown;
   let reasons: DefinitionVersionImpactResult["reasons"];
-  let representationChanged = false;
   if (request.kind === "module") {
     const latestModule = latest!;
     const latestContent = moduleContentV3Schema.parse(latestModule.content);
@@ -406,33 +392,14 @@ const compareParsedDefinitionVersionImpact = (
     reasons = compareModuleContents(comparablePrevious, comparableCandidate);
   } else {
     const latestApplication = latest! as PublishedApplicationDefinition;
-    const latestV2 = isApplicationV2Release(latestApplication);
-    representationChanged = !latestV2;
-    if (representationChanged) {
-      normalisedPrevious = latestApplication.content;
-      reasons = [
-        {
-          impact: "major",
-          code: "existing_behavior_changed",
-          location: {
-            componentKind: "application",
-            property: "configuration",
-          },
-        },
-      ];
-    } else {
-      normalisedPrevious = normaliseApplicationContentV2(latestApplication.content);
-      assertUnambiguousApplicationContentV2(latestApplication.content);
-      reasons = compareApplicationContentsV2(
-        normalisedPrevious as ReturnType<typeof normaliseApplicationContentV2>,
-        normalisedCandidate as ReturnType<typeof normaliseApplicationContentV2>,
-      );
-    }
+    normalisedPrevious = normaliseApplicationContentV2(latestApplication.content);
+    assertUnambiguousApplicationContentV2(latestApplication.content);
+    reasons = compareApplicationContentsV2(
+      normalisedPrevious as ReturnType<typeof normaliseApplicationContentV2>,
+      normalisedCandidate as ReturnType<typeof normaliseApplicationContentV2>,
+    );
   }
-  if (
-    !representationChanged &&
-    canonicalJson(normalisedPrevious) === canonicalJson(normalisedCandidate)
-  ) {
+  if (canonicalJson(normalisedPrevious) === canonicalJson(normalisedCandidate)) {
     const resultWithoutFingerprint = {
       subject,
       outcome: "no_change" as const,

@@ -123,7 +123,8 @@ export const systemApplicationBoundReleaseSetCommandSchema = z
   })
   .strict();
 
-const applicationDefinitionConsumerReadResultSchema = applicationDefinitionConsumerReadResultV2Schema;
+const applicationDefinitionConsumerReadResultSchema =
+  applicationDefinitionConsumerReadResultV2Schema;
 const moduleDefinitionConsumerReadResultSchema = moduleDefinitionConsumerReadResultV3Schema;
 
 export const applicationBoundReleaseSetResultSchema = z
