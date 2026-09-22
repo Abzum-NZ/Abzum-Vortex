@@ -35,6 +35,7 @@ export {
   ensureIdentityProjection,
   readIdentityProjection,
   listOffboardingOwnedRecords,
+  transferOffboardingOwnedRecords,
   OrganizationAccountError,
   organizationAccountErrorCodes,
   type CreatedOrganizationInvitation,
@@ -55,6 +56,10 @@ export {
   type OffboardingSectionKind,
   type OffboardingSharedPageImpact,
   type OffboardingStorageScope,
+  type OffboardingTransferBatchCommand,
+  type OffboardingTransferBatchRecordOutcome,
+  type OffboardingTransferBatchRecordResult,
+  type OffboardingTransferBatchResult,
 } from "./organization-accounts";
 export {
   createOrganizationLauncherService,
