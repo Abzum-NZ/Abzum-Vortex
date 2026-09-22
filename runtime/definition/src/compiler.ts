@@ -196,6 +196,10 @@ const sourceCollectionIdKeys: Readonly<Record<string, string>> = Object.freeze({
   interfaces: "interfaceId",
   operations: "operationId",
   public_addresses: "addressId",
+  flows: "flowId",
+  flow_nodes: "nodeId",
+  flow_edges: "edgeId",
+  flow_bindings: "bindingId",
 });
 
 const directSourceKeyMap: Readonly<Record<string, string>> = Object.freeze({
@@ -4371,9 +4375,457 @@ function compileApplication(
       })),
       theme: compositionV2.theme,
       homePageId: pageId(String(body.home_page)),
+      flows: compileApplicationFlows(source, resolution, valueIndex),
+      flowBindings: compileApplicationFlowBindings(source, resolution),
     },
   });
   return canonical;
+}
+
+function compileApplicationFlows(
+  source: JsonObject,
+  resolution: Resolution,
+  valueIndex: ApplicationModuleValueIndex,
+): JsonObject[] {
+  const body = asObject(source.body);
+  const definitionKey = String(source.key);
+  const rawFlows = Array.isArray(body.flows) ? (body.flows as JsonObject[]) : [];
+  return rawFlows.map((flow) => {
+    const flowId = flow.flowId
+      ? String(flow.flowId)
+      : resolution.id(definitionKey, "flow", String(flow.id), "content");
+    const flowScope = `flow:${flow.key}`;
+
+    const compileFlowValueDeclaration = (decl: JsonObject): JsonObject => ({
+      type: decl.type,
+      required: Boolean(decl.required),
+      ...(decl.record_types
+        ? {
+            recordTypeIds: (decl.record_types as string[]).map(
+              (rt) => resolution.recordType(rt).recordTypeId,
+            ),
+          }
+        : decl.recordTypeIds
+          ? { recordTypeIds: decl.recordTypeIds }
+          : {}),
+    });
+
+    const compileFlowVariableDeclaration = (decl: JsonObject): JsonObject => ({
+      ...(decl.variableId ? { variableId: decl.variableId } : {}),
+      key: decl.key,
+      ...(decl.name ? { name: decl.name } : {}),
+      type: decl.type,
+      ...(decl.record_types
+        ? {
+            recordTypeIds: (decl.record_types as string[]).map(
+              (rt) => resolution.recordType(rt).recordTypeId,
+            ),
+          }
+        : decl.recordTypeIds
+          ? { recordTypeIds: decl.recordTypeIds }
+          : {}),
+      ...(decl.default_value !== undefined
+        ? { defaultValue: decl.default_value }
+        : decl.defaultValue !== undefined
+          ? { defaultValue: decl.defaultValue }
+          : {}),
+    });
+
+    const compileNodeInputValue = (value: JsonObject): JsonObject => {
+      if (value.source === "literal") return { source: "literal", value: value.value };
+      if (value.source === "flow_input") return { source: "flow_input", input: value.input };
+      if (value.source === "flow_variable") return { source: "flow_variable", variable: value.variable };
+      if (value.source === "node_output") {
+        const nodeId = value.nodeId
+          ? String(value.nodeId)
+          : resolution.id(definitionKey, "flow_node", String(value.node), flowScope);
+        return { source: "node_output", nodeId, output: value.output };
+      }
+      return { source: "current_organization_account_id" };
+    };
+
+    const compileNodeInputBinding = (binding: JsonObject): JsonObject => ({
+      type: binding.type,
+      value: compileNodeInputValue(asObject(binding.value)),
+    });
+
+    const compileNode = (node: JsonObject): JsonObject => {
+      const nodeId = node.nodeId
+        ? String(node.nodeId)
+        : resolution.id(definitionKey, "flow_node", String(node.id), flowScope);
+      const base = {
+        nodeId,
+        key: node.key,
+        kind: node.kind,
+        ...(node.label ? { label: node.label } : {}),
+      };
+
+      if (node.kind === "start") {
+        return {
+          ...base,
+          runAs: { kind: "current_user" },
+          ...(node.entry_condition
+            ? {
+                entryCondition: condition(node.entry_condition, (alias) => alias),
+              }
+            : node.entryCondition
+              ? { entryCondition: node.entryCondition }
+              : {}),
+          outputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.outputs ?? {})).map(([k, v]) => [
+              k,
+              compileFlowValueDeclaration(asObject(v)),
+            ]),
+          ),
+        };
+      }
+
+      if (node.kind === "query") {
+        const target = asObject(node.target);
+        let compiledTarget: JsonObject;
+        if (target.kind === "application_query") {
+          compiledTarget = {
+            kind: "application_query",
+            queryId: target.queryId ?? resolution.id(definitionKey, "query", String(target.query), "content"),
+          };
+        } else {
+          const modDef = target.module
+            ? resolution.definition(String(target.module), "module")
+            : undefined;
+          compiledTarget = {
+            kind: "query",
+            moduleRootId: target.moduleRootId ?? modDef?.rootId,
+            moduleReleaseVersion: target.moduleReleaseVersion ?? modDef?.exactVersion ?? "1.0.0",
+            queryId: target.queryId ?? resolution.query(String(target.module), String(target.query)),
+          };
+        }
+        return {
+          ...base,
+          target: compiledTarget,
+          runAs: { kind: "current_user" },
+          inputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.inputs ?? {})).map(([k, v]) => [
+              k,
+              compileNodeInputBinding(asObject(v)),
+            ]),
+          ),
+          outputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.outputs ?? {})).map(([k, v]) => [
+              k,
+              compileFlowValueDeclaration(asObject(v)),
+            ]),
+          ),
+          results: node.results ?? {},
+        };
+      }
+
+      if (node.kind === "action") {
+        const target = asObject(node.target);
+        let compiledTarget: JsonObject;
+        if (target.kind === "protected_operation") {
+          compiledTarget = {
+            kind: "protected_operation",
+            operation: target.operation,
+          };
+        } else if (target.kind === "form_continuation") {
+          compiledTarget = {
+            kind: "form_continuation",
+            applicationRootId: target.applicationRootId ?? resolution.definition(definitionKey, "application").rootId,
+            formId: target.formId ?? resolution.id(definitionKey, "block_placement", String(target.form)),
+            continuationEventId: target.continuationEventId ?? resolution.id(definitionKey, "event", String(target.continuation_event ?? target.continuationEventId), "content"),
+          };
+        } else if (target.kind === "durable_workflow_start") {
+          compiledTarget = {
+            kind: "durable_workflow_start",
+            applicationRootId: target.applicationRootId ?? resolution.definition(definitionKey, "application").rootId,
+            workflowId: target.workflowId ?? resolution.id(definitionKey, "workflow", String(target.workflow), "content"),
+          };
+        } else {
+          compiledTarget = {
+            kind: "application_action",
+            actionKey: target.actionKey ?? target.action,
+          };
+        }
+        return {
+          ...base,
+          target: compiledTarget,
+          runAs: { kind: "current_user" },
+          inputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.inputs ?? {})).map(([k, v]) => [
+              k,
+              compileNodeInputBinding(asObject(v)),
+            ]),
+          ),
+          outputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.outputs ?? {})).map(([k, v]) => [
+              k,
+              compileFlowValueDeclaration(asObject(v)),
+            ]),
+          ),
+          results: node.results ?? {},
+        };
+      }
+
+      if (node.kind === "transform") {
+        return {
+          ...base,
+          inputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.inputs ?? {})).map(([k, v]) => [
+              k,
+              compileNodeInputBinding(asObject(v)),
+            ]),
+          ),
+          outputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.outputs ?? {})).map(([k, v]) => [
+              k,
+              compileFlowValueDeclaration(asObject(v)),
+            ]),
+          ),
+          results: node.results ?? {},
+        };
+      }
+
+      return {
+        ...base,
+        results: objectFromUniqueEntries(
+          Object.entries(asObject(node.results ?? {})).map(([k, v]) => [
+            k,
+            compileNodeInputValue(asObject(v)),
+          ]),
+        ),
+        outcome: node.outcome ?? "completed",
+      };
+    };
+
+    const nodes = (flow.nodes as JsonObject[]).map(compileNode);
+    const nodeByAlias = new Map(
+      (flow.nodes as JsonObject[]).map((n, idx) => [
+        String(n.id ?? n.nodeId),
+        String(nodes[idx].nodeId),
+      ]),
+    );
+
+    const edges = (flow.edges as JsonObject[]).map((edge) => {
+      const edgeId = edge.edgeId
+        ? String(edge.edgeId)
+        : resolution.id(definitionKey, "flow_edge", String(edge.id ?? `${edge.from_node ?? edge.fromNodeId}_${edge.to_node ?? edge.toNodeId}`), flowScope);
+      const fromNodeId = edge.fromNodeId
+        ? String(edge.fromNodeId)
+        : nodeByAlias.get(String(edge.from_node)) ?? String(edge.from_node);
+      const toNodeId = edge.toNodeId
+        ? String(edge.toNodeId)
+        : nodeByAlias.get(String(edge.to_node)) ?? String(edge.to_node);
+      return {
+        edgeId,
+        fromNodeId,
+        toNodeId,
+        ...(edge.outcome ? { outcome: edge.outcome } : {}),
+      };
+    });
+
+    const inputs = objectFromUniqueEntries(
+      Object.entries(asObject(flow.inputs ?? {})).map(([k, v]) => [
+        k,
+        compileFlowValueDeclaration(asObject(v)),
+      ]),
+    );
+    const outputs = objectFromUniqueEntries(
+      Object.entries(asObject(flow.outputs ?? {})).map(([k, v]) => [
+        k,
+        compileFlowValueDeclaration(asObject(v)),
+      ]),
+    );
+    const variables = objectFromUniqueEntries(
+      Object.entries(asObject(flow.variables ?? {})).map(([k, v]) => [
+        k,
+        compileFlowVariableDeclaration(asObject(v)),
+      ]),
+    );
+
+    return {
+      flowId,
+      key: flow.key,
+      name: flow.name,
+      ...(flow.description ? { description: flow.description } : {}),
+      runAs: "current_user",
+      inputs,
+      outputs,
+      variables,
+      nodes,
+      edges,
+    };
+  });
+}
+
+function compileApplicationFlowBindings(
+  source: JsonObject,
+  resolution: Resolution,
+): JsonObject[] {
+  const body = asObject(source.body);
+  const definitionKey = String(source.key);
+  const root = resolution.definition(definitionKey, "application");
+  const rawBindings = Array.isArray(body.flow_bindings)
+    ? (body.flow_bindings as JsonObject[])
+    : Array.isArray(body.flowBindings)
+      ? (body.flowBindings as JsonObject[])
+      : [];
+
+  return rawBindings.map((binding) => {
+    const bindingId = binding.bindingId
+      ? String(binding.bindingId)
+      : binding.id
+        ? resolution.id(definitionKey, "flow_binding", String(binding.id), "content")
+        : undefined;
+
+    const controlId = binding.controlId
+      ? String(binding.controlId)
+      : resolution.id(definitionKey, "block_placement", String(binding.control));
+
+    const eventId = binding.eventId
+      ? String(binding.eventId)
+      : binding.event_id
+        ? resolution.id(definitionKey, "event", String(binding.event_id), "content")
+        : resolution.id(definitionKey, "event", `${binding.control}_${binding.event}`, "content");
+
+    const flowRef = asObject(binding.flow);
+    let compiledFlowRef: JsonObject;
+    if (flowRef.kind === "platform_managed") {
+      compiledFlowRef = {
+        kind: "platform_managed",
+        flowId: flowRef.flowId ?? flowRef.flow_id,
+        releaseVersion: flowRef.releaseVersion ?? flowRef.release_version,
+      };
+    } else {
+      compiledFlowRef = {
+        kind: "application_owned",
+        applicationRootId: flowRef.applicationRootId ?? root.rootId,
+        flowId: flowRef.flowId ?? resolution.id(definitionKey, "flow", String(flowRef.flow), "content"),
+      };
+    }
+
+    const compileBindingContext = (ctx: JsonObject): JsonObject => {
+      const kind = ctx.kind;
+      if (kind === "page_subject") {
+        return {
+          kind: "page_subject",
+          recordTypeId: ctx.recordTypeId ?? resolution.recordType(String(ctx.record_type)).recordTypeId,
+        };
+      }
+      if (kind === "related_record") {
+        const recordType = ctx.recordTypeId ? String(ctx.recordTypeId) : resolution.recordType(String(ctx.record_type)).recordTypeId;
+        const relId = ctx.relationshipId
+          ? String(ctx.relationshipId)
+          : resolution.relationship(String(ctx.record_type), String(ctx.relationship));
+        return {
+          kind: "related_record",
+          relationshipId: relId,
+          recordTypeId: recordType,
+        };
+      }
+      if (kind === "row") {
+        const cId = ctx.controlId
+          ? String(ctx.controlId)
+          : resolution.id(definitionKey, "block_placement", String(ctx.control));
+        return {
+          kind: "row",
+          controlId: cId,
+          recordTypeId: ctx.recordTypeId ?? resolution.recordType(String(ctx.record_type)).recordTypeId,
+        };
+      }
+      if (kind === "selection") {
+        const cId = ctx.controlId
+          ? String(ctx.controlId)
+          : resolution.id(definitionKey, "block_placement", String(ctx.control));
+        return {
+          kind: "selection",
+          controlId: cId,
+          recordTypeId: ctx.recordTypeId ?? resolution.recordType(String(ctx.record_type)).recordTypeId,
+          cardinality: ctx.cardinality,
+        };
+      }
+      if (kind === "form") {
+        const fId = ctx.formId
+          ? String(ctx.formId)
+          : resolution.id(definitionKey, "block_placement", String(ctx.form));
+        return {
+          kind: "form",
+          formId: fId,
+          recordTypeId: ctx.recordTypeId ?? resolution.recordType(String(ctx.record_type)).recordTypeId,
+        };
+      }
+      const fId = ctx.formId
+        ? String(ctx.formId)
+        : resolution.id(definitionKey, "block_placement", String(ctx.form));
+      return {
+        kind: "response",
+        formId: fId,
+        ...(ctx.record_type || ctx.recordTypeId
+          ? {
+              recordTypeId: ctx.recordTypeId ?? resolution.recordType(String(ctx.record_type)).recordTypeId,
+            }
+          : {}),
+      };
+    };
+
+    const compileBindingInputValue = (value: JsonObject): JsonObject => {
+      if (value.source === "literal") return { source: "literal", value: value.value };
+      if (value.source === "context_record") {
+        return {
+          source: "context_record",
+          context: compileBindingContext(asObject(value.context)),
+        };
+      }
+      if (value.source === "context_field") {
+        const ctx = asObject(value.context);
+        const compiledCtx = compileBindingContext(ctx);
+        const fieldId = value.fieldId
+          ? String(value.fieldId)
+          : resolution.field(String(ctx.record_type ?? ctx.recordTypeId), String(value.field));
+        return {
+          source: "context_field",
+          context: compiledCtx,
+          fieldId,
+        };
+      }
+      if (value.source === "form_input") {
+        const formId = value.formId
+          ? String(value.formId)
+          : resolution.id(definitionKey, "block_placement", String(value.form));
+        return {
+          source: "form_input",
+          formId,
+          input: value.input,
+        };
+      }
+      if (value.source === "event_input") return { source: "event_input", input: value.input };
+      return { source: "current_organization_account_id" };
+    };
+
+    const inputs = objectFromUniqueEntries(
+      Object.entries(asObject(binding.inputs ?? {})).map(([k, v]) => {
+        const inp = asObject(v);
+        return [
+          k,
+          {
+            type: inp.type,
+            value: compileBindingInputValue(asObject(inp.value)),
+          },
+        ];
+      }),
+    );
+
+    return {
+      contractVersion: "1.0.0",
+      ...(bindingId !== undefined ? { bindingId } : {}),
+      controlId,
+      eventId,
+      event: binding.event,
+      flow: compiledFlowRef,
+      inputs,
+      results: binding.results ?? {},
+      declaredEffects: binding.declaredEffects ?? binding.declared_effects,
+    };
+  });
 }
 
 function compileConnection(source: JsonObject, resolution: Resolution) {

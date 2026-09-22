@@ -260,6 +260,10 @@ const sourceCollectionLocationKind = {
   shapes: "setting",
   operations: "setting",
   incoming_messages: "setting",
+  flows: "flow",
+  flow_nodes: "flow_node",
+  flow_edges: "flow_edge",
+  flow_bindings: "flow_binding",
 } as const satisfies Partial<
   Record<string, DefinitionValidationLocation["segments"][number]["kind"]>
 >;
@@ -2736,6 +2740,246 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
   return failures;
 }
 
+function flowTypesCompatible(actual: string, expected: string): boolean {
+  if (actual === expected) return true;
+  if (expected === "json") return true;
+  if (expected === "text" && actual === "string") return true;
+  if (expected === "string" && actual === "text") return true;
+  if (
+    ["whole_number", "decimal_number", "money", "number"].includes(actual) &&
+    ["whole_number", "decimal_number", "money", "number"].includes(expected)
+  )
+    return true;
+  if (["date", "date_time"].includes(actual) && ["date", "date_time"].includes(expected))
+    return true;
+  if (
+    ["record", "record_reference"].includes(actual) &&
+    ["record", "record_reference"].includes(expected)
+  )
+    return true;
+  return false;
+}
+
+function validateCurrentUserFlow(
+  output: Output,
+  flow: JsonObject,
+  queries: ReadonlyMap<string, JsonObject>,
+  actions: ReadonlyMap<string, JsonObject>,
+  executableActionKeys: ReadonlySet<string>,
+  workflows: ReadonlyMap<string, JsonObject>,
+): DefinitionRuleFailure[] {
+  const failures: DefinitionRuleFailure[] = [];
+  const flowFailure = (ruleCode: string, family: DefinitionRuleFailure["family"]) =>
+    failure(output, ruleCode, family, { kind: "flow", key: String(flow.key) });
+  const nodes = array(flow.nodes);
+  const edges = array(flow.edges);
+  const byId = new Map(nodes.map((node) => [String(node.nodeId), node]));
+  const starts = nodes.filter((node) => node.kind === "start");
+  const returns = nodes.filter((node) => node.kind === "return");
+
+  if (starts.length !== 1) {
+    failures.push(flowFailure("vortex.definition.application_flow_single_start", "invalid_value"));
+  }
+
+  let edgeEndpointsValid = true;
+  for (const edge of edges) {
+    if (!byId.has(String(edge.fromNodeId)) || !byId.has(String(edge.toNodeId))) {
+      edgeEndpointsValid = false;
+    }
+  }
+  if (!edgeEndpointsValid) {
+    failures.push(flowFailure("vortex.definition.application_flow_edge_endpoints", "broken_reference"));
+  }
+
+  const outgoing = new Map<string, string[]>();
+  const incoming = new Map<string, string[]>();
+  for (const node of nodes) {
+    outgoing.set(String(node.nodeId), []);
+    incoming.set(String(node.nodeId), []);
+  }
+  for (const edge of edges) {
+    if (byId.has(String(edge.fromNodeId)) && byId.has(String(edge.toNodeId))) {
+      outgoing.get(String(edge.fromNodeId))!.push(String(edge.toNodeId));
+      incoming.get(String(edge.toNodeId))!.push(String(edge.fromNodeId));
+    }
+  }
+
+  if (starts.length === 1) {
+    const startId = String(starts[0]!.nodeId);
+    if ((incoming.get(startId)?.length ?? 0) !== 0 || (outgoing.get(startId)?.length ?? 0) < 1) {
+      failures.push(flowFailure("vortex.definition.application_flow_single_start", "invalid_value"));
+    }
+    const reachable = new Set<string>();
+    const queue = [startId];
+    while (queue.length > 0) {
+      const curr = queue.shift()!;
+      if (reachable.has(curr)) continue;
+      reachable.add(curr);
+      for (const next of outgoing.get(curr) ?? []) {
+        queue.push(next);
+      }
+    }
+    if (reachable.size !== nodes.length) {
+      failures.push(flowFailure("vortex.definition.application_flow_reachability", "broken_reference"));
+    }
+  }
+
+  for (const node of nodes) {
+    const id = String(node.nodeId);
+    if (node.kind !== "start" && node.kind !== "return") {
+      if ((incoming.get(id)?.length ?? 0) < 1 || (outgoing.get(id)?.length ?? 0) < 1) {
+        failures.push(flowFailure("vortex.definition.application_flow_reachability", "broken_reference"));
+        break;
+      }
+    }
+  }
+
+  if (returns.length < 1) {
+    failures.push(flowFailure("vortex.definition.application_flow_termination", "invalid_value"));
+  } else {
+    for (const ret of returns) {
+      if ((outgoing.get(String(ret.nodeId))?.length ?? 0) > 0) {
+        failures.push(flowFailure("vortex.definition.application_flow_termination", "scope_conflict"));
+        break;
+      }
+    }
+    const canTerminate = new Set(returns.map((n) => String(n.nodeId)));
+    let termChanged = true;
+    while (termChanged) {
+      termChanged = false;
+      for (const edge of edges) {
+        const fromId = String(edge.fromNodeId);
+        const toId = String(edge.toNodeId);
+        if (canTerminate.has(toId) && !canTerminate.has(fromId)) {
+          canTerminate.add(fromId);
+          termChanged = true;
+        }
+      }
+    }
+    if (nodes.some((n) => !canTerminate.has(String(n.nodeId)))) {
+      failures.push(flowFailure("vortex.definition.application_flow_termination", "dependency_cycle"));
+    }
+  }
+
+  const inDegrees = new Map<string, number>();
+  for (const node of nodes) inDegrees.set(String(node.nodeId), incoming.get(String(node.nodeId))?.length ?? 0);
+  const zeroInQueue: string[] = [];
+  for (const [id, deg] of inDegrees.entries()) {
+    if (deg === 0) zeroInQueue.push(id);
+  }
+  let processedCount = 0;
+  const topOrder: string[] = [];
+  while (zeroInQueue.length > 0) {
+    const curr = zeroInQueue.shift()!;
+    topOrder.push(curr);
+    processedCount++;
+    for (const next of outgoing.get(curr) ?? []) {
+      const newDeg = (inDegrees.get(next) ?? 1) - 1;
+      inDegrees.set(next, newDeg);
+      if (newDeg === 0) zeroInQueue.push(next);
+    }
+  }
+  if (processedCount !== nodes.length) {
+    failures.push(flowFailure("vortex.definition.application_flow_acyclic", "dependency_cycle"));
+  }
+
+  const ancestors = new Map<string, Set<string>>();
+  for (const id of topOrder) {
+    const anc = new Set<string>();
+    for (const parent of incoming.get(id) ?? []) {
+      anc.add(parent);
+      for (const grand of ancestors.get(parent) ?? []) {
+        anc.add(grand);
+      }
+    }
+    ancestors.set(id, anc);
+  }
+
+  for (const node of nodes) {
+    if (node.kind === "query") {
+      const target = object(node.target);
+      if (target.kind === "query" || target.kind === "application_query") {
+        if (!queries.has(String(target.queryId))) {
+          failures.push(flowFailure("vortex.definition.application_flow_node_references", "broken_reference"));
+        }
+      }
+    } else if (node.kind === "action") {
+      const target = object(node.target);
+      if (target.kind === "application_action") {
+        if (
+          !executableActionKeys.has(String(target.actionKey)) &&
+          !actions.has(String(target.actionKey))
+        ) {
+          failures.push(flowFailure("vortex.definition.application_flow_node_references", "broken_reference"));
+        }
+      } else if (target.kind === "durable_workflow_start") {
+        if (!workflows.has(String(target.workflowId))) {
+          failures.push(flowFailure("vortex.definition.application_flow_node_references", "broken_reference"));
+        }
+      }
+    }
+  }
+
+  const flowInputs = object(flow.inputs ?? {});
+  const flowVariables = object(flow.variables ?? {});
+  for (const node of nodes) {
+    const nodeId = String(node.nodeId);
+    const nodeAncestors = ancestors.get(nodeId) ?? new Set<string>();
+    const inspectValue = (val: JsonObject, expectedType?: string): boolean => {
+      if (val.source === "literal") return true;
+      if (val.source === "flow_input") {
+        const input = object(flowInputs[String(val.input)]);
+        if (!input || !input.type) return false;
+        if (expectedType && !flowTypesCompatible(String(input.type), expectedType)) return false;
+        return true;
+      }
+      if (val.source === "flow_variable") {
+        const variable = object(flowVariables[String(val.variable)]);
+        if (!variable || !variable.type) return false;
+        if (expectedType && !flowTypesCompatible(String(variable.type), expectedType)) return false;
+        return true;
+      }
+      if (val.source === "node_output") {
+        const producerId = String(val.nodeId);
+        if (!nodeAncestors.has(producerId)) return false;
+        const producer = byId.get(producerId);
+        if (!producer) return false;
+        const outputs = object(producer.outputs ?? {});
+        const outputDecl = object(outputs[String(val.output)]);
+        if (!outputDecl || !outputDecl.type) return false;
+        if (expectedType && !flowTypesCompatible(String(outputDecl.type), expectedType)) return false;
+        return true;
+      }
+      if (val.source === "current_organization_account_id") {
+        return !expectedType || flowTypesCompatible("organization_account_reference", expectedType);
+      }
+      return false;
+    };
+
+    if (node.kind === "query" || node.kind === "action" || node.kind === "transform") {
+      for (const input of Object.values(object(node.inputs ?? {}))) {
+        const inputObj = object(input);
+        if (!inspectValue(object(inputObj.value), String(inputObj.type))) {
+          failures.push(flowFailure("vortex.definition.application_flow_node_values", "broken_reference"));
+          break;
+        }
+      }
+    }
+    if (node.kind === "return") {
+      for (const [resKey, resVal] of Object.entries(object(node.results ?? {}))) {
+        const flowOutput = object(object(flow.outputs ?? {})[resKey]);
+        const expectedType = flowOutput ? String(flowOutput.type) : undefined;
+        if (!inspectValue(object(resVal), expectedType)) {
+          failures.push(flowFailure("vortex.definition.application_flow_node_values", "broken_reference"));
+          break;
+        }
+      }
+    }
+  }
+
+  return failures;
+}
+
 const outputsByNodeType: Readonly<Record<string, readonly string[]>> = workflowNodeOutputKeysByType;
 
 function validateWorkflow(output: Output, workflow: JsonObject): DefinitionRuleFailure[] {
@@ -3758,6 +4002,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       [array(content.connectionBindings), "bindingId", "key"],
       [array(content.interfaces), "interfaceId", "key"],
       [array(content.publicAddresses), "addressId", "path"],
+      [array(content.flows), "flowId", "key"],
     ] as const;
     for (const [collection, idProperty, keyProperty] of identityCollections) {
       const ids = collection.map((entry) => String(entry[idProperty]));
@@ -3767,6 +4012,20 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           failure(output, "vortex.definition.application_identity_unique", "duplicate_key"),
         );
     }
+    const flowBindingKeys = array(content.flowBindings).map(
+      (binding) => `${binding.controlId}\0${binding.eventId}`,
+    );
+    if (new Set(flowBindingKeys).size !== flowBindingKeys.length)
+      failures.push(
+        failure(output, "vortex.definition.application_identity_unique", "duplicate_key"),
+      );
+    const flowBindingIds = array(content.flowBindings)
+      .map((binding) => binding.bindingId)
+      .filter((id): id is string => typeof id === "string");
+    if (new Set(flowBindingIds).size !== flowBindingIds.length)
+      failures.push(
+        failure(output, "vortex.definition.application_identity_unique", "duplicate_key"),
+      );
     const navigationIds: string[] = [];
     const collectNavigationIds = (items: JsonObject[]) => {
       for (const item of items) {
@@ -4951,6 +5210,106 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     };
     for (const workflow of workflows.values())
       visitChild(String(workflow.workflowId), 1, Number(workflow.maximumNestingDepth));
+
+    const flowsById = new Map(
+      array(content.flows).map((flow) => [String(flow.flowId), flow]),
+    );
+    for (const flow of array(content.flows)) {
+      failures.push(
+        ...validateCurrentUserFlow(
+          output,
+          flow,
+          queries,
+          actions,
+          executableActionKeys,
+          workflows,
+        ),
+      );
+    }
+    for (const binding of array(content.flowBindings)) {
+      const bindingFailure = (ruleCode: string, family: DefinitionRuleFailure["family"]) =>
+        failure(output, ruleCode, family, {
+          kind: "flow_binding",
+          key: String(binding.bindingId ?? `${binding.controlId}:${binding.eventId}`),
+        });
+      const flow = flowsById.get(String(binding.flowId));
+      if (!flow) {
+        failures.push(
+          bindingFailure("vortex.definition.application_flow_binding_target", "broken_reference"),
+        );
+      }
+      if (!applicationPlacementIds.has(String(binding.controlId))) {
+        failures.push(
+          bindingFailure("vortex.definition.application_flow_binding_target", "broken_reference"),
+        );
+      }
+      const context = object(binding.context);
+      const inputs = object(binding.inputs ?? {});
+      if (context.kind === "response") {
+        for (const input of Object.values(inputs)) {
+          const inputVal = object(object(input).value);
+          if (inputVal.source === "context_record") {
+            failures.push(
+              bindingFailure("vortex.definition.application_flow_binding_context", "scope_conflict"),
+            );
+            break;
+          }
+        }
+      }
+      if (context.kind === "page_subject" || context.kind === "row" || context.kind === "selection") {
+        if (context.recordTypeId && !records.has(String(context.recordTypeId))) {
+          failures.push(
+            bindingFailure("vortex.definition.application_flow_binding_context", "broken_reference"),
+          );
+        }
+      }
+      if (context.kind === "related_record") {
+        if (
+          !records.has(String(context.parentRecordTypeId)) ||
+          !allRelationships.has(String(context.relationshipId))
+        ) {
+          failures.push(
+            bindingFailure("vortex.definition.application_flow_binding_context", "broken_reference"),
+          );
+        }
+      }
+      if (context.kind === "form") {
+        if (context.recordTypeId && !records.has(String(context.recordTypeId))) {
+          failures.push(
+            bindingFailure("vortex.definition.application_flow_binding_context", "broken_reference"),
+          );
+        }
+      }
+      if (flow) {
+        const declaredInputs = object(flow.inputs ?? {});
+        for (const [key, inputDecl] of Object.entries(declaredInputs)) {
+          const decl = object(inputDecl);
+          const isRequired = decl.required !== false && decl.defaultValue === undefined;
+          if (isRequired && !(key in inputs)) {
+            failures.push(
+              bindingFailure("vortex.definition.application_flow_binding_inputs", "broken_reference"),
+            );
+            break;
+          }
+        }
+        for (const [key, boundInput] of Object.entries(inputs)) {
+          const bound = object(boundInput);
+          const decl = declaredInputs[key] ? object(declaredInputs[key]) : undefined;
+          if (!decl) {
+            failures.push(
+              bindingFailure("vortex.definition.application_flow_binding_inputs", "broken_reference"),
+            );
+            break;
+          }
+          if (bound.type && decl.type && !flowTypesCompatible(String(bound.type), String(decl.type))) {
+            failures.push(
+              bindingFailure("vortex.definition.application_flow_binding_inputs", "invalid_value"),
+            );
+            break;
+          }
+        }
+      }
+    }
   }
   return failures;
 }
@@ -5018,6 +5377,16 @@ const applicationRuleCodes = [
   "vortex.definition.workflow_child_acyclic",
   "vortex.definition.workflow_child_depth",
   "vortex.definition.workflow_child_reference",
+  "vortex.definition.application_flow_single_start",
+  "vortex.definition.application_flow_reachability",
+  "vortex.definition.application_flow_termination",
+  "vortex.definition.application_flow_acyclic",
+  "vortex.definition.application_flow_edge_endpoints",
+  "vortex.definition.application_flow_node_references",
+  "vortex.definition.application_flow_node_values",
+  "vortex.definition.application_flow_binding_target",
+  "vortex.definition.application_flow_binding_inputs",
+  "vortex.definition.application_flow_binding_context",
 ] as const;
 
 const connectionRuleCodes = [
