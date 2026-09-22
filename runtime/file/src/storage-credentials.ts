@@ -29,11 +29,15 @@ import {
 /**
  * The request presented to the trusted, server-injected authority resolver.
  * Transfer grants are required for upload and read; delete is resolved from its
- * exact file identifier. None of these values is accepted as authority by itself.
+ * exact file identifier. Inspect is the File service's own server-side read of a
+ * pending uploaded object for trusted inspection and isolated scanning; it signs
+ * a Storage read of that exact object and is never projected to a browser. None
+ * of these values is accepted as authority by itself.
  */
 export type StorageCredentialRequest =
   | Readonly<{ operation: "upload"; grant: UploadGrant }>
   | Readonly<{ operation: "read"; grant: DownloadGrant }>
+  | Readonly<{ operation: "inspect"; fileId: FileId }>
   | Readonly<{ operation: "delete"; fileId: FileId }>;
 
 /**
@@ -59,6 +63,7 @@ export type CurrentStorageAuthority =
         operation: "upload" | "read";
         transferGrantId: UploadGrant["oneTimeId"];
       }>)
+  | (CurrentStorageAuthorityBase & Readonly<{ operation: "inspect" }>)
   | (CurrentStorageAuthorityBase &
       Readonly<{
         operation: "delete";
@@ -180,6 +185,11 @@ const validateCredentialRequest = (
         throw new Error("Storage credential request has an invalid download grant");
       }
       return Object.freeze({ operation: "read", grant: grant.data });
+    }
+    case "inspect": {
+      const fileId = fileIdSchema.safeParse(request.fileId);
+      if (!fileId.success) throw new Error("Storage credential request has an invalid file ID");
+      return Object.freeze({ operation: "inspect", fileId: fileId.data });
     }
     case "delete": {
       const fileId = fileIdSchema.safeParse(request.fileId);
@@ -391,6 +401,19 @@ const validateCurrentAuthority = (
       grantExpiry = expires;
       break;
     }
+    case "inspect": {
+      const fileIdResult = fileIdSchema.safeParse(request.fileId);
+      if (
+        !fileIdResult.success ||
+        fileIdResult.data !== fileRecord.fileId ||
+        !sameActor(actor, fileRecord.uploadedBy) ||
+        fileRecord.lifecycleState !== "pending" ||
+        fileRecord.scannerResult !== "pending"
+      ) {
+        throw new Error("Storage credential minting refused: inspection scope is not current");
+      }
+      break;
+    }
     case "delete": {
       const fileIdResult = fileIdSchema.safeParse(request.fileId);
       if (
@@ -564,12 +587,15 @@ export const createStorageCredentialBridge = (
       throw new Error("Storage credential minting refused: current authority has expired");
     }
 
+    // Inspection is a server-side read of the exact pending object.
+    const storageOperation: FileStorageOperation =
+      request.operation === "inspect" ? "read" : request.operation;
     const claims = createSignedStorageOperationClaims({
       destinationProject,
       issuer,
       organizationId: authority.fileRecord.organizationId,
       objectPath: authority.fileRecord.storageKey,
-      operation: request.operation,
+      operation: storageOperation,
       actor: authority.actor,
       correlationId: authority.correlationId,
       ttlSeconds,
@@ -589,7 +615,7 @@ export const createStorageCredentialBridge = (
       organizationId: authority.fileRecord.organizationId,
       bucketId: PRIVATE_FILE_BUCKET,
       objectPath: authority.fileRecord.storageKey,
-      operation: request.operation,
+      operation: storageOperation,
       keyId: activeKeyId,
       iat: claims.iat,
       exp: claims.exp,
