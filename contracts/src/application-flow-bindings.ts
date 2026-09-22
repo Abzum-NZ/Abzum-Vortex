@@ -384,6 +384,10 @@ export const flowNodeInputBindingSchema = z
       });
   });
 
+const currentUserFlowRunAsSchema = z
+  .object({ kind: z.literal("current_user") })
+  .strict();
+
 export const flowVariableDeclarationSchema = z
   .object({
     key: builderKeySchema,
@@ -457,7 +461,7 @@ export const currentUserFlowStartNodeSchema = z
     key: builderKeySchema,
     kind: z.literal("start"),
     label: labelSchema.optional(),
-    runAs: flowNodeRunAsSchema.default({ kind: "current_user" }),
+    runAs: currentUserFlowRunAsSchema.default({ kind: "current_user" }),
     entryCondition: conditionNodeSchema.optional(),
     outputs: z.record(builderKeySchema, flowValueDeclarationSchema).default({}),
   })
@@ -470,7 +474,7 @@ export const currentUserFlowQueryNodeSchema = z
     kind: z.literal("query"),
     label: labelSchema.optional(),
     target: currentUserFlowQueryTargetSchema,
-    runAs: flowNodeRunAsSchema.default({ kind: "current_user" }),
+    runAs: currentUserFlowRunAsSchema.default({ kind: "current_user" }),
     inputs: z.record(builderKeySchema, flowNodeInputBindingSchema).default({}),
     outputs: z.record(builderKeySchema, flowValueDeclarationSchema).default({}),
     results: z.record(builderKeySchema, typedFlowResultMappingSchema).default({}),
@@ -484,7 +488,7 @@ export const currentUserFlowActionNodeSchema = z
     kind: z.literal("action"),
     label: labelSchema.optional(),
     target: currentUserFlowActionTargetSchema,
-    runAs: flowNodeRunAsSchema.default({ kind: "current_user" }),
+    runAs: currentUserFlowRunAsSchema.default({ kind: "current_user" }),
     inputs: z.record(builderKeySchema, flowNodeInputBindingSchema).default({}),
     outputs: z.record(builderKeySchema, flowValueDeclarationSchema).default({}),
     results: z.record(builderKeySchema, typedFlowResultMappingSchema).default({}),
@@ -1118,7 +1122,7 @@ export const sourceCurrentUserFlowStartNodeSchema = z
     key: builderKeySchema,
     kind: z.literal("start"),
     label: labelSchema.optional(),
-    run_as: flowNodeRunAsSchema.default({ kind: "current_user" }),
+    run_as: currentUserFlowRunAsSchema.default({ kind: "current_user" }),
     entry_condition: sourceQualifiedConditionSchema.optional(),
     outputs: z.record(builderKeySchema, sourceFlowValueDeclarationSchema).default({}),
   })
@@ -1131,7 +1135,7 @@ export const sourceCurrentUserFlowQueryNodeSchema = z
     kind: z.literal("query"),
     label: labelSchema.optional(),
     target: sourceCurrentUserFlowQueryTargetSchema,
-    run_as: flowNodeRunAsSchema.default({ kind: "current_user" }),
+    run_as: currentUserFlowRunAsSchema.default({ kind: "current_user" }),
     inputs: z.record(builderKeySchema, sourceFlowNodeInputBindingSchema).default({}),
     outputs: z.record(builderKeySchema, sourceFlowValueDeclarationSchema).default({}),
     results: z.record(builderKeySchema, typedFlowResultMappingSchema).default({}),
@@ -1145,7 +1149,7 @@ export const sourceCurrentUserFlowActionNodeSchema = z
     kind: z.literal("action"),
     label: labelSchema.optional(),
     target: sourceCurrentUserFlowActionTargetSchema,
-    run_as: flowNodeRunAsSchema.default({ kind: "current_user" }),
+    run_as: currentUserFlowRunAsSchema.default({ kind: "current_user" }),
     inputs: z.record(builderKeySchema, sourceFlowNodeInputBindingSchema).default({}),
     outputs: z.record(builderKeySchema, sourceFlowValueDeclarationSchema).default({}),
     results: z.record(builderKeySchema, typedFlowResultMappingSchema).default({}),
