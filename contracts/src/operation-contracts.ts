@@ -935,6 +935,73 @@ export const downloadGrantSchema = z
   })
   .strict();
 
+/**
+ * Verified file inspection results derived strictly from trusted server-side inspection
+ * of uploaded bytes (actual size, detected media type, normalized extension, and checksum).
+ * Browser-supplied headers or file names never substitute for this inspection.
+ */
+export const trustedFileInspectionSchema = z
+  .object({
+    actualSizeBytes: z.number().int().min(0),
+    detectedMediaType: z.string().min(1).max(200),
+    detectedExtension: z.string().regex(/^\.[a-z0-9]+$/),
+    checksum: fingerprintSchema,
+  })
+  .strict();
+export type TrustedFileInspection = z.infer<typeof trustedFileInspectionSchema>;
+
+export const fileUploadScanOutcomeSchema = z
+  .object({
+    scannerName: z.string().min(1).max(120),
+    scannerVersion: z.string().min(1).max(120),
+    scannerResult: z.enum(["clean", "quarantined", "refused"]),
+    reason: z.string().max(1_000).optional(),
+  })
+  .strict();
+export type FileUploadScanOutcome = z.infer<typeof fileUploadScanOutcomeSchema>;
+
+export const fileUploadAdmissionRefusalReasonSchema = z.enum([
+  "caller_not_authorized",
+  "field_not_writable",
+  "field_capacity_exceeded",
+  "file_size_exceeded",
+  "disallowed_content_kind",
+  "disallowed_extension",
+  "executable_content_refused",
+  "capability_refused",
+  "replacement_file_not_found",
+  "malformed_request",
+]);
+export type FileUploadAdmissionRefusalReason = z.infer<
+  typeof fileUploadAdmissionRefusalReasonSchema
+>;
+
+export const fileUploadRenewalRefusalReasonSchema = z.enum([
+  "caller_not_authorized",
+  "field_not_writable",
+  "file_not_found",
+  "invalid_lifecycle_state",
+  "grant_mismatch",
+  "grant_expired",
+]);
+export type FileUploadRenewalRefusalReason = z.infer<
+  typeof fileUploadRenewalRefusalReasonSchema
+>;
+
+export const fileUploadCompletionRefusalReasonSchema = z.enum([
+  "caller_not_authorized",
+  "field_not_writable",
+  "file_not_found",
+  "invalid_lifecycle_state",
+  "content_safety_refused",
+  "scan_refused",
+  "size_limit_exceeded",
+  "capacity_exceeded",
+]);
+export type FileUploadCompletionRefusalReason = z.infer<
+  typeof fileUploadCompletionRefusalReasonSchema
+>;
+
 const canonicalActivitySubjectIdsSchema = z
   .array(platformIdSchema)
   .min(1)

@@ -36,3 +36,21 @@ export {
   type UploadCapabilityAdmissionResult,
   type UploadCapabilityReservationPorts,
 } from "./upload-capability-admission";
+export {
+  createFileUploadCoordinator,
+  createInMemoryFileUploadRepository,
+  createUploadStorageAuthorityResolver,
+  reservePendingUpload,
+  renewPendingUpload,
+  completeFileUpload,
+  type FileUploadAdmissionInput,
+  type FileUploadAdmissionResult,
+  type FileUploadCompletionInput,
+  type FileUploadCompletionResult,
+  type FileUploadCoordinator,
+  type FileUploadCoordinatorDependencies,
+  type FileUploadRenewalInput,
+  type FileUploadRenewalResult,
+  type FileUploadRepository,
+} from "./upload";
+
