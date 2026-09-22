@@ -14,7 +14,8 @@
     "@vortex/access": "workspace:*",
     "@vortex/contracts": "workspace:*",
     "@vortex/record": "workspace:*",
-    "server-only": "0.0.1"
+    "server-only": "0.0.1",
+    "zod": "4.6.5"
   },
   "vortex": {
     "tier": 6,
