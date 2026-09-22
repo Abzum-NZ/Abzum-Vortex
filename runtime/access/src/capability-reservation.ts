@@ -18,14 +18,17 @@ import {
   effectiveCapabilityPolicySchema,
 } from "./capability-policy";
 
-/** Stable aggregated balance across an effective capability policy scope. */
+const storedQuantitySchema = z.number().nonnegative().finite().max(Number.MAX_SAFE_INTEGER);
+const reservationQuantitySchema = capabilityPolicyQuantitySchema.max(Number.MAX_SAFE_INTEGER);
+
+/** Current evidence only; it never grants capability authority. */
 export const capabilityBalanceSchema = z
   .object({
     policyLimit: capabilityPolicyQuantitySchema,
-    activeReservedQuantity: z.number().nonnegative().finite(),
-    consumedQuantity: z.number().nonnegative().finite(),
-    releasedQuantity: z.number().nonnegative().finite(),
-    availableQuantity: z.number().nonnegative().finite(),
+    activeReservedQuantity: storedQuantitySchema,
+    consumedQuantity: storedQuantitySchema,
+    releasedQuantity: storedQuantitySchema,
+    availableQuantity: storedQuantitySchema,
   })
   .strict();
 
@@ -41,14 +44,36 @@ export const capabilityPolicyEvidenceSchema = z
   })
   .strict();
 
+/**
+ * The #649 result supplies only the requested scope. Reservation authority and
+ * every policy field are resolved again from current storage under lock.
+ */
 export const reserveCapabilityCommandSchema = z
   .object({
     policy: effectiveCapabilityPolicySchema,
-    requestedQuantity: capabilityPolicyQuantitySchema,
+    requestedQuantity: reservationQuantitySchema,
     duplicateKey: platformIdSchema,
-    reservationId: platformIdSchema.optional(),
-    expiresAt: timestampSchema.optional(),
-    correlationId: correlationIdSchema.optional(),
+  })
+  .strict();
+
+const reservationRefusalSchema = z
+  .object({
+    outcome: z.literal("refused"),
+    status: z.enum(["accepted", "replayed"]),
+    tenantId: tenantIdSchema,
+    organizationId: organizationIdSchema.optional(),
+    capabilityKey: namespacedKeySchema,
+    unit: builderKeySchema,
+    policyId: platformIdSchema.optional(),
+    policyRevision: revisionSchema.optional(),
+    assignmentId: platformIdSchema.optional(),
+    assignmentRevision: revisionSchema.optional(),
+    appliedScope: capabilityPolicyAppliedScopeSchema.optional(),
+    requestedQuantity: reservationQuantitySchema,
+    reasonCode: z.enum(["insufficient_capacity", "capability_not_assigned", "policy_stale"]),
+    decidedAt: timestampSchema,
+    correlationId: correlationIdSchema,
+    balance: capabilityBalanceSchema.optional(),
   })
   .strict();
 
@@ -67,33 +92,14 @@ export const capabilityReservationResultSchema = z.discriminatedUnion("outcome",
       assignmentId: platformIdSchema,
       assignmentRevision: revisionSchema,
       appliedScope: capabilityPolicyAppliedScopeSchema,
-      reservedQuantity: capabilityPolicyQuantitySchema,
+      reservedQuantity: reservationQuantitySchema,
       reservedAt: timestampSchema,
       expiresAt: timestampSchema,
       correlationId: correlationIdSchema,
       balance: capabilityBalanceSchema,
     })
     .strict(),
-  z
-    .object({
-      outcome: z.literal("refused"),
-      status: z.enum(["accepted", "replayed"]),
-      tenantId: tenantIdSchema,
-      organizationId: organizationIdSchema.optional(),
-      capabilityKey: namespacedKeySchema,
-      unit: builderKeySchema,
-      policyId: platformIdSchema.optional(),
-      policyRevision: revisionSchema.optional(),
-      assignmentId: platformIdSchema.optional(),
-      assignmentRevision: revisionSchema.optional(),
-      appliedScope: capabilityPolicyAppliedScopeSchema.optional(),
-      requestedQuantity: capabilityPolicyQuantitySchema,
-      reasonCode: z.enum(["insufficient_capacity", "capability_not_assigned", "policy_stale"]),
-      decidedAt: timestampSchema,
-      correlationId: correlationIdSchema,
-      balance: capabilityBalanceSchema.optional(),
-    })
-    .strict(),
+  reservationRefusalSchema,
 ]);
 
 export const consumeCapabilityReservationCommandSchema = z
@@ -106,35 +112,57 @@ export const consumeCapabilityReservationCommandSchema = z
     policyId: platformIdSchema,
     policyRevision: revisionSchema,
     assignmentId: platformIdSchema,
-    quantity: capabilityPolicyQuantitySchema,
+    assignmentRevision: revisionSchema,
+    quantity: reservationQuantitySchema,
     duplicateKey: platformIdSchema,
-    correlationId: correlationIdSchema.optional(),
   })
   .strict();
 
-export const capabilityConsumptionResultSchema = z
+const reservationOperationRefusalSchema = z
   .object({
-    outcome: z.literal("consumed"),
+    outcome: z.literal("refused"),
     status: z.enum(["accepted", "replayed"]),
     reservationId: platformIdSchema,
     tenantId: tenantIdSchema,
     organizationId: organizationIdSchema.optional(),
     capabilityKey: namespacedKeySchema,
     unit: builderKeySchema,
-    policyId: platformIdSchema,
-    policyRevision: revisionSchema,
-    assignmentId: platformIdSchema,
-    assignmentRevision: revisionSchema,
-    appliedScope: capabilityPolicyAppliedScopeSchema,
-    consumedAmount: capabilityPolicyQuantitySchema,
-    totalConsumedQuantity: z.number().nonnegative().finite(),
-    remainingReservedQuantity: z.number().nonnegative().finite(),
-    reservationState: z.enum(["active", "consumed"]),
-    consumedAt: timestampSchema,
+    reasonCode: z.enum([
+      "reservation_unavailable",
+      "reservation_stale",
+      "insufficient_reserved_quantity",
+    ]),
+    decidedAt: timestampSchema,
     correlationId: correlationIdSchema,
-    balance: capabilityBalanceSchema,
   })
   .strict();
+
+export const capabilityConsumptionResultSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("consumed"),
+      status: z.enum(["accepted", "replayed"]),
+      reservationId: platformIdSchema,
+      tenantId: tenantIdSchema,
+      organizationId: organizationIdSchema.optional(),
+      capabilityKey: namespacedKeySchema,
+      unit: builderKeySchema,
+      policyId: platformIdSchema,
+      policyRevision: revisionSchema,
+      assignmentId: platformIdSchema,
+      assignmentRevision: revisionSchema,
+      appliedScope: capabilityPolicyAppliedScopeSchema,
+      consumedAmount: reservationQuantitySchema,
+      totalConsumedQuantity: storedQuantitySchema,
+      remainingReservedQuantity: storedQuantitySchema,
+      reservationState: z.enum(["active", "consumed"]),
+      consumedAt: timestampSchema,
+      correlationId: correlationIdSchema,
+      balance: capabilityBalanceSchema,
+    })
+    .strict(),
+  reservationOperationRefusalSchema,
+]);
 
 export const releaseCapabilityReservationCommandSchema = z
   .object({
@@ -146,35 +174,38 @@ export const releaseCapabilityReservationCommandSchema = z
     policyId: platformIdSchema,
     policyRevision: revisionSchema,
     assignmentId: platformIdSchema,
-    quantity: capabilityPolicyQuantitySchema.optional(),
+    assignmentRevision: revisionSchema,
+    quantity: reservationQuantitySchema.optional(),
     duplicateKey: platformIdSchema,
-    correlationId: correlationIdSchema.optional(),
   })
   .strict();
 
-export const capabilityReleaseResultSchema = z
-  .object({
-    outcome: z.literal("released"),
-    status: z.enum(["accepted", "replayed"]),
-    reservationId: platformIdSchema,
-    tenantId: tenantIdSchema,
-    organizationId: organizationIdSchema.optional(),
-    capabilityKey: namespacedKeySchema,
-    unit: builderKeySchema,
-    policyId: platformIdSchema,
-    policyRevision: revisionSchema,
-    assignmentId: platformIdSchema,
-    assignmentRevision: revisionSchema,
-    appliedScope: capabilityPolicyAppliedScopeSchema,
-    releasedAmount: capabilityPolicyQuantitySchema,
-    totalReleasedQuantity: z.number().nonnegative().finite(),
-    remainingReservedQuantity: z.number().nonnegative().finite(),
-    reservationState: z.enum(["active", "released"]),
-    releasedAt: timestampSchema,
-    correlationId: correlationIdSchema,
-    balance: capabilityBalanceSchema,
-  })
-  .strict();
+export const capabilityReleaseResultSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("released"),
+      status: z.enum(["accepted", "replayed"]),
+      reservationId: platformIdSchema,
+      tenantId: tenantIdSchema,
+      organizationId: organizationIdSchema.optional(),
+      capabilityKey: namespacedKeySchema,
+      unit: builderKeySchema,
+      policyId: platformIdSchema,
+      policyRevision: revisionSchema,
+      assignmentId: platformIdSchema,
+      assignmentRevision: revisionSchema,
+      appliedScope: capabilityPolicyAppliedScopeSchema,
+      releasedAmount: reservationQuantitySchema,
+      totalReleasedQuantity: storedQuantitySchema,
+      remainingReservedQuantity: storedQuantitySchema,
+      reservationState: z.enum(["active", "released"]),
+      releasedAt: timestampSchema,
+      correlationId: correlationIdSchema,
+      balance: capabilityBalanceSchema,
+    })
+    .strict(),
+  reservationOperationRefusalSchema,
+]);
 
 export const readCapabilityBalanceRequestSchema = z
   .object({
@@ -204,15 +235,18 @@ export const capabilityBalanceRecordSchema = z
 export const expireStaleCapabilityReservationsCommandSchema = z
   .object({
     tenantId: tenantIdSchema,
-    assignmentId: platformIdSchema.optional(),
-    correlationId: correlationIdSchema.optional(),
+    organizationId: organizationIdSchema.optional(),
+    capabilityKey: namespacedKeySchema,
+    unit: builderKeySchema,
   })
   .strict();
 
 export const expireStaleCapabilityReservationsResultSchema = z
   .object({
     tenantId: tenantIdSchema,
-    assignmentId: platformIdSchema.optional(),
+    organizationId: organizationIdSchema.optional(),
+    capabilityKey: namespacedKeySchema,
+    unit: builderKeySchema,
     expiredCount: z.number().int().nonnegative(),
     expiredAt: timestampSchema,
     correlationId: correlationIdSchema,
@@ -240,113 +274,7 @@ export type ExpireStaleCapabilityReservationsResult = z.infer<
   typeof expireStaleCapabilityReservationsResultSchema
 >;
 
-type ReservationRow = DatabaseRow & {
-  outcome: unknown;
-  status: unknown;
-  reservation_id: unknown;
-  tenant_id: unknown;
-  organization_id: unknown;
-  capability_key: unknown;
-  unit: unknown;
-  policy_id: unknown;
-  policy_revision: unknown;
-  assignment_id: unknown;
-  assignment_revision: unknown;
-  applied_scope: unknown;
-  policy_quantity_limit: unknown;
-  active_reserved_quantity: unknown;
-  consumed_quantity: unknown;
-  released_quantity: unknown;
-  available_quantity: unknown;
-  reserved_quantity: unknown;
-  created_at: unknown;
-  expires_at: unknown;
-  correlation_id: unknown;
-  reason_code: unknown;
-};
-
-type ConsumptionRow = DatabaseRow & {
-  outcome: unknown;
-  status: unknown;
-  reservation_id: unknown;
-  tenant_id: unknown;
-  organization_id: unknown;
-  capability_key: unknown;
-  unit: unknown;
-  policy_id: unknown;
-  policy_revision: unknown;
-  assignment_id: unknown;
-  assignment_revision: unknown;
-  applied_scope: unknown;
-  policy_quantity_limit: unknown;
-  active_reserved_quantity: unknown;
-  consumed_quantity: unknown;
-  released_quantity: unknown;
-  available_quantity: unknown;
-  consumed_amount: unknown;
-  reservation_consumed_quantity: unknown;
-  reservation_remaining_quantity: unknown;
-  reservation_state: unknown;
-  consumed_at: unknown;
-  correlation_id: unknown;
-};
-
-type ReleaseRow = DatabaseRow & {
-  outcome: unknown;
-  status: unknown;
-  reservation_id: unknown;
-  tenant_id: unknown;
-  organization_id: unknown;
-  capability_key: unknown;
-  unit: unknown;
-  policy_id: unknown;
-  policy_revision: unknown;
-  assignment_id: unknown;
-  assignment_revision: unknown;
-  applied_scope: unknown;
-  policy_quantity_limit: unknown;
-  active_reserved_quantity: unknown;
-  consumed_quantity: unknown;
-  released_quantity: unknown;
-  available_quantity: unknown;
-  released_amount: unknown;
-  reservation_released_quantity: unknown;
-  reservation_remaining_quantity: unknown;
-  reservation_state: unknown;
-  released_at: unknown;
-  correlation_id: unknown;
-};
-
-type BalanceRow = DatabaseRow & {
-  tenant_id: unknown;
-  organization_id: unknown;
-  capability_key: unknown;
-  unit: unknown;
-  policy_id: unknown;
-  policy_revision: unknown;
-  assignment_id: unknown;
-  assignment_revision: unknown;
-  applied_scope: unknown;
-  policy_quantity_limit: unknown;
-  active_reserved_quantity: unknown;
-  consumed_quantity: unknown;
-  released_quantity: unknown;
-  available_quantity: unknown;
-  evaluated_at: unknown;
-};
-
-type ExpireRow = DatabaseRow & {
-  expired_count: unknown;
-  evaluated_at: unknown;
-};
-
-const revision = (value: unknown): unknown => {
-  if (typeof value === "bigint")
-    return value > 0n && value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : value;
-  if (typeof value !== "string" || !/^[1-9][0-9]*$/.test(value)) return value;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && String(parsed) === value ? parsed : value;
-};
+type ResultRow = DatabaseRow & { result: unknown };
 
 const decimalPattern = /^[+-]?\d+(?:\.\d*)?$/;
 
@@ -361,28 +289,88 @@ const canonicalDecimal = (text: string): string | undefined => {
   return `${text.startsWith("-") && /[1-9]/.test(digits) ? "-" : ""}${magnitude}`;
 };
 
+/** Refuse any PostgreSQL numeric that would change meaning as a JS number. */
 const quantity = (value: unknown): unknown => {
   if (typeof value === "number") return value;
   if (typeof value !== "string") return value;
   const canonical = canonicalDecimal(value.trim());
   if (canonical === undefined) return value;
   const parsed = Number(canonical);
-  if (!Number.isFinite(parsed)) return value;
+  if (!Number.isFinite(parsed) || Math.abs(parsed) > Number.MAX_SAFE_INTEGER) return value;
   return canonicalDecimal(String(parsed)) === canonical ? parsed : value;
 };
 
-const timestamp = (value: unknown): unknown =>
-  value instanceof Date && Number.isFinite(value.valueOf()) ? value.toISOString() : value;
-
-const parseOne = <Row>(rows: readonly Row[], error: string): Row => {
-  if (rows.length !== 1 || rows[0] === undefined) throw new Error(error);
-  return rows[0];
+const revision = (value: unknown): unknown => {
+  if (typeof value === "number") return value;
+  if (typeof value === "bigint")
+    return value > 0n && value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : value;
+  if (typeof value !== "string" || !/^[1-9][0-9]*$/.test(value)) return value;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && String(parsed) === value ? parsed : value;
 };
 
-/**
- * Atomically locks policy balance, expires stale reservations, checks policy evidence,
- * and reserves capability quantity.
- */
+const quantityKeys = new Set([
+  "policyLimit",
+  "activeReservedQuantity",
+  "consumedQuantity",
+  "releasedQuantity",
+  "availableQuantity",
+  "requestedQuantity",
+  "reservedQuantity",
+  "consumedAmount",
+  "totalConsumedQuantity",
+  "remainingReservedQuantity",
+  "releasedAmount",
+  "totalReleasedQuantity",
+]);
+const revisionKeys = new Set(["policyRevision", "assignmentRevision"]);
+
+const normalizeStoredResult = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(normalizeStoredResult);
+  if (typeof value !== "object" || value === null) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
+      quantityKeys.has(key)
+        ? quantity(entry)
+        : revisionKeys.has(key)
+          ? revision(entry)
+          : normalizeStoredResult(entry),
+    ]),
+  );
+};
+
+const parseResult = <Result>(
+  rows: readonly ResultRow[],
+  schema: z.ZodType<Result>,
+  errorCode: string,
+): Result => {
+  if (rows.length !== 1 || rows[0] === undefined) throw new Error(errorCode);
+  const parsed = schema.safeParse(normalizeStoredResult(rows[0].result));
+  if (!parsed.success) throw new Error(errorCode);
+  return parsed.data;
+};
+
+const databaseCode = (error: unknown): string | undefined =>
+  typeof error === "object" && error !== null && "code" in error
+    ? String((error as { readonly code?: unknown }).code)
+    : undefined;
+
+const runCommand = async <Result>(
+  operation: () => Promise<readonly ResultRow[]>,
+  schema: z.ZodType<Result>,
+  conflictCode: string,
+  unavailableCode: string,
+): Promise<Result> => {
+  try {
+    return parseResult(await operation(), schema, unavailableCode);
+  } catch (error) {
+    if (error instanceof Error && error.message === unavailableCode) throw error;
+    if (databaseCode(error) === "V3001") throw new Error(conflictCode);
+    throw new Error(unavailableCode);
+  }
+};
+
 export const reserveCapabilityQuantity = async (
   transaction: RequestDatabaseTransaction,
   commandCandidate: ReserveCapabilityCommand,
@@ -390,118 +378,24 @@ export const reserveCapabilityQuantity = async (
   const command = reserveCapabilityCommandSchema.safeParse(commandCandidate);
   if (!command.success) throw new Error("CAPABILITY_RESERVATION_COMMAND_INVALID");
   const value = command.data;
-
-  if (value.policy.outcome === "refused") {
-    const correlationId = value.correlationId ?? (crypto.randomUUID() as string);
-    const candidate = {
-      outcome: "refused" as const,
-      status: "accepted" as const,
-      tenantId: value.policy.tenantId,
-      ...(value.policy.organizationId ? { organizationId: value.policy.organizationId } : {}),
-      capabilityKey: value.policy.capabilityKey,
-      unit: value.policy.unit,
-      requestedQuantity: value.requestedQuantity,
-      reasonCode: "capability_not_assigned" as const,
-      decidedAt: new Date().toISOString(),
-      correlationId,
-    };
-    const parsed = capabilityReservationResultSchema.safeParse(candidate);
-    if (!parsed.success) throw new Error("CAPABILITY_RESERVATION_UNAVAILABLE");
-    return parsed.data;
-  }
-
-  const policy = value.policy;
-  const correlationId = value.correlationId ?? null;
-  const reservationId = value.reservationId ?? null;
-  const expiresAt = value.expiresAt ?? null;
-
-  let rows: readonly ReservationRow[];
-  try {
-    rows = await transaction.query<ReservationRow>`
-      select * from vortex_access.reserve_capability_quantity(
-        ${policy.tenantId}::uuid,
-        ${policy.organizationId ?? null}::uuid,
-        ${policy.capabilityKey}::text,
-        ${policy.unit}::text,
-        ${policy.policyId}::uuid,
-        ${policy.policyRevision}::bigint,
-        ${policy.assignmentId}::uuid,
-        ${policy.assignmentRevision}::bigint,
-        ${policy.quantityLimit}::numeric,
+  return runCommand(
+    () => transaction.query<ResultRow>`
+      select result from vortex_access.reserve_capability_quantity(
+        ${value.policy.tenantId}::uuid,
+        ${value.policy.organizationId ?? null}::uuid,
+        ${value.policy.capabilityKey}::text,
+        ${value.policy.unit}::text,
+        ${JSON.stringify(value.policy)}::text::jsonb,
         ${value.requestedQuantity}::numeric,
-        ${value.duplicateKey}::uuid,
-        ${expiresAt}::timestamptz,
-        ${reservationId}::uuid,
-        ${correlationId}::uuid
+        ${value.duplicateKey}::uuid
       )
-    `;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("V3001")) {
-      throw new Error("CAPABILITY_RESERVATION_DUPLICATE_CONFLICTS");
-    }
-    if (error instanceof Error && error.message.includes("V3102")) {
-      throw new Error("CAPABILITY_POLICY_STALE");
-    }
-    throw new Error("CAPABILITY_RESERVATION_UNAVAILABLE");
-  }
-
-  const row = parseOne(rows, "CAPABILITY_RESERVATION_UNAVAILABLE");
-  const candidate = {
-    outcome: row.outcome,
-    status: row.status,
-    tenantId: row.tenant_id,
-    ...(row.organization_id != null ? { organizationId: row.organization_id } : {}),
-    capabilityKey: row.capability_key,
-    unit: row.unit,
-    ...(row.outcome === "reserved"
-      ? {
-          reservationId: row.reservation_id,
-          policyId: row.policy_id,
-          policyRevision: revision(row.policy_revision),
-          assignmentId: row.assignment_id,
-          assignmentRevision: revision(row.assignment_revision),
-          appliedScope: row.applied_scope,
-          reservedQuantity: quantity(row.reserved_quantity),
-          reservedAt: timestamp(row.created_at),
-          expiresAt: timestamp(row.expires_at),
-          correlationId: row.correlation_id,
-          balance: {
-            policyLimit: quantity(row.policy_quantity_limit),
-            activeReservedQuantity: quantity(row.active_reserved_quantity),
-            consumedQuantity: quantity(row.consumed_quantity),
-            releasedQuantity: quantity(row.released_quantity),
-            availableQuantity: quantity(row.available_quantity),
-          },
-        }
-      : {
-          policyId: row.policy_id != null ? row.policy_id : undefined,
-          policyRevision: row.policy_revision != null ? revision(row.policy_revision) : undefined,
-          assignmentId: row.assignment_id != null ? row.assignment_id : undefined,
-          assignmentRevision:
-            row.assignment_revision != null ? revision(row.assignment_revision) : undefined,
-          appliedScope: row.applied_scope != null ? row.applied_scope : undefined,
-          requestedQuantity: value.requestedQuantity,
-          reasonCode: row.reason_code ?? "insufficient_capacity",
-          decidedAt: timestamp(row.created_at),
-          correlationId: row.correlation_id,
-          balance: {
-            policyLimit: quantity(row.policy_quantity_limit),
-            activeReservedQuantity: quantity(row.active_reserved_quantity),
-            consumedQuantity: quantity(row.consumed_quantity),
-            releasedQuantity: quantity(row.released_quantity),
-            availableQuantity: quantity(row.available_quantity),
-          },
-        }),
-  };
-
-  const parsed = capabilityReservationResultSchema.safeParse(candidate);
-  if (!parsed.success) throw new Error("CAPABILITY_RESERVATION_UNAVAILABLE");
-  return parsed.data;
+    `,
+    capabilityReservationResultSchema,
+    "CAPABILITY_RESERVATION_DUPLICATE_CONFLICTS",
+    "CAPABILITY_RESERVATION_UNAVAILABLE",
+  );
 };
 
-/**
- * Atomically consumes reserved capability quantity, bounded by reservation amount.
- */
 export const consumeCapabilityReservation = async (
   transaction: RequestDatabaseTransaction,
   commandCandidate: ConsumeCapabilityReservationCommand,
@@ -509,11 +403,9 @@ export const consumeCapabilityReservation = async (
   const command = consumeCapabilityReservationCommandSchema.safeParse(commandCandidate);
   if (!command.success) throw new Error("CAPABILITY_CONSUMPTION_COMMAND_INVALID");
   const value = command.data;
-
-  let rows: readonly ConsumptionRow[];
-  try {
-    rows = await transaction.query<ConsumptionRow>`
-      select * from vortex_access.consume_capability_reservation(
+  return runCommand(
+    () => transaction.query<ResultRow>`
+      select result from vortex_access.consume_capability_reservation(
         ${value.tenantId}::uuid,
         ${value.organizationId ?? null}::uuid,
         ${value.capabilityKey}::text,
@@ -521,59 +413,18 @@ export const consumeCapabilityReservation = async (
         ${value.policyId}::uuid,
         ${value.policyRevision}::bigint,
         ${value.assignmentId}::uuid,
+        ${value.assignmentRevision}::bigint,
         ${value.reservationId}::uuid,
         ${value.quantity}::numeric,
-        ${value.duplicateKey}::uuid,
-        ${value.correlationId ?? null}::uuid
+        ${value.duplicateKey}::uuid
       )
-    `;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("V3001")) {
-      throw new Error("CAPABILITY_CONSUMPTION_DUPLICATE_CONFLICTS");
-    }
-    if (error instanceof Error && error.message.includes("V3102")) {
-      throw new Error("CAPABILITY_RESERVATION_STALE");
-    }
-    throw new Error("CAPABILITY_CONSUMPTION_UNAVAILABLE");
-  }
-
-  const row = parseOne(rows, "CAPABILITY_CONSUMPTION_UNAVAILABLE");
-  const candidate = {
-    outcome: row.outcome,
-    status: row.status,
-    reservationId: row.reservation_id,
-    tenantId: row.tenant_id,
-    ...(row.organization_id != null ? { organizationId: row.organization_id } : {}),
-    capabilityKey: row.capability_key,
-    unit: row.unit,
-    policyId: row.policy_id,
-    policyRevision: revision(row.policy_revision),
-    assignmentId: row.assignment_id,
-    assignmentRevision: revision(row.assignment_revision),
-    appliedScope: row.applied_scope,
-    consumedAmount: quantity(row.consumed_amount),
-    totalConsumedQuantity: quantity(row.reservation_consumed_quantity),
-    remainingReservedQuantity: quantity(row.reservation_remaining_quantity),
-    reservationState: row.reservation_state,
-    consumedAt: timestamp(row.consumed_at),
-    correlationId: row.correlation_id,
-    balance: {
-      policyLimit: quantity(row.policy_quantity_limit),
-      activeReservedQuantity: quantity(row.active_reserved_quantity),
-      consumedQuantity: quantity(row.consumed_quantity),
-      releasedQuantity: quantity(row.released_quantity),
-      availableQuantity: quantity(row.available_quantity),
-    },
-  };
-
-  const parsed = capabilityConsumptionResultSchema.safeParse(candidate);
-  if (!parsed.success) throw new Error("CAPABILITY_CONSUMPTION_UNAVAILABLE");
-  return parsed.data;
+    `,
+    capabilityConsumptionResultSchema,
+    "CAPABILITY_CONSUMPTION_DUPLICATE_CONFLICTS",
+    "CAPABILITY_CONSUMPTION_UNAVAILABLE",
+  );
 };
 
-/**
- * Atomically releases unconsumed reserved quantity back to available policy capacity.
- */
 export const releaseCapabilityReservation = async (
   transaction: RequestDatabaseTransaction,
   commandCandidate: ReleaseCapabilityReservationCommand,
@@ -581,11 +432,9 @@ export const releaseCapabilityReservation = async (
   const command = releaseCapabilityReservationCommandSchema.safeParse(commandCandidate);
   if (!command.success) throw new Error("CAPABILITY_RELEASE_COMMAND_INVALID");
   const value = command.data;
-
-  let rows: readonly ReleaseRow[];
-  try {
-    rows = await transaction.query<ReleaseRow>`
-      select * from vortex_access.release_capability_reservation(
+  return runCommand(
+    () => transaction.query<ResultRow>`
+      select result from vortex_access.release_capability_reservation(
         ${value.tenantId}::uuid,
         ${value.organizationId ?? null}::uuid,
         ${value.capabilityKey}::text,
@@ -593,59 +442,18 @@ export const releaseCapabilityReservation = async (
         ${value.policyId}::uuid,
         ${value.policyRevision}::bigint,
         ${value.assignmentId}::uuid,
+        ${value.assignmentRevision}::bigint,
         ${value.reservationId}::uuid,
         ${value.duplicateKey}::uuid,
-        ${value.quantity ?? null}::numeric,
-        ${value.correlationId ?? null}::uuid
+        ${value.quantity ?? null}::numeric
       )
-    `;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("V3001")) {
-      throw new Error("CAPABILITY_RELEASE_DUPLICATE_CONFLICTS");
-    }
-    if (error instanceof Error && error.message.includes("V3102")) {
-      throw new Error("CAPABILITY_RESERVATION_STALE");
-    }
-    throw new Error("CAPABILITY_RELEASE_UNAVAILABLE");
-  }
-
-  const row = parseOne(rows, "CAPABILITY_RELEASE_UNAVAILABLE");
-  const candidate = {
-    outcome: row.outcome,
-    status: row.status,
-    reservationId: row.reservation_id,
-    tenantId: row.tenant_id,
-    ...(row.organization_id != null ? { organizationId: row.organization_id } : {}),
-    capabilityKey: row.capability_key,
-    unit: row.unit,
-    policyId: row.policy_id,
-    policyRevision: revision(row.policy_revision),
-    assignmentId: row.assignment_id,
-    assignmentRevision: revision(row.assignment_revision),
-    appliedScope: row.applied_scope,
-    releasedAmount: quantity(row.released_amount),
-    totalReleasedQuantity: quantity(row.reservation_released_quantity),
-    remainingReservedQuantity: quantity(row.reservation_remaining_quantity),
-    reservationState: row.reservation_state,
-    releasedAt: timestamp(row.released_at),
-    correlationId: row.correlation_id,
-    balance: {
-      policyLimit: quantity(row.policy_quantity_limit),
-      activeReservedQuantity: quantity(row.active_reserved_quantity),
-      consumedQuantity: quantity(row.consumed_quantity),
-      releasedQuantity: quantity(row.released_quantity),
-      availableQuantity: quantity(row.available_quantity),
-    },
-  };
-
-  const parsed = capabilityReleaseResultSchema.safeParse(candidate);
-  if (!parsed.success) throw new Error("CAPABILITY_RELEASE_UNAVAILABLE");
-  return parsed.data;
+    `,
+    capabilityReleaseResultSchema,
+    "CAPABILITY_RELEASE_DUPLICATE_CONFLICTS",
+    "CAPABILITY_RELEASE_UNAVAILABLE",
+  );
 };
 
-/**
- * Reads locked/stable capability balances for an effective policy scope.
- */
 export const readCapabilityBalance = async (
   transaction: RequestDatabaseTransaction,
   requestCandidate: ReadCapabilityBalanceRequest,
@@ -653,50 +461,22 @@ export const readCapabilityBalance = async (
   const request = readCapabilityBalanceRequestSchema.safeParse(requestCandidate);
   if (!request.success) throw new Error("CAPABILITY_BALANCE_REQUEST_INVALID");
   const value = request.data;
-
-  let rows: readonly BalanceRow[];
   try {
-    rows = await transaction.query<BalanceRow>`
-      select * from vortex_access.read_capability_reservation_balance(
+    const rows = await transaction.query<ResultRow>`
+      select result from vortex_access.read_capability_reservation_balance(
         ${value.tenantId}::uuid,
         ${value.organizationId ?? null}::uuid,
         ${value.capabilityKey}::text,
         ${value.unit}::text
       )
     `;
-  } catch {
+    return parseResult(rows, capabilityBalanceRecordSchema, "CAPABILITY_BALANCE_UNAVAILABLE");
+  } catch (error) {
+    if (error instanceof Error && error.message === "CAPABILITY_BALANCE_UNAVAILABLE") throw error;
     throw new Error("CAPABILITY_BALANCE_UNAVAILABLE");
   }
-
-  const row = parseOne(rows, "CAPABILITY_BALANCE_UNAVAILABLE");
-  const candidate = {
-    tenantId: row.tenant_id,
-    ...(row.organization_id != null ? { organizationId: row.organization_id } : {}),
-    capabilityKey: row.capability_key,
-    unit: row.unit,
-    policyId: row.policy_id,
-    policyRevision: revision(row.policy_revision),
-    assignmentId: row.assignment_id,
-    assignmentRevision: revision(row.assignment_revision),
-    appliedScope: row.applied_scope,
-    balance: {
-      policyLimit: quantity(row.policy_quantity_limit),
-      activeReservedQuantity: quantity(row.active_reserved_quantity),
-      consumedQuantity: quantity(row.consumed_quantity),
-      releasedQuantity: quantity(row.released_quantity),
-      availableQuantity: quantity(row.available_quantity),
-    },
-    evaluatedAt: timestamp(row.evaluated_at),
-  };
-
-  const parsed = capabilityBalanceRecordSchema.safeParse(candidate);
-  if (!parsed.success) throw new Error("CAPABILITY_BALANCE_UNAVAILABLE");
-  return parsed.data;
 };
 
-/**
- * Expires active reservations past their deadline and recalculates balances.
- */
 export const expireStaleCapabilityReservations = async (
   transaction: RequestDatabaseTransaction,
   commandCandidate: ExpireStaleCapabilityReservationsCommand,
@@ -704,98 +484,75 @@ export const expireStaleCapabilityReservations = async (
   const command = expireStaleCapabilityReservationsCommandSchema.safeParse(commandCandidate);
   if (!command.success) throw new Error("EXPIRE_STALE_RESERVATIONS_COMMAND_INVALID");
   const value = command.data;
-
-  let rows: readonly ExpireRow[];
   try {
-    rows = await transaction.query<ExpireRow>`
-      select * from vortex_access.expire_stale_capability_reservations(
+    const rows = await transaction.query<ResultRow>`
+      select result from vortex_access.expire_stale_capability_reservations(
         ${value.tenantId}::uuid,
-        ${value.assignmentId ?? null}::uuid
+        ${value.organizationId ?? null}::uuid,
+        ${value.capabilityKey}::text,
+        ${value.unit}::text
       )
     `;
-  } catch {
+    return parseResult(
+      rows,
+      expireStaleCapabilityReservationsResultSchema,
+      "EXPIRE_STALE_RESERVATIONS_UNAVAILABLE",
+    );
+  } catch (error) {
+    if (error instanceof Error && error.message === "EXPIRE_STALE_RESERVATIONS_UNAVAILABLE")
+      throw error;
     throw new Error("EXPIRE_STALE_RESERVATIONS_UNAVAILABLE");
   }
-
-  const row = parseOne(rows, "EXPIRE_STALE_RESERVATIONS_UNAVAILABLE");
-  const correlationId = value.correlationId ?? (crypto.randomUUID() as string);
-  const candidate = {
-    tenantId: value.tenantId,
-    ...(value.assignmentId ? { assignmentId: value.assignmentId } : {}),
-    expiredCount:
-      typeof row.expired_count === "number" ? row.expired_count : Number(row.expired_count),
-    expiredAt: timestamp(row.evaluated_at),
-    correlationId,
-  };
-
-  const parsed = expireStaleCapabilityReservationsResultSchema.safeParse(candidate);
-  if (!parsed.success) throw new Error("EXPIRE_STALE_RESERVATIONS_UNAVAILABLE");
-  return parsed.data;
 };
 
-/**
- * Convenience helper to consume an active reservation directly.
- */
+type ReservedCapability = Extract<CapabilityReservationResult, { outcome: "reserved" }>;
+
+/** Convenience wrapper that retains every immutable reservation binding. */
 export const consumeReservation = async (
   transaction: RequestDatabaseTransaction,
-  reservation: {
-    reservationId: string;
-    tenantId: string;
-    organizationId?: string | undefined;
-    capabilityKey: string;
-    unit: string;
-    policyId: string;
-    policyRevision: number;
-    assignmentId: string;
-  },
-  quantity: number,
-  duplicateKey: string,
-  correlationId?: string,
-): Promise<CapabilityConsumptionResult> =>
-  consumeCapabilityReservation(transaction, {
-    reservationId: reservation.reservationId as any,
-    tenantId: reservation.tenantId as any,
-    organizationId: reservation.organizationId as any,
+  reservation: ReservedCapability,
+  quantityCandidate: number,
+  duplicateKeyCandidate: string,
+): Promise<CapabilityConsumptionResult> => {
+  const command = consumeCapabilityReservationCommandSchema.parse({
+    reservationId: reservation.reservationId,
+    tenantId: reservation.tenantId,
+    ...(reservation.organizationId === undefined
+      ? {}
+      : { organizationId: reservation.organizationId }),
     capabilityKey: reservation.capabilityKey,
     unit: reservation.unit,
-    policyId: reservation.policyId as any,
+    policyId: reservation.policyId,
     policyRevision: reservation.policyRevision,
-    assignmentId: reservation.assignmentId as any,
-    quantity,
-    duplicateKey: duplicateKey as any,
-    correlationId: correlationId as any,
+    assignmentId: reservation.assignmentId,
+    assignmentRevision: reservation.assignmentRevision,
+    quantity: quantityCandidate,
+    duplicateKey: duplicateKeyCandidate,
   });
+  return consumeCapabilityReservation(transaction, command);
+};
 
-/**
- * Convenience helper to release an active reservation directly.
- */
+/** Convenience wrapper that retains every immutable reservation binding. */
 export const releaseReservation = async (
   transaction: RequestDatabaseTransaction,
-  reservation: {
-    reservationId: string;
-    tenantId: string;
-    organizationId?: string | undefined;
-    capabilityKey: string;
-    unit: string;
-    policyId: string;
-    policyRevision: number;
-    assignmentId: string;
-  },
-  duplicateKey: string,
-  quantity?: number,
-  correlationId?: string,
-): Promise<CapabilityReleaseResult> =>
-  releaseCapabilityReservation(transaction, {
-    reservationId: reservation.reservationId as any,
-    tenantId: reservation.tenantId as any,
-    organizationId: reservation.organizationId as any,
+  reservation: ReservedCapability,
+  duplicateKeyCandidate: string,
+  quantityCandidate?: number,
+): Promise<CapabilityReleaseResult> => {
+  const command = releaseCapabilityReservationCommandSchema.parse({
+    reservationId: reservation.reservationId,
+    tenantId: reservation.tenantId,
+    ...(reservation.organizationId === undefined
+      ? {}
+      : { organizationId: reservation.organizationId }),
     capabilityKey: reservation.capabilityKey,
     unit: reservation.unit,
-    policyId: reservation.policyId as any,
+    policyId: reservation.policyId,
     policyRevision: reservation.policyRevision,
-    assignmentId: reservation.assignmentId as any,
-    quantity,
-    duplicateKey: duplicateKey as any,
-    correlationId: correlationId as any,
+    assignmentId: reservation.assignmentId,
+    assignmentRevision: reservation.assignmentRevision,
+    ...(quantityCandidate === undefined ? {} : { quantity: quantityCandidate }),
+    duplicateKey: duplicateKeyCandidate,
   });
-
+  return releaseCapabilityReservation(transaction, command);
+};

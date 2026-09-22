@@ -168,4 +168,3 @@ export const AccessService = Object.freeze({
   key: "access",
   boundary: "@vortex/access",
 });
-
