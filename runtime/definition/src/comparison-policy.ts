@@ -1020,6 +1020,20 @@ export const compareModuleContents = (
     "extension_point",
     (left, right) => compareExtensionPoint(reasons, left, right),
   );
+  compareKeyed(
+    reasons,
+    (previous.queries as RecordValue[] | undefined) ?? [],
+    (candidate.queries as RecordValue[] | undefined) ?? [],
+    "queryId",
+    "query",
+    // Label and description are presentation; every other declared part of a published query
+    // changes what consumers receive, so it is a major change.
+    (left, right) =>
+      compareSimpleComponent(reasons, "query", right.queryId, left, right, [
+        "label",
+        "description",
+      ]),
+  );
   return finaliseReasons(reasons);
 };
 
@@ -1847,6 +1861,19 @@ export const normaliseModuleContent = <T extends ModuleContent | ModuleContentV2
       })),
       "extensionPointId",
     ),
+    // Superseded Module contents carry no queries. Ordering inside one query is meaningful, so
+    // only the collection itself is ordered; its typed inputs share the Action input shape.
+    ...(value.queries === undefined
+      ? {}
+      : {
+          queries: sorted(
+            (value.queries as RecordValue[]).map((query) => ({
+              ...query,
+              inputs: (query.inputs as RecordValue[]).map(normaliseActionInput),
+            })),
+            "queryId",
+          ),
+        }),
   } as T;
 };
 
@@ -1934,6 +1961,21 @@ const currencyConfiguration = (settings: RecordValue): RecordValue => ({
   ...(settings.currency === undefined ? {} : { currency: settings.currency }),
 });
 
+/** Typed inputs share one shape wherever an Action or a Module query declares them. */
+const assertUnambiguousTypedInputs = (inputs: RecordValue[]): void => {
+  assertUnique(inputs, "key");
+  for (const input of inputs) {
+    if (input.type === "record_reference") assertUniqueValues(input.recordTypes as unknown[]);
+    const validation = input.validation;
+    if (
+      input.type === "formatted_text" &&
+      validation !== undefined &&
+      Array.isArray(asRecord(validation).allowedBlocks)
+    )
+      assertUniqueValues(asRecord(validation).allowedBlocks as unknown[]);
+  }
+};
+
 export const assertUnambiguousModuleContent = (content: unknown): void => {
   const value = asRecord(content);
   for (const [collection, key] of [
@@ -1948,6 +1990,16 @@ export const assertUnambiguousModuleContent = (content: unknown): void => {
   ] as const)
     assertUnique(value[collection] as RecordValue[], key);
   assertUnique(value.permissions as RecordValue[], "key");
+  if (value.queries !== undefined) {
+    assertUnique(value.queries as RecordValue[], "queryId");
+    assertUnique(value.queries as RecordValue[], "key");
+    for (const query of value.queries as RecordValue[]) {
+      assertUnambiguousTypedInputs(query.inputs as RecordValue[]);
+      assertUnique(query.aggregates as RecordValue[], "alias");
+      assertUniqueValues(query.selectedFieldIds as unknown[]);
+      assertUniqueValues(query.groupByFieldIds as unknown[]);
+    }
+  }
   for (const recordType of value.recordTypes as RecordValue[]) {
     assertUnique(recordType.fields as RecordValue[], "fieldId");
     assertUnique(recordType.relationships as RecordValue[], "relationshipId");
@@ -1970,19 +2022,8 @@ export const assertUnambiguousModuleContent = (content: unknown): void => {
       }
     }
   }
-  for (const action of value.actions as RecordValue[]) {
-    assertUnique(action.inputs as RecordValue[], "key");
-    for (const input of action.inputs as RecordValue[]) {
-      if (input.type === "record_reference") assertUniqueValues(input.recordTypes as unknown[]);
-      const validation = input.validation;
-      if (
-        input.type === "formatted_text" &&
-        validation !== undefined &&
-        Array.isArray(asRecord(validation).allowedBlocks)
-      )
-        assertUniqueValues(asRecord(validation).allowedBlocks as unknown[]);
-    }
-  }
+  for (const action of value.actions as RecordValue[])
+    assertUnambiguousTypedInputs(action.inputs as RecordValue[]);
   for (const event of value.events as RecordValue[])
     assertUniqueValues(event.carriedFieldIds as unknown[]);
   for (const condition of value.sharingConditions as RecordValue[])
@@ -2028,19 +2069,8 @@ const assertUnambiguousApplicationSharedContent = (content: unknown): void => {
   }
   for (const event of value.events as RecordValue[])
     assertUniqueValues(event.carriedFieldIds as unknown[]);
-  for (const action of value.actions as RecordValue[]) {
-    assertUnique(action.inputs as RecordValue[], "key");
-    for (const input of action.inputs as RecordValue[]) {
-      if (input.type === "record_reference") assertUniqueValues(input.recordTypes as unknown[]);
-      const validation = input.validation;
-      if (
-        input.type === "formatted_text" &&
-        validation !== undefined &&
-        Array.isArray(asRecord(validation).allowedBlocks)
-      )
-        assertUniqueValues(asRecord(validation).allowedBlocks as unknown[]);
-    }
-  }
+  for (const action of value.actions as RecordValue[])
+    assertUnambiguousTypedInputs(action.inputs as RecordValue[]);
 };
 
 type PlacementContextV2 = {
