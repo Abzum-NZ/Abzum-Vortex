@@ -2188,7 +2188,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       const identity = recordIdentity(currentModuleRootId, String(currentRecord.recordTypeId));
       if (visiting.has(identity)) return false;
       if (visited.has(identity)) return true;
-      if (["organization_account", "team"].includes(String(currentRecord.ownershipMode))) {
+      if (["organization_account", "group"].includes(String(currentRecord.ownershipMode))) {
         visited.add(identity);
         return true;
       }

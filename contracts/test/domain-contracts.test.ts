@@ -3,7 +3,6 @@ import { resolve } from "node:path";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import {
   accessGrantSchema,
-  accessVersionChangeReasonV1Schema,
   accessVersionChangeReasonSchema,
   actionInputDefinitionSchema,
   applicationConnectionBindingSchema,
@@ -70,9 +69,6 @@ import {
   deriveTenantAdministratorAssignmentOutcome,
   verifiedIdentitySchema,
   readOrganizationAccessVersionCommandSchema,
-  readAccessVersionChangeReasonV1,
-  readOrganizationAccessVersionV1,
-  writeAccessVersionChangeReasonV1,
 } from "../src";
 import type {
   PublishedApplicationDefinition,
@@ -167,79 +163,6 @@ describe("identity projection, organisation-account and invitation contracts", (
     expect(accessVersionChangeReasonSchema.safeParse("team_membership_changed").success).toBe(
       false,
     );
-    expect(accessVersionChangeReasonV1Schema.safeParse("team_membership_changed").success).toBe(
-      true,
-    );
-    expect(accessVersionChangeReasonV1Schema.safeParse("role_catalogue_changed").success).toBe(
-      true,
-    );
-    expect(accessVersionChangeReasonV1Schema.safeParse("role_activation_changed").success).toBe(
-      true,
-    );
-    expect(accessVersionChangeReasonV1Schema.safeParse("delegation_changed").success).toBe(true);
-    expect(accessVersionChangeReasonV1Schema.safeParse("stewardship_changed").success).toBe(true);
-    expect(accessVersionChangeReasonV1Schema.safeParse("invitation_access_accepted").success).toBe(
-      true,
-    );
-    expect(accessVersionChangeReasonV1Schema.safeParse("group_membership_changed").success).toBe(
-      false,
-    );
-    expect(writeAccessVersionChangeReasonV1("group_membership_changed")).toBe(
-      "team_membership_changed",
-    );
-    expect(writeAccessVersionChangeReasonV1("role_catalogue_changed")).toBe(
-      "role_catalogue_changed",
-    );
-    expect(writeAccessVersionChangeReasonV1("role_activation_changed")).toBe(
-      "role_activation_changed",
-    );
-    expect(writeAccessVersionChangeReasonV1("delegation_changed")).toBe("delegation_changed");
-    expect(writeAccessVersionChangeReasonV1("stewardship_changed")).toBe("stewardship_changed");
-    expect(writeAccessVersionChangeReasonV1("invitation_access_accepted")).toBe(
-      "invitation_access_accepted",
-    );
-    expect(writeAccessVersionChangeReasonV1("record_ownership_changed")).toBe(
-      "record_ownership_changed",
-    );
-    expect(readAccessVersionChangeReasonV1("record_ownership_changed")).toBe(
-      "record_ownership_changed",
-    );
-    expect(
-      readOrganizationAccessVersionV1({
-        ...version,
-        changeReason: "team_membership_changed",
-      }),
-    ).toEqual({ ...version, changeReason: "group_membership_changed" });
-    expect(
-      readOrganizationAccessVersionV1({
-        ...version,
-        changeReason: "role_catalogue_changed",
-      }),
-    ).toEqual({ ...version, changeReason: "role_catalogue_changed" });
-    expect(
-      readOrganizationAccessVersionV1({
-        ...version,
-        changeReason: "role_activation_changed",
-      }),
-    ).toEqual({ ...version, changeReason: "role_activation_changed" });
-    expect(
-      readOrganizationAccessVersionV1({
-        ...version,
-        changeReason: "delegation_changed",
-      }),
-    ).toEqual({ ...version, changeReason: "delegation_changed" });
-    expect(
-      readOrganizationAccessVersionV1({
-        ...version,
-        changeReason: "stewardship_changed",
-      }),
-    ).toEqual({ ...version, changeReason: "stewardship_changed" });
-    expect(
-      readOrganizationAccessVersionV1({
-        ...version,
-        changeReason: "invitation_access_accepted",
-      }),
-    ).toEqual({ ...version, changeReason: "invitation_access_accepted" });
     expect(accessVersionChangeReasonSchema.safeParse("business_record_changed").success).toBe(
       false,
     );
