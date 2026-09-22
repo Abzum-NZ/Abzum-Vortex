@@ -1,5 +1,6 @@
-import type { ComponentType, CSSProperties, ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import {
+  immutablePlatformBlockCatalogueV2Schema,
   platformBlockReleaseV2Schema,
   type ApplicationCompositionPolicyV2,
   type BlockPropertyValueV2Contract,
@@ -18,8 +19,8 @@ export type PlatformBlockRenderProps = Readonly<{
   breakpoint: Breakpoint;
   metadata: PlatformBlockReleaseV2;
   themeOverrides?: Readonly<Record<string, unknown>>;
-  className?: string;
-  style?: CSSProperties;
+  availability: "available" | "unavailable";
+  unavailableReason?: "operation_unavailable";
 }>;
 
 /**
@@ -55,10 +56,8 @@ export interface PlatformComponentRegistry {
    */
   hasBlockId(blockId: string): boolean;
 
-  /**
-   * Look up registration by renderer key (e.g. "platform.renderer.stack").
-   */
-  getByRendererKey(rendererKey: string): PlatformComponentRegistration | undefined;
+  /** Look up the one React renderer bound to a renderer key across exact releases. */
+  getRenderer(rendererKey: string): PlatformComponentRenderer | undefined;
 
   /**
    * List all registered components.
@@ -83,6 +82,12 @@ const DEFAULT_COMPOSITION_POLICY: ApplicationCompositionPolicyV2 = {
   maximumPlacements: 512,
 };
 
+const deepFreeze = <Value>(value: Value): Value => {
+  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const key of Reflect.ownKeys(value)) deepFreeze(Reflect.get(value, key));
+  return Object.freeze(value);
+};
+
 /**
  * Creates a browser-safe immutable platform component registry.
  * Validates each metadata release against the contract schema at registration boundary.
@@ -92,6 +97,8 @@ export function createPlatformComponentRegistry(
 ): PlatformComponentRegistry {
   const byIdentity = new Map<string, PlatformComponentRegistration>();
   const byRendererKey = new Map<string, PlatformComponentRegistration>();
+  const blockKeyById = new Map<string, string>();
+  const blockIdByKey = new Map<string, string>();
   const knownBlockIds = new Set<string>();
   const list: PlatformComponentRegistration[] = [];
 
@@ -102,13 +109,17 @@ export function createPlatformComponentRegistry(
         "INVALID_COMPOSITION",
         `Invalid platform block release metadata for '${registration.metadata?.blockId ?? "unknown"}': ${parsedMetadata.error.message}`,
         {
-          blockId: registration.metadata?.blockId,
-          releaseVersion: registration.metadata?.releaseVersion,
+          ...(registration.metadata?.blockId === undefined
+            ? {}
+            : { blockId: registration.metadata.blockId }),
+          ...(registration.metadata?.releaseVersion === undefined
+            ? {}
+            : { releaseVersion: registration.metadata.releaseVersion }),
         },
       );
     }
 
-    const metadata = parsedMetadata.data;
+    const metadata = deepFreeze(parsedMetadata.data);
     if (!metadata.rendererKey || metadata.rendererKey.trim().length === 0) {
       throw new DefinitionRenderError(
         "ABSENT_RENDERER_KEY",
@@ -117,7 +128,7 @@ export function createPlatformComponentRegistry(
       );
     }
 
-    if (typeof registration.render !== "function" && typeof registration.render !== "object") {
+    if (typeof registration.render !== "function") {
       throw new DefinitionRenderError(
         "ABSENT_RENDERER_KEY",
         `Block release '${metadata.key}' (${metadata.blockId}:${metadata.releaseVersion}) has no valid React renderer component`,
@@ -134,6 +145,28 @@ export function createPlatformComponentRegistry(
       );
     }
 
+    const knownKey = blockKeyById.get(metadata.blockId);
+    const knownId = blockIdByKey.get(metadata.key);
+    if (
+      (knownKey !== undefined && knownKey !== metadata.key) ||
+      (knownId !== undefined && knownId !== metadata.blockId)
+    ) {
+      throw new DefinitionRenderError(
+        "INVALID_COMPOSITION",
+        `Block key '${metadata.key}' and permanent identity '${metadata.blockId}' must map one to one`,
+        { blockId: metadata.blockId, releaseVersion: metadata.releaseVersion },
+      );
+    }
+
+    const rendererRegistration = byRendererKey.get(metadata.rendererKey);
+    if (rendererRegistration !== undefined && rendererRegistration.render !== registration.render) {
+      throw new DefinitionRenderError(
+        "RENDERER_KEY_CONFLICT",
+        `Renderer key '${metadata.rendererKey}' resolves to more than one React renderer`,
+        { blockId: metadata.blockId, releaseVersion: metadata.releaseVersion },
+      );
+    }
+
     const frozenRegistration: PlatformComponentRegistration = Object.freeze({
       metadata,
       render: registration.render,
@@ -141,6 +174,8 @@ export function createPlatformComponentRegistry(
 
     byIdentity.set(identityKey, frozenRegistration);
     knownBlockIds.add(metadata.blockId);
+    blockKeyById.set(metadata.blockId, metadata.key);
+    blockIdByKey.set(metadata.key, metadata.blockId);
     if (!byRendererKey.has(metadata.rendererKey)) {
       byRendererKey.set(metadata.rendererKey, frozenRegistration);
     }
@@ -163,8 +198,8 @@ export function createPlatformComponentRegistry(
       return knownBlockIds.has(blockId);
     },
 
-    getByRendererKey(rendererKey: string): PlatformComponentRegistration | undefined {
-      return byRendererKey.get(rendererKey);
+    getRenderer(rendererKey: string): PlatformComponentRenderer | undefined {
+      return byRendererKey.get(rendererKey)?.render;
     },
 
     list(): readonly PlatformComponentRegistration[] {
@@ -178,12 +213,21 @@ export function createPlatformComponentRegistry(
     toPlatformBlockCatalogue(
       compositionPolicy: ApplicationCompositionPolicyV2 = DEFAULT_COMPOSITION_POLICY,
     ): ImmutablePlatformBlockCatalogueV2 {
-      return Object.freeze({
-        compositionPolicy: Object.freeze({ ...compositionPolicy }),
-        releases: Object.freeze(
-          [...frozenReleases].sort((first, second) => first.blockId.localeCompare(second.blockId)),
+      const parsed = immutablePlatformBlockCatalogueV2Schema.safeParse({
+        compositionPolicy,
+        releases: [...frozenReleases].sort(
+          (first, second) =>
+            first.blockId.localeCompare(second.blockId) ||
+            first.releaseVersion.localeCompare(second.releaseVersion),
         ),
       });
+      if (!parsed.success) {
+        throw new DefinitionRenderError(
+          "INVALID_COMPOSITION",
+          `Invalid platform block catalogue: ${parsed.error.message}`,
+        );
+      }
+      return deepFreeze(parsed.data);
     },
   };
 

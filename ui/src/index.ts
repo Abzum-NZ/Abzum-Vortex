@@ -14,6 +14,7 @@ export {
   DefinitionRenderError,
   validateAccessibleName,
   validatePlacementSlots,
+  validatePlacementTree,
   validateSlotOrder,
   type Breakpoint,
   type DefinitionRenderErrorCode,
@@ -43,5 +44,7 @@ export {
   type PlacementRendererProps,
   type PlacementSlotRendererProps,
   type PlacementSlotV2,
+  type ProjectedPlacementAvailability,
+  type ProjectedPlacementSlot,
   type ProjectedPageCapability,
 } from "./layout-renderer";

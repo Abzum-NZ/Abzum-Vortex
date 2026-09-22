@@ -1,4 +1,5 @@
 import type {
+  ApplicationShellV2,
   BlockCapabilitiesV2,
   BlockPlacementV2Contract,
   BlockPropertyValueV2Contract,
@@ -12,7 +13,9 @@ export type DefinitionRenderErrorCode =
   | "UNKNOWN_RELEASE"
   | "MISMATCHED_RELEASE"
   | "ABSENT_RENDERER_KEY"
+  | "RENDERER_KEY_CONFLICT"
   | "UNDECLARED_CHILDREN"
+  | "MISSING_CHILDREN"
   | "ILLEGAL_CHILDREN"
   | "INCOMPLETE_CHILD_ORDERING"
   | "MISSING_ACCESSIBLE_NAME"
@@ -88,11 +91,10 @@ export function validateAccessibleName(
     return;
   }
 
-  let currentSettings: Record<string, BlockPropertyValueV2Contract> = settings;
+  let currentSettings: Readonly<Record<string, BlockPropertyValueV2Contract>> = settings;
   let targetValue: BlockPropertyValueV2Contract | undefined;
 
-  for (let index = 0; index < propertyPath.length; index++) {
-    const key = propertyPath[index]!;
+  for (const [index, key] of propertyPath.entries()) {
     const val = currentSettings[key];
     if (val === undefined) {
       targetValue = undefined;
@@ -217,8 +219,24 @@ export function validatePlacementSlots(
   metadata: PlatformBlockReleaseV2,
   registry: PlatformComponentRegistry,
   location: DefinitionRenderErrorLocation = {},
+  options: Readonly<{ allowEmptyRequiredSlots?: boolean }> = {},
 ): void {
   const declaredSlots = new Map(metadata.slots.map((slot) => [slot.key, slot]));
+
+  for (const declaration of metadata.slots) {
+    const childSlot = placement.slots[declaration.key];
+    if (
+      declaration.required &&
+      (childSlot === undefined ||
+        (!options.allowEmptyRequiredSlots && Object.keys(childSlot.placements).length === 0))
+    ) {
+      throw new DefinitionRenderError(
+        "MISSING_CHILDREN",
+        `Required child slot '${declaration.key}' on block '${metadata.key}' (${metadata.blockId}) has no content`,
+        { ...location, slotKey: declaration.key },
+      );
+    }
+  }
 
   for (const slotKey of Object.keys(placement.slots)) {
     const declaration = declaredSlots.get(slotKey);
@@ -284,4 +302,130 @@ export function validatePlacementSlots(
       }
     }
   }
+}
+
+/**
+ * Validates a complete placement tree before any registered renderer is invoked.
+ * Permission projection may legitimately empty a required slot after publication validation.
+ */
+export function validatePlacementTree(
+  slot: ApplicationShellV2["layout"],
+  registry: PlatformComponentRegistry,
+  location: DefinitionRenderErrorLocation = {},
+  options: Readonly<{ allowEmptyRequiredSlots?: boolean }> = {},
+): void {
+  const seenPlacementIds = new Set<string>();
+
+  const visit = (
+    currentSlot: ApplicationShellV2["layout"],
+    currentLocation: DefinitionRenderErrorLocation,
+  ): void => {
+    for (const breakpoint of ["desktop", "tablet", "phone"] as const)
+      validateSlotOrder(currentSlot, breakpoint, currentLocation);
+
+    for (const [placementId, placement] of Object.entries(currentSlot.placements)) {
+      const placementLocation: DefinitionRenderErrorLocation = {
+        ...currentLocation,
+        placementId,
+        blockId: placement.block.blockId,
+        releaseVersion: placement.block.releaseVersion,
+      };
+      if (seenPlacementIds.has(placementId)) {
+        throw new DefinitionRenderError(
+          "INVALID_COMPOSITION",
+          `Placement identity '${placementId}' appears more than once in the rendered tree`,
+          placementLocation,
+        );
+      }
+      seenPlacementIds.add(placementId);
+
+      const registration = registry.get(
+        placement.block.blockId,
+        placement.block.releaseVersion,
+      );
+      if (registration === undefined) {
+        throw new DefinitionRenderError(
+          registry.hasBlockId(placement.block.blockId) ? "MISMATCHED_RELEASE" : "UNKNOWN_RELEASE",
+          `Placement '${placementId}' references ${
+            registry.hasBlockId(placement.block.blockId) ? "mismatched" : "unknown"
+          } block release '${placement.block.blockId}:${placement.block.releaseVersion}'`,
+          placementLocation,
+        );
+      }
+
+      const keyedRenderer = registry.getRenderer(registration.metadata.rendererKey);
+      if (keyedRenderer === undefined || keyedRenderer !== registration.render) {
+        throw new DefinitionRenderError(
+          "RENDERER_KEY_CONFLICT",
+          `Renderer key '${registration.metadata.rendererKey}' does not resolve to the exact registered renderer`,
+          placementLocation,
+        );
+      }
+
+      validateAccessibleName(placement.settings, registration.metadata.capabilities, placementLocation);
+      validatePlacementSlots(
+        placement,
+        registration.metadata,
+        registry,
+        placementLocation,
+        options,
+      );
+
+      const layouts = [
+        placement.responsive.desktop,
+        placement.responsive.tablet,
+        placement.responsive.phone,
+      ];
+      if (
+        !registration.metadata.capabilities.responsiveVisibility &&
+        layouts.some((layout) => layout.visible !== layouts[0]?.visible)
+      ) {
+        throw new DefinitionRenderError(
+          "INVALID_COMPOSITION",
+          `Block '${registration.metadata.key}' does not permit responsive visibility overrides`,
+          placementLocation,
+        );
+      }
+      if (
+        !registration.metadata.capabilities.gridWidth &&
+        layouts.some((layout) => layout.width.kind === "grid")
+      ) {
+        throw new DefinitionRenderError(
+          "INVALID_COMPOSITION",
+          `Block '${registration.metadata.key}' does not permit grid-width placement`,
+          placementLocation,
+        );
+      }
+      if (
+        registration.metadata.capabilities.height === "content" &&
+        layouts.some((layout) => layout.height.kind !== "content")
+      ) {
+        throw new DefinitionRenderError(
+          "INVALID_COMPOSITION",
+          `Block '${registration.metadata.key}' permits content-driven height only`,
+          placementLocation,
+        );
+      }
+      if (!registration.metadata.capabilities.responsiveOrder) {
+        for (const [slotKey, childSlot] of Object.entries(placement.slots)) {
+          const desktopOrder = childSlot.order.desktop;
+          if (
+            childSlot.order.tablet.some((entry, index) => entry !== desktopOrder[index]) ||
+            childSlot.order.phone.some((entry, index) => entry !== desktopOrder[index])
+          ) {
+            throw new DefinitionRenderError(
+              "INCOMPLETE_CHILD_ORDERING",
+              `Block '${registration.metadata.key}' does not permit responsive child-order overrides`,
+              { ...placementLocation, slotKey },
+            );
+          }
+        }
+      }
+
+      for (const [slotKey, childSlot] of Object.entries(placement.slots))
+        visit(childSlot, { ...placementLocation, slotKey });
+    }
+  };
+
+  visit(slot, location);
 }
