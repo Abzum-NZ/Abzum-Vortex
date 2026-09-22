@@ -1147,10 +1147,7 @@ function explicitSourceTargets(
       const recordTypePath = [...base, "recordType"];
       return leafPaths(valueAtPath(canonical, recordTypePath), recordTypePath);
     }
-    if (
-      (sourcePath[3] === "select" || sourcePath[3] === "output_fields") &&
-      typeof sourcePath[4] === "number"
-    )
+    if (sourcePath[3] === "select" && typeof sourcePath[4] === "number")
       return [[...base, "selectedFieldIds", sourcePath[4]]];
     if (sourcePath[3] === "group_by" && typeof sourcePath[4] === "number")
       return [[...base, "groupByFieldIds", sourcePath[4]]];
@@ -1439,7 +1436,7 @@ const moduleSourceTransformPatterns = [
   /^body\/actions\/#\/effects\/#\/(?:field|record_type|relationships\/#|target_input|event)$/,
   /^body\/actions\/#\/effects\/#\/value\/(?:source|input|field|value)(?:\/.*)?$/,
   /^body\/actions\/#\/effects\/#\/values\/[^/]+\/(?:source|input|field|value)(?:\/.*)?$/,
-  /^body\/queries\/#\/(?:id|record_type|select\/#|output_fields\/#|group_by\/#)$/,
+  /^body\/queries\/#\/(?:id|record_type|select\/#|group_by\/#)$/,
   /^body\/queries\/#\/inputs\/#\/(?:type|record_types\/#)$/,
   /^body\/queries\/#\/inputs\/#\/validation\/(?:minimum|maximum)$/,
   /^body\/queries\/#\/filter$/,
@@ -1617,7 +1614,7 @@ function sourceResolvesIdentity(sourcePath: Path, positions: SourceContractPosit
   return (
     path === "root_alias" ||
     (typeof last === "string" && ID_FIELDS.has(last)) ||
-    /\/(?:custom_actions|carries|declared_fields|public_fields|select|output_fields|group_by|component_order|relationships|record_types|allowed_child_blocks)\/#$/.test(
+    /\/(?:custom_actions|carries|declared_fields|public_fields|select|group_by|component_order|relationships|record_types|allowed_child_blocks)\/#$/.test(
       path,
     ) ||
     /\/(?:record_type|source_record_type|to_record_type|target|field|page|query|block|home_page|module|connection_type|workflow|node|relationship|amount_field|percentage_field|date_field|due_field|status_field|required_permission)$/.test(
@@ -3246,49 +3243,38 @@ function compileModule(
       ...(fieldPolicy === undefined ? {} : { fieldPolicy }),
     };
   });
-  const queries = ((body.queries as JsonObject[] | undefined) ?? []).map((query) => {
-    const rawRecord = String(query.record_type);
-    const record = rawRecord.includes(":") ? rawRecord : qualifiedForRecord(rawRecord);
+  const queries = (body.queries as JsonObject[]).map((query) => {
+    const authoredRecord = String(query.record_type);
+    // A local key names this module's own record; a qualified key names a declared dependency.
+    const record = authoredRecord.includes(":")
+      ? authoredRecord
+      : qualifiedForRecord(authoredRecord);
     const localField = (alias: string) => resolution.field(record, alias);
     const inputTypes = new Map(
-      ((query.inputs as JsonObject[] | undefined) ?? []).map((input) => [
-        String(input.key),
-        String(input.type),
-      ]),
+      (query.inputs as JsonObject[]).map((input) => [String(input.key), String(input.type)]),
     );
     const valueContext = valueContextFor(record, inputTypes);
-    const selectedFieldAliases = (query.select ?? query.output_fields ?? []) as string[];
-    const selectedFieldIds = selectedFieldAliases.map((alias) => resolution.field(record, alias));
-    const groupByAliases = (query.group_by as string[] | undefined) ?? [];
-    const groupByFieldIds = groupByAliases.map((alias) => resolution.field(record, alias));
-    const aggregates = ((query.aggregates as JsonObject[] | undefined) ?? []).map((aggregate) => ({
-      operation: aggregate.operation,
-      ...(aggregate.field ? { fieldId: resolution.field(record, String(aggregate.field)) } : {}),
-      alias: aggregate.alias,
-    }));
-    const sorts = ((query.sort as JsonObject[] | undefined) ?? []).map((sort) => ({
-      fieldId: resolution.field(record, String(sort.field)),
-      direction: sort.direction,
-    }));
     return {
       queryId: resolution.id(definitionKey, "query", String(query.id), "content"),
       key: query.key,
       ...(query.label ? { label: query.label } : {}),
       ...(query.description ? { description: query.description } : {}),
       recordType: resolution.recordType(record),
-      inputs: ((query.inputs as JsonObject[] | undefined) ?? []).map((input) =>
-        actionInput(input, resolution, true),
-      ),
-      selectedFieldIds,
-      outputFieldIds: selectedFieldIds,
-      filter: query.filter
-        ? condition(query.filter, localField, valueContext)
-        : null,
-      groupByFieldIds,
-      aggregates,
-      sort: sorts,
-      pageSize: query.page_size ?? 50,
-      relationshipHops: query.relationship_hops ?? 0,
+      inputs: (query.inputs as JsonObject[]).map((input) => actionInput(input, resolution, true)),
+      selectedFieldIds: (query.select as string[]).map(localField),
+      filter: query.filter ? condition(query.filter, localField, valueContext) : null,
+      groupByFieldIds: (query.group_by as string[]).map(localField),
+      aggregates: (query.aggregates as JsonObject[]).map((aggregate) => ({
+        operation: aggregate.operation,
+        ...(aggregate.field ? { fieldId: localField(String(aggregate.field)) } : {}),
+        alias: aggregate.alias,
+      })),
+      sort: (query.sort as JsonObject[]).map((sort) => ({
+        fieldId: localField(String(sort.field)),
+        direction: sort.direction,
+      })),
+      pageSize: query.page_size,
+      relationshipHops: query.relationship_hops,
     };
   });
   const canonical = moduleDraftV3Schema.parse({

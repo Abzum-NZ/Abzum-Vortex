@@ -1242,8 +1242,11 @@ export const moduleSourceQueryAggregateSchema = z
   })
   .strict();
 
-export const moduleSourceQueryInputSchema = moduleSourceActionInputSchema;
-
+/**
+ * One authored Module-owned query. It names a local or dependency-qualified record type,
+ * typed inputs, the fields it returns, a typed filter tree, grouping, totals, a stable sort,
+ * a bounded page size and its declared relationship hops. It never carries a database target.
+ */
 export const moduleSourceQuerySchema = z
   .object({
     id: sourceAliasSchema,
@@ -1251,29 +1254,16 @@ export const moduleSourceQuerySchema = z
     label: z.string().min(1).max(60).optional(),
     description: z.string().min(1).max(1_000).optional(),
     record_type: z.union([builderKeySchema, sourceQualifiedRecordTypeSchema]),
-    inputs: z.array(moduleSourceActionInputSchema).max(50).default([]),
-    select: z.array(builderKeySchema).min(1).max(200).optional(),
-    output_fields: z.array(builderKeySchema).min(1).max(200).optional(),
-    filter: sourceConditionSchema.nullable().optional(),
-    group_by: z.array(builderKeySchema).max(10).default([]),
-    aggregates: z.array(moduleSourceQueryAggregateSchema).max(20).default([]),
-    sort: z.array(moduleSourceQuerySortSchema).max(20).default([]),
-    page_size: z.number().int().min(1).max(200).default(50),
-    relationship_hops: z.number().int().min(0).max(2).default(0),
+    inputs: z.array(moduleSourceActionInputSchema).max(50),
+    select: z.array(builderKeySchema).min(1).max(200),
+    filter: z.union([z.null(), sourceConditionSchema]),
+    group_by: z.array(builderKeySchema).max(10),
+    aggregates: z.array(moduleSourceQueryAggregateSchema).max(20),
+    sort: z.array(moduleSourceQuerySortSchema).min(1).max(20),
+    page_size: z.number().int().min(1).max(200),
+    relationship_hops: z.number().int().min(0).max(2),
   })
-  .strict()
-  .superRefine((value, context) => {
-    if (
-      (!value.select || value.select.length === 0) &&
-      (!value.output_fields || value.output_fields.length === 0)
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["output_fields"],
-        message: "Query must declare at least one output field via output_fields or select",
-      });
-    }
-  });
+  .strict();
 
 // ---------------------------------------------------------------------------
 // Module body and document.
