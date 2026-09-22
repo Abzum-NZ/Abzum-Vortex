@@ -2,7 +2,6 @@ import { z } from "zod";
 import {
   applicationContentV2Schema,
   applicationDraftV2Schema,
-  applicationDraftSchema,
   publishedApplicationDefinitionSchema,
 } from "./application-contracts";
 import {
@@ -178,14 +177,6 @@ export const definitionVersionImpactFailureCodeSchema = z.enum([
 
 const historyLimit = 10_000;
 
-export const applicationVersionImpactRequestSchema = z
-  .object({
-    kind: z.literal("application"),
-    history: z.array(publishedApplicationDefinitionSchema).max(historyLimit),
-    candidate: applicationDraftSchema,
-  })
-  .strict();
-
 /**
  * Comparator-only native V2 history evidence. Stored publication selection
  * remains closed until coordinated persistence and consumer work is complete.
@@ -236,7 +227,7 @@ export const moduleVersionImpactRequestV3Schema = z
 
 export const definitionVersionImpactRequestSchema = z.discriminatedUnion("kind", [
   moduleVersionImpactRequestV3Schema,
-  applicationVersionImpactRequestSchema,
+  applicationVersionImpactRequestV2Schema,
 ]);
 
 const resultCommon = {

@@ -1,7 +1,6 @@
 import {
   assertModuleContractPair,
   selectApplicationContractPair,
-  type ApplicationCompilationOutputV2,
   type DefinitionCompilationOutput,
   type DefinitionResolutionSnapshot,
   type DefinitionResolutionSnapshotV2,
@@ -93,63 +92,41 @@ const exactApplicationDependenciesMatch = (
   )
     return false;
 
-  if ("validationContractVersion" in output) {
-    const v2 = output as ApplicationCompilationOutputV2;
-    const blockEntries = manifest.filter(
-      (entry): entry is Extract<ExactDefinitionDependency, { kind: "platform_block" }> =>
-        entry.kind === "platform_block",
-    );
-    const blockDependencies = v2.canonical.content.platformBlockDependencies;
-    if (
-      blockEntries.length !== blockDependencies.length ||
-      blockDependencies.some(
-        (dependency) =>
-          !blockEntries.some(
-            (entry) =>
-              entry.blockId === dependency.blockId &&
-              entry.releaseVersion === dependency.releaseVersion &&
-              entry.contentFingerprint === dependency.contentFingerprint &&
-              entry.catalogueFingerprint === dependency.catalogueFingerprint,
-          ),
-      )
-    )
-      return false;
-    const base = v2.canonical.content.theme.base;
-    const theme = manifest.filter((entry) => entry.kind === "platform_theme");
-    if (
-      theme.length !== 1 ||
-      theme[0]!.catalogueThemeId !== base.catalogueThemeId ||
-      theme[0]!.releaseVersion !== base.releaseVersion ||
-      theme[0]!.contentFingerprint !== base.contentFingerprint ||
-      theme[0]!.catalogueFingerprint !== base.catalogueFingerprint
-    )
-      return false;
-    return sameStringSet(
-      [
-        ...moduleSubjects.map((entry) => `module:${entry!.key}`),
-        ...connectionSubjects.map((entry) => `connection_type:${entry!.key}`),
-        ...blockDependencies.map((entry) => `platform_block:${entry.blockId}`),
-        `platform_theme:${base.catalogueThemeId}`,
-      ],
-      manifest.map(manifestSubject),
-    );
-  }
-
-  const theme = output.canonical.content.theme;
-  const themeEntries = manifest.filter((entry) => entry.kind === "platform_theme");
+  const blockEntries = manifest.filter(
+    (entry): entry is Extract<ExactDefinitionDependency, { kind: "platform_block" }> =>
+      entry.kind === "platform_block",
+  );
+  const blockDependencies = output.canonical.content.platformBlockDependencies;
   if (
-    theme.mode === "platform" &&
-    (themeEntries.length !== 1 ||
-      themeEntries[0]!.catalogueThemeId !== theme.catalogueThemeId ||
-      themeEntries[0]!.releaseVersion !== theme.version)
+    blockEntries.length !== blockDependencies.length ||
+    blockDependencies.some(
+      (dependency) =>
+        !blockEntries.some(
+          (entry) =>
+            entry.blockId === dependency.blockId &&
+            entry.releaseVersion === dependency.releaseVersion &&
+            entry.contentFingerprint === dependency.contentFingerprint &&
+            entry.catalogueFingerprint === dependency.catalogueFingerprint,
+        ),
+    )
   )
     return false;
-  if (theme.mode !== "platform" && themeEntries.length !== 0) return false;
+  const base = output.canonical.content.theme.base;
+  const theme = manifest.filter((entry) => entry.kind === "platform_theme");
+  if (
+    theme.length !== 1 ||
+    theme[0]!.catalogueThemeId !== base.catalogueThemeId ||
+    theme[0]!.releaseVersion !== base.releaseVersion ||
+    theme[0]!.contentFingerprint !== base.contentFingerprint ||
+    theme[0]!.catalogueFingerprint !== base.catalogueFingerprint
+  )
+    return false;
   return sameStringSet(
     [
       ...moduleSubjects.map((entry) => `module:${entry!.key}`),
       ...connectionSubjects.map((entry) => `connection_type:${entry!.key}`),
-      ...(theme.mode === "platform" ? [`platform_theme:${theme.catalogueThemeId}`] : []),
+      ...blockDependencies.map((entry) => `platform_block:${entry.blockId}`),
+      `platform_theme:${base.catalogueThemeId}`,
     ],
     manifest.map(manifestSubject),
   );
@@ -193,41 +170,20 @@ export const hasAuthenticStoredCustomerDefinitionRelease = (
   release: StoredCustomerDefinitionReleaseEvidence,
 ): boolean => {
   const { compilationOutput: output, resolutionSnapshot: snapshot } = release;
-  if (release.kind === "application") {
-    let pair: "v1" | "v2";
-    try {
-      pair = selectApplicationContractPair(
-        release.sourceContractVersion,
-        release.validationContractVersion,
-      ).schema;
-    } catch {
-      return false;
-    }
-    const expectedVersion = pair === "v2" ? "2.0.0" : "1.0.0";
-    const outputVersion =
-      "validationContractVersion" in output ? output.validationContractVersion : "1.0.0";
-    if (
-      outputVersion !== expectedVersion ||
-      snapshot.contractVersion !== expectedVersion ||
-      outputVersion !== release.validationContractVersion
-    )
-      return false;
-  } else {
-    try {
-      assertModuleContractPair(release.sourceContractVersion, release.validationContractVersion);
-    } catch {
-      return false;
-    }
-    const expectedVersion = "3.0.0";
-    const outputVersion =
-      "validationContractVersion" in output ? output.validationContractVersion : "1.0.0";
-    if (
-      outputVersion !== expectedVersion ||
-      snapshot.contractVersion !== expectedVersion ||
-      outputVersion !== release.validationContractVersion
-    )
-      return false;
+  const expectedVersion = release.kind === "application" ? "2.0.0" : "3.0.0";
+  try {
+    if (release.kind === "application")
+      selectApplicationContractPair(release.sourceContractVersion, release.validationContractVersion);
+    else assertModuleContractPair(release.sourceContractVersion, release.validationContractVersion);
+  } catch {
+    return false;
   }
+  if (
+    output.validationContractVersion !== expectedVersion ||
+    snapshot.contractVersion !== expectedVersion ||
+    output.validationContractVersion !== release.validationContractVersion
+  )
+    return false;
   const ownResolution = snapshot.definitions.filter(
     (definition) =>
       definition.kind === release.kind &&

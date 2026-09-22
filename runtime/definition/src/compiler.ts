@@ -4,7 +4,6 @@ import {
   applicationSourceDocumentV2Schema,
   applicationCompilationOutputV2Schema,
   applicationCompilationRequestV2Schema,
-  applicationDraftSchema,
   applicationDraftV2Schema,
   conditionNodeSchema,
   jsonValueSchema,
@@ -3886,8 +3885,8 @@ function compileApplication(
   resolution: Resolution,
   metadata: JsonObject,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
-  compositionV2?: MaterialisedApplicationCompositionV2,
-  suppliedValueIndex?: ApplicationModuleValueIndex,
+  compositionV2: MaterialisedApplicationCompositionV2,
+  valueIndex: ApplicationModuleValueIndex,
 ) {
   const body = asObject(source.body);
   const definitionKey = String(source.key);
@@ -3926,205 +3925,8 @@ function compileApplication(
       ...(fieldPolicy === undefined ? {} : { fieldPolicy }),
     };
   });
-  const valueIndex =
-    suppliedValueIndex ?? applicationModuleValueIndex(source, resolution, dependencyOutputs);
   const pageId = (alias: string) => resolution.id(definitionKey, "page", alias, "content");
-  const queryId = (alias: string) => resolution.id(definitionKey, "query", alias, "content");
-  const blockId = (alias: string) => resolution.id(definitionKey, "block", alias, "content");
-  const compileBlockSetting = (settingValue: unknown) => {
-    const setting = asObject(settingValue);
-    if (setting.kind === "literal" || setting.kind === "action_reference")
-      return setting.kind === "literal"
-        ? { kind: "literal", value: setting.value }
-        : { kind: "action_reference", actionKey: setting.action };
-    if (setting.kind === "field_reference")
-      return {
-        kind: "field_reference",
-        fieldId: qualifiedField(resolution, String(setting.field)),
-      };
-    if (setting.kind === "relationship_reference") {
-      const reference = String(setting.relationship);
-      const separator = reference.lastIndexOf(".");
-      if (separator < 1) fail("vortex.definition.qualified_field_required", "unresolved_reference");
-      return {
-        kind: "relationship_reference",
-        relationshipId: resolution.relationship(
-          reference.slice(0, separator),
-          reference.slice(separator + 1),
-        ),
-      };
-    }
-    if (setting.kind === "page_reference")
-      return { kind: "page_reference", pageId: pageId(String(setting.page)) };
-    if (setting.kind === "query_reference")
-      return { kind: "query_reference", queryId: queryId(String(setting.query)) };
-    if (setting.kind === "pipeline_reference")
-      return {
-        kind: "pipeline_reference",
-        pipelineId: resolution.id(definitionKey, "pipeline", String(setting.pipeline), "content"),
-      };
-    if (setting.kind === "record_type_reference")
-      return {
-        kind: "record_type_reference",
-        recordType: resolution.recordType(String(setting.record_type)),
-      };
-    if (setting.kind === "record_reference")
-      return {
-        kind: "record_reference",
-        recordType: resolution.recordType(String(setting.record_type)),
-        recordId: setting.record_id,
-      };
-    fail("vortex.definition.invalid_compilation_output", "unsupported_choice");
-  };
-  const placement = (input: JsonObject) => ({
-    placementId: resolution.id(definitionKey, "block_placement", String(input.id)),
-    blockId: blockId(String(input.block)),
-    blockReleaseVersion: input.block_release_version,
-    settings: objectFromUniqueEntries(
-      Object.entries(asObject(input.settings)).map(([key, value]) => [
-        key,
-        compileBlockSetting(value),
-      ]),
-    ),
-    desktop: {
-      startColumn: asObject(input.desktop).start_column,
-      span: asObject(input.desktop).span,
-      height: asObject(input.desktop).height,
-    },
-    phone: input.phone,
-    ...(input.visibility_condition
-      ? {
-          visibilityCondition: condition(
-            input.visibility_condition,
-            (reference) => qualifiedField(resolution, reference),
-            valueIndex.context(),
-          ),
-        }
-      : {}),
-    viewPermissionKey: input.view_permission,
-    ...(input.use_permission ? { usePermissionKey: input.use_permission } : {}),
-    ...(input.query ? { queryId: queryId(String(input.query)) } : {}),
-  });
-  const layout = (input: JsonObject) => ({
-    desktop: {
-      columns: 12,
-      componentOrder: (asObject(input.desktop).component_order as string[]).map((alias) =>
-        resolution.id(definitionKey, "block_placement", alias),
-      ),
-    },
-    phone: {
-      componentOrder: (asObject(input.phone).component_order as string[]).map((alias) =>
-        resolution.id(definitionKey, "block_placement", alias),
-      ),
-    },
-  });
-  const pagesV1 =
-    compositionV2 === undefined
-      ? (body.pages as JsonObject[]).map((page) => {
-          const base = {
-            pageId: resolution.id(definitionKey, "page", String(page.id), "content"),
-            key: page.key,
-            name: page.name,
-            accessPermissionKey: page.permission,
-            states: page.states,
-            layout: layout(asObject(page.layout)),
-            ...(page.standard_page_replacement
-              ? {
-                  standardPageReplacement: {
-                    standardPage: asObject(page.standard_page_replacement).standard_page,
-                    recordType: resolution.recordType(
-                      String(asObject(page.standard_page_replacement).record_type),
-                    ),
-                  },
-                }
-              : {}),
-          };
-          if (page.type === "list") {
-            const record = String(page.record_type);
-            const mapping = page.calendar_mapping ? asObject(page.calendar_mapping) : undefined;
-            return {
-              ...base,
-              type: "list",
-              recordType: resolution.recordType(record),
-              queryId: queryId(String(page.query)),
-              arrangements: page.arrangements,
-              ...(mapping
-                ? {
-                    calendarMapping:
-                      "end" in mapping
-                        ? {
-                            kind: "start_end",
-                            startFieldId: resolution.field(record, String(mapping.start)),
-                            endFieldId: resolution.field(record, String(mapping.end)),
-                          }
-                        : {
-                            kind: "start_duration",
-                            startFieldId: resolution.field(record, String(mapping.start)),
-                            durationFieldId: resolution.field(
-                              record,
-                              String(mapping.duration_field),
-                            ),
-                            durationUnit: mapping.duration_unit,
-                          },
-                  }
-                : {}),
-            };
-          }
-          if (page.type === "dashboard")
-            return {
-              ...base,
-              type: "dashboard",
-              blocks: (page.blocks as JsonObject[]).map(placement),
-            };
-          if (page.type === "detail")
-            return {
-              ...base,
-              type: "detail",
-              recordType: resolution.recordType(String(page.record_type)),
-              blocks: (page.blocks as JsonObject[]).map(placement),
-            };
-          if (page.type === "form")
-            return {
-              ...base,
-              type: "form",
-              recordType: resolution.recordType(String(page.record_type)),
-              commitActionKey: page.commit_action,
-              blocks: (page.blocks as JsonObject[]).map(placement),
-            };
-          if (page.type === "guided_form")
-            return {
-              ...base,
-              type: "guided_form",
-              recordType: resolution.recordType(String(page.record_type)),
-              commitActionKey: page.commit_action,
-              steps: (page.steps as JsonObject[]).map((step) => ({
-                id: resolution.id(definitionKey, "guided_step", String(step.id)),
-                name: step.name,
-                summary: step.summary,
-                blocks: (step.blocks as JsonObject[]).map(placement),
-              })),
-            };
-          return {
-            ...base,
-            type: "public",
-            ...(page.record_type
-              ? { recordType: resolution.recordType(String(page.record_type)) }
-              : {}),
-            publicFieldIds: page.record_type
-              ? (page.public_fields as string[]).map((alias) =>
-                  resolution.field(String(page.record_type), alias),
-                )
-              : [],
-            ...(page.public_action ? { publicActionKey: page.public_action } : {}),
-            blocks: (page.blocks as JsonObject[]).map(placement),
-            rateLimitPerMinute: page.rate_limit_per_minute,
-          };
-        })
-      : [];
-  const pages =
-    compositionV2 === undefined
-      ? pagesV1
-      : compileApplicationPagesV2(source, resolution, compositionV2);
+  const pages = compileApplicationPagesV2(source, resolution, compositionV2);
   const queries = (body.queries as JsonObject[]).map((query) => {
     const record = String(query.record_type);
     const valueContext = valueIndex.record(record)?.moduleV2
@@ -4157,7 +3959,7 @@ function compileApplication(
     .sort((left, right) => compareCanonicalStrings(String(left.key), String(right.key)));
   const wildcardPermissionKeys = wildcardPermissions.map((permission) => permission.key);
   const wildcardCatalogueFingerprint = fingerprintCanonicalValue(wildcardPermissions);
-  const canonical = (compositionV2 ? applicationDraftV2Schema : applicationDraftSchema).parse({
+  const canonical = applicationDraftV2Schema.parse({
     envelope: {
       kind: "application",
       rootId: root.rootId,
@@ -4228,26 +4030,8 @@ function compileApplication(
         };
       }),
       queries,
-      ...(compositionV2
-        ? {
-            platformBlockDependencies: compositionV2.platformBlockDependencies,
-            shells: compositionV2.shells,
-          }
-        : {
-            blockRegistrations: (body.block_registrations as JsonObject[]).map((block) => ({
-              blockId: resolution.id(definitionKey, "block", String(block.id), "content"),
-              releaseVersion: block.release_version,
-              name: block.name,
-              icon: block.icon,
-              paletteGroup: block.palette_group,
-              settings: block.settings,
-              allowedChildBlockIds: (block.allowed_child_blocks as string[]).map(blockId),
-              phoneBehaviour: block.phone_behaviour,
-              resizableHeight: block.resizable_height,
-              liveUpdate: block.live_update,
-              publicPage: block.public_page,
-            })),
-          }),
+      platformBlockDependencies: compositionV2.platformBlockDependencies,
+      shells: compositionV2.shells,
       pipelines: (body.pipelines as JsonObject[]).map((pipeline) => {
         const record = String(pipeline.record_type);
         const valueContext = valueIndex.record(record)?.moduleV2
@@ -4544,19 +4328,7 @@ function compileApplication(
         state: address.state,
         rateLimitPerMinute: address.rate_limit_per_minute,
       })),
-      theme:
-        compositionV2?.theme ??
-        (asObject(body.theme).mode === "application"
-          ? {
-              mode: "application",
-              lightAndDark: asObject(body.theme).light_and_dark,
-              tokens: asObject(body.theme).tokens,
-            }
-          : {
-              mode: "platform",
-              catalogueThemeId: asObject(body.theme).catalogue_theme_id,
-              version: asObject(body.theme).version,
-            }),
+      theme: compositionV2.theme,
       homePageId: pageId(String(body.home_page)),
     },
   });
@@ -4700,23 +4472,13 @@ function compileDefinitionInternal(
 
 function compileParsedLegacyRequest(
   request: ParsedLegacyRequest,
-  dependencyOutputs: readonly DefinitionCompilationOutput[],
+  _dependencyOutputs: readonly DefinitionCompilationOutput[],
 ): DefinitionCompilationOutput {
   const sourceDocument = request.source;
   const source = sourceDocument as unknown as JsonObject;
   try {
     const resolution = new Resolution(request.resolution, source);
-    let canonical: unknown;
-    if (source.kind === "application") {
-      if (!request.draftMetadata)
-        fail("vortex.definition.draft_metadata_required", "required_value");
-      canonical = compileApplication(
-        source,
-        resolution,
-        request.draftMetadata as unknown as JsonObject,
-        dependencyOutputs,
-      );
-    } else canonical = compileConnection(source, resolution);
+    const canonical: unknown = compileConnection(source, resolution);
     const ownDefinition = resolution.definition(sourceDocument.key, sourceDocument.kind);
     const canonicalObject = asObject(canonical);
     const artifact = {

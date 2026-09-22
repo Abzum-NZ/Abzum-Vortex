@@ -31,10 +31,8 @@ import {
   assertUnambiguousApplicationContent,
   assertUnambiguousApplicationContentV2,
   assertUnambiguousModuleContent,
-  compareApplicationContents,
   compareApplicationContentsV2,
   compareModuleContents,
-  normaliseApplicationContent,
   normaliseApplicationContentV2,
   normaliseModuleContent,
 } from "./comparison-policy";
@@ -69,13 +67,6 @@ export type DefinitionPublicationHistoryFold = {
 const activeHistoryFolds = new WeakSet<object>();
 const verifiedHistoryEvidence = new WeakSet<object>();
 const savedConditionEvidence = new WeakMap<object, SavedConditionRevisionFold>();
-
-const isApplicationV2Request = (
-  request: SupportedVersionImpactRequest,
-): request is ApplicationVersionImpactRequestV2 =>
-  request.kind === "application" &&
-  "validationContractVersion" in request &&
-  request.validationContractVersion === "2.0.0";
 
 const isApplicationV2Release = (
   release: PublishedApplicationDefinition,
@@ -360,11 +351,7 @@ const compareParsedDefinitionVersionImpact = (
 ): DefinitionVersionImpactResult => {
   if (
     unresolvedRecordTypeReferencePaths(
-      request.kind === "module"
-        ? moduleContentV3Schema
-        : isApplicationV2Request(request)
-          ? applicationContentV2Schema
-          : applicationContentSchema,
+      request.kind === "module" ? moduleContentV3Schema : applicationContentV2Schema,
       request.candidate.content,
     ).length > 0
   )
@@ -378,21 +365,14 @@ const compareParsedDefinitionVersionImpact = (
   const subject = subjectOf(request);
   const exactCandidateContentFingerprint = fingerprintCanonicalValue(request.candidate.content);
   if (request.kind === "module") assertUnambiguousModuleContent(request.candidate.content);
-  else if (isApplicationV2Request(request))
-    assertUnambiguousApplicationContentV2(request.candidate.content);
-  else assertUnambiguousApplicationContent(request.candidate.content);
+  else assertUnambiguousApplicationContentV2(request.candidate.content);
 
   const normalisedCandidate =
     request.kind === "module"
       ? normaliseModuleContent(request.candidate.content)
-      : isApplicationV2Request(request)
-        ? normaliseApplicationContentV2(request.candidate.content)
-        : normaliseApplicationContent(request.candidate.content);
-  const policyVersion = isApplicationV2Request(request)
-    ? applicationVersionImpactPolicyVersionV2
-    : request.kind === "module"
-      ? moduleVersionImpactPolicyVersionV3
-      : versionImpactPolicyVersion;
+      : normaliseApplicationContentV2(request.candidate.content);
+  const policyVersion =
+    request.kind === "module" ? moduleVersionImpactPolicyVersionV3 : applicationVersionImpactPolicyVersionV2;
 
   if (latest === undefined) {
     const resultWithoutFingerprint = {
@@ -426,9 +406,8 @@ const compareParsedDefinitionVersionImpact = (
     reasons = compareModuleContents(comparablePrevious, comparableCandidate);
   } else {
     const latestApplication = latest! as PublishedApplicationDefinition;
-    const candidateV2 = isApplicationV2Request(request);
     const latestV2 = isApplicationV2Release(latestApplication);
-    representationChanged = candidateV2 !== latestV2;
+    representationChanged = !latestV2;
     if (representationChanged) {
       normalisedPrevious = latestApplication.content;
       reasons = [
@@ -441,21 +420,14 @@ const compareParsedDefinitionVersionImpact = (
           },
         },
       ];
-    } else if (candidateV2 && latestV2) {
+    } else {
       normalisedPrevious = normaliseApplicationContentV2(latestApplication.content);
       assertUnambiguousApplicationContentV2(latestApplication.content);
       reasons = compareApplicationContentsV2(
         normalisedPrevious as ReturnType<typeof normaliseApplicationContentV2>,
         normalisedCandidate as ReturnType<typeof normaliseApplicationContentV2>,
       );
-    } else if (!candidateV2 && !latestV2) {
-      normalisedPrevious = normaliseApplicationContent(latestApplication.content);
-      assertUnambiguousApplicationContent(latestApplication.content);
-      reasons = compareApplicationContents(
-        normalisedPrevious as ReturnType<typeof normaliseApplicationContent>,
-        normalisedCandidate as ReturnType<typeof normaliseApplicationContent>,
-      );
-    } else return refuseVersionImpact("invalid_history");
+    }
   }
   if (
     !representationChanged &&

@@ -1,5 +1,4 @@
 import {
-  applicationDraftSchema,
   applicationDraftV2Schema,
   applicationSourceDocumentV2Schema,
   applicationCompilationRequestV2Schema,
@@ -155,9 +154,7 @@ const canonicalValueWalker = (context: DefinitionSetValidationContext) =>
         output.kind === "module"
           ? moduleDraftV3Schema
           : output.kind === "application"
-            ? "validationContractVersion" in output
-              ? applicationDraftV2Schema
-              : applicationDraftSchema
+            ? applicationDraftV2Schema
             : connectionTypeSchema,
       value: output.canonical,
     })),

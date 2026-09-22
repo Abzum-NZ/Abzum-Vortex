@@ -1,10 +1,6 @@
 import { z } from "zod";
 import { correlationIdSchema } from "./common";
-import {
-  applicationSourceDocumentV1Schema,
-  applicationSourceDocumentV2Schema,
-  moduleSourceDocumentSchema,
-} from "./definition-source";
+import { applicationSourceDocumentV2Schema, moduleSourceDocumentSchema } from "./definition-source";
 import {
   actorIdSchema,
   applicationRootIdSchema,
@@ -25,10 +21,7 @@ import {
   versionImpactSchema,
 } from "./version-impact";
 
-export const storedApplicationSourceDocumentSchema = z.discriminatedUnion(
-  "source_contract_version",
-  [applicationSourceDocumentV1Schema, applicationSourceDocumentV2Schema],
-);
+export const storedApplicationSourceDocumentSchema = applicationSourceDocumentV2Schema;
 export const storedModuleSourceDocumentSchema = moduleSourceDocumentSchema;
 export const storedDefinitionSourceSchema = z.union([
   storedModuleSourceDocumentSchema,

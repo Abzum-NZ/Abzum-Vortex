@@ -252,7 +252,6 @@ type Requirement = Readonly<{ key: string; version: VersionRequirement }>;
 type ResolvedDependencies = Readonly<{
   modules: readonly ResolvableModuleRelease[];
   connections: readonly ResolvableConnectionTypeRelease[];
-  theme?: ResolvablePlatformThemeRelease;
   compositionV2?: ApplicationCompositionCatalogueSnapshotV2;
 }>;
 
@@ -690,37 +689,7 @@ const resolveDependencies = async (
     connections.push(resolvedRelease);
   }
 
-  let theme: ResolvablePlatformThemeRelease | undefined;
   let compositionV2: ApplicationCompositionCatalogueSnapshotV2 | undefined;
-  if (
-    candidate.draft.source.kind === "application" &&
-    candidate.draft.source.source_contract_version === "1.0.0" &&
-    candidate.draft.source.body.theme.mode === "platform"
-  ) {
-    const requested = candidate.draft.source.body.theme;
-    const exact =
-      pinned === undefined
-        ? undefined
-        : findPinned(pinned, "platform_theme", requested.catalogue_theme_id);
-    if (exact !== undefined && exact.releaseVersion !== requested.version)
-      refuse("DEFINITION_CONFIRMATION_MISMATCH");
-    theme = await catalogue.readPlatformThemeRelease(
-      requested.catalogue_theme_id,
-      requested.version,
-    );
-    if (theme === undefined) refuse("DEFINITION_DEPENDENCY_MISSING");
-    const resolvedTheme = theme as ResolvablePlatformThemeRelease;
-    if (
-      resolvedTheme.catalogueThemeId !== requested.catalogue_theme_id ||
-      resolvedTheme.releaseVersion !== requested.version ||
-      !stable(resolvedTheme.releaseVersion) ||
-      (exact !== undefined &&
-        (resolvedTheme.contentFingerprint !== exact.contentFingerprint ||
-          resolvedTheme.catalogueFingerprint !== exact.catalogueFingerprint))
-    )
-      refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
-    theme = resolvedTheme;
-  }
   if (
     candidate.draft.source.kind === "application" &&
     candidate.draft.source.source_contract_version === "2.0.0"
@@ -734,7 +703,6 @@ const resolveDependencies = async (
   const expectedSubjects = [
     ...modules.map((release) => `module:${release.key}`),
     ...connections.map((release) => `connection_type:${release.key}`),
-    ...(theme === undefined ? [] : [`platform_theme:${theme.catalogueThemeId}`]),
     ...(compositionV2 === undefined
       ? []
       : [
@@ -753,7 +721,6 @@ const resolveDependencies = async (
   return {
     modules,
     connections,
-    ...(theme === undefined ? {} : { theme }),
     ...(compositionV2 === undefined ? {} : { compositionV2 }),
   };
 };
@@ -819,17 +786,6 @@ const manifestFor = (dependencies: ResolvedDependencies): ExactDefinitionDepende
       contentFingerprint: release.contentFingerprint,
       catalogueFingerprint: release.catalogueFingerprint,
     })),
-    ...(dependencies.theme === undefined
-      ? []
-      : [
-          {
-            kind: "platform_theme" as const,
-            catalogueThemeId: dependencies.theme.catalogueThemeId,
-            releaseVersion: dependencies.theme.releaseVersion,
-            contentFingerprint: dependencies.theme.contentFingerprint,
-            catalogueFingerprint: dependencies.theme.catalogueFingerprint,
-          },
-        ]),
     ...(dependencies.compositionV2 === undefined
       ? []
       : [
@@ -1105,8 +1061,6 @@ const compileCandidate = (
   }
   if (resolution.contractVersion !== "1.0.0") return refuse("DEFINITION_COMPILATION_REFUSED");
   const source = candidate.draft.source;
-  if (source.kind === "application" && source.source_contract_version !== "1.0.0")
-    return refuse("DEFINITION_COMPILATION_REFUSED");
   const request = {
     source,
     resolution,

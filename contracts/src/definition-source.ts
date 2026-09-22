@@ -1,9 +1,6 @@
 import { z } from "zod";
 import {
-  applicationSourceDocumentSchema,
-  applicationSourceDocumentV1Schema,
   applicationSourceDocumentV2Schema,
-  sourceBlockSettingValueSchema,
   sourceApplicationBodyV2Schema,
   sourcePageDefinitionV2Schema,
 } from "./application-source-contracts";
@@ -42,12 +39,9 @@ export const assertModuleContractPair = (
 };
 
 export {
-  applicationSourceDocumentSchema,
-  applicationSourceDocumentV1Schema,
   applicationSourceDocumentV2Schema,
   connectionTypeSourceDocumentSchema,
   moduleSourceDocumentSchema,
-  sourceBlockSettingValueSchema,
   sourceApplicationBodyV2Schema,
   sourcePageDefinitionV2Schema,
   sourceConditionSchema,
@@ -56,11 +50,11 @@ export {
 
 export const definitionSourceDocumentSchema = z.discriminatedUnion("kind", [
   moduleSourceDocumentSchema,
-  applicationSourceDocumentSchema,
+  applicationSourceDocumentV2Schema,
   connectionTypeSourceDocumentSchema,
 ]);
 
-export type ApplicationSourceDocument = z.infer<typeof applicationSourceDocumentSchema>;
+export type ApplicationSourceDocument = z.infer<typeof applicationSourceDocumentV2Schema>;
 export type ConnectionTypeSourceDocument = z.infer<typeof connectionTypeSourceDocumentSchema>;
 export type DefinitionSourceDocument = z.infer<typeof definitionSourceDocumentSchema>;
 export type {
