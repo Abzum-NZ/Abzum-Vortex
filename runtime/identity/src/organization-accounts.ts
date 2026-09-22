@@ -275,6 +275,13 @@ export const createOrganizationAccountStore = (
     ): Promise<OffboardingInventoryResult> {
       return executeListOffboardingOwnedRecords(transaction, query);
     },
+
+    async transferOffboardingOwnedRecords(
+      transaction: RequestDatabaseTransaction,
+      command: OffboardingTransferBatchCommand,
+    ): Promise<OffboardingTransferBatchResult> {
+      return executeTransferOffboardingOwnedRecords(transaction, command);
+    },
   });
 };
 
@@ -386,7 +393,49 @@ export interface OffboardingInventoryResult {
   readonly next?: OffboardingInventoryCursor & { readonly token: string };
 }
 
+/**
+ * A batch is addressed by the same keyset and target that its preview uses.
+ * `commandId` is stable for a retry of this batch; item command, Activity and
+ * Event identities are derived from it and the exact previewed record, so a
+ * retry reuses the same protected receipt instead of repeating an effect. A
+ * record whose revision, target or protected entry differs from the attempt
+ * that already used its derived command identity is refused, never transferred
+ * twice.
+ */
+export interface OffboardingTransferBatchCommand extends OffboardingInventoryQuery {
+  readonly commandId: string;
+}
+
+export type OffboardingTransferBatchRecordOutcome = "completed" | "conflicted" | "refused";
+
+export interface OffboardingTransferBatchRecordResult {
+  readonly storageContractId: string;
+  readonly recordTypeId: string;
+  readonly recordId: string;
+  readonly outcome: OffboardingTransferBatchRecordOutcome;
+  readonly concurrencyNumber?: number;
+}
+
+export interface OffboardingTransferBatchResult {
+  readonly outcome: "processed";
+  /** The preview's admitted access version for this bounded batch. */
+  readonly accessVersion: number;
+  readonly items: readonly OffboardingTransferBatchRecordResult[];
+  /**
+   * True when the disclosed walk had no further page. It does not assert that
+   * the account now owns nothing: refused and conflicted records of this and
+   * earlier pages remain owned, records hidden from this administrator stay
+   * concealed, and only the protected deletion fence decides that none remain.
+   */
+  readonly complete: boolean;
+  readonly next?: OffboardingInventoryCursor & { readonly token: string };
+}
+
 interface OffboardingInventorySqlRow extends DatabaseRow {
+  readonly result: unknown;
+}
+
+interface OffboardingTransferSqlRow extends DatabaseRow {
   readonly result: unknown;
 }
 
@@ -397,6 +446,10 @@ interface OffboardingInventorySelector {
   readonly sectionKind: OffboardingInventorySectionKind;
   readonly after: OffboardingInventoryCursor | undefined;
   readonly limit: number;
+}
+
+interface OffboardingTransferBatchSelector {
+  readonly commandId: string;
 }
 
 interface OffboardingInventorySection {
@@ -534,6 +587,32 @@ const readInventorySelector = (query: unknown): OffboardingInventorySelector => 
     limit:
       typeof fields.limit === "number" ? fields.limit : offboardingInventoryPageLimit,
   };
+};
+
+const readTransferBatchSelector = (command: unknown): OffboardingTransferBatchSelector => {
+  if (typeof command !== "object" || command === null || Array.isArray(command))
+    return invalidCommand();
+  return { commandId: commandUuid((command as Record<string, unknown>).commandId) };
+};
+
+const derivedBatchItemId = (
+  batchCommandId: string,
+  item: OffboardingOwnedRecordItem,
+  purpose: "command" | "activity" | "occurrence",
+): string => {
+  const bytes = Buffer.from(
+    createHash("sha256")
+      .update(`${batchCommandId}:${item.recordTypeId}:${item.recordId}:${purpose}`, "utf8")
+      .digest()
+      .subarray(0, 16),
+  );
+  // Make the digest a RFC 4122 variant, version-5-shaped UUID. The batch
+  // command is caller-provided and stable, so replays use the same protected
+  // receipt, Activity and Event identities for this exact record.
+  bytes[6] = (bytes[6] & 0x0f) | 0x50;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
 
 const querySqlSection = async (
@@ -811,6 +890,128 @@ const executeListOffboardingOwnedRecords = async (
   }
 };
 
+const transferBatchItem = async (
+  transaction: RequestDatabaseTransaction,
+  batchCommandId: string,
+  selector: OffboardingInventorySelector,
+  accessVersion: number,
+  item: OffboardingOwnedRecordItem,
+): Promise<OffboardingTransferBatchRecordResult> => {
+  const base = {
+    storageContractId: item.storageContractId,
+    recordTypeId: item.recordTypeId,
+    recordId: item.recordId,
+  } as const;
+
+  // The inventory already records why this item is incompatible. In particular,
+  // Group targets and removal-pending rows never enter the mutable path.
+  if (item.classification !== "transferable") return { ...base, outcome: "refused" };
+
+  const commandId = derivedBatchItemId(batchCommandId, item, "command");
+  const activityId = derivedBatchItemId(batchCommandId, item, "activity");
+  const occurrenceId = derivedBatchItemId(batchCommandId, item, "occurrence");
+
+  // One protected ownership action with two entries. Its retained/offboarding
+  // path exists for a retained row or a disabled installation and refuses an
+  // ordinary active record of an active installation, so the batch routes each
+  // disclosed record to the entry that owns it. The disclosed facts choose the
+  // entry and nothing else: each entry independently reloads lifecycle,
+  // installation, ownership, authority, target and revision, so a route that no
+  // longer matches the stored row refuses instead of transferring it.
+  const rows =
+    item.installationState === "active" && item.lifecycleState === "active"
+      ? await transaction.query<OffboardingTransferSqlRow>`
+          select vortex_record.transfer_offboarding_active_owned_record(
+            ${commandId}::uuid,
+            ${item.recordTypeId}::uuid,
+            ${item.recordId}::uuid,
+            ${item.concurrencyNumber}::bigint,
+            ${selector.targetKind}::text,
+            ${selector.targetId}::uuid,
+            ${activityId}::uuid,
+            ${occurrenceId}::uuid,
+            ${accessVersion}::bigint
+          ) as result
+        `
+      : await transaction.query<OffboardingTransferSqlRow>`
+          select vortex_record.transfer_offboarding_owned_record(
+            ${commandId}::uuid,
+            ${item.recordTypeId}::uuid,
+            ${item.recordId}::uuid,
+            ${item.concurrencyNumber}::bigint,
+            ${selector.targetKind}::text,
+            ${selector.targetId}::uuid,
+            ${activityId}::uuid,
+            ${occurrenceId}::uuid,
+            ${selector.sourceOrganizationAccountId}::uuid,
+            ${accessVersion}::bigint
+          ) as result
+        `;
+  const raw = requireOne(rows).result;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) invalidResult();
+  const result = raw as Record<string, unknown>;
+
+  if (result.outcome === "transferred") {
+    if (resultUuid(result.recordId) !== item.recordId) invalidResult();
+    return {
+      ...base,
+      outcome: "completed",
+      concurrencyNumber: resultStoredInteger(result.concurrencyNumber),
+    };
+  }
+  if (result.outcome === "conflict") {
+    return {
+      ...base,
+      outcome: "conflicted",
+      ...(result.concurrencyNumber === undefined
+        ? {}
+        : { concurrencyNumber: resultStoredInteger(result.concurrencyNumber) }),
+    };
+  }
+  if (result.outcome === "refused" || result.outcome === "refused_recorded")
+    return { ...base, outcome: "refused" };
+  return invalidResult();
+};
+
+const executeTransferOffboardingOwnedRecords = async (
+  transaction: RequestDatabaseTransaction,
+  command: unknown,
+): Promise<OffboardingTransferBatchResult> => {
+  const batch = readTransferBatchSelector(command);
+  const selector = readInventorySelector(command);
+
+  try {
+    // Read a single bounded #563 page first. Each protected entry below
+    // re-admits the offboarding scope and this page's access version for every
+    // mutable item, while the fixed operation behind it rechecks installation,
+    // lifecycle, ownership, transfer authority, target state and this exact
+    // expected revision. Nothing outside this disclosed page is touched.
+    const inventory = await executeListOffboardingOwnedRecords(transaction, command);
+    const items: OffboardingTransferBatchRecordResult[] = [];
+    for (const item of inventory.items) {
+      items.push(
+        await transferBatchItem(
+          transaction,
+          batch.commandId,
+          selector,
+          inventory.accessVersion,
+          item,
+        ),
+      );
+    }
+    return {
+      outcome: "processed",
+      accessVersion: inventory.accessVersion,
+      items,
+      complete: inventory.complete,
+      ...(inventory.next === undefined ? {} : { next: inventory.next }),
+    };
+  } catch (error) {
+    if (error instanceof OrganizationAccountError) throw error;
+    throw mapStorageFailure(error);
+  }
+};
+
 const defaultStore = createOrganizationAccountStore();
 
 export const ensureIdentityProjection = defaultStore.ensureIdentityProjection;
@@ -818,3 +1019,4 @@ export const readIdentityProjection = defaultStore.readIdentityProjection;
 export const createInvitationAfterAuthorization = defaultStore.createInvitationAfterAuthorization;
 export const revokeInvitationAfterAuthorization = defaultStore.revokeInvitationAfterAuthorization;
 export const listOffboardingOwnedRecords = defaultStore.listOffboardingOwnedRecords;
+export const transferOffboardingOwnedRecords = defaultStore.transferOffboardingOwnedRecords;
