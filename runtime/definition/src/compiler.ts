@@ -191,11 +191,16 @@ const sourceCollectionIdKeys: Readonly<Record<string, string>> = Object.freeze({
   steps: "id",
   workflows: "workflowId",
   nodes: "nodeId",
+  edges: "edgeId",
   pipelines: "pipelineId",
   connection_bindings: "bindingId",
   interfaces: "interfaceId",
   operations: "operationId",
   public_addresses: "addressId",
+  flows: "flowId",
+  flow_nodes: "nodeId",
+  flow_edges: "edgeId",
+  flow_bindings: "bindingId",
 });
 
 const directSourceKeyMap: Readonly<Record<string, string>> = Object.freeze({
@@ -431,6 +436,38 @@ function sourceToCanonicalPath(
     sourcePath[6] === "relationships"
   )
     mapped[6] = "relationshipIds";
+  if (
+    source.kind === "application" &&
+    sourcePath[0] === "body" &&
+    sourcePath[1] === "flows"
+  ) {
+    const leaf = sourcePath.at(-1);
+    const recordTypesIndex = sourcePath.lastIndexOf("record_types");
+    if (recordTypesIndex >= 0) mapped[recordTypesIndex] = "recordTypeIds";
+    if (sourcePath[3] === "nodes" && sourcePath[5] === "target") {
+      if (leaf === "module") mapped[mapped.length - 1] = "moduleRootId";
+      if (leaf === "version") mapped[mapped.length - 1] = "moduleReleaseVersion";
+      if (leaf === "form") mapped[mapped.length - 1] = "formId";
+      if (leaf === "continuation_event") mapped[mapped.length - 1] = "continuationEventId";
+    }
+    if (sourcePath[3] === "edges") {
+      if (leaf === "from_node") mapped[mapped.length - 1] = "fromNodeId";
+      if (leaf === "to_node") mapped[mapped.length - 1] = "toNodeId";
+    }
+  }
+  if (
+    source.kind === "application" &&
+    sourcePath[0] === "body" &&
+    sourcePath[1] === "flow_bindings"
+  ) {
+    const leaf = sourcePath.at(-1);
+    if (sourcePath[3] === "control") mapped[mapped.length - 1] = "controlId";
+    if (sourcePath[3] === "flow" && leaf === "flow") mapped[mapped.length - 1] = "flowId";
+    if (sourcePath[3] === "event") mapped[mapped.length - 1] = "event";
+    if (leaf === "record_type") mapped[mapped.length - 1] = "recordTypeId";
+    if (leaf === "control") mapped[mapped.length - 1] = "controlId";
+    if (leaf === "form") mapped[mapped.length - 1] = "formId";
+  }
   return resolveDynamicMapPath(source, canonical, sourcePath, mapped);
 }
 
@@ -560,6 +597,19 @@ function conditionRootPaths(
       sourceRoot: ["body", "workflows", first, "trigger", "condition"],
       canonicalRoot: ["content", "workflows", first, "trigger", "condition"],
     });
+  if (
+    collection === "flows" &&
+    sourcePath[3] === "nodes" &&
+    typeof sourcePath[4] === "number"
+  ) {
+    const flow = (asObject(source.body).flows as JsonObject[])[first];
+    const node = flow ? (flow.nodes as JsonObject[])[sourcePath[4]] : undefined;
+    if (node?.kind === "start")
+      fixedRoots.push({
+        sourceRoot: ["body", "flows", first, "nodes", sourcePath[4], "entry_condition"],
+        canonicalRoot: ["content", "flows", first, "nodes", sourcePath[4], "entryCondition"],
+      });
+  }
   if (collection === "pages") {
     if (sourcePath[3] === "blocks" && typeof sourcePath[4] === "number")
       fixedRoots.push({
@@ -806,6 +856,73 @@ function permissionFieldPolicyTargets(
   ];
 }
 
+function applicationFlowSourceTargets(
+  source: JsonObject,
+  sourcePath: Path,
+): Path[] | undefined {
+  if (source.kind !== "application" || sourcePath[0] !== "body") return undefined;
+  if (sourcePath[1] === "flows" && typeof sourcePath[2] === "number") {
+    const flowBase: Path = ["content", "flows", sourcePath[2]];
+    if (
+      ["inputs", "outputs", "variables"].includes(String(sourcePath[3])) &&
+      typeof sourcePath[4] === "string" &&
+      sourcePath[5] === "record_types" &&
+      typeof sourcePath[6] === "number"
+    )
+      return [
+        [
+          ...flowBase,
+          sourcePath[3],
+          sourcePath[4],
+          "recordTypeIds",
+          sourcePath[6],
+        ],
+      ];
+    if (
+      sourcePath[3] === "nodes" &&
+      typeof sourcePath[4] === "number" &&
+      sourcePath[5] === "outputs" &&
+      typeof sourcePath[6] === "string" &&
+      sourcePath[7] === "record_types" &&
+      typeof sourcePath[8] === "number"
+    )
+      return [
+        [
+          ...flowBase,
+          "nodes",
+          sourcePath[4],
+          "outputs",
+          sourcePath[6],
+          "recordTypeIds",
+          sourcePath[8],
+        ],
+      ];
+    if (
+      sourcePath[3] === "nodes" &&
+      typeof sourcePath[4] === "number" &&
+      sourcePath[5] === "target"
+    ) {
+      const targetBase: Path = [...flowBase, "nodes", sourcePath[4], "target"];
+      if (sourcePath[6] === "version") return [[...targetBase, "moduleReleaseVersion"]];
+      if (sourcePath.length === 7 && sourcePath[6] === "form")
+        return [[...targetBase, "applicationRootId"], [...targetBase, "formId"]];
+      if (sourcePath.length === 7 && sourcePath[6] === "workflow")
+        return [[...targetBase, "applicationRootId"], [...targetBase, "workflowId"]];
+    }
+  }
+  if (
+    sourcePath[1] === "flow_bindings" &&
+    typeof sourcePath[2] === "number" &&
+    sourcePath[3] === "flow" &&
+    sourcePath.length === 5 &&
+    sourcePath[4] === "flow"
+  ) {
+    const targetBase: Path = ["content", "flowBindings", sourcePath[2], "flow"];
+    return [[...targetBase, "applicationRootId"], [...targetBase, "flowId"]];
+  }
+  return undefined;
+}
+
 function explicitSourceTargets(
   source: JsonObject,
   canonical: unknown,
@@ -813,6 +930,8 @@ function explicitSourceTargets(
   positions: SourceContractPositions,
   resolution: Resolution,
 ): Path[] | undefined {
+  const flowTargets = applicationFlowSourceTargets(source, sourcePath);
+  if (flowTargets) return flowTargets;
   const fieldPolicyTargets = permissionFieldPolicyTargets(
     source,
     canonical,
@@ -1501,6 +1620,17 @@ const applicationSourceTransformPatterns = [
   /^body\/rules\/#\/effect\/(?:field|message|component|workflow|reason_code)$/,
   /^body\/rules\/#\/effect\/value(?:\/.*)?$/,
   /^body\/pipelines\/#\/stages\/#\/(?:entry_actions|exit_actions)\/#$/,
+  /^body\/flows\/#\/id$/,
+  /^body\/flows\/#\/(?:inputs|outputs|variables)\/[^/]+\/(?:record_types\/#|default_value(?:\/.*)?)$/,
+  /^body\/flows\/#\/nodes\/#\/outputs\/[^/]+\/record_types\/#$/,
+  /^body\/flows\/#\/nodes\/#\/id$/,
+  /^body\/flows\/#\/nodes\/#\/target\/(?:module|version(?:\/.*)?|query|form|continuation_event|workflow|action)$/,
+  /^body\/flows\/#\/nodes\/#\/(?:inputs|results)\/[^/]+\/(?:type|output|value\/(?:source|node|input|variable|value)(?:\/.*)?)$/,
+  /^body\/flows\/#\/nodes\/#\/results\/[^/]+\/(?:source|node|input|variable|value)(?:\/.*)?$/,
+  /^body\/flows\/#\/edges\/#\/(?:id|from_node|to_node)$/,
+  /^body\/flow_bindings\/#\/(?:id|control|event_id)$/,
+  /^body\/flow_bindings\/#\/flow\/(?:flow|flow_id|release_version)$/,
+  /^body\/flow_bindings\/#\/inputs\/[^/]+\/value\/(?:control|form|record_type|relationship|field)(?:\/.*)?$/,
 ] as const;
 
 const connectionSourceTransformPatterns = [
@@ -1531,6 +1661,7 @@ const conditionSourcePathPatterns = [
   "body/workflows/#/trigger/condition",
   "body/pages/#/blocks/#/visibility_condition",
   "body/pages/#/steps/#/blocks/#/visibility_condition",
+  "body/flows/#/nodes/#/entry_condition",
 ].map(conditionSourcePathPattern);
 const workflowConditionNodePathPattern = conditionSourcePathPattern(
   "body/workflows/#/nodes/#/config",
@@ -1630,6 +1761,18 @@ function sourceResolvesIdentity(sourcePath: Path, positions: SourceContractPosit
   );
 }
 
+function applicationFlowSourceResolvesIdentity(sourcePath: Path): boolean {
+  const path = sourcePath.map((segment) => (typeof segment === "number" ? "#" : segment)).join("/");
+  return (
+    /^body\/flows\/#\/(?:id|(?:inputs|outputs|variables)\/[^/]+\/record_types\/#)$/.test(path) ||
+    /^body\/flows\/#\/nodes\/#\/outputs\/[^/]+\/record_types\/#$/.test(path) ||
+    /^body\/flows\/#\/nodes\/#\/(?:id|target\/(?:module|version(?:\/.*)?|query|form|continuation_event|workflow)|(?:inputs|results)\/[^/]+\/value\/node)$/.test(path) ||
+    /^body\/flows\/#\/edges\/#\/(?:id|from_node|to_node)$/.test(path) ||
+    /^body\/flow_bindings\/#\/(?:id|control|event_id|flow\/flow)$/.test(path) ||
+    /^body\/flow_bindings\/#\/inputs\/[^/]+\/value\/(?:control|form|record_type|relationship|field)$/.test(path)
+  );
+}
+
 function recordScopeSourceResolvesIdentity(sourcePath: Path): boolean {
   const normalized = sourcePath.map((segment) => (typeof segment === "number" ? "#" : segment));
   const path = normalized.join("/");
@@ -1670,6 +1813,10 @@ function isFixedWorkflowDefaultPath(path: Path): boolean {
     /\.nodes\.\d+\.(?:timeoutSeconds|duplicateProtection|activityKey|redaction)$/.test(joined) ||
     /\.nodes\.\d+\.retry\./.test(joined)
   );
+}
+
+function isFixedApplicationFlowDefaultPath(path: Path): boolean {
+  return /^content\.flowBindings\.\d+\.contractVersion$/.test(path.join("."));
 }
 
 type SourceProvenanceMapping = {
@@ -1713,7 +1860,8 @@ function provenanceFor(
     const resolved =
       sourceResolvesIdentity(sourcePath, positions) ||
       recordScopeSourceResolvesIdentity(sourcePath) ||
-      fieldPolicySourceResolvesIdentity(sourcePath);
+      fieldPolicySourceResolvesIdentity(sourcePath) ||
+      applicationFlowSourceResolvesIdentity(sourcePath);
     const transformTargets = explicitTargets
       ? explicitTargets.map((target) =>
           applicationTypedValueTarget(sourceObject, sourcePath, target, canonicalLeafSet),
@@ -1777,7 +1925,13 @@ function provenanceFor(
       canonicalPath.at(-1) === "publishedRevision" ||
       canonicalPath.at(-1) === "contractFingerprint";
     const isFixedWorkflowDefault = isFixedWorkflowDefaultPath(canonicalPath);
-    if (isSystem || isPublicationMetadata || isFixedWorkflowDefault) {
+    const isFixedApplicationFlowDefault = isFixedApplicationFlowDefaultPath(canonicalPath);
+    if (
+      isSystem ||
+      isPublicationMetadata ||
+      isFixedWorkflowDefault ||
+      isFixedApplicationFlowDefault
+    ) {
       entries.push({
         canonicalPath,
         origin: isSystem || isPublicationMetadata ? "system_metadata" : "fixed_default",
@@ -1962,12 +2116,18 @@ class Resolution {
       role: "role",
       connection_binding: "connection",
       interface: "interface",
+      flow: "flow",
+      flow_node: "flow_node",
+      flow_edge: "flow_edge",
+      flow_binding: "flow_binding",
     };
     const segments = [...this.sourceLocation.segments];
     if (scope?.startsWith("record:"))
       segments.push({ kind: "record_type", key: scope.slice("record:".length) });
     else if (scope?.startsWith("workflow:"))
       segments.push({ kind: "workflow", key: scope.slice("workflow:".length) });
+    else if (scope?.startsWith("flow:"))
+      segments.push({ kind: "flow", key: scope.slice("flow:".length) });
     const componentKind = componentKinds[kind];
     if (componentKind) segments.push({ kind: componentKind, key });
     return { ...this.sourceLocation, segments };
@@ -4371,9 +4531,435 @@ function compileApplication(
       })),
       theme: compositionV2.theme,
       homePageId: pageId(String(body.home_page)),
+      flows: compileApplicationFlows(source, resolution, valueIndex),
+      flowBindings: compileApplicationFlowBindings(source, resolution),
     },
   });
   return canonical;
+}
+
+function compileApplicationFlows(
+  source: JsonObject,
+  resolution: Resolution,
+  valueIndex: ApplicationModuleValueIndex,
+): JsonObject[] {
+  const body = asObject(source.body);
+  const definitionKey = String(source.key);
+  const rawFlows = body.flows as JsonObject[];
+  return rawFlows.map((flow) => {
+    const flowId = resolution.id(definitionKey, "flow", String(flow.id), "content");
+    const flowScope = `flow:${flow.key}`;
+
+    const compileFlowValueDeclaration = (decl: JsonObject): JsonObject => ({
+      type: decl.type,
+      required: Boolean(decl.required),
+      ...(decl.record_types
+        ? {
+            recordTypeIds: (decl.record_types as string[]).map(
+              (rt) => resolution.recordType(rt).recordTypeId,
+            ),
+          }
+        : {}),
+    });
+
+    const compileFlowVariableDeclaration = (decl: JsonObject): JsonObject => ({
+      key: decl.key,
+      ...(decl.name ? { name: decl.name } : {}),
+      type: decl.type,
+      ...(decl.record_types
+        ? {
+            recordTypeIds: (decl.record_types as string[]).map(
+              (rt) => resolution.recordType(rt).recordTypeId,
+            ),
+          }
+        : {}),
+      ...(decl.default_value !== undefined
+        ? { defaultValue: decl.default_value }
+        : {}),
+    });
+
+    const compileNodeInputValue = (value: JsonObject): JsonObject => {
+      if (value.source === "literal") return { source: "literal", value: value.value };
+      if (value.source === "flow_input") return { source: "flow_input", input: value.input };
+      if (value.source === "flow_variable") return { source: "flow_variable", variable: value.variable };
+      if (value.source === "node_output") {
+        const nodeId = resolution.id(definitionKey, "flow_node", String(value.node), flowScope);
+        return { source: "node_output", nodeId, output: value.output };
+      }
+      return { source: "current_organization_account_id" };
+    };
+
+    const compileNodeInputBinding = (binding: JsonObject): JsonObject => ({
+      type: binding.type,
+      value: compileNodeInputValue(asObject(binding.value)),
+    });
+
+    const compileNode = (node: JsonObject): JsonObject => {
+      const nodeId = resolution.id(definitionKey, "flow_node", String(node.id), flowScope);
+      const base = {
+        nodeId,
+        key: node.key,
+        kind: node.kind,
+        ...(node.label ? { label: node.label } : {}),
+      };
+
+      if (node.kind === "start") {
+        return {
+          ...base,
+          runAs: { kind: "current_user" },
+          ...(node.entry_condition
+            ? {
+                entryCondition: condition(
+                  node.entry_condition,
+                  (reference) => qualifiedField(resolution, reference),
+                  valueIndex.context(),
+                ),
+              }
+            : {}),
+          outputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.outputs ?? {})).map(([k, v]) => [
+              k,
+              compileFlowValueDeclaration(asObject(v)),
+            ]),
+          ),
+        };
+      }
+
+      if (node.kind === "query") {
+        const target = asObject(node.target);
+        let compiledTarget: JsonObject;
+        if (target.kind === "application_query") {
+          compiledTarget = {
+            kind: "application_query",
+            queryId: resolution.id(definitionKey, "query", String(target.query), "content"),
+          };
+        } else {
+          const moduleKey = String(target.module);
+          const requirement = target.version as Parameters<typeof compatibleVersion>[0];
+          const modDef = resolution.definition(moduleKey, "module");
+          compiledTarget = {
+            kind: "query",
+            moduleRootId: modDef.rootId,
+            moduleReleaseVersion: exactVersion(resolution, moduleKey, "module", requirement),
+            queryId: resolution.id(moduleKey, "query", String(target.query), "content"),
+          };
+        }
+        return {
+          ...base,
+          target: compiledTarget,
+          runAs: { kind: "current_user" },
+          inputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.inputs ?? {})).map(([k, v]) => [
+              k,
+              compileNodeInputBinding(asObject(v)),
+            ]),
+          ),
+          outputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.outputs ?? {})).map(([k, v]) => [
+              k,
+              compileFlowValueDeclaration(asObject(v)),
+            ]),
+          ),
+          results: node.results ?? {},
+        };
+      }
+
+      if (node.kind === "action") {
+        const target = asObject(node.target);
+        let compiledTarget: JsonObject;
+        if (target.kind === "protected_operation") {
+          compiledTarget = {
+            kind: "protected_operation",
+            operation: target.operation,
+          };
+        } else if (target.kind === "form_continuation") {
+          compiledTarget = {
+            kind: "form_continuation",
+            applicationRootId: resolution.definition(definitionKey, "application").rootId,
+            formId: resolution.id(definitionKey, "block_placement", String(target.form)),
+            continuationEventId: resolution.id(
+              definitionKey,
+              "event",
+              String(target.continuation_event),
+              "content",
+            ),
+          };
+        } else if (target.kind === "durable_workflow_start") {
+          compiledTarget = {
+            kind: "durable_workflow_start",
+            applicationRootId: resolution.definition(definitionKey, "application").rootId,
+            workflowId: resolution.id(definitionKey, "workflow", String(target.workflow), "content"),
+          };
+        } else {
+          compiledTarget = {
+            kind: "application_action",
+            actionKey: target.action,
+          };
+        }
+        return {
+          ...base,
+          target: compiledTarget,
+          runAs: { kind: "current_user" },
+          inputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.inputs ?? {})).map(([k, v]) => [
+              k,
+              compileNodeInputBinding(asObject(v)),
+            ]),
+          ),
+          outputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.outputs ?? {})).map(([k, v]) => [
+              k,
+              compileFlowValueDeclaration(asObject(v)),
+            ]),
+          ),
+          results: node.results ?? {},
+        };
+      }
+
+      if (node.kind === "transform") {
+        return {
+          ...base,
+          inputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.inputs ?? {})).map(([k, v]) => [
+              k,
+              compileNodeInputBinding(asObject(v)),
+            ]),
+          ),
+          outputs: objectFromUniqueEntries(
+            Object.entries(asObject(node.outputs ?? {})).map(([k, v]) => [
+              k,
+              compileFlowValueDeclaration(asObject(v)),
+            ]),
+          ),
+          results: node.results ?? {},
+        };
+      }
+
+      return {
+        ...base,
+        results: objectFromUniqueEntries(
+          Object.entries(asObject(node.results ?? {})).map(([k, v]) => [
+            k,
+            compileNodeInputValue(asObject(v)),
+          ]),
+        ),
+        outcome: node.outcome ?? "completed",
+      };
+    };
+
+    const nodes = (flow.nodes as JsonObject[]).map(compileNode);
+    const nodeByAlias = new Map(
+      (flow.nodes as JsonObject[]).map((n, idx) => [
+        String(n.id),
+        String(nodes[idx].nodeId),
+      ]),
+    );
+
+    const edges = (flow.edges as JsonObject[]).map((edge) => {
+      const edgeId = resolution.id(definitionKey, "flow_edge", String(edge.id), flowScope);
+      const fromNodeId = nodeByAlias.get(String(edge.from_node));
+      const toNodeId = nodeByAlias.get(String(edge.to_node));
+      if (fromNodeId === undefined || toNodeId === undefined)
+        fail("vortex.definition.missing_identity", "unresolved_reference");
+      return {
+        edgeId,
+        fromNodeId,
+        toNodeId,
+        ...(edge.outcome ? { outcome: edge.outcome } : {}),
+      };
+    });
+
+    const inputs = objectFromUniqueEntries(
+      Object.entries(asObject(flow.inputs ?? {})).map(([k, v]) => [
+        k,
+        compileFlowValueDeclaration(asObject(v)),
+      ]),
+    );
+    const outputs = objectFromUniqueEntries(
+      Object.entries(asObject(flow.outputs ?? {})).map(([k, v]) => [
+        k,
+        compileFlowValueDeclaration(asObject(v)),
+      ]),
+    );
+    const variables = objectFromUniqueEntries(
+      Object.entries(asObject(flow.variables ?? {})).map(([k, v]) => [
+        k,
+        compileFlowVariableDeclaration(asObject(v)),
+      ]),
+    );
+
+    return {
+      flowId,
+      key: flow.key,
+      name: flow.name,
+      ...(flow.description ? { description: flow.description } : {}),
+      runAs: "current_user",
+      inputs,
+      outputs,
+      variables,
+      nodes,
+      edges,
+    };
+  });
+}
+
+function compileApplicationFlowBindings(
+  source: JsonObject,
+  resolution: Resolution,
+): JsonObject[] {
+  const body = asObject(source.body);
+  const definitionKey = String(source.key);
+  const root = resolution.definition(definitionKey, "application");
+  const rawBindings = body.flow_bindings as JsonObject[];
+
+  return rawBindings.map((binding) => {
+    const bindingId = resolution.id(
+      definitionKey,
+      "flow_binding",
+      String(binding.id),
+      "content",
+    );
+    const controlId = resolution.id(
+      definitionKey,
+      "block_placement",
+      String(binding.control),
+    );
+    const eventId = resolution.id(
+      definitionKey,
+      "event",
+      String(binding.event_id),
+      "content",
+    );
+
+    const flowRef = asObject(binding.flow);
+    let compiledFlowRef: JsonObject;
+    if (flowRef.kind === "platform_managed") {
+      compiledFlowRef = {
+        kind: "platform_managed",
+        flowId: flowRef.flow_id,
+        releaseVersion: flowRef.release_version,
+      };
+    } else {
+      compiledFlowRef = {
+        kind: "application_owned",
+        applicationRootId: root.rootId,
+        flowId: resolution.id(definitionKey, "flow", String(flowRef.flow), "content"),
+      };
+    }
+
+    const compileBindingContext = (ctx: JsonObject): JsonObject => {
+      const kind = ctx.kind;
+      if (kind === "page_subject") {
+        return {
+          kind: "page_subject",
+          recordTypeId: resolution.recordType(String(ctx.record_type)).recordTypeId,
+        };
+      }
+      if (kind === "related_record") {
+        const recordType = resolution.recordType(String(ctx.record_type)).recordTypeId;
+        const [relationshipRecord, relationshipAlias] = splitMember(
+          String(ctx.relationship),
+          "vortex.definition.qualified_field_required",
+        );
+        const relId = resolution.relationship(relationshipRecord, relationshipAlias);
+        return {
+          kind: "related_record",
+          relationshipId: relId,
+          recordTypeId: recordType,
+        };
+      }
+      if (kind === "row") {
+        const cId = resolution.id(definitionKey, "block_placement", String(ctx.control));
+        return {
+          kind: "row",
+          controlId: cId,
+          recordTypeId: resolution.recordType(String(ctx.record_type)).recordTypeId,
+        };
+      }
+      if (kind === "selection") {
+        const cId = resolution.id(definitionKey, "block_placement", String(ctx.control));
+        return {
+          kind: "selection",
+          controlId: cId,
+          recordTypeId: resolution.recordType(String(ctx.record_type)).recordTypeId,
+          cardinality: ctx.cardinality,
+        };
+      }
+      if (kind === "form") {
+        const fId = resolution.id(definitionKey, "block_placement", String(ctx.form));
+        return {
+          kind: "form",
+          formId: fId,
+          recordTypeId: resolution.recordType(String(ctx.record_type)).recordTypeId,
+        };
+      }
+      const fId = resolution.id(definitionKey, "block_placement", String(ctx.form));
+      return {
+        kind: "response",
+        formId: fId,
+        ...(ctx.record_type || ctx.recordTypeId
+          ? {
+              recordTypeId: resolution.recordType(String(ctx.record_type)).recordTypeId,
+            }
+          : {}),
+      };
+    };
+
+    const compileBindingInputValue = (value: JsonObject): JsonObject => {
+      if (value.source === "literal") return { source: "literal", value: value.value };
+      if (value.source === "context_record") {
+        return {
+          source: "context_record",
+          context: compileBindingContext(asObject(value.context)),
+        };
+      }
+      if (value.source === "context_field") {
+        const ctx = asObject(value.context);
+        const compiledCtx = compileBindingContext(ctx);
+        const fieldId = resolution.field(String(ctx.record_type), String(value.field));
+        return {
+          source: "context_field",
+          context: compiledCtx,
+          fieldId,
+        };
+      }
+      if (value.source === "form_input") {
+        const formId = resolution.id(definitionKey, "block_placement", String(value.form));
+        return {
+          source: "form_input",
+          formId,
+          input: value.input,
+        };
+      }
+      if (value.source === "event_input") return { source: "event_input", input: value.input };
+      return { source: "current_organization_account_id" };
+    };
+
+    const inputs = objectFromUniqueEntries(
+      Object.entries(asObject(binding.inputs ?? {})).map(([k, v]) => {
+        const inp = asObject(v);
+        return [
+          k,
+          {
+            type: inp.type,
+            value: compileBindingInputValue(asObject(inp.value)),
+          },
+        ];
+      }),
+    );
+
+    return {
+      contractVersion: "1.0.0",
+      bindingId,
+      controlId,
+      eventId,
+      event: binding.event,
+      flow: compiledFlowRef,
+      inputs,
+      results: binding.results ?? {},
+      declaredEffects: binding.declaredEffects ?? binding.declared_effects,
+    };
+  });
 }
 
 function compileConnection(source: JsonObject, resolution: Resolution) {

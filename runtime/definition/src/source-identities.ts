@@ -307,6 +307,26 @@ export function extractApplicationSourceIdentityRequirementsV2(
       );
   }
 
+  for (const flow of collection("flows")) {
+    addIdentified("flow", "content", "content", flow);
+    const flowKey = stringValue(flow.key);
+    const flowOwner = stringValue(flow.id);
+    if (flowKey === undefined || flowOwner === undefined) continue;
+    for (const node of objects(flow.nodes))
+      addIdentified("flow_node", `flow_owner:${flowOwner}`, `flow:${flowKey}`, node);
+    for (const edge of objects(flow.edges)) {
+      const edgeId = stringValue(edge.id);
+      if (edgeId !== undefined)
+        add("flow_edge", `flow_owner:${flowOwner}`, `flow:${flowKey}`, edgeId, [edgeId]);
+    }
+  }
+
+  for (const binding of collection("flow_bindings")) {
+    const bindingId = stringValue(binding.id);
+    if (bindingId !== undefined)
+      add("flow_binding", "content", "content", bindingId, [bindingId]);
+  }
+
   return requirements;
 }
 
