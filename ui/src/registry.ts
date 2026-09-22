@@ -7,7 +7,12 @@ import {
   type ImmutablePlatformBlockCatalogueV2,
   type PlatformBlockReleaseV2,
 } from "@vortex/contracts";
-import { DefinitionRenderError, type Breakpoint } from "./definition-error";
+import type { Breakpoint } from "./definition-error";
+import { DefinitionRenderError } from "./definition-error";
+import type {
+  DisplayEventHandlers,
+  ProjectedDisplayData,
+} from "./display/projected-data";
 
 /**
  * Properties passed to a platform block's React renderer.
@@ -21,6 +26,8 @@ export type PlatformBlockRenderProps = Readonly<{
   themeOverrides?: Readonly<Record<string, unknown>>;
   availability: "available" | "unavailable";
   unavailableReason?: "operation_unavailable";
+  projectedData?: ProjectedDisplayData;
+  displayEvents?: DisplayEventHandlers;
 }>;
 
 /**

@@ -24,6 +24,15 @@ import {
   LAYOUT_CLASS_NAMES,
 } from "./layout-styles";
 import type { PlatformComponentRegistry } from "./registry";
+import {
+  assertProjectionKeysArePlacements,
+  parseDisplayEventsByPlacement,
+  parseProjectedDataByPlacement,
+  type DisplayEventHandlers,
+  type DisplayEventsByPlacement,
+  type ProjectedDataByPlacement,
+  type ProjectedDisplayData,
+} from "./display/projected-data";
 
 export type PlacementSlotV2 = ApplicationShellV2["layout"];
 
@@ -175,6 +184,19 @@ function findPlacementsInSlot(
   return matches;
 }
 
+function collectPlacementIds(
+  slot: PlacementSlotV2,
+  ids: Set<string> = new Set<string>(),
+): Set<string> {
+  for (const [id, placement] of Object.entries(slot.placements)) {
+    ids.add(id);
+    for (const child of Object.values(placement.slots)) {
+      collectPlacementIds(child, ids);
+    }
+  }
+  return ids;
+}
+
 /**
  * Pure shell resolution: injects page content into the shell's declared content slots.
  */
@@ -323,6 +345,10 @@ export type PlacementRendererProps = Readonly<{
   location?: DefinitionRenderErrorLocation;
   /** Permission projection may remove otherwise required child content. */
   allowEmptyRequiredSlots?: boolean;
+  projectedData?: ProjectedDisplayData;
+  displayEvents?: DisplayEventHandlers;
+  allProjectedData?: ProjectedDataByPlacement;
+  allDisplayEvents?: DisplayEventsByPlacement;
 }>;
 
 /**
@@ -338,6 +364,10 @@ export function PlacementRenderer({
   style,
   location = {},
   allowEmptyRequiredSlots = false,
+  projectedData,
+  displayEvents,
+  allProjectedData,
+  allDisplayEvents,
 }: PlacementRendererProps): ReactElement {
   const currentLocation: DefinitionRenderErrorLocation = {
     ...location,
@@ -410,6 +440,8 @@ export function PlacementRenderer({
           parentPlacementId={placementId}
           location={{ ...currentLocation, slotKey: declaredSlot.key }}
           allowEmptyRequiredSlots={allowEmptyRequiredSlots}
+          projectedData={allProjectedData}
+          displayEvents={allDisplayEvents}
         />
       );
     } else {
@@ -450,6 +482,8 @@ export function PlacementRenderer({
           metadata={metadata}
           themeOverrides={placement.themeOverrides}
           {...projectedAvailability(placement, currentLocation)}
+          {...(projectedData !== undefined ? { projectedData } : {})}
+          {...(displayEvents !== undefined ? { displayEvents } : {})}
         />
       ) : null}
     </div>
@@ -470,6 +504,8 @@ export type PlacementSlotRendererProps = Readonly<{
   location?: DefinitionRenderErrorLocation;
   /** Permission projection may remove otherwise required child content. */
   allowEmptyRequiredSlots?: boolean;
+  projectedData?: ProjectedDataByPlacement;
+  displayEvents?: DisplayEventsByPlacement;
 }>;
 
 /**
@@ -485,6 +521,8 @@ export function PlacementSlotRenderer({
   style,
   location = {},
   allowEmptyRequiredSlots = false,
+  projectedData,
+  displayEvents,
 }: PlacementSlotRendererProps): ReactElement {
   const currentLocation: DefinitionRenderErrorLocation = {
     ...location,
@@ -550,6 +588,10 @@ export function PlacementSlotRenderer({
             location={currentLocation}
             {...(gridItemStyle === undefined ? {} : { style: gridItemStyle })}
             allowEmptyRequiredSlots={allowEmptyRequiredSlots}
+            projectedData={projectedData?.[childId]}
+            displayEvents={displayEvents?.[childId]}
+            allProjectedData={projectedData}
+            allDisplayEvents={displayEvents}
           />
         );
       })}
@@ -574,6 +616,8 @@ export type PageLayoutRendererProps = Readonly<{
   activeStepId?: string;
   className?: string;
   style?: CSSProperties;
+  projectedData?: ProjectedDataByPlacement;
+  displayEvents?: DisplayEventsByPlacement;
 }>;
 
 /**
@@ -589,6 +633,8 @@ export function PageLayoutRenderer({
   activeStepId,
   className,
   style,
+  projectedData,
+  displayEvents,
 }: PageLayoutRendererProps): ReactElement {
   const resolved = resolveRootPlacementSlotWithContext({
     composition,
@@ -604,6 +650,31 @@ export function PageLayoutRenderer({
       pageId === undefined ? {} : { pageId },
     );
 
+  const location: DefinitionRenderErrorLocation = {
+    ...(pageId === undefined ? {} : { pageId }),
+    ...(activeStepId === undefined ? {} : { stepId: activeStepId }),
+    breakpoint,
+  };
+
+  const parsedProjectedData =
+    projectedData !== undefined
+      ? parseProjectedDataByPlacement(projectedData, location)
+      : undefined;
+  const parsedDisplayEvents =
+    displayEvents !== undefined
+      ? parseDisplayEventsByPlacement(displayEvents, location)
+      : undefined;
+
+  if (parsedProjectedData !== undefined || parsedDisplayEvents !== undefined) {
+    const placementIds = collectPlacementIds(resolved.slot);
+    assertProjectionKeysArePlacements(
+      placementIds,
+      parsedProjectedData,
+      parsedDisplayEvents,
+      location,
+    );
+  }
+
   return (
     <PlacementSlotRenderer
       slot={resolved.slot}
@@ -611,12 +682,10 @@ export function PageLayoutRenderer({
       registry={registry}
       {...(className === undefined ? {} : { className })}
       {...(style === undefined ? {} : { style })}
-      location={{
-        ...(pageId === undefined ? {} : { pageId }),
-        ...(activeStepId === undefined ? {} : { stepId: activeStepId }),
-        breakpoint,
-      }}
+      location={location}
       allowEmptyRequiredSlots={resolved.permissionProjected}
+      projectedData={parsedProjectedData}
+      displayEvents={parsedDisplayEvents}
     />
   );
 }
