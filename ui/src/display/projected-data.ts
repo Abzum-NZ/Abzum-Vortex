@@ -2,6 +2,7 @@ import {
   builderKeySchema,
   richTextDocumentV2Schema,
   safeHttpsUrlSchema,
+  timestampSchema,
   type BlockPropertyValueV2Contract,
   type ComponentSemanticEventKind,
 } from "@vortex/contracts";
@@ -33,7 +34,7 @@ export type DisplayCellValue =
   | Readonly<{ kind: "text"; text: string }>
   | Readonly<{ kind: "number"; value: number; formatted?: string }>
   | Readonly<{ kind: "boolean"; value: boolean }>
-  | Readonly<{ kind: "date"; iso: string }>
+  | Readonly<{ kind: "date"; iso: string }> // ISO calendar date or offset timestamp
   | Readonly<{ kind: "choice"; key: string; label: string }>
   | Readonly<{ kind: "link"; address: string; label: string }>
   | Readonly<{ kind: "rich_text"; document: DisplayRichTextDocument }>
@@ -118,11 +119,12 @@ export type DisplaySemanticEventName = Extract<
 
 /**
  * One declared semantic event. Row and item events always carry stable identity;
- * no event is ever emitted without a real user interaction.
+ * no event is ever emitted without a real user interaction. The bound flow, not the
+ * component, decides what a row action does.
  */
 export type DisplaySemanticEvent =
   | Readonly<{ event: "refresh" }>
-  | Readonly<{ event: "row_action"; recordId: string; action: string }>
+  | Readonly<{ event: "row_action"; recordId: string }>
   | Readonly<{ event: "selection_changed"; recordId: string; selected: boolean }>
   | Readonly<{
       event: "sort_changed";
@@ -162,8 +164,7 @@ const LOADING_STATE: ProjectedDisplayData = Object.freeze({ status: "loading" })
 const EMPTY_STATE: ProjectedDisplayData = Object.freeze({ status: "empty" });
 const EMPTY_CELL: DisplayCellValue = Object.freeze({ kind: "empty" });
 const EMPTY_HANDLERS: DisplayEventHandlers = Object.freeze({});
-const EMPTY_DATA_BY_PLACEMENT: ProjectedDataByPlacement = Object.freeze({});
-const EMPTY_EVENTS_BY_PLACEMENT: DisplayEventsByPlacement = Object.freeze({});
+const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
 
 const fail = (
   message: string,
@@ -291,12 +292,13 @@ const parseCellValue = (
       requireExactKeys(record, ["kind", "iso"], location);
       const iso = requireNonEmptyString(
         record.iso,
-        "A date display value requires an ISO timestamp",
+        "A date display value requires an ISO date or timestamp",
         location,
       );
-      return Number.isNaN(Date.parse(iso))
-        ? fail("A date display value must be a parseable ISO timestamp", location)
-        : Object.freeze({ kind: "date", iso });
+      const isDate = ISO_CALENDAR_DATE.test(iso) && !Number.isNaN(Date.parse(iso));
+      return isDate || timestampSchema.safeParse(iso).success
+        ? Object.freeze({ kind: "date", iso })
+        : fail("A date display value must be an ISO date or offset timestamp", location);
     }
     case "choice":
       requireExactKeys(record, ["kind", "key", "label"], location);
@@ -737,13 +739,16 @@ const parseKeyedRecords = <Value>(
 ): Readonly<Record<string, Value>> => {
   if (value === undefined) return Object.freeze({});
   const record = requireRecord(value, message, location);
-  const result: Record<string, Value> = {};
-  for (const [placementId, entry] of Object.entries(record)) {
-    if (placementId.trim().length === 0)
-      fail("A display surface key must be a non-empty placement identity", location);
-    result[placementId] = parse(entry, { ...location, placementId });
-  }
-  return Object.freeze(result);
+  // Own data properties only: a supplied "__proto__" key stays an ordinary (unknown) key.
+  return Object.freeze(
+    Object.fromEntries(
+      Object.entries(record).map(([placementId, entry]) => {
+        if (placementId.trim().length === 0)
+          fail("A display surface key must be a non-empty placement identity", location);
+        return [placementId, parse(entry, { ...location, placementId })] as const;
+      }),
+    ),
+  );
 };
 
 /** Validates unknown projection data keyed by stable placement identity. */
@@ -776,18 +781,38 @@ export const parseDisplayEventsByPlacement = (
  */
 export const assertProjectionKeysArePlacements = (
   placementIds: ReadonlySet<string>,
-  projectedData: ProjectedDataByPlacement | undefined,
-  displayEvents: DisplayEventsByPlacement | undefined,
+  projectedData: unknown,
+  displayEvents: unknown,
   location: DefinitionRenderErrorLocation = {},
 ): void => {
-  for (const placementId of Object.keys(projectedData ?? {})) {
+  const dataKeys =
+    projectedData === undefined
+      ? []
+      : Object.keys(
+          requireRecord(
+            projectedData,
+            "Projected display data must be keyed by placement identity",
+            location,
+          ),
+        );
+  const eventKeys =
+    displayEvents === undefined
+      ? []
+      : Object.keys(
+          requireRecord(
+            displayEvents,
+            "Display semantic callbacks must be keyed by placement identity",
+            location,
+          ),
+        );
+  for (const placementId of dataKeys) {
     if (!placementIds.has(placementId))
       fail(`Projected data names unknown placement '${placementId}'`, {
         ...location,
         placementId,
       });
   }
-  for (const placementId of Object.keys(displayEvents ?? {})) {
+  for (const placementId of eventKeys) {
     if (!placementIds.has(placementId))
       fail(`Display events name unknown placement '${placementId}'`, {
         ...location,

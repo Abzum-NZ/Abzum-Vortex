@@ -7,8 +7,7 @@ import {
   type ImmutablePlatformBlockCatalogueV2,
   type PlatformBlockReleaseV2,
 } from "@vortex/contracts";
-import type { Breakpoint } from "./definition-error";
-import { DefinitionRenderError } from "./definition-error";
+import { DefinitionRenderError, type Breakpoint } from "./definition-error";
 import type {
   DisplayEventHandlers,
   ProjectedDisplayData,

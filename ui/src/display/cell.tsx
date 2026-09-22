@@ -1,26 +1,22 @@
 import type { ReactElement } from "react";
+import { safeHttpsUrlSchema } from "@vortex/contracts";
+import { DefinitionRenderError } from "../definition-error";
 import type { DisplayCellValue } from "./projected-data";
 import { RichTextDocumentView, richTextToPlainText } from "./rich-text";
 
 /**
- * Formats an ISO timestamp safely to a standard presentation string.
- * Falls back to the raw ISO string if invalid.
+ * Formats a validated ISO calendar date or offset timestamp for presentation.
+ * A calendar date carries no time zone, so it is formatted in UTC to avoid shifting its day.
  */
 export function formatIsoDate(iso: string): string {
-  try {
-    const timestamp = Date.parse(iso);
-    if (!Number.isNaN(timestamp)) {
-      const date = new Date(timestamp);
-      return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
-    }
-  } catch {
-    // Return raw iso if parsing fails
-  }
-  return iso;
+  const timestamp = Date.parse(iso);
+  if (Number.isNaN(timestamp)) return iso;
+  return new Date(timestamp).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    ...(iso.length === 10 ? { timeZone: "UTC" } : {}),
+  });
 }
 
 /**
@@ -83,6 +79,12 @@ export function DisplayCellView({
         </span>
       );
     case "link":
+      // Re-checked here because this view is exported and may receive unparsed values.
+      if (!safeHttpsUrlSchema.safeParse(value.address).success)
+        throw new DefinitionRenderError(
+          "INVALID_COMPOSITION",
+          "A link display value requires a safe HTTPS address",
+        );
       return (
         <a
           className="vortex-cell-link"
@@ -91,19 +93,21 @@ export function DisplayCellView({
           rel="noopener noreferrer"
         >
           {value.label}
-          <span className="vortex-sr-only"> (external link)</span>
+          <span aria-hidden="true"> ↗</span>
+          <span className="vortex-sr-only"> (external link, opens in a new page)</span>
         </a>
       );
     case "rich_text":
       return (
-        <span className="vortex-cell-rich-text">
+        <div className="vortex-cell-rich-text">
           <RichTextDocumentView document={value.document} />
-        </span>
+        </div>
       );
     case "empty":
       return (
-        <span className="vortex-cell-empty" aria-label="Empty">
-          —
+        <span className="vortex-cell-empty">
+          <span aria-hidden="true">—</span>
+          <span className="vortex-sr-only">No value</span>
         </span>
       );
   }

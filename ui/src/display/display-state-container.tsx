@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
-import type { BlockPropertyValueV2Contract } from "@vortex/contracts";
+import type { BlockPropertyValueV2Contract, PlatformBlockReleaseV2 } from "@vortex/contracts";
 import type { DisplayRefusalReason, ProjectedDisplayData } from "./projected-data";
 
 /** Safe, data-free presentation text for fixed refusal reasons. */
@@ -10,71 +10,52 @@ const REFUSAL_MESSAGES: Readonly<Record<DisplayRefusalReason, string>> = Object.
 });
 
 /**
- * Extracts a safe accessible name from block settings, falling back to a default label.
+ * Reads the authored accessible name only through the block's declared
+ * `accessibleNamePropertyPath`; it never guesses a setting from its key.
+ * Returns undefined when the block declares no name or the optional name is absent.
  */
 export function getAccessibleName(
-  settings: Readonly<Record<string, BlockPropertyValueV2Contract>> | undefined,
-  fallback: string,
-): string {
-  if (settings) {
-    const title = settings.title;
-    if (
-      title &&
-      title.kind === "text" &&
-      typeof title.value === "string" &&
-      title.value.trim().length > 0
-    ) {
-      return title.value.trim();
-    }
-    const accessibleName = settings.accessible_name;
-    if (
-      accessibleName &&
-      accessibleName.kind === "text" &&
-      typeof accessibleName.value === "string" &&
-      accessibleName.value.trim().length > 0
-    ) {
-      return accessibleName.value.trim();
-    }
+  settings: Readonly<Record<string, BlockPropertyValueV2Contract>>,
+  metadata: PlatformBlockReleaseV2,
+): string | undefined {
+  const capabilities = metadata.capabilities;
+  if (capabilities.accessibleName === "not_applicable") return undefined;
+  let current: Readonly<Record<string, BlockPropertyValueV2Contract>> = settings;
+  const path = capabilities.accessibleNamePropertyPath;
+  for (const [index, key] of path.entries()) {
+    const value = Object.hasOwn(current, key) ? current[key] : undefined;
+    if (value === undefined) return undefined;
+    if (index === path.length - 1)
+      return value.kind === "text" && value.value.trim().length > 0 ? value.value.trim() : undefined;
+    if (value.kind !== "group") return undefined;
+    current = value.properties;
   }
-  return fallback;
+  return undefined;
 }
 
 export type DisplayStateContainerProps = Readonly<{
+  /** Accessible name for the affected component; the block palette name when none is authored. */
   accessibleName: string;
-  availability?: "available" | "unavailable";
-  unavailableReason?: "operation_unavailable";
-  projectedData?: ProjectedDisplayData;
-  emptyMessage?: string;
+  availability: "available" | "unavailable";
+  projectedData: ProjectedDisplayData;
+  emptyMessage: string;
   children: ReactNode;
 }>;
 
 /**
- * Standard container wrapping display component state transitions.
- * Ensures loading, empty, refused and unavailable states are accessible and data-safe;
- * refused data is never leaked to the DOM.
+ * Standard container for display component states. Loading, empty and refused states
+ * render fixed data-free text announced politely at the component. A viewable placement
+ * whose use is unavailable keeps its permitted content with a fixed unavailable note;
+ * its components receive no semantic callbacks.
  */
 export function DisplayStateContainer({
   accessibleName,
-  availability = "available",
-  unavailableReason,
+  availability,
   projectedData,
-  emptyMessage = "No records available",
+  emptyMessage,
   children,
 }: DisplayStateContainerProps): ReactElement {
-  if (availability === "unavailable" || unavailableReason === "operation_unavailable") {
-    return (
-      <div
-        role="alert"
-        data-vortex-display-state="unavailable"
-        className="vortex-display-state vortex-display-unavailable"
-        aria-label={`Unavailable: ${accessibleName}`}
-      >
-        <span className="vortex-state-message">Operation unavailable</span>
-      </div>
-    );
-  }
-
-  if (projectedData?.status === "loading") {
+  if (projectedData.status === "loading") {
     return (
       <div
         role="status"
@@ -83,37 +64,50 @@ export function DisplayStateContainer({
         className="vortex-display-state vortex-display-loading"
         aria-label={`Loading ${accessibleName}`}
       >
-        <span className="vortex-state-message">Loading...</span>
+        <span className="vortex-state-message">Loading…</span>
       </div>
     );
   }
 
-  if (projectedData?.status === "empty") {
+  if (projectedData.status === "empty") {
     return (
       <div
+        role="status"
         data-vortex-display-state="empty"
         className="vortex-display-state vortex-display-empty"
-        aria-label={`Empty: ${accessibleName}`}
+        aria-label={`${accessibleName}: empty`}
       >
         <span className="vortex-state-message">{emptyMessage}</span>
       </div>
     );
   }
 
-  if (projectedData?.status === "refused") {
-    const message = REFUSAL_MESSAGES[projectedData.reason] ?? "Content unavailable";
+  if (projectedData.status === "refused") {
     return (
       <div
-        role="alert"
+        role="status"
         data-vortex-display-state="refused"
         data-vortex-refusal-reason={projectedData.reason}
         className="vortex-display-state vortex-display-refused"
-        aria-label={`Access refused: ${accessibleName}`}
+        aria-label={`${accessibleName}: unavailable`}
       >
-        <span className="vortex-state-message">{message}</span>
+        <span className="vortex-state-message">{REFUSAL_MESSAGES[projectedData.reason]}</span>
       </div>
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {availability === "unavailable" ? (
+        <div
+          role="status"
+          data-vortex-display-state="unavailable"
+          className="vortex-display-state vortex-display-unavailable"
+        >
+          <span className="vortex-state-message">Actions are unavailable</span>
+        </div>
+      ) : null}
+      {children}
+    </>
+  );
 }

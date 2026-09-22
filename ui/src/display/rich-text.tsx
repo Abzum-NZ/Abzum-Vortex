@@ -26,7 +26,8 @@ const renderInline = (inline: DisplayRichTextInline, key: number): ReactNode => 
       return (
         <a key={key} href={inline.address} target="_blank" rel="noopener noreferrer">
           {inline.children.map(renderInline)}
-          <span className="vortex-sr-only"> (external link)</span>
+          <span aria-hidden="true"> ↗</span>
+          <span className="vortex-sr-only"> (external link, opens in a new page)</span>
         </a>
       );
   }

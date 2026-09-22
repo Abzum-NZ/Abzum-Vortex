@@ -26,12 +26,10 @@ import {
 import type { PlatformComponentRegistry } from "./registry";
 import {
   assertProjectionKeysArePlacements,
-  parseDisplayEventsByPlacement,
-  parseProjectedDataByPlacement,
-  type DisplayEventHandlers,
+  parseDisplayEventHandlers,
+  parseProjectedDisplayData,
   type DisplayEventsByPlacement,
   type ProjectedDataByPlacement,
-  type ProjectedDisplayData,
 } from "./display/projected-data";
 
 export type PlacementSlotV2 = ApplicationShellV2["layout"];
@@ -183,6 +181,13 @@ function findPlacementsInSlot(
   }
   return matches;
 }
+
+/** Reads only an own entry keyed by exact stable placement identity. */
+const ownPlacementEntry = <Value,>(
+  entries: Readonly<Record<string, Value>> | undefined,
+  placementId: string,
+): Value | undefined =>
+  entries !== undefined && Object.hasOwn(entries, placementId) ? entries[placementId] : undefined;
 
 function collectPlacementIds(
   slot: PlacementSlotV2,
@@ -345,10 +350,10 @@ export type PlacementRendererProps = Readonly<{
   location?: DefinitionRenderErrorLocation;
   /** Permission projection may remove otherwise required child content. */
   allowEmptyRequiredSlots?: boolean;
-  projectedData?: ProjectedDisplayData;
-  displayEvents?: DisplayEventHandlers;
-  allProjectedData?: ProjectedDataByPlacement;
-  allDisplayEvents?: DisplayEventsByPlacement;
+  /** Permission-projected display data keyed by stable placement identity. */
+  projectedData?: ProjectedDataByPlacement | undefined;
+  /** Semantic callbacks keyed by stable placement identity. */
+  displayEvents?: DisplayEventsByPlacement | undefined;
 }>;
 
 /**
@@ -366,8 +371,6 @@ export function PlacementRenderer({
   allowEmptyRequiredSlots = false,
   projectedData,
   displayEvents,
-  allProjectedData,
-  allDisplayEvents,
 }: PlacementRendererProps): ReactElement {
   const currentLocation: DefinitionRenderErrorLocation = {
     ...location,
@@ -426,7 +429,22 @@ export function PlacementRenderer({
     allowEmptyRequiredSlots,
   });
 
-  // 5. Recursively render declared named child slots in deterministic order
+  // 5. Parse this placement's own projected data and callbacks, fail-closed. A placement whose
+  //    use is unavailable stays viewable but never receives an invocable callback.
+  const availability = projectedAvailability(placement, currentLocation);
+  const suppliedData = ownPlacementEntry(projectedData, placementId);
+  const placementData =
+    suppliedData === undefined ? undefined : parseProjectedDisplayData(suppliedData, currentLocation);
+  const suppliedEvents =
+    availability.availability === "available"
+      ? ownPlacementEntry(displayEvents, placementId)
+      : undefined;
+  const placementEvents =
+    suppliedEvents === undefined
+      ? undefined
+      : parseDisplayEventHandlers(suppliedEvents, currentLocation);
+
+  // 6. Recursively render declared named child slots in deterministic order
   const renderedSlots: Record<string, ReactNode> = {};
   for (const declaredSlot of metadata.slots) {
     const childSlot = placement.slots[declaredSlot.key];
@@ -440,8 +458,8 @@ export function PlacementRenderer({
           parentPlacementId={placementId}
           location={{ ...currentLocation, slotKey: declaredSlot.key }}
           allowEmptyRequiredSlots={allowEmptyRequiredSlots}
-          projectedData={allProjectedData}
-          displayEvents={allDisplayEvents}
+          projectedData={projectedData}
+          displayEvents={displayEvents}
         />
       );
     } else {
@@ -449,7 +467,7 @@ export function PlacementRenderer({
     }
   }
 
-  // 6. Apply declared visibility, content/fill/grid placement and content/bounded-height sizing
+  // 7. Apply declared visibility, content/fill/grid placement and content/bounded-height sizing
   const layout = placement.responsive[breakpoint];
   const placementStyle = computePlacementStyle(layout, breakpoint);
   const placementClassName = computePlacementClassName(layout, breakpoint);
@@ -481,9 +499,9 @@ export function PlacementRenderer({
           breakpoint={breakpoint}
           metadata={metadata}
           themeOverrides={placement.themeOverrides}
-          {...projectedAvailability(placement, currentLocation)}
-          {...(projectedData !== undefined ? { projectedData } : {})}
-          {...(displayEvents !== undefined ? { displayEvents } : {})}
+          {...availability}
+          {...(placementData === undefined ? {} : { projectedData: placementData })}
+          {...(placementEvents === undefined ? {} : { displayEvents: placementEvents })}
         />
       ) : null}
     </div>
@@ -504,8 +522,10 @@ export type PlacementSlotRendererProps = Readonly<{
   location?: DefinitionRenderErrorLocation;
   /** Permission projection may remove otherwise required child content. */
   allowEmptyRequiredSlots?: boolean;
-  projectedData?: ProjectedDataByPlacement;
-  displayEvents?: DisplayEventsByPlacement;
+  /** Permission-projected display data keyed by stable placement identity. */
+  projectedData?: ProjectedDataByPlacement | undefined;
+  /** Semantic callbacks keyed by stable placement identity. */
+  displayEvents?: DisplayEventsByPlacement | undefined;
 }>;
 
 /**
@@ -588,10 +608,8 @@ export function PlacementSlotRenderer({
             location={currentLocation}
             {...(gridItemStyle === undefined ? {} : { style: gridItemStyle })}
             allowEmptyRequiredSlots={allowEmptyRequiredSlots}
-            projectedData={projectedData?.[childId]}
-            displayEvents={displayEvents?.[childId]}
-            allProjectedData={projectedData}
-            allDisplayEvents={displayEvents}
+            projectedData={projectedData}
+            displayEvents={displayEvents}
           />
         );
       })}
@@ -616,7 +634,12 @@ export type PageLayoutRendererProps = Readonly<{
   activeStepId?: string;
   className?: string;
   style?: CSSProperties;
+  /**
+   * Permission-projected display data keyed by stable placement identity. Every key must
+   * name a placement in the resolved tree; each entry is parsed fail-closed at its placement.
+   */
   projectedData?: ProjectedDataByPlacement;
+  /** Semantic callbacks keyed by stable placement identity; the renderer never invokes them. */
   displayEvents?: DisplayEventsByPlacement;
 }>;
 
@@ -656,24 +679,13 @@ export function PageLayoutRenderer({
     breakpoint,
   };
 
-  const parsedProjectedData =
-    projectedData !== undefined
-      ? parseProjectedDataByPlacement(projectedData, location)
-      : undefined;
-  const parsedDisplayEvents =
-    displayEvents !== undefined
-      ? parseDisplayEventsByPlacement(displayEvents, location)
-      : undefined;
-
-  if (parsedProjectedData !== undefined || parsedDisplayEvents !== undefined) {
-    const placementIds = collectPlacementIds(resolved.slot);
+  if (projectedData !== undefined || displayEvents !== undefined)
     assertProjectionKeysArePlacements(
-      placementIds,
-      parsedProjectedData,
-      parsedDisplayEvents,
+      collectPlacementIds(resolved.slot),
+      projectedData,
+      displayEvents,
       location,
     );
-  }
 
   return (
     <PlacementSlotRenderer
@@ -684,8 +696,8 @@ export function PageLayoutRenderer({
       {...(style === undefined ? {} : { style })}
       location={location}
       allowEmptyRequiredSlots={resolved.permissionProjected}
-      projectedData={parsedProjectedData}
-      displayEvents={parsedDisplayEvents}
+      projectedData={projectedData}
+      displayEvents={displayEvents}
     />
   );
 }

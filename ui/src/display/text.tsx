@@ -1,59 +1,51 @@
 import type { ReactElement } from "react";
 import type { PlatformBlockRenderProps } from "../registry";
 import { DisplayCellView } from "./cell";
-import { DisplayStateContainer, getAccessibleName } from "./display-state-container";
-import { DefinitionRenderError } from "../definition-error";
+import { DisplayHeader, resolveDisplayContext } from "./controls";
+import { DisplayStateContainer } from "./display-state-container";
 
 /**
- * Shared browser-safe display component for plain text values.
- * Consumes caller-supplied permission-projected text or explicit text setting.
- * Never executes or fetches a Query.
+ * Shared browser-safe display component for plain text.
+ * Renders caller-supplied projected text, or the block's declared literal `text` setting when
+ * no projection is supplied. Never executes or fetches a Query.
  */
-export function PlainTextDisplay({
-  placementId,
-  settings,
-  projectedData,
-  availability,
-  unavailableReason,
-}: PlatformBlockRenderProps): ReactElement {
-  const accessibleName = getAccessibleName(settings, "Plain text");
-
-  let cellValue = projectedData?.status === "ready" ? projectedData.values : undefined;
-  if (cellValue !== undefined && cellValue.kind !== "text") {
-    throw new DefinitionRenderError(
-      "INVALID_COMPOSITION",
-      `Plain text component expected 'text' projected values, got '${cellValue.kind}'`,
-      { placementId },
-    );
-  }
-
-  // Fallback to settings.text if projectedData was not provided
-  if (cellValue === undefined && projectedData === undefined && settings.text?.kind === "text") {
-    cellValue = { kind: "text", value: { kind: "text", text: settings.text.value } };
-  }
-
-  const effectiveProjectedData =
-    projectedData ??
-    (cellValue !== undefined
-      ? { status: "ready", values: cellValue }
-      : { status: "empty" });
+export function PlainTextDisplay(props: PlatformBlockRenderProps): ReactElement {
+  const literal = Object.hasOwn(props.settings, "text") ? props.settings.text : undefined;
+  const effectiveProps: PlatformBlockRenderProps =
+    props.projectedData === undefined && literal?.kind === "text" && literal.value.length > 0
+      ? {
+          ...props,
+          projectedData: {
+            status: "ready",
+            values: { kind: "text", value: { kind: "text", text: literal.value } },
+          },
+        }
+      : props;
+  const { title, accessibleName, values, state, events } = resolveDisplayContext(
+    effectiveProps,
+    "text",
+    (text) => text.value.kind === "empty",
+  );
 
   return (
     <DisplayStateContainer
       accessibleName={accessibleName}
-      availability={availability}
-      unavailableReason={unavailableReason}
-      projectedData={effectiveProjectedData}
-      emptyMessage="No text content"
+      availability={props.availability}
+      projectedData={state}
+      emptyMessage="No text to show"
     >
-      <div
-        data-vortex-display="text"
-        data-vortex-placement-id={placementId}
-        className="vortex-display-text"
-        aria-label={accessibleName}
-      >
-        {cellValue ? <DisplayCellView value={cellValue.value} /> : null}
-      </div>
+      {values === undefined ? null : (
+        <div
+          data-vortex-display="text"
+          data-vortex-placement-id={props.placementId}
+          className="vortex-display-text"
+        >
+          <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
+          <div className="vortex-text-value">
+            <DisplayCellView value={values.value} />
+          </div>
+        </div>
+      )}
     </DisplayStateContainer>
   );
 }
