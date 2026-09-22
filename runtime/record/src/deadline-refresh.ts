@@ -12,6 +12,7 @@ import {
   recordTypeIdSchema,
   storageContractIdSchema,
   timestampSchema,
+  type RecordTypeDefinitionV2,
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
@@ -84,6 +85,12 @@ export type ClaimRecordDeadlineRefreshResult =
       recalculatedDeadline?: PendingDeadlineTransitionV2;
       effectId: string;
       effectIdentity: string;
+      /** @internal Consumed only by the #558 closure operation in the same transaction. */
+      recordType: RecordTypeDefinitionV2;
+      /** @internal Consumed only by the #558 closure operation in the same transaction. */
+      existingValues: Readonly<Record<string, unknown>>;
+      /** @internal Consumed only by the #558 closure operation in the same transaction. */
+      timeZone: string;
     }>
   | Readonly<{ outcome: "none" }>
   | Readonly<{ outcome: "conflict"; reasonCode: DeadlineRefreshConflictReasonCode }>
@@ -394,6 +401,9 @@ export const claimRecordDeadlineRefresh = async (
     ...(recalculatedDeadline === undefined ? {} : { recalculatedDeadline }),
     effectId: effect.effectId,
     effectIdentity: effect.effectIdentity,
+    recordType: recordType.data,
+    existingValues: existingValues.data as Readonly<Record<string, unknown>>,
+    timeZone: candidate.timeZone as string,
   };
 };
 
