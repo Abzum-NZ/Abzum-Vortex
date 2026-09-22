@@ -3,6 +3,7 @@ import "server-only";
 import {
   eventOccurrenceEnvelopeV2Schema,
   eventOccurrenceIdSchema,
+  timestampSchema,
   type EventOccurrenceEnvelopeV2,
 } from "@vortex/contracts";
 import type { DatabaseRow, RuntimeDatabaseTransaction } from "@vortex/db";
@@ -78,15 +79,30 @@ const consumerKeyMatches = (value: unknown): value is string =>
 
 const uuidMatches = (value: unknown): value is string =>
   typeof value === "string" &&
+  value !== "00000000-0000-0000-0000-000000000000" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 const timestampMatches = (value: unknown): value is string =>
-  typeof value === "string" && Number.isFinite(Date.parse(value));
+  timestampSchema.safeParse(value).success;
 
 const record = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
   typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Readonly<Record<string, unknown>>)
     : undefined;
+
+const exactRecord = <Key extends string>(
+  value: unknown,
+  keys: readonly Key[],
+): Readonly<Record<Key, unknown>> | undefined => {
+  const candidate = record(value);
+  if (
+    candidate === undefined ||
+    Object.keys(candidate).length !== keys.length ||
+    keys.some((key) => !Object.hasOwn(candidate, key))
+  )
+    return undefined;
+  return candidate as Readonly<Record<Key, unknown>>;
+};
 
 const requireOne = (rows: readonly ConsumerProgressRow[]): ConsumerProgressRow => {
   if (rows.length !== 1 || rows[0] === undefined)
@@ -139,52 +155,73 @@ const validateAcknowledgementInput = (
   return input;
 };
 
-const parseClaimResult = (candidate: unknown): EventConsumerClaimResult => {
-  const value = record(candidate);
+const parseClaimResult = (
+  candidate: unknown,
+  maximumOccurrenceCount: number,
+): EventConsumerClaimResult => {
+  const value = exactRecord(candidate, ["ackCursor", "occurrences"]);
   const occurrences = value && Array.isArray(value.occurrences) ? value.occurrences : undefined;
   const ackCursor = value?.ackCursor;
+  const parsedOccurrences: ClaimedEventOccurrence[] = [];
+  const occurrenceIds = new Set<string>();
   if (
     value === undefined ||
     occurrences === undefined ||
+    occurrences.length > maximumOccurrenceCount ||
     !(ackCursor === null || uuidMatches(ackCursor)) ||
-    (ackCursor === null) !== (occurrences.length === 0) ||
-    occurrences.some((item) => {
-      const claimed = record(item);
-      const occurrence = eventOccurrenceEnvelopeV2Schema.safeParse(claimed?.occurrence);
+    (ackCursor === null) !== (occurrences.length === 0)
+  )
+    throw new EventConsumerProgressError("EVENT_CONSUMER_PROGRESS_STORAGE_UNAVAILABLE");
+  for (const item of occurrences) {
+    const claimed = exactRecord(item, ["occurrence", "causalDepth", "leaseExpiresAt"]);
+    const occurrence = eventOccurrenceEnvelopeV2Schema.safeParse(claimed?.occurrence);
+    if (
+      claimed === undefined ||
+      !occurrence.success ||
+      !Number.isSafeInteger(claimed.causalDepth) ||
+      (claimed.causalDepth as number) < 0 ||
+      (claimed.causalDepth as number) > eventConsumerProgressLimits.maximumCausalDepth ||
+      !timestampMatches(claimed.leaseExpiresAt) ||
+      occurrenceIds.has(occurrence.data.occurrenceId)
+    )
+      throw new EventConsumerProgressError("EVENT_CONSUMER_PROGRESS_STORAGE_UNAVAILABLE");
+    occurrenceIds.add(occurrence.data.occurrenceId);
+    parsedOccurrences.push({
+      occurrence: occurrence.data,
+      causalDepth: claimed.causalDepth as number,
+      leaseExpiresAt: claimed.leaseExpiresAt as string,
+    });
+  }
+  if (
+    parsedOccurrences.some((item, index) => {
+      const previous = parsedOccurrences[index - 1];
+      if (previous === undefined) return false;
+      const timeOrder =
+        Date.parse(previous.occurrence.occurredAt) - Date.parse(item.occurrence.occurredAt);
       return (
-        claimed === undefined ||
-        !occurrence.success ||
-        !Number.isSafeInteger(claimed.causalDepth) ||
-        (claimed.causalDepth as number) < 0 ||
-        (claimed.causalDepth as number) > eventConsumerProgressLimits.maximumCausalDepth ||
-        !timestampMatches(claimed.leaseExpiresAt)
+        timeOrder > 0 ||
+        (timeOrder === 0 && previous.occurrence.occurrenceId >= item.occurrence.occurrenceId)
       );
     })
   )
     throw new EventConsumerProgressError("EVENT_CONSUMER_PROGRESS_STORAGE_UNAVAILABLE");
   return {
     ackCursor: ackCursor === null ? undefined : ackCursor,
-    occurrences: occurrences.map((item) => {
-      const claimed = record(item)!;
-      return {
-        occurrence: eventOccurrenceEnvelopeV2Schema.parse(claimed.occurrence),
-        causalDepth: claimed.causalDepth as number,
-        leaseExpiresAt: claimed.leaseExpiresAt as string,
-      };
-    }),
+    occurrences: parsedOccurrences,
   };
 };
 
 const parseLeaseRenewalResult = (candidate: unknown): EventConsumerLeaseRenewalResult => {
-  const value = record(candidate);
-  if (value?.outcome === "claim_unavailable") return { outcome: "claim_unavailable" };
-  if (value?.outcome === "renewed" && timestampMatches(value.leaseExpiresAt))
-    return { outcome: "renewed", leaseExpiresAt: value.leaseExpiresAt };
+  const unavailable = exactRecord(candidate, ["outcome"]);
+  if (unavailable?.outcome === "claim_unavailable") return { outcome: "claim_unavailable" };
+  const renewed = exactRecord(candidate, ["outcome", "leaseExpiresAt"]);
+  if (renewed?.outcome === "renewed" && timestampMatches(renewed.leaseExpiresAt))
+    return { outcome: "renewed", leaseExpiresAt: renewed.leaseExpiresAt };
   throw new EventConsumerProgressError("EVENT_CONSUMER_PROGRESS_STORAGE_UNAVAILABLE");
 };
 
 const parseAcknowledgementResult = (candidate: unknown): EventConsumerAcknowledgementResult => {
-  const value = record(candidate);
+  const value = exactRecord(candidate, ["outcome"]);
   if (
     value?.outcome === "acknowledged" ||
     value?.outcome === "already_acknowledged" ||
@@ -226,7 +263,6 @@ export const createEventConsumerProgressRepository = (
     async claim(inputCandidate) {
       const input = validateClaimInput(inputCandidate);
       try {
-        await transaction.query`set local role vortex_runtime`;
         const rows = await transaction.query<ConsumerProgressRow>`
           select vortex_event.claim_consumer_occurrences(
             ${input.consumerKey}::text,
@@ -234,7 +270,7 @@ export const createEventConsumerProgressRepository = (
             ${input.leaseSeconds}::integer
           ) as result
         `;
-        return parseClaimResult(requireOne(rows).result);
+        return parseClaimResult(requireOne(rows).result, input.batchSize);
       } catch (error) {
         throw mapFailure(error);
       }
@@ -243,7 +279,6 @@ export const createEventConsumerProgressRepository = (
     async renewLease(inputCandidate) {
       const input = validateLeaseRenewalInput(inputCandidate);
       try {
-        await transaction.query`set local role vortex_runtime`;
         const rows = await transaction.query<ConsumerProgressRow>`
           select vortex_event.renew_consumer_occurrence_lease(
             ${input.consumerKey}::text,
@@ -261,7 +296,6 @@ export const createEventConsumerProgressRepository = (
     async acknowledge(inputCandidate) {
       const input = validateAcknowledgementInput(inputCandidate);
       try {
-        await transaction.query`set local role vortex_runtime`;
         const rows = await transaction.query<ConsumerProgressRow>`
           select vortex_event.acknowledge_consumer_occurrence(
             ${input.consumerKey}::text,

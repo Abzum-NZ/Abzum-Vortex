@@ -126,6 +126,7 @@ begin
         from causal_chain
         join vortex_event.event_outbox as parent
           on parent.occurrence_id = causal_chain.causation_id
+          and parent.organization_id = occurrence.organization_id
         where causal_chain.depth < maximum_causal_depth
           and not parent.occurrence_id = any (causal_chain.path)
       )
@@ -136,6 +137,7 @@ begin
           and exists (
             select 1 from vortex_event.event_outbox as deeper
             where deeper.occurrence_id = causal_chain.causation_id
+              and deeper.organization_id = occurrence.organization_id
           )
         ), false) as exceeds_limit,
         pg_catalog.coalesce(pg_catalog.bool_or(
@@ -143,6 +145,7 @@ begin
           and exists (
             select 1 from vortex_event.event_outbox as repeated
             where repeated.occurrence_id = causal_chain.causation_id
+              and repeated.organization_id = occurrence.organization_id
               and repeated.occurrence_id = any (causal_chain.path)
           )
         ), false) as has_cycle
