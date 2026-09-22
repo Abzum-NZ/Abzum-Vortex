@@ -60,8 +60,9 @@ const objectValue = (value: unknown): SourceObject | undefined =>
     : undefined;
 
 /**
- * Derives every permanent identity owner and authentic alias from a parsed source document.
- * Source `id` values are owners; mutable keys and paths are aliases of that owner.
+ * Derives every permanent identity owner and authentic alias shared by the Module vocabulary.
+ * Source `id` values are owners; mutable keys and paths are aliases of that owner. A connection
+ * type contributes only its root; an Application uses the V2 extractor below.
  */
 export function extractSourceIdentityRequirements(
   source: DefinitionSourceDocument | ModuleSourceDocument,
@@ -96,7 +97,7 @@ export function extractSourceIdentityRequirements(
   ) => add(kind, ownerScope, scope, component.id, [component.id, component.key, ...extraAliases]);
 
   add("root", "document", "document", "root", [source.key, source.root_alias]);
-  if (source.kind === "connection_type") return requirements;
+  if (source.kind !== "module") return requirements;
 
   const body = sourceObject.body as SourceObject;
   const collection = (key: string): SourceObject[] => objects(body[key]);
@@ -114,82 +115,24 @@ export function extractSourceIdentityRequirements(
   addTopLevel("rule", "rules");
   addTopLevel("event", "events");
 
-  if (source.kind === "module") {
-    for (const recordType of collection("record_types")) {
-      const recordKey = stringValue(recordType.key);
-      const recordOwner = stringValue(recordType.id);
-      if (recordKey === undefined || recordOwner === undefined) continue;
-      const scope = `record:${recordKey}`;
-      const ownerScope = `record_owner:${recordOwner}`;
-      addIdentified("record_type", "content", "content", recordType);
-      add("storage_contract", ownerScope, scope, recordType.storage_contract_id, [
-        recordType.storage_contract_id,
-        recordType.key,
-      ]);
-      for (const field of objects(recordType.fields))
-        addIdentified("field", ownerScope, scope, field);
-      for (const relationship of objects(recordType.relationships))
-        addIdentified("relationship", ownerScope, scope, relationship);
-    }
-    addTopLevel("extension_point", "extension_points");
-    addTopLevel("sharing_condition", "sharing_conditions");
-    return requirements;
+  for (const recordType of collection("record_types")) {
+    const recordKey = stringValue(recordType.key);
+    const recordOwner = stringValue(recordType.id);
+    if (recordKey === undefined || recordOwner === undefined) continue;
+    const scope = `record:${recordKey}`;
+    const ownerScope = `record_owner:${recordOwner}`;
+    addIdentified("record_type", "content", "content", recordType);
+    add("storage_contract", ownerScope, scope, recordType.storage_contract_id, [
+      recordType.storage_contract_id,
+      recordType.key,
+    ]);
+    for (const field of objects(recordType.fields))
+      addIdentified("field", ownerScope, scope, field);
+    for (const relationship of objects(recordType.relationships))
+      addIdentified("relationship", ownerScope, scope, relationship);
   }
-
-  addTopLevel("role", "roles");
-  addTopLevel("query", "queries");
-  addTopLevel("block", "block_registrations");
-  addTopLevel("pipeline", "pipelines");
-  addTopLevel("connection_binding", "connection_bindings");
-  addTopLevel("public_address", "public_addresses", (component) => [component.path]);
-
-  const flattenNavigation = (items: readonly SourceObject[]): SourceObject[] =>
-    items.flatMap((item) => [item, ...flattenNavigation(objects(item.children))]);
-  for (const item of flattenNavigation(collection("navigation")))
-    addIdentified("navigation_item", "content", "content", item);
-
-  for (const page of collection("pages")) {
-    addIdentified("page", "content", "content", page);
-    const pageKey = stringValue(page.key);
-    const pageOwner = stringValue(page.id);
-    for (const placement of objects(page.blocks))
-      addIdentified("block_placement", "content", "content", placement);
-    for (const step of objects(page.steps)) {
-      if (pageKey !== undefined && pageOwner !== undefined)
-        addIdentified("guided_step", `page_owner:${pageOwner}`, `page:${pageKey}`, step);
-      for (const placement of objects(step.blocks))
-        addIdentified("block_placement", "content", "content", placement);
-    }
-  }
-
-  for (const workflow of collection("workflows")) {
-    addIdentified("workflow", "content", "content", workflow);
-    const workflowKey = stringValue(workflow.key);
-    const workflowOwner = stringValue(workflow.id);
-    if (workflowKey === undefined || workflowOwner === undefined) continue;
-    for (const node of objects(workflow.nodes))
-      addIdentified(
-        "workflow_node",
-        `workflow_owner:${workflowOwner}`,
-        `workflow:${workflowKey}`,
-        node,
-      );
-  }
-
-  for (const definition of collection("interfaces")) {
-    addIdentified("interface", "content", "content", definition);
-    const interfaceKey = stringValue(definition.key);
-    const interfaceOwner = stringValue(definition.id);
-    if (interfaceKey === undefined || interfaceOwner === undefined) continue;
-    for (const operation of objects(definition.operations))
-      addIdentified(
-        "interface_operation",
-        `interface_owner:${interfaceOwner}`,
-        `interface:${interfaceKey}`,
-        operation,
-      );
-  }
-
+  addTopLevel("extension_point", "extension_points");
+  addTopLevel("sharing_condition", "sharing_conditions");
   return requirements;
 }
 
