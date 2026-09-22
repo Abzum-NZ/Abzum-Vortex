@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "2.0.0",
+  "source_contract_version": "3.0.0",
   "root_alias": "mod_crm_opportunities",
   "key": "vortex.crm.opportunities",
   "kind": "module",

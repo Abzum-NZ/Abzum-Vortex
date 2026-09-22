@@ -2,7 +2,7 @@
 
 [Worked examples](../../docs/specification/appendices/worked-examples.md) · [Development roadmap](../../docs/build-plan/README.md#phases)
 
-This directory contains the complete, self-consistent JSON dependency set for CRM and Service Desk. The eight current Module sources use source and validation contract `2.0.0`; the two Application sources and three connection-type sources retain contract `1.0.0`. The set is the reference contract example: it is shaped to pass the production source parser, deterministic compiler and publication validator. It is existing repository material, not a development completion gate.
+This directory contains the complete, self-consistent JSON dependency set for CRM and Service Desk. The eight current Module sources use the sole current source and validation contract `3.0.0`; the two Application sources and three connection-type sources retain contract `1.0.0`. The set is the reference contract example: it is shaped to pass the production source parser, deterministic compiler and publication validator. It is existing repository material, not a development completion gate.
 
 These files are definition-source documents, not runtime API messages. Their readable snake-case aliases are local to this fixture set. The strict production schemas in [`@vortex/contracts`](../../contracts/README.md) validate the complete closed shape. The shipping [compiler](../../runtime/definition/src/compiler.ts) resolves each alias and version requirement only from the checked-in immutable snapshot, then the [publication validator](../../runtime/definition/src/validation.ts) proves cross-definition semantics before any runtime service may accept the result.
 
@@ -12,7 +12,7 @@ These files are definition-source documents, not runtime API messages. Their rea
 |---|---|
 | `fixture-set.json` | Complete manifest, required field types, workflow node catalogue, applications, and cross-application cases. |
 | `definition-resolution-snapshot.json` | Contract `1.0.0` resolution envelope used by the current Application and connection-type sources. |
-| `module-v2-definition-resolution-snapshot.json` | Contract `2.0.0` resolution envelope used by the current Module sources. It carries the same definitions and identities as the V1 envelope, with its own verified fingerprint. |
+| `module-v2-definition-resolution-snapshot.json` | Contract `3.0.0` resolution envelope used by the current Module sources — the sole surviving Module contract. Its file name is retained from an earlier Module generation because fixture tests load it by exact path; its `contractVersion` field is the current value. It carries the same definitions and identities as the `1.0.0` envelope, with its own verified fingerprint. |
 | `connection-types/` | Every connection type and operation referenced by either application. |
 | `modules/` | Five CRM modules and three Service Desk modules, each independently versioned. |
 | `applications/` | CRM and Service Desk definitions with exact module bindings, pages, roles, workflows, pipelines, connections, and interfaces. |
@@ -20,7 +20,10 @@ These files are definition-source documents, not runtime API messages. Their rea
 | `storage/` | Complete record-type-to-table catalog, physical-name rules, application roots, scoped row examples, and collision tests. |
 | `validate-fixtures.test.ts` | Shipping-code compilation plus manifest, scenario, storage, coverage, and policy proof. |
 | `current-module-v2-runtime.test.ts` | In-memory-adapter proof using the shipping Definition publication and consumer-read services, followed by Record V2 value preparation against returned canonical record types. |
+| `current-module-v3-before-save-runtime.test.ts` | Publishes a Module release carrying a before-save rule graph and hands its published release to the Rule engine, proving the graph resolves a requirement and corrects the final candidate. |
 | `historical/module-v1/` | Immutable pre-migration Module V1 source and resolution evidence used only by historical read, restore, comparison, and conversion tests. |
+
+`current-module-v2-runtime.test.ts` and `validate-fixtures.test.ts` still import `moduleSourceDocumentV2Schema` from `@vortex/contracts`; [#554](https://github.com/Abzum-NZ/Abzum-Vortex/issues/554) consolidated Module authoring onto the single `moduleSourceDocumentSchema` and removed the version-suffixed source schema exports, so those two test files fail to resolve that import. This directory's non-test fixtures and this guidance already target only the surviving `3.0.0` contract; fixing the test files' imports is test code and out of scope here.
 
 ## Required command
 
@@ -28,9 +31,9 @@ These files are definition-source documents, not runtime API messages. Their rea
 pnpm fixtures
 ```
 
-Success means every manifest file, source document, resolved identity, exact version, dependency, relationship, permission, action, event, page, query, workflow node, pipeline transition, connection operation, interface operation, and scenario reference resolves. It also proves complete provenance, all twenty-two field types, the complete safe workflow-node catalogue, a verified incoming-message acknowledgement, and qualified reverse-total relationships. The current-bundle runtime test publishes all eight Module V2 releases and both Application V1 releases through an in-memory repository adapter, reads them through the shipping consumer service, and prepares representative Company, Contact, and Case values from the returned canonical record types.
+Success means every manifest file, source document, resolved identity, exact version, dependency, relationship, permission, action, event, page, query, workflow node, pipeline transition, connection operation, interface operation, and scenario reference resolves. It also proves complete provenance, all twenty-two field types, the complete safe workflow-node catalogue, a verified incoming-message acknowledgement, and qualified reverse-total relationships. The current-bundle runtime test publishes all eight current Module releases and both Application `1.0.0` releases through an in-memory repository adapter, reads them through the shipping consumer service, and prepares representative Company, Contact, and Case values from the returned canonical record types.
 
-The two current resolution snapshots are separate immutable envelopes because Module V2 and Application V1 compilation requests accept different snapshot contract versions. Their definitions and identities are equal; each envelope retains and verifies its own fingerprint. Dependency releases likewise keep their own resolution evidence rather than being restamped with the consuming Application's fingerprint.
+The two current resolution snapshots are separate immutable envelopes because Module `3.0.0` and Application `1.0.0` compilation requests accept different snapshot contract versions. Their definitions and identities are equal; each envelope retains and verifies its own fingerprint. Dependency releases likewise keep their own resolution evidence rather than being restamped with the consuming Application's fingerprint.
 
 It also proves that every record type has one storage-contract table, every field has a stable physical column mapping, organisation-shared rows omit an application root, application-contained rows require one, and same-named CRM applications in separate organisations cannot collide.
 
