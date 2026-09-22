@@ -16,7 +16,7 @@ export const organizationAdministrationAccountSummarySchema = z
   .object({
     organizationAccountId: organizationAccountIdSchema,
     displayName: z.string().trim().min(1).max(120).optional(),
-    state: z.enum(["active", "suspended", "closed"]),
+    state: z.enum(["active", "suspended", "closed", "closing", "deleted"]),
     language: z.string().min(2).max(35).optional(),
     timeZone: z.string().min(1).max(100).optional(),
     revision: javascriptSafeRevisionSchema,
