@@ -689,6 +689,36 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
         )
           valid = false;
       }
+      for (const query of array(body.queries)) {
+        // A query names one of this module's own records or a record of a declared dependency.
+        // Only an own record can be checked field by field here; a dependency record is resolved
+        // against the compiled dependency release by the Module reference rule.
+        const authoredRecord = String(query.record_type);
+        const separator = authoredRecord.lastIndexOf(":");
+        const ownRecordKey =
+          separator < 0
+            ? authoredRecord
+            : authoredRecord.slice(0, separator) === source.key
+              ? authoredRecord.slice(separator + 1)
+              : undefined;
+        if (separator < 0 ? !records.has(authoredRecord) : !qualifiedRecordValid(authoredRecord))
+          valid = false;
+        const record = ownRecordKey === undefined ? undefined : records.get(ownRecordKey);
+        if (record) {
+          const fields = new Set(array(record.fields).map((field) => String(field.key)));
+          const inputKeys = new Set(array(query.inputs).map((input) => String(input.key)));
+          if ((query.select as string[]).some((field) => !fields.has(String(field)))) valid = false;
+          if (array(query.group_by).some((field) => !fields.has(String(field)))) valid = false;
+          if (array(query.sort).some((sort) => !fields.has(String(sort.field)))) valid = false;
+          if (
+            array(query.aggregates).some(
+              (aggregate) => aggregate.field && !fields.has(String(aggregate.field)),
+            )
+          )
+            valid = false;
+          if (query.filter && !conditionValid(query.filter, fields, inputKeys)) valid = false;
+        }
+      }
     } else if (source.kind === "application") {
       const moduleBindings = new Set(
         array(body.module_bindings).map((binding) => String(binding.module)),
@@ -922,6 +952,23 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
         ),
       );
       if (!conditionTypesValidV2(sharingCondition.condition, fields, parameters, "source"))
+        valid = false;
+    }
+    for (const query of array(body.queries)) {
+      // Only an own record carries authored field types here; a dependency record's filter is
+      // type-checked against the compiled dependency release by the Module reference rule.
+      const authoredRecord = String(query.record_type);
+      const separator = authoredRecord.lastIndexOf(":");
+      if (separator >= 0 && authoredRecord.slice(0, separator) !== source.key) continue;
+      const fields = fieldsFor(
+        records.get(separator < 0 ? authoredRecord : authoredRecord.slice(separator + 1)),
+      );
+      const inputTypes = new Map(
+        array(query.inputs).map(
+          (input) => [String(input.key), semanticFieldTypeV2(input.type) ?? ""] as const,
+        ),
+      );
+      if (query.filter && !conditionTypesValidV2(query.filter, fields, inputTypes, "source"))
         valid = false;
     }
     const sharingConditions = new Map(
@@ -2601,6 +2648,88 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       if (!valid)
         failures.push(
           failure(output, "vortex.definition.module_sharing_condition", "broken_reference"),
+        );
+    }
+    // Module-owned queries exist only in the current Module contract, so they always read field
+    // meaning through its exact value types rather than the superseded module value model.
+    for (const query of array(content.queries)) {
+      const location = { kind: "query" as const, key: String(query.key) };
+      const targetRecord = recordReference(query.recordType, allowedModuleRoots);
+      if (!targetRecord) {
+        failures.push(
+          failure(
+            output,
+            "vortex.definition.module_query_references",
+            "broken_reference",
+            location,
+          ),
+        );
+        continue;
+      }
+      const fieldMap = new Map(
+        array(targetRecord.fields).map((field) => [String(field.fieldId), field]),
+      );
+      const fields = new Set(fieldMap.keys());
+      const selectedFieldIds = (query.selectedFieldIds as string[]).map(String);
+      const groupByFieldIds = (query.groupByFieldIds as string[]).map(String);
+      const sortFieldIds = array(query.sort).map((sort) => String(sort.fieldId));
+      const aggregateFieldIds = array(query.aggregates).flatMap((aggregate) =>
+        aggregate.fieldId === undefined ? [] : [String(aggregate.fieldId)],
+      );
+      const aggregateAliases = array(query.aggregates).map((aggregate) => String(aggregate.alias));
+      const selectedFieldKeys = selectedFieldIds.map((id) => String(fieldMap.get(id)?.key));
+      const unique = (values: readonly string[]) => new Set(values).size === values.length;
+      // Grouping decides the row shape, so a grouped query returns and orders by its grouping
+      // keys only, and a total needs a grouping key to belong to.
+      const groupingValid =
+        groupByFieldIds.length > 0
+          ? selectedFieldIds.every((id) => groupByFieldIds.includes(id)) &&
+            sortFieldIds.every((id) => groupByFieldIds.includes(id))
+          : aggregateAliases.length === 0;
+      const aggregatesValid = array(query.aggregates).every((aggregate) => {
+        if (aggregate.operation === "count") return aggregate.fieldId === undefined;
+        if (aggregate.fieldId === undefined) return false;
+        const field = fieldMap.get(String(aggregate.fieldId));
+        if (!field) return false;
+        if (aggregate.operation === "sum" || aggregate.operation === "average")
+          return ["whole_number", "decimal_number", "money"].includes(fieldValueTypeV2(field) ?? "");
+        return !["formatted_text", "table", "attachment", "link_to_one_of_several"].includes(
+          String(field.type),
+        );
+      });
+      const filterValid =
+        !query.filter ||
+        (fieldReferencesValid(query.filter, fields) &&
+          conditionTypesValidV2(
+            query.filter,
+            fieldMap,
+            new Map(
+              array(query.inputs).map((input) => [
+                String(input.key),
+                semanticFieldTypeV2(input.type) ?? "",
+              ]),
+            ),
+          ));
+      if (
+        [...selectedFieldIds, ...groupByFieldIds, ...sortFieldIds, ...aggregateFieldIds].some(
+          (id) => !fields.has(id),
+        ) ||
+        !unique(selectedFieldIds) ||
+        !unique(groupByFieldIds) ||
+        !unique(sortFieldIds) ||
+        // Every returned column needs one unambiguous name in the result row.
+        !unique([...selectedFieldKeys, ...aggregateAliases]) ||
+        !groupingValid ||
+        !aggregatesValid ||
+        !filterValid
+      )
+        failures.push(
+          failure(
+            output,
+            "vortex.definition.module_query_references",
+            "broken_reference",
+            location,
+          ),
         );
     }
   }
@@ -4839,6 +4968,7 @@ const moduleRuleCodes = [
   "vortex.definition.module_extension_capabilities",
   "vortex.definition.module_extension_references",
   "vortex.definition.module_sharing_condition",
+  "vortex.definition.module_query_references",
 ] as const;
 const applicationRuleCodes = [
   "vortex.definition.application_identity_unique",

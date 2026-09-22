@@ -69,6 +69,7 @@ export const definitionCompilerRefusalCodes = Object.freeze([
   "vortex.definition.module_extension_capabilities",
   "vortex.definition.module_extension_references",
   "vortex.definition.module_field_references",
+  "vortex.definition.module_query_references",
   "vortex.definition.module_record_references",
   "vortex.definition.module_relationship_references",
   "vortex.definition.module_rule_references",
