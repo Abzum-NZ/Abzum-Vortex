@@ -28,7 +28,7 @@ import {
   recordTypeIdSchema,
   fieldIdSchema,
   normalizeExactDecimal,
-  readModuleSourceRecordOwnershipModeV1,
+  readModuleSourceRecordOwnershipMode,
   type ApplicationCompilationOutputV2,
   type ApplicationCompilationRequestV2,
   type ModuleCompilationOutputV2,
@@ -3096,7 +3096,7 @@ function compileModule(
         recordType.storage_scope === "organisation_shared"
           ? "organization_shared"
           : recordType.storage_scope,
-      ownershipMode: readModuleSourceRecordOwnershipModeV1(recordType.ownership_mode),
+      ownershipMode: readModuleSourceRecordOwnershipMode(recordType.ownership_mode),
       ...(recordType.ownership_relationship
         ? {
             ownershipRelationshipId: resolution.relationship(

@@ -11,7 +11,7 @@ import {
   sourceQualifiedRelationshipSchema,
   sourceQualifiedRecordTypeSchema,
 } from "./definition-source-common";
-import { moduleSourceRecordOwnershipModeV1Schema } from "./record-ownership-compatibility";
+import { moduleSourceRecordOwnershipModeSchema } from "./record-ownership-compatibility";
 
 export const sourcePermissionRecordScopeRouteSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("all_records") }).strict(),
@@ -742,7 +742,7 @@ const moduleFixtureRecordTypeSchema = z
     title_field: builderKeySchema,
     storage_contract_id: sourceAliasSchema,
     storage_scope: z.enum(["organisation_shared", "application_contained"]),
-    ownership_mode: moduleSourceRecordOwnershipModeV1Schema,
+    ownership_mode: moduleSourceRecordOwnershipModeSchema,
     ownership_relationship: builderKeySchema.optional(),
     standard_actions: z
       .array(z.enum(["create", "read", "update", "soft_delete", "restore", "export"]))
