@@ -158,7 +158,13 @@ flowchart TD
 A stored calculation that changes at a deadline refreshes automatically without
 a person editing its record. The same calculation engine supplies its next due
 time. A committed save updates that due time alongside the value; changing or
-clearing the deadline cancels/replaces the pending work. The shared scheduler
+clearing the deadline cancels/replaces the pending work. This covers named
+actions, the records they create and every changed parent total. Activating an
+installation reselects the due work of its records. Detaching it removes the
+Application's due work. Changing the organisation time zone reselects the
+organisation's pending work. Each change takes effect in its own transaction,
+and the recalculation operation below re-derives every reselected transition.
+The shared scheduler
 processes due work in bounded batches through a protected recalculation operation,
 not a separate formula engine or one deployed Kestra flow per record.
 
