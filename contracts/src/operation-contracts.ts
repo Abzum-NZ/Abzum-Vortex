@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { correlationIdSchema, jsonValueSchema, secretReferenceSchema } from "./common";
+import {
+  correlationIdSchema,
+  duplicateProtectionKeySchema,
+  jsonValueSchema,
+  secretReferenceSchema,
+} from "./common";
 import { lifecycleStateSchema } from "./catalogues";
 import {
   actionIdSchema,
@@ -673,6 +678,111 @@ export const fileRemovalEligibilityDecisionSchema = z.discriminatedUnion("eligib
 ]);
 export type FileRemovalEligibilityDecision = z.infer<typeof fileRemovalEligibilityDecisionSchema>;
 
+/**
+ * Canonical stages of file object and metadata removal under Specifications 11 and 14.
+ * Previews and active derived copies are cleaned, the private storage object is
+ * deleted, and the file metadata is transitioned to its terminal tombstone.
+ */
+export const fileRemovalStageSchema = z.enum([
+  "previews",
+  "storage_object",
+  "metadata",
+]);
+export type FileRemovalStage = z.infer<typeof fileRemovalStageSchema>;
+
+/**
+ * Safe request to coordinate permanent file object removal.
+ * Requires an eligible #657 decision and a stable deletion key; carries no
+ * private storage paths or credentials, and the service re-evaluates the
+ * submitted decision before accepting a new intent.
+ */
+export const fileObjectRemovalRequestSchema = z
+  .object({
+    fileId: fileIdSchema,
+    deletionKey: duplicateProtectionKeySchema,
+    decision: fileRemovalEligibleDecisionSchema,
+    correlationId: correlationIdSchema,
+  })
+  .strict();
+export type FileObjectRemovalRequest = z.infer<typeof fileObjectRemovalRequestSchema>;
+
+/**
+ * Resumable partial state for an interrupted or in-progress file removal.
+ * Accurately identifies completed and current stages without exposing private
+ * storage paths or content.
+ */
+export const fileObjectRemovalPartialStateSchema = z
+  .object({
+    fileId: fileIdSchema,
+    organizationId: organizationIdSchema,
+    deletionKey: duplicateProtectionKeySchema,
+    status: z.enum(["in_progress", "interrupted"]),
+    completedStages: z.array(fileRemovalStageSchema),
+    currentStage: fileRemovalStageSchema,
+    authorityFingerprint: fingerprintSchema,
+    startedAt: timestampSchema,
+    updatedAt: timestampSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const stages = fileRemovalStageSchema.options;
+    const currentIndex = stages.indexOf(value.currentStage);
+    const expectedCompleted = stages.slice(0, currentIndex);
+    if (
+      value.completedStages.length !== expectedCompleted.length ||
+      value.completedStages.some((stage, index) => stage !== expectedCompleted[index])
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["completedStages"],
+        message: "Completed removal stages must be the canonical prefix before the current stage",
+      });
+  });
+export type FileObjectRemovalPartialState = z.infer<
+  typeof fileObjectRemovalPartialStateSchema
+>;
+
+/**
+ * Content-free terminal receipt for completed permanent file removal.
+ * Emitted only when all owned stages (previews, storage object, metadata tombstone)
+ * are complete. Converges idempotently on repeated calls with the same deletion key.
+ */
+export const fileObjectRemovalReceiptSchema = z
+  .object({
+    receiptId: platformIdSchema,
+    fileId: fileIdSchema,
+    organizationId: organizationIdSchema,
+    deletionKey: duplicateProtectionKeySchema,
+    status: z.literal("completed"),
+    outcome: z.literal("removed"),
+    completedStages: z.array(fileRemovalStageSchema),
+    authorityFingerprint: fingerprintSchema,
+    removedAt: timestampSchema,
+    completedAt: timestampSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const stages = fileRemovalStageSchema.options;
+    if (
+      value.completedStages.length !== stages.length ||
+      value.completedStages.some((stage, index) => stage !== stages[index])
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["completedStages"],
+        message: "A terminal removal receipt records every stage once in canonical order",
+      });
+    if (value.completedAt !== value.removedAt)
+      context.addIssue({
+        code: "custom",
+        path: ["completedAt"],
+        message: "The terminal receipt commits at the same instant as the file tombstone",
+      });
+  });
+export type FileObjectRemovalReceipt = z.infer<
+  typeof fileObjectRemovalReceiptSchema
+>;
+
 export const fileRecordSchema = z
   .object({
     fileId: fileIdSchema,
@@ -695,6 +805,7 @@ export const fileRecordSchema = z
     activatedAt: timestampSchema.optional(),
     deletedAt: timestampSchema.optional(),
     removalDueAt: timestampSchema.optional(),
+    removedAt: timestampSchema.optional(),
     owningAttachmentReferences: z.array(platformIdSchema),
     ownerRecordTypeId: recordTypeIdSchema.optional(),
     ownerRecordId: recordIdSchema.optional(),
@@ -759,6 +870,42 @@ export const fileRecordSchema = z
         code: "custom",
         path: ["deletedAt"],
         message: "A soft-deleted file records when it was deleted",
+      });
+
+    if (value.lifecycleState === "removed") {
+      if (value.removedAt === undefined)
+        context.addIssue({
+          code: "custom",
+          path: ["removedAt"],
+          message: "A permanently removed file records when removal completed",
+        });
+      if (value.previewReferences.length !== 0)
+        context.addIssue({
+          code: "custom",
+          path: ["previewReferences"],
+          message: "A permanently removed file retains no preview references",
+        });
+      if (value.owningAttachmentReferences.length !== 0)
+        context.addIssue({
+          code: "custom",
+          path: ["owningAttachmentReferences"],
+          message: "A permanently removed file retains no active attachment references",
+        });
+      if (
+        value.deletedAt !== undefined &&
+        value.removedAt !== undefined &&
+        Date.parse(value.removedAt) < Date.parse(value.deletedAt)
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["removedAt"],
+          message: "Permanent removal cannot predate soft deletion",
+        });
+    } else if (value.removedAt !== undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["removedAt"],
+        message: "Only a permanently removed file carries a removal time",
       });
   });
 

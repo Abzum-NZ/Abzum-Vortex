@@ -21,3 +21,12 @@ export {
   type FileRemovalRefusalReason,
   type ResolveCurrentFileRemovalAuthority,
 } from "./removal-eligibility";
+export {
+  createFileRemovalCoordinator,
+  type FilePreviewDeleter,
+  type FileRemovalCoordinator,
+  type FileRemovalCoordinatorDependencies,
+  type FileRemovalRepository,
+  type FileRemovalResult,
+  type FileStorageDeleter,
+} from "./object-removal";
