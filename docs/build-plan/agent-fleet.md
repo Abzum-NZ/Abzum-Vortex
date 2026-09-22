@@ -2,19 +2,19 @@
 
 Read [agent coordination](agent-coordination.md) first. This procedure governs the GPT 5.6 Sol main orchestrator, implementers and Opus 5 / GPT 5.6 Sol reviewers. [Visual workflow](fleet-orchestration.html).
 
-## Strict pickup algorithm
+## Ready-work dispatch algorithm
 
 1. On startup/resume, inspect current coordinator/run, workers and worktrees. Adopt ownership only through supported Orca operations. Never duplicate a live or uncertain worker. Reconcile ownership ambiguity before dispatching the affected issue. Pending reports or status writes for one issue remain in the reconciliation journal and do not stop independent eligible work.
-2. Read all pages of the configured authoritative roadmap project: required leaves, phase, numeric Pickup Order, status, native blockers and parent relationships. The concrete repository and project identifiers belong in coordinator runtime state, not this policy. Cache the queue for the cycle. Refresh active/next items at each transition and the complete queue every 30 minutes or after a roadmap change. A partial view cannot establish an empty/completed phase.
+2. Read all pages of the configured authoritative roadmap project: required leaves, phase, status, native blockers, parent relationships and Pickup Order metadata. The concrete repository and project identifiers belong in coordinator runtime state, not this policy. Cache the queue for the cycle. Refresh active/next items at each transition and the complete queue every 30 minutes or after a roadmap change. A partial view cannot establish an empty/completed phase.
 3. Find the earliest phase with unfinished required leaves. Exclude rollup parents and explicitly cancelled leaves. Reviewed but unmerged is unfinished. This phase is the only phase eligible for implementation dispatch.
-4. Scan that phase's leaves in ascending numeric Pickup Order. Keep active work in place, then dispatch each dependency-ready, independently bounded leaf whose owning paths do not overlap an active editor until the lane target is full. Do not renumber or jump phases. A blocked or active lower pickup remains first in reporting, but it does not block a higher independent leaf in the same phase. A higher leaf that depends directly or indirectly on unfinished lower work is not eligible.
+4. Scan every leaf in that phase for actual dependency readiness. Keep active work in place, then dispatch dependency-ready, independently bounded leaves whose owning paths do not overlap an active editor until the lane target is full. Do not jump phases. Pickup Order does not affect eligibility; a leaf is ineligible only because of a real dependency, overlapping ownership, unresolved scope or unavailable capacity.
 5. Confirm the selected leaf's real native blockers and required children are complete. Correct stale dependency descriptions against source/spec with a recorded reason. Never delete a real dependency merely to make the task Ready.
-6. A missing/duplicate Pickup Order, dependency cycle or real forward dependency is a planning blocker. Prepare the exact correction and ask the user before changing agreed order. Do not silently renumber or sort by issue number.
+6. A dependency cycle or contradictory native dependency is a planning blocker. Pickup Order may remain missing, duplicated or out of sequence because it is reporting metadata; never wait for or renumber it before dispatching Ready work.
 7. Read current source and bound remaining work for enough eligible leaves to maintain six active implementer lanes by default, or eight when isolation and capacity are clear. Already implemented functionality goes to a bounded Opus/Sol source review and completion reconciliation, not reimplementation. Otherwise select routing/estimate and dispatch the implementer.
 8. Treat implementer and reviewer capacity as separate pools. Up to four independent Opus 5 or GPT 5.6 Sol review-and-fix sessions may run concurrently. A candidate waiting for review, repository status, or integration does not consume an implementer lane and does not pause independent work in the same phase.
 9. After any candidate handoff, reviewed integration, issue closure, board reconciliation or cleanup, immediately recompute eligibility and refill open lanes. Advance phase only after all required leaves in this phase are complete. Phase 6 means implemented definition-led UI, not deployment or hosted evidence.
 
-Strict order is preserved by phase, dependencies and ascending dispatch, not by serializing unrelated work. Resolve external blockers or name the exact action needed; keep other independent leaves in the same phase moving. Provider changes and revised estimates never change Pickup Order. Do not go silently idle or claim an empty queue while eligible work or an unfilled lane remains.
+Phase order is preserved by completing the earliest incomplete phase and respecting real dependencies, not by serializing unrelated work. Resolve external blockers or name the exact action needed; keep every independent Ready leaf in the same phase moving. Provider changes, Pickup Order and revised estimates never change readiness. Do not go silently idle or claim an empty queue while eligible work or an unfilled lane remains.
 
 ## Models and capacity
 
@@ -28,7 +28,7 @@ Strict order is preserved by phase, dependencies and ascending dispatch, not by 
 | Alternative bounded implementation | GPT 5.6 Terra, or GPT 5.6 Luna High for clearly defined bounded work |
 | All final reviews, fixes and re-reviews | Opus 5 or GPT 5.6 Sol (High), separate session from implementer |
 
-Choose the cheapest capable model. Before pickup, review handoff and each 30-minute active checkpoint, read `orca account list --json` for Claude and Codex session and weekly usage, reset times, freshness and errors. GLM and Antigravity capacity may require observing the actual provider response. Unknown quota is not unlimited. The following percentages guide routing and do not permit skipping the current pickup. Avoid routine implementation below 25% weekly remaining; preserve 15% for essential coordination/review. No automatic credit purchases or resets, and do not repeatedly probe a provider that has already returned a limit. If both qualified reviewers are unavailable, remain In review with a capacity blocker; do not substitute a cheaper reviewer, claim Done or skip this pickup.
+Choose the cheapest capable model. Before dispatch, review handoff and each 30-minute active checkpoint, read `orca account list --json` for Claude and Codex session and weekly usage, reset times, freshness and errors. GLM and Antigravity capacity may require observing the actual provider response. Unknown quota is not unlimited. Capacity guidance does not permit crossing phase boundaries or ignoring dependencies. Avoid routine implementation below 25% weekly remaining; preserve 15% for essential coordination/review. No automatic credit purchases or resets, and do not repeatedly probe a provider that has already returned a limit. If both qualified reviewers are unavailable, remain In review with a capacity blocker; do not substitute a cheaper reviewer or claim Done.
 
 Treat a provider concurrency, rate-limit or model-unavailable response as a capacity result, not a tool-approval denial. Positively settle that exact attempt, preserve its branch/worktree, record the actual provider response, then reassign implementation to the next cheapest suitable authorized workhorse without waiting for user direction. Do not repeatedly probe the failed provider. Real permission and repository-protection denials remain non-bypassable: do not retry unchanged, change controls or route through another executor to evade them.
 
@@ -48,7 +48,7 @@ Orchestrator is the sole project-board writer. Reviewer is explicitly allowed to
 
 | Event | Board action |
 | --- | --- |
-| Ordered issue eligible | Ready, planned model/estimate, no active owner yet |
+| Dependency-ready issue bounded | Ready, planned model/estimate, no active owner yet |
 | Actual worker start | In progress, actual model/dispatch/branch, UTC start |
 | Implementation complete | In review, candidate commit, implementer cleared, reviewer queued/started |
 | Reviewer starts/fixes | In review, actual reviewer, review/fix substate, current candidate |
@@ -70,13 +70,13 @@ Every 15 minutes while active, compare actual workers with board owners and comp
 | No useful progress for 15 minutes | Inspect edits/session; ask one bounded status question if unclear |
 | Estimate reached or 30-minute checkpoint | Record completed/remaining scope and cause; adjust estimate or narrow within this issue |
 | Productive worker exceeds estimate | Continue; time alone never terminates a worker |
-| Confirmed provider failure/quota refusal | Preserve work, settle/stop old attempt through Orca, reassign same pickup and update metadata |
+| Confirmed provider failure/quota refusal | Preserve work, settle/stop old attempt through Orca, reassign the same issue and update metadata |
 | Reviewer finds defects | Reviewer fixes and re-reviews itself; no implementer ping-pong |
 | Conflicting editors/stale main | Establish exclusive ownership; reviewer resolves and re-reviews candidate |
 | Real permission/repository rejection | Name exact rule/action and supported resolution; no unchanged retry loop or bypass |
 | No eligible work in current phase | Report every active/blocking leaf and accountable action; do not jump to a later phase |
 
-When externally blocked, persist the resume condition and let the scheduled monitor inspect for changes. Do not burn tokens polling unchanged state or leave an idle worker presented as active. Retain the candidate and release settled workers. Progress resumes at the same pickup after the condition changes. There is no promise of uninterrupted progress through genuine external blocks.
+When externally blocked, persist the resume condition and let the scheduled monitor inspect for changes. Do not burn tokens polling unchanged state or leave an idle worker presented as active. Retain the candidate and release settled workers. Keep every other Ready same-phase issue moving and resume the blocked issue after its condition changes. There is no promise of uninterrupted progress through genuine external blocks.
 
 ## Orca lifecycle and cleanup
 
@@ -129,4 +129,4 @@ The coordinator owns a durable checkpoint outside disposable worktrees. Discover
 
 Keep actual UTC, coordinator/run/session, current phase, every running/reviewing leaf, worker/reviewer, candidate/worktree/branch, reviewed/merged commits, status, progress time, estimates, blocker/resume condition, pending board writes, retained worktrees and the next eligible queue in one checkpoint. It records facts, not new policy.
 
-Every scheduled check reports findings even unchanged: a list of currently running tasks with actual agent/model/stage/elapsed estimate; tasks completed since the previous scheduled run; reviewed versus merged work; issue/board accuracy; blockers/actions; open lane count and why any lane is idle; next eligible pickups in the current phase; provider usage freshness; verified task-count progress percentages for the overall roadmap and the Phase 1-6 milestone; and progress toward the visible definition-led Phase 6 outcome. Never infer a percentage from a partial board page or say work is moving while idle.
+Every scheduled check reports findings even unchanged: a list of currently running tasks with actual agent/model/stage/elapsed estimate; tasks completed since the previous scheduled run; reviewed versus merged work; issue/board accuracy; blockers/actions; open lane count and why any lane is idle; next eligible issues in the current phase; provider usage freshness; verified task-count progress percentages for the overall roadmap and the Phase 1-6 milestone; and progress toward the visible definition-led Phase 6 outcome. Never infer a percentage from a partial board page or say work is moving while idle.

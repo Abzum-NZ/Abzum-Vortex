@@ -18,7 +18,7 @@ Kestra is not involved in fleet management or development acceptance. Do not inv
 
 | Role | Owns | Does not own |
 | --- | --- | --- |
-| Main orchestrator: GPT 5.6 Sol | Phase/Pickup Order, scope/dependencies, model routing, shared board, agent lifecycle, cleanup, progress | Routine product implementation, extra acceptance review, deployment |
+| Main orchestrator: GPT 5.6 Sol | Phase readiness, scope/dependencies, model routing, shared board, agent lifecycle, cleanup, progress | Routine product implementation, extra acceptance review, deployment |
 | Implementer: cheapest suitable agent | One bounded issue, isolated worktree, implementation commit and handoff | Issue closure, board edits, merging or another task |
 | Reviewer: Opus 5 or GPT 5.6 Sol | Independent review, own findings/fixes, re-review, PR integration, assigned issue update and closure | Shared board, unrelated issues, sending ordinary fixes back to implementer |
 
@@ -28,26 +28,26 @@ Reviewer reads and updates its assigned issue and PR. Orchestrator owns shared p
 
 ## Required lifecycle
 
-1. **Pick:** Select the earliest incomplete phase, then scan its unfinished leaves in numeric Pickup Order. Read each full issue/comments, native blockers, relevant specification and current main code. Separate already built from exact remaining work. Add every dependency-ready leaf with non-overlapping ownership to the current parallel wave until the worker-lane target is full. A lower pickup that is already active or blocked by another active leaf stays visible but does not suppress a higher independent leaf in the same phase. Never start a later phase early.
-2. **Assign:** Choose the cheapest capable agent for each bounded leaf using difficulty and current usage. Create an isolated issue worktree from origin/main. Record actual model, branch, path, estimate and dispatch. Mark In progress only after actual task start. Dispatch the wave in ascending Pickup Order and spread implementation across OpenCode GLM 5.3 Flash, Antigravity Gemini 3.8 Flash Max, Claude Sonnet 5 High, GPT 5.6 Terra, and GPT 5.6 Luna High when each is suitable. Luna receives only clearly defined bounded work. Do not consume GPT 5.6 Sol for routine implementation.
+1. **Pick:** Select the earliest incomplete phase, then scan all its unfinished leaves for actual dependency readiness and non-overlapping ownership. Read each full issue/comments, native blockers, relevant specification and current main code. Separate already built from exact remaining work. Add every dependency-ready leaf with non-overlapping ownership to the current parallel wave until the worker-lane target is full. Numeric Pickup Order is retained for reporting only and does not delay any Ready leaf. Never start a later phase early.
+2. **Assign:** Choose the cheapest capable agent for each bounded leaf using difficulty and current usage. Create an isolated issue worktree from origin/main. Record actual model, branch, path, estimate and dispatch. Mark In progress only after actual task start. Dispatch every eligible leaf needed to fill the wave and spread implementation across OpenCode GLM 5.3 Flash, Antigravity Gemini 3.8 Flash Max, Claude Sonnet 5 High, GPT 5.6 Terra, and GPT 5.6 Luna High when each is suitable. Luna receives only clearly defined bounded work. Do not consume GPT 5.6 Sol for routine implementation.
 3. **Implement:** Worker changes the agreed scope, commits/pushes candidate and reports functionality, commit, acceptance mapping and limitations. It does not close the issue. Orchestrator settles/releases implementer and records In review before review handoff.
 4. **Review and fix:** Fresh Opus 5/Sol reviewer checks the full diff and affected callers against acceptance/spec, fixes findings itself and re-reviews the final changes. Repeat this bounded loop until in-scope findings are resolved. Missing product decisions go to the orchestrator; do not invent them.
 5. **Integrate and close:** Reviewer opens the PR if the implementer has not already opened it, then integrates its reviewed PR into main through permitted repository operations. If resolving a conflict changes code, re-review that candidate. Confirm merge, update the assigned issue's implemented outcome and final review, then close it completed. A local commit or reviewed-but-unmerged PR is not Done.
 6. **Report:** Reviewer sends issue/phase/pickup, PR, reviewed commit, merge commit, functionality, findings fixed, remaining limitations and closure state. Explicitly ask orchestrator to reconcile board, unblock dependents, roll up parents, stop/release reviewer, clean the safe completed worktree, recompute the current-phase eligible queue and refill every open implementation and review lane. Send completion once, stop editing and idle for release.
-7. **Reconcile, refill and clean:** Orchestrator confirms reported states, records Done, clears active owner, refreshes dependency eligibility and rolls up completed parents. Release settled agents. Remove a completed worktree only when all useful work is merged or preserved. Refill an available implementer or reviewer lane immediately from the same phase's ascending eligible queue. Advance phase only when all its required leaves are complete.
+7. **Reconcile, refill and clean:** Orchestrator confirms reported states, records Done, clears active owner, refreshes dependency eligibility and rolls up completed parents. Release settled agents. Remove a completed worktree only when all useful work is merged or preserved. Refill an available implementer or reviewer lane immediately from any eligible non-overlapping leaf in the same phase. Advance phase only when all its required leaves are complete.
 
 ## Status meanings
 
 | Status | Fact required |
 | --- | --- |
 | Backlog | Not picked up or prerequisite unresolved; no active implementation claim |
-| Ready | Ordered issue is bounded and unblocked; no planner approval gate |
+| Ready | Issue is bounded and dependency-ready; no planner approval gate |
 | In progress | Named implementer actually started |
 | In review | Candidate handed off; reviewer queued/active/fixing or integration blocked; name substate |
 | Done | Functionality reviewed and merged, issue closed, board reconciled |
 | Not planned | Explicitly cancelled scope, not delivered functionality |
 
-Testing is not a development status. Blocked integration stays In review with exact blocker and no fictitious active owner. Continue independent eligible leaves in the same phase, while keeping the blocked lower pickup first in reporting. Do not advance the phase or treat the blocker as resolved.
+Testing is not a development status. Blocked integration stays In review with exact blocker and no fictitious active owner. Continue every independent eligible leaf in the same phase. Do not advance the phase or treat the blocker as resolved.
 
 ## Boundaries
 
