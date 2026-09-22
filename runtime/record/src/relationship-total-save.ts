@@ -166,7 +166,7 @@ const issue = (
  */
 export const calculateLockedRelationshipTotalSave = (
   input: Readonly<{
-    command: SaveRecordCommandV2;
+    command: Pick<SaveRecordCommandV2, "operation" | "submittedValues">;
     preparation: LockedRelationshipTotalPreparation;
     creations?: readonly RelationshipTotalCreationRoot[];
     organizationCurrency?: string;
