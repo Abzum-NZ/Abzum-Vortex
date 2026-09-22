@@ -315,6 +315,19 @@ export const lifecycleReadinessEvidenceSchema = z
 export type LifecycleReadinessEvidence = z.infer<typeof lifecycleReadinessEvidenceSchema>;
 
 /**
+ * The maximum recovery window a policy may configure, in whole days.  Every
+ * window is converted to milliseconds for the elapsed-time comparison, so the
+ * ceiling is the largest day count whose millisecond value is still a
+ * JSON-safe integer.  A larger configured window is a refusal, never a silent
+ * unlimited-recovery fallback.
+ */
+export const maximumRecoveryWindowDays = Math.floor(
+  Number.MAX_SAFE_INTEGER / (24 * 60 * 60 * 1000),
+);
+
+const recoveryWindowDaysSchema = jsonSafePositiveIntegerSchema.max(maximumRecoveryWindowDays);
+
+/**
  * The immutable facts a caller must carry into a recovery decision.  The
  * record-type identity is intentionally paired with the stored-policy target:
  * a storage contract is not itself an authority to restore another type.
@@ -323,7 +336,7 @@ export const recordRecoveryPolicySchema = z
   .object({
     recordTypeId: recordTypeIdSchema,
     policy: recordTypeLifecyclePolicySchema,
-    recoveryWindowDays: jsonSafePositiveIntegerSchema,
+    recoveryWindowDays: recoveryWindowDaysSchema,
   })
   .strict();
 export type RecordRecoveryPolicy = z.infer<typeof recordRecoveryPolicySchema>;
@@ -345,6 +358,10 @@ export type RecordRecoveryEligibilityReason = z.infer<
  * Pure, state-free recovery decision input.  The caller supplies the current
  * stored policy projection and readiness fact; this contract deliberately has
  * no record ID, mutation command, totals, effects, or receipt fields.
+ *
+ * `governingPolicy` is explicitly nullable so an absent stored policy is the
+ * distinct `policy_unavailable` refusal rather than a malformed input, and so
+ * an unavailable policy can never be read as an unrestricted recovery.
  */
 export const recordRecoveryEligibilityInputSchema = z
   .object({
@@ -356,7 +373,7 @@ export const recordRecoveryEligibilityInputSchema = z
     decidedAt: timestampSchema,
     expectedPolicyRevision: jsonSafeRevisionSchema,
     readinessAvailable: z.boolean(),
-    governingPolicy: recordRecoveryPolicySchema,
+    governingPolicy: recordRecoveryPolicySchema.nullable(),
   })
   .strict();
 export type RecordRecoveryEligibilityInput = z.infer<typeof recordRecoveryEligibilityInputSchema>;
@@ -382,9 +399,10 @@ export type RecordRecoveryEligibilityDecision = z.infer<
 >;
 
 /**
- * Protected Record-owned snapshot used immediately before Module activation.
- * It contains no mutable request input: target completeness comes from the
- * repository and each policy is checked again by the Module caller.
+ * Protected Record-owned snapshot taken immediately after the Module
+ * activation write and before that write is accepted.  It contains no mutable
+ * request input: target completeness comes from the repository and every
+ * policy is checked again by the Module caller.
  */
 export const applicationLifecyclePolicyReadinessSchema = z
   .object({
@@ -409,9 +427,26 @@ const refusedRecovery = (
 });
 
 /**
+ * Platform identifiers are compared case-insensitively, exactly like every
+ * other stored-identifier comparison in this repository: a database projection
+ * and a request value can differ in hexadecimal case alone, and that
+ * difference is not a scope mismatch.
+ */
+const sameIdentifier = (left: string | null, right: string | null): boolean =>
+  left === null || right === null
+    ? left === right
+    : left.toLowerCase() === right.toLowerCase();
+
+const millisecondsPerDay = 24 * 60 * 60 * 1000;
+
+/**
  * Determines recovery eligibility without observing or changing Record state.
  * Times are interpreted as UTC instants and a record is recoverable only while
  * the elapsed interval is strictly shorter than its configured window.
+ *
+ * Every refusal is one of the closed `recordRecoveryEligibilityReasonSchema`
+ * values and carries the governing policy revision whenever one was resolved,
+ * so a caller can report exactly which revision refused it.
  */
 export const decideRecordRecoveryEligibility = (
   candidate: unknown,
@@ -420,29 +455,41 @@ export const decideRecordRecoveryEligibility = (
   if (!input.success) return refusedRecovery("malformed_input", null);
 
   const { governingPolicy, deletedAt, decidedAt } = input.data;
+  if (governingPolicy === null) return refusedRecovery("policy_unavailable", null);
+
   const policy = governingPolicy.policy;
   const policyRevision = policy.policyRevision;
   if (input.data.expectedPolicyRevision !== policyRevision)
     return refusedRecovery("policy_revision_stale", policyRevision);
   if (
-    policy.organizationId !== input.data.organizationId ||
-    policy.storageContractId !== input.data.storageContractId ||
-    policy.applicationRootId !== input.data.applicationRootId ||
-    governingPolicy.recordTypeId !== input.data.recordTypeId
+    !sameIdentifier(policy.organizationId, input.data.organizationId) ||
+    !sameIdentifier(policy.storageContractId, input.data.storageContractId) ||
+    !sameIdentifier(policy.applicationRootId, input.data.applicationRootId) ||
+    !sameIdentifier(governingPolicy.recordTypeId, input.data.recordTypeId)
   )
     return refusedRecovery("scope_mismatch", policyRevision);
-  if (policy.action !== "delete") return refusedRecovery("recovery_action_ineligible", policyRevision);
-  if (!input.data.readinessAvailable) return refusedRecovery("readiness_unavailable", policyRevision);
+  // Recoverable deletion is the only end-of-life action this decision allows.
+  // An archive-workflow policy removes its source through the durable archive
+  // path owned by #560/#568, so it is refused here with a stable reason rather
+  // than silently reinterpreted as a recoverable delete.
+  if (policy.action !== "delete")
+    return refusedRecovery("recovery_action_ineligible", policyRevision);
+  if (!input.data.readinessAvailable)
+    return refusedRecovery("readiness_unavailable", policyRevision);
 
   const deletedAtMs = new Date(deletedAt).getTime();
   const decidedAtMs = new Date(decidedAt).getTime();
-  const recoveryWindowMs =
-    governingPolicy.recoveryWindowDays > Number.MAX_SAFE_INTEGER / (24 * 60 * 60 * 1000)
-      ? Number.POSITIVE_INFINITY
-      : governingPolicy.recoveryWindowDays * 24 * 60 * 60 * 1000;
   if (!Number.isFinite(deletedAtMs) || !Number.isFinite(decidedAtMs))
     return refusedRecovery("malformed_input", policyRevision);
-  if (decidedAtMs < deletedAtMs || decidedAtMs - deletedAtMs >= recoveryWindowMs)
+  // A decision taken before the deletion it decides on is not an expired
+  // window; it is an inconsistent input and is reported as one.
+  if (decidedAtMs < deletedAtMs) return refusedRecovery("malformed_input", policyRevision);
+
+  // `recoveryWindowDays` is bounded by `maximumRecoveryWindowDays`, so this
+  // product is always a JSON-safe integer and can never degrade into an
+  // unbounded recovery window.
+  const recoveryWindowMs = governingPolicy.recoveryWindowDays * millisecondsPerDay;
+  if (decidedAtMs - deletedAtMs >= recoveryWindowMs)
     return refusedRecovery("recovery_window_expired", policyRevision);
 
   return { allowed: true, reason: null, governingPolicyRevision: policyRevision };

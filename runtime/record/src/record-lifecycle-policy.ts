@@ -18,8 +18,6 @@ import {
   type OrganizationSelectionCandidate,
   type RecordTypeLifecyclePolicy,
 } from "@vortex/contracts";
-
-export { decideRecordRecoveryEligibility } from "@vortex/contracts";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
@@ -72,6 +70,33 @@ export interface SaveRecordTypeLifecyclePolicyCommand {
   readonly expectedSettingsRevision: number;
   /** `null` when creating the first policy for this exact target. */
   readonly expectedPolicyRevision: number | null;
+  readonly policy: RecordTypeLifecyclePolicyActionInput;
+}
+
+/**
+ * Initial policy setup for a record type of an Application that is still
+ * being provisioned (#567).
+ *
+ * The #566 administration save requires an already-active installation, and
+ * #567 makes activation require a stored policy for every record type the
+ * installation owns. This command is the only route out of that circle: it
+ * stores revision 1 and nothing else, for one exact storage contract and
+ * application scope, bound to one exact provisioned Module binding revision
+ * and the organisation's exact current limits revision. An existing policy is
+ * refused rather than updated, so it never becomes a second way to change a
+ * policy that #566 already governs.
+ */
+export interface SaveInitialRecordTypeLifecyclePolicyForProvisionedSetupCommand {
+  readonly organizationId: string;
+  /** The Application being installed; always present, never null. */
+  readonly bindingApplicationRootId: string;
+  /** Must match the provisioned Module binding revision for this target. */
+  readonly expectedBindingRevision: number;
+  readonly storageContractId: string;
+  /** `null` only for an organisation-shared record type. */
+  readonly applicationRootId: string | null;
+  /** Must match the organisation's current lifecycle-limits revision. */
+  readonly expectedSettingsRevision: number;
   readonly policy: RecordTypeLifecyclePolicyActionInput;
 }
 
@@ -231,6 +256,60 @@ const parseSaveRecordTypeLifecyclePolicyCommand = (
     applicationRootId: applicationRootId.data,
     expectedSettingsRevision: expectedSettingsRevision.data,
     expectedPolicyRevision: expectedPolicyRevision.data,
+    policy,
+  };
+};
+
+const provisionedSetupCommandKeys = [
+  "organizationId",
+  "bindingApplicationRootId",
+  "expectedBindingRevision",
+  "storageContractId",
+  "applicationRootId",
+  "expectedSettingsRevision",
+  "policy",
+] as const;
+
+const parseSaveInitialPolicyForProvisionedSetupCommand = (
+  candidate: unknown,
+): SaveInitialRecordTypeLifecyclePolicyForProvisionedSetupCommand | undefined => {
+  if (!isPlainObject(candidate) || !hasOnlyKeys(candidate, provisionedSetupCommandKeys))
+    return undefined;
+  const organizationId = organizationIdSchema.safeParse(candidate.organizationId);
+  const bindingApplicationRootId = applicationRootIdSchema.safeParse(
+    candidate.bindingApplicationRootId,
+  );
+  const expectedBindingRevision = parseSafeRevision(candidate.expectedBindingRevision);
+  const storageContractId = storageContractIdSchema.safeParse(candidate.storageContractId);
+  const applicationRootId =
+    candidate.applicationRootId === null
+      ? { success: true as const, data: null }
+      : applicationRootIdSchema.safeParse(candidate.applicationRootId);
+  const expectedSettingsRevision = parseSafeRevision(candidate.expectedSettingsRevision);
+  const policy = parseRecordTypeLifecyclePolicyActionInput(candidate.policy);
+
+  if (
+    !organizationId.success ||
+    !bindingApplicationRootId.success ||
+    !expectedBindingRevision.success ||
+    !storageContractId.success ||
+    !applicationRootId.success ||
+    !expectedSettingsRevision.success ||
+    policy === undefined ||
+    // The policy scope is either this exact Application or, for an
+    // organisation-shared record type, no Application at all.
+    (applicationRootId.data !== null &&
+      !sameUuid(applicationRootId.data, bindingApplicationRootId.data))
+  )
+    return undefined;
+
+  return {
+    organizationId: organizationId.data,
+    bindingApplicationRootId: bindingApplicationRootId.data,
+    expectedBindingRevision: expectedBindingRevision.data,
+    storageContractId: storageContractId.data,
+    applicationRootId: applicationRootId.data,
+    expectedSettingsRevision: expectedSettingsRevision.data,
     policy,
   };
 };
@@ -411,5 +490,80 @@ export const createRecordTypeLifecyclePolicyService = (
         return parsed.data;
       });
     },
+
+    /**
+     * Stores the first lifecycle policy for one record type while its
+     * Application installation is still provisioned, so that #567 activation
+     * has an executable policy to gate on. It can only ever create revision 1
+     * for the exact target; an existing policy is refused by the stored
+     * primitive rather than updated.
+     */
+    saveInitialForProvisionedSetup: async (
+      session: IdentitySession,
+      commandCandidate: unknown,
+    ): Promise<HumanOrganizationRequestResult<RecordTypeLifecyclePolicy>> => {
+      const command = parseSaveInitialPolicyForProvisionedSetupCommand(commandCandidate);
+      if (command === undefined) return { kind: "unavailable" };
+      let activityId: string;
+      try {
+        activityId = activityIdSchema.parse(newActivityId());
+      } catch {
+        return { kind: "temporarily_unavailable" };
+      }
+
+      // Provisioned setup is always an Application-scoped request: the
+      // binding that authorises it belongs to exactly one Application, even
+      // when the record type it configures is organisation-shared.
+      const selection: OrganizationSelectionCandidate = {
+        organizationId: command.organizationId,
+        applicationRootId: command.bindingApplicationRootId,
+      };
+
+      return requests.runChange(session, selection, async (transaction, scope) => {
+        await transaction.query`set local role vortex_runtime`;
+        const rows = await transaction.query<PolicyRow>`
+          select vortex_record.save_initial_record_type_lifecycle_policy_for_provisioned_setup(
+            ${command.bindingApplicationRootId}::uuid,
+            ${command.expectedBindingRevision}::bigint,
+            ${command.storageContractId}::uuid,
+            ${command.applicationRootId}::uuid,
+            ${command.expectedSettingsRevision}::bigint,
+            ${activityId}::uuid,
+            ${JSON.stringify(command.policy)}::text::jsonb
+          ) as policy
+        `;
+        const row = requireOneRow(rows);
+        const parsed = recordTypeLifecyclePolicySchema.safeParse(row.policy);
+        if (
+          !parsed.success ||
+          !sameUuid(parsed.data.organizationId, scope.organizationId) ||
+          !sameUuid(parsed.data.storageContractId, command.storageContractId) ||
+          (parsed.data.applicationRootId === null) !== (command.applicationRootId === null) ||
+          (parsed.data.applicationRootId !== null &&
+            command.applicationRootId !== null &&
+            !sameUuid(parsed.data.applicationRootId, command.applicationRootId)) ||
+          parsed.data.policyRevision !== 1 ||
+          !storedPolicyMatchesCommand(parsed.data, command.policy)
+        )
+          throw new Error("RECORD_LIFECYCLE_POLICY_STORAGE_UNAVAILABLE");
+        return parsed.data;
+      });
+    },
   });
 };
+
+/**
+ * The pure #567 recovery-eligibility decision. It is re-exported here so the
+ * Record lifecycle-policy runtime is the single callable surface for it; the
+ * decision itself observes and changes nothing, and owns no restore, totals,
+ * due-metadata, Activity, Event or receipt behaviour.
+ */
+export {
+  decideRecordRecoveryEligibility,
+  maximumRecoveryWindowDays,
+  recordRecoveryEligibilityInputSchema,
+  type RecordRecoveryEligibilityDecision,
+  type RecordRecoveryEligibilityInput,
+  type RecordRecoveryEligibilityReason,
+  type RecordRecoveryPolicy,
+} from "@vortex/contracts";
