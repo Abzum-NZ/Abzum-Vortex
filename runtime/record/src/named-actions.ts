@@ -24,8 +24,8 @@ import {
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
   deriveEarliestPendingDeadlineTransitionV2,
-  deriveParentDeadlineDueMutations,
-  type ParentDeadlineDueMutation,
+  deriveParentDeadlineDueTransitions,
+  type ParentDeadlineDueTransition,
   type PendingDeadlineTransitionV2,
 } from "./deadline-transitions";
 import {
@@ -323,6 +323,12 @@ const refusePrecondition = async (
     : { outcome: "refused" };
 };
 
+/** The next due transition of one created record, keyed by its creation ordinal. */
+type CreationDeadlineDueTransition = Readonly<{
+  ordinal: number;
+  dueTransition: PendingDeadlineTransitionV2 | null;
+}>;
+
 const persist = async (
   transaction: RequestDatabaseTransaction,
   command: ExecuteNamedActionCommandV2,
@@ -334,8 +340,9 @@ const persist = async (
   declaredOccurrenceIds: readonly string[],
   creationOccurrenceIds: readonly string[],
   parentMutations: readonly unknown[],
-  dueTransition?: PendingDeadlineTransitionV2,
-  parentDeadlineDueMutations: readonly ParentDeadlineDueMutation[] = [],
+  dueTransition: PendingDeadlineTransitionV2 | undefined,
+  parentDueTransitions: readonly ParentDeadlineDueTransition[],
+  creationDueTransitions: readonly CreationDeadlineDueTransition[],
 ) => {
   const rows = await transaction.query<ResultRow>`
     select vortex_record.save_named_action_effects_with_relationship_totals_and_deadline_due_metadata(
@@ -352,15 +359,8 @@ const persist = async (
       ${command.action.releaseRevision}::bigint, ${command.action.actionId}::uuid,
       ${JSON.stringify(command.inputs)}::text::jsonb,
       ${dueTransition === undefined ? null : JSON.stringify(dueTransition)}::text::jsonb,
-      ${JSON.stringify(
-        parentDeadlineDueMutations.map((mutation) => ({
-          recordTypeId: mutation.recordTypeId,
-          recordId: mutation.recordId,
-          recordType: mutation.recordType,
-          concurrencyNumber: mutation.newConcurrencyNumber,
-          ...(mutation.dueTransition === undefined ? {} : { dueTransition: mutation.dueTransition }),
-        })),
-      )}::text::jsonb
+      ${JSON.stringify(parentDueTransitions)}::text::jsonb,
+      ${JSON.stringify(creationDueTransitions)}::text::jsonb
     ) as value
   `;
   const value = one(rows).value;
@@ -480,8 +480,6 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
 
             let finalValues: Record<string, unknown> = {};
             let parentMutations: readonly RelationshipTotalParentMutation[] = [];
-            let dueTransition: PendingDeadlineTransitionV2 | undefined;
-            let parentDeadlineDueMutations: readonly ParentDeadlineDueMutation[] = [];
             let creations: readonly Readonly<{
               ordinal: number;
               recordTypeId: string;
@@ -602,19 +600,38 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
             // ended up being (including the untouched `{}`/`[]` defaults above),
             // so an action with no deadline-relevant effect reconfirms the
             // record's already-correct due row instead of cancelling it.
-            dueTransition = deriveEarliestPendingDeadlineTransitionV2({
+            const organizationTimeZone = settings?.timeZone ?? "UTC";
+            const dueTransition = deriveEarliestPendingDeadlineTransitionV2({
               recordType: prepared.recordType,
               finalAuthoritativeFieldValues: { ...prepared.existingValues, ...finalValues },
-              organizationTimeZone: settings?.timeZone ?? "UTC",
+              organizationTimeZone,
             });
-            parentDeadlineDueMutations =
+            const parentDueTransitions =
               totalPreparation.outcome === "prepared"
-                ? deriveParentDeadlineDueMutations(
+                ? deriveParentDeadlineDueTransitions(
                     parentMutations,
                     totalPreparation.records,
-                    settings?.timeZone ?? "UTC",
+                    organizationTimeZone,
                   )
                 : [];
+            const createTargets = new Map(
+              prepared.createTargets.map((target) => [target.ordinal, target]),
+            );
+            const creationDueTransitions: CreationDeadlineDueTransition[] = [];
+            for (const creation of creations) {
+              const target = createTargets.get(creation.ordinal);
+              if (target === undefined)
+                return safeRefusal(prepared.correlationId, "operation_refused");
+              creationDueTransitions.push({
+                ordinal: creation.ordinal,
+                dueTransition:
+                  deriveEarliestPendingDeadlineTransitionV2({
+                    recordType: target.recordType,
+                    finalAuthoritativeFieldValues: creation.finalValues,
+                    organizationTimeZone,
+                  }) ?? null,
+              });
+            }
             try {
               standardOccurrenceId ??= eventOccurrenceIdSchema.parse(newOccurrenceId());
               declaredOccurrenceIds ??= Array.from({ length: prepared.eventDescriptorCount }, () =>
@@ -639,7 +656,8 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
               creationOccurrenceIds,
               parentMutations,
               dueTransition,
-              parentDeadlineDueMutations,
+              parentDueTransitions,
+              creationDueTransitions,
             );
             if (stored.outcome === "restart") return restart;
             if (stored.outcome === "refused_recorded") return recordedRefusal;

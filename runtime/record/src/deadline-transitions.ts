@@ -205,53 +205,46 @@ export type DeadlineDueParentRecordLookup = Readonly<{
   existingValues: Readonly<Record<string, unknown>>;
 }>;
 
-export type ParentDeadlineDueMutation = Readonly<{
+/**
+ * The next due transition of one submitted relationship-total parent, keyed by
+ * the revision the parent writer expects. `null` cancels the parent's due row.
+ */
+export type ParentDeadlineDueTransition = Readonly<{
+  storageContractId: string;
   recordTypeId: string;
   recordId: string;
-  recordType: RecordTypeDefinitionV2;
-  /** The parent's revision once this mutation's actual field changes commit. */
-  newConcurrencyNumber: number;
-  dueTransition?: PendingDeadlineTransitionV2;
+  expectedConcurrencyNumber: number;
+  dueTransition: PendingDeadlineTransitionV2 | null;
 }>;
 
 /**
- * Only a relationship-total parent whose final values actually differ from
- * its locked existing values is written by the shared parent-mutation
- * writer, which is also the only case where its revision advances. A parent
- * with no real change must be skipped here too, or its due metadata would be
- * upserted under a revision the writer never actually reached.
+ * Derives the next due transition for every submitted parent mutation. The
+ * SQL composer applies it only to a parent whose revision the shared parent
+ * writer actually advanced, so this never predicts which values change.
  */
-export const deriveParentDeadlineDueMutations = (
+export const deriveParentDeadlineDueTransitions = (
   parentMutations: readonly RelationshipTotalParentMutation[],
   records: readonly DeadlineDueParentRecordLookup[],
   organizationTimeZone: string,
-): readonly ParentDeadlineDueMutation[] => {
-  const mutations: ParentDeadlineDueMutation[] = [];
-  for (const mutation of parentMutations) {
+): readonly ParentDeadlineDueTransition[] =>
+  parentMutations.map((mutation) => {
     const record = records.find(
       (candidate) =>
         candidate.recordKey !== "root" &&
         candidate.recordId === mutation.recordId &&
         candidate.recordType.recordTypeId === mutation.recordTypeId,
     );
-    if (record === undefined) continue;
-    const changed = Object.entries(mutation.finalValues).some(([fieldId, value]) => {
-      const existing = record.existingValues[fieldId];
-      return JSON.stringify(value ?? null) !== JSON.stringify(existing ?? null);
-    });
-    if (!changed) continue;
-    const dueTransition = deriveEarliestPendingDeadlineTransitionV2({
-      recordType: record.recordType,
-      finalAuthoritativeFieldValues: { ...record.existingValues, ...mutation.finalValues },
-      organizationTimeZone,
-    });
-    mutations.push({
+    if (record === undefined) throw new Error("RECORD_DEADLINE_PARENT_UNAVAILABLE");
+    return {
+      storageContractId: record.recordType.storageContractId,
       recordTypeId: mutation.recordTypeId,
       recordId: mutation.recordId,
-      recordType: record.recordType,
-      newConcurrencyNumber: mutation.expectedConcurrencyNumber + 1,
-      ...(dueTransition === undefined ? {} : { dueTransition }),
-    });
-  }
-  return mutations;
-};
+      expectedConcurrencyNumber: mutation.expectedConcurrencyNumber,
+      dueTransition:
+        deriveEarliestPendingDeadlineTransitionV2({
+          recordType: record.recordType,
+          finalAuthoritativeFieldValues: { ...record.existingValues, ...mutation.finalValues },
+          organizationTimeZone,
+        }) ?? null,
+    };
+  });
