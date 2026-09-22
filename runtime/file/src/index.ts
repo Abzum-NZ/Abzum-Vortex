@@ -37,12 +37,16 @@ export {
   type UploadCapabilityReservationPorts,
 } from "./upload-capability-admission";
 export {
-  createFileUploadCoordinator,
-  createInMemoryFileUploadRepository,
-  createUploadStorageAuthorityResolver,
-  reservePendingUpload,
-  renewPendingUpload,
+  PENDING_UPLOAD_WINDOW_SECONDS,
+  activateUploadedFile,
   completeFileUpload,
+  createFileUploadCoordinator,
+  createUploadStorageAuthorityResolver,
+  renewPendingUpload,
+  reservePendingUpload,
+  type ClaimedUploadGrant,
+  type FileUploadActivationInput,
+  type FileUploadActivationResult,
   type FileUploadAdmissionInput,
   type FileUploadAdmissionResult,
   type FileUploadCompletionInput,
@@ -52,5 +56,10 @@ export {
   type FileUploadRenewalInput,
   type FileUploadRenewalResult,
   type FileUploadRepository,
+  type IsolatedFileScanner,
+  type PendingUploadReservation,
+  type PendingUploadState,
+  type UploadAttachmentSettings,
+  type UploadedObjectInspector,
+  type UploadedObjectLocation,
 } from "./upload";
-

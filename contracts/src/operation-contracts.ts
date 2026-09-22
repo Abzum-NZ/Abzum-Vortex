@@ -936,9 +936,10 @@ export const downloadGrantSchema = z
   .strict();
 
 /**
- * Verified file inspection results derived strictly from trusted server-side inspection
- * of uploaded bytes (actual size, detected media type, normalized extension, and checksum).
- * Browser-supplied headers or file names never substitute for this inspection.
+ * The result of trusted server-side inspection of the stored object's bytes: its
+ * actual size, the media type and canonical extension detected from its content,
+ * and its checksum. Only the File service's inspector produces this; a file name,
+ * browser-supplied type or client-reported size never substitutes for it.
  */
 export const trustedFileInspectionSchema = z
   .object({
@@ -950,12 +951,12 @@ export const trustedFileInspectionSchema = z
   .strict();
 export type TrustedFileInspection = z.infer<typeof trustedFileInspectionSchema>;
 
+/** The outcome of the isolated safety scanner for one uploaded object. */
 export const fileUploadScanOutcomeSchema = z
   .object({
     scannerName: z.string().min(1).max(120),
     scannerVersion: z.string().min(1).max(120),
     scannerResult: z.enum(["clean", "quarantined", "refused"]),
-    reason: z.string().max(1_000).optional(),
   })
   .strict();
 export type FileUploadScanOutcome = z.infer<typeof fileUploadScanOutcomeSchema>;
@@ -965,7 +966,6 @@ export const fileUploadAdmissionRefusalReasonSchema = z.enum([
   "field_not_writable",
   "field_capacity_exceeded",
   "file_size_exceeded",
-  "disallowed_content_kind",
   "disallowed_extension",
   "executable_content_refused",
   "capability_refused",
@@ -982,7 +982,8 @@ export const fileUploadRenewalRefusalReasonSchema = z.enum([
   "file_not_found",
   "invalid_lifecycle_state",
   "grant_mismatch",
-  "grant_expired",
+  "upload_expired",
+  "malformed_request",
 ]);
 export type FileUploadRenewalRefusalReason = z.infer<
   typeof fileUploadRenewalRefusalReasonSchema
@@ -993,13 +994,26 @@ export const fileUploadCompletionRefusalReasonSchema = z.enum([
   "field_not_writable",
   "file_not_found",
   "invalid_lifecycle_state",
-  "content_safety_refused",
-  "scan_refused",
-  "size_limit_exceeded",
-  "capacity_exceeded",
+  "upload_incomplete",
+  "upload_expired",
+  "revision_conflict",
 ]);
 export type FileUploadCompletionRefusalReason = z.infer<
   typeof fileUploadCompletionRefusalReasonSchema
+>;
+
+export const fileUploadActivationRefusalReasonSchema = z.enum([
+  "caller_not_authorized",
+  "field_not_writable",
+  "file_not_found",
+  "invalid_lifecycle_state",
+  "owner_mismatch",
+  "replacement_file_not_found",
+  "upload_expired",
+  "revision_conflict",
+]);
+export type FileUploadActivationRefusalReason = z.infer<
+  typeof fileUploadActivationRefusalReasonSchema
 >;
 
 const canonicalActivitySubjectIdsSchema = z
