@@ -5,156 +5,101 @@ import {
   MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
   PRIVATE_FILE_BUCKET,
   correlationIdSchema,
+  downloadGrantSchema,
+  fileIdSchema,
   fileRecordSchema,
+  timestampSchema,
+  uploadGrantSchema,
+  verifiedFileActorSchema,
   type DownloadGrant,
+  type FileId,
   type FileRecord,
   type FileStorageOperation,
-  type FileStorageOperationClaims,
   type OrganizationId,
   type UploadGrant,
   type VerifiedFileActor,
 } from "@vortex/contracts";
-import {
-  createSignedStorageOperationClaims,
-  validateStorageKey,
-  verifySignedStorageOperationClaims,
-  type VerifyStorageClaimsResult,
-} from "./storage-policy";
+import { createSignedStorageOperationClaims, validateStorageKey } from "./storage-policy";
 
 /**
- * Bounded authorised storage purposes.
- *
- * Each operation (upload, read, delete) must be an already-authorised, single-operation
- * purpose carrying the source organisation, verified actor, and correlation identifier.
- * Upload and read purposes may additionally include the bounded transfer grant
- * (UploadGrant or DownloadGrant) from which they were derived.
+ * The request presented to the trusted, server-injected authority resolver.
+ * Transfer grants are required for upload and read; delete is resolved from its
+ * exact file identifier. None of these values is accepted as authority by itself.
  */
-export type AuthorizedUploadPurpose = Readonly<{
-  operation: "upload";
+export type StorageCredentialRequest =
+  | Readonly<{ operation: "upload"; grant: UploadGrant }>
+  | Readonly<{ operation: "read"; grant: DownloadGrant }>
+  | Readonly<{ operation: "delete"; fileId: FileId }>;
+
+/**
+ * Current authority and canonical metadata returned by trusted File-service
+ * wiring. The resolver must re-run the ordinary Access-resolved operation and
+ * load the current FileRecord; upload/read resolution also revalidates and
+ * consumes the grant's one-time identifier. Mint callers cannot supply these
+ * results.
+ */
+type CurrentStorageAuthorityBase = Readonly<{
+  authorized: true;
   organizationId: OrganizationId;
+  fileId: FileId;
+  fileRecord: FileRecord;
   actor: VerifiedFileActor;
   correlationId: string;
-  grant?: UploadGrant;
-  ttlSeconds?: number;
+  validUntil: string;
 }>;
 
-export type AuthorizedReadPurpose = Readonly<{
-  operation: "read";
-  organizationId: OrganizationId;
-  actor: VerifiedFileActor;
-  correlationId: string;
-  grant?: DownloadGrant;
-  ttlSeconds?: number;
-}>;
+export type CurrentStorageAuthority =
+  | (CurrentStorageAuthorityBase &
+      Readonly<{
+        operation: "upload" | "read";
+        transferGrantId: UploadGrant["oneTimeId"];
+      }>)
+  | (CurrentStorageAuthorityBase & Readonly<{ operation: "delete" }>);
 
-export type AuthorizedDeletePurpose = Readonly<{
-  operation: "delete";
-  organizationId: OrganizationId;
-  actor: VerifiedFileActor;
-  correlationId: string;
-  ttlSeconds?: number;
-}>;
+export type StorageAuthorityResolution =
+  | CurrentStorageAuthority
+  | Readonly<{ authorized: false }>;
 
-export type AuthorizedStoragePurpose =
-  | AuthorizedUploadPurpose
-  | AuthorizedReadPurpose
-  | AuthorizedDeletePurpose;
+export type ResolveCurrentStorageAuthority = (
+  request: StorageCredentialRequest,
+) => Promise<StorageAuthorityResolution>;
 
 /**
- * Creates an authorized upload purpose from an already-authorized UploadGrant.
- */
-export const createAuthorizedUploadPurpose = (
-  grant: UploadGrant,
-  correlationId: string,
-  ttlSeconds?: number,
-): AuthorizedUploadPurpose => ({
-  operation: "upload",
-  organizationId: grant.organizationId,
-  actor: grant.actor,
-  correlationId,
-  grant,
-  ...(ttlSeconds !== undefined ? { ttlSeconds } : {}),
-});
-
-/**
- * Creates an authorized read purpose from an already-authorized DownloadGrant.
- */
-export const createAuthorizedReadPurpose = (
-  grant: DownloadGrant,
-  correlationId: string,
-  ttlSeconds?: number,
-): AuthorizedReadPurpose => ({
-  operation: "read",
-  organizationId: grant.organizationId,
-  actor: grant.actor,
-  correlationId,
-  grant,
-  ...(ttlSeconds !== undefined ? { ttlSeconds } : {}),
-});
-
-/**
- * Creates an authorized delete purpose from verified caller context.
- */
-export const createAuthorizedDeletePurpose = (
-  organizationId: OrganizationId,
-  actor: VerifiedFileActor,
-  correlationId: string,
-  ttlSeconds?: number,
-): AuthorizedDeletePurpose => ({
-  operation: "delete",
-  organizationId,
-  actor,
-  correlationId,
-  ...(ttlSeconds !== undefined ? { ttlSeconds } : {}),
-});
-
-/**
- * A signing function that takes signing input bytes and produces a base64url-encoded
- * ES256 signature in IEEE P1363 format (r || s, 64 bytes).
+ * A signing function backed by the destination environment's secret store or
+ * HSM. It returns an unpadded base64url ES256 signature in IEEE P1363 r || s
+ * form (exactly 64 bytes before encoding).
  */
 export type StorageKeySigner = (data: Buffer) => string | Promise<string>;
 
-/**
- * Server-injected signing key definition.
- * Accepts a direct signing function, or a Node KeyObject / PEM string / Buffer
- * that is encapsulated into a standard ES256 IEEE P1363 signer.
- */
 export type StorageKeyDefinition = Readonly<{
   keyId: string;
   signer: StorageKeySigner | KeyObject | string | Buffer;
 }>;
 
-/**
- * Safe public key rotation metadata.
- * Contains only non-sensitive key identifiers and algorithm configuration;
- * never exposes private signing keys, PEMs or secrets.
- */
+/** Public rotation information; private signing material is never projected. */
 export type StorageKeyRotationMetadata = Readonly<{
-  destinationProject: string;
-  issuer: string;
   activeKeyId: string;
   availableKeyIds: readonly string[];
   algorithm: "ES256";
 }>;
 
 /**
- * Server-side configuration for the Supabase Storage credential bridge.
- * All configuration is injected server-side; no caller-selected projects, signing
- * material, arbitrary paths or service-role credentials can be supplied through client requests.
+ * Server-owned bridge configuration. The authority resolver and signing keys
+ * are installed once by trusted service wiring, never selected by a request.
  */
 export type StorageCredentialBridgeConfig = Readonly<{
   destinationProject: string;
   issuer: string;
   activeKeyId: string;
   keys: readonly StorageKeyDefinition[];
+  resolveCurrentAuthority: ResolveCurrentStorageAuthority;
   clock?: () => Date;
 }>;
 
 /**
- * Server-side Storage operation credential.
- * Contains the minted short-lived asymmetric JWT and exact claim context.
- * Kept strictly server-side for read and delete operations; only pending-upload
- * credentials may be projected into browser grants.
+ * Server-side credential for exactly one Storage operation. A non-enumerable
+ * toJSON guard installed at runtime prevents accidental response serialization;
+ * only mintBrowserUploadGrant creates a browser-safe projection.
  */
 export type StorageOperationCredential = Readonly<{
   token: string;
@@ -169,15 +114,9 @@ export type StorageOperationCredential = Readonly<{
   iat: number;
   exp: number;
   expiresAt: string;
-  claims: FileStorageOperationClaims;
 }>;
 
-/**
- * Browser upload grant.
- * Permitted ONLY for pending-object upload INSERT.
- * Does NOT authorize read, list, update, upsert, copy, move or delete.
- * Does NOT expose internal upstream endpoints, database connections or private keys.
- */
+/** The only credential projection permitted to leave the server boundary. */
 export type BrowserUploadGrant = Readonly<{
   token: string;
   bucketId: typeof PRIVATE_FILE_BUCKET;
@@ -186,24 +125,70 @@ export type BrowserUploadGrant = Readonly<{
   operation: "upload";
 }>;
 
-/**
- * Input to mint a scoped Storage operation credential.
- * Accepts exactly one authorised purpose and the verified FileRecord context.
- * Arbitrary paths, caller-selected projects, signing material and user-editable metadata
- * are never accepted.
- */
 export type MintStorageCredentialInput = Readonly<{
-  purpose: AuthorizedStoragePurpose;
-  fileRecord: FileRecord;
-  keyId?: string;
+  request: StorageCredentialRequest;
+  /** A caller may request a shorter lifetime, never a longer one. */
   ttlSeconds?: number;
-  clock?: () => Date;
 }>;
 
-/**
- * Creates an ES256 IEEE P1363 base64url signer from a Node KeyObject, PEM string or Buffer.
- * The private key stays encapsulated inside the closure.
- */
+const sameActor = (left: VerifiedFileActor, right: VerifiedFileActor): boolean => {
+  if (left.kind !== right.kind) return false;
+  return left.kind === "human" && right.kind === "human"
+    ? left.organizationAccountId === right.organizationAccountId &&
+        left.identityId === right.identityId
+    : left.kind === "system" &&
+        right.kind === "system" &&
+        left.systemActorId === right.systemActorId;
+};
+
+const timestampSeconds = (value: string): number | undefined => {
+  const milliseconds = Date.parse(value);
+  return Number.isFinite(milliseconds) ? Math.floor(milliseconds / 1_000) : undefined;
+};
+
+const validateCredentialRequest = (
+  request: StorageCredentialRequest,
+): StorageCredentialRequest => {
+  if (request === null || typeof request !== "object") {
+    throw new Error("Storage credential request is invalid");
+  }
+  switch (request.operation) {
+    case "upload": {
+      const grant = uploadGrantSchema.safeParse(request.grant);
+      if (!grant.success) {
+        throw new Error("Storage credential request has an invalid upload grant");
+      }
+      return Object.freeze({ operation: "upload", grant: grant.data });
+    }
+    case "read": {
+      const grant = downloadGrantSchema.safeParse(request.grant);
+      if (!grant.success) {
+        throw new Error("Storage credential request has an invalid download grant");
+      }
+      return Object.freeze({ operation: "read", grant: grant.data });
+    }
+    case "delete": {
+      const fileId = fileIdSchema.safeParse(request.fileId);
+      if (!fileId.success) throw new Error("Storage credential request has an invalid file ID");
+      return Object.freeze({ operation: "delete", fileId: fileId.data });
+    }
+    default:
+      throw new Error("Storage credential request has an unsupported operation");
+  }
+};
+
+const ownerMatches = (
+  fileRecord: FileRecord,
+  grant: Pick<UploadGrant, "recordTypeId" | "recordId" | "fieldId">,
+): boolean =>
+  fileRecord.ownerRecordTypeId !== undefined &&
+  fileRecord.ownerRecordId !== undefined &&
+  fileRecord.ownerFieldId !== undefined &&
+  fileRecord.ownerRecordTypeId === grant.recordTypeId &&
+  fileRecord.ownerRecordId === grant.recordId &&
+  fileRecord.ownerFieldId === grant.fieldId;
+
+/** Creates a standards-compliant ES256 signer and keeps its private key in the closure. */
 export const createStorageSignerFromPrivateKey = (
   privateKeyInput: KeyObject | string | Buffer,
 ): StorageKeySigner => {
@@ -211,6 +196,14 @@ export const createStorageSignerFromPrivateKey = (
     typeof privateKeyInput === "string" || Buffer.isBuffer(privateKeyInput)
       ? createPrivateKey(privateKeyInput)
       : privateKeyInput;
+
+  if (
+    privateKey.type !== "private" ||
+    privateKey.asymmetricKeyType !== "ec" ||
+    privateKey.asymmetricKeyDetails?.namedCurve !== "prime256v1"
+  ) {
+    throw new Error("Storage signing key must be a private P-256 elliptic-curve key");
+  }
 
   return (data: Buffer) =>
     sign("sha256", data, {
@@ -222,467 +215,329 @@ export const createStorageSignerFromPrivateKey = (
 const encodeBase64UrlJson = (value: unknown): string =>
   Buffer.from(JSON.stringify(value)).toString("base64url");
 
+const validateSignature = (candidate: string): string => {
+  if (
+    !/^[A-Za-z0-9_-]{86}$/.test(candidate) ||
+    Buffer.from(candidate, "base64url").length !== 64 ||
+    Buffer.from(candidate, "base64url").toString("base64url") !== candidate
+  ) {
+    throw new Error("Storage signer returned an invalid ES256 IEEE P1363 signature");
+  }
+  return candidate;
+};
+
 const validateBridgeConfig = (config: StorageCredentialBridgeConfig): void => {
-  if (
-    typeof config.destinationProject !== "string" ||
-    config.destinationProject.trim().length === 0 ||
-    config.destinationProject.length > 120
-  ) {
-    throw new Error(
-      "Invalid destinationProject: must be a non-empty string of at most 120 characters",
-    );
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,118}[a-z0-9])?$/.test(config.destinationProject)) {
+    throw new Error("Storage destination project must be a canonical lowercase project ref");
   }
 
-  // Strictly refuse service-role or platform secret credentials from entering the bridge
-  if (
-    config.destinationProject.includes("service_role") ||
-    config.destinationProject.startsWith("sb_secret_")
-  ) {
-    throw new Error(
-      "Platform and service-role credentials must never enter the storage credential bridge",
-    );
+  const expectedIssuer = `https://${config.destinationProject}.supabase.co/auth/v1`;
+  if (config.issuer !== expectedIssuer) {
+    throw new Error("Storage issuer must be the destination Supabase project's Auth issuer");
   }
 
-  let parsedIssuer: URL;
-  try {
-    parsedIssuer = new URL(config.issuer);
-  } catch {
-    throw new Error("Invalid issuer: must be a valid URL");
-  }
-  if (parsedIssuer.protocol !== "http:" && parsedIssuer.protocol !== "https:") {
-    throw new Error("Invalid issuer: protocol must be http or https");
-  }
-  if (
-    parsedIssuer.username.length > 0 ||
-    parsedIssuer.password.length > 0 ||
-    parsedIssuer.search.length > 0 ||
-    parsedIssuer.hash.length > 0
-  ) {
-    throw new Error(
-      "Invalid issuer: must not contain user credentials, query parameters or fragment",
-    );
+  if (typeof config.resolveCurrentAuthority !== "function") {
+    throw new Error("Storage credential bridge requires a current-authority resolver");
   }
 
-  if (
-    typeof config.activeKeyId !== "string" ||
-    config.activeKeyId.trim().length === 0
-  ) {
-    throw new Error("Invalid activeKeyId: must be a non-empty string");
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(config.activeKeyId)) {
+    throw new Error("Storage active key identifier is invalid");
   }
 
   if (!Array.isArray(config.keys) || config.keys.length === 0) {
-    throw new Error("Storage credential bridge requires at least one signing key definition");
+    throw new Error("Storage credential bridge requires at least one signing key");
   }
 
   const keyIds = new Set<string>();
-  for (const keyDef of config.keys) {
-    if (typeof keyDef.keyId !== "string" || keyDef.keyId.trim().length === 0) {
-      throw new Error("Every signing key definition must have a non-empty keyId");
+  for (const key of config.keys) {
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(key.keyId)) {
+      throw new Error("Storage signing key identifier is invalid");
     }
-    if (keyIds.has(keyDef.keyId)) {
-      throw new Error(`Duplicate signing keyId '${keyDef.keyId}' in configuration`);
+    if (keyIds.has(key.keyId)) {
+      throw new Error("Storage signing key identifiers must be unique");
     }
-    keyIds.add(keyDef.keyId);
+    keyIds.add(key.keyId);
   }
 
   if (!keyIds.has(config.activeKeyId)) {
-    throw new Error(
-      `Active keyId '${config.activeKeyId}' is not among configured keys (${[...keyIds].join(", ")})`,
-    );
+    throw new Error("Storage active signing key is not configured");
   }
 };
 
-/**
- * Validates and rechecks all admission requirements for minting a scoped storage credential:
- * organisation ownership, destination project, private bucket, exact object path,
- * actor attribution, correlation identifier, and single operation semantics.
- */
-const recheckStorageOperationAdmission = (
-  purpose: AuthorizedStoragePurpose,
-  fileRecord: FileRecord,
-  destinationProject: string,
+type ValidatedAuthority = Readonly<{
+  fileRecord: FileRecord;
+  actor: VerifiedFileActor;
+  correlationId: string;
+  expiresAtSeconds: number;
+}>;
+
+const validateCurrentAuthority = (
+  request: StorageCredentialRequest,
+  resolution: StorageAuthorityResolution,
   nowSeconds: number,
-): void => {
-  // 1. Verify FileRecord schema
-  const parsedFileRecord = fileRecordSchema.safeParse(fileRecord);
-  if (!parsedFileRecord.success) {
-    throw new Error(
-      `File record failed contract validation: ${parsedFileRecord.error.message}`,
-    );
+): ValidatedAuthority => {
+  if (resolution.authorized !== true) {
+    throw new Error("Storage credential minting refused by current authority");
   }
 
-  // 2. Correlation identifier check
-  const correlationResult = correlationIdSchema.safeParse(purpose.correlationId);
-  if (!correlationResult.success) {
-    throw new Error("Storage credential minting refused: invalid correlation identifier");
+  const fileResult = fileRecordSchema.safeParse(resolution.fileRecord);
+  const actorResult = verifiedFileActorSchema.safeParse(resolution.actor);
+  const correlationResult = correlationIdSchema.safeParse(resolution.correlationId);
+  const authorityValidUntil = timestampSchema.safeParse(resolution.validUntil);
+  const authorityExpiry = authorityValidUntil.success
+    ? timestampSeconds(authorityValidUntil.data)
+    : undefined;
+  if (
+    !fileResult.success ||
+    !actorResult.success ||
+    !correlationResult.success ||
+    authorityExpiry === undefined ||
+    authorityExpiry <= nowSeconds ||
+    resolution.operation !== request.operation ||
+    resolution.organizationId !== fileResult.data.organizationId ||
+    resolution.fileId !== fileResult.data.fileId
+  ) {
+    throw new Error("Storage credential minting refused: current authority is invalid or expired");
   }
 
-  // 3. Organisation ownership recheck
-  if (purpose.organizationId !== fileRecord.organizationId) {
-    throw new Error(
-      `Storage credential minting refused: purpose organisation '${purpose.organizationId}' does not match file organisation '${fileRecord.organizationId}'`,
-    );
+  const fileRecord = fileResult.data;
+  const actor = actorResult.data;
+
+  if (
+    fileRecord.bucketId !== PRIVATE_FILE_BUCKET ||
+    !validateStorageKey(fileRecord.storageKey, fileRecord.organizationId) ||
+    !fileRecord.storageKey.startsWith(`${fileRecord.organizationId}/${fileRecord.fileId}/`)
+  ) {
+    throw new Error("Storage credential minting refused: file storage scope is invalid");
   }
 
-  if (fileRecord.organizationId !== fileRecord.organizationId.toLowerCase()) {
-    throw new Error(
-      "Storage credential minting refused: organisation identifier must be canonical lowercase",
-    );
-  }
-
-  // 4. Private bucket recheck
-  if (fileRecord.bucketId !== PRIVATE_FILE_BUCKET) {
-    throw new Error(
-      `Storage credential minting refused: bucket '${fileRecord.bucketId}' is not the private file bucket '${PRIVATE_FILE_BUCKET}'`,
-    );
-  }
-
-  // 5. Exact object path recheck
-  if (!validateStorageKey(fileRecord.storageKey, fileRecord.organizationId)) {
-    throw new Error(
-      `Storage credential minting refused: object path '${fileRecord.storageKey}' is not an organisation-scoped unguessable private path`,
-    );
-  }
-
-  if (!fileRecord.storageKey.startsWith(`${fileRecord.organizationId}/${fileRecord.fileId}/`)) {
-    throw new Error(
-      `Storage credential minting refused: object path '${fileRecord.storageKey}' is not scoped to file '${fileRecord.fileId}'`,
-    );
-  }
-
-  // 6. Transfer grant recheck (when grant is attached)
-  if (purpose.operation === "upload" && purpose.grant) {
-    if (purpose.grant.kind !== "upload") {
-      throw new Error("Upload purpose contains a non-upload transfer grant");
-    }
-    if (purpose.grant.organizationId !== fileRecord.organizationId) {
-      throw new Error("Upload grant organisation does not match file record organisation");
-    }
-    const grantExpiryEpoch = Math.floor(new Date(purpose.grant.expiresAt).getTime() / 1000);
-    if (grantExpiryEpoch < nowSeconds) {
-      throw new Error("Upload grant has expired");
-    }
-    if (fileRecord.ownerRecordTypeId !== undefined) {
-      if (
-        purpose.grant.recordTypeId !== fileRecord.ownerRecordTypeId ||
-        purpose.grant.recordId !== fileRecord.ownerRecordId ||
-        purpose.grant.fieldId !== fileRecord.ownerFieldId
-      ) {
-        throw new Error(
-          "Upload grant record/field scope does not match file record owner scope",
-        );
-      }
-    }
-  }
-
-  if (purpose.operation === "read" && purpose.grant) {
-    if (purpose.grant.kind !== "download") {
-      throw new Error("Read purpose contains a non-download transfer grant");
-    }
-    if (purpose.grant.organizationId !== fileRecord.organizationId) {
-      throw new Error("Download grant organisation does not match file record organisation");
-    }
-    if (purpose.grant.fileId !== fileRecord.fileId) {
-      throw new Error("Download grant fileId does not match file record fileId");
-    }
-    const grantExpiryEpoch = Math.floor(new Date(purpose.grant.expiresAt).getTime() / 1000);
-    if (grantExpiryEpoch < nowSeconds) {
-      throw new Error("Download grant has expired");
-    }
-    if (fileRecord.ownerRecordTypeId !== undefined) {
-      if (
-        purpose.grant.recordTypeId !== fileRecord.ownerRecordTypeId ||
-        purpose.grant.recordId !== fileRecord.ownerRecordId ||
-        purpose.grant.fieldId !== fileRecord.ownerFieldId
-      ) {
-        throw new Error(
-          "Download grant record/field scope does not match file record owner scope",
-        );
-      }
-    }
-  }
-
-  // 7. Single operation & lifecycle state rechecks
-  switch (purpose.operation) {
+  let grantExpiry = authorityExpiry;
+  switch (request.operation) {
     case "upload": {
-      // Upload credentials are permitted ONLY for pending objects.
-      // Re-uploading or overwriting active/quarantined/abandoned/soft_deleted/removed files is refused.
-      if (fileRecord.lifecycleState !== "pending") {
-        throw new Error(
-          `Refusing upload credential for file '${fileRecord.fileId}': lifecycle state is '${fileRecord.lifecycleState}', expected 'pending'. Overwriting existing objects is prohibited.`,
-        );
+      const grantResult = uploadGrantSchema.safeParse(request.grant);
+      if (!grantResult.success) {
+        throw new Error("Storage credential minting refused: upload grant is invalid");
       }
-      // Actor attribution recheck: uploader must match the file record uploader
-      if (JSON.stringify(purpose.actor) !== JSON.stringify(fileRecord.uploadedBy)) {
-        throw new Error(
-          "Refusing upload credential: actor does not match the verified uploader recorded on the pending file",
-        );
+      const grant = grantResult.data;
+      const expires = timestampSeconds(grant.expiresAt);
+      if (
+        expires === undefined ||
+        expires <= nowSeconds ||
+        !("transferGrantId" in resolution) ||
+        resolution.transferGrantId !== grant.oneTimeId ||
+        grant.organizationId !== fileRecord.organizationId ||
+        !ownerMatches(fileRecord, grant) ||
+        grant.maximumBytes < fileRecord.sizeBytes ||
+        !sameActor(grant.actor, actor) ||
+        !sameActor(actor, fileRecord.uploadedBy) ||
+        fileRecord.lifecycleState !== "pending" ||
+        fileRecord.scannerResult !== "pending"
+      ) {
+        throw new Error("Storage credential minting refused: upload scope is not current");
       }
+      grantExpiry = expires;
       break;
     }
-
     case "read": {
-      if (fileRecord.lifecycleState === "abandoned" || fileRecord.lifecycleState === "removed") {
-        throw new Error(
-          `Refusing read credential for file '${fileRecord.fileId}': file is '${fileRecord.lifecycleState}'`,
-        );
+      const grantResult = downloadGrantSchema.safeParse(request.grant);
+      if (!grantResult.success) {
+        throw new Error("Storage credential minting refused: download grant is invalid");
       }
-      if (fileRecord.lifecycleState === "quarantined") {
-        throw new Error(
-          `Refusing read credential for file '${fileRecord.fileId}': file is quarantined due to safety checks`,
-        );
+      const grant = grantResult.data;
+      const expires = timestampSeconds(grant.expiresAt);
+      if (
+        expires === undefined ||
+        expires <= nowSeconds ||
+        !("transferGrantId" in resolution) ||
+        resolution.transferGrantId !== grant.oneTimeId ||
+        grant.fileId !== fileRecord.fileId ||
+        grant.organizationId !== fileRecord.organizationId ||
+        !ownerMatches(fileRecord, grant) ||
+        !sameActor(grant.actor, actor) ||
+        fileRecord.lifecycleState !== "active" ||
+        fileRecord.scannerResult !== "clean"
+      ) {
+        throw new Error("Storage credential minting refused: read scope is not current");
       }
-      if (fileRecord.lifecycleState === "soft_deleted") {
-        throw new Error(
-          `Refusing read credential for file '${fileRecord.fileId}': file is soft-deleted and must be restored before read`,
-        );
-      }
-      // A human user can only read an active file whose safety check passed
-      if (purpose.actor.kind === "human" && fileRecord.lifecycleState !== "active") {
-        throw new Error(
-          `Refusing read credential for human actor: file '${fileRecord.fileId}' is '${fileRecord.lifecycleState}', expected 'active'`,
-        );
-      }
+      grantExpiry = expires;
       break;
     }
-
     case "delete": {
-      if (fileRecord.lifecycleState === "removed") {
-        throw new Error(
-          `Refusing delete credential for file '${fileRecord.fileId}': file is already removed`,
-        );
-      }
-      if (fileRecord.legalHold) {
-        throw new Error(
-          `Refusing delete credential for file '${fileRecord.fileId}': a legal hold prevents permanent removal`,
-        );
+      const fileIdResult = fileIdSchema.safeParse(request.fileId);
+      if (
+        !fileIdResult.success ||
+        fileIdResult.data !== fileRecord.fileId ||
+        fileRecord.lifecycleState === "removed" ||
+        fileRecord.legalHold
+      ) {
+        throw new Error("Storage credential minting refused: removal scope is not current");
       }
       break;
     }
-
     default: {
-      const exhaustiveCheck: never = purpose;
-      throw new Error(`Unsupported storage operation in purpose: ${JSON.stringify(exhaustiveCheck)}`);
+      const exhaustive: never = request;
+      throw new Error(`Unsupported storage operation: ${JSON.stringify(exhaustive)}`);
     }
   }
+
+  return {
+    fileRecord,
+    actor,
+    correlationId: correlationResult.data,
+    expiresAtSeconds: Math.min(authorityExpiry, grantExpiry),
+  };
 };
 
-/**
- * Storage credential bridge interface.
- * Implements the scoped Supabase Storage credential bridge.
- */
+const requestedTtl = (ttlSeconds: number | undefined): number => {
+  if (ttlSeconds === undefined) return MAXIMUM_FILE_STORAGE_OPERATION_SECONDS;
+  if (
+    !Number.isSafeInteger(ttlSeconds) ||
+    ttlSeconds < 1 ||
+    ttlSeconds > MAXIMUM_FILE_STORAGE_OPERATION_SECONDS
+  ) {
+    throw new Error(
+      `Storage credential lifetime must be between 1 and ${MAXIMUM_FILE_STORAGE_OPERATION_SECONDS} seconds`,
+    );
+  }
+  return ttlSeconds;
+};
+
+const makeServerCredential = (
+  value: StorageOperationCredential,
+): StorageOperationCredential => {
+  Object.defineProperty(value, "toJSON", {
+    enumerable: false,
+    configurable: false,
+    writable: false,
+    value: () => {
+      throw new Error("Server-side Storage credentials cannot be serialized");
+    },
+  });
+  return Object.freeze(value);
+};
+
 export type StorageCredentialBridge = Readonly<{
-  destinationProject: string;
-  issuer: string;
-  activeKeyId: string;
   getKeyRotationMetadata(): StorageKeyRotationMetadata;
   mintStorageOperationCredential(
     input: MintStorageCredentialInput,
   ): Promise<StorageOperationCredential>;
   mintBrowserUploadGrant(
-    input: MintStorageCredentialInput,
+    input: MintStorageCredentialInput &
+      Readonly<{
+        request: Extract<StorageCredentialRequest, Readonly<{ operation: "upload" }>>;
+      }>,
   ): Promise<BrowserUploadGrant>;
 }>;
 
-/**
- * Creates the Supabase Storage credential bridge from server-injected configuration.
- * Never accepts signing material or service credentials through caller requests.
- */
+/** Creates a bridge whose authority and signing dependencies remain server-side. */
 export const createStorageCredentialBridge = (
   config: StorageCredentialBridgeConfig,
 ): StorageCredentialBridge => {
   validateBridgeConfig(config);
 
-  const signersMap = new Map<string, StorageKeySigner>();
-  for (const keyDef of config.keys) {
-    if (typeof keyDef.signer === "function") {
-      signersMap.set(keyDef.keyId, keyDef.signer);
-    } else {
-      signersMap.set(keyDef.keyId, createStorageSignerFromPrivateKey(keyDef.signer));
-    }
+  const destinationProject = config.destinationProject;
+  const issuer = config.issuer;
+  const activeKeyId = config.activeKeyId;
+  const resolveCurrentAuthority = config.resolveCurrentAuthority;
+  const clock = config.clock ?? (() => new Date());
+  const signers = new Map<string, StorageKeySigner>();
+  for (const key of config.keys) {
+    signers.set(
+      key.keyId,
+      typeof key.signer === "function"
+        ? key.signer
+        : createStorageSignerFromPrivateKey(key.signer),
+    );
+  }
+  const activeSigner = signers.get(activeKeyId);
+  if (activeSigner === undefined) {
+    throw new Error("Storage active signing key is unavailable");
   }
 
-  const getKeyRotationMetadata = (): StorageKeyRotationMetadata =>
-    Object.freeze({
-      destinationProject: config.destinationProject,
-      issuer: config.issuer,
-      activeKeyId: config.activeKeyId,
-      availableKeyIds: Object.freeze([...signersMap.keys()]),
-      algorithm: "ES256" as const,
-    });
+  const rotationMetadata = Object.freeze({
+    activeKeyId,
+    availableKeyIds: Object.freeze([...signers.keys()]),
+    algorithm: "ES256" as const,
+  });
 
   const mintStorageOperationCredential = async (
     input: MintStorageCredentialInput,
   ): Promise<StorageOperationCredential> => {
-    // Input must never contain caller-selected project, arbitrary path, or signing material
-    if (
-      "privateKey" in input ||
-      "signingKey" in input ||
-      "destinationProject" in input ||
-      "serviceRoleKey" in input
-    ) {
-      throw new Error(
-        "Refusing storage credential mint: caller must not supply signing material, platform keys or destination project",
-      );
+    const now = clock();
+    const nowMilliseconds = now.getTime();
+    if (!Number.isFinite(nowMilliseconds)) {
+      throw new Error("Storage credential clock returned an invalid time");
+    }
+    const nowSeconds = Math.floor(nowMilliseconds / 1_000);
+
+    const request = validateCredentialRequest(input.request);
+    let resolution: StorageAuthorityResolution;
+    try {
+      resolution = await resolveCurrentAuthority(request);
+    } catch {
+      throw new Error("Storage credential current authority is unavailable");
+    }
+    const authority = validateCurrentAuthority(request, resolution, nowSeconds);
+    const ttlSeconds = Math.min(
+      requestedTtl(input.ttlSeconds),
+      authority.expiresAtSeconds - nowSeconds,
+    );
+    if (ttlSeconds < 1) {
+      throw new Error("Storage credential minting refused: current authority has expired");
     }
 
-    const clock = input.clock ?? config.clock ?? (() => new Date());
-    const nowSeconds = Math.floor(clock().getTime() / 1000);
-
-    // Recheck admission
-    recheckStorageOperationAdmission(
-      input.purpose,
-      input.fileRecord,
-      config.destinationProject,
-      nowSeconds,
-    );
-
-    // Select signing key
-    const selectedKeyId = input.keyId ?? config.activeKeyId;
-    const signer = signersMap.get(selectedKeyId);
-    if (!signer) {
-      throw new Error(
-        `Signing keyId '${selectedKeyId}' is not configured in this storage credential bridge`,
-      );
-    }
-
-    // TTL bounded to at most 60 seconds
-    const effectiveTtlSeconds = Math.min(
-      Math.max(
-        1,
-        Math.floor(
-          input.ttlSeconds ??
-            input.purpose.ttlSeconds ??
-            MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
-        ),
-      ),
-      MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
-    );
-
-    // Mint exact operation claims per storage policy contract
     const claims = createSignedStorageOperationClaims({
-      destinationProject: config.destinationProject,
-      issuer: config.issuer,
-      organizationId: input.fileRecord.organizationId,
-      objectPath: input.fileRecord.storageKey,
-      operation: input.purpose.operation,
-      actor: input.purpose.actor,
-      correlationId: input.purpose.correlationId,
-      ttlSeconds: effectiveTtlSeconds,
-      clock,
+      destinationProject,
+      issuer,
+      organizationId: authority.fileRecord.organizationId,
+      objectPath: authority.fileRecord.storageKey,
+      operation: request.operation,
+      actor: authority.actor,
+      correlationId: authority.correlationId,
+      ttlSeconds,
+      clock: () => now,
     });
 
-    // Construct JWT header & payload
-    const header = encodeBase64UrlJson({
-      alg: "ES256",
-      kid: selectedKeyId,
-      typ: "JWT",
-    });
+    const header = encodeBase64UrlJson({ alg: "ES256", kid: activeKeyId, typ: "JWT" });
     const payload = encodeBase64UrlJson(claims);
     const signingInput = Buffer.from(`${header}.${payload}`);
+    const signature = validateSignature(await activeSigner(signingInput));
 
-    // Sign using server-injected asymmetric signer
-    const signatureResult = await signer(signingInput);
-    const signature =
-      typeof signatureResult === "string"
-        ? signatureResult
-        : Buffer.from(signatureResult).toString("base64url");
-
-    const token = `${header}.${payload}.${signature}`;
-
-    return Object.freeze({
-      token,
-      tokenKind: "vortex_file_storage_operation" as const,
-      role: "authenticated" as const,
-      destinationProject: config.destinationProject,
-      organizationId: input.fileRecord.organizationId,
+    return makeServerCredential({
+      token: `${header}.${payload}.${signature}`,
+      tokenKind: "vortex_file_storage_operation",
+      role: "authenticated",
+      destinationProject,
+      organizationId: authority.fileRecord.organizationId,
       bucketId: PRIVATE_FILE_BUCKET,
-      objectPath: input.fileRecord.storageKey,
-      operation: input.purpose.operation,
-      keyId: selectedKeyId,
+      objectPath: authority.fileRecord.storageKey,
+      operation: request.operation,
+      keyId: activeKeyId,
       iat: claims.iat,
       exp: claims.exp,
-      expiresAt: new Date(claims.exp * 1000).toISOString(),
-      claims,
+      expiresAt: new Date(claims.exp * 1_000).toISOString(),
     });
   };
 
-  const mintBrowserUploadGrant = async (
-    input: MintStorageCredentialInput,
-  ): Promise<BrowserUploadGrant> => {
-    if (input.purpose.operation !== "upload") {
-      throw new Error(
-        `Browser output is permitted only for pending-object upload INSERT; read, preview and removal credentials remain server-side only (requested '${input.purpose.operation}')`,
-      );
+  const mintBrowserUploadGrant: StorageCredentialBridge["mintBrowserUploadGrant"] = async (
+    input,
+  ) => {
+    if (input.request.operation !== "upload") {
+      throw new Error("Only a pending-object upload credential may be projected to a browser");
     }
-    if (input.fileRecord.lifecycleState !== "pending") {
-      throw new Error(
-        `Browser upload grant is permitted only for files in 'pending' lifecycle state (file '${input.fileRecord.fileId}' is '${input.fileRecord.lifecycleState}')`,
-      );
-    }
-
     const credential = await mintStorageOperationCredential(input);
-    return projectBrowserUploadGrant(credential, input.fileRecord);
+    return Object.freeze({
+      token: credential.token,
+      bucketId: credential.bucketId,
+      objectPath: credential.objectPath,
+      expiresAt: credential.expiresAt,
+      operation: "upload" as const,
+    });
   };
 
   return Object.freeze({
-    destinationProject: config.destinationProject,
-    issuer: config.issuer,
-    activeKeyId: config.activeKeyId,
-    getKeyRotationMetadata,
+    getKeyRotationMetadata: () => rotationMetadata,
     mintStorageOperationCredential,
     mintBrowserUploadGrant,
   });
 };
-
-/**
- * Projects a server-side storage operation credential into a safe browser upload grant.
- * Permitted ONLY for pending-object upload INSERT.
- * Rejects any read, preview or delete credentials, and rejects non-pending files.
- */
-export const projectBrowserUploadGrant = (
-  credential: StorageOperationCredential,
-  fileRecord: FileRecord,
-): BrowserUploadGrant => {
-  if (credential.operation !== "upload") {
-    throw new Error(
-      `Browser output is permitted only for pending-object upload INSERT; read, preview and removal credentials remain server-side only (requested '${credential.operation}')`,
-    );
-  }
-
-  if (fileRecord.lifecycleState !== "pending") {
-    throw new Error(
-      `Browser upload grant is permitted only for files in 'pending' lifecycle state (file '${fileRecord.fileId}' is '${fileRecord.lifecycleState}')`,
-    );
-  }
-
-  if (credential.objectPath !== fileRecord.storageKey) {
-    throw new Error(
-      `Credential object path '${credential.objectPath}' does not match file record storage key '${fileRecord.storageKey}'`,
-    );
-  }
-
-  return Object.freeze({
-    token: credential.token,
-    bucketId: credential.bucketId,
-    objectPath: credential.objectPath,
-    expiresAt: credential.expiresAt,
-    operation: "upload" as const,
-  });
-};
-
-/**
- * Verifies that a storage credential's claims match the expected scope and boundaries.
- */
-export const verifyStorageCredentialClaims = (
-  credential: StorageOperationCredential,
-  expected: Readonly<{
-    destinationProject: string;
-    issuer: string;
-    organizationId: OrganizationId;
-    objectPath: string;
-    operation: FileStorageOperation;
-    nowEpochSeconds?: number;
-  }>,
-): VerifyStorageClaimsResult =>
-  verifySignedStorageOperationClaims(credential.claims, expected);
