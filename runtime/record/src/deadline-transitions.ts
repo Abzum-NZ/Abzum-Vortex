@@ -5,6 +5,7 @@ import {
   type ModuleFieldV2,
   type RecordTypeDefinitionV2,
 } from "@vortex/contracts";
+import type { RelationshipTotalParentMutation } from "./relationship-total-save";
 
 export type DeriveEarliestPendingDeadlineTransitionV2Input = Readonly<{
   recordType: RecordTypeDefinitionV2;
@@ -194,4 +195,63 @@ export const deriveEarliestPendingDeadlineTransitionV2 = (
       earliest = { transition, instant };
   }
   return earliest?.transition;
+};
+
+/** The minimal locked-record shape needed to re-derive a parent's due transition. */
+export type DeadlineDueParentRecordLookup = Readonly<{
+  recordKey: string;
+  recordId?: string;
+  recordType: RecordTypeDefinitionV2;
+  existingValues: Readonly<Record<string, unknown>>;
+}>;
+
+export type ParentDeadlineDueMutation = Readonly<{
+  recordTypeId: string;
+  recordId: string;
+  recordType: RecordTypeDefinitionV2;
+  /** The parent's revision once this mutation's actual field changes commit. */
+  newConcurrencyNumber: number;
+  dueTransition?: PendingDeadlineTransitionV2;
+}>;
+
+/**
+ * Only a relationship-total parent whose final values actually differ from
+ * its locked existing values is written by the shared parent-mutation
+ * writer, which is also the only case where its revision advances. A parent
+ * with no real change must be skipped here too, or its due metadata would be
+ * upserted under a revision the writer never actually reached.
+ */
+export const deriveParentDeadlineDueMutations = (
+  parentMutations: readonly RelationshipTotalParentMutation[],
+  records: readonly DeadlineDueParentRecordLookup[],
+  organizationTimeZone: string,
+): readonly ParentDeadlineDueMutation[] => {
+  const mutations: ParentDeadlineDueMutation[] = [];
+  for (const mutation of parentMutations) {
+    const record = records.find(
+      (candidate) =>
+        candidate.recordKey !== "root" &&
+        candidate.recordId === mutation.recordId &&
+        candidate.recordType.recordTypeId === mutation.recordTypeId,
+    );
+    if (record === undefined) continue;
+    const changed = Object.entries(mutation.finalValues).some(([fieldId, value]) => {
+      const existing = record.existingValues[fieldId];
+      return JSON.stringify(value ?? null) !== JSON.stringify(existing ?? null);
+    });
+    if (!changed) continue;
+    const dueTransition = deriveEarliestPendingDeadlineTransitionV2({
+      recordType: record.recordType,
+      finalAuthoritativeFieldValues: { ...record.existingValues, ...mutation.finalValues },
+      organizationTimeZone,
+    });
+    mutations.push({
+      recordTypeId: mutation.recordTypeId,
+      recordId: mutation.recordId,
+      recordType: record.recordType,
+      newConcurrencyNumber: mutation.expectedConcurrencyNumber + 1,
+      ...(dueTransition === undefined ? {} : { dueTransition }),
+    });
+  }
+  return mutations;
 };

@@ -23,12 +23,21 @@ import {
 } from "@vortex/access";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
+  deriveEarliestPendingDeadlineTransitionV2,
+  deriveParentDeadlineDueMutations,
+  type ParentDeadlineDueMutation,
+  type PendingDeadlineTransitionV2,
+} from "./deadline-transitions";
+import {
   composeNamedAction,
   type NamedActionCreateTarget,
   type NamedActionCreation,
   type PreparedNamedAction,
 } from "./named-action-composition";
-import { calculateLockedRelationshipTotalSave } from "./relationship-total-save";
+import {
+  calculateLockedRelationshipTotalSave,
+  type RelationshipTotalParentMutation,
+} from "./relationship-total-save";
 import {
   calculateAndFinalize,
   operationClock,
@@ -325,9 +334,11 @@ const persist = async (
   declaredOccurrenceIds: readonly string[],
   creationOccurrenceIds: readonly string[],
   parentMutations: readonly unknown[],
+  dueTransition?: PendingDeadlineTransitionV2,
+  parentDeadlineDueMutations: readonly ParentDeadlineDueMutation[] = [],
 ) => {
   const rows = await transaction.query<ResultRow>`
-    select vortex_record.save_named_action_effects_with_relationship_totals(
+    select vortex_record.save_named_action_effects_with_relationship_totals_and_deadline_due_metadata(
       ${command.commandId}::uuid, ${command.recordTypeId}::uuid,
       ${command.recordId}::uuid, ${command.expectedConcurrencyNumber}::bigint,
       ${JSON.stringify(submittedValues)}::text::jsonb,
@@ -339,7 +350,17 @@ const persist = async (
       ${JSON.stringify(creationOccurrenceIds)}::text::jsonb,
       ${command.action.ownerKind}::text, ${command.action.ownerId}::uuid,
       ${command.action.releaseRevision}::bigint, ${command.action.actionId}::uuid,
-      ${JSON.stringify(command.inputs)}::text::jsonb
+      ${JSON.stringify(command.inputs)}::text::jsonb,
+      ${dueTransition === undefined ? null : JSON.stringify(dueTransition)}::text::jsonb,
+      ${JSON.stringify(
+        parentDeadlineDueMutations.map((mutation) => ({
+          recordTypeId: mutation.recordTypeId,
+          recordId: mutation.recordId,
+          recordType: mutation.recordType,
+          concurrencyNumber: mutation.newConcurrencyNumber,
+          ...(mutation.dueTransition === undefined ? {} : { dueTransition: mutation.dueTransition }),
+        })),
+      )}::text::jsonb
     ) as value
   `;
   const value = one(rows).value;
@@ -458,18 +479,24 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
             }
 
             let finalValues: Record<string, unknown> = {};
-            let parentMutations: readonly unknown[] = [];
+            let parentMutations: readonly RelationshipTotalParentMutation[] = [];
+            let dueTransition: PendingDeadlineTransitionV2 | undefined;
+            let parentDeadlineDueMutations: readonly ParentDeadlineDueMutation[] = [];
             let creations: readonly Readonly<{
               ordinal: number;
               recordTypeId: string;
               values: Readonly<Record<string, JsonValue | null>>;
               finalValues: Readonly<Record<string, JsonValue | null>>;
             }>[] = [];
+            // Read unconditionally: even an action with no set_field effect and
+            // no creation can still leave a stale due row in place unless its
+            // deadline transition is re-derived from the record's unchanged
+            // existing values below.
+            const settings = await readOrganizationRuntimeSettings(transaction);
             if (
               Object.keys(composition.submittedValues).length > 0 ||
               composition.creations.length > 0
             ) {
-              const settings = await readOrganizationRuntimeSettings(transaction);
               const saveCommand = saveRecordCommandV2Schema.parse({
                 contractVersion: "2.0.0",
                 commandId: command.data.commandId,
@@ -571,6 +598,23 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
                 finalValues: createdFinalValues[creation.ordinal] ?? creation.values,
               }));
             }
+            // Derived unconditionally from whatever finalValues/parentMutations
+            // ended up being (including the untouched `{}`/`[]` defaults above),
+            // so an action with no deadline-relevant effect reconfirms the
+            // record's already-correct due row instead of cancelling it.
+            dueTransition = deriveEarliestPendingDeadlineTransitionV2({
+              recordType: prepared.recordType,
+              finalAuthoritativeFieldValues: { ...prepared.existingValues, ...finalValues },
+              organizationTimeZone: settings?.timeZone ?? "UTC",
+            });
+            parentDeadlineDueMutations =
+              totalPreparation.outcome === "prepared"
+                ? deriveParentDeadlineDueMutations(
+                    parentMutations,
+                    totalPreparation.records,
+                    settings?.timeZone ?? "UTC",
+                  )
+                : [];
             try {
               standardOccurrenceId ??= eventOccurrenceIdSchema.parse(newOccurrenceId());
               declaredOccurrenceIds ??= Array.from({ length: prepared.eventDescriptorCount }, () =>
@@ -594,6 +638,8 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
               declaredOccurrenceIds,
               creationOccurrenceIds,
               parentMutations,
+              dueTransition,
+              parentDeadlineDueMutations,
             );
             if (stored.outcome === "restart") return restart;
             if (stored.outcome === "refused_recorded") return recordedRefusal;
