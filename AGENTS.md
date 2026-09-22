@@ -8,4 +8,6 @@ Implementer hands a committed candidate to a fresh reviewer. Reviewer fixes its 
 
 No test creation/runs, database execution/review, hosted verification, proof receipts, Kestra orchestration or deployment to Testing/Production. No additional acceptance gates. Existing repository tools do not create task requirements. Do not alter external permission controls or repository protections to evade a rejection.
 
+Provider concurrency, rate-limit and model-unavailable responses are capacity failures, not approval denials. After the exact attempt is positively settled, the orchestrator preserves its work and reassigns the implementation to another suitable authorized workhorse without waiting for user direction; when no qualified reviewer has capacity, the leaf stays In review with a capacity blocker instead of moving to a cheaper reviewer. Real tool-approval and repository-protection denials keep the existing no-bypass rule: do not retry unchanged, alter controls or switch executors to evade them.
+
 Preserve tenant isolation, permissions, transactions, revisions, safe errors and explicit definition publication/installation. Fix obsolete contracts at their root; this new application needs no invented legacy compatibility. Never put business application names or special cases into generic engines. Never expose credentials. Preserve unique work before cleanup.
