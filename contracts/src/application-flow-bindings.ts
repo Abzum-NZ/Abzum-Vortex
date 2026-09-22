@@ -367,10 +367,250 @@ export const safeFlowResultKindSchema = z.enum([
   "committed",
   "refused",
   "conflict",
+  "validation",
   "partial",
   "uncertain",
   "background_pending",
   "failed",
+]);
+
+function validateNoCallerAuthority(
+  value: Record<string, unknown>,
+  context: z.RefinementCtx,
+): void {
+  const forbidden = [
+    "actorId",
+    "actorIdentity",
+    "callerAuthority",
+    "permissionEvidence",
+    "permissionOverride",
+    "rpcTarget",
+    "endpoint",
+    "callback",
+    "nextNodeId",
+    "nextExecutableNode",
+    "nextStep",
+  ];
+  for (const key of forbidden) {
+    if (key in value && value[key] !== undefined) {
+      context.addIssue({
+        code: "custom",
+        path: [key],
+        message: `Caller input cannot choose ${key}`,
+      });
+    }
+  }
+}
+
+export const canonicalProtectedOperationResultStateSchema = z.enum([
+  "success",
+  "refusal",
+  "validation",
+  "partial",
+  "uncertain",
+  "background_pending",
+]);
+
+const successResultDescriptorFields = {
+  label: labelSchema.optional(),
+  outputs: z.record(builderKeySchema, flowValueDeclarationSchema).default({}),
+  messageKey: namespacedKeySchema.optional(),
+  concurrencyPolicy: z
+    .enum(["not_required", "returns_revision", "advances_concurrency"])
+    .default("not_required"),
+};
+
+const refusalResultDescriptorFields = {
+  label: labelSchema.optional(),
+  code: builderKeySchema,
+  messageKey: namespacedKeySchema.optional(),
+  retryable: z.boolean().default(false),
+  remediation: z.string().min(1).max(500).optional(),
+};
+
+export const protectedOperationSuccessResultDescriptorSchema = z
+  .object({
+    outcome: z.literal("success"),
+    ...successResultDescriptorFields,
+  })
+  .strict();
+
+export const protectedOperationCompletedResultDescriptorSchema = z
+  .object({
+    outcome: z.literal("completed"),
+    ...successResultDescriptorFields,
+  })
+  .strict();
+
+export const protectedOperationCommittedResultDescriptorSchema = z
+  .object({
+    outcome: z.literal("committed"),
+    ...successResultDescriptorFields,
+  })
+  .strict();
+
+export const protectedOperationRefusalResultDescriptorSchema = z
+  .object({
+    outcome: z.literal("refusal"),
+    ...refusalResultDescriptorFields,
+  })
+  .strict();
+
+export const protectedOperationRefusedResultDescriptorSchema = z
+  .object({
+    outcome: z.literal("refused"),
+    ...refusalResultDescriptorFields,
+  })
+  .strict();
+
+export const protectedOperationValidationResultDescriptorSchema = z
+  .object({
+    outcome: z.literal("validation"),
+    label: labelSchema.optional(),
+    fields: z
+      .record(
+        builderKeySchema,
+        z
+          .object({
+            code: builderKeySchema,
+            messageKey: namespacedKeySchema.optional(),
+            message: z.string().min(1).max(300).optional(),
+          })
+          .strict(),
+      )
+      .default({}),
+    retryable: z.literal(true).default(true),
+    messageKey: namespacedKeySchema.optional(),
+  })
+  .strict();
+
+export const protectedOperationPartialResultDescriptorSchema = z
+  .object({
+    outcome: z.literal("partial"),
+    label: labelSchema.optional(),
+    committedEffects: z.array(builderKeySchema).min(1).max(20),
+    uncommittedEffects: z.array(builderKeySchema).min(1).max(20),
+    rollbackSupported: z.literal(false).default(false),
+    reconciliationRequired: z.literal(true).default(true),
+    messageKey: namespacedKeySchema.optional(),
+  })
+  .strict();
+
+export const protectedOperationUncertainResultDescriptorSchema = z
+  .object({
+    outcome: z.literal("uncertain"),
+    label: labelSchema.optional(),
+    reconciliationRequired: z.literal(true).default(true),
+    duplicateProtection: z.enum(["required", "not_required"]).default("required"),
+    retryPolicy: z
+      .enum(["reconcile_first", "verify_receipt", "do_not_reexecute"])
+      .default("reconcile_first"),
+    messageKey: namespacedKeySchema.optional(),
+  })
+  .strict();
+
+export const protectedOperationPendingResultDescriptorSchema = z
+  .object({
+    outcome: z.literal("background_pending"),
+    label: labelSchema.optional(),
+    intentAccepted: z.literal(true).default(true),
+    delivery: z.enum(["queued", "dispatched", "pending"]).default("pending"),
+    workflowId: workflowIdSchema.optional(),
+    messageKey: namespacedKeySchema.optional(),
+  })
+  .strict();
+
+export const protectedOperationResultDescriptorSchema = z.discriminatedUnion("outcome", [
+  protectedOperationSuccessResultDescriptorSchema,
+  protectedOperationCompletedResultDescriptorSchema,
+  protectedOperationCommittedResultDescriptorSchema,
+  protectedOperationRefusalResultDescriptorSchema,
+  protectedOperationRefusedResultDescriptorSchema,
+  protectedOperationValidationResultDescriptorSchema,
+  protectedOperationPartialResultDescriptorSchema,
+  protectedOperationUncertainResultDescriptorSchema,
+  protectedOperationPendingResultDescriptorSchema,
+]);
+
+export const protectedOperationResultMapSchema = z.record(
+  builderKeySchema,
+  protectedOperationResultDescriptorSchema,
+);
+
+export const canonicalProtectedOperationResultMapSchema = z
+  .object({
+    success: protectedOperationSuccessResultDescriptorSchema.optional(),
+    completed: protectedOperationCompletedResultDescriptorSchema.optional(),
+    committed: protectedOperationCommittedResultDescriptorSchema.optional(),
+    refusal: protectedOperationRefusalResultDescriptorSchema.optional(),
+    refused: protectedOperationRefusedResultDescriptorSchema.optional(),
+    validation: protectedOperationValidationResultDescriptorSchema.optional(),
+    partial: protectedOperationPartialResultDescriptorSchema.optional(),
+    uncertain: protectedOperationUncertainResultDescriptorSchema.optional(),
+    background_pending: protectedOperationPendingResultDescriptorSchema.optional(),
+  })
+  .strict();
+
+const privateFormContinuationFields = {
+  applicationRootId: applicationRootIdSchema,
+  formId: containedComponentIdSchema,
+  continuationEventId: eventIdSchema,
+  releaseVersion: stableDefinitionReleaseVersionSchema,
+  contentFingerprint: fingerprintSchema,
+  resolutionFingerprint: fingerprintSchema,
+  inputs: z.record(builderKeySchema, flowValueDeclarationSchema).default({}),
+  outputs: z.record(builderKeySchema, flowValueDeclarationSchema).default({}),
+  trustedCurrentAccount: z.literal("server_resolved").default("server_resolved"),
+};
+
+export const privateFormContinuationDescriptorSchema = z
+  .object({
+    kind: z.literal("private_form"),
+    ...privateFormContinuationFields,
+  })
+  .strict()
+  .superRefine(validateNoCallerAuthority);
+
+export const formContinuationDescriptorSchema = z
+  .object({
+    kind: z.literal("form_continuation"),
+    ...privateFormContinuationFields,
+  })
+  .strict()
+  .superRefine(validateNoCallerAuthority);
+
+const recordFreeDurableStartContinuationFields = {
+  applicationRootId: applicationRootIdSchema,
+  workflowId: workflowIdSchema,
+  releaseVersion: stableDefinitionReleaseVersionSchema,
+  contentFingerprint: fingerprintSchema,
+  resolutionFingerprint: fingerprintSchema,
+  inputs: z.record(builderKeySchema, flowValueDeclarationSchema).default({}),
+  recordScope: z.literal("record_free").default("record_free"),
+  trustedCurrentAccount: z.literal("server_resolved").default("server_resolved"),
+};
+
+export const recordFreeDurableStartContinuationDescriptorSchema = z
+  .object({
+    kind: z.literal("record_free_durable_start"),
+    ...recordFreeDurableStartContinuationFields,
+  })
+  .strict()
+  .superRefine(validateNoCallerAuthority);
+
+export const durableWorkflowStartContinuationDescriptorSchema = z
+  .object({
+    kind: z.literal("durable_workflow_start"),
+    ...recordFreeDurableStartContinuationFields,
+  })
+  .strict()
+  .superRefine(validateNoCallerAuthority);
+
+export const flowContinuationDescriptorSchema = z.discriminatedUnion("kind", [
+  privateFormContinuationDescriptorSchema,
+  formContinuationDescriptorSchema,
+  recordFreeDurableStartContinuationDescriptorSchema,
+  durableWorkflowStartContinuationDescriptorSchema,
 ]);
 
 export const protectedOperationDescriptorSchema = z
@@ -384,9 +624,12 @@ export const protectedOperationDescriptorSchema = z
     expectedRevision: z.enum(["not_required", "required"]),
     confirmation: z.enum(["not_required", "required"]),
     duplicateProtection: z.enum(["not_required", "required"]),
-    safeResults: z.array(safeFlowResultKindSchema).min(1).max(8),
+    safeResults: z.array(safeFlowResultKindSchema).min(1).max(12),
+    results: protectedOperationResultMapSchema.optional(),
+    continuations: z.array(flowContinuationDescriptorSchema).max(10).optional(),
   })
   .strict()
+  .superRefine(validateNoCallerAuthority)
   .superRefine((value, context) => {
     if (new Set(value.safeResults).size !== value.safeResults.length)
       context.addIssue({
@@ -415,6 +658,7 @@ export const frontendFlowNodeTargetSchema = z.discriminatedUnion("kind", [
       operation: protectedOperationReferenceSchema,
       ...resolvedFlowTargetEvidenceSchema.shape,
       catalogueFingerprint: fingerprintSchema.optional(),
+      descriptor: protectedOperationDescriptorSchema.optional(),
     })
     .strict(),
   z
@@ -435,6 +679,12 @@ export const frontendFlowNodeTargetSchema = z.discriminatedUnion("kind", [
       formId: containedComponentIdSchema,
       continuationEventId: eventIdSchema,
       ...resolvedFlowTargetEvidenceSchema.shape,
+      descriptor: z
+        .union([
+          privateFormContinuationDescriptorSchema,
+          formContinuationDescriptorSchema,
+        ])
+        .optional(),
     })
     .strict(),
   z
@@ -443,6 +693,12 @@ export const frontendFlowNodeTargetSchema = z.discriminatedUnion("kind", [
       applicationRootId: applicationRootIdSchema,
       workflowId: workflowIdSchema,
       ...resolvedFlowTargetEvidenceSchema.shape,
+      descriptor: z
+        .union([
+          recordFreeDurableStartContinuationDescriptorSchema,
+          durableWorkflowStartContinuationDescriptorSchema,
+        ])
+        .optional(),
     })
     .strict(),
 ]);
@@ -561,6 +817,7 @@ export const currentUserFlowActionTargetSchema = z.discriminatedUnion("kind", [
       operation: protectedOperationReferenceSchema,
       ...resolvedFlowTargetEvidenceSchema.shape,
       catalogueFingerprint: fingerprintSchema.optional(),
+      descriptor: protectedOperationDescriptorSchema.optional(),
     })
     .strict(),
   z
@@ -570,6 +827,12 @@ export const currentUserFlowActionTargetSchema = z.discriminatedUnion("kind", [
       formId: containedComponentIdSchema,
       continuationEventId: eventIdSchema,
       ...resolvedFlowTargetEvidenceSchema.shape,
+      descriptor: z
+        .union([
+          privateFormContinuationDescriptorSchema,
+          formContinuationDescriptorSchema,
+        ])
+        .optional(),
     })
     .strict(),
   z
@@ -578,6 +841,12 @@ export const currentUserFlowActionTargetSchema = z.discriminatedUnion("kind", [
       applicationRootId: applicationRootIdSchema,
       workflowId: workflowIdSchema,
       ...resolvedFlowTargetEvidenceSchema.shape,
+      descriptor: z
+        .union([
+          recordFreeDurableStartContinuationDescriptorSchema,
+          durableWorkflowStartContinuationDescriptorSchema,
+        ])
+        .optional(),
     })
     .strict(),
   z
@@ -630,6 +899,8 @@ export const currentUserFlowActionNodeSchema = z
     inputs: z.record(builderKeySchema, flowNodeInputBindingSchema).default({}),
     outputs: z.record(builderKeySchema, flowValueDeclarationSchema).default({}),
     results: z.record(builderKeySchema, typedFlowResultMappingSchema).default({}),
+    resultDescriptors: protectedOperationResultMapSchema.optional(),
+    continuations: z.array(flowContinuationDescriptorSchema).max(10).optional(),
   })
   .strict();
 
@@ -653,6 +924,7 @@ export const currentUserFlowReturnNodeSchema = z
     label: labelSchema.optional(),
     results: z.record(builderKeySchema, flowNodeInputValueSchema).default({}),
     outcome: safeFlowResultKindSchema.optional().default("completed"),
+    descriptor: protectedOperationResultDescriptorSchema.optional(),
   })
   .strict();
 
@@ -1235,6 +1507,7 @@ export const sourceCurrentUserFlowActionTargetSchema = z.discriminatedUnion("kin
       kind: z.literal("protected_operation"),
       operation: protectedOperationReferenceSchema,
       release_version: stableDefinitionReleaseVersionSchema.optional(),
+      descriptor: protectedOperationDescriptorSchema.optional(),
     })
     .strict()
     .superRefine((value, context) => {
@@ -1252,12 +1525,24 @@ export const sourceCurrentUserFlowActionTargetSchema = z.discriminatedUnion("kin
       kind: z.literal("form_continuation"),
       form: sourceAliasSchema,
       continuation_event: sourceAliasSchema,
+      descriptor: z
+        .union([
+          privateFormContinuationDescriptorSchema,
+          formContinuationDescriptorSchema,
+        ])
+        .optional(),
     })
     .strict(),
   z
     .object({
       kind: z.literal("durable_workflow_start"),
       workflow: builderKeySchema,
+      descriptor: z
+        .union([
+          recordFreeDurableStartContinuationDescriptorSchema,
+          durableWorkflowStartContinuationDescriptorSchema,
+        ])
+        .optional(),
     })
     .strict(),
   z
@@ -1305,6 +1590,8 @@ export const sourceCurrentUserFlowActionNodeSchema = z
     inputs: z.record(builderKeySchema, sourceFlowNodeInputBindingSchema).default({}),
     outputs: z.record(builderKeySchema, sourceFlowValueDeclarationSchema).default({}),
     results: z.record(builderKeySchema, typedFlowResultMappingSchema).default({}),
+    result_descriptors: protectedOperationResultMapSchema.optional(),
+    continuations: z.array(flowContinuationDescriptorSchema).max(10).optional(),
   })
   .strict();
 
@@ -1328,6 +1615,7 @@ export const sourceCurrentUserFlowReturnNodeSchema = z
     label: labelSchema.optional(),
     results: z.record(builderKeySchema, sourceFlowNodeInputValueSchema).default({}),
     outcome: safeFlowResultKindSchema.optional().default("completed"),
+    descriptor: protectedOperationResultDescriptorSchema.optional(),
   })
   .strict();
 
@@ -1667,6 +1955,61 @@ export type ProtectedOperationPermissionReference = z.infer<
   typeof protectedOperationPermissionReferenceSchema
 >;
 export type SafeFlowResultKind = z.infer<typeof safeFlowResultKindSchema>;
+export type CanonicalProtectedOperationResultState = z.infer<
+  typeof canonicalProtectedOperationResultStateSchema
+>;
+export type ProtectedOperationSuccessResultDescriptor = z.infer<
+  typeof protectedOperationSuccessResultDescriptorSchema
+>;
+export type ProtectedOperationCompletedResultDescriptor = z.infer<
+  typeof protectedOperationCompletedResultDescriptorSchema
+>;
+export type ProtectedOperationCommittedResultDescriptor = z.infer<
+  typeof protectedOperationCommittedResultDescriptorSchema
+>;
+export type ProtectedOperationRefusalResultDescriptor = z.infer<
+  typeof protectedOperationRefusalResultDescriptorSchema
+>;
+export type ProtectedOperationRefusedResultDescriptor = z.infer<
+  typeof protectedOperationRefusedResultDescriptorSchema
+>;
+export type ProtectedOperationValidationResultDescriptor = z.infer<
+  typeof protectedOperationValidationResultDescriptorSchema
+>;
+export type ProtectedOperationPartialResultDescriptor = z.infer<
+  typeof protectedOperationPartialResultDescriptorSchema
+>;
+export type ProtectedOperationUncertainResultDescriptor = z.infer<
+  typeof protectedOperationUncertainResultDescriptorSchema
+>;
+export type ProtectedOperationPendingResultDescriptor = z.infer<
+  typeof protectedOperationPendingResultDescriptorSchema
+>;
+export type ProtectedOperationResultDescriptor = z.infer<
+  typeof protectedOperationResultDescriptorSchema
+>;
+export type ProtectedOperationResultMap = z.infer<
+  typeof protectedOperationResultMapSchema
+>;
+export type CanonicalProtectedOperationResultMap = z.infer<
+  typeof canonicalProtectedOperationResultMapSchema
+>;
+
+export type PrivateFormContinuationDescriptor = z.infer<
+  typeof privateFormContinuationDescriptorSchema
+>;
+export type FormContinuationDescriptor = z.infer<
+  typeof formContinuationDescriptorSchema
+>;
+export type RecordFreeDurableStartContinuationDescriptor = z.infer<
+  typeof recordFreeDurableStartContinuationDescriptorSchema
+>;
+export type DurableWorkflowStartContinuationDescriptor = z.infer<
+  typeof durableWorkflowStartContinuationDescriptorSchema
+>;
+export type FlowContinuationDescriptor = z.infer<
+  typeof flowContinuationDescriptorSchema
+>;
 export type ProtectedOperationDescriptor = z.infer<typeof protectedOperationDescriptorSchema>;
 export type FlowNodeRunAs = z.infer<typeof flowNodeRunAsSchema>;
 export type FrontendFlowNodeTarget = z.infer<typeof frontendFlowNodeTargetSchema>;
