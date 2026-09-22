@@ -425,8 +425,8 @@ const applicationSharedContentSchema = z
     interfaces: z.array(interfaceDefinitionSchema),
     publicAddresses: z.array(publicAddressSchema),
     homePageId: pageIdSchema,
-    flows: z.array(currentUserFlowSchema).default([]),
-    flowBindings: z.array(componentFlowBindingSchema).default([]),
+    flows: z.array(currentUserFlowSchema),
+    flowBindings: z.array(componentFlowBindingSchema),
   })
   .strict();
 
@@ -583,6 +583,22 @@ export const applicationContentV2Schema = applicationSharedContentSchema
 
     const flowsById = new Map(value.flows.map((flow) => [String(flow.flowId), flow]));
     const placementIdSet = new Set(placementIds.map(String));
+    const flowBindingIds = value.flowBindings.map((binding) => String(binding.bindingId));
+    const flowBindingEvents = value.flowBindings.map(
+      (binding) => `${String(binding.controlId)}:${String(binding.eventId)}`,
+    );
+    if (new Set(flowBindingIds).size !== flowBindingIds.length)
+      context.addIssue({
+        code: "custom",
+        path: ["flowBindings"],
+        message: "Flow binding identities must be unique",
+      });
+    if (new Set(flowBindingEvents).size !== flowBindingEvents.length)
+      context.addIssue({
+        code: "custom",
+        path: ["flowBindings"],
+        message: "A control event can have only one flow binding",
+      });
     for (const [bindingIndex, binding] of value.flowBindings.entries()) {
       if (binding.flow.kind === "application_owned") {
         const flow = flowsById.get(String(binding.flow.flowId));

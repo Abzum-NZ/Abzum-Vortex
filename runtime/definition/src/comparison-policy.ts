@@ -922,6 +922,66 @@ const compareSimpleComponent = (
   );
 };
 
+const compareCurrentUserFlow = (
+  reasons: VersionImpactReason[],
+  previous: RecordValue,
+  candidate: RecordValue,
+): void => {
+  const flowId = candidate.flowId;
+  for (const key of ["name", "description"] as const)
+    pushChange(
+      reasons,
+      previous[key],
+      candidate[key],
+      "patch",
+      key === "description" ? "definition_text_changed" : "presentation_changed",
+      "flow",
+      key,
+      flowId,
+    );
+  pushChange(
+    reasons,
+    previous.key,
+    candidate.key,
+    "major",
+    "component_key_changed",
+    "flow",
+    "key",
+    flowId,
+  );
+  for (const key of ["runAs", "inputs", "outputs", "variables"] as const)
+    pushChange(
+      reasons,
+      previous[key],
+      candidate[key],
+      "major",
+      "existing_behavior_changed",
+      "flow",
+      "behavior",
+      flowId,
+    );
+  compareKeyed(
+    reasons,
+    previous.nodes as RecordValue[],
+    candidate.nodes as RecordValue[],
+    "nodeId",
+    "flow_node",
+    (left, right) =>
+      compareSimpleComponent(reasons, "flow_node", right.nodeId, left, right, ["label"]),
+    () => "major",
+  );
+  compareKeyed(
+    reasons,
+    previous.edges as RecordValue[],
+    candidate.edges as RecordValue[],
+    "edgeId",
+    "flow_edge",
+    (left, right) =>
+      compareSimpleComponent(reasons, "flow_edge", right.edgeId, left, right),
+    () => "major",
+  );
+};
+
 export const compareModuleContents = (
   previousContent: ModuleContent | ModuleContentV2 | ModuleContentV3,
   candidateContent: ModuleContent | ModuleContentV2 | ModuleContentV3,
@@ -1305,21 +1365,18 @@ const compareApplicationSharedContent = (
   );
   compareKeyed(
     reasons,
-    ((previous.flows ?? []) as RecordValue[]),
-    ((candidate.flows ?? []) as RecordValue[]),
+    previous.flows as RecordValue[],
+    candidate.flows as RecordValue[],
     "flowId",
     "flow",
-    (left, right) =>
-      compareSimpleComponent(reasons, "flow", right.flowId, left, right),
-    () => "major",
+    (left, right) => compareCurrentUserFlow(reasons, left, right),
   );
-  const flowBindingKey = (item: RecordValue) =>
-    String(item.bindingId ?? `${item.controlId}:${item.eventId}`);
-  const previousFlowBindings = (((previous.flowBindings ?? []) as RecordValue[])).map((b) => ({
+  const flowBindingKey = (item: RecordValue) => String(item.bindingId);
+  const previousFlowBindings = (previous.flowBindings as RecordValue[]).map((b) => ({
     ...b,
     _flowBindingKey: flowBindingKey(b),
   }));
-  const candidateFlowBindings = (((candidate.flowBindings ?? []) as RecordValue[])).map((b) => ({
+  const candidateFlowBindings = (candidate.flowBindings as RecordValue[]).map((b) => ({
     ...b,
     _flowBindingKey: flowBindingKey(b),
   }));
@@ -1331,7 +1388,7 @@ const compareApplicationSharedContent = (
     "flow_binding",
     (left, right) =>
       compareSimpleComponent(reasons, "flow_binding", right._flowBindingKey, left, right),
-    () => "minor",
+    () => "major",
   );
   pushChange(
     reasons,
@@ -1962,7 +2019,7 @@ const normaliseApplicationSharedContent = (content: ApplicationContentV2): Recor
     ),
     publicAddresses: sorted(value.publicAddresses as unknown[], "addressId"),
     flows: sorted(
-      (((value.flows ?? []) as RecordValue[])).map((flow) => ({
+      (value.flows as RecordValue[]).map((flow) => ({
         ...flow,
         nodes: sorted(flow.nodes as unknown[], "nodeId"),
         edges: sorted(flow.edges as unknown[], "edgeId"),
@@ -1970,7 +2027,7 @@ const normaliseApplicationSharedContent = (content: ApplicationContentV2): Recor
       "flowId",
     ),
     flowBindings: sorted(
-      ((value.flowBindings ?? []) as RecordValue[]),
+      value.flowBindings as RecordValue[],
       "bindingId",
     ),
   };
@@ -2103,15 +2160,17 @@ const assertUnambiguousApplicationSharedContent = (content: unknown): void => {
     assertUnique(workflow.nodes as RecordValue[], "nodeId");
     assertUniqueWorkflowEdges(workflow.edges as RecordValue[]);
   }
-  for (const flow of ((value.flows ?? []) as RecordValue[])) {
+  for (const flow of value.flows as RecordValue[]) {
     assertUnique(flow.nodes as RecordValue[], "nodeId");
     assertUnique(flow.edges as RecordValue[], "edgeId");
   }
-  const flowBindings = ((value.flowBindings ?? []) as RecordValue[]);
-  const flowBindingKeys = flowBindings.map((b) => `${b.controlId}:${b.eventId}`);
+  const flowBindings = value.flowBindings as RecordValue[];
+  const flowBindingKeys = flowBindings.map(
+    (binding) => `${binding.controlId}:${binding.eventId}`,
+  );
   if (new Set(flowBindingKeys).size !== flowBindingKeys.length)
     refuseVersionImpact("ambiguous_component_identity");
-  const flowBindingIds = flowBindings.map((b) => b.bindingId).filter(Boolean);
+  const flowBindingIds = flowBindings.map((binding) => binding.bindingId);
   if (new Set(flowBindingIds).size !== flowBindingIds.length)
     refuseVersionImpact("ambiguous_component_identity");
   for (const binding of value.connectionBindings as RecordValue[])

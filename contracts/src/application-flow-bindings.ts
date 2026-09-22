@@ -5,6 +5,7 @@ import {
   sourceAliasSchema,
   sourceQualifiedConditionSchema,
   sourceQualifiedRecordTypeSchema,
+  sourceQualifiedRelationshipSchema,
 } from "./definition-source-common";
 import { conditionNodeSchema } from "./module-contracts";
 import {
@@ -210,7 +211,7 @@ export const protectedOperationEffectKindSchema = flowEffectKindSchema.extract([
 export const componentFlowBindingSchema = z
   .object({
     contractVersion: z.literal(applicationFlowBindingContractVersion),
-    bindingId: containedComponentIdSchema.optional(),
+    bindingId: containedComponentIdSchema,
     controlId: containedComponentIdSchema,
     eventId: eventIdSchema,
     event: componentSemanticEventKindSchema,
@@ -385,7 +386,6 @@ export const flowNodeInputBindingSchema = z
 
 export const flowVariableDeclarationSchema = z
   .object({
-    variableId: containedComponentIdSchema.optional(),
     key: builderKeySchema,
     name: labelSchema.optional(),
     type: workflowValueTypeSchema,
@@ -531,6 +531,25 @@ export const currentUserFlowEdgeSchema = z
   })
   .strict();
 
+type FlowTypeDeclaration = Readonly<{
+  type: string;
+  recordTypeIds?: readonly unknown[];
+  record_types?: readonly unknown[];
+}>;
+
+function flowDeclarationsCompatible(
+  actual: FlowTypeDeclaration,
+  expected: FlowTypeDeclaration,
+): boolean {
+  if (actual.type !== expected.type) return false;
+  const actualRecordTypes = actual.recordTypeIds ?? actual.record_types;
+  const expectedRecordTypes = expected.recordTypeIds ?? expected.record_types;
+  if (actualRecordTypes === undefined || expectedRecordTypes === undefined)
+    return actualRecordTypes === expectedRecordTypes;
+  const allowed = new Set(expectedRecordTypes.map(String));
+  return actualRecordTypes.every((recordType) => allowed.has(String(recordType)));
+}
+
 export function validateCurrentUserFlowGraph(
   value: {
     inputs: Record<string, FlowValueDeclaration>;
@@ -541,6 +560,14 @@ export function validateCurrentUserFlowGraph(
   },
   context: z.RefinementCtx,
 ): void {
+  for (const [variableKey, variable] of Object.entries(value.variables)) {
+    if (variable.key !== variableKey)
+      context.addIssue({
+        code: "custom",
+        path: ["variables", variableKey, "key"],
+        message: "A flow variable key must match its containing map key",
+      });
+  }
   const nodeIds = value.nodes.map((n) => String(n.nodeId));
   const nodeKeys = value.nodes.map((n) => n.key);
   if (new Set(nodeIds).size !== nodeIds.length) {
@@ -553,14 +580,32 @@ export function validateCurrentUserFlowGraph(
   if (new Set(edgeIds).size !== edgeIds.length) {
     context.addIssue({ code: "custom", path: ["edges"], message: "Flow edge identities must be unique" });
   }
-  const edgeSignatures = value.edges.map((e) => `${e.fromNodeId}:${e.toNodeId}:${e.outcome ?? ""}`);
+  const edgeSignatures = value.edges.map((edge) =>
+    `${String(edge.fromNodeId)}:${edge.outcome ?? ""}`,
+  );
   if (new Set(edgeSignatures).size !== edgeSignatures.length) {
-    context.addIssue({ code: "custom", path: ["edges"], message: "Flow edges must be unique" });
+    context.addIssue({ code: "custom", path: ["edges"], message: "Flow outcome routes must be unique" });
   }
 
   const startNodes = value.nodes.filter((n) => n.kind === "start");
   if (startNodes.length !== 1) {
     context.addIssue({ code: "custom", path: ["nodes"], message: "A flow must have exactly one start node" });
+  } else {
+    const startOutputs = startNodes[0]!.outputs;
+    if (
+      Object.keys(startOutputs).length !== Object.keys(value.inputs).length ||
+      Object.entries(value.inputs).some(
+        ([key, declaration]) =>
+          startOutputs[key] === undefined ||
+          !flowDeclarationsCompatible(declaration, startOutputs[key]) ||
+          !flowDeclarationsCompatible(startOutputs[key], declaration),
+      )
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["nodes"],
+        message: "The start node outputs must exactly expose the declared flow inputs",
+      });
   }
   const returnNodes = value.nodes.filter((n) => n.kind === "return");
   if (returnNodes.length < 1) {
@@ -673,8 +718,23 @@ export function validateCurrentUserFlowGraph(
     context.addIssue({ code: "custom", path: ["edges"], message: "Flow graph must be acyclic (no cycles allowed)" });
   }
 
-  const topoIndex = new Map(topologicalOrder.map((id, idx) => [id, idx]));
   const nodeById = new Map(value.nodes.map((n) => [String(n.nodeId), n]));
+  const dominators = new Map<string, Set<string>>();
+  for (const nodeId of topologicalOrder) {
+    const parents = value.edges
+      .filter((edge) => String(edge.toNodeId) === nodeId)
+      .map((edge) => String(edge.fromNodeId));
+    const dominated =
+      parents.length === 0
+        ? new Set<string>()
+        : new Set(
+            [...(dominators.get(parents[0]!) ?? [])].filter((candidate) =>
+              parents.slice(1).every((parent) => dominators.get(parent)?.has(candidate)),
+            ),
+          );
+    dominated.add(nodeId);
+    dominators.set(nodeId, dominated);
+  }
   for (const node of value.nodes) {
     if (node.kind === "query" || node.kind === "action" || node.kind === "transform") {
       for (const [inputKey, inputBinding] of Object.entries(node.inputs)) {
@@ -698,38 +758,76 @@ export function validateCurrentUserFlowGraph(
           if (!refNode) {
             context.addIssue({ code: "custom", path: ["nodes"], message: `Input '${inputKey}' references unknown node '${refNodeId}'` });
           } else {
-            const currentIdx = topoIndex.get(String(node.nodeId)) ?? -1;
-            const refIdx = topoIndex.get(refNodeId) ?? -1;
-            if (refIdx >= currentIdx) {
+            if (
+              refNodeId === String(node.nodeId) ||
+              !dominators.get(String(node.nodeId))?.has(refNodeId)
+            ) {
               context.addIssue({ code: "custom", path: ["nodes"], message: `Input '${inputKey}' references node output from subsequent or concurrent node` });
             }
-            if (refNode.kind !== "return") {
-              const declaredOutput = (refNode as any).outputs?.[inputBinding.value.output];
-              if (!declaredOutput) {
-                context.addIssue({ code: "custom", path: ["nodes"], message: `Node '${refNode.key}' does not declare output '${inputBinding.value.output}'` });
-              } else if (declaredOutput.type !== inputBinding.type) {
-                context.addIssue({ code: "custom", path: ["nodes"], message: `Input '${inputKey}' type '${inputBinding.type}' is incompatible with output type '${declaredOutput.type}'` });
-              }
+            const declaredOutput = refNode.kind === "return"
+              ? undefined
+              : refNode.outputs[inputBinding.value.output];
+            if (!declaredOutput) {
+              context.addIssue({ code: "custom", path: ["nodes"], message: `Node '${refNode.key}' does not declare output '${inputBinding.value.output}'` });
+            } else if (declaredOutput.type !== inputBinding.type) {
+              context.addIssue({ code: "custom", path: ["nodes"], message: `Input '${inputKey}' type '${inputBinding.type}' is incompatible with output type '${declaredOutput.type}'` });
             }
           }
         }
       }
+      const mappedOutputs = new Set<string>();
+      for (const [resultKey, mapping] of Object.entries(node.results)) {
+        const declaredOutput = node.outputs[mapping.output];
+        if (!declaredOutput || mapping.type !== declaredOutput.type) {
+          context.addIssue({ code: "custom", path: ["nodes"], message: `Result '${resultKey}' must map to a compatible declared node output` });
+        }
+        if (mappedOutputs.has(mapping.output)) {
+          context.addIssue({ code: "custom", path: ["nodes"], message: `Node output '${mapping.output}' cannot be mapped more than once` });
+        }
+        mappedOutputs.add(mapping.output);
+      }
+      for (const [outputKey, output] of Object.entries(node.outputs)) {
+        if (output.required && !mappedOutputs.has(outputKey)) {
+          context.addIssue({ code: "custom", path: ["nodes"], message: `Required node output '${outputKey}' needs an explicit result mapping` });
+        }
+      }
     } else if (node.kind === "return") {
       for (const [resultKey, resultValue] of Object.entries(node.results)) {
+        const expectedOutput = value.outputs[resultKey];
+        if (!expectedOutput) {
+          context.addIssue({ code: "custom", path: ["nodes"], message: `Return result '${resultKey}' is not declared by the flow` });
+          continue;
+        }
         if (resultValue.source === "flow_input") {
-          if (!value.inputs[resultValue.input]) {
+          const input = value.inputs[resultValue.input];
+          if (!input || !flowDeclarationsCompatible(input, expectedOutput)) {
             context.addIssue({ code: "custom", path: ["nodes"], message: `Return result '${resultKey}' references unknown flow input '${resultValue.input}'` });
           }
         } else if (resultValue.source === "flow_variable") {
-          if (!value.variables[resultValue.variable]) {
+          const variable = value.variables[resultValue.variable];
+          if (!variable || !flowDeclarationsCompatible(variable, expectedOutput)) {
             context.addIssue({ code: "custom", path: ["nodes"], message: `Return result '${resultKey}' references unknown flow variable '${resultValue.variable}'` });
           }
         } else if (resultValue.source === "node_output") {
           const refNodeId = String(resultValue.nodeId);
           const refNode = nodeById.get(refNodeId);
-          if (!refNode) {
+          const declaredOutput = refNode?.kind === "return"
+            ? undefined
+            : refNode?.outputs[resultValue.output];
+          if (
+            !refNode ||
+            refNodeId === String(node.nodeId) ||
+            !dominators.get(String(node.nodeId))?.has(refNodeId) ||
+            !declaredOutput ||
+            !flowDeclarationsCompatible(declaredOutput, expectedOutput)
+          ) {
             context.addIssue({ code: "custom", path: ["nodes"], message: `Return result '${resultKey}' references unknown node '${refNodeId}'` });
           }
+        }
+      }
+      for (const [outputKey, output] of Object.entries(value.outputs)) {
+        if (output.required && !(outputKey in node.results)) {
+          context.addIssue({ code: "custom", path: ["nodes"], message: `Return node must map required flow output '${outputKey}'` });
         }
       }
     }
@@ -764,7 +862,7 @@ export const sourceComponentBindingContextSchema = z.discriminatedUnion("kind", 
   z
     .object({
       kind: z.literal("related_record"),
-      relationship: sourceAliasSchema,
+      relationship: sourceQualifiedRelationshipSchema,
       record_type: sourceQualifiedRecordTypeSchema,
     })
     .strict(),
@@ -880,9 +978,9 @@ export const sourceFrontendFlowReferenceSchema = z.discriminatedUnion("kind", [
 
 export const sourceComponentFlowBindingSchema = z
   .object({
-    id: sourceAliasSchema.optional(),
+    id: sourceAliasSchema,
     control: sourceAliasSchema,
-    event_id: sourceAliasSchema.optional(),
+    event_id: sourceAliasSchema,
     event: componentSemanticEventKindSchema,
     flow: sourceFrontendFlowReferenceSchema,
     inputs: z.record(builderKeySchema, sourceTypedFlowInputBindingSchema).default({}),
@@ -951,7 +1049,6 @@ export const sourceFlowValueDeclarationSchema = z
 
 export const sourceFlowVariableDeclarationSchema = z
   .object({
-    id: sourceAliasSchema.optional(),
     key: builderKeySchema,
     name: labelSchema.optional(),
     type: workflowValueTypeSchema,
@@ -975,7 +1072,7 @@ export const sourceCurrentUserFlowQueryTargetSchema = z.discriminatedUnion("kind
     .object({
       kind: z.literal("query"),
       module: namespacedKeySchema,
-      version: versionRequirementSchema.optional(),
+      version: versionRequirementSchema,
       query: builderKeySchema,
     })
     .strict(),
@@ -998,7 +1095,7 @@ export const sourceCurrentUserFlowActionTargetSchema = z.discriminatedUnion("kin
     .object({
       kind: z.literal("form_continuation"),
       form: sourceAliasSchema,
-      continuation_event: sourceAliasSchema.optional(),
+      continuation_event: sourceAliasSchema,
     })
     .strict(),
   z
@@ -1088,7 +1185,7 @@ export const sourceCurrentUserFlowNodeSchema = z.discriminatedUnion("kind", [
 
 export const sourceCurrentUserFlowEdgeSchema = z
   .object({
-    id: sourceAliasSchema.optional(),
+    id: sourceAliasSchema,
     from_node: sourceAliasSchema,
     to_node: sourceAliasSchema,
     outcome: builderKeySchema.optional(),
@@ -1105,6 +1202,14 @@ export function validateSourceCurrentUserFlowGraph(
   },
   context: z.RefinementCtx,
 ): void {
+  for (const [variableKey, variable] of Object.entries(value.variables)) {
+    if (variable.key !== variableKey)
+      context.addIssue({
+        code: "custom",
+        path: ["variables", variableKey, "key"],
+        message: "A flow variable key must match its containing map key",
+      });
+  }
   const nodeAliases = value.nodes.map((n) => n.id);
   const nodeKeys = value.nodes.map((n) => n.key);
   if (new Set(nodeAliases).size !== nodeAliases.length) {
@@ -1113,14 +1218,36 @@ export function validateSourceCurrentUserFlowGraph(
   if (new Set(nodeKeys).size !== nodeKeys.length) {
     context.addIssue({ code: "custom", path: ["nodes"], message: "Flow node keys must be unique" });
   }
-  const edgeSignatures = value.edges.map((e) => `${e.from_node}:${e.to_node}:${e.outcome ?? ""}`);
+  const edgeSignatures = value.edges.map((edge) =>
+    `${edge.from_node}:${edge.outcome ?? ""}`,
+  );
+  const edgeAliases = value.edges.map((edge) => edge.id);
+  if (new Set(edgeAliases).size !== edgeAliases.length) {
+    context.addIssue({ code: "custom", path: ["edges"], message: "Flow edge aliases must be unique" });
+  }
   if (new Set(edgeSignatures).size !== edgeSignatures.length) {
-    context.addIssue({ code: "custom", path: ["edges"], message: "Flow edges must be unique" });
+    context.addIssue({ code: "custom", path: ["edges"], message: "Flow outcome routes must be unique" });
   }
 
   const startNodes = value.nodes.filter((n) => n.kind === "start");
   if (startNodes.length !== 1) {
     context.addIssue({ code: "custom", path: ["nodes"], message: "A flow must have exactly one start node" });
+  } else {
+    const startOutputs = startNodes[0]!.outputs;
+    if (
+      Object.keys(startOutputs).length !== Object.keys(value.inputs).length ||
+      Object.entries(value.inputs).some(
+        ([key, declaration]) =>
+          startOutputs[key] === undefined ||
+          !flowDeclarationsCompatible(declaration, startOutputs[key]) ||
+          !flowDeclarationsCompatible(startOutputs[key], declaration),
+      )
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["nodes"],
+        message: "The start node outputs must exactly expose the declared flow inputs",
+      });
   }
   const returnNodes = value.nodes.filter((n) => n.kind === "return");
   if (returnNodes.length < 1) {
@@ -1233,8 +1360,23 @@ export function validateSourceCurrentUserFlowGraph(
     context.addIssue({ code: "custom", path: ["edges"], message: "Flow graph must be acyclic (no cycles allowed)" });
   }
 
-  const topoIndex = new Map(topologicalOrder.map((id, idx) => [id, idx]));
   const nodeById = new Map(value.nodes.map((n) => [n.id, n]));
+  const dominators = new Map<string, Set<string>>();
+  for (const nodeId of topologicalOrder) {
+    const parents = value.edges
+      .filter((edge) => edge.to_node === nodeId)
+      .map((edge) => edge.from_node);
+    const dominated =
+      parents.length === 0
+        ? new Set<string>()
+        : new Set(
+            [...(dominators.get(parents[0]!) ?? [])].filter((candidate) =>
+              parents.slice(1).every((parent) => dominators.get(parent)?.has(candidate)),
+            ),
+          );
+    dominated.add(nodeId);
+    dominators.set(nodeId, dominated);
+  }
   for (const node of value.nodes) {
     if (node.kind === "query" || node.kind === "action" || node.kind === "transform") {
       for (const [inputKey, inputBinding] of Object.entries(node.inputs)) {
@@ -1258,38 +1400,73 @@ export function validateSourceCurrentUserFlowGraph(
           if (!refNode) {
             context.addIssue({ code: "custom", path: ["nodes"], message: `Input '${inputKey}' references unknown node '${refNodeId}'` });
           } else {
-            const currentIdx = topoIndex.get(node.id) ?? -1;
-            const refIdx = topoIndex.get(refNodeId) ?? -1;
-            if (refIdx >= currentIdx) {
+            if (refNodeId === node.id || !dominators.get(node.id)?.has(refNodeId)) {
               context.addIssue({ code: "custom", path: ["nodes"], message: `Input '${inputKey}' references node output from subsequent or concurrent node` });
             }
-            if (refNode.kind !== "return") {
-              const declaredOutput = (refNode as any).outputs?.[inputBinding.value.output];
-              if (!declaredOutput) {
-                context.addIssue({ code: "custom", path: ["nodes"], message: `Node '${refNode.key}' does not declare output '${inputBinding.value.output}'` });
-              } else if (declaredOutput.type !== inputBinding.type) {
-                context.addIssue({ code: "custom", path: ["nodes"], message: `Input '${inputKey}' type '${inputBinding.type}' is incompatible with output type '${declaredOutput.type}'` });
-              }
+            const declaredOutput = refNode.kind === "return"
+              ? undefined
+              : refNode.outputs[inputBinding.value.output];
+            if (!declaredOutput) {
+              context.addIssue({ code: "custom", path: ["nodes"], message: `Node '${refNode.key}' does not declare output '${inputBinding.value.output}'` });
+            } else if (declaredOutput.type !== inputBinding.type) {
+              context.addIssue({ code: "custom", path: ["nodes"], message: `Input '${inputKey}' type '${inputBinding.type}' is incompatible with output type '${declaredOutput.type}'` });
             }
           }
         }
       }
+      const mappedOutputs = new Set<string>();
+      for (const [resultKey, mapping] of Object.entries(node.results)) {
+        const declaredOutput = node.outputs[mapping.output];
+        if (!declaredOutput || mapping.type !== declaredOutput.type) {
+          context.addIssue({ code: "custom", path: ["nodes"], message: `Result '${resultKey}' must map to a compatible declared node output` });
+        }
+        if (mappedOutputs.has(mapping.output)) {
+          context.addIssue({ code: "custom", path: ["nodes"], message: `Node output '${mapping.output}' cannot be mapped more than once` });
+        }
+        mappedOutputs.add(mapping.output);
+      }
+      for (const [outputKey, output] of Object.entries(node.outputs)) {
+        if (output.required && !mappedOutputs.has(outputKey)) {
+          context.addIssue({ code: "custom", path: ["nodes"], message: `Required node output '${outputKey}' needs an explicit result mapping` });
+        }
+      }
     } else if (node.kind === "return") {
       for (const [resultKey, resultValue] of Object.entries(node.results)) {
+        const expectedOutput = value.outputs[resultKey];
+        if (!expectedOutput) {
+          context.addIssue({ code: "custom", path: ["nodes"], message: `Return result '${resultKey}' is not declared by the flow` });
+          continue;
+        }
         if (resultValue.source === "flow_input") {
-          if (!value.inputs[resultValue.input]) {
+          const input = value.inputs[resultValue.input];
+          if (!input || !flowDeclarationsCompatible(input, expectedOutput)) {
             context.addIssue({ code: "custom", path: ["nodes"], message: `Return result '${resultKey}' references unknown flow input '${resultValue.input}'` });
           }
         } else if (resultValue.source === "flow_variable") {
-          if (!value.variables[resultValue.variable]) {
+          const variable = value.variables[resultValue.variable];
+          if (!variable || !flowDeclarationsCompatible(variable, expectedOutput)) {
             context.addIssue({ code: "custom", path: ["nodes"], message: `Return result '${resultKey}' references unknown flow variable '${resultValue.variable}'` });
           }
         } else if (resultValue.source === "node_output") {
           const refNodeId = resultValue.node;
           const refNode = nodeById.get(refNodeId);
-          if (!refNode) {
+          const declaredOutput = refNode?.kind === "return"
+            ? undefined
+            : refNode?.outputs[resultValue.output];
+          if (
+            !refNode ||
+            refNodeId === node.id ||
+            !dominators.get(node.id)?.has(refNodeId) ||
+            !declaredOutput ||
+            !flowDeclarationsCompatible(declaredOutput, expectedOutput)
+          ) {
             context.addIssue({ code: "custom", path: ["nodes"], message: `Return result '${resultKey}' references unknown node '${refNodeId}'` });
           }
+        }
+      }
+      for (const [outputKey, output] of Object.entries(value.outputs)) {
+        if (output.required && !(outputKey in node.results)) {
+          context.addIssue({ code: "custom", path: ["nodes"], message: `Return node must map required flow output '${outputKey}'` });
         }
       }
     }
@@ -1365,4 +1542,3 @@ export type SourceCurrentUserFlowReturnNode = z.infer<typeof sourceCurrentUserFl
 export type SourceCurrentUserFlowNode = z.infer<typeof sourceCurrentUserFlowNodeSchema>;
 export type SourceCurrentUserFlowEdge = z.infer<typeof sourceCurrentUserFlowEdgeSchema>;
 export type SourceCurrentUserFlow = z.infer<typeof sourceCurrentUserFlowSchema>;
-

@@ -862,8 +862,8 @@ export const sourceApplicationBodyV2Schema = z
     shells: z.array(sourceApplicationShellV2Schema),
     pages: z.array(sourcePageDefinitionV2Schema).min(1),
     theme: sourceApplicationThemeV2Schema,
-    flows: z.array(sourceCurrentUserFlowSchema).optional().default([]),
-    flow_bindings: z.array(sourceComponentFlowBindingSchema).optional().default([]),
+    flows: z.array(sourceCurrentUserFlowSchema),
+    flow_bindings: z.array(sourceComponentFlowBindingSchema),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1009,6 +1009,22 @@ export const sourceApplicationBodyV2Schema = z
 
     const flowsByAlias = new Map(value.flows.map((flow) => [flow.id, flow]));
     const placementAliasSet = new Set(placementEntries.map(([alias]) => alias));
+    const flowBindingAliases = value.flow_bindings.map((binding) => binding.id);
+    const flowBindingEvents = value.flow_bindings.map(
+      (binding) => `${binding.control}:${binding.event_id}`,
+    );
+    if (new Set(flowBindingAliases).size !== flowBindingAliases.length)
+      context.addIssue({
+        code: "custom",
+        path: ["flow_bindings"],
+        message: "Flow binding aliases must be unique",
+      });
+    if (new Set(flowBindingEvents).size !== flowBindingEvents.length)
+      context.addIssue({
+        code: "custom",
+        path: ["flow_bindings"],
+        message: "A control event can have only one flow binding",
+      });
     for (const [bindingIndex, binding] of value.flow_bindings.entries()) {
       if (binding.flow.kind === "application_owned") {
         const flow = flowsByAlias.get(binding.flow.flow);
