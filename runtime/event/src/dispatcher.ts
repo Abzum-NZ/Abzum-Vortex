@@ -1,15 +1,11 @@
 import "server-only";
 
-import {
-  actorIdSchema,
-  timestampSchema,
-  type EventOccurrenceEnvelopeV2,
-} from "@vortex/contracts";
-import type { RuntimeDatabaseTransaction } from "@vortex/db";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { actorIdSchema, type EventOccurrenceEnvelopeV2 } from "@vortex/contracts";
+import { withRuntimeTransaction, type RuntimeDatabaseTransaction } from "@vortex/db";
 import {
   createEventConsumerProgressRepository,
   eventConsumerProgressLimits,
-  EventConsumerProgressError,
   type ClaimedEventOccurrence,
   type EventConsumerClaimResult,
   type EventConsumerProgressRepository,
@@ -18,37 +14,27 @@ import {
   createEventDeliveryRecoveryRepository,
   eventDeliveryFailureClassifications,
   eventDeliveryRecoveryLimits,
-  EventDeliveryRecoveryError,
   type EventDeliveryFailureClassification,
   type EventDeliveryRecoveryRepository,
 } from "./delivery-recovery";
 
 export const eventDispatcherLimits = Object.freeze({
-  defaultBatchSize: 20,
-  maximumBatchSize: eventConsumerProgressLimits.maximumBatchSize,
-  minimumBatchSize: 1,
-  defaultLeaseSeconds: 60,
-  maximumLeaseSeconds: eventConsumerProgressLimits.maximumLeaseSeconds,
-  minimumLeaseSeconds: 1,
-  maximumConsumerKeyLength: eventConsumerProgressLimits.maximumConsumerKeyLength,
-  defaultRetryAttempts: 5,
-  maximumRetryAttempts: eventDeliveryRecoveryLimits.maximumRetryAttempts,
-  minimumRetryAttempts: eventDeliveryRecoveryLimits.minimumRetryAttempts,
-  defaultRetryBackoffSeconds: 30,
-  minimumRetryBackoffSeconds: eventDeliveryRecoveryLimits.minimumRetryBackoffSeconds,
-  maximumRetryBackoffSeconds: eventDeliveryRecoveryLimits.maximumRetryBackoffSeconds,
+  /** Occurrences claimed by one dispatch across every selected consumer. */
+  defaultBatchLimit: 20,
+  maximumBatchLimit: eventConsumerProgressLimits.maximumBatchSize,
   maximumRegisteredConsumers: 32,
+  defaultLeaseSeconds: 60,
+  defaultMaxAttempts: 5,
+  defaultRetryBackoffSeconds: 30,
+  minimumCredentialLength: 32,
+  maximumCredentialLength: 512,
 });
 
 export const eventDispatcherErrorCodes = [
-  "UNAUTHENTICATED_DISPATCHER",
+  "INVALID_EVENT_DISPATCH_INPUT",
+  "UNAUTHENTICATED_EVENT_DISPATCHER",
   "UNKNOWN_EVENT_CONSUMER",
-  "INVALID_EVENT_DISPATCHER_INPUT",
-  "EVENT_DISPATCHER_STORAGE_UNAVAILABLE",
-  "STALE_CLAIM_CURSOR",
-  "UNSAFE_EVENT_CONSUMER_OUTCOME",
-  "DUPLICATE_EVENT_CONSUMER_REGISTRATION",
-  "EVENT_CONSUMER_REGISTRATION_LIMIT_EXCEEDED",
+  "INVALID_EVENT_CONSUMER_REGISTRATION",
 ] as const;
 
 export type EventDispatcherErrorCode = (typeof eventDispatcherErrorCodes)[number];
@@ -56,643 +42,594 @@ export type EventDispatcherErrorCode = (typeof eventDispatcherErrorCodes)[number
 export class EventDispatcherError extends Error {
   readonly code: EventDispatcherErrorCode;
 
-  constructor(code: EventDispatcherErrorCode, message?: string) {
-    super(message ? `${code}: ${message}` : code);
+  constructor(code: EventDispatcherErrorCode) {
+    super(code);
     this.name = "EventDispatcherError";
     this.code = code;
   }
 }
 
 /**
- * Authenticated system identity claiming or running dispatch.
- * Caller-asserted consumer authority or arbitrary operator overrides are strictly rejected.
+ * How one registered consumer is delivered to. `leaseSeconds` is the claim
+ * held for, and renewed by, each delivery; `maxAttempts` and
+ * `retryBackoffSeconds` are the bounded retry policy handed to #640.
  */
-export type AuthenticatedDispatcherIdentity = Readonly<{
-  dispatcherId?: string;
-  actorId?: string;
-  systemActorId?: string;
-  kind?: "system" | "dispatcher";
-  authenticatedAt?: string;
+export type EventConsumerDeliveryPolicy = Readonly<{
+  leaseSeconds: number;
+  maxAttempts: number;
+  retryBackoffSeconds: number;
 }>;
 
-export type EventConsumerInvocationContext = Readonly<{
+/**
+ * One claimed occurrence handed to a consumer. Delivery is at least once: an
+ * effect whose acknowledgement is lost is delivered again, so a consumer must
+ * make its effect idempotent on (`consumerKey`, `occurrence.occurrenceId`).
+ */
+export type EventConsumerDelivery = Readonly<{
   consumerKey: string;
   occurrence: EventOccurrenceEnvelopeV2;
   causalDepth: number;
   leaseExpiresAt: string;
-  claimCursor: string;
-  renewLease: (leaseSeconds?: number) => Promise<boolean>;
+  /**
+   * Extends this delivery's claim by the consumer's lease policy. `false` means
+   * the claim is no longer held and another dispatch may reclaim it, so the
+   * consumer should stop without committing its effect. It opens its own
+   * runtime transaction and must not be awaited inside one the consumer holds.
+   */
+  renewLease: () => Promise<boolean>;
 }>;
 
-export type EventConsumerInvocationSuccessOutcome = Readonly<{
-  outcome: "completed" | "acknowledged" | "already_completed";
+export type EventConsumerOutcome =
+  | Readonly<{ outcome: "completed" }>
+  | Readonly<{ outcome: "retryable_failure"; failureCode: EventDeliveryFailureClassification }>
+  | Readonly<{ outcome: "terminal_failure"; failureCode: EventDeliveryFailureClassification }>;
+
+export type EventConsumerAdapter = Readonly<{
+  consumerKey: string;
+  policy?: Partial<EventConsumerDeliveryPolicy>;
+  deliver(delivery: EventConsumerDelivery): Promise<EventConsumerOutcome>;
 }>;
-
-export type EventConsumerInvocationFailureOutcome = Readonly<{
-  outcome: "failed" | "retryable_failure" | "terminal_failure";
-  failureCode?: EventDeliveryFailureClassification;
-  maxAttempts?: number;
-  retryBackoffSeconds?: number;
-}>;
-
-export type EventConsumerInvocationResult =
-  | EventConsumerInvocationSuccessOutcome
-  | EventConsumerInvocationFailureOutcome;
-
-export interface EventConsumerAdapter {
-  readonly consumerKey: string;
-  readonly defaultMaxAttempts?: number;
-  readonly defaultRetryBackoffSeconds?: number;
-  handle(
-    occurrence: EventOccurrenceEnvelopeV2,
-    context: EventConsumerInvocationContext,
-  ): Promise<EventConsumerInvocationResult>;
-}
-
-export interface EventDispatcherRegistry {
-  register(adapter: EventConsumerAdapter): void;
-  get(consumerKey: string): EventConsumerAdapter | undefined;
-  has(consumerKey: string): boolean;
-  list(): readonly EventConsumerAdapter[];
-  listKeys(): readonly string[];
-  readonly size: number;
-}
-
-export type DispatchEventsInput = Readonly<{
-  dispatcherIdentity: AuthenticatedDispatcherIdentity;
-  batchSize?: number;
-  batchLimit?: number;
-  consumerKey?: string;
-  leaseSeconds?: number;
-}>;
-
-export type EventDispatchStatus =
-  | "idle"
-  | "completed"
-  | "partial_failure"
-  | "interrupted";
 
 /**
- * Content-free result counts and safe delivery status.
+ * The dispatcher identity established by {@link authenticateEventDispatcher}
+ * from a verified credential and server configuration. Only values issued by
+ * that function are accepted by a dispatch; an object literal of the same shape
+ * is caller-asserted and refused.
  */
-export type DispatchEventsResult = Readonly<{
+export type AuthenticatedEventDispatcher = Readonly<{
+  kind: "event_dispatcher";
+  systemActorId: string;
+}>;
+
+export const eventDispatcherRefusalReasons = [
+  "dispatcher_not_configured",
+  "credential_missing",
+  "credential_rejected",
+] as const;
+
+export type EventDispatcherRefusalReason = (typeof eventDispatcherRefusalReasons)[number];
+
+export type EventDispatcherAuthentication =
+  | Readonly<{ outcome: "authenticated"; dispatcher: AuthenticatedEventDispatcher }>
+  | Readonly<{ outcome: "refused"; reason: EventDispatcherRefusalReason }>;
+
+export type DispatchEventsInput = Readonly<{
+  dispatcher: AuthenticatedEventDispatcher;
+  batchLimit?: number;
+  /** Restricts this dispatch to one registered consumer. */
+  consumerKey?: string;
+}>;
+
+export type EventDispatchStatus = "idle" | "completed" | "partial_failure" | "interrupted";
+
+/**
+ * Content-free outcome of one bounded dispatch. `interruptedCount` counts
+ * claimed occurrences this dispatch did not settle; their leases lapse and
+ * they are reclaimed in order by a later dispatch, so no work is lost.
+ */
+export type EventDispatchResult = Readonly<{
   status: EventDispatchStatus;
   claimedCount: number;
   acknowledgedCount: number;
   retryScheduledCount: number;
   terminallyFailedCount: number;
-  unprocessedCount: number;
+  interruptedCount: number;
   consumersDispatched: number;
+  consumersUnavailable: number;
 }>;
 
 export interface EventDispatcher {
-  dispatch(input: DispatchEventsInput): Promise<DispatchEventsResult>;
-  registerConsumer(adapter: EventConsumerAdapter): void;
-  getRegisteredConsumer(consumerKey: string): EventConsumerAdapter | undefined;
-  listRegisteredConsumers(): readonly string[];
+  dispatch(input: DispatchEventsInput): Promise<EventDispatchResult>;
 }
 
+export type EventDispatcherTransactionRunner = <Result>(
+  operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+) => Promise<Result>;
+
 export type EventDispatcherDependencies = Readonly<{
-  progressRepository: EventConsumerProgressRepository;
-  recoveryRepository: EventDeliveryRecoveryRepository;
-  consumers?: readonly EventConsumerAdapter[] | EventDispatcherRegistry;
+  consumers: readonly EventConsumerAdapter[];
+  /**
+   * Runs one storage step. Every claim, renewal, acknowledgement and failure
+   * report commits in its own transaction, so leases are visible to concurrent
+   * dispatches and no consumer runs inside a dispatcher transaction.
+   */
+  runtimeTransaction?: EventDispatcherTransactionRunner;
 }>;
 
-export type EventDispatcherDatabaseDependencies = Readonly<{
-  consumers?: readonly EventConsumerAdapter[] | EventDispatcherRegistry;
+export type EventDispatchRouteRequest = Readonly<{
+  /** The request's `Authorization` header value. */
+  authorization: string | null | undefined;
+  batchLimit?: unknown;
+  consumerKey?: unknown;
 }>;
+
+export type EventDispatchRouteResponse =
+  | Readonly<{ outcome: "refused"; reason: EventDispatcherRefusalReason }>
+  | Readonly<{
+      outcome: "invalid_request";
+      code: "INVALID_EVENT_DISPATCH_INPUT" | "UNKNOWN_EVENT_CONSUMER";
+    }>
+  | Readonly<{ outcome: "dispatched"; result: EventDispatchResult }>;
+
+export type EventDispatcherRouteDependencies = EventDispatcherDependencies &
+  Readonly<{ environment?: Readonly<Record<string, string | undefined>> }>;
+
+export interface EventDispatcherRoute {
+  handle(request: EventDispatchRouteRequest): Promise<EventDispatchRouteResponse>;
+}
 
 const consumerKeyMatches = (value: unknown): value is string =>
   typeof value === "string" &&
-  value.length <= eventDispatcherLimits.maximumConsumerKeyLength &&
+  value.length <= eventConsumerProgressLimits.maximumConsumerKeyLength &&
   /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
 
-const uuidMatches = (value: unknown): value is string =>
-  typeof value === "string" &&
-  value !== "00000000-0000-0000-0000-000000000000" &&
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+const integerWithin = (value: unknown, minimum: number, maximum: number): value is number =>
+  Number.isSafeInteger(value) && (value as number) >= minimum && (value as number) <= maximum;
 
-const timestampMatches = (value: unknown): value is string =>
-  timestampSchema.safeParse(value).success;
+const record = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Readonly<Record<string, unknown>>)
+    : undefined;
 
-const deriveRecordKey = (occurrence: EventOccurrenceEnvelopeV2): string =>
-  `${occurrence.organizationId}:${occurrence.installation.applicationRootId}:${occurrence.recordId}`;
-
-const validateDispatcherIdentity = (candidate: unknown): AuthenticatedDispatcherIdentity => {
-  if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) {
-    throw new EventDispatcherError(
-      "UNAUTHENTICATED_DISPATCHER",
-      "Dispatcher identity must be an authenticated object",
-    );
-  }
-
-  const identity = candidate as Readonly<Record<string, unknown>>;
-  const dispatcherId = identity.dispatcherId;
-  const actorId = identity.actorId;
-  const systemActorId = identity.systemActorId;
-  const kind = identity.kind;
-  const authenticatedAt = identity.authenticatedAt;
-
-  const validDispatcherId = typeof dispatcherId === "string" && uuidMatches(dispatcherId);
-  const validActorId = typeof actorId === "string" && uuidMatches(actorId);
-  const validSystemActorId = typeof systemActorId === "string" && uuidMatches(systemActorId);
-
-  if (!validDispatcherId && !validActorId && !validSystemActorId) {
-    throw new EventDispatcherError(
-      "UNAUTHENTICATED_DISPATCHER",
-      "Dispatcher identity must include at least one valid UUID identifier (dispatcherId, actorId, or systemActorId)",
-    );
-  }
-
-  if (dispatcherId !== undefined && !validDispatcherId) {
-    throw new EventDispatcherError("UNAUTHENTICATED_DISPATCHER", "Invalid dispatcherId format");
-  }
-  if (actorId !== undefined && !validActorId) {
-    throw new EventDispatcherError("UNAUTHENTICATED_DISPATCHER", "Invalid actorId format");
-  }
-  if (systemActorId !== undefined && !validSystemActorId) {
-    throw new EventDispatcherError("UNAUTHENTICATED_DISPATCHER", "Invalid systemActorId format");
-  }
-  if (kind !== undefined && kind !== "system" && kind !== "dispatcher") {
-    throw new EventDispatcherError("UNAUTHENTICATED_DISPATCHER", "Invalid identity kind");
-  }
-  if (authenticatedAt !== undefined && !timestampMatches(authenticatedAt)) {
-    throw new EventDispatcherError("UNAUTHENTICATED_DISPATCHER", "Invalid authenticatedAt timestamp");
-  }
-
-  return Object.freeze({
-    ...(validDispatcherId ? { dispatcherId: dispatcherId as string } : {}),
-    ...(validActorId ? { actorId: actorId as string } : {}),
-    ...(validSystemActorId ? { systemActorId: systemActorId as string } : {}),
-    ...(kind !== undefined ? { kind: kind as "system" | "dispatcher" } : {}),
-    ...(authenticatedAt !== undefined ? { authenticatedAt: authenticatedAt as string } : {}),
-  });
-};
-
-const validateDispatchInput = (inputCandidate: unknown): DispatchEventsInput => {
-  if (typeof inputCandidate !== "object" || inputCandidate === null || Array.isArray(inputCandidate)) {
-    throw new EventDispatcherError("INVALID_EVENT_DISPATCHER_INPUT", "Input must be an object");
-  }
-
-  const input = inputCandidate as Readonly<Record<string, unknown>>;
-
-  // Refuse caller-asserted consumer authority
+const exactRecord = <Key extends string>(
+  value: unknown,
+  keys: readonly Key[],
+): Readonly<Record<Key, unknown>> | undefined => {
+  const candidate = record(value);
   if (
-    "consumerAuthority" in input ||
-    "callerAuthority" in input ||
-    "operatorAuthority" in input ||
-    "operatorToken" in input ||
-    "consumerCredentials" in input
-  ) {
-    throw new EventDispatcherError(
-      "INVALID_EVENT_DISPATCHER_INPUT",
-      "Caller-asserted consumer authority is not accepted",
-    );
-  }
+    candidate === undefined ||
+    Object.keys(candidate).length !== keys.length ||
+    keys.some((key) => !Object.hasOwn(candidate, key))
+  )
+    return undefined;
+  return candidate as Readonly<Record<Key, unknown>>;
+};
 
-  const dispatcherIdentity = validateDispatcherIdentity(input.dispatcherIdentity);
+const failureClassificationMatches = (
+  value: unknown,
+): value is EventDeliveryFailureClassification =>
+  typeof value === "string" &&
+  (eventDeliveryFailureClassifications as readonly string[]).includes(value);
 
-  const rawBatch = input.batchLimit ?? input.batchSize;
-  let batchSize = eventDispatcherLimits.defaultBatchSize;
-  if (rawBatch !== undefined) {
-    if (
-      !Number.isInteger(rawBatch) ||
-      (rawBatch as number) < eventDispatcherLimits.minimumBatchSize ||
-      (rawBatch as number) > eventDispatcherLimits.maximumBatchSize
-    ) {
-      throw new EventDispatcherError(
-        "INVALID_EVENT_DISPATCHER_INPUT",
-        `Batch limit must be an integer between ${eventDispatcherLimits.minimumBatchSize} and ${eventDispatcherLimits.maximumBatchSize}`,
-      );
-    }
-    batchSize = rawBatch as number;
-  }
+// Dispatcher identities are only ever minted here, after credential
+// verification, so membership proves authentication rather than shape.
+const authenticatedDispatchers = new WeakSet<AuthenticatedEventDispatcher>();
 
-  let leaseSeconds = eventDispatcherLimits.defaultLeaseSeconds;
-  if (input.leaseSeconds !== undefined) {
-    if (
-      !Number.isInteger(input.leaseSeconds) ||
-      (input.leaseSeconds as number) < eventDispatcherLimits.minimumLeaseSeconds ||
-      (input.leaseSeconds as number) > eventDispatcherLimits.maximumLeaseSeconds
-    ) {
-      throw new EventDispatcherError(
-        "INVALID_EVENT_DISPATCHER_INPUT",
-        `Lease seconds must be an integer between ${eventDispatcherLimits.minimumLeaseSeconds} and ${eventDispatcherLimits.maximumLeaseSeconds}`,
-      );
-    }
-    leaseSeconds = input.leaseSeconds as number;
-  }
+type DispatcherConfiguration = Readonly<{ systemActorId: string; credentialDigest: Buffer }>;
 
-  let consumerKey: string | undefined;
-  if (input.consumerKey !== undefined) {
-    if (!consumerKeyMatches(input.consumerKey)) {
-      throw new EventDispatcherError("INVALID_EVENT_DISPATCHER_INPUT", "Invalid consumerKey");
-    }
-    consumerKey = input.consumerKey;
-  }
-
+/**
+ * The dispatcher's system actor and the SHA-256 digest of its credential come
+ * from server configuration. Only the digest is configured here; the credential
+ * itself is held by the wake-up and recovery callers.
+ */
+const dispatcherConfiguration = (
+  environment: Readonly<Record<string, string | undefined>>,
+): DispatcherConfiguration | undefined => {
+  const systemActorId = actorIdSchema.safeParse(environment.VORTEX_EVENT_DISPATCHER_ACTOR_ID);
+  const digest = environment.VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256;
+  if (!systemActorId.success || digest === undefined || !/^[0-9a-f]{64}$/.test(digest))
+    return undefined;
   return Object.freeze({
-    dispatcherIdentity,
-    batchSize,
-    leaseSeconds,
-    ...(consumerKey !== undefined ? { consumerKey } : {}),
+    systemActorId: systemActorId.data,
+    credentialDigest: Buffer.from(digest, "hex"),
   });
 };
 
-export const createEventDispatcherRegistry = (
-  initialAdapters?: readonly EventConsumerAdapter[],
-): EventDispatcherRegistry => {
-  const adapters = new Map<string, EventConsumerAdapter>();
+const bearerCredential = (authorization: unknown): string | undefined => {
+  if (typeof authorization !== "string") return undefined;
+  const match = /^Bearer ([\x21-\x7e]+)$/.exec(authorization);
+  const credential = match?.[1];
+  return credential !== undefined &&
+    credential.length >= eventDispatcherLimits.minimumCredentialLength &&
+    credential.length <= eventDispatcherLimits.maximumCredentialLength
+    ? credential
+    : undefined;
+};
 
-  const register = (adapter: EventConsumerAdapter): void => {
-    if (typeof adapter !== "object" || adapter === null) {
-      throw new EventDispatcherError("INVALID_EVENT_DISPATCHER_INPUT", "Adapter must be an object");
-    }
-    if (!consumerKeyMatches(adapter.consumerKey)) {
-      throw new EventDispatcherError("INVALID_EVENT_DISPATCHER_INPUT", "Invalid consumerKey on adapter");
-    }
-    if (typeof adapter.handle !== "function") {
-      throw new EventDispatcherError("INVALID_EVENT_DISPATCHER_INPUT", "Adapter must provide a handle function");
-    }
-    if (adapters.has(adapter.consumerKey)) {
-      throw new EventDispatcherError(
-        "DUPLICATE_EVENT_CONSUMER_REGISTRATION",
-        `Consumer key already registered: ${adapter.consumerKey}`,
-      );
-    }
-    if (adapters.size >= eventDispatcherLimits.maximumRegisteredConsumers) {
-      throw new EventDispatcherError(
-        "EVENT_CONSUMER_REGISTRATION_LIMIT_EXCEEDED",
-        `Registration limit of ${eventDispatcherLimits.maximumRegisteredConsumers} exceeded`,
-      );
-    }
-    if (
-      adapter.defaultMaxAttempts !== undefined &&
-      (!Number.isInteger(adapter.defaultMaxAttempts) ||
-        adapter.defaultMaxAttempts < eventDeliveryRecoveryLimits.minimumRetryAttempts ||
-        adapter.defaultMaxAttempts > eventDeliveryRecoveryLimits.maximumRetryAttempts)
-    ) {
-      throw new EventDispatcherError("INVALID_EVENT_DISPATCHER_INPUT", "Invalid defaultMaxAttempts");
-    }
-    if (
-      adapter.defaultRetryBackoffSeconds !== undefined &&
-      (!Number.isInteger(adapter.defaultRetryBackoffSeconds) ||
-        adapter.defaultRetryBackoffSeconds < eventDeliveryRecoveryLimits.minimumRetryBackoffSeconds ||
-        adapter.defaultRetryBackoffSeconds > eventDeliveryRecoveryLimits.maximumRetryBackoffSeconds)
-    ) {
-      throw new EventDispatcherError("INVALID_EVENT_DISPATCHER_INPUT", "Invalid defaultRetryBackoffSeconds");
-    }
+const verifyCredential = (
+  configuration: DispatcherConfiguration | undefined,
+  authorization: unknown,
+): EventDispatcherAuthentication => {
+  if (configuration === undefined)
+    return { outcome: "refused", reason: "dispatcher_not_configured" };
+  const credential = bearerCredential(authorization);
+  if (credential === undefined) return { outcome: "refused", reason: "credential_missing" };
+  const presented = createHash("sha256").update(credential, "utf8").digest();
+  if (!timingSafeEqual(presented, configuration.credentialDigest))
+    return { outcome: "refused", reason: "credential_rejected" };
+  const dispatcher: AuthenticatedEventDispatcher = Object.freeze({
+    kind: "event_dispatcher",
+    systemActorId: configuration.systemActorId,
+  });
+  authenticatedDispatchers.add(dispatcher);
+  return { outcome: "authenticated", dispatcher };
+};
 
-    adapters.set(adapter.consumerKey, Object.freeze({ ...adapter }));
+/**
+ * Authenticates the dispatcher route's caller from its `Authorization: Bearer`
+ * credential against the configured credential digest, in constant time. The
+ * resulting identity is the configured dispatcher actor; nothing the caller
+ * sends can name or elevate it. Unconfigured dispatch refuses closed.
+ */
+export const authenticateEventDispatcher = (
+  authorization: string | null | undefined,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): EventDispatcherAuthentication =>
+  verifyCredential(dispatcherConfiguration(environment), authorization);
+
+type RegisteredConsumer = Readonly<{
+  consumerKey: string;
+  policy: EventConsumerDeliveryPolicy;
+  deliver: (delivery: EventConsumerDelivery) => Promise<EventConsumerOutcome>;
+}>;
+
+const registrationInvalid = (): never => {
+  throw new EventDispatcherError("INVALID_EVENT_CONSUMER_REGISTRATION");
+};
+
+const registerConsumers = (
+  adapters: readonly EventConsumerAdapter[],
+): ReadonlyMap<string, RegisteredConsumer> => {
+  if (!Array.isArray(adapters) || adapters.length > eventDispatcherLimits.maximumRegisteredConsumers)
+    return registrationInvalid();
+  const registered = new Map<string, RegisteredConsumer>();
+  for (const adapter of adapters) {
+    const candidate = record(adapter);
+    const policy: Readonly<Record<string, unknown>> | undefined =
+      candidate?.policy === undefined ? {} : record(candidate.policy);
+    const consumerKey = candidate?.consumerKey;
+    const deliver = candidate?.deliver;
+    if (
+      candidate === undefined ||
+      policy === undefined ||
+      !consumerKeyMatches(consumerKey) ||
+      typeof deliver !== "function" ||
+      registered.has(consumerKey)
+    )
+      return registrationInvalid();
+    const leaseSeconds = policy.leaseSeconds ?? eventDispatcherLimits.defaultLeaseSeconds;
+    const maxAttempts = policy.maxAttempts ?? eventDispatcherLimits.defaultMaxAttempts;
+    const retryBackoffSeconds =
+      policy.retryBackoffSeconds ?? eventDispatcherLimits.defaultRetryBackoffSeconds;
+    if (
+      !integerWithin(leaseSeconds, 1, eventConsumerProgressLimits.maximumLeaseSeconds) ||
+      !integerWithin(
+        maxAttempts,
+        eventDeliveryRecoveryLimits.minimumRetryAttempts,
+        eventDeliveryRecoveryLimits.maximumRetryAttempts,
+      ) ||
+      !integerWithin(
+        retryBackoffSeconds,
+        eventDeliveryRecoveryLimits.minimumRetryBackoffSeconds,
+        eventDeliveryRecoveryLimits.maximumRetryBackoffSeconds,
+      )
+    )
+      return registrationInvalid();
+    registered.set(
+      consumerKey,
+      Object.freeze({
+        consumerKey,
+        policy: Object.freeze({ leaseSeconds, maxAttempts, retryBackoffSeconds }),
+        // Bound once so a later mutation of the adapter cannot change what runs.
+        deliver: (deliver as EventConsumerAdapter["deliver"]).bind(adapter),
+      }),
+    );
+  }
+  return registered;
+};
+
+type ValidatedDispatch = Readonly<{ batchLimit: number; consumerKey: string | undefined }>;
+
+const validateDispatchInput = (candidate: unknown): ValidatedDispatch => {
+  const input = record(candidate);
+  if (input === undefined) throw new EventDispatcherError("INVALID_EVENT_DISPATCH_INPUT");
+  const dispatcher = input.dispatcher;
+  if (
+    typeof dispatcher !== "object" ||
+    dispatcher === null ||
+    !authenticatedDispatchers.has(dispatcher as AuthenticatedEventDispatcher)
+  )
+    throw new EventDispatcherError("UNAUTHENTICATED_EVENT_DISPATCHER");
+  if (
+    Object.keys(input).some(
+      (key) => key !== "dispatcher" && key !== "batchLimit" && key !== "consumerKey",
+    ) ||
+    (input.batchLimit !== undefined &&
+      !integerWithin(input.batchLimit, 1, eventDispatcherLimits.maximumBatchLimit)) ||
+    (input.consumerKey !== undefined && !consumerKeyMatches(input.consumerKey))
+  )
+    throw new EventDispatcherError("INVALID_EVENT_DISPATCH_INPUT");
+  return {
+    batchLimit: (input.batchLimit as number | undefined) ?? eventDispatcherLimits.defaultBatchLimit,
+    consumerKey: input.consumerKey as string | undefined,
+  };
+};
+
+type ConsumerOutcome =
+  | Readonly<{ kind: "completed" }>
+  | Readonly<{ kind: "failed"; terminal: boolean; failureCode: EventDeliveryFailureClassification }>;
+
+// Anything other than an exact, known outcome is unsafe: it is never taken as
+// completion, and is reported to #640 as an unclassified retryable failure.
+const unsafeOutcome: ConsumerOutcome = Object.freeze({
+  kind: "failed",
+  terminal: false,
+  failureCode: "unclassified",
+});
+
+const parseConsumerOutcome = (candidate: unknown): ConsumerOutcome => {
+  if (exactRecord(candidate, ["outcome"])?.outcome === "completed") return { kind: "completed" };
+  const failed = exactRecord(candidate, ["outcome", "failureCode"]);
+  if (
+    (failed?.outcome === "retryable_failure" || failed?.outcome === "terminal_failure") &&
+    failureClassificationMatches(failed.failureCode)
+  )
+    return {
+      kind: "failed",
+      terminal: failed.outcome === "terminal_failure",
+      failureCode: failed.failureCode,
+    };
+  return unsafeOutcome;
+};
+
+type Settlement = "acknowledged" | "retry_scheduled" | "terminally_failed" | "interrupted";
+
+type Tally = {
+  claimedCount: number;
+  acknowledgedCount: number;
+  retryScheduledCount: number;
+  terminallyFailedCount: number;
+  interruptedCount: number;
+  consumersDispatched: number;
+  consumersUnavailable: number;
+};
+
+const tallySettlement = (tally: Tally, settlement: Settlement): void => {
+  if (settlement === "acknowledged") tally.acknowledgedCount += 1;
+  else if (settlement === "retry_scheduled") tally.retryScheduledCount += 1;
+  else if (settlement === "terminally_failed") tally.terminallyFailedCount += 1;
+  else tally.interruptedCount += 1;
+};
+
+const dispatchStatus = (tally: Tally): EventDispatchStatus => {
+  if (tally.interruptedCount > 0 || tally.consumersUnavailable > 0) return "interrupted";
+  if (tally.retryScheduledCount > 0 || tally.terminallyFailedCount > 0) return "partial_failure";
+  return tally.claimedCount > 0 ? "completed" : "idle";
+};
+
+/**
+ * Bounded dispatcher over #639 claims and #640 failure recovery. Only the
+ * consumers registered at construction can be invoked. One dispatch claims at
+ * most `batchLimit` occurrences in total, shared across the selected
+ * consumers, and invokes each consumer strictly in claim order.
+ *
+ * Per-record sequence is enforced by #639 storage: a claim never contains an
+ * occurrence whose earlier record sequence is unacknowledged, and a failed or
+ * interrupted occurrence is never acknowledged here, so later occurrences for
+ * that record stay withheld until it is delivered or recovered. Every claim is
+ * renewed immediately before its consumer runs, so a claim whose lease lapsed
+ * (and may have been reclaimed by a concurrent dispatch) is never invoked.
+ */
+export const createEventDispatcher = (dependencies: EventDispatcherDependencies): EventDispatcher => {
+  const consumers = registerConsumers(dependencies.consumers);
+  const run = dependencies.runtimeTransaction ?? withRuntimeTransaction;
+  const progress = <Result>(
+    operation: (repository: EventConsumerProgressRepository) => Promise<Result>,
+  ): Promise<Result> =>
+    run((transaction) => operation(createEventConsumerProgressRepository(transaction)));
+  const recovery = <Result>(
+    operation: (repository: EventDeliveryRecoveryRepository) => Promise<Result>,
+  ): Promise<Result> =>
+    run((transaction) => operation(createEventDeliveryRecoveryRepository(transaction)));
+
+  const renew = async (
+    consumer: RegisteredConsumer,
+    ackCursor: string,
+    occurrenceId: string,
+  ): Promise<string | undefined> => {
+    try {
+      const renewal = await progress((repository) =>
+        repository.renewLease({
+          consumerKey: consumer.consumerKey,
+          ackCursor,
+          occurrenceId,
+          leaseSeconds: consumer.policy.leaseSeconds,
+        }),
+      );
+      return renewal.outcome === "renewed" ? renewal.leaseExpiresAt : undefined;
+    } catch {
+      return undefined;
+    }
   };
 
-  if (initialAdapters) {
-    for (const adapter of initialAdapters) {
-      register(adapter);
+  const settle = async (
+    consumer: RegisteredConsumer,
+    ackCursor: string,
+    occurrenceId: string,
+    outcome: ConsumerOutcome,
+  ): Promise<Settlement> => {
+    try {
+      if (outcome.kind === "completed") {
+        const acknowledgement = await progress((repository) =>
+          repository.acknowledge({ consumerKey: consumer.consumerKey, ackCursor, occurrenceId }),
+        );
+        return acknowledgement.outcome === "claim_unavailable" ? "interrupted" : "acknowledged";
+      }
+      const report = await recovery((repository) =>
+        repository.reportFailure({
+          consumerKey: consumer.consumerKey,
+          occurrenceId,
+          claimCursor: ackCursor,
+          failureCode: outcome.failureCode,
+          // A budget of one makes this reported failure terminal in #640.
+          maxAttempts: outcome.terminal
+            ? eventDeliveryRecoveryLimits.minimumRetryAttempts
+            : consumer.policy.maxAttempts,
+          retryBackoffSeconds: consumer.policy.retryBackoffSeconds,
+        }),
+      );
+      switch (report.outcome) {
+        case "retry_scheduled":
+          return "retry_scheduled";
+        case "terminal_failure":
+          return "terminally_failed";
+        case "already_acknowledged":
+          return "acknowledged";
+        default:
+          return "interrupted";
+      }
+    } catch {
+      // Unsettled work keeps its lease, which lapses into an ordinary reclaim.
+      return "interrupted";
     }
-  }
+  };
+
+  const deliver = async (
+    consumer: RegisteredConsumer,
+    ackCursor: string,
+    claimed: ClaimedEventOccurrence,
+  ): Promise<Settlement> => {
+    const occurrenceId = claimed.occurrence.occurrenceId;
+    const leaseExpiresAt = await renew(consumer, ackCursor, occurrenceId);
+    if (leaseExpiresAt === undefined) return "interrupted";
+
+    const delivery: EventConsumerDelivery = Object.freeze({
+      consumerKey: consumer.consumerKey,
+      occurrence: claimed.occurrence,
+      causalDepth: claimed.causalDepth,
+      leaseExpiresAt,
+      renewLease: async () => (await renew(consumer, ackCursor, occurrenceId)) !== undefined,
+    });
+    let outcome: ConsumerOutcome;
+    try {
+      outcome = parseConsumerOutcome(await consumer.deliver(delivery));
+    } catch {
+      outcome = unsafeOutcome;
+    }
+    return settle(consumer, ackCursor, occurrenceId, outcome);
+  };
+
+  const dispatchConsumer = async (
+    consumer: RegisteredConsumer,
+    batchSize: number,
+    tally: Tally,
+  ): Promise<void> => {
+    let claim: EventConsumerClaimResult;
+    try {
+      claim = await progress((repository) =>
+        repository.claim({
+          consumerKey: consumer.consumerKey,
+          batchSize,
+          leaseSeconds: consumer.policy.leaseSeconds,
+        }),
+      );
+    } catch {
+      tally.consumersUnavailable += 1;
+      return;
+    }
+    tally.consumersDispatched += 1;
+    const { ackCursor, occurrences } = claim;
+    if (ackCursor === undefined) return;
+    tally.claimedCount += occurrences.length;
+
+    // Storage never claims two occurrences of one record together; this guard
+    // only keeps that guarantee local if it were ever violated.
+    const unsettledRecords = new Set<string>();
+    for (const claimed of occurrences) {
+      const recordKey = `${claimed.occurrence.organizationId}:${claimed.occurrence.recordId}`;
+      const settlement = unsettledRecords.has(recordKey)
+        ? "interrupted"
+        : await deliver(consumer, ackCursor, claimed);
+      if (settlement !== "acknowledged") unsettledRecords.add(recordKey);
+      tallySettlement(tally, settlement);
+    }
+  };
 
   return Object.freeze({
-    register,
-    get: (key: string) => adapters.get(key),
-    has: (key: string) => adapters.has(key),
-    list: () => Object.freeze(Array.from(adapters.values())),
-    listKeys: () => Object.freeze(Array.from(adapters.keys())),
-    get size() {
-      return adapters.size;
-    },
-  });
-};
-
-export const createEventDispatcher = (
-  dependencies: EventDispatcherDependencies,
-): EventDispatcher => {
-  const registry: EventDispatcherRegistry =
-    dependencies.consumers && "register" in dependencies.consumers
-      ? dependencies.consumers
-      : createEventDispatcherRegistry(dependencies.consumers as readonly EventConsumerAdapter[] | undefined);
-
-  const dispatchForConsumer = async (
-    adapter: EventConsumerAdapter,
-    batchSize: number,
-    leaseSeconds: number,
-  ): Promise<{
-    claimedCount: number;
-    acknowledgedCount: number;
-    retryScheduledCount: number;
-    terminallyFailedCount: number;
-    unprocessedCount: number;
-    staleCount: number;
-  }> => {
-    const consumerKey = adapter.consumerKey;
-
-    let claimResult: EventConsumerClaimResult;
-    try {
-      claimResult = await dependencies.progressRepository.claim({
-        consumerKey,
-        batchSize,
-        leaseSeconds,
-      });
-    } catch (error) {
-      if (error instanceof EventConsumerProgressError) {
-        if (error.code === "INVALID_EVENT_CONSUMER_PROGRESS_INPUT") {
-          throw new EventDispatcherError("INVALID_EVENT_DISPATCHER_INPUT");
-        }
-        throw new EventDispatcherError("EVENT_DISPATCHER_STORAGE_UNAVAILABLE");
+    async dispatch(candidate: DispatchEventsInput): Promise<EventDispatchResult> {
+      const input = validateDispatchInput(candidate);
+      let selected: readonly RegisteredConsumer[];
+      if (input.consumerKey === undefined) selected = [...consumers.values()];
+      else {
+        const consumer = consumers.get(input.consumerKey);
+        if (consumer === undefined) throw new EventDispatcherError("UNKNOWN_EVENT_CONSUMER");
+        selected = [consumer];
       }
-      throw new EventDispatcherError("EVENT_DISPATCHER_STORAGE_UNAVAILABLE");
-    }
 
-    const { ackCursor, occurrences } = claimResult;
-    if (!ackCursor || occurrences.length === 0) {
-      return {
+      const tally: Tally = {
         claimedCount: 0,
         acknowledgedCount: 0,
         retryScheduledCount: 0,
         terminallyFailedCount: 0,
-        unprocessedCount: 0,
-        staleCount: 0,
+        interruptedCount: 0,
+        consumersDispatched: 0,
+        consumersUnavailable: 0,
       };
-    }
-
-    let acknowledgedCount = 0;
-    let retryScheduledCount = 0;
-    let terminallyFailedCount = 0;
-    let unprocessedCount = 0;
-    let staleCount = 0;
-
-    const blockedRecords = new Set<string>();
-
-    for (const claimed of occurrences) {
-      const { occurrence } = claimed;
-      const occurrenceId = occurrence.occurrenceId;
-      const recordKey = deriveRecordKey(occurrence);
-
-      // Preserve per-record sequence: do not advance an occurrence if an earlier
-      // occurrence for the same record encountered a failure in this batch.
-      if (blockedRecords.has(recordKey)) {
-        unprocessedCount++;
-        continue;
-      }
-
-      const context: EventConsumerInvocationContext = Object.freeze({
-        consumerKey,
-        occurrence,
-        causalDepth: claimed.causalDepth,
-        leaseExpiresAt: claimed.leaseExpiresAt,
-        claimCursor: ackCursor,
-        async renewLease(extensionSeconds?: number): Promise<boolean> {
-          try {
-            const renewSecs = extensionSeconds ?? leaseSeconds;
-            const result = await dependencies.progressRepository.renewLease({
-              consumerKey,
-              ackCursor,
-              occurrenceId,
-              leaseSeconds: renewSecs,
-            });
-            return result.outcome === "renewed";
-          } catch {
-            return false;
-          }
-        },
-      });
-
-      let invocationResult: EventConsumerInvocationResult;
-      try {
-        const rawResult = await adapter.handle(occurrence, context);
-        if (
-          typeof rawResult !== "object" ||
-          rawResult === null ||
-          typeof (rawResult as any).outcome !== "string"
-        ) {
-          invocationResult = {
-            outcome: "failed",
-            failureCode: "unclassified",
-          };
-        } else {
-          invocationResult = rawResult;
-        }
-      } catch {
-        invocationResult = {
-          outcome: "failed",
-          failureCode: "unclassified",
-        };
-      }
-
-      if (
-        invocationResult.outcome === "completed" ||
-        invocationResult.outcome === "acknowledged" ||
-        invocationResult.outcome === "already_completed"
-      ) {
-        try {
-          const ackResult = await dependencies.progressRepository.acknowledge({
-            consumerKey,
-            ackCursor,
-            occurrenceId,
-          });
-
-          if (
-            ackResult.outcome === "acknowledged" ||
-            ackResult.outcome === "already_acknowledged"
-          ) {
-            acknowledgedCount++;
-          } else {
-            // Claim unavailable: lease expired or mismatched
-            staleCount++;
-            blockedRecords.add(recordKey);
-          }
-        } catch {
-          staleCount++;
-          blockedRecords.add(recordKey);
-        }
-      } else if (
-        invocationResult.outcome === "failed" ||
-        invocationResult.outcome === "retryable_failure" ||
-        invocationResult.outcome === "terminal_failure"
-      ) {
-        const failureCode =
-          invocationResult.failureCode &&
-          (eventDeliveryFailureClassifications as readonly string[]).includes(
-            invocationResult.failureCode,
-          )
-            ? invocationResult.failureCode
-            : "unclassified";
-
-        const maxAttempts =
-          invocationResult.maxAttempts ??
-          adapter.defaultMaxAttempts ??
-          eventDispatcherLimits.defaultRetryAttempts;
-
-        const retryBackoffSeconds =
-          invocationResult.retryBackoffSeconds ??
-          adapter.defaultRetryBackoffSeconds ??
-          eventDispatcherLimits.defaultRetryBackoffSeconds;
-
-        try {
-          const failureReport =
-            await dependencies.recoveryRepository.reportFailure({
-              consumerKey,
-              occurrenceId,
-              claimCursor: ackCursor,
-              failureCode,
-              maxAttempts,
-              retryBackoffSeconds,
-            });
-
-          if (failureReport.outcome === "retry_scheduled") {
-            retryScheduledCount++;
-            blockedRecords.add(recordKey);
-          } else if (failureReport.outcome === "terminal_failure") {
-            terminallyFailedCount++;
-            blockedRecords.add(recordKey);
-          } else if (failureReport.outcome === "already_acknowledged") {
-            acknowledgedCount++;
-          } else {
-            // claim_unavailable or mismatched
-            staleCount++;
-            blockedRecords.add(recordKey);
-          }
-        } catch {
-          staleCount++;
-          blockedRecords.add(recordKey);
-        }
-      } else {
-        // Unsafe unrecognized outcome: delegate retry to #640 without acknowledging
-        try {
-          await dependencies.recoveryRepository.reportFailure({
-            consumerKey,
-            occurrenceId,
-            claimCursor: ackCursor,
-            failureCode: "unclassified",
-            maxAttempts:
-              adapter.defaultMaxAttempts ??
-              eventDispatcherLimits.defaultRetryAttempts,
-            retryBackoffSeconds:
-              adapter.defaultRetryBackoffSeconds ??
-              eventDispatcherLimits.defaultRetryBackoffSeconds,
-          });
-        } catch {
-          // preserve unacknowledged state
-        }
-        retryScheduledCount++;
-        blockedRecords.add(recordKey);
-      }
-    }
-
-    return {
-      claimedCount: occurrences.length,
-      acknowledgedCount,
-      retryScheduledCount,
-      terminallyFailedCount,
-      unprocessedCount,
-      staleCount,
-    };
-  };
-
-  return Object.freeze({
-    async dispatch(inputCandidate: DispatchEventsInput): Promise<DispatchEventsResult> {
-      const validated = validateDispatchInput(inputCandidate);
-
-      let consumersToDispatch: readonly EventConsumerAdapter[];
-      if (validated.consumerKey !== undefined) {
-        const adapter = registry.get(validated.consumerKey);
-        if (!adapter) {
-          throw new EventDispatcherError(
-            "UNKNOWN_EVENT_CONSUMER",
-            `Unknown or unregistered event consumer: ${validated.consumerKey}`,
-          );
-        }
-        consumersToDispatch = [adapter];
-      } else {
-        consumersToDispatch = registry.list();
-      }
-
-      if (consumersToDispatch.length === 0) {
-        return Object.freeze({
-          status: "idle",
-          claimedCount: 0,
-          acknowledgedCount: 0,
-          retryScheduledCount: 0,
-          terminallyFailedCount: 0,
-          unprocessedCount: 0,
-          consumersDispatched: 0,
-        });
-      }
-
-      let totalClaimed = 0;
-      let totalAcknowledged = 0;
-      let totalRetryScheduled = 0;
-      let totalTerminallyFailed = 0;
-      let totalUnprocessed = 0;
-      let totalStale = 0;
-      let consumersDispatched = 0;
-
-      for (const adapter of consumersToDispatch) {
-        const result = await dispatchForConsumer(
-          adapter,
-          validated.batchSize ?? eventDispatcherLimits.defaultBatchSize,
-          validated.leaseSeconds ?? eventDispatcherLimits.defaultLeaseSeconds,
+      for (const [index, consumer] of selected.entries()) {
+        // An even share of what remains, so capacity one consumer leaves
+        // unused passes to the consumers after it and the total stays bounded.
+        const share = Math.ceil(
+          (input.batchLimit - tally.claimedCount) / (selected.length - index),
         );
-
-        totalClaimed += result.claimedCount;
-        totalAcknowledged += result.acknowledgedCount;
-        totalRetryScheduled += result.retryScheduledCount;
-        totalTerminallyFailed += result.terminallyFailedCount;
-        totalUnprocessed += result.unprocessedCount;
-        totalStale += result.staleCount;
-        consumersDispatched++;
+        if (share < 1) break;
+        await dispatchConsumer(consumer, share, tally);
       }
-
-      let status: EventDispatchStatus;
-      if (totalClaimed === 0) {
-        status = "idle";
-      } else if (totalStale > 0) {
-        status = "interrupted";
-      } else if (
-        totalRetryScheduled > 0 ||
-        totalTerminallyFailed > 0 ||
-        totalUnprocessed > 0
-      ) {
-        status = totalAcknowledged > 0 ? "partial_failure" : "interrupted";
-      } else {
-        status = "completed";
-      }
-
-      return Object.freeze({
-        status,
-        claimedCount: totalClaimed,
-        acknowledgedCount: totalAcknowledged,
-        retryScheduledCount: totalRetryScheduled,
-        terminallyFailedCount: totalTerminallyFailed,
-        unprocessedCount: totalUnprocessed,
-        consumersDispatched,
-      });
-    },
-
-    registerConsumer(adapter: EventConsumerAdapter): void {
-      registry.register(adapter);
-    },
-
-    getRegisteredConsumer(consumerKey: string): EventConsumerAdapter | undefined {
-      return registry.get(consumerKey);
-    },
-
-    listRegisteredConsumers(): readonly string[] {
-      return registry.listKeys();
+      return Object.freeze({ status: dispatchStatus(tally), ...tally });
     },
   });
 };
 
 /**
- * Event-owned runtime adapter creating a protected bounded dispatcher wired to
- * a server-only runtime database transaction.
+ * The protected dispatcher route: authenticates the caller, then runs one
+ * bounded dispatch. Webhook wake-ups and scheduled recovery both call this same
+ * operation. Responses carry only refusal reasons, safe error codes and counts.
  */
-export const createDatabaseEventDispatcher = (
-  transaction: RuntimeDatabaseTransaction,
-  dependencies?: EventDispatcherDatabaseDependencies,
-): EventDispatcher =>
-  createEventDispatcher({
-    progressRepository: createEventConsumerProgressRepository(transaction),
-    recoveryRepository: createEventDeliveryRecoveryRepository(transaction),
-    consumers: dependencies?.consumers,
+export const createEventDispatcherRoute = (
+  dependencies: EventDispatcherRouteDependencies,
+): EventDispatcherRoute => {
+  const configuration = dispatcherConfiguration(dependencies.environment ?? process.env);
+  const dispatcher = createEventDispatcher(dependencies);
+  return Object.freeze({
+    async handle(request: EventDispatchRouteRequest): Promise<EventDispatchRouteResponse> {
+      const authentication = verifyCredential(configuration, request.authorization);
+      if (authentication.outcome === "refused") return authentication;
+      try {
+        const result = await dispatcher.dispatch({
+          dispatcher: authentication.dispatcher,
+          ...(request.batchLimit === undefined ? {} : { batchLimit: request.batchLimit as number }),
+          ...(request.consumerKey === undefined
+            ? {}
+            : { consumerKey: request.consumerKey as string }),
+        });
+        return { outcome: "dispatched", result };
+      } catch (error) {
+        if (
+          error instanceof EventDispatcherError &&
+          (error.code === "INVALID_EVENT_DISPATCH_INPUT" || error.code === "UNKNOWN_EVENT_CONSUMER")
+        )
+          return { outcome: "invalid_request", code: error.code };
+        throw error;
+      }
+    },
   });
+};
