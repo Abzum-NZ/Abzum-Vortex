@@ -176,8 +176,8 @@ begin
   limit 1;
   if query_item is null
     or query_item #>> '{recordType,state}' is distinct from 'resolved'
-    or not pg_catalog.pg_input_is_valid(query_item #>> '{recordType,moduleRootId}', 'uuid')
-    or not pg_catalog.pg_input_is_valid(query_item #>> '{recordType,recordTypeId}', 'uuid') then
+    or not coalesce(pg_catalog.pg_input_is_valid(query_item #>> '{recordType,moduleRootId}', 'uuid'), false)
+    or not coalesce(pg_catalog.pg_input_is_valid(query_item #>> '{recordType,recordTypeId}', 'uuid'), false) then
     return null;
   end if;
   type_module_root_id := (query_item #>> '{recordType,moduleRootId}')::uuid;
@@ -212,7 +212,7 @@ begin
   limit 1;
   if record_type_item is null
     or pg_catalog.jsonb_typeof(record_type_item -> 'fields') is distinct from 'array'
-    or not pg_catalog.pg_input_is_valid(record_type_item ->> 'storageContractId', 'uuid') then
+    or not coalesce(pg_catalog.pg_input_is_valid(record_type_item ->> 'storageContractId', 'uuid'), false) then
     return null;
   end if;
 
