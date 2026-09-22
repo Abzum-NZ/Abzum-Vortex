@@ -5,6 +5,7 @@ export * from "./installed-event-catalogue-source";
 export * from "./consumer-progress";
 export * from "./delivery-recovery";
 export * from "./dispatcher";
+export * from "./dispatcher-wakeup";
 
 export const EventService = Object.freeze({
   key: "event",

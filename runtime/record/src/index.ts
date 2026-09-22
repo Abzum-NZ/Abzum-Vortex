@@ -10,6 +10,7 @@ export * from "./named-actions";
 export * from "./deadline-refresh";
 export * from "./deadline-closure";
 export * from "./record-lifecycle-policy";
+export * from "./delete-record";
 
 export const RecordService = Object.freeze({
   key: "record",

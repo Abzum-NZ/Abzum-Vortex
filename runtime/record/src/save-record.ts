@@ -22,7 +22,11 @@ import {
 } from "@vortex/access";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import { evaluateRecordCalculationsV2 } from "./calculations";
-import { deriveEarliestPendingDeadlineTransitionV2 } from "./deadline-transitions";
+import {
+  deriveEarliestPendingDeadlineTransitionV2,
+  deriveParentDeadlineDueTransitions,
+  type ParentDeadlineDueTransition,
+} from "./deadline-transitions";
 import {
   finalizeRecordFieldCandidateV2,
   prepareInitialRecordFieldCandidateV2,
@@ -500,6 +504,7 @@ const persist = async (
   occurrenceId: string,
   parentMutations: readonly RelationshipTotalParentMutation[] = [],
   dueTransition?: Readonly<{ calculationFieldId: string; transitionAt: string }>,
+  parentDueTransitions: readonly ParentDeadlineDueTransition[] = [],
 ): Promise<StoredResult> => {
   const rows = await transaction.query<SaveRow>`
     select vortex_record.save_base_record_with_relationship_totals_and_deadline_due_metadata(
@@ -514,7 +519,8 @@ const persist = async (
       ${activityId}::uuid,
       ${occurrenceId}::uuid,
       ${JSON.stringify(parentMutations)}::text::jsonb,
-      ${dueTransition === undefined ? null : JSON.stringify(dueTransition)}::text::jsonb
+      ${dueTransition === undefined ? null : JSON.stringify(dueTransition)}::text::jsonb,
+      ${JSON.stringify(parentDueTransitions)}::text::jsonb
     ) as result
   `;
   const candidate = one(rows).result;
@@ -703,6 +709,14 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               organizationTimeZone: settings?.timeZone ?? "UTC",
             });
             occurrenceId ??= eventOccurrenceIdSchema.parse(newOccurrenceId());
+            const parentDueTransitions =
+              "parentMutations" in values && totalPreparation.outcome === "prepared"
+                ? deriveParentDeadlineDueTransitions(
+                    values.parentMutations,
+                    totalPreparation.records,
+                    settings?.timeZone ?? "UTC",
+                  )
+                : [];
             const stored = await persist(
               transaction,
               command.data,
@@ -711,6 +725,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               occurrenceId,
               "parentMutations" in values ? values.parentMutations : [],
               dueTransition,
+              parentDueTransitions,
             );
             if (stored.outcome === "restart") return restartRelationshipTotalSave;
             if (stored.outcome === "refused_recorded") return recordedRefusal;

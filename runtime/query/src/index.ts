@@ -22,6 +22,38 @@ export {
 
 export type { QueryContinuationKey } from "./continuation-token";
 
+export {
+  arrangementRowLimit,
+  boardChoiceOptionLimit,
+  arrangementCommandSchema,
+  arrangementResultSchema,
+  arrangementRefusalReasonCodes,
+  type ArrangementCommand,
+  type ArrangementDataset,
+  type ArrangementField,
+  type ArrangementDescriptor,
+  type TableArrangementDescriptor,
+  type BoardArrangementDescriptor,
+  type CalendarArrangementDescriptor,
+  type SummaryArrangementDescriptor,
+  type AggregateDescriptor,
+  type AggregateValue,
+  type AggregateResult,
+  type ArrangementRow,
+  type TableGroup,
+  type TableArrangementResult,
+  type BoardArrangementResult,
+  type CalendarItem,
+  type CalendarArrangementResult,
+  type SummaryGroup,
+  type SummaryArrangementResult,
+  type ArrangementRefusalReasonCode,
+  type ArrangementRefusal,
+  type ArrangementResult,
+} from "./arrangement-contracts";
+
+export { arrangeDataset } from "./arrangements";
+
 export const QueryService = Object.freeze({
   key: "query",
   boundary: "@vortex/query",
