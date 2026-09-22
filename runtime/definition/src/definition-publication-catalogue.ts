@@ -5,7 +5,6 @@ import {
   applicationCompositionPolicyV2Schema,
   connectionTypeIdSchema,
   connectionTypeSourceDocumentSchema,
-  fingerprintSchema,
   platformBlockReferenceV2Schema,
   platformBlockReleaseV2Schema,
   platformIdSchema,
@@ -16,7 +15,6 @@ import {
   type BlockId,
   type ConnectionTypeId,
   type ConnectionTypeSourceDocument,
-  type Fingerprint,
   type PlatformId,
   type PlatformBlockReleaseV2,
   type PlatformThemeReleaseV2,
@@ -29,7 +27,6 @@ import { compileDefinitionSet } from "./validation";
 import type {
   DefinitionPublicationCatalogue,
   ResolvableConnectionTypeRelease,
-  ResolvablePlatformThemeRelease,
 } from "./definition-publication";
 
 export type PlatformConnectionTypeReleaseDefinition = Readonly<{
@@ -38,15 +35,8 @@ export type PlatformConnectionTypeReleaseDefinition = Readonly<{
   releaseVersion: SemanticVersion;
 }>;
 
-export type PlatformThemeReleaseDefinition = Readonly<{
-  catalogueThemeId: string;
-  releaseVersion: SemanticVersion;
-  contentFingerprint: Fingerprint;
-}>;
-
 export type ImmutableDefinitionPublicationCatalogueDefinition = Readonly<{
   connectionTypeReleases: readonly PlatformConnectionTypeReleaseDefinition[];
-  platformThemeReleases: readonly PlatformThemeReleaseDefinition[];
   applicationCompositionV2?: ApplicationCompositionCatalogueDefinitionV2;
 }>;
 
@@ -102,14 +92,6 @@ const connectionTypeReleaseDefinitionSchema = z
   })
   .strict();
 
-const platformThemeReleaseDefinitionSchema = z
-  .object({
-    catalogueThemeId: platformIdSchema,
-    releaseVersion: stableDefinitionReleaseVersionSchema,
-    contentFingerprint: fingerprintSchema,
-  })
-  .strict();
-
 const platformBlockReleaseDefinitionV2Schema = z
   .object(platformBlockReleaseV2Schema.shape)
   .omit({ contentFingerprint: true, catalogueFingerprint: true })
@@ -133,7 +115,6 @@ const applicationCompositionCatalogueDefinitionV2Schema = z
 const catalogueDefinitionSchema = z
   .object({
     connectionTypeReleases: z.array(connectionTypeReleaseDefinitionSchema).max(10_000),
-    platformThemeReleases: z.array(platformThemeReleaseDefinitionSchema).max(10_000),
     applicationCompositionV2: applicationCompositionCatalogueDefinitionV2Schema.optional(),
   })
   .strict();
@@ -150,9 +131,8 @@ const duplicate = (): never => {
   throw new Error("INVALID_PLATFORM_RELEASE_CATALOGUE");
 };
 
-const ensureUniquePlatformReleases = (
+const ensureUniqueConnectionTypeReleases = (
   connectionTypes: readonly PlatformConnectionTypeReleaseDefinition[],
-  themes: readonly PlatformThemeReleaseDefinition[],
 ): void => {
   const connectionVersions = new Set<string>();
   const rootsByKey = new Map<string, string>();
@@ -170,13 +150,6 @@ const ensureUniquePlatformReleases = (
       duplicate();
     rootsByKey.set(key, rootId);
     keysByRoot.set(rootId, key);
-  }
-
-  const themeVersions = new Set<string>();
-  for (const release of themes) {
-    const versionKey = `${release.catalogueThemeId}:${release.releaseVersion}`;
-    if (themeVersions.has(versionKey)) duplicate();
-    themeVersions.add(versionKey);
   }
 };
 
@@ -304,15 +277,16 @@ const materialisePlatformThemeReleaseV2 = (
 
 /**
  * Creates the read-only publication catalogue used until durable platform-catalogue storage exists.
- * Connection releases are compiled from the governed source contract; theme content remains owned by
- * the platform release and is represented by its exact immutable content fingerprint.
+ * Connection releases are compiled from the governed source contract; platform block and theme
+ * releases are the current Application composition catalogue, each represented by its exact
+ * immutable content fingerprint.
  */
 export const createImmutableDefinitionPublicationCatalogue = (
   input: ImmutableDefinitionPublicationCatalogueDefinition,
 ): ImmutableDefinitionPublicationCatalogue => {
   const parsed = catalogueDefinitionSchema.safeParse(input);
   const definition = parsed.success ? parsed.data : duplicate();
-  ensureUniquePlatformReleases(definition.connectionTypeReleases, definition.platformThemeReleases);
+  ensureUniqueConnectionTypeReleases(definition.connectionTypeReleases);
   ensureUniqueApplicationCompositionReleases(definition.applicationCompositionV2);
 
   const connectionTypes = definition.connectionTypeReleases
@@ -322,27 +296,12 @@ export const createImmutableDefinitionPublicationCatalogue = (
         ? compare(left.releaseVersion, right.releaseVersion)
         : compareCanonicalStrings(left.key, right.key),
     );
-  const themes: readonly ResolvablePlatformThemeRelease[] = definition.platformThemeReleases.map(
-    (release) =>
-      deepFreeze({
-        ...release,
-        catalogueFingerprint: fingerprintCanonicalValue({
-          kind: "platform_theme",
-          catalogueThemeId: release.catalogueThemeId,
-          releaseVersion: release.releaseVersion,
-          contentFingerprint: release.contentFingerprint,
-        }),
-      }),
-  );
   const connectionsByKey = new Map<string, readonly ResolvableConnectionTypeRelease[]>();
   for (const release of connectionTypes)
     connectionsByKey.set(release.key, [...(connectionsByKey.get(release.key) ?? []), release]);
   for (const [key, releases] of connectionsByKey) connectionsByKey.set(key, deepFreeze(releases));
   const connectionsByIdentity = new Map(
     connectionTypes.map((release) => [`${release.rootId}:${release.releaseVersion}`, release]),
-  );
-  const themesByIdentity = new Map(
-    themes.map((release) => [`${release.catalogueThemeId}:${release.releaseVersion}`, release]),
   );
   const composition = definition.applicationCompositionV2;
   const blockReleasesV2 = (composition?.platformBlockReleases ?? []).map(
@@ -370,8 +329,6 @@ export const createImmutableDefinitionPublicationCatalogue = (
     listConnectionTypeReleases: async (key: string) => connectionsByKey.get(key) ?? [],
     readConnectionTypeRelease: async (rootId: ConnectionTypeId, releaseVersion: string) =>
       connectionsByIdentity.get(`${rootId}:${releaseVersion}`),
-    readPlatformThemeRelease: async (catalogueThemeId: string, releaseVersion: string) =>
-      themesByIdentity.get(`${catalogueThemeId}:${releaseVersion}`),
     readPlatformBlockReleaseV2,
     readPlatformThemeReleaseV2,
     readApplicationCompositionCatalogueSnapshotV2: async (

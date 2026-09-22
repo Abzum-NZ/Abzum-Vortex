@@ -1,10 +1,7 @@
 import { z } from "zod";
-import { applicationDraftV1Schema, applicationDraftV2Schema } from "./application-contracts";
+import { applicationDraftV2Schema } from "./application-contracts";
 import { applicationCompositionCatalogueSnapshotV2Schema } from "./application-composition-v2";
-import {
-  applicationSourceDocumentSchema,
-  applicationSourceDocumentV2Schema,
-} from "./application-source-contracts";
+import { applicationSourceDocumentV2Schema } from "./application-source-contracts";
 import { publishedApplicationDefinitionSchema } from "./application-contracts";
 import { connectionTypeSourceDocumentSchema } from "./connection-source-contracts";
 import { connectionTypeSchema } from "./integration-contracts";
@@ -180,15 +177,13 @@ export const savedConditionRevisionAssignmentSchema = z
   })
   .strict();
 
-/** Module publication always uses the explicit current-contract request below. */
-const legacyDefinitionCompilationSourceSchema = z.discriminatedUnion("kind", [
-  applicationSourceDocumentSchema,
-  connectionTypeSourceDocumentSchema,
-]);
-
+/**
+ * The platform connection-type compilation request. Application and Module publication use the
+ * explicit current-contract requests below; neither is accepted here.
+ */
 export const definitionCompilationRequestSchema = z
   .object({
-    source: legacyDefinitionCompilationSourceSchema,
+    source: connectionTypeSourceDocumentSchema,
     resolution: definitionResolutionSnapshotSchema,
     draftMetadata: definitionDraftMetadataSchema.optional(),
     savedConditionRevisions: z.array(savedConditionRevisionAssignmentSchema).optional(),
@@ -206,7 +201,7 @@ export const moduleCompilationRequestV3Schema = z
   })
   .strict();
 
-/** Explicit V2-only request; it is not part of the legacy compilation request union yet. */
+/** The one current Application compilation request; runtime dispatch requires this exact pair. */
 export const applicationCompilationRequestV2Schema = z
   .object({
     sourceContractVersion: z.literal("2.0.0"),
@@ -273,18 +268,6 @@ export const compiledDefinitionArtifactSchema = z.discriminatedUnion("kind", [
   compiledConnectionArtifactSchema,
 ]);
 
-export const applicationCompilationOutputV1Schema = z
-  .object({
-    kind: z.literal("application"),
-    canonical: applicationDraftV1Schema,
-    artifact: compiledApplicationArtifactSchema,
-    provenance: z.array(definitionProvenanceEntrySchema),
-    dependencyOrder: z.array(namespacedKeySchema),
-    resolvedDependencies: z.array(resolvedDefinitionSchema),
-    resolutionFingerprint: fingerprintSchema,
-  })
-  .strict();
-
 export const applicationCompilationOutputV2Schema = z
   .object({
     kind: z.literal("application"),
@@ -313,7 +296,6 @@ export const moduleCompilationOutputV3Schema = z
 
 export const definitionCompilationOutputSchema = z.union([
   moduleCompilationOutputV3Schema,
-  applicationCompilationOutputV1Schema,
   applicationCompilationOutputV2Schema,
   z
     .object({

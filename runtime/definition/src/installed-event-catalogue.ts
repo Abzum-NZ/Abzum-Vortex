@@ -1,5 +1,4 @@
 import {
-  applicationDefinitionConsumerReadResultV1Schema,
   applicationDefinitionConsumerReadResultV2Schema,
   activeApplicationInstallationEvidenceSchema,
   installedEventDescriptorSchema,
@@ -20,10 +19,7 @@ type ApplicationRead = Extract<DefinitionConsumerReadResult, { kind: "applicatio
 type ModuleRead = Extract<DefinitionConsumerReadResult, { kind: "module" }>;
 type ModuleRecordType = ModuleRead["content"]["recordTypes"][number];
 
-const applicationReadSchema = z.union([
-  applicationDefinitionConsumerReadResultV1Schema,
-  applicationDefinitionConsumerReadResultV2Schema,
-]);
+const applicationReadSchema = applicationDefinitionConsumerReadResultV2Schema;
 const moduleReadSchema = moduleDefinitionConsumerReadResultV3Schema;
 const rawInstallationEvidenceSchema = z
   .object(activeApplicationInstallationEvidenceSchema.shape)

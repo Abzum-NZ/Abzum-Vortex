@@ -157,7 +157,7 @@ export type DefinitionCatalogueVerification = "valid" | "unavailable" | "invalid
 export const verifyDefinitionCatalogueDependencies = async (
   manifest: readonly ExactDefinitionDependency[],
   catalogue: DefinitionPublicationCatalogue,
-  validationContractVersion: string = "1.0.0",
+  validationContractVersion: string,
 ): Promise<DefinitionCatalogueVerification> => {
   for (const dependency of manifest) {
     if (dependency.kind === "module") continue;
@@ -193,18 +193,15 @@ export const verifyDefinitionCatalogueDependencies = async (
         return "invalid";
       continue;
     }
+    // A platform-theme dependency exists only in an Application manifest, and the sole
+    // Application contract pair is 2.0.0.
+    if (validationContractVersion !== "2.0.0") return "invalid";
     const catalogueThemeId = platformIdSchema.safeParse(dependency.catalogueThemeId);
     if (!catalogueThemeId.success) return "invalid";
-    const release =
-      validationContractVersion === "2.0.0"
-        ? await catalogue.readPlatformThemeReleaseV2(
-            catalogueThemeId.data,
-            dependency.releaseVersion,
-          )
-        : await catalogue.readPlatformThemeRelease(
-            dependency.catalogueThemeId,
-            dependency.releaseVersion,
-          );
+    const release = await catalogue.readPlatformThemeReleaseV2(
+      catalogueThemeId.data,
+      dependency.releaseVersion,
+    );
     if (release === undefined) return "unavailable";
     if (
       release.catalogueThemeId !== dependency.catalogueThemeId ||

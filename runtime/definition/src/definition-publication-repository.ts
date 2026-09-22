@@ -489,19 +489,15 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
           release.publication.kind !== "application"
         )
           return invalidStorage();
-        let schema: "v1" | "v2";
         try {
-          schema = selectApplicationContractPair(
+          selectApplicationContractPair(
             release.evidence.sourceContractVersion,
             release.publication.validationContractVersion,
-          ).schema;
+          );
         } catch {
           return invalidStorage();
         }
-        if (
-          (schema === "v2") !== "validationContractVersion" in output ||
-          (schema === "v2") !== (resolution.contractVersion === "2.0.0")
-        )
+        if (output.validationContractVersion !== "2.0.0" || resolution.contractVersion !== "2.0.0")
           return invalidStorage();
       }
       if (kind === "module") {
@@ -519,10 +515,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         } catch {
           return invalidStorage();
         }
-        const expectedVersion = "3.0.0";
-        const outputVersion =
-          "validationContractVersion" in output ? output.validationContractVersion : "1.0.0";
-        if (outputVersion !== expectedVersion || resolution.contractVersion !== expectedVersion)
+        if (output.validationContractVersion !== "3.0.0" || resolution.contractVersion !== "3.0.0")
           return invalidStorage();
       }
       const ownResolution = resolution.definitions.filter(

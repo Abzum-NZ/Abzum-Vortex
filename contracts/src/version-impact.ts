@@ -1,12 +1,9 @@
 import { z } from "zod";
 import {
-  applicationContentV2Schema,
   applicationDraftV2Schema,
-  applicationDraftSchema,
   publishedApplicationDefinitionSchema,
 } from "./application-contracts";
 import {
-  publishedApplicationReferenceSchema,
   publishedDefinitionReferenceSchema,
   publishedModuleReferenceSchema,
   requireResolvedRecordTypeReferences,
@@ -21,7 +18,6 @@ import {
 import { moduleContentV3Schema, moduleDraftV3Schema } from "./module-contracts-v3";
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);
-export const versionImpactPolicyVersion = "1.0.0" as const;
 export const applicationVersionImpactPolicyVersionV2 = "2.0.0" as const;
 export const moduleVersionImpactPolicyVersionV3 = "3.0.0" as const;
 export const stableDefinitionReleaseVersionSchema = semanticVersionSchema.refine(
@@ -178,29 +174,7 @@ export const definitionVersionImpactFailureCodeSchema = z.enum([
 
 const historyLimit = 10_000;
 
-export const applicationVersionImpactRequestSchema = z
-  .object({
-    kind: z.literal("application"),
-    history: z.array(publishedApplicationDefinitionSchema).max(historyLimit),
-    candidate: applicationDraftSchema,
-  })
-  .strict();
-
-/**
- * Comparator-only native V2 history evidence. Stored publication selection
- * remains closed until coordinated persistence and consumer work is complete.
- */
-export const applicationVersionImpactHistoryEntryV2Schema = z
-  .object({
-    publication: publishedApplicationReferenceSchema.extend({
-      validationContractVersion: z.literal("2.0.0"),
-    }),
-    content: applicationContentV2Schema,
-    dependencyManifest: z.array(publishedDefinitionReferenceSchema),
-    releaseNote: z.string().min(1).max(2_000),
-  })
-  .strict();
-
+/** The one current Application history evidence; publication dispatch requires this exact pair. */
 export const applicationVersionImpactRequestV2Schema = z
   .object({
     kind: z.literal("application"),
@@ -236,7 +210,7 @@ export const moduleVersionImpactRequestV3Schema = z
 
 export const definitionVersionImpactRequestSchema = z.discriminatedUnion("kind", [
   moduleVersionImpactRequestV3Schema,
-  applicationVersionImpactRequestSchema,
+  applicationVersionImpactRequestV2Schema,
 ]);
 
 const resultCommon = {

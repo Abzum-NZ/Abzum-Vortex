@@ -70,7 +70,7 @@ const currentIdentityEvidenceSchema = sourceIdentityAssignmentV3Schema
 type RestoreEvidence = StoredConsumerReleaseEvidence & {
   authoredSource: z.infer<typeof storedDefinitionSourceSchema>;
   sourceFingerprint: z.infer<typeof fingerprintSchema>;
-  sourceContractVersion: "1.0.0" | "2.0.0" | "3.0.0";
+  sourceContractVersion: "2.0.0" | "3.0.0";
   identityEvidence: readonly z.infer<typeof currentIdentityEvidenceSchema>[];
 };
 
@@ -78,7 +78,7 @@ const restoreEvidenceSchema = storedConsumerReleaseEvidenceSchema
   .extend({
     authoredSource: storedDefinitionSourceSchema,
     sourceFingerprint: fingerprintSchema,
-    sourceContractVersion: z.enum(["1.0.0", "2.0.0", "3.0.0"]),
+    sourceContractVersion: z.enum(["2.0.0", "3.0.0"]),
     identityEvidence: z.array(currentIdentityEvidenceSchema),
   })
   .strict();

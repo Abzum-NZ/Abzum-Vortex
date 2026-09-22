@@ -1,5 +1,4 @@
 import {
-  applicationDraftSchema,
   applicationDraftV2Schema,
   applicationSourceDocumentV2Schema,
   applicationCompilationRequestV2Schema,
@@ -24,7 +23,6 @@ import {
   definitionPublicationContextSchema,
   builderKeySchema,
   platformIdSchema,
-  blockSettingReferenceKindByControl,
   namespacedKeySchema,
   translateDefinitionSchemaError,
   workflowNodeOutputKeysByType,
@@ -155,9 +153,7 @@ const canonicalValueWalker = (context: DefinitionSetValidationContext) =>
         output.kind === "module"
           ? moduleDraftV3Schema
           : output.kind === "application"
-            ? "validationContractVersion" in output
-              ? applicationDraftV2Schema
-              : applicationDraftSchema
+            ? applicationDraftV2Schema
             : connectionTypeSchema,
       value: output.canonical,
     })),
@@ -694,7 +690,6 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
           valid = false;
       }
     } else if (source.kind === "application") {
-      const usesV2Composition = source.source_contract_version === "2.0.0";
       const moduleBindings = new Set(
         array(body.module_bindings).map((binding) => String(binding.module)),
       );
@@ -709,37 +704,12 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
       }
       const pages = new Set(array(body.pages).map((page) => String(page.key)));
       const queries = new Set(array(body.queries).map((query) => String(query.key)));
-      const blocks = usesV2Composition
-        ? new Set<string>()
-        : new Set(array(body.block_registrations).map((block) => String(block.id)));
       const workflows = new Set(array(body.workflows).map((workflow) => String(workflow.key)));
       const connections = new Set(
         array(body.connection_bindings).map((binding) => String(binding.id)),
       );
-      const pagePlacements = (page: JsonObject): JsonObject[] =>
-        page.type === "guided_form"
-          ? array(page.steps).flatMap((step) => array(step.blocks))
-          : page.blocks
-            ? array(page.blocks)
-            : [];
-      for (const page of array(body.pages)) {
+      for (const page of array(body.pages))
         if (page.query && !queries.has(String(page.query))) valid = false;
-        if (usesV2Composition) continue;
-        const placements = pagePlacements(page);
-        if (placements.some((placement) => !blocks.has(String(placement.block)))) valid = false;
-        const placementIds = new Set(placements.map((placement) => String(placement.id)));
-        const layout = object(page.layout);
-        for (const order of [
-          (object(layout.desktop).component_order as string[]) ?? [],
-          (object(layout.phone).component_order as string[]) ?? [],
-        ])
-          if (
-            order.length !== placementIds.size ||
-            order.some((id) => !placementIds.has(id)) ||
-            new Set(order).size !== order.length
-          )
-            valid = false;
-      }
       const visitNavigation = (items: JsonObject[]) => {
         for (const item of items) {
           if (item.type === "page" && !pages.has(String(item.page))) valid = false;
@@ -3086,7 +3056,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
   const modules = availableOutputs.filter((output) => output.kind === "module");
   const connections = availableOutputs.filter((output) => output.kind === "connection_type");
   for (const output of context.outputs.filter((entry) => entry.kind === "application")) {
-    const applicationV2 = "validationContractVersion" in output;
     const content = object(object(output.canonical).content);
     const bindings = array(content.moduleBindings);
     const connectionBindingEntries = array(content.connectionBindings);
@@ -3379,9 +3348,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       ].map((event) => [String(event.key), event]),
     );
     const pages = new Map(array(content.pages).map((page) => [String(page.pageId), page]));
-    const shells = new Map(
-      (applicationV2 ? array(content.shells) : []).map((shell) => [String(shell.shellId), shell]),
-    );
+    const shells = new Map(array(content.shells).map((shell) => [String(shell.shellId), shell]));
     const collectPlacementEntriesV2 = (
       slotValue: unknown,
       entries: [string, JsonObject][] = [],
@@ -3446,12 +3413,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         );
       return undefined;
     };
-    const blocks = new Map(
-      (applicationV2 ? [] : array(content.blockRegistrations)).map((block) => [
-        String(block.blockId),
-        block,
-      ]),
-    );
     const connectionMap = new Map(
       connections
         .filter((connection) => {
@@ -3622,20 +3583,10 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         );
     }
     const applicationPlacementIds = new Set(
-      applicationV2
-        ? [
-            ...[...shells.values()].flatMap((shell) => collectPlacementEntriesV2(shell.layout)),
-            ...[...pages.values()].flatMap(pageContentPlacementEntriesV2),
-          ].map(([placementId]) => placementId)
-        : [...pages.values()].flatMap((page) =>
-            page.type === "guided_form"
-              ? array(page.steps).flatMap((step) =>
-                  array(step.blocks).map((placement) => String(placement.placementId)),
-                )
-              : page.blocks
-                ? array(page.blocks).map((placement) => String(placement.placementId))
-                : [],
-          ),
+      [
+        ...[...shells.values()].flatMap((shell) => collectPlacementEntriesV2(shell.layout)),
+        ...[...pages.values()].flatMap(pageContentPlacementEntriesV2),
+      ].map(([placementId]) => placementId),
     );
     for (const rule of array(content.rules)) {
       const record = records.get(String(rule.subjectRecordTypeId));
@@ -3669,7 +3620,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       [array(content.pages), "pageId", "key"],
       [array(content.roles), "roleId", "key"],
       [array(content.queries), "queryId", "key"],
-      ...(applicationV2 ? [] : ([[array(content.blockRegistrations), "blockId", "name"]] as const)),
       [array(content.pipelines), "pipelineId", "key"],
       [array(content.permissions), "permissionId", "key"],
       [array(content.actions), "actionId", "key"],
@@ -3696,17 +3646,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       }
     };
     collectNavigationIds(array(content.navigation));
-    const placementIds = applicationV2
-      ? [...applicationPlacementIds]
-      : [...pages.values()].flatMap((page) =>
-          page.type === "guided_form"
-            ? array(page.steps).flatMap((step) =>
-                array(step.blocks).map((placement) => String(placement.placementId)),
-              )
-            : page.blocks
-              ? array(page.blocks).map((placement) => String(placement.placementId))
-              : [],
-        );
+    const placementIds = [...applicationPlacementIds];
     const guidedStepIds = [...pages.values()].flatMap((page) =>
       page.type === "guided_form" ? array(page.steps).map((step) => String(step.id)) : [],
     );
@@ -3867,169 +3807,10 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
             failure(output, "vortex.definition.application_calendar_mapping", "scope_conflict"),
           );
       }
-      const pageContentPlacements = applicationV2
-        ? pageContentPlacementEntriesV2(page).map(([, placement]) => placement)
-        : page.type === "guided_form"
-          ? array(page.steps).flatMap((step) => array(step.blocks))
-          : page.blocks
-            ? array(page.blocks)
-            : [];
-      const placements = applicationV2
-        ? [
-            ...pageContentPlacements,
-            ...pageShellPlacementEntriesV2(page).map(([, placement]) => placement),
-          ]
-        : pageContentPlacements;
-      const placementIds = placements.map((placement) => String(placement.placementId));
-      const desktopOrder = applicationV2
-        ? []
-        : (object(object(page.layout).desktop).componentOrder as string[]);
-      const phoneOrder = applicationV2
-        ? []
-        : (object(object(page.layout).phone).componentOrder as string[]);
-      if (
-        !applicationV2 &&
-        (new Set(placementIds).size !== placementIds.length ||
-          desktopOrder.length !== placementIds.length ||
-          phoneOrder.length !== placementIds.length ||
-          placementIds.some((id) => !desktopOrder.includes(id) || !phoneOrder.includes(id)))
-      )
-        failures.push(
-          failure(output, "vortex.definition.application_layout_complete", "broken_reference"),
-        );
-      const pageFieldIds = new Set(
-        pageRecord ? array(pageRecord.fields).map((field) => String(field.fieldId)) : [],
-      );
-      const pageRelationshipIds = new Set(
-        pageRecord
-          ? array(pageRecord.relationships).map((relationship) =>
-              String(relationship.relationshipId),
-            )
-          : [],
-      );
-      for (const placement of placements) {
-        if (applicationV2) continue;
-        const block = blocks.get(String(placement.blockId));
-        const placementQuery = placement.queryId
-          ? queries.get(String(placement.queryId))
-          : undefined;
-        if (
-          !block ||
-          block.releaseVersion !== placement.blockReleaseVersion ||
-          !permissions.has(String(placement.viewPermissionKey)) ||
-          (placement.usePermissionKey && !permissions.has(String(placement.usePermissionKey))) ||
-          (placement.queryId &&
-            (!placementQuery ||
-              (pageRecordId !== undefined &&
-                String(object(placementQuery.recordType).recordTypeId) !== pageRecordId)))
-        )
-          failures.push(
-            failure(output, "vortex.definition.application_block_references", "broken_reference"),
-          );
-        if (block) {
-          const settings = object(placement.settings);
-          const declarations = array(block.settings);
-          const allowed = new Set(declarations.map((setting) => String(setting.key)));
-          const required = declarations
-            .filter((setting) => setting.required === true)
-            .map((setting) => String(setting.key));
-          if (
-            Object.keys(settings).some((key) => !allowed.has(key)) ||
-            required.some((key) => !(key in settings)) ||
-            declarations.some((setting) => {
-              if (!(String(setting.key) in settings)) return false;
-              const value = object(settings[String(setting.key)]);
-              const control = String(setting.control);
-              const expectedKind =
-                blockSettingReferenceKindByControl[
-                  control as keyof typeof blockSettingReferenceKindByControl
-                ] ?? "literal";
-              if (value.kind !== expectedKind) return true;
-              if (value.kind === "literal") {
-                if (control === "switch") return typeof value.value !== "boolean";
-                if (control === "number")
-                  return typeof value.value !== "number" || !Number.isFinite(value.value);
-                return typeof value.value !== "string";
-              }
-              if (value.kind === "field_reference") return !allFields.has(String(value.fieldId));
-              if (value.kind === "relationship_reference")
-                return !allRelationships.has(String(value.relationshipId));
-              if (value.kind === "action_reference")
-                return !executableActionKeys.has(String(value.actionKey));
-              if (value.kind === "page_reference") return !pages.has(String(value.pageId));
-              if (value.kind === "query_reference") return !queries.has(String(value.queryId));
-              if (value.kind === "pipeline_reference")
-                return !pipelines.has(String(value.pipelineId));
-              if (value.kind === "record_type_reference" || value.kind === "record_reference")
-                return !records.has(String(object(value.recordType).recordTypeId));
-              return true;
-            })
-          )
-            failures.push(
-              failure(output, "vortex.definition.application_block_settings", "broken_reference"),
-            );
-          const pageScopeInvalid = Object.values(settings).some((settingValue) => {
-            if (!pageRecordId) return false;
-            const value = object(settingValue);
-            if (value.kind === "field_reference") return !pageFieldIds.has(String(value.fieldId));
-            if (value.kind === "relationship_reference")
-              return !pageRelationshipIds.has(String(value.relationshipId));
-            if (value.kind === "action_reference") {
-              const actionRecordId =
-                actions.get(String(value.actionKey))?.subjectRecordTypeId ??
-                standardActionRecordTypes.get(String(value.actionKey));
-              return !pageRecordId || String(actionRecordId) !== pageRecordId;
-            }
-            if (value.kind === "page_reference") {
-              const referencedPage = pages.get(String(value.pageId));
-              const referencedRecordId = referencedPage?.recordType
-                ? String(object(referencedPage.recordType).recordTypeId)
-                : undefined;
-              return !referencedPage || referencedRecordId !== pageRecordId;
-            }
-            if (value.kind === "query_reference") {
-              const referencedQuery = queries.get(String(value.queryId));
-              return (
-                !referencedQuery ||
-                String(object(referencedQuery.recordType).recordTypeId) !== pageRecordId
-              );
-            }
-            if (value.kind === "pipeline_reference") {
-              const referencedPipeline = pipelines.get(String(value.pipelineId));
-              return (
-                !referencedPipeline ||
-                String(object(referencedPipeline.recordType).recordTypeId) !== pageRecordId
-              );
-            }
-            if (value.kind === "record_type_reference" || value.kind === "record_reference")
-              return String(object(value.recordType).recordTypeId) !== pageRecordId;
-            return false;
-          });
-          if (pageScopeInvalid)
-            failures.push(
-              failure(output, "vortex.definition.application_block_references", "scope_conflict"),
-            );
-        }
-        if (
-          placement.visibilityCondition !== undefined &&
-          !applicationConditionTypesValid(
-            placement.visibilityCondition,
-            new Map(
-              pageRecord
-                ? array(pageRecord.fields).map((field) => [String(field.fieldId), field] as const)
-                : [],
-            ),
-            pageRecordId === undefined ? false : (recordValuePairs.get(pageRecordId) ?? false),
-          )
-        )
-          failures.push(
-            failure(output, "vortex.definition.application_block_references", "broken_reference"),
-          );
-        if (page.type === "public" && block?.publicPage !== true)
-          failures.push(
-            failure(output, "vortex.definition.application_public_surface", "unsafe_content"),
-          );
-      }
+      const placements = [
+        ...pageContentPlacementEntriesV2(page).map(([, placement]) => placement),
+        ...pageShellPlacementEntriesV2(page).map(([, placement]) => placement),
+      ];
       if (page.type === "public") {
         const record = page.recordType
           ? records.get(String(object(page.recordType).recordTypeId))
@@ -4045,10 +3826,8 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         let publicBlockReferencesSafe = true;
         for (const placement of placements) {
           if (
-            (applicationV2
-              ? placement.viewPermissionKey !== undefined &&
-                !publicPermissionSafe(placement.viewPermissionKey)
-              : !publicPermissionSafe(placement.viewPermissionKey)) ||
+            (placement.viewPermissionKey !== undefined &&
+              !publicPermissionSafe(placement.viewPermissionKey)) ||
             (placement.usePermissionKey && !publicPermissionSafe(placement.usePermissionKey))
           )
             publicBlockReferencesSafe = false;
@@ -4082,10 +3861,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
                 publicBlockReferencesSafe = false;
             }
           };
-          if (applicationV2) walkValues(placement.settings, inspectPublicSetting);
-          else
-            for (const settingValue of Object.values(object(placement.settings)))
-              inspectPublicSetting(object(settingValue));
+          walkValues(placement.settings, inspectPublicSetting);
           if (placement.queryId) {
             const query = queries.get(String(placement.queryId));
             if (!publicQuerySafe(query, pageRecordId, pagePublicFields))

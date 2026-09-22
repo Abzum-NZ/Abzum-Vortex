@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { applicationContentV1Schema, applicationContentV2Schema } from "./application-contracts";
+import { applicationContentV2Schema } from "./application-contracts";
 import { correlationIdSchema } from "./common";
 import { exactDefinitionDependencySchema } from "./definition-store-contracts";
 import {
@@ -85,16 +85,6 @@ const definitionConsumerReadResultCommon = {
  * The only release projection exposed to Definition-service consumers.
  * It deliberately excludes authored source, publication evidence and persistence details.
  */
-export const applicationDefinitionConsumerReadResultV1Schema = z
-  .object({
-    kind: z.literal("application"),
-    rootId: applicationRootIdSchema,
-    content: applicationContentV1Schema,
-    ...definitionConsumerReadResultCommon,
-    validationContractVersion: z.literal("1.0.0"),
-  })
-  .strict();
-
 export const applicationDefinitionConsumerReadResultV2Schema = z
   .object({
     kind: z.literal("application"),
@@ -118,7 +108,6 @@ export const moduleDefinitionConsumerReadResultV3Schema = z
 
 export const definitionConsumerReadResultSchema = z.union([
   moduleDefinitionConsumerReadResultV3Schema,
-  applicationDefinitionConsumerReadResultV1Schema,
   applicationDefinitionConsumerReadResultV2Schema,
 ]);
 
@@ -134,10 +123,8 @@ export const systemApplicationBoundReleaseSetCommandSchema = z
   })
   .strict();
 
-const applicationDefinitionConsumerReadResultSchema = z.union([
-  applicationDefinitionConsumerReadResultV1Schema,
-  applicationDefinitionConsumerReadResultV2Schema,
-]);
+const applicationDefinitionConsumerReadResultSchema =
+  applicationDefinitionConsumerReadResultV2Schema;
 const moduleDefinitionConsumerReadResultSchema = moduleDefinitionConsumerReadResultV3Schema;
 
 export const applicationBoundReleaseSetResultSchema = z

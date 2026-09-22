@@ -5,9 +5,7 @@ import {
   applicationCompositionCatalogueSnapshotV2Schema,
   assertModuleContractPair,
   definitionCompilationOutputSchema,
-  definitionCompilationRequestSchema,
   definitionPublicationConfirmationSchema,
-  definitionResolutionSnapshotSchema,
   definitionResolutionSnapshotV3Schema,
   moduleCompilationRequestV3Schema,
   prepareDefinitionPublicationCommandSchema,
@@ -17,7 +15,6 @@ import {
   savedConditionRevisionAssignmentSchema,
   stableDefinitionReleaseVersionSchema,
   storedDefinitionDraftSchema,
-  sourceIdentityKindSchema,
   sourceIdentityKindV2Schema,
   type DefinitionCompilationOutput,
   type DefinitionPublicationConfirmation,
@@ -155,13 +152,6 @@ export type ResolvableConnectionTypeRelease = Readonly<{
   compilationOutput: ConnectionOutput;
 }>;
 
-export type ResolvablePlatformThemeRelease = Readonly<{
-  catalogueThemeId: string;
-  releaseVersion: SemanticVersion;
-  contentFingerprint: Fingerprint;
-  catalogueFingerprint: Fingerprint;
-}>;
-
 export interface DefinitionPublicationReader {
   readCandidate(rootId: string): Promise<DefinitionPublicationCandidate | undefined>;
   readModuleReleasePage(
@@ -182,10 +172,6 @@ export interface DefinitionPublicationCatalogue {
     rootId: ConnectionTypeId,
     releaseVersion: string,
   ): Promise<ResolvableConnectionTypeRelease | undefined>;
-  readPlatformThemeRelease(
-    catalogueThemeId: string,
-    releaseVersion: string,
-  ): Promise<ResolvablePlatformThemeRelease | undefined>;
   readPlatformBlockReleaseV2(
     blockId: BlockId,
     releaseVersion: string,
@@ -216,7 +202,7 @@ export type DefinitionReleaseAppend = Readonly<{
   reasons: DefinitionPublicationConfirmation["reasons"];
   dependencyManifest: readonly ExactDefinitionDependency[];
   resolutionSnapshot: DefinitionResolution;
-  validationContractVersion: "1.0.0" | "2.0.0" | "3.0.0";
+  validationContractVersion: "2.0.0" | "3.0.0";
   releaseNote: string;
 }>;
 
@@ -252,7 +238,6 @@ type Requirement = Readonly<{ key: string; version: VersionRequirement }>;
 type ResolvedDependencies = Readonly<{
   modules: readonly ResolvableModuleRelease[];
   connections: readonly ResolvableConnectionTypeRelease[];
-  theme?: ResolvablePlatformThemeRelease;
   compositionV2?: ApplicationCompositionCatalogueSnapshotV2;
 }>;
 
@@ -690,41 +675,8 @@ const resolveDependencies = async (
     connections.push(resolvedRelease);
   }
 
-  let theme: ResolvablePlatformThemeRelease | undefined;
   let compositionV2: ApplicationCompositionCatalogueSnapshotV2 | undefined;
-  if (
-    candidate.draft.source.kind === "application" &&
-    candidate.draft.source.source_contract_version === "1.0.0" &&
-    candidate.draft.source.body.theme.mode === "platform"
-  ) {
-    const requested = candidate.draft.source.body.theme;
-    const exact =
-      pinned === undefined
-        ? undefined
-        : findPinned(pinned, "platform_theme", requested.catalogue_theme_id);
-    if (exact !== undefined && exact.releaseVersion !== requested.version)
-      refuse("DEFINITION_CONFIRMATION_MISMATCH");
-    theme = await catalogue.readPlatformThemeRelease(
-      requested.catalogue_theme_id,
-      requested.version,
-    );
-    if (theme === undefined) refuse("DEFINITION_DEPENDENCY_MISSING");
-    const resolvedTheme = theme as ResolvablePlatformThemeRelease;
-    if (
-      resolvedTheme.catalogueThemeId !== requested.catalogue_theme_id ||
-      resolvedTheme.releaseVersion !== requested.version ||
-      !stable(resolvedTheme.releaseVersion) ||
-      (exact !== undefined &&
-        (resolvedTheme.contentFingerprint !== exact.contentFingerprint ||
-          resolvedTheme.catalogueFingerprint !== exact.catalogueFingerprint))
-    )
-      refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
-    theme = resolvedTheme;
-  }
-  if (
-    candidate.draft.source.kind === "application" &&
-    candidate.draft.source.source_contract_version === "2.0.0"
-  )
+  if (candidate.draft.source.kind === "application")
     compositionV2 = await resolveApplicationCompositionV2(
       candidate.draft.source,
       catalogue,
@@ -734,7 +686,6 @@ const resolveDependencies = async (
   const expectedSubjects = [
     ...modules.map((release) => `module:${release.key}`),
     ...connections.map((release) => `connection_type:${release.key}`),
-    ...(theme === undefined ? [] : [`platform_theme:${theme.catalogueThemeId}`]),
     ...(compositionV2 === undefined
       ? []
       : [
@@ -753,7 +704,6 @@ const resolveDependencies = async (
   return {
     modules,
     connections,
-    ...(theme === undefined ? {} : { theme }),
     ...(compositionV2 === undefined ? {} : { compositionV2 }),
   };
 };
@@ -819,17 +769,6 @@ const manifestFor = (dependencies: ResolvedDependencies): ExactDefinitionDepende
       contentFingerprint: release.contentFingerprint,
       catalogueFingerprint: release.catalogueFingerprint,
     })),
-    ...(dependencies.theme === undefined
-      ? []
-      : [
-          {
-            kind: "platform_theme" as const,
-            catalogueThemeId: dependencies.theme.catalogueThemeId,
-            releaseVersion: dependencies.theme.releaseVersion,
-            contentFingerprint: dependencies.theme.contentFingerprint,
-            catalogueFingerprint: dependencies.theme.catalogueFingerprint,
-          },
-        ]),
     ...(dependencies.compositionV2 === undefined
       ? []
       : [
@@ -923,25 +862,12 @@ const buildResolution = (
       fingerprint: fingerprintCanonicalValue(evidence),
     });
   }
-  if (
-    candidate.draft.source.kind === "application" &&
-    candidate.draft.source.source_contract_version === "2.0.0"
-  )
-    return createApplicationResolutionSnapshotV2({
-      definitions,
-      identities: allIdentities.filter(
-        (identity): identity is DefinitionResolutionSnapshotV2["identities"][number] =>
-          sourceIdentityKindV2Schema.safeParse(identity.kind).success,
-      ),
-    });
-  const identities = allIdentities.filter(
-    (identity): identity is DefinitionResolutionSnapshot["identities"][number] =>
-      sourceIdentityKindSchema.safeParse(identity.kind).success,
-  );
-  const evidence = { contractVersion: "1.0.0" as const, definitions, identities };
-  return definitionResolutionSnapshotSchema.parse({
-    ...evidence,
-    fingerprint: fingerprintCanonicalValue(evidence),
+  return createApplicationResolutionSnapshotV2({
+    definitions,
+    identities: allIdentities.filter(
+      (identity): identity is DefinitionResolutionSnapshotV2["identities"][number] =>
+        sourceIdentityKindV2Schema.safeParse(identity.kind).success,
+    ),
   });
 };
 
@@ -996,7 +922,6 @@ const parsedCompilationRequest = <Schema extends z.ZodType>(
 
 const assertFinalPublicationValidation = (
   request:
-    | z.output<typeof definitionCompilationRequestSchema>
     | z.output<typeof applicationCompilationRequestV2Schema>
     | z.output<typeof moduleCompilationRequestV3Schema>,
   output: Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>,
@@ -1025,10 +950,7 @@ const compileCandidate = (
     ...dependencies.modules.map((release) => release.compilationOutput),
     ...dependencies.connections.map((release) => release.compilationOutput),
   ].map((output) => definitionCompilationOutputSchema.parse(output));
-  if (
-    candidate.draft.source.kind === "application" &&
-    candidate.draft.source.source_contract_version === "2.0.0"
-  ) {
+  if (candidate.draft.source.kind === "application") {
     if (resolution.contractVersion !== "2.0.0" || dependencies.compositionV2 === undefined)
       return refuse("DEFINITION_COMPILATION_REFUSED");
     const request = {
@@ -1103,34 +1025,9 @@ const compileCandidate = (
     );
     return output;
   }
-  if (resolution.contractVersion !== "1.0.0") return refuse("DEFINITION_COMPILATION_REFUSED");
-  const source = candidate.draft.source;
-  if (source.kind === "application" && source.source_contract_version !== "1.0.0")
-    return refuse("DEFINITION_COMPILATION_REFUSED");
-  const request = {
-    source,
-    resolution,
-    draftMetadata: draftMetadata(candidate.draft),
-  };
-  if (!final) {
-    const output = compileParsedDefinition(
-      parsedCompilationRequest(definitionCompilationRequestSchema, request),
-      dependencyOutputs,
-    );
-    if (output.kind === "connection_type") refuse("DEFINITION_COMPILATION_REFUSED");
-    return output as Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>;
-  }
-  const parsedRequest = parsedCompilationRequest(definitionCompilationRequestSchema, request);
-  const output = compileParsedDefinition(parsedRequest, dependencyOutputs);
-  if (output === undefined || output.kind === "connection_type")
-    return refuse("DEFINITION_COMPILATION_REFUSED");
-  assertFinalPublicationValidation(
-    parsedRequest,
-    output,
-    dependencyOutputs,
-    candidate.historyEvidence,
-  );
-  return output as Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>;
+  // Only an Application or a Module is a customer-publishable definition, and each has exactly
+  // one current source/validation contract pair. A stored draft of any other shape is refused.
+  return refuse("DEFINITION_COMPILATION_REFUSED");
 };
 
 const validateCandidate = (
@@ -1174,15 +1071,12 @@ const validateCandidate = (
   return candidate;
 };
 
-/** The explicit comparator contract for a stored draft, defaulting to the original pair. */
+/** The one explicit comparator contract each stored draft kind declares. */
 const candidateValidationContractVersion = (
   source: StoredDefinitionDraft["source"],
-): Readonly<{ validationContractVersion?: "2.0.0" | "3.0.0" }> => {
-  if (source.kind === "module") return { validationContractVersion: "3.0.0" };
-  if (source.kind === "application" && source.source_contract_version === "2.0.0")
-    return { validationContractVersion: "2.0.0" };
-  return {};
-};
+): Readonly<{ validationContractVersion: "2.0.0" | "3.0.0" }> => ({
+  validationContractVersion: source.kind === "module" ? "3.0.0" : "2.0.0",
+});
 
 const prepareFromReader = async (
   context: SessionContext,
