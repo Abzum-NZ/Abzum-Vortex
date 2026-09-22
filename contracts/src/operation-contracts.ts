@@ -693,7 +693,8 @@ export type FileRemovalStage = z.infer<typeof fileRemovalStageSchema>;
 /**
  * Safe request to coordinate permanent file object removal.
  * Requires an eligible #657 decision and a stable deletion key; carries no
- * private storage paths, credentials, or caller-invented eligibility facts.
+ * private storage paths or credentials, and the service re-evaluates the
+ * submitted decision before accepting a new intent.
  */
 export const fileObjectRemovalRequestSchema = z
   .object({
@@ -892,7 +893,8 @@ export const fileRecordSchema = z
         });
       if (
         value.deletedAt !== undefined &&
-        Date.parse(value.removedAt!) < Date.parse(value.deletedAt)
+        value.removedAt !== undefined &&
+        Date.parse(value.removedAt) < Date.parse(value.deletedAt)
       )
         context.addIssue({
           code: "custom",

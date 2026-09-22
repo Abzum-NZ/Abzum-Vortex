@@ -212,6 +212,7 @@ const bindingsMatch = (
 const fingerprintIntent = (
   intent: Omit<FileRemovalIntent, "intentFingerprint">,
 ): Fingerprint => {
+  const canonicalFileRecord = fileRecordSchema.parse(intent.fileRecord);
   const stableEvidence = {
     deletionKey: intent.deletionKey,
     correlationId: intent.correlationId,
@@ -223,7 +224,7 @@ const fingerprintIntent = (
     governingPolicyRevision: intent.governingPolicyRevision,
     holdPolicyRevision: intent.holdPolicyRevision,
     eligibleDecidedAt: intent.eligibleDecidedAt,
-    fileRecord: intent.fileRecord,
+    fileRecord: canonicalFileRecord,
   };
   return createHash("sha256")
     .update(JSON.stringify(stableEvidence))
@@ -240,6 +241,8 @@ const assertRecordMatchesIntent = (
   intent: FileRemovalIntent,
 ): void => {
   const persisted = record.intent;
+  const persistedFileRecord = fileRecordSchema.parse(persisted.fileRecord);
+  const expectedFileRecord = fileRecordSchema.parse(intent.fileRecord);
   if (
     persisted.intentFingerprint !== fingerprintIntent(persisted) ||
     persisted.deletionKey !== intent.deletionKey ||
@@ -255,7 +258,7 @@ const assertRecordMatchesIntent = (
     persisted.eligibleDecidedAt !== intent.eligibleDecidedAt ||
     persisted.fileRecord.bucketId !== intent.fileRecord.bucketId ||
     persisted.fileRecord.storageKey !== intent.fileRecord.storageKey ||
-    JSON.stringify(persisted.fileRecord) !== JSON.stringify(intent.fileRecord)
+    JSON.stringify(persistedFileRecord) !== JSON.stringify(expectedFileRecord)
   ) {
     throw new Error(
       "File removal refused: deletion key is already bound to different evidence",
@@ -527,7 +530,7 @@ export const createFileRemovalCoordinator = (
               ? await dependencies.previewDeleter.deletePreviews({
                   organizationId: intent.organizationId,
                   fileId: intent.fileId,
-                  previewReferences: intent.fileRecord.previewReferences,
+                  previewReferences: [...intent.fileRecord.previewReferences],
                   idempotencyKey: claim.operationKey,
                 })
               : await dependencies.storageDeleter.deleteObject({
