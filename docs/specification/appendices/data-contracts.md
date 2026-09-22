@@ -224,7 +224,7 @@ The Identity boundary owns only the language, time zone, default currency, date 
 
 The current product model is [Groups and privileged role activation](groups-and-privileged-access.md). Every live role revision has protected privilege classification and an assignment-policy choice. A standing-access role has no activation-policy reference and accepts standing assignments only. An activation-required role pins a complete immutable activation-policy identity, revision and fingerprint and accepts eligible assignments only. Account-specific time-bounded activations derive from exact eligible assignments; eligibility alone is not effective permission. Group-derived activations retain their exact membership and eligibility provenance; stale or restored sources cannot revive them. [#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) owns these protected facts, not ordinary IAM records.
 
-Current collective-principal contracts use Group identities and the `group` discriminator. Historical serialized `team` references identify that same principal through the explicit [compatibility boundary](groups-and-privileged-access.md#contract-compatibility-and-delivery), not a second principal or an accepted alternate spelling in current contracts. [#283](https://github.com/Abzum-NZ/Abzum-Vortex/issues/283) reconciles the current contracts and exact V1 readers/writers before assignment delivery. Definition V1 ownership values and stored Access-version reason values remain in their exact historical wire representation. Neither terminology changes nor their compatibility adapters implement PIM or authorise rewriting published artifacts, permanent permission keys or applied migrations.
+Current collective-principal contracts use Group identities and the `group` discriminator. Definition ownership, Access reasons and current readers/writers use that same vocabulary under [#283](https://github.com/Abzum-NZ/Abzum-Vortex/issues/283). The Team translation adapters are removed; there is no second collective-principal concept and no current reader or writer accepts `team` or `team_membership_changed`. An already-published release whose record type carries ownership `team` is republished from a corrected definition rather than rewritten in place.
 
 The [IAM application](iam-application.md) owns ordinary access-request and review records and their workflows. Core retains only the existing protected effective role, assignment and delegation facts and generic operation/human-response evidence required to secure them. IAM links proposals, responses and operation outcomes to exact organisation accounts or Groups; it must not create an independently writable assignment copy. Editing a display record cannot supply approval authority. Full grant orchestration is [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267), not a new core IAM record schema or approval-node kind.
 
@@ -240,7 +240,7 @@ Only complete current record-permission contributions supply a field policy. Int
 
 Newly published record permissions also require an explicit `recordScope`: a non-empty, unique, canonically ordered set of all-record, ownership, direct-share or declared-relationship routes, optionally narrowed by one saved condition. All-record is the sole base route when selected. A relationship carries its permanent relationship and source read-permission identities. A saved condition carries its permanent identity, published revision, contract fingerprint and exact ordered parameter bindings; each binding is a typed literal or the verified current organisation-account identity. Canonical route and binding order is Unicode code-point order (`COLLATE "C"`), owned by the stored-scope validator; consumers do not re-check it under a database collation. The expression is `(any declared base route) AND (optional saved condition)`, not a second role language. Non-record permissions cannot declare this scope. The [permission contract](../../../contracts/src/permissions.ts) and [record-visibility requirements](../04-access-and-permissions.md#record-visibility) define its exact shape and evaluation ownership.
 
-Historical V1 declarations remain readable with scope absent and their original permission-meaning fingerprint unchanged. Absence is not converted to all-record access and supplies no row authority. Adding or changing scope participates in existing permission acceptance and release-version comparison. [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) completes compiler, catalogue and current-row integration; a contract-only checkpoint is not evidence of a working row policy.
+Permission declarations state their current record scope explicitly. Missing scope supplies no row authority. Adding or changing scope participates in permission acceptance and release-version comparison; compiler, catalogue and row decisions use the same current meaning.
 
 There are three distinct records: an immutable application-contained role template; an organisation-local assignable application-role registration with an accepted exact grant snapshot and source release/catalogue evidence; and an independent organisation-owned custom role. Both assignable live kinds have permanent role identity, organisation, key, label, description, live revision and exact scoped permission entries. The application-role registration intrinsically names its one application root; a custom organisation role may contain separately scoped permissions from several applications.
 
@@ -294,7 +294,7 @@ The protected server verifies the prepared role/template evidence with the exist
 
 An organisation-owned custom role lists exact permissions only. The immutable application template lists exact permissions or uses the sole entry `*`, which expands only to the non-administrative permissions declared by that exact application revision. Its live assignable wildcard projection never includes module, tenant, organisation-administration, security, entitlement, protected-data, export, or sharing-administration permissions. Its organisation-local registration stores the catalogue fingerprint and exact live expansion accepted for assignment; there is no runtime trailing/module wildcard entry.
 
-The prepared template handoff distinguishes `sourcePermissions`, the full exact immutable template resolution, from `livePermissions`, its deterministic assignable projection. Existing V1 expansion and fingerprints remain unchanged even when a non-administrative export permission appears in that source list. Live wildcard projection excludes both `administrative: true` and `actionKind: export`, is application-owner-only, and never guesses categories from a key or label. Exact selection preserves its explicitly requested permission list and is separately authorised. The prepared live list may be empty for an all-excluded wildcard; an active assigned role may not be empty. Both lists retain exact owner, application, source-release and meaning evidence; a structurally valid handoff still requires the trusted #22/#32 immutable-evidence verification in [#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33).
+The prepared template handoff distinguishes `sourcePermissions`, the full exact immutable template resolution, from `livePermissions`, its deterministic assignable projection. The current source list may include a non-administrative export permission. Live wildcard projection excludes both `administrative: true` and `actionKind: export`, is application-owner-only, and never guesses categories from a key or label. Exact selection preserves its explicitly requested permission list and is separately authorised. The prepared live list may be empty for an all-excluded wildcard; an active assigned role may not be empty. Both lists retain exact owner, application, source-release and meaning evidence; a structurally valid handoff still requires the trusted #22/#32 immutable-evidence verification in [#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33).
 
 A role contained in an application definition uses the same closed meaning in a source-friendly form: it lists exact permission keys or uses `*` as the only list entry. `*` expands only to non-administrative permissions declared by that application revision. It never includes permissions merely supplied by a module binding.
 
@@ -375,7 +375,7 @@ flowchart LR
 
 The Access service owns an `access_version` per organisation. Every access-affecting organisation-account, role, assignment, group, sharing, public-policy, or application-access change increases it in the same transaction as the owning state change.
 
-The closed reasons distinguish standalone `role_catalogue_changed`, `role_assignment_changed`, `role_activation_changed` and `delegation_changed`. Activation changes an individual use window without changing its eligibility assignment. Explicit stewardship adoption or a management-application requirement change uses `stewardship_changed` once for its whole composition; existing guarded role, assignment, delegation and account changes retain their own reason. The spelling is shared by current and stored contracts; the existing historical Group-name conversion is unchanged. A coordinated application catalogue/continuity/role change uses `application_access_changed` once for the whole transaction, not another increment per changed role. A refused or unchanged replay increments nothing. Add new reasons to the existing contract and database allowlist without rewriting old change records or creating another counter.
+The closed reasons distinguish standalone `role_catalogue_changed`, `role_assignment_changed`, `role_activation_changed` and `delegation_changed`. Activation changes an individual use window without changing its eligibility assignment. Explicit stewardship adoption or a management-application requirement change uses `stewardship_changed` once for its whole composition; existing guarded role, assignment, delegation and account changes retain their own reason. The spelling is shared by current and stored contracts; current change records use Group terminology without an obsolete-name conversion path. A coordinated application catalogue/continuity/role change uses `application_access_changed` once for the whole transaction, not another increment per changed role. A refused or unchanged replay increments nothing. Add new reasons to the existing contract and database allowlist without rewriting old change records or creating another counter.
 
 The stored access-version record contains `organisation_id`, positive `current_version`, `changed_at`, `changed_by`, `change_correlation_id`, and one closed `change_reason`. It begins at `1`, cannot exceed the JavaScript safe-integer request-context limit, and exposes no permission result. The closed reasons cover organisation-account lifecycle, roles, Groups, application access, direct shares, grants, public policy, federation mirrors and MCP authorisation. Cluster-local identity-projection lifecycle is checked before Access and does not fan out increments across the person's organisations. Initialisation is separate and idempotent; a general increment cannot pretend to be initialisation. One narrow trusted operation reads only the live organisation identifier and version for an exact active tenant/organisation pair. Owner-only operations initialise or atomically increment and return the complete stored record. Identity-owned records contain no copy or contribution column.
 
@@ -699,56 +699,44 @@ The recipient stores one non-content mirror with `grant_id`, source and recipien
 
 ## Action, rule and condition contracts
 
-User-facing action and data-component bindings reference an exact application-owned Frontend Flow, event identity and typed input/context map; they do not contain an alternate operation handler. Platform-managed flows are separate exact versioned catalogue dependencies with distinct use and edit authority. A flow may terminate with presentation only or sequence registered pure, module-query, protected-change, form and background-start nodes. Each protected operation commits or refuses atomically in its own short transaction; later failure preserves earlier commits. Save form remains a one-node convenience over the exact form commit operation, and collect-first remains an optional authoring pattern. Default flow identities are allocated during revision-checked authoring, not rendering. [Bindings delivery](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) owns these reference shapes, and [rule delivery](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58) owns their graph validation/execution. Preserve immutable legacy direct bindings through their supported reader; new-draft conversion materialises explicit flows. See [page-to-flow composition](frontend-rule-designer.md#pages-compose-flows-define-actions).
+User-facing action and data-component bindings reference an exact application-owned Frontend Flow, event identity and typed input/context map; they do not contain an alternate operation handler. Platform-managed flows are separate exact versioned catalogue dependencies with distinct use and edit authority. A flow may terminate with presentation only or sequence registered pure, module-query, protected-change, form and background-start nodes. Each protected operation commits or refuses atomically in its own short transaction; later failure preserves earlier commits. Save form remains a one-node convenience over the exact form commit operation, and collect-first remains an optional authoring pattern. Default flow identities are allocated during revision-checked authoring, not rendering. [Bindings delivery](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) owns these reference shapes, and [rule delivery](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58) owns their graph validation/execution. Use explicit current flow bindings without legacy direct-binding readers or conversions. See [page-to-flow composition](frontend-rule-designer.md#pages-compose-flows-define-actions).
 
 An action contains identifier, key, label, subject record type, permission binding, sharing setting (`refused` by default or `allowed`), uniquely keyed typed inputs, precondition, and one to ten ordered effects. Each input has a label and required flag. Its validation contract is discriminated by type: plain/formatted text, number, Boolean, date, date-time, one-or-more record-type reference, or organisation-account reference. One input cannot accept another type's settings. Effects are `set_field`, `create_record`, `copy_relationships`, `soft_delete_subject`, or `announce_event`. A relationship-copy effect names every source relationship and its target-record input; it never means “all relationships.” A shared action executes wholly in the source organisation and cannot create a relationship to recipient-owned data.
 
-The coordinated Module V2 [field-value contract](../05-modules-fields-and-relationships.md#record-value-formats)
+The current Module [field-value contract](../05-modules-fields-and-relationships.md#record-value-formats)
 adds explicit `decimal_number` and `money` action inputs with exact-text amount
 bounds. Money input values carry amount and currency; the target field's currency
-policy still applies. V2 formatted inputs use the Record rich-text format,
+policy still applies. Structured formatted inputs use the Record rich-text format,
 including an allowed table block, without expanding the Page format. Typed record
-references and organisation-account references remain distinct. Historical V1
-input meaning is unchanged. A consumer resolves input/value semantics from the
+references and organisation-account references remain distinct. A consumer resolves input/value semantics from the
 exact owning Module contract, not from a string or object's appearance.
 
 [Row-policy composition #35](../../build-plan/issue-35-row-policy-composition.md) extends that permission binding without rewriting published content: keep authored `permission` and compiled `permissionKey` for one permission; use mutually exclusive authored `permission_alternatives` and compiled `permissionKeys` for two or more unique, canonically ordered alternatives. Every alternative resolves to its exact declaring owner and the same subject record type and action meaning. Named alternatives additionally share the same declaring owner; matching names in different modules do not establish the same authority. An application action may reference a bound module's permissions, so the action's containing application is not automatically the permission owner. Each alternative must independently supply both current authority and its own complete record scope; an interface exposure permission cannot substitute for either. The action's flow execution remains owned by [page/action bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), not this metadata extension.
 
-A rule flow contains identifier, owner/subject context, explicit contract version, trigger binding, optional condition, priority, typed input/variable declarations, registered versioned nodes, labelled edges and terminal/submission outcomes. The [Frontend Rule Designer contract](frontend-rule-designer.md#contracts-and-compatibility-delivery) governs the complete versioned extension and fixtures. The existing single-effect representation remains readable as immutable legacy content; conversion produces a new versioned draft, never a rewritten release. Module rules retain their record-only context; application rules can additionally refer to owned pages, forms and workflows. There is no separate permission-approval rule.
+A rule flow contains identifier, owner/subject context, explicit contract version, trigger binding, optional condition, priority, typed input/variable declarations, registered versioned nodes, labelled edges and terminal/submission outcomes. The [Frontend Rule Designer contract](frontend-rule-designer.md#current-contracts-and-delivery) governs the complete versioned extension and fixtures. Current rules use the graph representation throughout authoring and execution; remove the obsolete single-effect reader and conversion path. Module rules retain their record-only context; application rules can additionally refer to owned pages, forms and workflows. There is no separate permission-approval rule.
 
 The first implementation profile is the shared graph's `before_save` profile,
-embedded in the explicit Module source/validation pair `3.0.0`. It reuses V2
+embedded in the explicit Module source/validation pair `3.0.0`. It uses the current exact-value
 field values and defines Start, Condition, Set variable, Set field, Require field,
 Warn, Refuse and Finish nodes. Typed run-local variables are not infrastructure
 environment variables or secrets. Graphs run in ascending priority and permanent
 rule-ID order. Require-field nodes return checks for the owning Record save's
 final candidate, after all applicable graphs and owning generators. Definition carries the exact pair through compilation, semantic validation,
 publication, consumer reads and restore, retaining node/input/variable identities
-inside their permanent rule owner. Complete local lifecycle tests exercise those
-operations; they do not establish hosted delivery or execution. The
-[shared graph delivery plan](../../build-plan/issue-58-shared-rule-graph-foundation.md)
-requires explicit new-draft conversion before interpreter implementation. Parsing
-or publishing a graph alone does not execute it. The other interactive and
+inside their permanent rule owner. The protected Record save invokes the Rule interpreter;
+parsing or publishing a graph alone does not execute it. The other interactive and
 effectful nodes remain required extensions of this same engine, not a second
 designer or interpreter.
 
-Explicit draft conversion preserves supported legacy create/change triggers,
-recursive conditions, rule identity and priority, field assignments and clears,
-requirements, warnings and refusals. Existing warning/refusal codes are retained;
-missing safe messages require an explicit author-supplied resolution. V1 field
-conversion uses the existing V1-to-V2 converter before graph conversion. An
-unsupported trigger, effect or write to a generated field returns a located
-diagnostic rather than silently losing behavior or claiming a usable graph.
-Conversion changes no stored draft or release by itself; normal draft authoring
-and publication remain necessary. See the [conversion implementation](../../../runtime/definition/src/module-v3-draft-conversion.ts).
+Current graph definitions express create/change triggers, recursive conditions, permanent rule identity, priority, field assignments, requirements, warnings and refusals directly. Keep safe message codes and final-candidate validation. Remove old-format conversion operations and align checked-in definitions with the current schema.
 
 Flow table inputs, variables and standalone table literals are self-describing:
-each column declares its key, existing V2 cell type and whether a cell is required.
+each column declares its key, declared current cell type and whether a cell is required.
 Canonical columns use key order while rows retain their meaningful order. Cell
 validation reuses existing value codecs; decimal-looking text is not guessed to
 be a number. Assignment to a record table additionally obeys that field's own
 constraints. Flow data descriptors do not duplicate storage settings or grant
-write authority. See the [typed-value delivery plan](../../build-plan/issue-58-shared-rule-graph-foundation.md#values-and-field-behavior).
+write authority. See the [typed-value delivery plan](../../build-plan/issue-58-shared-rule-graph-foundation.md).
 
 Graph publication validates value shapes and declared reference targets, including
 variable defaults. The owning Record save enforces field-specific currency,
@@ -764,13 +752,13 @@ A condition node has an operator and typed field, value, or parameter operands. 
 
 A saved sharing condition belongs to one source record type and contains permanent identifier, key, system-derived published revision and contract fingerprint, typed parameter declarations, a closed condition tree, declared local field dependencies, and publication tests. Every test provides explicit source-field values, parameter values, and an expected result. It cannot traverse relationships in the first release, read recipient data, execute code, call a connection, or accept an undeclared parameter. Definition derives revisions from the permanent condition identifier and complete immutable Module history: first appearance is `1`, unchanged resolved content retains its revision, changed content increments once, removal adds no mutable state, and reintroduction after any absent release increments once. A grant pins its revision and values; later publication does not change an active grant.
 
-Module V2 saved conditions explicitly support `decimal_number` and `money`
+Current Module saved conditions explicitly support `decimal_number` and `money`
 parameters. Decimal comparison is exact; money equality and membership include
 currency, and ordering across different currencies is refused rather than treated
-as false. Authored values normalize before canonical evaluation; the historical
-`number` parameter retains its previous meaning. Definition publication tests,
-Rule execution and database-backed permission conditions must agree before the
-new format is activated for records. The [coordinated implementation plan](../../build-plan/issue-44-record-field-values.md#rule-consumer-handoff)
+as false. Authored values normalize before canonical evaluation; an explicitly
+declared `number` parameter uses finite-double meaning. Definition publication
+validation, Rule execution and database-backed permission conditions apply the
+same declared operand semantics. The [coordinated implementation plan](../../build-plan/issue-44-record-field-values.md)
 tracks that complete delivery; standalone schemas do not establish runtime support.
 
 ## Definition publication storage contract
@@ -872,7 +860,7 @@ The response is `completed`, `already_completed`, `waiting`, `retryable_failure`
 | Interface page                 | 100 records by default; maximum 500 when published |
 | Export page                    | 1,000 records per background batch                 |
 
-These are safety and product-shape limits, not performance release gates. Changing one requires contract review, compatibility evidence, and updated tests.
+These are safety and product-shape limits, not performance release gates. Changing one requires an explicit contract change and code review of affected consumers.
 
 ## File contract
 

@@ -1,5 +1,15 @@
 # The workflow engine
 
+## Current development policy — 21 September 2026
+
+The [current roadmap](../../docs/build-plan/README.md) and [architecture review](../../docs/build-plan/architecture-review-2026-09-21.md) govern implementation work. Development completion is implemented functionality plus independent code review. Do not create or run tests, require database review, collect hosted proof, or introduce verification/promotion gates for these development issues.
+
+This policy supersedes contrary completion or standing-authority wording below. The recipes and environment observations below are separate, optional operational documentation. They describe existing tooling and historical operational practices; they are not developer completion instructions and do not authorize running commands, starting recurring jobs, deploying, recovering data, changing credentials or modifying Production. Any operational work requires a separately scoped request for that environment and action. Reading this file or finishing a development issue grants no Production authority.
+
+Preserve runtime access controls, tenant isolation, atomic changes, protected credentials and safe error handling. This policy changes completion requirements, not those product protections.
+
+## Operational reference
+
 Kestra open source runs on the Coolify-managed server with its own PostgreSQL. It is the workflow and
 operations service in the [current hosting boundary](../../docs/specification/17-runtime-storage-and-caching.md#hosting-boundaries).
 It runs durable application workflows and reviewed operational jobs such as database migration,
@@ -15,7 +25,7 @@ Operational flows remain separate and use their own narrow credentials.
 |---|---|
 | `Dockerfile` | The pinned Kestra operations image with checksum-verified Supabase and Doppler command-line tools |
 | `docker-compose.yml` | The stack Coolify deploys: Kestra and its own PostgreSQL |
-| `flows/` | Reviewed operational flows. Database delivery begins in Phase 2; application workflow execution arrives in Phase 7. |
+| `flows/` | Reviewed operational flows. Operational database delivery is separate from the roadmap; application workflow execution is scheduled in phase 9. |
 | `scripts/` | Reviewed commands called by operational flows; these are not available as application workflow nodes |
 | `tests/` | Credential-free contract checks for the operational delivery boundary |
 
@@ -192,7 +202,7 @@ currently reports its supported `Pause.onResume` field as deprecated during loca
 though the current official Pause contract documents and uses that field; this warning is recorded
 and does not justify an unverified replacement.
 
-The local operational gate is:
+For a separately requested operational task, the existing local commands are:
 
 ```text
 docker compose -f workflows/kestra/docker-compose.yml build kestra

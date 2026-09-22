@@ -51,7 +51,7 @@ Vortex uses Supabase as an integrated platform, but each capability has one narr
 
 Supabase Cron is not a second workflow system: Kestra owns business schedules, retention, recovery, and operational jobs. Edge Functions are not a second server boundary: Vercel owns web and interface routes. Supabase Vault is not a second secret authority: Doppler owns secrets. Read replicas are added only after measured read demand, recovery needs, cost, and routing behaviour justify them. Direct browser access to business tables, direct cross-cluster database connections, logical replication for sharing, and service-role-key use are refused.
 
-The Phase 10 MCP implementation uses the managed OAuth capability and the approved authorization contract. A concrete capability gap is a bounded architecture question; do not silently introduce a second identity or token service. Hosted version checks are outside the current development workflow. See the [current roadmap](../build-plan/README.md#phases).
+The Phase 10 MCP interface uses the managed Supabase OAuth 2.1 server under the approved authorization contract. Its adapter implements the required protocol behavior and returns a safe unavailable result when the configured capability cannot serve the request. A missing provider capability cannot silently introduce a second identity or token service; any necessary change to the approved provider boundary belongs to the owning specification decision. Hosted capability checks are not a development completion gate. See the [current roadmap](../build-plan/README.md#phases).
 
 ```mermaid
 flowchart LR
@@ -125,7 +125,7 @@ The durable identity session remains in Supabase Auth; no Vortex database sessio
 - Database row restrictions protect every organisation-owned table for select, insert, update, and delete.
 - Only application-record tables explicitly marked shareable evaluate active [access grants](04-access-and-permissions.md#shared-record-access). Identity, secrets, connections, activity, grant-consent decisions, access-control rows, entitlement policy, and other protected platform tables never become visible through a record grant.
 - Request database roles do not own tables and cannot bypass the row restrictions.
-- The trusted backend owns the runtime database connection; browser, import, flow and MCP callers receive closed protected commands, never SQL or database credentials. Temporarily selecting a restricted request role is not a sandbox against compromised backend code: [PostgreSQL can restore the connection's session role](https://www.postgresql.org/docs/current/sql-set-role.html). The [Record save handoff](../build-plan/module-record-provisioning.md#final-values-and-the-trusted-server-boundary) separates untrusted submitted values from server-computed final changes without duplicating the business-rule engine in SQL. Tests must distinguish a genuinely restricted session from a runtime session temporarily using the request role.
+- The trusted backend owns the runtime database connection; browser, import, flow and MCP callers receive closed protected commands, never SQL or database credentials. Temporarily selecting a restricted request role is not a sandbox against compromised backend code: [PostgreSQL can restore the connection's session role](https://www.postgresql.org/docs/current/sql-set-role.html). The [Record save handoff](../build-plan/module-record-provisioning.md#protected-save) separates untrusted submitted values from server-computed final changes without duplicating the business-rule engine in SQL. Tests must distinguish a genuinely restricted session from a runtime session temporarily using the request role.
 - The Supabase project-owner credential is limited to migration and controlled verification work. The separate non-login Record object owner is callable only through the protected [storage provisioner](#record-storage-provisioning); request roles cannot inherit it.
 - Every protected database transaction establishes one complete context containing the caller kind, Identity Authority identifier or system actor where applicable, tenant, organisation account where applicable, organisation, optional application, session, authentication strength, issue and expiry times, access version, and correlation identifier before reading organisation data. The cluster-local identity projection and all selected scope rows must be active. Tenant-administrator context alone never satisfies an organisation record policy.
 - Organisation file paths begin with the organisation identifier and are protected by storage policy and server checks.
@@ -345,7 +345,7 @@ and grants no record access. It refuses a detached target. Unrelated detached
 history does not invalidate a complete current installation. See the
 [active installation read plan](../build-plan/issue-43-active-installation-read.md).
 
-The [Application lifecycle permission](../build-plan/issue-64-application-runtime.md#installation-permission-delivered-with-the-storage-engine)
+The [Application lifecycle permission](../build-plan/issue-64-application-runtime.md)
 is the organisation-scoped platform permission
 `platform.organization.applications.manage`. The operation binds the exact
 application and additionally checks delegated management of its complete affected
@@ -402,11 +402,12 @@ change, not silent reuse or automatic refusal of every compatible addition.
 Exact release content/resolution evidence records what was provisioned. No extra
 plan fingerprint, receipt counter or second platform migration ledger is needed.
 
-The provisioner must explicitly support the exact Module source/validation pairs
-2.0.0/2.0.0 and 3.0.0/3.0.0. Module 3 reuses the V2 field storage model; accepting
-it does not relabel a published release or create a separate table for its rules.
-See the [compatibility implementation plan](../build-plan/issue-45-module3-storage-compatibility.md)
-for the bounded delivery and remaining installation dependencies.
+The provisioner accepts the declared current Module source/validation pair and
+uses its exact-value field storage model and graph definitions consistently.
+Rule changes do not create a separate record table or relabel a published release.
+Remove obsolete pair selectors with [Module consolidation #548](https://github.com/Abzum-NZ/Abzum-Vortex/issues/548);
+the [storage owner](../build-plan/issue-45-module3-storage-compatibility.md) retains
+the existing allocation and installation responsibilities.
 
 An unchanged retry of the original first-provision command may return the same
 inactive provisioned binding after a lost response, even though its expected

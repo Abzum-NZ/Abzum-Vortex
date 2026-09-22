@@ -30,7 +30,7 @@ Access typecheck, lint and formatting. Root independently passed the combined
 contract/contribution/field/runtime focused checks (37 assertions at that checkpoint).
 
 This provides no default adapter, new SQL endpoint, owner connection, token or
-authority store. The [fixed-adapter handoff](../build-plan/issue-35-row-policy-composition.md#trusted-record-adapters--8-september-2026)
+authority store. The [fixed-adapter handoff](../build-plan/issue-35-row-policy-composition.md)
 retains SQL430 as actual restricted-role neutral policy evidence and #45 as owner
 of permanent generated adapters. The unfinished SQL candidate and fixed-limit
 authorization below are not delivered by this source checkpoint; whole #35 stays
@@ -96,7 +96,7 @@ The unchanged legacy SQL290 **48/48** and SQL300 **28/28** passed the implemente
 rollback-only run with both candidate migrations.
 
 This is not source delivery, hosted verification or whole-task completion. The
-[separate fixed-cutoff tooling restriction](../build-plan/issue-35-row-policy-composition.md#narrow-implementation-authorization--8-september-2026)
+[separate fixed-cutoff tooling restriction](../build-plan/issue-35-row-policy-composition.md)
 remains unchanged and unresolved; the cleanup approval for
 [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) does not authorize it.
 

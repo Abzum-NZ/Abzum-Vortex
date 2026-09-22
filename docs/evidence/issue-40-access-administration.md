@@ -98,7 +98,7 @@ remains outstanding. This does not close the whole access-administration task.
 
 The user explicitly authorized delegated organisation administrators to remove
 assignments to withdrawn roles/permissions only when the operation cannot restore,
-recreate, assign or increase authority. The [approved implementation scope](../build-plan/issue-40-protected-access-administration.md#approved-removal-only-cleanup-after-withdrawal--8-september-2026)
+recreate, assign or increase authority. The [approved implementation scope](../build-plan/issue-40-protected-access-administration.md)
 retains exact management permission, current organisation-catalogue delegation for
 an unavailable empty role, revision/governance checks, terminal removal and atomic
 Access/Activity. Historical permission fallback and permission-only removal remain
@@ -353,7 +353,7 @@ This is local checkpoint evidence. Final direct-share test expansion, combined i
 | `20260906152143_protect_organization_role_activation_administration.sql` | `0cf502c68dc10ebbb2b0b1d29b3463553365cde851d13bdcf5529bab63d964da` |
 | `390_organization_role_activation_administration.test.sql`               | `f72b387e3789a0aae74866920e96eaf461c3c69b6f0e8975b8a1d1214e240f80` |
 
-Final independent Sol actual-work review approves the activation and direct-share checkpoint with no findings. The final aggregate database result is **53 files / 2,418 assertions**, after the direct-share suite gained its restricted-role proof. The preceding aggregate attempt encountered an intermittent failure in an unchanged stewardship check; [the direct-share evidence](issue-36-record-visibility.md#current-direct-share-contributions--7-september-2026) and [#318](https://github.com/Abzum-NZ/Abzum-Vortex/issues/318#issuecomment-5563910662) retain the failed run and successful isolated/bounded aggregate retry. This is not an unqualified first-run pass or a repair of that separate observation.
+Final independent Sol actual-work review approves the activation and direct-share checkpoint with no findings. The final aggregate database result is **53 files / 2,418 assertions**, after the direct-share suite gained its restricted-role proof. The preceding aggregate attempt encountered an intermittent failure in an unchanged stewardship check; [the direct-share evidence](issue-36-record-visibility.md) and [#318](https://github.com/Abzum-NZ/Abzum-Vortex/issues/318#issuecomment-5563910662) retain the failed run and successful isolated/bounded aggregate retry. This is not an unqualified first-run pass or a repair of that separate observation.
 
 ## Activation/share Testing source delivery — 7 September 2026
 

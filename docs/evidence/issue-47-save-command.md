@@ -26,7 +26,7 @@ returning and cannot repeat effects or disclose withdrawn values.
 Unused named-action or custom-Event declarations do not disable ordinary saves.
 Actual immediate Rules, named action execution, broader
 relationship shapes, System execution and Event delivery consumers retain their
-linked owners in the [implementation plan](../build-plan/issue-47-save-command.md#supported-now-and-later-owners).
+linked owners in the [implementation plan](../build-plan/issue-47-save-command.md).
 Subsequent #48 stages 1–2B integrated calculations and relationship totals;
 deadline-driven recalculation remains that issue's next stage.
 

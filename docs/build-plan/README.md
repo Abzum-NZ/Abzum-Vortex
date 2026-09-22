@@ -4,6 +4,8 @@ Work through the GitHub roadmap phases in numerical order and maintain numeric P
 
 [GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) · [Agent coordination](agent-coordination.md) · [Fleet procedure](agent-fleet.md) · [Workflow diagram](fleet-orchestration.html) · [Product specification](../specification/README.md)
 
+The GitHub project roadmap is the execution plan. Issue bodies and native dependencies define bounded work. This page explains the phases; it does not duplicate live owner, status or estimate records. The [21 September architecture review](architecture-review-2026-09-21.md) records what was actually present on main at `e4cd4375958b91c55a5bd93b00c86656b98a8d13`.
+
 ## Phases
 
 | Phase | Functionality | Scope epic |
@@ -26,22 +28,39 @@ Work through the GitHub roadmap phases in numerical order and maintain numeric P
 
 Select the lowest unfinished leaf in the earliest incomplete phase. Parent/phase epics summarize their children and are not additional implementation assignments. Do not skip a blocked pickup, renumber the queue or advance phases without completing required work. A forward dependency, missing/duplicate number or cycle requires an explicit ordering correction, not silently selecting another issue. Follow the [strict pickup algorithm](agent-fleet.md#strict-pickup-algorithm).
 
+A phase label does not replace a dependency. Confirm each selected leaf's real Blocked by issues and prerequisite child scopes are complete before dispatch.
+
 The orchestrator reads source before assignment, bounds the outcome/paths/exclusions/acceptance, chooses the cheapest capable model and updates metadata to match the actual assignment. One issue proceeds through implementation, reviewer-owned fixes/re-review, permitted integration, issue closure, board reconciliation and cleanup before the next pickup.
 
-Completion requires implemented functionality, independent source review and integration. No tests, DB/hosted review, proof receipts, Kestra, Testing deployment or release gate is part of these phases. Phase 13 develops operational functionality in code; it does not authorize operating or deploying a hosted system.
+Completion requires implemented functionality, independent source review and integration. No tests, database/hosted review, proof receipts, Kestra, Testing deployment or release gate is part of these phases. Phase 13 develops operational functionality in code; it does not authorize operating or deploying a hosted system.
 
 ## Phase 6 boundary
 
 Identity/access, one current definition format, installation/storage, record operations, queries and page/form/application composition must connect into the existing Next.js UI. Include actual session/access decisions, initial operating access and declared action wiring. No fake permission bypasses, fixture-only result or hardcoded demo counts as the implemented application.
 
-The visual designer, search/files, durable workflow engine, connections, sharing and MCP remain in their assigned later tasks. Product requirements live in the specification and bounded issue; old phase lists or evidence instructions do not override this current roadmap.
+Application installation and initial operating access are explicit owning-service operations. The initial setup command binds a frozen server-owned manifest to the original provisioning receipt and nominated account. It installs exact releases and establishes only their named operating access. Ordinary application requests continue to use actual sessions and Access decisions; management status or first login never invents business permissions. The later governed access-request workflow is Phase 9.
+
+The visual designer, search/files, durable workflow engine, connections, sharing and MCP remain in their assigned later tasks. A later engine extends the application definitions through its named task; it does not hold the Phase 6 UI behind a whole later phase. Product requirements live in the specification and bounded issue; old phase lists or evidence instructions do not override this current roadmap.
+
+## Current representation
+
+This is a new application. Application, Module and Group owners replace obsolete format branches at their source and update all consumers together. There is no requirement to preserve unused V1/V2/V3 readers, converters or compatibility fixtures. Normal immutable product releases, explicit installed-release selection and revisions remain product functionality.
 
 ## Estimates and progress
 
-Use each leaf's named-agent active-minute estimate, separating implementation and review where useful. Parent/phase totals sum leaves only. At the estimate or 30-minute checkpoint inspect actual progress and record remaining scope and revised estimate; do not terminate productive work automatically. Missing progress is investigated at 15 minutes. Phase/Pickup Order remains unchanged on reassignment.
+Use each leaf's named-agent active-minute estimate, separating implementation and review where useful. Parent and phase totals sum their leaves only; do not add them again. They are planning estimates of active work, not elapsed calendar deadlines. At the estimate or 30-minute checkpoint inspect actual progress and record remaining scope and revised estimate; do not terminate productive work automatically. Missing progress is investigated at 15 minutes. Phase and Pickup Order remain unchanged on reassignment.
 
-The board holds live ownership and status; this document deliberately contains no duplicated live task counts or old completion receipts. The monitor reports after every scheduled run, including idle/blocker state, without inventing completion percentages.
+The board holds live ownership, status and current estimate rollups; this document deliberately contains no duplicated live task counts or old completion receipts. The monitor reports after every scheduled run, including idle and blocker state, without inventing completion percentages.
 
 ## Historical plans
 
-Earlier architecture notes, evidence and handoffs remain design/history references. Their test, deployment, proof, fixed-model and promotion instructions are superseded by [agent coordination](agent-coordination.md). Preserve relevant product requirements; do not import historical fleet procedures into new briefs.
+Earlier architecture notes, evidence and handoffs remain design and history references. Their test, deployment, proof, fixed-model and promotion instructions are superseded by [agent coordination](agent-coordination.md). Preserve relevant product requirements; do not import historical fleet procedures into new briefs.
+
+The old fleet is archived at `C:/Users/vijay/orca/archives/vortex-20260922-reset`. Read its `SALVAGE.md` and `archive-manifest.json` before dispatch; use new sessions and selectively import useful product code. In particular, #49 has a stopped reviewed candidate, #50 has an uncommitted draft, and #407 contains only the merged inventory portion. Read their current issue metadata and existing worktrees before assigning remaining work.
+
+## Working guidance
+
+- [Agent coordination](agent-coordination.md)
+- [Fleet operations and estimate checkpoints](agent-fleet.md)
+- [Definition-led application delivery](engine-first-application-delivery.md)
+- [Specification](../specification/README.md)

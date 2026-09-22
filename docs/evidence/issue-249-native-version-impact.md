@@ -2,7 +2,7 @@
 
 Task: [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249).
 Scope: [build and acceptance plan](../build-plan/issue-249-version-impact.md).
-Rules: [version-impact policy](../specification/appendices/version-impact-policy.md#native-v2-composition-comparison).
+Rules: [version-impact policy](../specification/appendices/version-impact-policy.md#current-composition-comparison).
 
 ## Outcome — 8 September 2026
 

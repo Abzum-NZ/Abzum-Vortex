@@ -1,6 +1,6 @@
 # First visible definition-led application
 
-Task: [#327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327). Phase 6. Follow current issue/subissue scope and native dependencies; the filename is retained for existing links and does not require a proof exercise.
+Task: [#327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327). Phase 6. Follow current issue/subissue scope and native dependencies; the filename is retained for existing links and does not require a proof exercise. The former proof-only programme is retired. The delivery sequence is [definition-led application delivery](engine-first-application-delivery.md).
 
 ## Outcome
 

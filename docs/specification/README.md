@@ -2,10 +2,10 @@
 
 > Development acceptance and fleet roles follow [agent coordination](../build-plan/agent-coordination.md). Specification scenarios describe functionality to implement, not instructions to run tests or hosted proof. Work through the current [roadmap](../build-plan/README.md) in strict phase and Pickup Order.
 
-The [7 September whole-platform architecture review](../build-plan/architecture-review-2026-09-07.md) reconciles configurable read/write data flows, managed-flow controls, per-node execution identity and truthful partial outcomes. [Delivery ownership](../build-plan/frontend-rule-designer.md) places the new headless [scoped execution-identity task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) before flow execution. These are planned capabilities, not delivered runtimes.
+The [7 September whole-platform architecture review](../build-plan/architecture-review-2026-09-07.md) describes configurable data flows, managed behavior, per-node identity and truthful partial outcomes. Current-person flow execution supports the Phase 6 application before the later [scoped execution-identity task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322). That task is a prerequisite only for specified-account and System execution. [Delivery ownership](../build-plan/frontend-rule-designer.md) assigns the corresponding early and later implementation work; specification text does not itself establish delivered runtime functionality.
 
-**Status:** Approved specification 2.25
-**Date:** 12 September 2026
+**Status:** Development specification; roadmap and completion policy revised 21 September 2026
+**Date:** 21 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 
 **Source repository:** [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex)
@@ -23,11 +23,11 @@ This document is the approved product contract for the current build scope. The 
 
 - [Verified recent authentication](appendices/recent-authentication.md): protected actions distinguish actual sign-in and MFA confirmation from token refresh, with provider-neutral evidence and ordinary-session compatibility.
 
-- [Groups and privileged role activation](appendices/groups-and-privileged-access.md): Roles and Groups terminology, separate eligibility and activation, optional role-governed PIM, IAM journeys and explicit compatibility for historical access references.
+- [Groups and privileged role activation](appendices/groups-and-privileged-access.md): Roles and Groups terminology, separate eligibility and activation, optional role-governed PIM, IAM journeys with one current Group representation.
 
 - [IAM application](appendices/iam-application.md): all role grants use user-linked requests, reviews and workflows in an ordinary Vortex application, with protected effective assignment and no parallel granting surface.
 - [One organisation-managed role and permission catalogue](04-access-and-permissions.md#one-organisation-managed-catalogue): application registration supplies permission declarations and role templates; explicit organisation assignments control access, and application updates never silently broaden grants.
-- [Page-builder contracts and Fluid adaptation](appendices/page-builder-contracts.md): shells, slots, typed settings/data/forms, responsive layout, operation parity and immutable-release migration.
+- [Page-builder contracts and Fluid adaptation](appendices/page-builder-contracts.md): shells, slots, typed settings/data/forms, responsive layout, operation parity and one current application representation.
 - [Review findings, subject coverage and corrected delivery order](../build-plan/architecture-review.md).
 - [HR example and workflow-only approvals](appendices/page-builder-contracts.md#hr-example-policy), approved by the owner in this review. This is a normal Vortex application, never hardcoded runtime behavior.
 
@@ -50,7 +50,7 @@ Each section contains:
 
 1. A plain-language explanation of the outcome.
 2. A diagram showing composition or working behaviour.
-3. Testable requirements.
+3. Functional requirements for implementation and code review.
 4. Links to related sections and any future unresolved choices.
 
 Words such as “organisation,” “module,” “application,” and “published version” have one meaning throughout. Those meanings are maintained in the [glossary](appendices/glossary.md).

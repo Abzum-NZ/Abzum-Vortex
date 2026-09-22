@@ -1,6 +1,6 @@
 # Vortex contract index
 
-[Platform specification](../docs/specification/README.md) · [Data-contract appendix](../docs/specification/appendices/data-contracts.md) · [Phase 1 build plan](../docs/build-plan/README.md#phase-1--contracts-and-complete-fixtures) · [Validation-error author guide](VALIDATION_ERRORS.md)
+[Platform specification](../docs/specification/README.md) · [Data-contract appendix](../docs/specification/appendices/data-contracts.md) · [Phase 1 build plan](../docs/build-plan/README.md#phases) · [Validation-error author guide](VALIDATION_ERRORS.md)
 
 This package is the database-free definition language shared by the Vortex services. It exports both the strict, readable authored-source boundary and the complete canonical runtime contracts with platform-issued identifiers. Neither layer contains installed definition names or behaviour. The snake-case JSON under `testing/fixtures` is non-shipping input that proves the production parser and compiler against a dependency-complete example set.
 

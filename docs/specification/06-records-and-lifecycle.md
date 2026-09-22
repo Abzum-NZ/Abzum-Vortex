@@ -53,7 +53,7 @@ participant, defined by Record and wired by the higher-level application
 composition, never an arbitrary callback supplied by a request. Both use the
 same existing request transaction. Event cannot commit separately, and a missing
 participant cannot be replaced with a successful no-op. The concrete delivery
-sequence is recorded in the [installation and save plan](../build-plan/module-record-provisioning.md#package-wiring-and-bounded-delivery).
+sequence is recorded in the [installation and save plan](../build-plan/module-record-provisioning.md#protected-save).
 
 The save transaction performs these steps in order:
 
@@ -64,7 +64,7 @@ The save transaction performs these steps in order:
 5. Compare the submitted concurrency number with the current number.
 6. Run eligible immediate [rules](08-forms-actions-rules-and-events.md).
 7. Run the owning reference-number, calculation and total generators in their declared dependency order. Validate the complete final candidate, including required fields and accumulated rule requirements, choices, currency/precision/row settings, live reference and file eligibility, uniqueness and application bindings. Refuse all writes if final validation fails.
-8. Save the record, affected parent totals and revisions, relationship changes, reference number, and matching [activity entries](14-activity-privacy-and-retention.md) in one database transaction. Include both old and new parents when a relationship moves, following the [concrete dependency and locking rules](../build-plan/issue-48-calculation-engine.md#integrated-totals-dependency-and-transaction-rules). A failed calculation or total refuses the operation without partial changes.
+8. Save the record, affected parent totals and revisions, relationship changes, reference number, and matching [activity entries](14-activity-privacy-and-retention.md) in one database transaction. Include both old and new parents when a relationship moves, following the [concrete dependency and locking rules](../build-plan/issue-48-calculation-engine.md). A failed calculation or total refuses the operation without partial changes.
 9. Write [events](08-forms-actions-rules-and-events.md#delivery-guarantees) to the outbox and logged queue in that same transaction. Dispatch and external work begin only after commit.
 10. Return the fields the person may read and the new concurrency number.
 
@@ -74,9 +74,9 @@ validation modes. Only final changed references, choices and files need the
 corresponding live checks; intermediate values overwritten by later rules are
 not saved. A Require-field node accumulates a check until the final candidate
 exists, including any generated value. Explicit Refuse still stops immediately.
-See the [save integration plan](../build-plan/issue-47-save-command.md#candidate-preparation-and-final-validation).
+See the [save integration plan](../build-plan/issue-47-save-command.md).
 
-This sequence defines one protected Record operation, not a transaction around an entire [Frontend Flow](appendices/frontend-rule-designer.md). A configured flow may run several queries and changes in order. Each protected change opens its own short owning-service transaction and either commits or refuses atomically; a later node failure does not roll back an earlier committed operation. Collecting all inputs before one save remains an available authoring pattern when one atomic Record operation is intended, but it is not mandatory for every journey. [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) delivered the base ordinary-human create/update implementation over active installed definitions with [hosted Testing acceptance](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47#issuecomment-5656036501). Subsequent #48 stages integrated calculations and relationship totals into the same protected operation. Immediate Rules, deadline-driven recalculation, named-action execution and broader relationships retain their existing owners in the [save plan](../build-plan/issue-47-save-command.md#supported-now-and-later-owners).
+This sequence defines one protected Record operation, not a transaction around an entire [Frontend Flow](appendices/frontend-rule-designer.md). A configured flow may run several queries and changes in order. Each protected change opens its own short owning-service transaction and either commits or refuses atomically; a later node failure does not roll back an earlier committed operation. Collecting all inputs before one save remains an available authoring pattern when one atomic Record operation is intended, but it is not mandatory for every journey. [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) delivered the base ordinary-human create/update implementation over active installed definitions with [hosted Testing acceptance](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47#issuecomment-5656036501). Subsequent #48 stages integrated calculations and relationship totals into the same protected operation. Immediate Rules, deadline-driven recalculation, named-action execution and broader relationships retain their existing owners in the [save plan](../build-plan/issue-47-save-command.md).
 
 ### Private recalculation scope
 

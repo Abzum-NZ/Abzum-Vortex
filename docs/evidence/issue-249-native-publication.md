@@ -83,7 +83,7 @@ canonical consumer and recompiling on every read solely to reproduce provenance.
 Source-to-canonical provenance is checked during compilation/publication. Reads
 verify their actual canonical/resolution/manifest/catalogue inputs; restore
 creates an editable draft that must pass compilation again before publication.
-The [acceptance plan](../build-plan/issue-249-native-publication.md#proportional-integrity-decision)
+The [acceptance plan](../build-plan/issue-249-native-publication.md)
 records this boundary explicitly.
 
 ## Remaining delivery

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** Current runtime terminology. Serialized Definition V1 contracts remain separate below. */
+/** Current record-ownership terminology. Compiled definitions and the runtime use these values. */
 export const recordOwnershipModeSchema = z.enum([
   "none",
   "organization_account",
@@ -8,39 +8,23 @@ export const recordOwnershipModeSchema = z.enum([
   "inherited",
 ]);
 
-/** Exact authored Definition V1 wire values. */
-export const moduleSourceRecordOwnershipModeV1Schema = z.enum([
+/**
+ * Authored Module source values. The source format spells this one value
+ * `organisation_account`, matching its other authored spellings.
+ */
+export const moduleSourceRecordOwnershipModeSchema = z.enum([
   "none",
   "organisation_account",
-  "team",
+  "group",
   "inherited",
 ]);
 
-/** Exact compiled Definition V1 wire values. */
-export const moduleRecordOwnershipModeV1Schema = z.enum([
-  "none",
-  "organization_account",
-  "team",
-  "inherited",
-]);
-
-export const readModuleSourceRecordOwnershipModeV1 = (
+export const readModuleSourceRecordOwnershipMode = (
   candidate: unknown,
 ): z.infer<typeof recordOwnershipModeSchema> => {
-  const mode = moduleSourceRecordOwnershipModeV1Schema.parse(candidate);
-  if (mode === "organisation_account") return "organization_account";
-  return mode === "team" ? "group" : mode;
-};
-
-export const writeModuleRecordOwnershipModeV1 = (
-  candidate: unknown,
-): z.infer<typeof moduleRecordOwnershipModeV1Schema> => {
-  const mode = recordOwnershipModeSchema.parse(candidate);
-  return mode === "group" ? "team" : mode;
+  const mode = moduleSourceRecordOwnershipModeSchema.parse(candidate);
+  return mode === "organisation_account" ? "organization_account" : mode;
 };
 
 export type RecordOwnershipMode = z.infer<typeof recordOwnershipModeSchema>;
-export type ModuleSourceRecordOwnershipModeV1 = z.infer<
-  typeof moduleSourceRecordOwnershipModeV1Schema
->;
-export type ModuleRecordOwnershipModeV1 = z.infer<typeof moduleRecordOwnershipModeV1Schema>;
+export type ModuleSourceRecordOwnershipMode = z.infer<typeof moduleSourceRecordOwnershipModeSchema>;

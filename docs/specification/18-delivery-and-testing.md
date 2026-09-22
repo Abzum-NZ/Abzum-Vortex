@@ -10,7 +10,7 @@ No tests are created or run. No database review/execution, hosted verification, 
 
 ## Branch flow
 
-Issue worktrees start from current `origin/main`. Reviewed PRs target `main`. A reviewer confirms integration before closing the issue completed. A reviewed but unmerged candidate remains In review with its exact integration blocker. Do not add another planner/reviewer, a missing authority-file condition or a release phase to close development work.
+Issue worktrees start from current `origin/main`. Reviewed PRs target `main`. The `testing` branch and hosted environments are outside this development sequence, and the actual effect of a push depends on the separately configured hosting and delivery triggers. A reviewer confirms integration before closing the issue completed. A reviewed but unmerged candidate remains In review with its exact integration blocker. Do not add another planner/reviewer, a missing authority-file condition or a release phase to close development work.
 
 Actual repository protections and permission controls remain in force. If one rejects integration, report the concrete rule and supported resolution rather than bypassing it. This is an external operational block, not permission to invent testing work.
 
@@ -24,7 +24,7 @@ Platform database changes are immutable, ordered migration files. Once a filenam
 
 Schema evolution changes the owning current schema and all affected current callers together. Additive storage, bounded data transformation, caller switch-over and obsolete-shape removal remain distinct operations when the change cannot be atomic. This sequencing protects accepted data and transaction integrity without requiring a legacy application contract or parallel compatibility reader.
 
-Application installation invokes the generic [Record storage provisioner](17-runtime-storage-and-caching.md#record-storage-provisioning) over exact published definitions. It does not accept customer SQL, expose DDL credentials or create a per-customer repository migration stream. The Record catalogue tracks definition-driven provisioning; the platform migration ledger remains authoritative for platform schema.
+Application installation invokes the generic [Record storage provisioner](17-runtime-storage-and-caching.md#record-storage-provisioning) over exact published definitions. It does not accept customer SQL, expose DDL credentials or create a per-customer repository migration stream. The Record catalogue tracks definition-driven provisioning; the platform migration ledger remains authoritative for platform schema. Module field changes and populated record handling remain explicit product operations under [modules](05-modules-fields-and-relationships.md) and [runtime storage](17-runtime-storage-and-caching.md).
 
 <a id="supabase-development-and-verification"></a>
 
@@ -61,6 +61,6 @@ Cross-cluster product changes preserve source authority, signed trust and safe r
 
 ## Credentials and runtime connections
 
-Runtime services use restricted credentials; browser bundles contain only public settings. Preserve certificate verification, connection semantics, request identity and current permissions. A deployment variable, page parameter or stale cache cannot grant access. Never place credentials in issue bodies, prompts, logs or commits.
+Runtime services use restricted credentials, not schema-owner or migration credentials; browser bundles contain only settings intended for public use. Preserve certificate verification, connection semantics, request identity and current permissions. The Identity Authority, selected organisation account, current permissions and installed definition determine request authority; a deployment variable, page parameter or stale browser cache cannot grant access. Never place credentials in issue bodies, prompts, logs or commits.
 
 Secrets are referenced by stable configuration keys and resolved only in the owning runtime. Migration, runtime, webhook and external-provider credentials have separate purposes and cannot be exchanged. Rotation, revocation and temporary unavailability must fail closed without exposing the secret or silently falling back to broader authority.

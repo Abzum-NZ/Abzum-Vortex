@@ -1,7 +1,7 @@
 # Application-owned field value consumers
 
 [Field definitions #44](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44) ·
-[Plan](../build-plan/issue-44-record-field-values.md#rule-consumer-handoff) ·
+[Plan](../build-plan/issue-44-record-field-values.md) ·
 [Value specification](../specification/05-modules-fields-and-relationships.md#record-value-formats)
 
 ## Confirmed problem

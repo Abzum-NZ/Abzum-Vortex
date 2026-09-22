@@ -1,6 +1,6 @@
 # Complete definition fixtures
 
-[Worked examples](../../docs/specification/appendices/worked-examples.md) · [Build plan Gate 0](../../docs/build-plan/README.md#gate-0--specification-and-contract-reconciliation)
+[Worked examples](../../docs/specification/appendices/worked-examples.md) · [Build plan Gate 0](../../docs/build-plan/README.md#phases)
 
 This directory contains the complete, self-consistent JSON dependency set for CRM and Service Desk. The eight current Module sources use source and validation contract `2.0.0`; the two Application sources and three connection-type sources retain contract `1.0.0`. It is a contract gate: the full set must pass the production source parser, deterministic compiler and publication validator before Phase 2 begins.
 
