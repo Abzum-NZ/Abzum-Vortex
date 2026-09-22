@@ -376,6 +376,7 @@ export const MAXIMUM_FILE_STORAGE_OPERATION_SECONDS = 60;
 export const fileStorageOperationClaimsSchema = z
   .object({
     role: z.literal("authenticated"),
+    aud: z.literal("authenticated"),
     iss: z.string().min(1).max(255),
     tokenKind: z.literal("vortex_file_storage_operation"),
     destinationProject: z.string().min(1).max(120),
