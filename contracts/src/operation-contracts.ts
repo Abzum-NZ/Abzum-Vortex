@@ -414,7 +414,7 @@ export const fileStorageOperationClaimsSchema = z
 /**
  * Non-authoritative legal-hold projection for display or query purposes only.
  * A boolean flag or display projection confers no removal authority; file removal
- * eligibility must be authoritatively evaluated by `decideFileRemovalEligibility`
+ * eligibility must be authoritatively evaluated by the resolver-backed File service
  * against active protected organisation legal holds and retention policies.
  */
 export const fileLegalHoldProjectionSchema = z
@@ -468,82 +468,190 @@ export type ProtectedLegalHoldScope = z.infer<typeof protectedLegalHoldScopeSche
  */
 export const protectedLegalHoldReferenceSchema = z
   .object({
+    tenantId: tenantIdSchema,
     holdId: platformIdSchema,
     organizationId: organizationIdSchema,
     scope: protectedLegalHoldScopeSchema,
     status: z.enum(["active", "released"]),
+    holdRevision: revisionSchema,
     scopeRevision: revisionSchema,
   })
   .strict();
 export type ProtectedLegalHoldReference = z.infer<typeof protectedLegalHoldReferenceSchema>;
 
+export const fileRemovalOwnerBindingSchema = z
+  .object({
+    sourceOrganizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema.optional(),
+    recordTypeId: recordTypeIdSchema,
+    recordId: recordIdSchema,
+    fieldId: fieldIdSchema,
+    recordRevision: revisionSchema,
+  })
+  .strict();
+export type FileRemovalOwnerBinding = z.infer<typeof fileRemovalOwnerBindingSchema>;
+
+export const activeFileAttachmentReferenceSchema = z
+  .object({
+    referenceId: platformIdSchema,
+    sourceOrganizationId: organizationIdSchema,
+    fileId: fileIdSchema,
+    owner: fileRemovalOwnerBindingSchema,
+  })
+  .strict();
+export type ActiveFileAttachmentReference = z.infer<
+  typeof activeFileAttachmentReferenceSchema
+>;
+
+export const activeFileShareReferenceSchema = z
+  .object({
+    referenceId: platformIdSchema,
+    sourceOrganizationId: organizationIdSchema,
+    recipientOrganizationId: organizationIdSchema,
+    fileId: fileIdSchema,
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.sourceOrganizationId.toLowerCase() !==
+      value.recipientOrganizationId.toLowerCase(),
+    {
+      path: ["recipientOrganizationId"],
+      message: "A file share names a distinct recipient organisation",
+    },
+  );
+export type ActiveFileShareReference = z.infer<typeof activeFileShareReferenceSchema>;
+
+export const activeFileSourceResponsibilityReferenceSchema = z
+  .object({
+    referenceId: platformIdSchema,
+    sourceOrganizationId: organizationIdSchema,
+    fileId: fileIdSchema,
+  })
+  .strict();
+export type ActiveFileSourceResponsibilityReference = z.infer<
+  typeof activeFileSourceResponsibilityReferenceSchema
+>;
+
+export const fileRemovalRecoveryPolicySnapshotSchema = z
+  .object({
+    tenantId: tenantIdSchema,
+    organizationId: organizationIdSchema,
+    sourceOrganizationId: organizationIdSchema,
+    retentionPolicyId: retentionPolicyIdSchema,
+    policyRevision: revisionSchema,
+    applicationRootId: applicationRootIdSchema.optional(),
+    recordTypeId: recordTypeIdSchema.optional(),
+    recoveryDeadline: timestampSchema,
+    resolvedAt: timestampSchema,
+    validUntil: timestampSchema,
+  })
+  .strict();
+export type FileRemovalRecoveryPolicySnapshot = z.infer<
+  typeof fileRemovalRecoveryPolicySnapshotSchema
+>;
+
+export const fileRemovalHoldAuthoritySnapshotSchema = z
+  .object({
+    tenantId: tenantIdSchema,
+    organizationId: organizationIdSchema,
+    policyRevision: revisionSchema,
+    resolvedAt: timestampSchema,
+    validUntil: timestampSchema,
+  })
+  .strict();
+export type FileRemovalHoldAuthoritySnapshot = z.infer<
+  typeof fileRemovalHoldAuthoritySnapshotSchema
+>;
+
 /**
  * Closed stable refusal reasons for file removal eligibility.
- * Distinguishes lifecycle, recovery protection, matching legal holds,
- * active attachment ownership, active share responsibility, stale revision,
- * and unavailable governing policies without exposing held content or foreign identifiers.
+ * No reason contains protected content, provider details, hold identifiers or
+ * foreign organisation identifiers.
  */
 export const fileRemovalRefusalReasonSchema = z.enum([
+  "authority_unavailable",
+  "authority_stale",
+  "ownership_mismatch",
   "wrong_lifecycle",
   "current_recovery_protection",
   "matching_legal_hold",
   "active_attachment_ownership",
   "active_share_responsibility",
+  "active_source_responsibility",
   "stale_revision",
   "unavailable_governing_policy",
   "malformed_input",
 ]);
 export type FileRemovalRefusalReason = z.infer<typeof fileRemovalRefusalReasonSchema>;
 
-/**
- * Strict input for authoritative file-removal eligibility evaluation.
- * Binds current organisation, file, source record/field ownership, file lifecycle,
- * recovery deadline, active attachment/share ownership, exact expected revision,
- * and exact protected legal-hold references/scopes.
- */
-export const fileRemovalEligibilityInputSchema = z
+/** The public request selects a file; it carries no eligibility or policy facts. */
+export const fileRemovalEligibilityRequestSchema = z
   .object({
-    organizationId: organizationIdSchema,
     fileId: fileIdSchema,
-    sourceOrganizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema.optional(),
-    ownerRecordTypeId: recordTypeIdSchema.optional(),
-    ownerRecordId: recordIdSchema.optional(),
-    ownerFieldId: fieldIdSchema.optional(),
-    lifecycleState: fileLifecycleStateSchema,
-    recoveryDeadline: timestampSchema.nullable().optional(),
-    activeAttachmentReferences: z.array(platformIdSchema),
-    activeShareReferences: z.array(platformIdSchema),
-    expectedRevision: revisionSchema,
-    currentRevision: revisionSchema,
-    holds: z.array(protectedLegalHoldReferenceSchema),
-    holdPolicyAvailable: z.boolean(),
-    recoveryPolicyAvailable: z.boolean(),
   })
-  .strict()
-  .superRefine((value, context) => {
-    const ownerParts = [value.ownerRecordTypeId, value.ownerRecordId, value.ownerFieldId];
-    if (
-      ownerParts.some((part) => part !== undefined) &&
-      ownerParts.some((part) => part === undefined)
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["ownerFieldId"],
-        message: "Owner record type, record and attachment field travel together or not at all",
-      });
-    }
-  });
-export type FileRemovalEligibilityInput = z.infer<typeof fileRemovalEligibilityInputSchema>;
+  .strict();
+export type FileRemovalEligibilityRequest = z.infer<
+  typeof fileRemovalEligibilityRequestSchema
+>;
+
+/**
+ * Complete current-authority snapshot returned by trusted File-service wiring.
+ * It is never accepted from a credential request. The exact object, owner and
+ * revisions are repeated deliberately so stale or mixed resolver projections
+ * fail closed before a delete credential can be signed.
+ */
+export const fileRemovalAuthoritySnapshotSchema = z
+  .object({
+    tenantId: tenantIdSchema,
+    organizationId: organizationIdSchema,
+    sourceOrganizationId: organizationIdSchema,
+    fileId: fileIdSchema,
+    bucketId: privateFileBucketSchema,
+    objectPath: privateFileObjectPathSchema,
+    applicationRootId: applicationRootIdSchema.optional(),
+    fileRevision: revisionSchema,
+    lifecycleState: fileLifecycleStateSchema,
+    owner: fileRemovalOwnerBindingSchema.nullable(),
+    governingPolicyId: retentionPolicyIdSchema,
+    governingPolicyRevision: revisionSchema,
+    expectedFileRevision: revisionSchema,
+    expectedRecordRevision: revisionSchema.nullable(),
+    activeAttachmentReferences: z.array(activeFileAttachmentReferenceSchema),
+    activeShareReferences: z.array(activeFileShareReferenceSchema),
+    activeSourceResponsibilityReferences: z.array(
+      activeFileSourceResponsibilityReferenceSchema,
+    ),
+    holds: z.array(protectedLegalHoldReferenceSchema),
+    holdAuthority: fileRemovalHoldAuthoritySnapshotSchema.nullable(),
+    recoveryPolicy: fileRemovalRecoveryPolicySnapshotSchema.nullable(),
+    resolvedAt: timestampSchema,
+    validUntil: timestampSchema,
+  })
+  .strict();
+export type FileRemovalAuthoritySnapshot = z.infer<
+  typeof fileRemovalAuthoritySnapshotSchema
+>;
+
+export const fileRemovalEligibilityBindingSchema = z
+  .object({
+    authorityFingerprint: fingerprintSchema,
+    fileRevision: revisionSchema,
+    recordRevision: revisionSchema.nullable(),
+    governingPolicyRevision: revisionSchema,
+    holdPolicyRevision: revisionSchema,
+  })
+  .strict();
+export type FileRemovalEligibilityBinding = z.infer<
+  typeof fileRemovalEligibilityBindingSchema
+>;
 
 export const fileRemovalEligibleDecisionSchema = z
   .object({
     eligible: z.literal(true),
     status: z.literal("eligible"),
     reason: z.null(),
-    fileId: fileIdSchema,
-    organizationId: organizationIdSchema,
-    evaluatedRevision: revisionSchema,
+    binding: fileRemovalEligibilityBindingSchema,
     decidedAt: timestampSchema,
   })
   .strict();
@@ -554,9 +662,6 @@ export const fileRemovalRefusedDecisionSchema = z
     eligible: z.literal(false),
     status: z.literal("refused"),
     reason: fileRemovalRefusalReasonSchema,
-    fileId: fileIdSchema.nullable(),
-    organizationId: organizationIdSchema.nullable(),
-    evaluatedRevision: revisionSchema.nullable(),
     decidedAt: timestampSchema,
   })
   .strict();
