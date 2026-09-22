@@ -24,7 +24,7 @@ A [module](05-modules-fields-and-relationships.md) owns reusable business meanin
 
 ### Application layer
 
-An [application](07-applications-pages-and-themes.md) selects exact compatible module versions and adds the user experience: navigation, pages, forms, application roles, application actions, rules, events, workflows, pipelines, and themes.
+An [application](07-applications-pages-and-themes.md) selects exact compatible module versions and adds the user experience: navigation, pages, forms, application roles, application actions, rules, events, workflows, pipelines, and themes. Applications use a single surviving contract across authoring source (`2.0.0`) and compiled validation (`2.0.0`), with no retained legacy V1 format, dual readers, conversion paths, or fallback selectors. Authoring in Studio uses an internal editing adapter (Puck) to map between native Vortex page structures and the interactive canvas; Puck's private representation is not the stored or public Vortex contract.
 
 In the target [Frontend Flow](appendices/frontend-rule-designer.md) model, application-owned flows compose those published capabilities. A platform-managed flow is instead a locked, exact versioned platform-catalogue dependency with separate use and edit authority; it is not copied into the application or selected by a mutable label. Adding these flow contracts remains future Definition source, canonical compilation, provenance, version-impact, persistence, consumer-read and restore work. This specification does not claim those extensions or a managed-flow catalogue are already delivered.
 
@@ -104,7 +104,7 @@ Restore follows these rules:
 - Restore never creates a release, moves the current pointer, changes immutable history or retargets a consumer. A consumer already bound to an exact release remains bound to it.
 - Later publication follows the ordinary publication rules. Content equal to the latest immutable release is refused as `no_change`; changed content receives the next governed version. Historical version, dependencies, publisher and time are not copied into the new release.
 
-The first implementation restores the existing `1.0.0` authored-source contract. Before a future source-contract version can publish, its retained reader or explicit migration must keep older releases restorable. Vortex does not build a speculative source-migration framework or a second history, activity or cache store for this operation.
+For Application definitions, the sole surviving contract pair is `sourceContractVersion: "2.0.0"` and `validationContractVersion: "2.0.0"`. Application restore requires the stored release to satisfy this surviving `2.0.0` contract pair; no Application V1 reader, conversion, or legacy fallback is retained. For Module definitions, the current contract pair is `sourceContractVersion: "3.0.0"` and `validationContractVersion: "3.0.0"`. Each definition kind strictly asserts its supported contract pair during release integrity verification; unsupported versions refuse restore. Vortex does not build a speculative source-migration framework or a second history, activity or cache store for this operation.
 
 ## Consumer reads of published definitions
 
@@ -125,7 +125,7 @@ flowchart LR
 - `current` is discovery-only: an owning operation may use it when deliberately preparing a new binding. An installed application, saved binding, workflow run, grant, or in-flight request uses its recorded exact revision.
 - A current read selects the root's current pointer and its immutable release together. An exact read selects only the named root and immutable revision; it never follows a dependency's current pointer or resolves a version range again.
 - The request context's organisation, root kind, root, stored key and release evidence must agree before content is returned. Unknown, foreign, wrong-kind, unpublished-current and unknown-revision selections have one indistinguishable release-not-found outcome.
-- The safe result contains only the kind, organisation, key, root, exact release revision and stable release version, validation-contract version, content and resolution fingerprints, complete canonical content, sorted complete exact dependency manifest, and copied correlation identifier. It excludes authored source, drafts, publication preparation, provenance, resolution-snapshot content, comparison evidence, notes, publisher information, times, cache state and persistence details.
+- The safe result contains only the kind, organisation, key, root, exact release revision and stable release version, validation-contract version, content and resolution fingerprints, complete canonical content, sorted complete exact dependency manifest, and copied correlation identifier. It excludes authored source, drafts, publication preparation, provenance, resolution-snapshot content, comparison evidence, notes, publisher information, times, cache state and persistence details. For Application definitions the service verifies the stored release against the surviving `2.0.0` source and validation contract pair and returns the one current Application consumer-read result at validation-contract version `2.0.0`. No polymorphic format selector, fallback reader or V1 compatibility path is permitted.
 - The Definition service verifies the stored canonical envelope, compiled artifact, release row, content fingerprint, resolution fingerprint, own snapshot entry and exact dependency manifest before returning a result. A dependency remains pinned to its stored exact root, revision, version and fingerprints. Each platform-catalogue evidence fingerprint belongs to that exact connection-type or theme release, so adding an unrelated catalogue release cannot invalidate it; a missing exact release is unavailable rather than substituted.
 - Consumer reads are server-only and use the existing request transaction boundary. They implement no cache, browser or HTTP endpoint, token parsing, session creation, access decision, installation, upgrade, publication or consumer-specific rewriting.
 
@@ -175,12 +175,17 @@ The same rule applies when the future Frontend Flow extension is delivered: node
 The publication caller supplies one strict [publication context contract](../../contracts/src/definition-compilation-contracts.ts): existing immutable compiled dependencies and the full prior published history for each module or application being published. Every compiled artifact binds its kind, definition key, permanent root, exact version, canonical-content fingerprint, and resolution-snapshot fingerprint. The artifact's exact version must equal the version assigned by the governed version-impact comparison; unchanged content and a snapshot prepared for another candidate version are refused. Each module dependency records its exact resolved version. An application or module accepts a dependency only when its kind, key, root, exact version, content fingerprint, declared requirement and requesting snapshot's dependency selection agree. The dependency artifact/output retain their own resolution fingerprint, verified against the dependency's own immutable release evidence; that fingerprint need not equal the requesting definition's fingerprint. Publication and readback pin and verify the selected dependency's exact revision and fingerprints in the existing dependency manifest. Matching only a key/root or supplying an internally consistent but differently selected release is insufficient. Do not rewrite a dependency's fingerprint to make two different snapshots appear identical.
 
 Application and Module have distinct current source contracts and independently
-versioned product releases. Their resolution envelopes retain the fingerprint
-meaning declared by each owning contract, even when identity and release
-selections coincide. Compilation, publication and consumer reads validate each
-current contract and its actual cross-definition references; equal format-version
-numbers across definition kinds are not a dependency requirement. No obsolete
-Application or Module representation reader or conversion is required.
+versioned product releases. Application definitions use solely the current
+contract pair (`sourceContractVersion: "2.0.0"`, `validationContractVersion:
+"2.0.0"`), with no retained Application V1 contract, comparison, conversion,
+fallback or dual-format selector. Module definitions independently use their own
+current contract pair (`3.0.0` source, `3.0.0` validation). Their resolution
+envelopes retain the fingerprint meaning declared by each owning contract, even
+when identity and release selections coincide. Compilation, publication,
+storage, restore and consumer reads validate each current contract and its
+actual cross-definition references; equal format-version numbers across
+definition kinds are not a dependency requirement. No obsolete Application or
+Module representation reader or conversion is permitted.
 
 Each immutable release stores its complete canonical compilation output and the exact resolution snapshot that produced it. This is required evidence, not a cache: a later component alias, dependency release, or catalogue update must not change how an older release is read or validated. The stored snapshot fingerprint, compilation-output fingerprints, release row and exact dependency manifest must agree before the release can be returned or used as a dependency.
 
