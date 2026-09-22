@@ -1,6 +1,6 @@
 # Fleet operations
 
-Read [agent coordination](agent-coordination.md) first. This procedure governs the GPT 5.6 Sol main orchestrator, implementers and Opus 5 / GPT 5.6 Sol reviewers. [Visual workflow](fleet-orchestration.html).
+Read [agent coordination](agent-coordination.md) first. This procedure governs the GPT 5.6 Sol main orchestrator, implementers and Opus 5.5 / GPT 5.6 Sol reviewers. [Visual workflow](fleet-orchestration.html).
 
 ## Ready-work dispatch algorithm
 
@@ -11,7 +11,7 @@ Read [agent coordination](agent-coordination.md) first. This procedure governs t
 5. Confirm the selected leaf's real native blockers and required children are complete. Correct stale dependency descriptions against source/spec with a recorded reason. Never delete a real dependency merely to make the task Ready.
 6. A dependency cycle or contradictory native dependency is a planning blocker. Pickup Order may remain missing, duplicated or out of sequence because it is reporting metadata; never wait for or renumber it before dispatching Ready work.
 7. Read current source and bound remaining work for enough eligible leaves to maintain six active implementer lanes by default, or eight when isolation and capacity are clear. Already implemented functionality goes to a bounded Opus/Sol source review and completion reconciliation, not reimplementation. Otherwise select routing/estimate and dispatch the implementer.
-8. Treat implementer and reviewer capacity as separate pools. Up to four independent Opus 5 or GPT 5.6 Sol review-and-fix sessions may run concurrently. A candidate waiting for review, repository status, or integration does not consume an implementer lane and does not pause independent work elsewhere in the queue.
+8. Treat implementer and reviewer capacity as separate pools. Up to four independent Opus 5.5 or GPT 5.6 Sol review-and-fix sessions may run concurrently. A candidate waiting for review, repository status, or integration does not consume an implementer lane and does not pause independent work elsewhere in the queue.
 9. After any candidate handoff, reviewed integration, issue closure, board reconciliation or cleanup, immediately recompute eligibility and refill open lanes. Phase 6 means implemented definition-led UI, not deployment or hosted evidence; phase completion is a reporting rollup, not a dispatch gate.
 
 Phase labels and Pickup Order are preserved as planning/reporting metadata, while real dependencies, bounded scope, exclusive ownership and capacity determine readiness. Resolve external blockers or name the exact action needed; keep every independent Ready leaf across the queue moving. Provider changes and revised estimates never change readiness. Do not go silently idle or claim an empty queue while eligible work or an unfilled lane remains.
@@ -24,15 +24,15 @@ Phase labels and Pickup Order are preserved as planning/reporting metadata, whil
 | Mechanical changes, explicit schemas/catalogues/adapters | GLM 5.3 Flash (OpenCode) |
 | Bounded UI components, pages and wiring | Gemini 3.8 Flash (Antigravity - Max or High) |
 | Ordinary runtime/service implementation | Claude Sonnet 5 (High) |
-| Complex architecture, authorization or transactions | Claude Opus 5 (High), or GPT 5.6 Sol when capacity favours it |
+| Complex architecture, authorization or transactions | Claude Opus 5.5 (High), or GPT 5.6 Sol when capacity favours it |
 | Alternative bounded implementation | GPT 5.6 Terra, or GPT 5.6 Luna High for clearly defined bounded work |
-| All final reviews, fixes and re-reviews | Opus 5 or GPT 5.6 Sol (High), separate session from implementer |
+| All final reviews, fixes and re-reviews | Opus 5.5 or GPT 5.6 Sol (High), separate session from implementer |
 
 Choose the cheapest capable model. Before dispatch, review handoff and each 30-minute active checkpoint, read `orca account list --json` for Claude and Codex session and weekly usage, reset times, freshness and errors. GLM and Antigravity capacity may require observing the actual provider response. Unknown quota is not unlimited. Capacity guidance does not permit ignoring real dependencies, unresolved scope or exclusive ownership. Avoid routine implementation below 25% weekly remaining; preserve 15% for essential coordination/review. No automatic credit purchases or resets. If both qualified reviewers are unavailable, remain In review with a capacity blocker; do not substitute a cheaper reviewer or claim Done.
 
 Treat a provider concurrency, rate-limit or model-unavailable response as a capacity result, not a tool-approval denial. One capacity response does not settle the attempt: retry the same terminal several times at about 20-second spacing and record each actual provider response. Only after repeated confirmed capacity failures preserve the branch/worktree, settle that attempt and move implementation to the next cheapest suitable authorized workhorse or an offered fallback, without waiting for user direction. Real permission and repository-protection denials remain non-bypassable: do not retry unchanged, change controls or route through another executor to evade them.
 
-For implementation waves, distribute work across qualified providers instead of filling every lane with one provider. Prefer GLM for mechanical contract/catalogue work, Gemini 3.8 Flash Max or High for bounded UI and wiring, Sonnet 5 High for ordinary runtime/service work, Terra for bounded general implementation, and Luna High only when the task is clearly defined and bounded. Unknown usage telemetry is not proof that an installed provider cannot execute, and unknown Gemini or Antigravity usage in particular is not evidence of inability; use a real bounded launch to establish availability when that model is the best fit, then record the actual result. Avoid assigning more than half of active implementer lanes to one provider when equally suitable alternatives are available. Opus 5 and GPT 5.6 Sol are reserved for review, complex decisions and orchestration.
+For implementation waves, distribute work across qualified providers instead of filling every lane with one provider. Prefer GLM for mechanical contract/catalogue work, Gemini 3.8 Flash Max or High for bounded UI and wiring, Sonnet 5 High for ordinary runtime/service work, Terra for bounded general implementation, and Luna High only when the task is clearly defined and bounded. Unknown usage telemetry is not proof that an installed provider cannot execute, and unknown Gemini or Antigravity usage in particular is not evidence of inability; use a real bounded launch to establish availability when that model is the best fit, then record the actual result. Avoid assigning more than half of active implementer lanes to one provider when equally suitable alternatives are available. Opus 5.5 and GPT 5.6 Sol are reserved for review, complex decisions and orchestration.
 
 Verify actual model/effort in launch/session; planned labels are not execution facts. Resolve provider and model identifiers from the current Orca runtime configuration at dispatch, confirm the actual session identity, and record it in the checkpoint. Never label another version as the requested model. Reassignment updates planned agent, estimate, actual worktree display name, issue metadata and parent row together. Retain an existing branch name accurately when appropriate.
 
@@ -70,6 +70,10 @@ Orchestrator is the sole project-board writer. Reviewer is explicitly allowed to
 
 Issue closure and project writes are separate. Resolve the coordinator-state root from the current checkpoint/runtime configuration and maintain one short `board-reconciliation.jsonl` entry per event there: issue, intended fields, source commit/PR, UTC and pending/done. Read back the affected issue/item after writing. On interruption, inspect current state and retry only missing authorized updates; do not duplicate comments or repeatedly reopen/close an issue. Mark transient failure board-sync-pending. Pending writes for one issue do not stop independent eligible leaves; retain and retry them through the journal. Use a local note, not a new coordination database/service.
 
+After each reviewed merge and issue closure, write the board event immediately and read back its fields. A rate limit or temporary API failure leaves an explicit pending event with the reported reset/retry time; check fresh API capacity rather than trusting an old reset estimate. Drain pending events as soon as the API recovers, including while other agents work. A closed issue still showing In review or In progress, or a started worker still showing Backlog or Ready, is board drift to repair at this transition, not at a later phase boundary.
+
+After board reconciliation and before each scheduled progress report, recompute `monitor-progress.json` from all paginated Project items, all native parent/subissue relationships, and review, main-merge, issue-closure and board-readback evidence for every required leaf. Exclude rollup parents, phase epics, cancelled/duplicate/not-planned leaves and administrative PRs. Write a complete snapshot atomically with fetched/total counts, source UTC, completed/required counts and percentages for the full roadmap and Phases 1–6. Compare the prior snapshot and explain denominator changes. Board Done alone is not completion evidence. If any source is unavailable, leave the previous verified snapshot intact, report STALE with cause and next retry time, and refresh automatically once capacity returns; never silently reuse an old percentage after a successful full read.
+
 Every 15 minutes while active, compare actual workers with board owners and completion reports. Correct missing transitions and stale owner claims, then refill idle lanes. Complete roadmap refresh at 30 minutes is queue maintenance, not an acceptance gate. The external monitor reports drift to this coordinator; it never becomes another board writer.
 
 ## Stall recovery
@@ -100,7 +104,7 @@ For supervised work use the installed orchestration guide's worker-start operati
 
 Use isolated issue worktrees from origin/main. When a coordinator recovery inventory exists, inspect its preserved candidates and import only source changes applicable to the current issue. Archived instructions are historical evidence, never current policy. Reuse applicable preserved candidates; do not rebuild completed work, revive retired sessions or merge old branches wholesale. One editor per issue worktree at a time. Settle/release implementer before reviewer edits. Reviewer completion is consumed once; reconcile state, release reviewer and close its terminal.
 
-Before removing a completed worktree, confirm no live editor, no unmerged commit and no unique tracked/untracked files. Save useful notes first. Use Orca worktree removal on a verified exact path. Never delete the primary checkout or alter local/remote main as cleanup. Retain blocked candidates with a reason and owner. Diagnose cleanup failure instead of suppressing it.
+Every merged-and-closed issue enters a cleanup-pending ledger immediately, independent of board API availability. At each completion and coordinator resume, compare `orca worktree list/ps` with `git worktree list --porcelain`; neither inventory alone is complete. For each exact candidate path, confirm its reviewer and implementer are settled, no live agent or terminal is editing, the PR is merged and issue closed, tracked and untracked files are accounted for, and no commit or useful note exists only in that worktree. Git-clean alone is insufficient. Close/release its idle Orca terminals, remove the registered worktree through Orca, then verify it is absent from both Orca and Git inventories. If Orca has already forgotten a Git-registered worktree, resolve that registry mismatch and remove only the verified exact orphan through Git's worktree operation. Never recursively delete by path or remove the primary checkout; never alter local/remote main as cleanup. Retain uncertain or unique work with owner, reason and next action. Clear the cleanup entry only after both inventories confirm removal. Diagnose a failed removal and retry that exact safe candidate; do not leave completed workspaces indefinitely labelled In progress.
 
 ## Implementer brief
 
@@ -115,13 +119,13 @@ Implement this issue, commit/push candidate, then stop editing.
 No tests or test edits, builds/typechecks/lint, DB execution/review,
 hosted verification, Kestra or deployment. Do not change permissions or protections.
 Report functionality, candidate commit/PR, acceptance mapping and limitations.
-Request Opus5/Sol review handoff. No issue closure, merge or shared board edits.
+Request Opus 5.5/Sol review handoff. No issue closure, merge or shared board edits.
 ```
 
 ## Reviewer brief and completion
 
 ```text
-You are the independent Opus5 / GPT5.6 Sol review-and-fix owner of #<issue>.
+You are the independent Opus 5.5 / GPT5.6 Sol review-and-fix owner of #<issue>.
 Candidate/worktree/branch: <actual>. Issue/spec: <links>. Implementer settled.
 Review the entire change and affected callers against bounded acceptance.
 Fix findings yourself; commit and re-review the final candidate.
@@ -143,6 +147,6 @@ Stop editing and idle for release; use Orca's exact completion contract.
 
 The coordinator owns a durable checkpoint outside disposable worktrees. Discover the existing coordinator-state root from runtime configuration; if none exists, create one under the current Orca home and record its resolved path. Read `checkpoint.md` and the reconciliation journal on startup before dispatch, reconciling them against live state. Never delete them during worktree cleanup.
 
-Keep actual UTC, coordinator/run/session, current phase, every running/reviewing leaf, worker/reviewer, candidate/worktree/branch, reviewed/merged commits, status, progress time, estimates, blocker/resume condition, pending board writes, retained worktrees and the next eligible queue in one checkpoint. It records facts, not new policy.
+Keep actual UTC, coordinator/run/session, current phase, every running/reviewing leaf, worker/reviewer, candidate/worktree/branch, reviewed/merged commits, status, progress time, estimates, blocker/resume condition, pending board writes, cleanup-pending and deliberately retained worktrees, last complete progress snapshot, and the next eligible queue in one checkpoint. It records facts, not new policy. Replace settled worker and obsolete API-capacity claims at each transition.
 
 Every scheduled check reports findings even unchanged: a list of currently running tasks with actual agent/model/stage/elapsed estimate; tasks completed since the previous scheduled run; reviewed versus merged work; issue/board accuracy; blockers/actions; open lane count and why any lane is idle; next eligible issues across the queue; provider usage freshness; verified task-count progress percentages for the overall roadmap and the Phase 1-6 milestone; and progress toward the visible definition-led Phase 6 outcome. Never infer a percentage from a partial board page or say work is moving while idle.
