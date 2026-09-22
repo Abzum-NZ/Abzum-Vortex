@@ -673,6 +673,84 @@ export const fileRemovalEligibilityDecisionSchema = z.discriminatedUnion("eligib
 ]);
 export type FileRemovalEligibilityDecision = z.infer<typeof fileRemovalEligibilityDecisionSchema>;
 
+/**
+ * Canonical stages of file object and metadata removal under Specifications 11 and 14.
+ * Previews and active derived copies are cleaned, the private storage object is
+ * deleted, and the file metadata is transitioned to its terminal tombstone.
+ */
+export const fileRemovalStageSchema = z.enum([
+  "previews",
+  "storage_object",
+  "metadata",
+]);
+export type FileRemovalStage = z.infer<typeof fileRemovalStageSchema>;
+
+/**
+ * Safe request to coordinate permanent file object removal.
+ * Requires an eligible #657 decision and a stable deletion key; carries no
+ * private storage paths, credentials, or caller-invented eligibility facts.
+ */
+export const fileObjectRemovalRequestSchema = z
+  .object({
+    fileId: fileIdSchema,
+    organizationId: organizationIdSchema.optional(),
+    deletionKey: z.string().min(1).max(200),
+    decision: fileRemovalEligibleDecisionSchema,
+    correlationId: correlationIdSchema.optional(),
+  })
+  .strict();
+export type FileObjectRemovalRequest = z.infer<typeof fileObjectRemovalRequestSchema>;
+export const fileRemovalRequestSchema = fileObjectRemovalRequestSchema;
+export type FileRemovalRequest = FileObjectRemovalRequest;
+
+/**
+ * Resumable partial state for an interrupted or in-progress file removal.
+ * Accurately identifies completed and remaining stages without exposing private
+ * storage paths or content.
+ */
+export const fileObjectRemovalPartialStateSchema = z
+  .object({
+    fileId: fileIdSchema,
+    organizationId: organizationIdSchema,
+    deletionKey: z.string().min(1).max(200),
+    status: z.enum(["in_progress", "interrupted"]),
+    completedStages: z.array(fileRemovalStageSchema),
+    remainingStages: z.array(fileRemovalStageSchema),
+    authorityFingerprint: fingerprintSchema,
+    startedAt: timestampSchema,
+    updatedAt: timestampSchema,
+  })
+  .strict();
+export type FileObjectRemovalPartialState = z.infer<
+  typeof fileObjectRemovalPartialStateSchema
+>;
+export const fileRemovalPartialStateSchema = fileObjectRemovalPartialStateSchema;
+export type FileRemovalPartialState = FileObjectRemovalPartialState;
+
+/**
+ * Content-free terminal receipt for completed permanent file removal.
+ * Emitted only when all owned stages (previews, storage object, metadata tombstone)
+ * are complete. Converges idempotently on repeated calls with the same deletion key.
+ */
+export const fileObjectRemovalReceiptSchema = z
+  .object({
+    receiptId: platformIdSchema,
+    fileId: fileIdSchema,
+    organizationId: organizationIdSchema,
+    deletionKey: z.string().min(1).max(200),
+    status: z.literal("completed"),
+    outcome: z.enum(["removed", "already_removed"]),
+    completedStages: z.array(fileRemovalStageSchema),
+    authorityFingerprint: fingerprintSchema,
+    completedAt: timestampSchema,
+  })
+  .strict();
+export type FileObjectRemovalReceipt = z.infer<
+  typeof fileObjectRemovalReceiptSchema
+>;
+export const fileRemovalReceiptSchema = fileObjectRemovalReceiptSchema;
+export type FileRemovalReceipt = FileObjectRemovalReceipt;
+
 export const fileRecordSchema = z
   .object({
     fileId: fileIdSchema,
