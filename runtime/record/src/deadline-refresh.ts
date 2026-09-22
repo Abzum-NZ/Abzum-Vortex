@@ -84,6 +84,8 @@ export type ClaimRecordDeadlineRefreshResult =
       recalculatedDeadline?: PendingDeadlineTransitionV2;
       effectId: string;
       effectIdentity: string;
+      /** Organisation time zone the #558 closure evaluates date deadlines in. */
+      timeZone: string;
     }>
   | Readonly<{ outcome: "none" }>
   | Readonly<{ outcome: "conflict"; reasonCode: DeadlineRefreshConflictReasonCode }>
@@ -394,6 +396,7 @@ export const claimRecordDeadlineRefresh = async (
     ...(recalculatedDeadline === undefined ? {} : { recalculatedDeadline }),
     effectId: effect.effectId,
     effectIdentity: effect.effectIdentity,
+    timeZone: candidate.timeZone as string,
   };
 };
 
