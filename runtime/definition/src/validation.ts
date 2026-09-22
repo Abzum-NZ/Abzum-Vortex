@@ -2841,6 +2841,7 @@ type CurrentUserFlowQueryReference = Readonly<{
   kind: "application_query" | "query";
   moduleRootId?: string;
   moduleReleaseVersion?: string;
+  declaredRequirement?: unknown;
 }>;
 
 function validateCurrentUserFlow(
@@ -2848,10 +2849,13 @@ function validateCurrentUserFlow(
   flow: JsonObject,
   queries: ReadonlyMap<string, CurrentUserFlowQueryReference>,
   actions: ReadonlyMap<string, JsonObject>,
-  executableActionKeys: ReadonlySet<string>,
   workflows: ReadonlyMap<string, JsonObject>,
   applicationRootId: string,
   boundModuleRootIds: ReadonlySet<string>,
+  definitionEvidenceByRoot: ReadonlyMap<
+    string,
+    Readonly<{ releaseVersion: string; resolutionFingerprint: string }>
+  >,
   protectedOperations: ReadonlyMap<string, JsonObject>,
   placementIds: ReadonlySet<string>,
   eventIds: ReadonlySet<string>,
@@ -2865,6 +2869,14 @@ function validateCurrentUserFlow(
   const byId = new Map(nodes.map((node) => [String(node.nodeId), node]));
   const starts = nodes.filter((node) => node.kind === "start");
   const returns = nodes.filter((node) => node.kind === "return");
+  const ownEvidence = definitionEvidenceByRoot.get(applicationRootId);
+
+  if (
+    ownEvidence === undefined ||
+    flow.releaseVersion !== ownEvidence.releaseVersion ||
+    flow.resolutionFingerprint !== ownEvidence.resolutionFingerprint
+  )
+    failures.push(flowFailure("vortex.definition.application_flow_node_references", "broken_reference"));
 
   if (starts.length !== 1) {
     failures.push(flowFailure("vortex.definition.application_flow_single_start", "invalid_value"));
@@ -3026,7 +3038,15 @@ function validateCurrentUserFlow(
           referenced.kind !== target.kind ||
           (target.kind === "query" &&
             (referenced.moduleRootId !== String(target.moduleRootId) ||
-              referenced.moduleReleaseVersion !== String(target.moduleReleaseVersion)))
+              referenced.moduleReleaseVersion !== String(target.moduleReleaseVersion) ||
+              fingerprintCanonicalValue(referenced.declaredRequirement) !==
+                fingerprintCanonicalValue(target.declaredRequirement) ||
+              definitionEvidenceByRoot.get(String(target.moduleRootId))?.resolutionFingerprint !==
+                target.resolutionFingerprint)) ||
+          (target.kind === "application_query" &&
+            (target.applicationRootId !== applicationRootId ||
+              target.releaseVersion !== flow.releaseVersion ||
+              target.resolutionFingerprint !== flow.resolutionFingerprint))
         ) {
           failures.push(flowFailure("vortex.definition.application_flow_node_references", "broken_reference"));
         }
@@ -3034,16 +3054,23 @@ function validateCurrentUserFlow(
     } else if (node.kind === "action") {
       const target = object(node.target);
       if (target.kind === "application_action") {
-        if (
-          !executableActionKeys.has(String(target.actionKey)) &&
-          !actions.has(String(target.actionKey))
+        const action = actions.get(String(target.actionKey));
+        if (!action) {
+          failures.push(flowFailure("vortex.definition.application_flow_node_references", "broken_reference"));
+        } else if (
+          target.applicationRootId !== applicationRootId ||
+          target.releaseVersion !== flow.releaseVersion ||
+          target.resolutionFingerprint !== flow.resolutionFingerprint ||
+          (action !== undefined && target.actionId !== action.actionId)
         ) {
           failures.push(flowFailure("vortex.definition.application_flow_node_references", "broken_reference"));
         }
       } else if (target.kind === "durable_workflow_start") {
         if (
           target.applicationRootId !== applicationRootId ||
-          !workflows.has(String(target.workflowId))
+          !workflows.has(String(target.workflowId)) ||
+          target.releaseVersion !== flow.releaseVersion ||
+          target.resolutionFingerprint !== flow.resolutionFingerprint
         ) {
           failures.push(flowFailure("vortex.definition.application_flow_node_references", "broken_reference"));
         }
@@ -3051,25 +3078,47 @@ function validateCurrentUserFlow(
         if (
           target.applicationRootId !== applicationRootId ||
           !placementIds.has(String(target.formId)) ||
-          !eventIds.has(String(target.continuationEventId))
+          !eventIds.has(String(target.continuationEventId)) ||
+          target.releaseVersion !== flow.releaseVersion ||
+          target.resolutionFingerprint !== flow.resolutionFingerprint
         )
           failures.push(flowFailure("vortex.definition.application_flow_node_references", "broken_reference"));
       } else if (target.kind === "protected_operation") {
         const operation = object(target.operation);
         const owner = object(operation.owner);
-        const ownerRootId =
-          owner.kind === "application"
-            ? String(owner.applicationRootId)
-            : owner.kind === "module"
-              ? String(owner.moduleRootId)
-              : undefined;
-        if (
-          ownerRootId === undefined ||
-          (owner.kind === "application" && ownerRootId !== applicationRootId) ||
-          (owner.kind === "module" && !boundModuleRootIds.has(ownerRootId)) ||
-          !protectedOperations.has(`${ownerRootId}:${String(operation.operationId)}`)
-        )
-          failures.push(flowFailure("vortex.definition.application_flow_node_references", "broken_reference"));
+        if (owner.kind === "platform_service") {
+          if (
+            typeof target.releaseVersion !== "string" ||
+            typeof target.contentFingerprint !== "string" ||
+            typeof target.catalogueFingerprint !== "string"
+          )
+            failures.push(
+              flowFailure(
+                "vortex.definition.application_flow_node_references",
+                "broken_reference",
+              ),
+            );
+        } else {
+          const ownerRootId =
+            owner.kind === "application"
+              ? String(owner.applicationRootId)
+              : String(owner.moduleRootId);
+          if (
+            (owner.kind === "application" && ownerRootId !== applicationRootId) ||
+            (owner.kind === "module" && !boundModuleRootIds.has(ownerRootId)) ||
+            target.releaseVersion !==
+              definitionEvidenceByRoot.get(ownerRootId)?.releaseVersion ||
+            target.resolutionFingerprint !==
+              definitionEvidenceByRoot.get(ownerRootId)?.resolutionFingerprint ||
+            !protectedOperations.has(`${ownerRootId}:${String(operation.operationId)}`)
+          )
+            failures.push(
+              flowFailure(
+                "vortex.definition.application_flow_node_references",
+                "broken_reference",
+              ),
+            );
+        }
       }
     }
 
@@ -4015,6 +4064,10 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
                 kind: "query" as const,
                 moduleRootId: module.artifact.rootId,
                 moduleReleaseVersion: module.artifact.exactVersion,
+                declaredRequirement: bindings.find(
+                  (binding) =>
+                    String(binding.moduleRootId) === String(module.artifact.rootId),
+                )?.version,
               },
             ] as const,
         ),
@@ -5505,6 +5558,25 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         ),
       ),
     ]);
+    const definitionEvidenceByRoot = new Map([
+      [
+        applicationRootId,
+        {
+          releaseVersion: String(output.artifact.exactVersion),
+          resolutionFingerprint: String(output.resolutionFingerprint),
+        },
+      ] as const,
+      ...boundModules.map(
+        (module) =>
+          [
+            String(module.artifact.rootId),
+            {
+              releaseVersion: String(module.artifact.exactVersion),
+              resolutionFingerprint: String(module.resolutionFingerprint),
+            },
+          ] as const,
+      ),
+    ]);
     for (const flow of array(content.flows)) {
       failures.push(
         ...validateCurrentUserFlow(
@@ -5512,10 +5584,10 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           flow,
           flowQueries,
           actions,
-          executableActionKeys,
           workflows,
           applicationRootId,
           boundRoots,
+          definitionEvidenceByRoot,
           protectedOperations,
           applicationPlacementIds,
           eventIds,
@@ -5536,7 +5608,11 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           : undefined;
       if (
         flowReference.kind === "application_owned" &&
-        (flowReference.applicationRootId !== applicationRootId || !flow)
+        (flowReference.applicationRootId !== applicationRootId ||
+          !flow ||
+          flowReference.releaseVersion !== flow.releaseVersion ||
+          flowReference.contentFingerprint !== flow.contentFingerprint ||
+          flowReference.resolutionFingerprint !== flow.resolutionFingerprint)
       ) {
         failures.push(
           bindingFailure("vortex.definition.application_flow_binding_target", "broken_reference"),
