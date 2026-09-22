@@ -7,7 +7,7 @@ Read [agent coordination](agent-coordination.md) first. This procedure governs t
 1. On startup/resume, inspect current coordinator/run, workers and worktrees. Adopt ownership only through supported Orca operations. Never duplicate a live or uncertain worker. Reconcile ownership ambiguity before dispatching the affected issue. Pending reports or status writes for one issue remain in the reconciliation journal and do not stop independent eligible work.
 2. Read all pages of the configured authoritative roadmap project: required leaves, phase, status, native blockers, parent relationships and Pickup Order metadata. The concrete repository and project identifiers belong in coordinator runtime state, not this policy. Cache the queue for the cycle. Refresh active/next items at each transition and the complete queue every 30 minutes or after a roadmap change. A partial view cannot establish an empty queue or completed required leaves.
 3. Scan every non-rollup, non-cancelled leaf across all phases. Reviewed but unmerged is unfinished. Phase and Pickup Order are planning and reporting metadata, not dispatch gates; implementation eligibility is governed by actual dependencies, bounded scope, exclusive owning paths and available capacity.
-4. Keep active work in place, then dispatch every dependency-ready, independently bounded leaf whose owning paths do not overlap an active editor until the lane target is full, regardless of phase or Pickup Order. A leaf is ineligible only because of a real dependency, overlapping ownership, unresolved scope or unavailable capacity.
+4. Keep active work in place, then dispatch every dependency-ready, independently bounded leaf whose owning paths do not overlap an active editor until the lane target is full. Phase never limits that selection; prefer lower Pickup Order only to break ties between equally ready leaves. A leaf is ineligible only because of a real dependency, overlapping ownership, unresolved scope or unavailable capacity.
 5. Confirm the selected leaf's real native blockers and required children are complete. Correct stale dependency descriptions against source/spec with a recorded reason. Never delete a real dependency merely to make the task Ready.
 6. A dependency cycle or contradictory native dependency is a planning blocker. Pickup Order may remain missing, duplicated or out of sequence because it is reporting metadata; never wait for or renumber it before dispatching Ready work.
 7. Read current source and bound remaining work for enough eligible leaves to maintain six active implementer lanes by default, or eight when isolation and capacity are clear. Already implemented functionality goes to a bounded Opus/Sol source review and completion reconciliation, not reimplementation. Otherwise select routing/estimate and dispatch the implementer.
@@ -22,7 +22,7 @@ Phase labels and Pickup Order are preserved as planning/reporting metadata, whil
 | --- | --- |
 | Main orchestrator | GPT 5.6 Sol (Codex - High) |
 | Mechanical changes, explicit schemas/catalogues/adapters | GLM 5.3 Flash (OpenCode) |
-| Bounded UI components, pages and wiring | Gemini 3.8 Flash (Antigravity - Max) |
+| Bounded UI components, pages and wiring | Gemini 3.8 Flash (Antigravity - Max or High) |
 | Ordinary runtime/service implementation | Claude Sonnet 5 (High) |
 | Complex architecture, authorization or transactions | Claude Opus 5 (High), or GPT 5.6 Sol when capacity favours it |
 | Alternative bounded implementation | GPT 5.6 Terra, or GPT 5.6 Luna High for clearly defined bounded work |
@@ -30,11 +30,22 @@ Phase labels and Pickup Order are preserved as planning/reporting metadata, whil
 
 Choose the cheapest capable model. Before dispatch, review handoff and each 30-minute active checkpoint, read `orca account list --json` for Claude and Codex session and weekly usage, reset times, freshness and errors. GLM and Antigravity capacity may require observing the actual provider response. Unknown quota is not unlimited. Capacity guidance does not permit ignoring real dependencies, unresolved scope or exclusive ownership. Avoid routine implementation below 25% weekly remaining; preserve 15% for essential coordination/review. No automatic credit purchases or resets. If both qualified reviewers are unavailable, remain In review with a capacity blocker; do not substitute a cheaper reviewer or claim Done.
 
-Treat a provider concurrency, rate-limit or model-unavailable response as a capacity result, not a tool-approval denial. Positively settle that exact attempt, preserve its branch/worktree, record the actual provider response, then reassign implementation to the next cheapest suitable authorized workhorse without waiting for user direction. Do not repeatedly probe the failed provider. Real permission and repository-protection denials remain non-bypassable: do not retry unchanged, change controls or route through another executor to evade them.
+Treat a provider concurrency, rate-limit or model-unavailable response as a capacity result, not a tool-approval denial. One capacity response does not settle the attempt: retry the same terminal several times at about 20-second spacing and record each actual provider response. Only after repeated confirmed capacity failures preserve the branch/worktree, settle that attempt and move implementation to the next cheapest suitable authorized workhorse or an offered fallback, without waiting for user direction. Real permission and repository-protection denials remain non-bypassable: do not retry unchanged, change controls or route through another executor to evade them.
 
-For implementation waves, distribute work across qualified providers instead of filling every lane with one provider. Prefer GLM for mechanical contract/catalogue work, Gemini 3.8 Flash Max for bounded UI and wiring, Sonnet 5 High for ordinary runtime/service work, Terra for bounded general implementation, and Luna High only when the task is clearly defined and bounded. Unknown usage telemetry is not proof that an installed provider cannot execute; use a single bounded launch to establish availability when that model is the best fit, then record the actual result. Avoid assigning more than half of active implementer lanes to one provider when equally suitable alternatives are available. Opus 5 and GPT 5.6 Sol are reserved for review, complex decisions and orchestration.
+For implementation waves, distribute work across qualified providers instead of filling every lane with one provider. Prefer GLM for mechanical contract/catalogue work, Gemini 3.8 Flash Max or High for bounded UI and wiring, Sonnet 5 High for ordinary runtime/service work, Terra for bounded general implementation, and Luna High only when the task is clearly defined and bounded. Unknown usage telemetry is not proof that an installed provider cannot execute, and unknown Gemini or Antigravity usage in particular is not evidence of inability; use a real bounded launch to establish availability when that model is the best fit, then record the actual result. Avoid assigning more than half of active implementer lanes to one provider when equally suitable alternatives are available. Opus 5 and GPT 5.6 Sol are reserved for review, complex decisions and orchestration.
 
 Verify actual model/effort in launch/session; planned labels are not execution facts. Resolve provider and model identifiers from the current Orca runtime configuration at dispatch, confirm the actual session identity, and record it in the checkpoint. Never label another version as the requested model. Reassignment updates planned agent, estimate, actual worktree display name, issue metadata and parent row together. Retain an existing branch name accurately when appropriate.
+
+## Workhorse terminal launch
+
+Launch each provider through its normal supported path and judge readiness by actual session state rather than cosmetic output.
+
+| Provider | Normal launch | Readiness and recovery |
+| --- | --- | --- |
+| Antigravity Gemini 3.8 Flash | `agy-trusted.cmd` | Ready when the session reports `agentWait: None`. The sign-in banner is cosmetic; it is not a blocker, a capacity result or a permission denial. |
+| OpenCode GLM 5.3 Flash | `opencode` | A TinyCC or OpenTUI initialization failure means the Windows ARM64 architecture fix must be re-applied and that terminal relaunched. It is not a capacity or permission result. |
+
+A GLM concurrency-capacity response is a capacity result on an otherwise healthy terminal: retry the same terminal several times at about 20-second spacing rather than relaunching it, reclassifying it as a permission problem or settling the leaf. Move the leaf to another workhorse or an offered fallback only after repeated confirmed capacity failures.
 
 ## Metadata
 
@@ -70,7 +81,10 @@ Every 15 minutes while active, compare actual workers with board owners and comp
 | No useful progress for 15 minutes | Inspect edits/session; ask one bounded status question if unclear |
 | Estimate reached or 30-minute checkpoint | Record completed/remaining scope and cause; adjust estimate or narrow within this issue |
 | Productive worker exceeds estimate | Continue; time alone never terminates a worker |
-| Confirmed provider failure/quota refusal | Preserve work, settle/stop old attempt through Orca, reassign the same issue and update metadata |
+| Provider concurrency or capacity response | Retry the same terminal several times at about 20-second spacing; do not relaunch, settle or reclassify it as a permission denial |
+| Repeatedly confirmed capacity failure or quota refusal | Preserve work, settle/stop old attempt through Orca, reassign the same issue to another workhorse or offered fallback and update metadata |
+| Antigravity sign-in banner with `agentWait: None` | Treat the session as ready; do not relaunch, reassign or report a blocker |
+| OpenCode TinyCC/OpenTUI initialization failure | Re-apply the Windows ARM64 architecture fix and relaunch that terminal |
 | Reviewer finds defects | Reviewer fixes and re-reviews itself; no implementer ping-pong |
 | Conflicting editors/stale main | Establish exclusive ownership; reviewer resolves and re-reviews candidate |
 | Real permission/repository rejection | Name exact rule/action and supported resolution; no unchanged retry loop or bypass |
@@ -98,7 +112,8 @@ Build: <bounded change and owning paths>. Exclude: <non-goals>.
 Dependencies: <completed prerequisites>. Acceptance: <inspectable code behavior>.
 Actual model/effort, estimate, worktree/branch, task/dispatch: <values>.
 Implement this issue, commit/push candidate, then stop editing.
-No tests, DB execution/review, hosted verification, Kestra or deployment.
+No tests or test edits, builds/typechecks/lint, DB execution/review,
+hosted verification, Kestra or deployment. Do not change permissions or protections.
 Report functionality, candidate commit/PR, acceptance mapping and limitations.
 Request Opus5/Sol review handoff. No issue closure, merge or shared board edits.
 ```
@@ -110,7 +125,8 @@ You are the independent Opus5 / GPT5.6 Sol review-and-fix owner of #<issue>.
 Candidate/worktree/branch: <actual>. Issue/spec: <links>. Implementer settled.
 Review the entire change and affected callers against bounded acceptance.
 Fix findings yourself; commit and re-review the final candidate.
-No tests, DB/hosted reviews, proof receipts, Kestra or deployment.
+No tests or test edits, builds/typechecks/lint, DB/hosted reviews,
+proof receipts, Kestra or deployment. Do not change permissions or protections.
 Open the candidate PR if absent. Integrate reviewed PR into main through permitted repository operations.
 If blocked, report exact cause; do not close the issue or claim Done.
 After merge, update assigned issue with implemented outcome/final review and close completed.
