@@ -36,6 +36,8 @@ export {
   readIdentityProjection,
   listOffboardingOwnedRecords,
   transferOffboardingOwnedRecords,
+  beginOrganizationAccountClosing,
+  finalizeOrganizationAccountDeletion,
   OrganizationAccountError,
   organizationAccountErrorCodes,
   type CreatedOrganizationInvitation,
@@ -60,6 +62,11 @@ export {
   type OffboardingTransferBatchRecordOutcome,
   type OffboardingTransferBatchRecordResult,
   type OffboardingTransferBatchResult,
+  type AccountDeletionFenceOutcome,
+  type AccountDeletionFenceResult,
+  type BeginOrganizationAccountClosingCommand,
+  type OrganizationAccountClosingResult,
+  type OrganizationAccountLifecycleState,
 } from "./organization-accounts";
 export {
   createOrganizationLauncherService,

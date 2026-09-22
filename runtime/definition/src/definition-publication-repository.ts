@@ -39,6 +39,7 @@ import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
 import {
   hasAuthenticResolutionFingerprint,
   hasAuthenticStoredCustomerDefinitionRelease,
+  releaseManifestMatchesCanonicalContent,
   sameCanonicalJson,
 } from "./definition-release-integrity";
 import {
@@ -79,6 +80,30 @@ const exactManifestSchema = z
         ? `${entry.kind}:${entry.catalogueThemeId}`
         : entry.kind === "platform_block"
           ? `${entry.kind}:${entry.blockId}`
+          : entry.kind === "platform_flow"
+            ? `${entry.kind}:${entry.flowId}`
+            : entry.kind === "application_flow"
+              ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}`
+              : entry.kind === "application_flow_node"
+                ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}:${entry.nodeId}`
+                : entry.kind === "application_query"
+                  ? `${entry.kind}:${entry.applicationRootId}:${entry.queryId}`
+                  : entry.kind === "module_query"
+                    ? `${entry.kind}:${entry.moduleRootId}:${entry.queryId}`
+                    : entry.kind === "application_form"
+                      ? `${entry.kind}:${entry.applicationRootId}:${entry.formId}`
+                        : entry.kind === "application_workflow"
+                          ? `${entry.kind}:${entry.applicationRootId}:${entry.workflowId}`
+                          : entry.kind === "application_action"
+                            ? `${entry.kind}:${entry.applicationRootId}:${entry.actionId}`
+                        : entry.kind === "protected_operation"
+                          ? `${entry.kind}:${entry.operation.owner.kind}:${
+                              entry.operation.owner.kind === "application"
+                                ? entry.operation.owner.applicationRootId
+                                : entry.operation.owner.kind === "module"
+                                  ? entry.operation.owner.moduleRootId
+                                  : entry.operation.owner.serviceId
+                            }:${entry.operation.operationId}`
           : `${entry.kind}:${entry.key}`,
     );
     if (new Set(subjects).size !== subjects.length)
@@ -126,7 +151,9 @@ const storedHistoryReleaseSchema = z
   .object({
     publication: z.union([publishedModuleReferenceSchema, publishedApplicationReferenceSchema]),
     content: requiredJsonSchema,
-    dependencyManifest: z.array(publishedModuleReferenceSchema).max(10_000),
+    dependencyManifest: z
+      .array(z.union([publishedModuleReferenceSchema, exactDefinitionDependencySchema]))
+      .max(10_000),
     releaseNote: z.string().min(1).max(2_000),
     evidence: storedReleaseEvidenceSchema,
   })
@@ -236,28 +263,8 @@ const parseOneRow = <Value>(rows: readonly DatabaseRow[], schema: z.ZodType<Valu
 
 const dependencyReferencesMatch = (
   output: Exclude<z.infer<typeof definitionCompilationOutputSchema>, { kind: "connection_type" }>,
-  references: readonly z.infer<typeof publishedModuleReferenceSchema>[],
-): boolean => {
-  const expected = new Set(
-    (output.kind === "module"
-      ? output.canonical.content.dependencies
-      : output.canonical.content.moduleBindings
-    ).map((dependency) => `${dependency.moduleRootId}:${dependency.resolvedVersion}`),
-  );
-  const actual = new Set(
-    references.map((reference) => `${reference.rootId}:${reference.releaseVersion}`),
-  );
-  return (
-    expected.size ===
-      (output.kind === "module"
-        ? output.canonical.content.dependencies.length
-        : output.canonical.content.moduleBindings.length) &&
-    actual.size === references.length &&
-    expected.size === actual.size &&
-    [...expected].every((dependency) => actual.has(dependency)) &&
-    references.every((reference) => reference.kind === "module")
-  );
-};
+  references: Parameters<typeof releaseManifestMatchesCanonicalContent>[1],
+): boolean => releaseManifestMatchesCanonicalContent(output, references);
 
 const currentIdentityLookupMatches = (
   source: StoredDefinitionSource,
@@ -580,7 +587,9 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
             ? publishedApplicationDefinitionSchema.safeParse({
                 publication: release.publication,
                 content: output.canonical.content,
-                dependencyManifest: release.dependencyManifest,
+                dependencyManifest: release.dependencyManifest.filter(
+                  (dependency) => dependency.kind === "module",
+                ),
                 releaseNote: release.releaseNote,
               })
             : undefined;

@@ -16,7 +16,11 @@ export type ApplicationCompositionResolutionV2 = Readonly<{
       | "guided_step"
       | "page"
       | "query"
-      | "pipeline",
+      | "pipeline"
+      | "flow"
+      | "flow_node"
+      | "flow_edge"
+      | "flow_binding",
     alias: string,
     scope?: string,
   ): string;

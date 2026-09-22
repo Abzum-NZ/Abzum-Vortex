@@ -3,6 +3,7 @@ import {
   applicationRootIdSchema,
   connectionInstanceIdSchema,
   organizationIdSchema,
+  recordTypeIdSchema,
   recordIdSchema,
   revisionSchema,
   storageContractIdSchema,
@@ -312,6 +313,187 @@ export const lifecycleReadinessEvidenceSchema = z
   })
   .strict();
 export type LifecycleReadinessEvidence = z.infer<typeof lifecycleReadinessEvidenceSchema>;
+
+/**
+ * The maximum recovery window a policy may configure, in whole days.  Every
+ * window is converted to milliseconds for the elapsed-time comparison, so the
+ * ceiling is the largest day count whose millisecond value is still a
+ * JSON-safe integer.  A larger configured window is a refusal, never a silent
+ * unlimited-recovery fallback.
+ */
+export const maximumRecoveryWindowDays = Math.floor(
+  Number.MAX_SAFE_INTEGER / (24 * 60 * 60 * 1000),
+);
+
+const recoveryWindowDaysSchema = jsonSafePositiveIntegerSchema.max(maximumRecoveryWindowDays);
+
+/**
+ * The immutable facts a caller must carry into a recovery decision.  The
+ * record-type identity is intentionally paired with the stored-policy target:
+ * a storage contract is not itself an authority to restore another type.
+ */
+export const recordRecoveryPolicySchema = z
+  .object({
+    recordTypeId: recordTypeIdSchema,
+    policy: recordTypeLifecyclePolicySchema,
+    recoveryWindowDays: recoveryWindowDaysSchema,
+  })
+  .strict();
+export type RecordRecoveryPolicy = z.infer<typeof recordRecoveryPolicySchema>;
+
+export const recordRecoveryEligibilityReasonSchema = z.enum([
+  "malformed_input",
+  "policy_unavailable",
+  "policy_revision_stale",
+  "scope_mismatch",
+  "recovery_action_ineligible",
+  "readiness_unavailable",
+  "recovery_window_expired",
+]);
+export type RecordRecoveryEligibilityReason = z.infer<
+  typeof recordRecoveryEligibilityReasonSchema
+>;
+
+/**
+ * Pure, state-free recovery decision input.  The caller supplies the current
+ * stored policy projection and readiness fact; this contract deliberately has
+ * no record ID, mutation command, totals, effects, or receipt fields.
+ *
+ * `governingPolicy` is explicitly nullable so an absent stored policy is the
+ * distinct `policy_unavailable` refusal rather than a malformed input, and so
+ * an unavailable policy can never be read as an unrestricted recovery.
+ */
+export const recordRecoveryEligibilityInputSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    storageContractId: storageContractIdSchema,
+    applicationRootId: applicationRootIdSchema.nullable(),
+    recordTypeId: recordTypeIdSchema,
+    deletedAt: timestampSchema,
+    decidedAt: timestampSchema,
+    expectedPolicyRevision: jsonSafeRevisionSchema,
+    readinessAvailable: z.boolean(),
+    governingPolicy: recordRecoveryPolicySchema.nullable(),
+  })
+  .strict();
+export type RecordRecoveryEligibilityInput = z.infer<typeof recordRecoveryEligibilityInputSchema>;
+
+export const recordRecoveryEligibilityDecisionSchema = z.discriminatedUnion("allowed", [
+  z
+    .object({
+      allowed: z.literal(true),
+      reason: z.null(),
+      governingPolicyRevision: jsonSafeRevisionSchema,
+    })
+    .strict(),
+  z
+    .object({
+      allowed: z.literal(false),
+      reason: recordRecoveryEligibilityReasonSchema,
+      governingPolicyRevision: jsonSafeRevisionSchema.nullable(),
+    })
+    .strict(),
+]);
+export type RecordRecoveryEligibilityDecision = z.infer<
+  typeof recordRecoveryEligibilityDecisionSchema
+>;
+
+/**
+ * Protected Record-owned snapshot taken immediately after the Module
+ * activation write and before that write is accepted.  It contains no mutable
+ * request input: target completeness comes from the repository and every
+ * policy is checked again by the Module caller.
+ */
+export const applicationLifecyclePolicyReadinessSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    policies: z.array(recordTypeLifecyclePolicySchema).min(1),
+    organizationLimits: organizationLifecycleLimitsSchema,
+    readinessEvidence: lifecycleReadinessEvidenceSchema,
+  })
+  .strict();
+export type ApplicationLifecyclePolicyReadiness = z.infer<
+  typeof applicationLifecyclePolicyReadinessSchema
+>;
+
+const refusedRecovery = (
+  reason: RecordRecoveryEligibilityReason,
+  governingPolicyRevision: number | null,
+): RecordRecoveryEligibilityDecision => ({
+  allowed: false,
+  reason,
+  governingPolicyRevision,
+});
+
+/**
+ * Platform identifiers are compared case-insensitively, exactly like every
+ * other stored-identifier comparison in this repository: a database projection
+ * and a request value can differ in hexadecimal case alone, and that
+ * difference is not a scope mismatch.
+ */
+const sameIdentifier = (left: string | null, right: string | null): boolean =>
+  left === null || right === null
+    ? left === right
+    : left.toLowerCase() === right.toLowerCase();
+
+const millisecondsPerDay = 24 * 60 * 60 * 1000;
+
+/**
+ * Determines recovery eligibility without observing or changing Record state.
+ * Times are interpreted as UTC instants and a record is recoverable only while
+ * the elapsed interval is strictly shorter than its configured window.
+ *
+ * Every refusal is one of the closed `recordRecoveryEligibilityReasonSchema`
+ * values and carries the governing policy revision whenever one was resolved,
+ * so a caller can report exactly which revision refused it.
+ */
+export const decideRecordRecoveryEligibility = (
+  candidate: unknown,
+): RecordRecoveryEligibilityDecision => {
+  const input = recordRecoveryEligibilityInputSchema.safeParse(candidate);
+  if (!input.success) return refusedRecovery("malformed_input", null);
+
+  const { governingPolicy, deletedAt, decidedAt } = input.data;
+  if (governingPolicy === null) return refusedRecovery("policy_unavailable", null);
+
+  const policy = governingPolicy.policy;
+  const policyRevision = policy.policyRevision;
+  if (input.data.expectedPolicyRevision !== policyRevision)
+    return refusedRecovery("policy_revision_stale", policyRevision);
+  if (
+    !sameIdentifier(policy.organizationId, input.data.organizationId) ||
+    !sameIdentifier(policy.storageContractId, input.data.storageContractId) ||
+    !sameIdentifier(policy.applicationRootId, input.data.applicationRootId) ||
+    !sameIdentifier(governingPolicy.recordTypeId, input.data.recordTypeId)
+  )
+    return refusedRecovery("scope_mismatch", policyRevision);
+  // Recoverable deletion is the only end-of-life action this decision allows.
+  // An archive-workflow policy removes its source through the durable archive
+  // path owned by #560/#568, so it is refused here with a stable reason rather
+  // than silently reinterpreted as a recoverable delete.
+  if (policy.action !== "delete")
+    return refusedRecovery("recovery_action_ineligible", policyRevision);
+  if (!input.data.readinessAvailable)
+    return refusedRecovery("readiness_unavailable", policyRevision);
+
+  const deletedAtMs = new Date(deletedAt).getTime();
+  const decidedAtMs = new Date(decidedAt).getTime();
+  if (!Number.isFinite(deletedAtMs) || !Number.isFinite(decidedAtMs))
+    return refusedRecovery("malformed_input", policyRevision);
+  // A decision taken before the deletion it decides on is not an expired
+  // window; it is an inconsistent input and is reported as one.
+  if (decidedAtMs < deletedAtMs) return refusedRecovery("malformed_input", policyRevision);
+
+  // `recoveryWindowDays` is bounded by `maximumRecoveryWindowDays`, so this
+  // product is always a JSON-safe integer and can never degrade into an
+  // unbounded recovery window.
+  const recoveryWindowMs = governingPolicy.recoveryWindowDays * millisecondsPerDay;
+  if (decidedAtMs - deletedAtMs >= recoveryWindowMs)
+    return refusedRecovery("recovery_window_expired", policyRevision);
+
+  return { allowed: true, reason: null, governingPolicyRevision: policyRevision };
+};
 
 export interface PolicyValidationIssue {
   code: string;
@@ -1270,6 +1452,14 @@ export interface EvaluateRecordLifecycleHandoffInput {
   policy: RecordTypeLifecyclePolicy;
   records: readonly LifecycleCandidateRecord[];
   evaluatedAt?: string | Date;
+  /**
+   * Total retained records in the exact policy scope. Bounded callers that
+   * evaluate one deterministic page must supply this together with
+   * `recordOffset`; whole-scope callers may omit both.
+   */
+  totalRetainedCount?: number;
+  /** Zero-based global position of the first supplied record. */
+  recordOffset?: number;
 }
 
 const compareCanonicalUuids = (a: string, b: string): number => {
@@ -1292,6 +1482,12 @@ const compareCanonicalUuids = (a: string, b: string): number => {
 export const selectDueRecordsForLifecycleHandoff = (
   input: EvaluateRecordLifecycleHandoffInput,
 ): RecordLifecycleHandoff => {
+  if (
+    (input.totalRetainedCount === undefined) !==
+    (input.recordOffset === undefined)
+  ) {
+    throw new Error("Bounded lifecycle count and offset must be supplied together");
+  }
   const policy = recordTypeLifecyclePolicySchema.parse(input.policy);
   const evaluationDate =
     input.evaluatedAt instanceof Date
@@ -1330,6 +1526,18 @@ export const selectDueRecordsForLifecycleHandoff = (
     return compareCanonicalUuids(a.recordId, b.recordId);
   });
 
+  const totalRetainedCount = input.totalRetainedCount ?? sortedRecords.length;
+  const recordOffset = input.recordOffset ?? 0;
+  if (
+    !Number.isSafeInteger(totalRetainedCount) ||
+    totalRetainedCount < 0 ||
+    !Number.isSafeInteger(recordOffset) ||
+    recordOffset < 0 ||
+    recordOffset + sortedRecords.length > totalRetainedCount
+  ) {
+    throw new Error("Invalid bounded lifecycle candidate position");
+  }
+
   const ageDueSet = new Set<string>();
   const countDueSet = new Set<string>();
 
@@ -1347,12 +1555,12 @@ export const selectDueRecordsForLifecycleHandoff = (
 
   // 2. Excess count selection (oldest first, canonical tie-breaker)
   if (policy.maxCount !== null && !policy.allowUnlimitedCount) {
-    const totalCount = sortedRecords.length;
-    if (totalCount > policy.maxCount) {
-      const excessCountNeeded = totalCount - policy.maxCount;
-      const excessCandidates = sortedRecords.slice(0, excessCountNeeded);
-      for (const rec of excessCandidates) {
-        countDueSet.add(rec.recordId);
+    if (totalRetainedCount > policy.maxCount) {
+      const excessCountNeeded = totalRetainedCount - policy.maxCount;
+      for (let index = 0; index < sortedRecords.length; index++) {
+        if (recordOffset + index < excessCountNeeded) {
+          countDueSet.add(sortedRecords[index]!.recordId);
+        }
       }
     }
   }
@@ -1429,7 +1637,7 @@ export const selectDueRecordsForLifecycleHandoff = (
   const hasDue = dueRecords.length > 0;
   const excessCount =
     policy.maxCount !== null && !policy.allowUnlimitedCount
-      ? Math.max(0, sortedRecords.length - policy.maxCount)
+      ? countDueSet.size
       : 0;
   const expiredAgeCount = ageDueSet.size;
 
@@ -1484,7 +1692,7 @@ export const selectDueRecordsForLifecycleHandoff = (
         }
       : {}),
     evaluatedAt: evaluatedAtIso,
-    totalRetainedCount: sortedRecords.length,
+    totalRetainedCount,
     dueCount: dueRecords.length + blockedRecords.length,
     dueRecords,
     blockedRecords,

@@ -33,6 +33,10 @@ import {
   sourcePlacementEntriesV2,
   sourcePlatformBlockDependenciesV2Schema,
 } from "./application-composition-v2";
+import {
+  sourceComponentFlowBindingSchema,
+  sourceCurrentUserFlowSchema,
+} from "./application-flow-bindings";
 
 const sourceFilterSchema = z.union([z.null(), sourceConditionSchema]);
 const sourceCalendarMappingSchema = z.union([
@@ -858,6 +862,8 @@ export const sourceApplicationBodyV2Schema = z
     shells: z.array(sourceApplicationShellV2Schema),
     pages: z.array(sourcePageDefinitionV2Schema).min(1),
     theme: sourceApplicationThemeV2Schema,
+    flows: z.array(sourceCurrentUserFlowSchema),
+    flow_bindings: z.array(sourceComponentFlowBindingSchema),
   })
   .strict()
   .superRefine((value, context) => {
@@ -993,6 +999,51 @@ export const sourceApplicationBodyV2Schema = z
         path: ["platform_block_dependencies"],
         message: "The platform-block dependency list cannot contain unused releases",
       });
+
+    const flowAliases = value.flows.map((flow) => flow.id);
+    const flowKeys = value.flows.map((flow) => flow.key);
+    if (new Set(flowAliases).size !== flowAliases.length)
+      context.addIssue({ code: "custom", path: ["flows"], message: "Flow aliases must be unique" });
+    if (new Set(flowKeys).size !== flowKeys.length)
+      context.addIssue({ code: "custom", path: ["flows"], message: "Flow keys must be unique" });
+
+    const flowsByAlias = new Map(value.flows.map((flow) => [flow.id, flow]));
+    const placementAliasSet = new Set(placementEntries.map(([alias]) => alias));
+    const flowBindingAliases = value.flow_bindings.map((binding) => binding.id);
+    const flowBindingEvents = value.flow_bindings.map(
+      (binding) => `${binding.control}:${binding.event_id}`,
+    );
+    if (new Set(flowBindingAliases).size !== flowBindingAliases.length)
+      context.addIssue({
+        code: "custom",
+        path: ["flow_bindings"],
+        message: "Flow binding aliases must be unique",
+      });
+    if (new Set(flowBindingEvents).size !== flowBindingEvents.length)
+      context.addIssue({
+        code: "custom",
+        path: ["flow_bindings"],
+        message: "A control event can have only one flow binding",
+      });
+    for (const [bindingIndex, binding] of value.flow_bindings.entries()) {
+      if (binding.flow.kind === "application_owned") {
+        const flow = flowsByAlias.get(binding.flow.flow);
+        if (flow === undefined) {
+          context.addIssue({
+            code: "custom",
+            path: ["flow_bindings", bindingIndex, "flow"],
+            message: "A flow binding must resolve inside the same application",
+          });
+        }
+      }
+      if (!placementAliasSet.has(binding.control)) {
+        context.addIssue({
+          code: "custom",
+          path: ["flow_bindings", bindingIndex, "control"],
+          message: "A flow binding control must resolve to a placement inside the application",
+        });
+      }
+    }
   });
 
 export const applicationSourceDocumentV2Schema = z
