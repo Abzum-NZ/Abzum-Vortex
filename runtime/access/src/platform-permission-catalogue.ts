@@ -40,7 +40,7 @@ const historicalPermissionsV1 = [
   },
   {
     permissionId: "290ae49f-4cab-4159-9c20-6e664f07d50b",
-    key: "platform.organization.teams.read",
+    key: "platform.organization.groups.read",
     label: "View teams",
     description: "View the selected organisation's Teams and membership administration data.",
     actionKind: "read",
@@ -48,7 +48,7 @@ const historicalPermissionsV1 = [
   },
   {
     permissionId: "6185dc64-464b-4776-97dc-c64a6f299550",
-    key: "platform.organization.teams.manage",
+    key: "platform.organization.groups.manage",
     label: "Manage teams",
     description:
       "Manage Teams and memberships subject to delegated scope and permanent-steward safeguards.",
@@ -129,19 +129,20 @@ const historicalPermissionsV1 = [
 ];
 
 /**
- * Group-facing display metadata. Only labels and descriptions change: the permanent
- * `teams` key segment is part of each permission's authority-bearing meaning fingerprint,
- * so renaming it would break continuity for every accepted grant and refuse the
- * permanent-steward safeguard. The key is internal identity and is never shown to a person.
+ * Group-facing display metadata. Only labels and descriptions change. A permission's
+ * permanent key is part of its authority-bearing meaning fingerprint, so a key never
+ * changes between catalogue versions: every version below uses the same Group keys and
+ * the same meaning fingerprints, and no organisation can experience a continuity break
+ * from this terminology change.
  */
 const historicalPermissionsV1_0_1 = historicalPermissionsV1.map((permission) => {
-  if (permission.key === "platform.organization.teams.read")
+  if (permission.key === "platform.organization.groups.read")
     return {
       ...permission,
       label: "View groups",
       description: "View the selected organisation's Groups and membership administration data.",
     };
-  if (permission.key === "platform.organization.teams.manage")
+  if (permission.key === "platform.organization.groups.manage")
     return {
       ...permission,
       label: "Manage groups",
