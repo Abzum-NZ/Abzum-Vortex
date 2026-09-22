@@ -11,6 +11,7 @@ import {
   type IdentityAuthorityId,
   type IdentitySession,
   type OrganizationSelectionCandidate,
+  type ServiceTelemetryPort,
   type SelectedOrganizationScope,
   type SessionContext,
 } from "@vortex/contracts";
@@ -42,6 +43,7 @@ export type HumanOrganizationRequestDependencies = Readonly<{
   resolvedRequestTransaction?: ResolvedRequestTransactionRunner;
   clock?: () => Date;
   correlationId?: () => string;
+  telemetry?: ServiceTelemetryPort;
 }>;
 
 type HumanOrganizationRequestMode = "read" | "change";
@@ -89,6 +91,33 @@ export const createHumanOrganizationRequestService = (
   const runTransaction = dependencies.resolvedRequestTransaction ?? withResolvedRequestTransaction;
   const clock = dependencies.clock ?? (() => new Date());
   const newCorrelationId = dependencies.correlationId ?? randomUUID;
+  const appendTelemetry = (
+    correlationId: string,
+    outcome: "success" | "failure" | "refused" | "temporarily_unavailable",
+    startedAt: number,
+  ): void => {
+    if (dependencies.telemetry === undefined) return;
+    const durationMs = Math.min(86_400_000, Math.max(0, Math.round(Date.now() - startedAt)));
+    try {
+      dependencies.telemetry.appendTelemetry({
+        correlationId: correlationIdSchema.parse(correlationId),
+        service: "access",
+        operation: "human_organization_request",
+        outcome,
+        durationMs,
+        counters: {
+          requestCount: 1,
+          successCount: outcome === "success" ? 1 : 0,
+          failureCount:
+            outcome === "failure" || outcome === "temporarily_unavailable" ? 1 : 0,
+          refusalCount: outcome === "refused" ? 1 : 0,
+          retryCount: 0,
+        },
+      });
+    } catch {
+      // Telemetry must not change the protected request's safe outcome.
+    }
+  };
 
   const runWithMode = async <Result>(
     mode: HumanOrganizationRequestMode,
@@ -104,6 +133,7 @@ export const createHumanOrganizationRequestService = (
     const verifiedSession = identitySessionSchema.safeParse(session);
     const verifiedCandidate = organizationSelectionCandidateSchema.safeParse(candidate);
     if (!verifiedSession.success || !verifiedCandidate.success) return { kind: "unavailable" };
+    const startedAt = Date.now();
 
     let issuedAt: string;
     let correlationId: string;
@@ -115,8 +145,10 @@ export const createHumanOrganizationRequestService = (
     } catch {
       return { kind: "temporarily_unavailable" };
     }
-    if (Date.parse(verifiedSession.data.accessTokenExpiresAt) <= Date.parse(issuedAt))
+    if (Date.parse(verifiedSession.data.accessTokenExpiresAt) <= Date.parse(issuedAt)) {
+      appendTelemetry(correlationId, "refused", startedAt);
       return { kind: "unavailable" };
+    }
     const hasAuthenticationEvidence =
       verifiedSession.data.primaryAuthenticatedAt !== undefined ||
       verifiedSession.data.multiFactorAuthenticatedAt !== undefined;
@@ -125,8 +157,10 @@ export const createHumanOrganizationRequestService = (
         Date.parse(verifiedSession.data.primaryAuthenticatedAt) > Date.parse(issuedAt)) ||
       (verifiedSession.data.multiFactorAuthenticatedAt !== undefined &&
         Date.parse(verifiedSession.data.multiFactorAuthenticatedAt) > Date.parse(issuedAt))
-    )
+    ) {
+      appendTelemetry(correlationId, "refused", startedAt);
       return { kind: "unavailable" };
+    }
 
     try {
       const value = await runTransaction(
@@ -212,11 +246,12 @@ export const createHumanOrganizationRequestService = (
         },
         (transaction, scope) => operation(transaction, scope, issuedAt),
       );
+      appendTelemetry(correlationId, "success", startedAt);
       return { kind: "available", value };
     } catch (error) {
-      return databaseCode(error) === "42501"
-        ? { kind: "unavailable" }
-        : { kind: "temporarily_unavailable" };
+      const refused = databaseCode(error) === "42501";
+      appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAt);
+      return refused ? { kind: "unavailable" } : { kind: "temporarily_unavailable" };
     }
   };
 

@@ -50,4 +50,5 @@ export * from "./storage";
 export * from "./tenant-provisioning";
 export * from "./tenant-governance";
 export * from "./validation-errors";
+export * from "./telemetry";
 export * from "./version-impact";
