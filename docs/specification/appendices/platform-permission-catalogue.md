@@ -6,13 +6,13 @@
 
 This initial closed catalogue contains only genuine platform administration permissions needed by [protected administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30), [roles #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) and [access administration #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40). The platform invariant is protecting organisation account, role and runtime administration before an application-specific catalogue exists. It contains no business-application permissions, customer roles or business-record grants.
 
-Current catalogue version: `1.2.0`. Immutable predecessor versions: `1.0.0` (initial), `1.0.1` (Group-facing display revision) and `1.1.0` (additive, still keyed under the historical `teams` segment). Permanent owner kind: `platform`. Permanent owner identifier: `cabe121e-0baf-4084-9471-cce915d460a8`. This identifies a permission-catalogue owner, not a customer Module/Application root or global administrator role. Registering it in one organisation creates availability there only and assigns no person or Group.
+Current catalogue version: `1.1.0`; immutable predecessor versions: `1.0.1` (Group-facing display metadata) and `1.0.0` (initial). Every permission key below is a permanent internal identifier that never changes, including the historical `teams` segment retained by the two collective-principal permissions. Permanent owner kind: `platform`. Permanent owner identifier: `cabe121e-0baf-4084-9471-cce915d460a8`. This identifies a permission-catalogue owner, not a customer Module/Application root or global administrator role. Registering it in one organisation creates availability there only and assigns no person or Group.
 
 The UUIDs below are newly allocated permanent identities, not derived from labels. Do not regenerate them during deployment. All entries have `administrative: true`, no `recordTypeId` and no `namedAction`; `actionKind` is the final `read` or `manage` key segment. The exact initial labels and descriptions follow. Display metadata can change through a catalogue version without changing identity or silently expanding permission meaning.
 
-## Initial catalogue (historical)
+## Initial catalogue
 
-This is the immutable initial `1.0.0` metadata, including its historical terminology. It is a preserved historical snapshot, not the current contract: the current user-facing and current permission-key concept is **Groups**, with no remaining Team vocabulary. Do not rewrite this historical snapshot or manufacture a permission-continuity break for a terminology-only change. [Privileged role policy](groups-and-privileged-access.md) is separately governed organisation role state, not a changed permission meaning.
+This is the immutable initial `1.0.0` metadata, including its historical terminology. The current user-facing concept is **Groups**. [Compatibility #283](https://github.com/Abzum-NZ/Abzum-Vortex/issues/283) publishes Group-facing display metadata in a forward catalogue revision while preserving the UUIDs, permanent internal keys and authority meaning below. Do not rewrite this historical snapshot or manufacture a permission-continuity break for a terminology-only change. The permanent key is part of a permission's authority-bearing meaning fingerprint, so renaming the `teams` segment would break continuity for every accepted grant of those two permissions and would refuse the permanent-steward safeguard; the segment therefore stays as an immutable internal identifier and is never presented to a person. [Privileged role policy](groups-and-privileged-access.md) is separately governed organisation role state, not a changed permission meaning.
 
 | Permanent permission identifier | Key | Label | Description |
 | --- | --- | --- | --- |
@@ -30,41 +30,30 @@ This is the immutable initial `1.0.0` metadata, including its historical termino
 | `6dffcb0b-ded8-4cd5-acc8-c50f7d4269a5` | `platform.organization.runtime_settings.read` | View organisation display settings | View the organisation's default language, time zone, currency, date and number display settings. |
 | `c658c254-2884-414a-9012-512c0cfe4b34` | `platform.organization.runtime_settings.manage` | Manage organisation display settings | Change the organisation's validated default display settings through the protected revision-checked operation. |
 
-## Group-facing metadata revision (historical)
+## Group-facing metadata revision
 
-Version `1.0.1` changed only these display fields from the initial catalogue. All thirteen permission identifiers, permanent keys, action kinds, administrative flags and authority-bearing meaning fingerprints remained unchanged; the complete catalogue fingerprint changed because its version and display metadata changed.
+Version `1.0.1` changes only these display fields from the initial catalogue. All thirteen permission identifiers, permanent keys, action kinds, administrative flags and authority-bearing meaning fingerprints remain unchanged; the complete catalogue fingerprint changes because its version and display metadata change.
 
-| Permanent key | Label at 1.0.1 | Description at 1.0.1 |
+| Permanent key | Label at `1.0.1` | Description at `1.0.1` |
 | --- | --- | --- |
 | `platform.organization.teams.read` | View groups | View the selected organisation's Groups and membership administration data. |
 | `platform.organization.teams.manage` | Manage groups | Manage Groups and memberships subject to delegated scope and permanent-steward safeguards. |
 
-The historical initializer still creates only exact version `1.0.0`, and calling it again does not silently upgrade an organisation. A separate owner-only revision operation bound the exact organisation, expected initial registration revision and fixed `1.0.0` to `1.0.1` transition for organisations that had not yet adopted a later shipped catalogue. It appends a complete immutable revision, preserves the old snapshot and moves the current registration pointer atomically. It never accepts caller-authored permission metadata or changes grants. A successful transition increments Access once; an exact replay, refusal or rollback does not increment it. This operation is retained only to complete that already-shipped historical transition for organisations still on `1.0.0`; it is not the current or forward catalogue mechanism.
+The historical initializer still creates only exact version `1.0.0`, and calling it again does not silently upgrade an organisation. A separate owner-only revision operation binds the exact organisation, expected initial registration revision and fixed `1.0.0` to `1.0.1` transition. It appends a complete immutable revision, preserves the old snapshot and moves the current registration pointer atomically. It never accepts caller-authored permission metadata or changes grants. A successful transition increments Access once; an exact replay, refusal or rollback does not increment it. After the explicit transition, initializer replay recognises and returns the exact current revision without downgrading or duplicating it.
 
-## Additive administration revision (historical)
+## Current catalogue: additive administration revision
 
-Version `1.1.0` added the `platform.organization.applications.manage` permission on top of the `1.0.1` display metadata, still under the historical `teams` key segment for the two collective-principal permissions:
+Version `1.1.0` is the current catalogue. It adds one permission to the `1.0.1` display metadata and changes nothing else; the thirteen earlier identifiers, permanent keys, action kinds, administrative flags and authority-bearing meaning fingerprints are unchanged.
 
-| Permanent key | Label at 1.1.0 | Description at 1.1.0 |
-| --- | --- | --- |
-| `platform.organization.teams.read` | View groups | View the selected organisation's Groups and membership administration data. |
-| `platform.organization.teams.manage` | Manage groups | Manage Groups and memberships subject to delegated scope and permanent-steward safeguards. |
-| `platform.organization.applications.manage` | Manage applications | Install, upgrade or detach exact application bindings in the selected organisation without receiving business-record use or role-assignment authority. |
+| Permanent permission identifier | Key | Label | Description |
+| --- | --- | --- | --- |
+| `7ecd3304-f16c-47d4-94db-0964980091ba` | `platform.organization.applications.manage` | Manage applications | Install, upgrade or detach exact application bindings in the selected organisation without receiving business-record use or role-assignment authority. |
 
-This is the exact catalogue already shipped to and adopted by organisations through the generic owner-only shipped-catalogue adoption operation. It is preserved immutably for continuity evidence; it is not the current contract.
+Every current label and description uses Group vocabulary, and no current reader, caller or user-facing surface presents a Team concept. The two collective-principal permissions keep their permanent `platform.organization.teams.read` and `platform.organization.teams.manage` keys, which are internal identity, not display text. There is no second Team permission concept and no live Team-to-Group permission transition to perform.
 
-## Current catalogue: Group keys
+A generic owner-only adoption operation moves an organisation from its exact current shipped catalogue to the exact next shipped one. It binds the organisation, the expected current registration revision and the exact target version and catalogue fingerprint, and never accepts caller-authored permission metadata. It appends a complete immutable revision, preserves the old snapshot, carries each unchanged permission's continuity forward, records a new continuity for an added permission and moves the current registration pointer atomically. A successful adoption increments Access once; an exact replay of the current revision returns the same evidence without incrementing it. A shipped revision that changed a permanent key or any other authority-bearing meaning could not be adopted this way: the affected continuities would break and the permanent-steward safeguard would refuse the transition until the owning role was explicitly reviewed and accepted again.
 
-Version `1.2.0` is the current contract. It retires the historical `teams` key segment for the two collective-principal permissions in favour of `groups`, matching the Group vocabulary every label and description already used from `1.0.1` onward. No other identity, action kind, administrative flag or label/description changes; the fourteen permission identifiers and authority meanings are unchanged from `1.1.0`.
-
-| Permanent key | Label | Description |
-| --- | --- | --- |
-| `platform.organization.groups.read` | View groups | View the selected organisation's Groups and membership administration data. |
-| `platform.organization.groups.manage` | Manage groups | Manage Groups and memberships subject to delegated scope and permanent-steward safeguards. |
-
-Current readers and callers use only this `1.2.0` catalogue and its `platform.organization.groups.*` keys; there is no second Team permission concept and no live display-only Team-to-Group transition in the current contract. An organisation already adopted at `1.1.0` retains its persisted `teams`-keyed rows until it adopts `1.2.0` through a dedicated, separately reviewed and ordered migration that extends the existing shipped-catalogue adoption operation; that migration is not part of this boundary and has not been applied or executed.
-
-This is the bounded prerequisite in [#283](https://github.com/Abzum-NZ/Abzum-Vortex/issues/283), not a general catalogue editor or a public granting operation. Later [#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33)/[#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) compositions must use explicit current registration evidence; display and key metadata changes preserve existing accepted authority and do not supply assignment authority.
+This is the bounded prerequisite in [#283](https://github.com/Abzum-NZ/Abzum-Vortex/issues/283), not a general catalogue editor or a public granting operation. Later [#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33)/[#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) compositions must use explicit current registration evidence; display metadata changes preserve existing accepted authority and do not supply assignment authority.
 
 ## Registration is not assignment
 

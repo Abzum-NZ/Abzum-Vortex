@@ -9,8 +9,7 @@ import { fingerprintCanonicalValue } from "@vortex/definition";
 export const platformPermissionCatalogueOwnerId = "cabe121e-0baf-4084-9471-cce915d460a8";
 export const platformPermissionCatalogueVersionV1 = "1.0.0";
 export const platformPermissionCatalogueVersionV1_0_1 = "1.0.1";
-export const platformPermissionCatalogueVersionV1_1_0 = "1.1.0";
-export const platformPermissionCatalogueVersion = "1.2.0";
+export const platformPermissionCatalogueVersion = "1.1.0";
 
 const historicalPermissionsV1 = [
   {
@@ -129,6 +128,12 @@ const historicalPermissionsV1 = [
   },
 ];
 
+/**
+ * Group-facing display metadata. Only labels and descriptions change: the permanent
+ * `teams` key segment is part of each permission's authority-bearing meaning fingerprint,
+ * so renaming it would break continuity for every accepted grant and refuse the
+ * permanent-steward safeguard. The key is internal identity and is never shown to a person.
+ */
 const historicalPermissionsV1_0_1 = historicalPermissionsV1.map((permission) => {
   if (permission.key === "platform.organization.teams.read")
     return {
@@ -146,12 +151,7 @@ const historicalPermissionsV1_0_1 = historicalPermissionsV1.map((permission) => 
   return permission;
 });
 
-/**
- * Additive administration revision as it was actually shipped and adopted by
- * organisations: Group-facing labels with the historical `teams` key segment
- * still in place, plus the additive applications-management permission.
- */
-const historicalPermissionsV1_1_0 = [
+const currentPermissions = [
   ...historicalPermissionsV1_0_1,
   {
     permissionId: "7ecd3304-f16c-47d4-94db-0964980091ba",
@@ -163,15 +163,6 @@ const historicalPermissionsV1_1_0 = [
     administrative: true,
   },
 ];
-
-/** Current catalogue content: the historical `teams` key segment is retired in favour of `groups`. */
-const currentPermissions = historicalPermissionsV1_1_0.map((permission) => {
-  if (permission.key === "platform.organization.teams.read")
-    return { ...permission, key: "platform.organization.groups.read" };
-  if (permission.key === "platform.organization.teams.manage")
-    return { ...permission, key: "platform.organization.groups.manage" };
-  return permission;
-});
 
 const buildCatalogue = (
   catalogueVersion: string,
@@ -201,17 +192,7 @@ export const platformPermissionCatalogueV1_0_1 = buildCatalogue(
   historicalPermissionsV1_0_1,
 );
 
-/** Immutable additive revision as shipped: still keyed under the historical `teams` segment. */
-export const platformPermissionCatalogueV1_1_0 = buildCatalogue(
-  platformPermissionCatalogueVersionV1_1_0,
-  historicalPermissionsV1_1_0,
-);
-
-/**
- * Current catalogue. Permission identities and authority meanings are unchanged from
- * version 1.1.0; only the historical `teams` key segment is retired in favour of `groups`,
- * matching the Group vocabulary already used by every current label and description.
- */
+/** Current additive catalogue. Historical permission identities and meanings remain unchanged. */
 export const platformPermissionCatalogue = buildCatalogue(
   platformPermissionCatalogueVersion,
   currentPermissions,
