@@ -7,8 +7,15 @@ import {
   type OrganizationLauncherResolution,
 } from "@vortex/contracts";
 import { createHumanOrganizationRequestService } from "@vortex/access";
+import { createAppTelemetryCollector } from "@vortex/app";
 import { listOrganizationLauncher } from "@vortex/identity";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
+
+/**
+ * The collector is stateless and frozen, so one instance is shared and then injected
+ * explicitly into the Access dependencies rather than read as ambient request state.
+ */
+const requestTelemetry = createAppTelemetryCollector();
 
 export const loadOrganizationLauncher = async (
   session: IdentitySession,
@@ -35,6 +42,7 @@ export const loadSelectedOrganization = async (
 
   const protectedResult = await createHumanOrganizationRequestService({
     identityAuthorityId: authorityId,
+    telemetry: requestTelemetry,
   }).resolve(session, { organizationId: organizationId.data });
   if (protectedResult.kind !== "available") return protectedResult;
 
