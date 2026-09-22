@@ -89,8 +89,9 @@ export const isValidFileLifecycleTransition = (
 /**
  * Moves one file to its next lifecycle state. Illegal transitions are refused, a
  * file only becomes active once its safety result is clean, activation and deletion
- * times are recorded, and restoring inside the recovery period clears the deletion
- * time the soft deletion set.
+ * times are recorded, permanent removal clears derived/attachment references and
+ * records its terminal time, and restoring inside the recovery period clears the
+ * deletion time the soft deletion set.
  */
 export const transitionFileLifecycleState = (
   fileRecord: FileRecord,
@@ -119,6 +120,16 @@ export const transitionFileLifecycleState = (
       ...restored,
       lifecycleState: nextState,
       activatedAt: fileRecord.activatedAt ?? nowIso,
+    });
+  }
+
+  if (nextState === "removed") {
+    return fileRecordSchema.parse({
+      ...fileRecord,
+      lifecycleState: nextState,
+      previewReferences: [],
+      owningAttachmentReferences: [],
+      removedAt: nowIso,
     });
   }
 
