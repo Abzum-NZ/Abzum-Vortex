@@ -84,7 +84,7 @@ The same route credential authenticates the normal database-webhook hint: the da
 carries the raw credential as the `vortex.event_dispatch_wakeup_bearer` setting while Vercel carries
 only its SHA-256 digest in `VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256`. Database sessions can read
 that setting, so the credential must authorise nothing beyond the bounded dispatcher wake-up. The
-database hint is installed by the `20260923164500_event_dispatch_wakeup` migration, reads
+database hint is installed by the `20260923173000_event_dispatch_wakeup` migration, reads
 `vortex.event_dispatch_wakeup_url` and `vortex.event_dispatch_wakeup_bearer` at runtime, queues at
 most one request per appending transaction and sends it only after that transaction commits. It
 sends nothing when either setting is absent or unusable, so missing configuration fails closed
