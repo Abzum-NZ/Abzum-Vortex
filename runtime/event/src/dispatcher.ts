@@ -432,7 +432,8 @@ const dispatchStatus = (tally: Tally): EventDispatchStatus => {
  */
 export const createEventDispatcher = (dependencies: EventDispatcherDependencies): EventDispatcher => {
   const consumers = registerConsumers(dependencies.consumers);
-  const run = dependencies.runtimeTransaction ?? withRuntimeTransaction;
+  const run: EventDispatcherTransactionRunner =
+    dependencies.runtimeTransaction ?? withRuntimeTransaction;
   const progress = <Result>(
     operation: (repository: EventConsumerProgressRepository) => Promise<Result>,
   ): Promise<Result> =>
