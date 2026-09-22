@@ -1,7 +1,10 @@
 # Vortex agent handover — 18 September 2026
 
-Copy the prompt below into the next agent. This is a dated checkpoint, not a live
-task queue. Verify repository, issue, board and execution state before acting.
+> Historical design/task record, not a dispatch brief or current fleet instruction. Use the live bounded GitHub issue and [current agent coordination](agent-coordination.md) / [fleet procedure](agent-fleet.md). Any tests, proof receipts, hosted/database verification, fixed model assignments, pickup lists or deployment instructions below are superseded and must not be executed or added to acceptance. Retain relevant product design facts only; the current specification resolves product scope.
+
+## Archived instructions — do not execute
+
+Archived prompt follows; do not execute or copy it into an agent. This dated checkpoint is not the live task queue.
 
 ## Handover prompt
 
@@ -234,7 +237,7 @@ These reminders supplement the full specification; they do not replace it.
   `Role (Model Name) - #issue - short description`, and its actual canonical worker
   reference in Dispatch reference. Use `/root` for the active coordinator. Clear
   stale owners; planned names and completed reviewers are not active agents.
-- Follow [status definitions](agent-coordination.md#status-meaning): In progress for
+- Follow [status definitions](agent-coordination.md#status-meanings): In progress for
   active implementation/investigation; In review for review/check/merge with the
   real owner; Testing for an actual owned execution; Done only with applicable
   acceptance evidence. Paused/dependency-blocked work stays Backlog with its reason.

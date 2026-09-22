@@ -1,5 +1,7 @@
 # Phase 3 — Row-policy composition
 
+> Historical design/task record, not a dispatch brief or current fleet instruction. Use the live bounded GitHub issue and [current agent coordination](agent-coordination.md) / [fleet procedure](agent-fleet.md). Any tests, proof receipts, hosted/database verification, fixed model assignments, pickup lists or deployment instructions below are superseded and must not be executed or added to acceptance. Retain relevant product design facts only; the current specification resolves product scope.
+
 Task: [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35). Prerequisites are complete: [central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34), [ownership and visibility #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) and [access administration #40](issue-40-protected-access-administration.md), each with verified exact hosted evidence.
 
 The earlier local implementation candidate and its unmerged migrations are set
@@ -132,4 +134,4 @@ flowchart LR
 
 - [Record visibility](../specification/04-access-and-permissions.md#record-visibility)
 - [Database roles and context](../specification/17-runtime-storage-and-caching.md#database-roles-connections-and-request-context)
-- [Phase 3 build plan](README.md#phase-3--access)
+- [Phase 3 build plan](README.md#phases)

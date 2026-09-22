@@ -1,5 +1,7 @@
 # Ownership, lifecycle and review corrections — 12 September 2026
 
+> Historical design/task record, not a dispatch brief or current fleet instruction. Use the live bounded GitHub issue and [current agent coordination](agent-coordination.md) / [fleet procedure](agent-fleet.md). Any tests, proof receipts, hosted/database verification, fixed model assignments, pickup lists or deployment instructions below are superseded and must not be executed or added to acceptance. Retain relevant product design facts only; the current specification resolves product scope.
+
 [Specification](../specification/appendices/record-ownership-and-lifecycle.md) · [Findings #405](https://github.com/Abzum-NZ/Abzum-Vortex/issues/405) · [Roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3)
 
 These are approved requirements and implementation ownership, not delivered runtime behaviour. The decision register is clear.

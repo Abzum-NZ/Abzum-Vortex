@@ -1,5 +1,7 @@
 # Phase 3 — Field access and protected local sharing
 
+> Historical design/task record, not a dispatch brief or current fleet instruction. Use the live bounded GitHub issue and [current agent coordination](agent-coordination.md) / [fleet procedure](agent-fleet.md). Any tests, proof receipts, hosted/database verification, fixed model assignments, pickup lists or deployment instructions below are superseded and must not be executed or added to acceptance. Retain relevant product design facts only; the current specification resolves product scope.
+
 Task: [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) is Done as of 12 September 2026. The database field and protected-local-sharing implementation and whole-task proofs reached Testing through [PR #385](https://github.com/Abzum-NZ/Abzum-Vortex/pull/385) and [PR #398](https://github.com/Abzum-NZ/Abzum-Vortex/pull/398); see [delivery evidence](../evidence/issue-37-field-access.md). The requirements below describe that bounded neutral-adapter delivery. Generated record storage, installed pages and cross-organisation sharing remain with their owning consumers.
 
 The earlier pure TypeScript field resolver was removed through [PR #388](https://github.com/Abzum-NZ/Abzum-Vortex/pull/388); do not rebuild a parallel evaluator. Later consumers use the delivered database enforcement and protected handoff.

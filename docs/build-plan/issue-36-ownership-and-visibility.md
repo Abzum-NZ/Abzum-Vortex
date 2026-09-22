@@ -1,5 +1,7 @@
 # Phase 3 — Ownership and record visibility
 
+> Historical design/task record, not a dispatch brief or current fleet instruction. Use the live bounded GitHub issue and [current agent coordination](agent-coordination.md) / [fleet procedure](agent-fleet.md). Any tests, proof receipts, hosted/database verification, fixed model assignments, pickup lists or deployment instructions below are superseded and must not be executed or added to acceptance. Retain relevant product design facts only; the current specification resolves product scope.
+
 Task: [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36). Prerequisites: completed [central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) and [transactional Activity #252](issue-252-activity-foundation.md). The [exact hosted Activity receipt](../evidence/issue-252-activity-foundation.md#hosted-delivery--6-september-2026) is verified; implementation may proceed.
 
 ## Outcome

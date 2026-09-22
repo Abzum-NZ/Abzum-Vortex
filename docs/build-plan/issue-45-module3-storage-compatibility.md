@@ -1,5 +1,7 @@
 # Module 3 storage compatibility
 
+> Historical design and execution record. Current issue scope and [agent coordination](agent-coordination.md) supersede its model, test, proof, hosted, deployment and closure instructions. Retain relevant product behavior only; do not execute this as a worker brief.
+
 [Storage task #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) ·
 [Installation plan](module-record-provisioning.md) ·
 [Coordination](agent-coordination.md)

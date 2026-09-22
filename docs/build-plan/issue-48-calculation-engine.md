@@ -1,5 +1,7 @@
 # Calculated values and totals
 
+> Historical design/task record, not a dispatch brief or current fleet instruction. Use the live bounded GitHub issue and [current agent coordination](agent-coordination.md) / [fleet procedure](agent-fleet.md). Any tests, proof receipts, hosted/database verification, fixed model assignments, pickup lists or deployment instructions below are superseded and must not be executed or added to acceptance. Retain relevant product design facts only; the current specification resolves product scope.
+
 [Calculations #48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48) ·
 [Save pipeline #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) ·
 [Field specification](../specification/05-modules-fields-and-relationships.md#calculations-and-totals)

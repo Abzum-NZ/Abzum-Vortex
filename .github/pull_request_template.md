@@ -1,13 +1,18 @@
-## What this changes
+## Functionality
 
-Closes #
+Issue #
+Describe the implemented behavior and bounded scope.
 
-## Checks
+## Code review
 
-- [ ] The Vercel build passes: types, lint, package boundaries, unit tests, build.
-- [ ] Where the database shape changes: the access-rule tests pass in Kestra.
-- [ ] Every schema change ships as a migration file with its permission tests in the same change.
-- [ ] No package reaches inside another package's files; nothing depends upward.
-- [ ] Where a screen changed: a screenshot of the built functionality is attached to the issue.
-- [ ] The issue this closes has its acceptance criteria ticked, and the project item is updated.
-- [ ] Specification, data contracts, build plan, traceability, dependent issues, and project dependencies were reviewed and either updated here or recorded as unchanged.
+Reviewer: Opus 5 / GPT 5.6 Sol, separate session from implementer.
+Final reviewed commit:
+Acceptance criteria addressed:
+Findings fixed and re-reviewed:
+Remaining limitations or explicitly deferred scope:
+
+## Completion handoff
+
+After reviewed integration, the reviewer updates/closes the assigned issue and sends the merge commit and summary to the orchestrator. The orchestrator updates the board, unblocks dependents, releases the agent, preserves/removes the completed worktree and selects the next strict pickup.
+
+Development acceptance is implementation plus code review. No tests, database/hosted evidence, screenshots, Kestra receipts or deployment are required. Do not add those steps to this pull request.

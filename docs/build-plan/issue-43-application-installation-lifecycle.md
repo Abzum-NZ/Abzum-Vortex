@@ -1,5 +1,7 @@
 # Application installation activation and detach evidence
 
+> Historical design and execution record. Current issue scope and [agent coordination](agent-coordination.md) supersede its model, test, proof, hosted, deployment and closure instructions. Retain relevant product behavior only; do not execute this as a worker brief.
+
 Task: [#43](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43) ·
 [installation plan](module-record-provisioning.md) ·
 [active reader](issue-43-active-installation-read.md)

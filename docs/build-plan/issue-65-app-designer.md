@@ -1,5 +1,7 @@
 # App Designer and page/flow canvas integration
 
+> Historical design/task record, not a dispatch brief or current fleet instruction. Use the live bounded GitHub issue and [current agent coordination](agent-coordination.md) / [fleet procedure](agent-fleet.md). Any tests, proof receipts, hosted/database verification, fixed model assignments, pickup lists or deployment instructions below are superseded and must not be executed or added to acceptance. Retain relevant product design facts only; the current specification resolves product scope.
+
 Task: [#65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65). Visual authoring only, after the [engine-first application proof](engine-first-application-delivery.md) and completed [prototype #323](https://github.com/Abzum-NZ/Abzum-Vortex/issues/323).
 
 **Blocked by:** [#327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327), [#323](https://github.com/Abzum-NZ/Abzum-Vortex/issues/323), [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64), [#69](https://github.com/Abzum-NZ/Abzum-Vortex/issues/69), [#70](https://github.com/Abzum-NZ/Abzum-Vortex/issues/70), [#71](https://github.com/Abzum-NZ/Abzum-Vortex/issues/71).

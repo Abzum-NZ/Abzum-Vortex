@@ -1,5 +1,7 @@
 # Protected base Record save
 
+> Historical design and execution record. Current issue scope and [agent coordination](agent-coordination.md) supersede its model, test, proof, hosted, deployment and closure instructions. Retain relevant product behavior only; do not execute this as a worker brief.
+
 [Save pipeline #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) ·
 [Save sequence](../specification/06-records-and-lifecycle.md#save-sequence) ·
 [Record save contract](../specification/appendices/data-contracts.md#record-save-command-and-result) ·

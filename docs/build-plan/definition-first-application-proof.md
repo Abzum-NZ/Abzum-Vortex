@@ -1,68 +1,26 @@
-# First usable definition-led application proof
+# First visible definition-led application
 
-Task: [#327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327).
+Task: [#327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327). Phase 6. Follow current issue/subissue scope and native dependencies; the filename is retained for existing links and does not require a proof exercise.
 
 ## Outcome
 
-The checked-in CRM and Service Desk applications install and run from authored
-definitions through the real Phase 4–6 engines before any App Designer work.
-This proof integrates existing engines; it creates no new engine, editor or
-test framework. It is deliberately the first usable definition-led proof, not
-the complete capability matrix: background workflows, pipelines, files/search,
-connections/interfaces, record sharing/federation, the governed IAM human
-journey, MCP parity and designer evidence belong to their owning issues and to
-[#254](https://github.com/Abzum-NZ/Abzum-Vortex/issues/254). Follow the
-[engine-first plan](engine-first-application-delivery.md).
+An authorized user opens an installed application and sees navigation, pages, permitted records, forms, declared actions and theme produced from ordinary definitions in the existing Next.js UI.
 
-## Prerequisites
+## What will be built
 
-[Module lifecycle #43](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43),
-[record storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45),
-[protected save #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47),
-[module queries #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54),
-[application runtime #64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64)
-and the [renderer checkpoint #74](https://github.com/Abzum-NZ/Abzum-Vortex/issues/74).
+- Compose current application installation, identity/access, record/query, form/action and renderer services through their public interfaces.
+- Resolve exact installed definitions and the actual request/session context at application entry.
+- Render navigation, a record list and record detail; wire create/edit forms and declared actions through owning services.
+- Show component-scoped loading, empty, unavailable and safe error states, including refused access and stale writes.
+- Apply the installed theme and preserve responsive layout, keyboard and focus behavior.
+- Use the application's ordinary definitions for names, fields and behavior. Do not add business-specific switches, mock success or a second application representation.
 
-## What will be built and verified
+## Boundaries
 
-1. Publish both applications' complete current definitions through supported
-   non-editor services, then explicitly install and activate exact releases in
-   two organisations. Permitted use may be established through the delivered
-   [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) protected
-   assignment operations; the governed IAM human journey remains with
-   [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) and #254.
-2. Open the real launcher and application routes. Render declared pages,
-   navigation and semantic controls from the exact installed artifact.
-3. Query records and save changes through the owning protected services with
-   row and field enforcement, including configured before-save rules.
-4. Prove the same organisation-shared Company and Contact records appear in
-   both applications with no duplicate storage, and prove both organisation
-   isolation directions refuse.
-5. Prove publication without installation changes nothing, explicit upgrade
-   changes behaviour, and failed or stale upgrades preserve the prior working
-   version.
-6. Record exact fixture/release/installation/code references, Testing evidence,
-   real browser screenshots and a concise walkthrough; obtain independent
-   review against this whole narrowed scope.
+Use the current GitHub issue as the bounded implementation contract. Already delivered engines are dependencies, not a reason to rebuild them. Visual authoring, search/files, durable workflows, connections, federation and MCP remain in later owning issues/phases.
 
-## Acceptance criteria
+## Acceptance
 
-- [ ] Files → validation/publication → explicit installation/activation → real
-      browser use → upgrade works without a visual editor.
-- [ ] Rendered navigation, pages, queries, forms and saves execute through the
-      real owning services and identify the same installed artifact.
-- [ ] Shared Company/Contact identity and both isolation directions pass at the
-      database boundary.
-- [ ] Wrong organisation, same-label/different application, denied
-      account/action and stale changes refuse.
-- [ ] Declared capabilities outside this proof are reported honestly and
-      tracked on their owning issues, never mocked as delivered.
+The reviewer can trace the user entry point through installed definitions, access decisions, query/record calls, form/action handlers and UI output. All named functionality is implemented with its required states; placeholder methods and hardcoded demo data do not satisfy the scope.
 
-## What follows
-
-Only after this proof, resume [prototype #323](https://github.com/Abzum-NZ/Abzum-Vortex/issues/323)
-and [App Designer #65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65).
-[#254](https://github.com/Abzum-NZ/Abzum-Vortex/issues/254) consumes this proof
-and owns the later workflow, file/search, connection/interface,
-sharing/federation, IAM-journey, MCP and designer evidence; it cannot be a
-prerequisite of the designer because that would form a cycle.
+A fresh Opus5/Sol reviewer fixes findings itself and re-reviews before permitted source integration and issue closure. No tests, screenshot, walkthrough, database/hosted review, Testing deployment or Kestra receipt is required. The orchestrator records completion, unblocks the next ordered work and cleans the completed worktree.

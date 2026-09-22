@@ -1,5 +1,7 @@
 # Application engine, installation and runtime assembly
 
+> Historical design/task record, not a dispatch brief or current fleet instruction. Use the live bounded GitHub issue and [current agent coordination](agent-coordination.md) / [fleet procedure](agent-fleet.md). Any tests, proof receipts, hosted/database verification, fixed model assignments, pickup lists or deployment instructions below are superseded and must not be executed or added to acceptance. Retain relevant product design facts only; the current specification resolves product scope.
+
 Task: [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64). This is engine work, not App Designer implementation. Follow [engine-first delivery](engine-first-application-delivery.md).
 
 **Prerequisites:** [#39](https://github.com/Abzum-NZ/Abzum-Vortex/issues/39), completed [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40), [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58), [#67](https://github.com/Abzum-NZ/Abzum-Vortex/issues/67), [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68), [#73](https://github.com/Abzum-NZ/Abzum-Vortex/issues/73).

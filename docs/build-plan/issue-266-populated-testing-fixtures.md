@@ -1,5 +1,7 @@
 # Verify accounts and roles in a populated Testing database
 
+> Historical design and execution record. Current issue scope and [agent coordination](agent-coordination.md) supersede its model, test, proof, hosted, deployment and closure instructions. Retain relevant product behavior only; do not execute this as a worker brief.
+
 Task: [#266](https://github.com/Abzum-NZ/Abzum-Vortex/issues/266).
 Affected delivery: [Page #38](https://github.com/Abzum-NZ/Abzum-Vortex/issues/38).
 

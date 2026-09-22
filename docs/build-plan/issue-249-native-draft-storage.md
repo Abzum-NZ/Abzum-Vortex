@@ -1,5 +1,7 @@
 # Native application draft storage
 
+> Historical design and execution record. Current issue scope and [agent coordination](agent-coordination.md) supersede its model, test, proof, hosted, deployment and closure instructions. Retain relevant product behavior only; do not execute this as a worker brief.
+
 Owner: [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249).
 Contract: [page composition](../specification/appendices/page-builder-contracts.md).
 Preceding slice: [change assessment](issue-249-version-impact.md).

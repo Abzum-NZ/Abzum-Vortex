@@ -1,5 +1,7 @@
 # Abzum Vortex platform specification
 
+> Development acceptance and fleet roles follow [agent coordination](../build-plan/agent-coordination.md). Specification scenarios describe functionality to implement, not instructions to run tests or hosted proof. Work through the current [roadmap](../build-plan/README.md) in strict phase and Pickup Order.
+
 The [7 September whole-platform architecture review](../build-plan/architecture-review-2026-09-07.md) reconciles configurable read/write data flows, managed-flow controls, per-node execution identity and truthful partial outcomes. [Delivery ownership](../build-plan/frontend-rule-designer.md) places the new headless [scoped execution-identity task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) before flow execution. These are planned capabilities, not delivered runtimes.
 
 **Status:** Approved specification 2.25

@@ -1,5 +1,7 @@
 # Phase 3 — Protected Access administration
 
+> Historical design/task record, not a dispatch brief or current fleet instruction. Use the live bounded GitHub issue and [current agent coordination](agent-coordination.md) / [fleet procedure](agent-fleet.md). Any tests, proof receipts, hosted/database verification, fixed model assignments, pickup lists or deployment instructions below are superseded and must not be executed or added to acceptance. Retain relevant product design facts only; the current specification resolves product scope.
+
 Task: [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40). Completed prerequisites: [permission registry #32](https://github.com/Abzum-NZ/Abzum-Vortex/issues/32), [Roles and Groups #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33), [central Access #34](issue-34-access-decision.md), [authentication evidence #276](../specification/appendices/recent-authentication.md), and [Activity #252](issue-252-activity-foundation.md), whose [exact hosted receipt](../evidence/issue-252-activity-foundation.md#hosted-delivery--6-september-2026) is verified. [Organisation administration #30](issue-30-protected-administration.md) is a separate consumer, not a dependency.
 
 ## Outcome

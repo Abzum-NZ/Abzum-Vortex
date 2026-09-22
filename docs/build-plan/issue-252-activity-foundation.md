@@ -1,5 +1,7 @@
 # Phase 3 — Activity append foundation
 
+> Historical design/task record, not a dispatch brief or current fleet instruction. Use the live bounded GitHub issue and [current agent coordination](agent-coordination.md) / [fleet procedure](agent-fleet.md). Any tests, proof receipts, hosted/database verification, fixed model assignments, pickup lists or deployment instructions below are superseded and must not be executed or added to acceptance. Retain relevant product design facts only; the current specification resolves product scope.
+
 Task: [#252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252). Prerequisites [database isolation #28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28) and [central Access decision #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) are complete. This work is independent of [administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) and [page composition #249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249).
 
 ## Outcome

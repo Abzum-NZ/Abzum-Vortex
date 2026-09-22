@@ -1,5 +1,7 @@
 # Native application publication, persistence and readback
 
+> Historical design and execution record. Current issue scope and [agent coordination](agent-coordination.md) supersede its model, test, proof, hosted, deployment and closure instructions. Retain relevant product behavior only; do not execute this as a worker brief.
+
 Task: [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249).
 Preceding slice: [native draft storage](issue-249-native-draft-storage.md).
 Specification: [page composition](../specification/appendices/page-builder-contracts.md).

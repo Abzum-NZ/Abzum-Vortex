@@ -1,5 +1,7 @@
 # Access Activity integration
 
+> Historical design/task record, not a dispatch brief or current fleet instruction. Use the live bounded GitHub issue and [current agent coordination](agent-coordination.md) / [fleet procedure](agent-fleet.md). Any tests, proof receipts, hosted/database verification, fixed model assignments, pickup lists or deployment instructions below are superseded and must not be executed or added to acceptance. Retain relevant product design facts only; the current specification resolves product scope.
+
 Task: [#41](https://github.com/Abzum-NZ/Abzum-Vortex/issues/41).
 Uses completed [Access #34](issue-34-access-decision.md),
 [Activity foundation #252](issue-252-activity-foundation.md) and

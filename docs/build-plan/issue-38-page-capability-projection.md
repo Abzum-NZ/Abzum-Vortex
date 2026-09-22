@@ -1,5 +1,7 @@
 # Page, section and block permission projection
 
+> Historical design/task record, not a dispatch brief or current fleet instruction. Use the live bounded GitHub issue and [current agent coordination](agent-coordination.md) / [fleet procedure](agent-fleet.md). Any tests, proof receipts, hosted/database verification, fixed model assignments, pickup lists or deployment instructions below are superseded and must not be executed or added to acceptance. Retain relevant product design facts only; the current specification resolves product scope.
+
 Task: [#38](https://github.com/Abzum-NZ/Abzum-Vortex/issues/38).
 Engine prerequisites: completed [permission registry #32](https://github.com/Abzum-NZ/Abzum-Vortex/issues/32)
 and [current Access #34](issue-34-access-decision.md).

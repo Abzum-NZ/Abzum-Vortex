@@ -1,5 +1,7 @@
 # Architecture review and corrected delivery order
 
+> Historical design/task record, not a dispatch brief or current fleet instruction. Use the live bounded GitHub issue and [current agent coordination](agent-coordination.md) / [fleet procedure](agent-fleet.md). Any tests, proof receipts, hosted/database verification, fixed model assignments, pickup lists or deployment instructions below are superseded and must not be executed or added to acceptance. Retain relevant product design facts only; the current specification resolves product scope.
+
 [Build plan](README.md) · [Specification](../specification/README.md) · [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) · [Page contracts](../specification/appendices/page-builder-contracts.md)
 
 ## Review boundary
@@ -131,4 +133,4 @@ The definition compiler's repeated traversal/provenance and comparison logic is 
 
 ## Completed-work and project follow-up
 
-The [completed-work review](completed-work-review.md) checks delivered foundations at the same immutable Testing baseline, explicitly excluding in-flight [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27). It confirms literal/reference confusion ([#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258)) and identifies the publication lifetime cap ([#257](https://github.com/Abzum-NZ/Abzum-Vortex/issues/257)) as unnecessary product restriction. The revised [project views](README.md#project-board-operating-structure) show ordered phase completion, review-ready PRs and unresolved bugs without synthetic dates. The native graph and issue bodies are read back after every correction batch.
+The [completed-work review](completed-work-review.md) checks delivered foundations at the same immutable Testing baseline, explicitly excluding in-flight [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27). It confirms literal/reference confusion ([#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258)) and identifies the publication lifetime cap ([#257](https://github.com/Abzum-NZ/Abzum-Vortex/issues/257)) as unnecessary product restriction. The revised [project views](README.md#phases) show ordered phase completion, review-ready PRs and unresolved bugs without synthetic dates. The native graph and issue bodies are read back after every correction batch.

@@ -1,5 +1,9 @@
 # Historical Claude engine handoff — 10 September 2026
 
+> Historical design/task record, not a dispatch brief or current fleet instruction. Use the live bounded GitHub issue and [current agent coordination](agent-coordination.md) / [fleet procedure](agent-fleet.md). Any tests, proof receipts, hosted/database verification, fixed model assignments, pickup lists or deployment instructions below are superseded and must not be executed or added to acceptance. Retain relevant product design facts only; the current specification resolves product scope.
+
+## Archived instructions — do not execute
+
 This is a completed assignment snapshot, not current task sequencing or authority
 to restart its workers. Consult the [live board](https://github.com/orgs/Abzum-NZ/projects/2/views/3)
 and [engine-first plan](engine-first-application-delivery.md) before assigning work.
