@@ -142,7 +142,7 @@ There is no separate duration type in this release. Each calendar page explicitl
 
 The Record engine must preserve the meaning of values from form entry through
 save, read, conditions, calculations and queries. A display format is not the
-stored value. The [field-runtime plan](../build-plan/issue-44-record-field-values.md#value-format-architecture-decision)
+stored value. The [field-runtime plan](../build-plan/issue-44-record-field-values.md)
 records the coordinated contract and consumer changes; these requirements do not
 claim that Record execution is already delivered.
 
@@ -200,12 +200,13 @@ dependencies. Options without a gate remain ordinary choices. The current Access
 decision controls both option visibility and direct server saves; a definition
 reference or submitted permission claim does not grant access.
 
-These value-representation changes use an explicit Module source/validation
-contract version. That technical format version is separate from the module's own
-published business version. Historical V1 definitions keep their stored bytes and
-remain readable/restorable. A new-format draft conversion and published upgrade
-must be explicit; they cannot infer a polymorphic target, reinterpret a currency
-or recover precision already lost in a historical number.
+The current Module value representation has an explicit source/validation
+contract revision, separate from the module's published business version.
+All current consumers use this representation; obsolete readers and draft-format
+conversion are not required. A deliberate published upgrade still cannot infer a
+polymorphic target, reinterpret a currency or recover precision already lost in a
+stored number. Published release selection and populated-data changes remain
+explicit product operations.
 
 ## Calculations and totals
 
@@ -240,7 +241,7 @@ different from computing from a redacted subset or refusing a permitted save.
 - Supported operations are count, sum, minimum, maximum, and average where the source type permits them. Count produces a whole number; sum, minimum, and maximum preserve the compatible source-field type; average produces a decimal number, or money when averaging money. Publication checks the declared result against the referenced field instead of treating every calculated or total value as a number.
 - A money total is valid only when every included non-empty value uses one currency. A mixed-currency total is refused with a stable internal diagnostic identifying the currency codes present; caller-visible errors must not reveal hidden inputs. Vortex never silently converts or splits the total.
 
-The [relationship-total delivery plan](../build-plan/issue-48-calculation-engine.md#next-delivery-relationship-totals)
+The [relationship-total delivery plan](../build-plan/issue-48-calculation-engine.md)
 defines the executable meanings. Count counts filtered related records; field
 operations ignore absent/null inputs but do not silently ignore invalid values.
 Empty count and dimensionless sum are zero; empty minimum, maximum and average
@@ -257,7 +258,7 @@ refer back to themselves. A type-level cycle is not automatically a forbidden
 record-level cycle. The protected save checks the actual record/field dependency
 graph, updates affected old/new parents and dependent totals atomically, and
 refuses a real cycle without partial changes. Follow the reviewed
-[integrated totals rules](../build-plan/issue-48-calculation-engine.md#integrated-totals-dependency-and-transaction-rules).
+[integrated totals rules](../build-plan/issue-48-calculation-engine.md).
 
 ## Relationships
 

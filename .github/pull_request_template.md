@@ -4,10 +4,15 @@ Closes #
 
 ## Checks
 
-- [ ] The Vercel build passes: types, lint, package boundaries, unit tests, build.
-- [ ] Where the database shape changes: the access-rule tests pass in Kestra.
-- [ ] Every schema change ships as a migration file with its permission tests in the same change.
+- [ ] The Vercel build passes: `pnpm build` type-checks every shipping package and builds the Next.js application.
+- [ ] A separate reviewer confirmed the issue's acceptance criteria against the changed code.
+- [ ] Every schema change ships as an ordered migration file; an already-applied file is corrected by a later migration.
+- [ ] Organisation isolation, current permission checks, atomic writes, revision checks and safe errors are preserved.
 - [ ] No package reaches inside another package's files; nothing depends upward.
-- [ ] Where a screen changed: a screenshot of the built functionality is attached to the issue.
-- [ ] The issue this closes has its acceptance criteria ticked, and the project item is updated.
-- [ ] Specification, data contracts, build plan, traceability, dependent issues, and project dependencies were reviewed and either updated here or recorded as unchanged.
+- [ ] Specification, data contracts and build plan were reviewed and either updated here or recorded as unchanged.
+- [ ] No secret or credential appears in source, logs, prompts or browser bundles.
+
+Development completion is implementation plus code review, as recorded in
+`docs/specification/18-delivery-and-testing.md` and `docs/specification/20-quality-and-acceptance.md`.
+Tests, database review, hosted evidence and screenshots are not required for a development task,
+and merging this change claims no Production release.

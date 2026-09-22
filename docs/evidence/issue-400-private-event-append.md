@@ -2,7 +2,7 @@
 
 Task: [#400](https://github.com/Abzum-NZ/Abzum-Vortex/issues/400). Normative
 behavior: [Event delivery guarantees](../specification/08-forms-actions-rules-and-events.md#delivery-guarantees)
-and the [save/Event boundary](../build-plan/module-record-provisioning.md#event-append-authority).
+and the [save/Event boundary](../build-plan/module-record-provisioning.md#event-ownership).
 
 ## Delivered boundary
 

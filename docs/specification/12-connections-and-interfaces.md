@@ -81,25 +81,25 @@ Interfaces use the same [actions](08-forms-actions-rules-and-events.md), [querie
 ### Exact values in interface contracts
 
 An interface must preserve the [owning field's value format](05-modules-fields-and-relationships.md#record-value-formats).
-Exact decimal text is not the legacy `number` wire type, and money needs both
+Exact decimal text is distinct from a finite-double `number`, and money needs both
 amount and currency. The operation catalogue in
 [#102](https://github.com/Abzum-NZ/Abzum-Vortex/issues/102) must deliver explicit
 exact-decimal and money input/output types through the versioned source,
 canonical, compiler and served-interface path. Compatibility and served versions
 remain owned by [#103](https://github.com/Abzum-NZ/Abzum-Vortex/issues/103).
 
-Until that contract extension is delivered, publication must not advertise a V2
-decimal or money query field as a legacy `number`. This is a recorded missing
-capability, not a permanent restriction or permission decision. Keep historical
-number contracts unchanged; no conversion through a floating-point number or
-discarding the currency is an acceptable implementation of the new types.
+Until that contract extension is delivered, publication must not advertise an
+exact decimal or money query field as a `number`. This is a recorded missing
+capability, not a permanent restriction or permission decision. No conversion
+through a floating-point number or discarding the currency is an acceptable
+implementation of the exact types.
 
 An interface action input can explicitly declare `formatted_text` to carry the
-structured document required by a Module V2 formatted-text input. The target
+structured document required by a current Module formatted-text input. The target
 action validates the document with the shared field-value contract before
 execution; the interface descriptor is not permission or a validation bypass.
-Historical V1 formatted strings still use `text`. Changing an activated
-interface input from `text` to `formatted_text` changes its wire representation
+Plain text and structured formatted text remain distinct declared input types.
+Changing an activated interface input from `text` to `formatted_text` changes its wire representation
 and requires a major interface version under [#103](https://github.com/Abzum-NZ/Abzum-Vortex/issues/103).
 This input descriptor does not make arbitrary structured outputs or exact
 decimal/money interface types available.

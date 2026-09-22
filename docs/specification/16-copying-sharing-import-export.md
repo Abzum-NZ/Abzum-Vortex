@@ -158,9 +158,9 @@ For shared records, the complete query runs at the source against one active gra
 
 A complete organisation archive is not a spreadsheet import. It contains versioned definitions, records, relationships, file manifests and encrypted bytes, roles and assignments, retained workflow state, required activity, retention receipts, and a signed manifest. Secrets are excluded or separately re-authorised.
 
-Restore is an operator-controlled disaster-recovery or migration process with compatibility checks, identifier mapping, integrity verification, privacy-removal replay, and a full [organisation separation test](20-quality-and-acceptance.md#organisation-separation-suite) before opening access.
+Restore is an operator-controlled disaster-recovery or migration process. It validates supported archive content and integrity, maps identifiers, replays privacy removals, and restores organisation-scoped ownership and access rules before making the restored organisation available. Restored operations use the ordinary protected boundaries described in [functional quality](20-quality-and-acceptance.md#functional-quality).
 
-Once the versioned Frontend Flow contract is delivered, definition copy, publication storage, consumer read and restore preserve its exact canonical graph and dependency evidence. Older immutable releases remain readable through their supported legacy contract and are never rewritten to claim the new execution model.
+Definition copy, publication storage, consumer read and restore preserve the exact current Frontend Flow graph, resolved dependencies and immutable publication identity. They use the current contract; maintaining obsolete representation readers or conversion paths is not required.
 
 ## Acceptance examples
 
@@ -182,4 +182,4 @@ Once the versioned Frontend Flow contract is delivered, definition copy, publica
 - A shared export is refused by default, contains only approved fields when enabled, and warns that a completed download cannot be recalled by revocation.
 - Import dry-run and confirmed execution use the same mapping and validation rules.
 - Record export cannot include a field the caller cannot read.
-- A complete archive can restore a test organisation without pretending that spreadsheet record import restores definitions, roles, files, or history.
+- A complete archive restores organisation definitions, roles, files and history; spreadsheet record import restores only the supported record values.

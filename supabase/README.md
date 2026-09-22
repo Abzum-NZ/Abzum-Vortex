@@ -1,5 +1,15 @@
 # Supabase database project
 
+## Current development policy — 21 September 2026
+
+The [current roadmap](../docs/build-plan/README.md) and [architecture review](../docs/build-plan/architecture-review-2026-09-21.md) govern implementation work. Development completion is implemented functionality plus independent code review. Do not create or run tests, require database review, collect hosted proof, or introduce verification/promotion gates for these development issues.
+
+This policy supersedes contrary completion or standing-authority wording below. The recipes and environment observations below are separate, optional operational documentation. They describe existing tooling and historical operational practices; they are not developer completion instructions and do not authorize running commands, starting recurring jobs, deploying, recovering data, changing credentials or modifying Production. Any operational work requires a separately scoped request for that environment and action. Reading this file or finishing a development issue grants no Production authority.
+
+Preserve runtime access controls, tenant isolation, atomic changes, protected credentials and safe error handling. This policy changes completion requirements, not those product protections.
+
+## Operational reference
+
 This is the repository's official Supabase CLI project. It is operational
 configuration, migrations, synthetic seed data, and database tests—not a
 workspace package and not an application data model.
@@ -11,7 +21,7 @@ workspace package and not an application data model.
 | `seed.sql` | Synthetic Local and Testing data only. Production never applies it. |
 | `tests/` | pgTAP tests run with `pnpm db:test`. |
 
-## Local database gate
+## Optional local database operations
 
 A Docker-compatible container runtime must be running. From the repository root:
 

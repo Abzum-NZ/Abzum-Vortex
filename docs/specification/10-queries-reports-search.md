@@ -36,13 +36,13 @@ A module-exposed query is this same closed query contract published under a stab
 
 Read value meaning from the exact published Module contract and its field settings,
 as defined in [Record value formats](05-modules-fields-and-relationships.md).
-For Module V2, decimal values travel as exact decimal text but filter, sort and
+For the current Module contract, decimal values travel as exact decimal text but filter, sort and
 aggregate as numbers: `2` precedes `10`, not the reverse. Do not convert them
 through a JavaScript floating-point number, including in continuation tokens or
 returned totals. Text fields containing the same characters remain text.
 
 Money results retain both exact amount and resolved currency. Amount comparisons
-follow the [Rule semantics](../build-plan/issue-44-record-field-values.md#rule-consumer-handoff):
+follow the [Rule semantics](../build-plan/issue-44-record-field-values.md):
 equality includes currency, and ordering amounts across currencies is refused.
 The existing mixed-currency total refusal below remains unchanged. Query, Rule
 and database-backed conditions must agree for the same typed operands. Formatting

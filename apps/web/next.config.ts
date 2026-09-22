@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   agentRules: false,
   reactStrictMode: true,
+  typescript: {
+    tsconfigPath: "tsconfig.build.json",
+  },
   transpilePackages: [
     "@vortex/contracts",
     "@vortex/modules",

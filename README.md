@@ -5,7 +5,7 @@ modules, record types, fields, relationships, pages, permissions, flows and conn
 It serves multiple organisations through one application, with access enforced by
 the platform and database.
 
-The project is under active development. The current priority is to prove complete
+The project is under active development. The current priority is to build usable
 applications defined in files before building the visual App Designer. The
 [roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) records delivery status;
 a specification or contract does not mean the feature is implemented.
@@ -15,7 +15,7 @@ rather than a single continuous team: one orchestrator plans, dispatches, watche
 and reports, and implementer agents deliver work in isolated worktrees.
 [Agent coordination](docs/build-plan/agent-coordination.md) and [agent fleet
 operations](docs/build-plan/agent-fleet.md) record how that work is planned,
-verified and promoted.
+implemented and reviewed.
 
 ## Start here
 
@@ -26,8 +26,8 @@ verified and promoted.
 | [Engine-first delivery](docs/build-plan/engine-first-application-delivery.md) | Path to a usable application before the designer |
 | [GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) | Current tasks, ownership and pickup order |
 | [Agent coordination](docs/build-plan/agent-coordination.md) | Planning, implementation, review and reporting rules |
-| [Agent fleet operations](docs/build-plan/agent-fleet.md) | Roster, escalation, queue selection, gates and promotion for the autonomous fleet |
-| [Agent handover — 18 September 2026](docs/build-plan/agent-handover-2026-09-18.md) | Copyable continuation prompt and dated checkpoint |
+| [Agent fleet operations](docs/build-plan/agent-fleet.md) | Cost-based assignments, estimates, pickup order and code review |
+| [Architecture review — 21 September 2026](docs/build-plan/architecture-review-2026-09-21.md) | Main-branch findings and revised implementation order |
 | [Open decisions](docs/specification/appendices/decisions.md) | Unresolved product choices requiring the owner's input |
 
 ## Architecture
@@ -85,7 +85,7 @@ installing packages alone does not configure them. Follow the
 [local database guide](supabase/README.md) and
 [environment and credential rules](docs/specification/18-delivery-and-testing.md).
 
-Useful commands from the repository root:
+Existing developer utilities (not development completion requirements):
 
 | Command | Purpose |
 | --- | --- |
@@ -93,8 +93,7 @@ Useful commands from the repository root:
 | `pnpm fixtures` | Validate the shipped application fixtures |
 | `pnpm db:verify` | Full local database verification using the disposable harness; requires Docker |
 
-Choose checks appropriate to the changed behaviour. For focused database checks
-and cleanup, use the [database guide](supabase/README.md); do not reset shared environments.
+Implement functionality and obtain code review. Do not create or run tests or add database/hosted verification to the current development tasks.
 
 ## Delivery and contribution
 
@@ -104,14 +103,10 @@ and cleanup, use the [database guide](supabase/README.md); do not reset shared e
   the specification and build plan when agreed behaviour or sequencing changes.
 - Keep changes focused. Preserve organisation isolation, current permission checks,
   atomic writes and revision checks without introducing unnecessary abstractions.
-- Obtain independent review and pass required PR checks before merging. Distinguish
-  source merged, preview built, and hosted behaviour verified in the evidence.
-- Use [Testing](https://vortex-testing.abzum.com) for current hosted acceptance.
-  Production deployment is deferred until the final project stage. A merge to
-  `main` is not evidence of a production release or successful database delivery.
+- Use issue branches from `origin/main`, obtain a separate code review, and merge
+  the accepted implementation into `main`. Code review is the completion criterion.
+- Hosted delivery and Production are outside this development pass.
 - Follow the [delivery specification](docs/specification/18-delivery-and-testing.md)
-  and [Kestra runbook](workflows/kestra/README.md) for environment changes. The dated
-  handover records the recent authorised source consolidation and its remaining
-  Testing requirements.
+  for the current development policy. Historical handovers do not add requirements.
 - Manage secrets through the documented Doppler configuration. Keep credentials
   out of source, browser bundles, agent prompts and logs.

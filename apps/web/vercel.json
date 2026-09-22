@@ -3,6 +3,6 @@
   "framework": "nextjs",
   "regions": ["syd1"],
   "installCommand": "cd ../.. && corepack enable && pnpm install --frozen-lockfile",
-  "buildCommand": "cd ../.. && pnpm verify",
+  "buildCommand": "cd ../.. && pnpm build",
   "outputDirectory": ".next"
 }
