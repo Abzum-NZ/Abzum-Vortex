@@ -119,6 +119,14 @@ export function computeSlotContainerStyle(hasGridChildren: boolean): CSSProperti
 /**
  * Layout-only CSS stylesheet string for browser-safe deterministic page layout rendering.
  */
+const GRID_POSITION_STYLES = Array.from({ length: 12 }, (_, startIndex) => {
+  const startColumn = startIndex + 1;
+  return Array.from({ length: 13 - startColumn }, (_, spanIndex) => {
+    const span = spanIndex + 1;
+    return `.vortex-col-${startColumn}-span-${span} { grid-column: ${startColumn} / span ${span}; }`;
+  }).join("\n");
+}).join("\n");
+
 export const LAYOUT_ONLY_STYLES_CSS = `
 .vortex-grid-12 {
   display: grid;
@@ -159,15 +167,5 @@ export const LAYOUT_ONLY_STYLES_CSS = `
   display: none !important;
 }
 
-/* 12-column grid position generator */
-.vortex-col-1-span-12 { grid-column: 1 / span 12; }
-.vortex-col-1-span-6  { grid-column: 1 / span 6; }
-.vortex-col-7-span-6  { grid-column: 7 / span 6; }
-.vortex-col-1-span-4  { grid-column: 1 / span 4; }
-.vortex-col-5-span-4  { grid-column: 5 / span 4; }
-.vortex-col-9-span-4  { grid-column: 9 / span 4; }
-.vortex-col-1-span-3  { grid-column: 1 / span 3; }
-.vortex-col-4-span-3  { grid-column: 4 / span 3; }
-.vortex-col-7-span-3  { grid-column: 7 / span 3; }
-.vortex-col-10-span-3 { grid-column: 10 / span 3; }
+${GRID_POSITION_STYLES}
 `;

@@ -437,19 +437,21 @@ export function PlacementRenderer({
       data-vortex-block-id={metadata.blockId}
       data-vortex-block-key={metadata.key}
       data-vortex-breakpoint={breakpoint}
-      data-vortex-visible={layout ? String(layout.visible) : "true"}
+      data-vortex-visible={String(layout.visible)}
       className={combinedClassName}
       style={combinedStyle}
     >
-      <Component
-        placementId={placementId}
-        settings={placement.settings}
-        slots={renderedSlots}
-        breakpoint={breakpoint}
-        metadata={metadata}
-        themeOverrides={placement.themeOverrides}
-        {...projectedAvailability(placement, currentLocation)}
-      />
+      {layout.visible ? (
+        <Component
+          placementId={placementId}
+          settings={placement.settings}
+          slots={renderedSlots}
+          breakpoint={breakpoint}
+          metadata={metadata}
+          themeOverrides={placement.themeOverrides}
+          {...projectedAvailability(placement, currentLocation)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -957,7 +959,7 @@ function resolvePageCompositionSlot(options: {
 }
 
 /**
- * Pure render helper that executes recursive layout traversal and returns the root ReactElement.
+ * Returns the root React element for recursive layout traversal.
  */
 export function renderPageLayout(props: PageLayoutRendererProps): ReactElement {
   return <PageLayoutRenderer {...props} />;
