@@ -3001,6 +3001,8 @@ function validateCurrentUserFlow(
         ).recordTypeIds,
       ).map(String);
     if (value.source === "literal") {
+      if (Array.isArray(value.value))
+        return value.value.map((entry) => String(object(entry).recordTypeId));
       const literal = object(value.value);
       return literal.recordTypeId === undefined ? [] : [String(literal.recordTypeId)];
     }
@@ -3094,6 +3096,15 @@ function validateCurrentUserFlow(
         : undefined;
       targetInputs = action ? array(action.inputs) : undefined;
     }
+    if (node.kind === "action" && object(node.target).kind === "durable_workflow_start") {
+      const workflow = workflows.get(String(object(node.target).workflowId));
+      targetInputs = workflow
+        ? array(object(workflow.trigger).inputs).map((input) => ({
+            ...input,
+            required: true,
+          }))
+        : undefined;
+    }
     if (targetInputs !== undefined) {
       const provided = object(node.inputs ?? {});
       const expected = new Map(targetInputs.map((input) => [String(input.key), input]));
@@ -3105,15 +3116,19 @@ function validateCurrentUserFlow(
           const actualType = String(bound.type);
           const expectedType = String(declaration?.type);
           const expectedRecordTypeIds = new Set(
-            array(declaration?.recordTypes).map((reference) =>
-              String(object(reference).recordTypeId),
-            ),
+            [
+              ...array(declaration?.recordTypes).map((reference) =>
+                String(object(reference).recordTypeId),
+              ),
+              ...array(declaration?.recordTypeIds).map(String),
+            ],
           );
           const actualRecordTypeIds = valueRecordTypeIds(object(bound.value));
           return (
             !declaration ||
             !flowInputMatchesTarget(actualType, expectedType) ||
-            (expectedType === "record_reference" &&
+            ((expectedType === "record_reference" ||
+              expectedType === "record_reference_list") &&
               (actualRecordTypeIds.length === 0 ||
                 actualRecordTypeIds.some((id) => !expectedRecordTypeIds.has(id))))
           );

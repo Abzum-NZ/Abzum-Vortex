@@ -463,6 +463,7 @@ function sourceToCanonicalPath(
     const leaf = sourcePath.at(-1);
     if (sourcePath[3] === "control") mapped[mapped.length - 1] = "controlId";
     if (sourcePath[3] === "flow" && leaf === "flow") mapped[mapped.length - 1] = "flowId";
+    if (sourcePath[3] === "event") mapped[mapped.length - 1] = "event";
     if (leaf === "record_type") mapped[mapped.length - 1] = "recordTypeId";
     if (leaf === "control") mapped[mapped.length - 1] = "controlId";
     if (leaf === "form") mapped[mapped.length - 1] = "formId";
@@ -1765,7 +1766,7 @@ function applicationFlowSourceResolvesIdentity(sourcePath: Path): boolean {
   return (
     /^body\/flows\/#\/(?:id|(?:inputs|outputs|variables)\/[^/]+\/record_types\/#)$/.test(path) ||
     /^body\/flows\/#\/nodes\/#\/outputs\/[^/]+\/record_types\/#$/.test(path) ||
-    /^body\/flows\/#\/nodes\/#\/(?:id|target\/(?:module|version(?:\/.*)?|query|form|continuation_event|workflow|action)|(?:inputs|results)\/[^/]+\/value\/node)$/.test(path) ||
+    /^body\/flows\/#\/nodes\/#\/(?:id|target\/(?:module|version(?:\/.*)?|query|form|continuation_event|workflow)|(?:inputs|results)\/[^/]+\/value\/node)$/.test(path) ||
     /^body\/flows\/#\/edges\/#\/(?:id|from_node|to_node)$/.test(path) ||
     /^body\/flow_bindings\/#\/(?:id|control|event_id|flow\/flow)$/.test(path) ||
     /^body\/flow_bindings\/#\/inputs\/[^/]+\/value\/(?:control|form|record_type|relationship|field)$/.test(path)
