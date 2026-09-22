@@ -6,9 +6,11 @@ description: >-
   automatically. Kestra holds only its route credential and never receives
   database credentials.
 
+# A tick still running covers the next one: each dispatch already drains a
+# bounded batch in order, so an overlapping tick is cancelled, not queued.
 concurrency:
   limit: 1
-  behavior: QUEUE
+  behavior: CANCEL
 
 tasks:
   - id: recover_missed_wakeups
@@ -18,8 +20,8 @@ tasks:
     contentType: application/json
     headers:
       Authorization: "Bearer {{ secret('VORTEX_EVENT_DISPATCH_WAKEUP_CREDENTIAL') }}"
-      X-Vortex-Wakeup-Source: scheduled_recovery
     body: '{"source":"scheduled_recovery"}'
+    timeout: PT4M
     options:
       allowFailed: false
 
@@ -28,4 +30,6 @@ triggers:
     type: io.kestra.plugin.core.trigger.Schedule
     cron: "*/5 * * * *"
     timezone: Etc/UTC
-    recoverMissedSchedules: ALL
+    # One catch-up tick after an outage recovers everything still pending;
+    # replaying every missed interval would only queue redundant dispatches.
+    recoverMissedSchedules: LAST

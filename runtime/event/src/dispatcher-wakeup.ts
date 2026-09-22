@@ -23,9 +23,9 @@ export type EventDispatcherWakeupSource = (typeof eventDispatcherWakeupSources)[
 export const eventDispatcherWakeupLimits = Object.freeze({
   /** Request body ceiling for the protected route. */
   maximumRequestBodyLength: 4096,
-  /** A live claim older than this is reported as a stalled backlog. */
+  /** A pending occurrence older than this is reported as a stalled backlog. */
   stalledBacklogAgeSeconds: 300,
-  /** Bounded ceiling on a reported oldest-claim age, about 30 days. */
+  /** Bounded ceiling on a reported oldest-pending age, about 30 days. */
   maximumBacklogAgeSeconds: 2_592_000,
   /** Bounded ceiling on a reported terminal failure count. */
   maximumBacklogFailureCount: 1_000_000,
@@ -42,8 +42,9 @@ export const eventDispatcherBacklogStatuses = [
 export type EventDispatcherBacklogStatus = (typeof eventDispatcherBacklogStatuses)[number];
 
 /**
- * Content-free delivery backlog: the age of the oldest live, unsettled claim
- * and the count of exhausted claims. It carries no occurrence identity,
+ * Content-free delivery backlog: the age, since append, of the oldest claimed
+ * occurrence that is neither acknowledged nor terminally failed, and the count
+ * of exhausted claims. It carries no occurrence identity,
  * consumer identity or payload, and "unavailable" reports a status that could
  * not be read rather than inventing one.
  */
@@ -56,7 +57,7 @@ export type EventDispatcherBacklog = Readonly<{
 export type EventDispatcherWakeupRequest = Readonly<{
   /** The request's `Authorization` header value. */
   authorization: string | null | undefined;
-  /** Optional parsed JSON body; only the `source` label is read from it. */
+  /** Optional parsed JSON body; it may carry only the `source` label. */
   body?: unknown;
 }>;
 
@@ -122,15 +123,17 @@ type ParsedWakeupRequest =
   | Readonly<{ kind: "invalid"; source: null }>;
 
 /**
- * Reads the advisory source label. An absent body or absent label is the
- * normal database-webhook path; a present but unknown label is refused closed
- * before any dispatch happens.
+ * Reads the advisory source label. An absent body, empty object or absent
+ * label is the database-webhook path. Any other field, including batch or
+ * consumer tuning, or an unknown label is refused closed before any dispatch,
+ * so a caller can never tune the bounded operation.
  */
 const parseWakeupRequest = (body: unknown): ParsedWakeupRequest => {
   if (body === undefined || body === null)
     return { kind: "accepted", source: "database_webhook" };
   const fields = record(body);
-  if (fields === undefined) return { kind: "invalid", source: null };
+  if (fields === undefined || Object.keys(fields).some((key) => key !== "source"))
+    return { kind: "invalid", source: null };
   const source = fields.source;
   if (source === undefined) return { kind: "accepted", source: "database_webhook" };
   if (!wakeupSourceMatches(source)) return { kind: "invalid", source: null };

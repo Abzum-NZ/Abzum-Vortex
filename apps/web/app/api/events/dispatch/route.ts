@@ -22,6 +22,9 @@ type ReadBodyResult =
   | Readonly<{ ok: false; status: number }>;
 
 const readBody = async (request: NextRequest): Promise<ReadBodyResult> => {
+  const declaredLength = Number(request.headers.get("content-length") ?? 0);
+  if (declaredLength > eventDispatcherWakeupLimits.maximumRequestBodyLength)
+    return { ok: false, status: 413 };
   let text: string;
   try {
     text = await request.text();
@@ -49,7 +52,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ...(body.body === undefined ? {} : { body: body.body }),
     });
   } catch {
-    // A missing or unusable database configuration fails closed.
+    // Any unexpected dispatcher failure fails closed without internal detail.
     return privateResponse({ outcome: "unavailable" }, 503);
   }
 
