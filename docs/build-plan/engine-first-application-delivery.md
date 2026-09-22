@@ -1,6 +1,6 @@
 # Definition-led application delivery
 
-Follow the [current roadmap](README.md) and [strict pickup procedure](agent-fleet.md#strict-pickup-algorithm). This page describes product sequencing, not additional acceptance gates.
+Follow the [current roadmap](README.md) and [ready-work dispatch algorithm](agent-fleet.md#ready-work-dispatch-algorithm). This page describes product sequencing, not additional acceptance gates.
 
 The Phase 6 outcome is a working application on the normal web UI. Its pages, navigation, forms, queries, actions and theme come from installed definitions. Persisted records and protected owning services supply actual behaviour. Issue [#327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327) connects the delivered Phase 1–6 engines; its [bounded scope](definition-first-application-proof.md) covers navigation, record lists and details, forms, declared actions, access decisions and theme.
 

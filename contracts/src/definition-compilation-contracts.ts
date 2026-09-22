@@ -58,6 +58,10 @@ export const sourceIdentityKindV2Schema = z.enum([
   ...sourceIdentityKindSchema.options,
   "shell",
   "shell_content_slot",
+  "flow",
+  "flow_node",
+  "flow_edge",
+  "flow_binding",
 ]);
 export type SourceIdentityKindV2 = z.infer<typeof sourceIdentityKindV2Schema>;
 

@@ -8,10 +8,11 @@ import {
   moduleRootIdSchema,
   namespacedKeySchema,
   organizationIdSchema,
+  queryIdSchema,
   revisionSchema,
   semanticVersionSchema,
 } from "./identifiers";
-import { moduleContentV3Schema } from "./module-contracts-v3";
+import { moduleContentV3Schema, moduleQueryDefinitionV3Schema } from "./module-contracts-v3";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
 const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
@@ -49,6 +50,30 @@ const dependencySubject = (entry: z.infer<typeof exactDefinitionDependencySchema
     ? `${entry.kind}:${entry.catalogueThemeId}`
     : entry.kind === "platform_block"
       ? `${entry.kind}:${entry.blockId}`
+      : entry.kind === "platform_flow"
+        ? `${entry.kind}:${entry.flowId}`
+        : entry.kind === "application_flow"
+          ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}`
+          : entry.kind === "application_flow_node"
+            ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}:${entry.nodeId}`
+            : entry.kind === "application_query"
+              ? `${entry.kind}:${entry.applicationRootId}:${entry.queryId}`
+              : entry.kind === "module_query"
+                ? `${entry.kind}:${entry.moduleRootId}:${entry.queryId}`
+                : entry.kind === "application_form"
+                  ? `${entry.kind}:${entry.applicationRootId}:${entry.formId}`
+                    : entry.kind === "application_workflow"
+                      ? `${entry.kind}:${entry.applicationRootId}:${entry.workflowId}`
+                      : entry.kind === "application_action"
+                        ? `${entry.kind}:${entry.applicationRootId}:${entry.actionId}`
+                    : entry.kind === "protected_operation"
+                      ? `${entry.kind}:${entry.operation.owner.kind}:${
+                          entry.operation.owner.kind === "application"
+                            ? entry.operation.owner.applicationRootId
+                            : entry.operation.owner.kind === "module"
+                              ? entry.operation.owner.moduleRootId
+                              : entry.operation.owner.serviceId
+                        }:${entry.operation.operationId}`
       : `${entry.kind}:${entry.key}`;
 
 /** A complete manifest in canonical subject order, using the publication contract's exact entries. */
@@ -163,6 +188,51 @@ export const systemApplicationBoundReleaseSetResultSchema = z
       });
   });
 
+/**
+ * One published Module query with the exact release identity it was read from. This is the only
+ * shape a Query executor receives; it carries the declared contract, never a database target.
+ */
+export const publishedModuleQueryDescriptorV3Schema = z
+  .object({
+    moduleRootId: moduleRootIdSchema,
+    moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
+    query: moduleQueryDefinitionV3Schema,
+  })
+  .strict();
+
+/** An Application selects a published Module query by module root, exact release and query identity. */
+export const applicationModuleQueryBindingSchema = z
+  .object({
+    moduleRootId: moduleRootIdSchema,
+    moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
+    queryId: queryIdSchema,
+  })
+  .strict();
+
+/**
+ * Resolves a bound Application query against one exact Module release read. The binding must name
+ * that release's own root and version, and the query is found only by its stable identity, so a
+ * renamed key or a different release can never satisfy the binding.
+ */
+export const resolvePublishedModuleQuery = (
+  release: ModuleDefinitionConsumerReadResultV3,
+  binding: ApplicationModuleQueryBinding,
+): PublishedModuleQueryDescriptorV3 | undefined => {
+  if (
+    release.rootId !== binding.moduleRootId ||
+    release.releaseVersion !== binding.moduleReleaseVersion
+  )
+    return undefined;
+  const query = release.content.queries.find((candidate) => candidate.queryId === binding.queryId);
+  return query === undefined
+    ? undefined
+    : {
+        moduleRootId: release.rootId,
+        moduleReleaseVersion: release.releaseVersion,
+        query,
+      };
+};
+
 export type DefinitionConsumerReadCommand = z.infer<typeof definitionConsumerReadCommandSchema>;
 export type DefinitionConsumerReadSelector = z.infer<typeof definitionConsumerReadSelectorSchema>;
 export type DefinitionConsumerReadDependencyManifest = z.infer<
@@ -184,3 +254,7 @@ export type SystemApplicationBoundReleaseSetResult = z.infer<
 export type ModuleDefinitionConsumerReadResultV3 = z.infer<
   typeof moduleDefinitionConsumerReadResultV3Schema
 >;
+export type PublishedModuleQueryDescriptorV3 = z.infer<
+  typeof publishedModuleQueryDescriptorV3Schema
+>;
+export type ApplicationModuleQueryBinding = z.infer<typeof applicationModuleQueryBindingSchema>;

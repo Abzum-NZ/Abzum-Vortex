@@ -27,6 +27,10 @@ export const definitionLocationSegmentKindSchema = z.enum([
   "connection",
   "interface",
   "setting",
+  "flow",
+  "flow_node",
+  "flow_edge",
+  "flow_binding",
 ]);
 
 const displayableDefinitionKeySchema = z.union([builderKeySchema, namespacedKeySchema]);
