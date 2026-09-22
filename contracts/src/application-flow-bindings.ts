@@ -22,7 +22,6 @@ import {
   queryIdSchema,
   recordTypeIdSchema,
   ruleIdSchema,
-  semanticVersionSchema,
   stableDefinitionReleaseVersionSchema,
   versionRequirementSchema,
   workflowIdSchema,
@@ -367,11 +366,132 @@ export const safeFlowResultKindSchema = z.enum([
   "committed",
   "refused",
   "conflict",
+  "validation",
   "partial",
   "uncertain",
   "background_pending",
   "failed",
 ]);
+
+const fixedResultDescriptorSchema = <
+  Outcome extends SafeFlowResultKind,
+  Commit extends string,
+  Outputs extends string,
+  Recovery extends string,
+>(
+  outcome: Outcome,
+  commit: Commit,
+  outputs: Outputs,
+  recovery: Recovery,
+) =>
+  z
+    .object({
+      outcome: z.literal(outcome),
+      commit: z.literal(commit),
+      outputs: z.literal(outputs),
+      recovery: z.literal(recovery),
+    })
+    .strict();
+
+/**
+ * Shared presentation semantics for every safe flow result. Each outcome fixes its own commit
+ * state, output availability and recovery path, so a partial, uncertain or background-pending
+ * result can never be rendered as success or as one another. Safe error detail belongs to the
+ * runtime result, not this descriptor.
+ */
+export const safeFlowResultDescriptorSchema = z.discriminatedUnion("outcome", [
+  fixedResultDescriptorSchema("completed", "none", "available", "none"),
+  fixedResultDescriptorSchema("committed", "confirmed", "available", "none"),
+  fixedResultDescriptorSchema("refused", "none", "unavailable", "change_request"),
+  fixedResultDescriptorSchema("conflict", "none", "unavailable", "refresh_and_review"),
+  fixedResultDescriptorSchema("validation", "none", "unavailable", "correct_inputs"),
+  // Earlier commits are preserved, unexecuted changes stay unapplied and nothing is rolled back.
+  fixedResultDescriptorSchema("partial", "partial", "unavailable", "review_committed_effects"),
+  // The same invocation must be reconciled through its receipt before any retry or continuation.
+  fixedResultDescriptorSchema("uncertain", "unknown", "unavailable", "reconcile_before_retry"),
+  // Intent is durably accepted; completion is reported by the background work, not this result.
+  fixedResultDescriptorSchema(
+    "background_pending",
+    "accepted",
+    "unavailable",
+    "await_background_result",
+  ),
+  fixedResultDescriptorSchema("failed", "none", "unavailable", "new_invocation"),
+]);
+
+/** The one shared result map: every safe flow result kind to its fixed descriptor. */
+export const safeFlowResultDescriptors: Readonly<{
+  [Outcome in SafeFlowResultKind]: Extract<SafeFlowResultDescriptor, { outcome: Outcome }>;
+}> = Object.freeze({
+  completed: { outcome: "completed", commit: "none", outputs: "available", recovery: "none" },
+  committed: { outcome: "committed", commit: "confirmed", outputs: "available", recovery: "none" },
+  refused: {
+    outcome: "refused",
+    commit: "none",
+    outputs: "unavailable",
+    recovery: "change_request",
+  },
+  conflict: {
+    outcome: "conflict",
+    commit: "none",
+    outputs: "unavailable",
+    recovery: "refresh_and_review",
+  },
+  validation: {
+    outcome: "validation",
+    commit: "none",
+    outputs: "unavailable",
+    recovery: "correct_inputs",
+  },
+  partial: {
+    outcome: "partial",
+    commit: "partial",
+    outputs: "unavailable",
+    recovery: "review_committed_effects",
+  },
+  uncertain: {
+    outcome: "uncertain",
+    commit: "unknown",
+    outputs: "unavailable",
+    recovery: "reconcile_before_retry",
+  },
+  background_pending: {
+    outcome: "background_pending",
+    commit: "accepted",
+    outputs: "unavailable",
+    recovery: "await_background_result",
+  },
+  failed: { outcome: "failed", commit: "none", outputs: "unavailable", recovery: "new_invocation" },
+});
+
+/** Declared results must be unique and are rendered in declaration order. */
+const safeFlowResultDescriptorListSchema = z
+  .array(safeFlowResultDescriptorSchema)
+  .min(1)
+  .max(safeFlowResultKindSchema.options.length)
+  .superRefine((value, context) => {
+    if (new Set(value.map((result) => result.outcome)).size !== value.length)
+      context.addIssue({
+        code: "custom",
+        message: "Declared flow results must be unique",
+      });
+  });
+
+/** Results an operation may report for its declared effect; the first is its confirmed result. */
+const protectedOperationResultsByEffect: Readonly<
+  Record<ProtectedOperationEffectKind, readonly [SafeFlowResultKind, ...SafeFlowResultKind[]]>
+> = {
+  read: ["completed", "refused", "validation", "failed"],
+  change: ["committed", "refused", "conflict", "validation", "partial", "uncertain", "failed"],
+  background_start: [
+    "background_pending",
+    "refused",
+    "conflict",
+    "validation",
+    "uncertain",
+    "failed",
+  ],
+};
 
 export const protectedOperationDescriptorSchema = z
   .object({
@@ -384,15 +504,44 @@ export const protectedOperationDescriptorSchema = z
     expectedRevision: z.enum(["not_required", "required"]),
     confirmation: z.enum(["not_required", "required"]),
     duplicateProtection: z.enum(["not_required", "required"]),
-    safeResults: z.array(safeFlowResultKindSchema).min(1).max(8),
+    safeResults: z
+      .array(safeFlowResultKindSchema)
+      .min(1)
+      .max(safeFlowResultKindSchema.options.length),
   })
   .strict()
   .superRefine((value, context) => {
-    if (new Set(value.safeResults).size !== value.safeResults.length)
+    const declared = new Set(value.safeResults);
+    if (declared.size !== value.safeResults.length)
       context.addIssue({
         code: "custom",
         path: ["safeResults"],
         message: "Safe operation results must be unique",
+      });
+    const permitted = protectedOperationResultsByEffect[value.effect];
+    if (value.safeResults.some((result) => !permitted.includes(result)))
+      context.addIssue({
+        code: "custom",
+        path: ["safeResults"],
+        message: "An operation can only report results possible for its declared effect",
+      });
+    if (!declared.has(permitted[0]) || !declared.has("refused"))
+      context.addIssue({
+        code: "custom",
+        path: ["safeResults"],
+        message: "An operation must declare its confirmed result and its permission refusal",
+      });
+    if (declared.has("conflict") !== (value.expectedRevision === "required"))
+      context.addIssue({
+        code: "custom",
+        path: ["safeResults"],
+        message: "A conflict result is declared exactly when an expected revision is required",
+      });
+    if (declared.has("uncertain") && value.duplicateProtection !== "required")
+      context.addIssue({
+        code: "custom",
+        path: ["safeResults"],
+        message: "An uncertain result requires duplicate protection for receipt reconciliation",
       });
   });
 
@@ -586,12 +735,37 @@ export const currentUserFlowActionTargetSchema = z.discriminatedUnion("kind", [
       actionKey: namespacedKeySchema,
       applicationRootId: applicationRootIdSchema,
       actionId: containedComponentIdSchema,
-      releaseVersion: semanticVersionSchema,
-      contentFingerprint: fingerprintSchema,
-      resolutionFingerprint: fingerprintSchema,
+      ...resolvedFlowTargetEvidenceSchema.shape,
     })
     .strict(),
 ]);
+
+/**
+ * Results each current-user action target reports, in presentation order. A protected operation
+ * reports exactly the results its resolved operation descriptor declares.
+ */
+export const currentUserFlowActionResults = {
+  form_continuation: ["completed", "validation", "refused"],
+  durable_workflow_start: ["background_pending", "validation", "refused", "uncertain"],
+  application_action: ["committed", "validation", "refused", "conflict", "uncertain"],
+} as const satisfies Readonly<
+  Record<
+    Exclude<CurrentUserFlowActionTarget["kind"], "protected_operation">,
+    readonly SafeFlowResultKind[]
+  >
+>;
+
+/** An action edge may only route a result its target can report. */
+function actionEdgeOutcomeDeclared(
+  targetKind: CurrentUserFlowActionTarget["kind"],
+  outcome: string,
+): boolean {
+  const results: readonly string[] =
+    targetKind === "protected_operation"
+      ? safeFlowResultKindSchema.options
+      : currentUserFlowActionResults[targetKind];
+  return results.includes(outcome);
+}
 
 export const currentUserFlowStartNodeSchema = z
   .object({
@@ -764,6 +938,14 @@ export function validateCurrentUserFlowGraph(
     }
     if (edge.fromNodeId === edge.toNodeId) {
       context.addIssue({ code: "custom", path: ["edges", index], message: "Self-referencing edges are not allowed" });
+    }
+    const fromNode = value.nodes.find((n) => String(n.nodeId) === String(edge.fromNodeId));
+    if (
+      fromNode?.kind === "action" &&
+      edge.outcome !== undefined &&
+      !actionEdgeOutcomeDeclared(fromNode.target.kind, edge.outcome)
+    ) {
+      context.addIssue({ code: "custom", path: ["edges", index, "outcome"], message: "An action edge can only route a result its target reports" });
     }
   }
 
@@ -994,6 +1176,204 @@ export const currentUserFlowSchema = z
   })
   .strict()
   .superRefine(validateCurrentUserFlowGraph);
+
+/** A trusted value the server takes from the verified request context; callers never supply it. */
+export const serverResolvedFlowInputSchema = z
+  .object({
+    source: z.literal("current_organization_account_id"),
+    type: z.literal("organization_account_reference"),
+  })
+  .strict();
+
+const flowContinuationInputs = {
+  /** The verified original initiator; never a caller-supplied account or actor. */
+  initiator: z.literal("server_resolved_current_account"),
+  /** Typed values the server binds from the published flow and its verified run state. */
+  flowInputs: z.record(builderKeySchema, workflowValueTypeSchema),
+  serverResolvedInputs: z.record(builderKeySchema, serverResolvedFlowInputSchema),
+};
+
+const refineDisjointContinuationInputs = (
+  value: { flowInputs: Record<string, unknown>; serverResolvedInputs: Record<string, unknown> },
+  context: z.RefinementCtx,
+): void => {
+  if (Object.keys(value.serverResolvedInputs).some((key) => key in value.flowInputs))
+    context.addIssue({
+      code: "custom",
+      path: ["serverResolvedInputs"],
+      message: "A server-resolved input cannot also be a flow-supplied input",
+    });
+};
+
+/**
+ * Resumes a flow from one private form draft. The draft belongs to the current account,
+ * organisation, application and form and creates no record before a protected operation commits.
+ */
+export const privateFormContinuationDescriptorSchema = z
+  .object({
+    kind: z.literal("private_form"),
+    draftScope: z.literal("current_account"),
+    ...flowContinuationInputs,
+    /** Answers the caller submits; the server validates them before the flow continues. */
+    answers: z.record(builderKeySchema, flowValueDeclarationSchema),
+  })
+  .strict()
+  .superRefine(refineDisjointContinuationInputs);
+
+/** Starts durable background work without fabricating or requiring a subject record. */
+export const recordFreeDurableStartContinuationDescriptorSchema = z
+  .object({
+    kind: z.literal("record_free_durable_start"),
+    subject: z.literal("none"),
+    ...flowContinuationInputs,
+  })
+  .strict()
+  .superRefine(refineDisjointContinuationInputs);
+
+export const flowContinuationDescriptorSchema = z.discriminatedUnion("kind", [
+  privateFormContinuationDescriptorSchema,
+  recordFreeDurableStartContinuationDescriptorSchema,
+]);
+
+const continuationKindByTarget = {
+  form_continuation: "private_form",
+  durable_workflow_start: "record_free_durable_start",
+} as const;
+
+/**
+ * The one typed descriptor a web or non-web consumer renders for a current-user flow action node.
+ * It names the exact server-resolved target, every result the node can report and its
+ * continuation, but never a successor node, actor, permission grant or executable endpoint:
+ * routing follows the published edges and authority is resolved again by the owning service.
+ */
+export const currentUserFlowActionDescriptorSchema = z
+  .object({
+    contractVersion: z.literal(applicationFlowBindingContractVersion),
+    flowId: ruleIdSchema,
+    nodeId: containedComponentIdSchema,
+    target: currentUserFlowActionTargetSchema,
+    runAs: z.literal("current_user"),
+    results: safeFlowResultDescriptorListSchema,
+    operation: protectedOperationDescriptorSchema.optional(),
+    continuation: flowContinuationDescriptorSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const target = value.target;
+    const operation = value.operation;
+    if (target.kind === "protected_operation") {
+      if (
+        operation === undefined ||
+        operationReferenceKey(operation.operation) !== operationReferenceKey(target.operation)
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["operation"],
+          message: "A protected operation action carries its own resolved operation descriptor",
+        });
+    } else if (operation !== undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["operation"],
+        message: "Only a protected operation action carries an operation descriptor",
+      });
+    const expectedResults: readonly SafeFlowResultKind[] =
+      target.kind === "protected_operation"
+        ? (operation?.safeResults ?? [])
+        : currentUserFlowActionResults[target.kind];
+    if (
+      value.results.length !== expectedResults.length ||
+      value.results.some((result, index) => result.outcome !== expectedResults[index])
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["results"],
+        message: "Action results must be exactly those its target reports",
+      });
+    const expectedContinuation =
+      target.kind === "form_continuation" || target.kind === "durable_workflow_start"
+        ? continuationKindByTarget[target.kind]
+        : undefined;
+    if (value.continuation?.kind !== expectedContinuation)
+      context.addIssue({
+        code: "custom",
+        path: ["continuation"],
+        message: "Form and durable-start actions carry exactly their own continuation",
+      });
+  });
+
+function operationReferenceKey(reference: ProtectedOperationReference): string {
+  const owner = reference.owner;
+  const ownerId =
+    owner.kind === "application"
+      ? owner.applicationRootId
+      : owner.kind === "module"
+        ? owner.moduleRootId
+        : owner.serviceId;
+  return `${owner.kind}:${String(ownerId)}:${String(reference.operationId)}`;
+}
+
+/**
+ * Builds the descriptor for one action node of a published current-user flow. A protected
+ * operation node requires the operation descriptor the server resolved for its exact target;
+ * trusted current-account inputs are always marked server-resolved rather than caller-supplied.
+ */
+export function describeCurrentUserFlowAction(
+  flow: CurrentUserFlow,
+  nodeId: string,
+  operation?: ProtectedOperationDescriptor,
+): CurrentUserFlowActionDescriptor {
+  const node = flow.nodes.find((candidate) => String(candidate.nodeId) === nodeId);
+  if (node?.kind !== "action")
+    throw new Error("A current-user flow action descriptor requires an action node of that flow");
+  const target = node.target;
+  const flowInputs: Record<string, z.infer<typeof workflowValueTypeSchema>> = {};
+  const serverResolvedInputs: Record<string, ServerResolvedFlowInput> = {};
+  for (const [key, binding] of Object.entries(node.inputs)) {
+    if (binding.value.source === "current_organization_account_id")
+      serverResolvedInputs[key] = {
+        source: "current_organization_account_id",
+        type: "organization_account_reference",
+      };
+    else flowInputs[key] = binding.type;
+  }
+  const continuationInputs = {
+    initiator: "server_resolved_current_account",
+    flowInputs,
+    serverResolvedInputs,
+  } as const;
+  const results: readonly SafeFlowResultKind[] =
+    target.kind === "protected_operation"
+      ? (operation?.safeResults ?? [])
+      : currentUserFlowActionResults[target.kind];
+  return currentUserFlowActionDescriptorSchema.parse({
+    contractVersion: applicationFlowBindingContractVersion,
+    flowId: flow.flowId,
+    nodeId: node.nodeId,
+    target,
+    runAs: "current_user",
+    results: results.map((result) => safeFlowResultDescriptors[result]),
+    ...(operation === undefined ? {} : { operation }),
+    ...(target.kind === "form_continuation"
+      ? {
+          continuation: {
+            kind: "private_form",
+            draftScope: "current_account",
+            ...continuationInputs,
+            answers: node.outputs,
+          },
+        }
+      : target.kind === "durable_workflow_start"
+        ? {
+            continuation: {
+              kind: "record_free_durable_start",
+              subject: "none",
+              ...continuationInputs,
+            },
+          }
+        : {}),
+  });
+}
 
 // --- Source equivalents for current-user flows and bindings ---
 
@@ -1421,6 +1801,14 @@ export function validateSourceCurrentUserFlowGraph(
     if (edge.from_node === edge.to_node) {
       context.addIssue({ code: "custom", path: ["edges", index], message: "Self-referencing edges are not allowed" });
     }
+    const fromNode = value.nodes.find((n) => n.id === edge.from_node);
+    if (
+      fromNode?.kind === "action" &&
+      edge.outcome !== undefined &&
+      !actionEdgeOutcomeDeclared(fromNode.target.kind, edge.outcome)
+    ) {
+      context.addIssue({ code: "custom", path: ["edges", index, "outcome"], message: "An action edge can only route a result its target reports" });
+    }
   }
 
   if (startNodes.length === 1) {
@@ -1667,6 +2055,7 @@ export type ProtectedOperationPermissionReference = z.infer<
   typeof protectedOperationPermissionReferenceSchema
 >;
 export type SafeFlowResultKind = z.infer<typeof safeFlowResultKindSchema>;
+export type SafeFlowResultDescriptor = z.infer<typeof safeFlowResultDescriptorSchema>;
 export type ProtectedOperationDescriptor = z.infer<typeof protectedOperationDescriptorSchema>;
 export type FlowNodeRunAs = z.infer<typeof flowNodeRunAsSchema>;
 export type FrontendFlowNodeTarget = z.infer<typeof frontendFlowNodeTargetSchema>;
@@ -1684,6 +2073,17 @@ export type CurrentUserFlowReturnNode = z.infer<typeof currentUserFlowReturnNode
 export type CurrentUserFlowNode = z.infer<typeof currentUserFlowNodeSchema>;
 export type CurrentUserFlowEdge = z.infer<typeof currentUserFlowEdgeSchema>;
 export type CurrentUserFlow = z.infer<typeof currentUserFlowSchema>;
+export type ServerResolvedFlowInput = z.infer<typeof serverResolvedFlowInputSchema>;
+export type PrivateFormContinuationDescriptor = z.infer<
+  typeof privateFormContinuationDescriptorSchema
+>;
+export type RecordFreeDurableStartContinuationDescriptor = z.infer<
+  typeof recordFreeDurableStartContinuationDescriptorSchema
+>;
+export type FlowContinuationDescriptor = z.infer<typeof flowContinuationDescriptorSchema>;
+export type CurrentUserFlowActionDescriptor = z.infer<
+  typeof currentUserFlowActionDescriptorSchema
+>;
 
 export type SourceComponentBindingContext = z.infer<typeof sourceComponentBindingContextSchema>;
 export type SourceComponentFlowInputValue = z.infer<typeof sourceComponentFlowInputValueSchema>;
