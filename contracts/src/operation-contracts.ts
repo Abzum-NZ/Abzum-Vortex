@@ -411,6 +411,163 @@ export const fileStorageOperationClaimsSchema = z
       });
   });
 
+/**
+ * Non-authoritative legal-hold projection for display or query purposes only.
+ * A boolean flag or display projection confers no removal authority; file removal
+ * eligibility must be authoritatively evaluated by `decideFileRemovalEligibility`
+ * against active protected organisation legal holds and retention policies.
+ */
+export const fileLegalHoldProjectionSchema = z
+  .object({
+    isHeld: z.boolean(),
+  })
+  .strict();
+export type FileLegalHoldProjection = z.infer<typeof fileLegalHoldProjectionSchema>;
+
+/**
+ * Versioned scope of a protected legal hold under Specification 14.
+ * A legal hold protects only data matching its authorised, versioned scope.
+ */
+export const protectedLegalHoldScopeSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("all_organization_data"),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("file"),
+      fileId: fileIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("record"),
+      recordTypeId: recordTypeIdSchema,
+      recordId: recordIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("record_type"),
+      recordTypeId: recordTypeIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("application"),
+      applicationRootId: applicationRootIdSchema,
+    })
+    .strict(),
+]);
+export type ProtectedLegalHoldScope = z.infer<typeof protectedLegalHoldScopeSchema>;
+
+/**
+ * Exact protected legal hold reference binding organisation ownership, hold identity,
+ * lifecycle status and versioned scope.
+ */
+export const protectedLegalHoldReferenceSchema = z
+  .object({
+    holdId: platformIdSchema,
+    organizationId: organizationIdSchema,
+    scope: protectedLegalHoldScopeSchema,
+    status: z.enum(["active", "released"]),
+    scopeRevision: revisionSchema,
+  })
+  .strict();
+export type ProtectedLegalHoldReference = z.infer<typeof protectedLegalHoldReferenceSchema>;
+
+/**
+ * Closed stable refusal reasons for file removal eligibility.
+ * Distinguishes lifecycle, recovery protection, matching legal holds,
+ * active attachment ownership, active share responsibility, stale revision,
+ * and unavailable governing policies without exposing held content or foreign identifiers.
+ */
+export const fileRemovalRefusalReasonSchema = z.enum([
+  "wrong_lifecycle",
+  "current_recovery_protection",
+  "matching_legal_hold",
+  "active_attachment_ownership",
+  "active_share_responsibility",
+  "stale_revision",
+  "unavailable_governing_policy",
+  "malformed_input",
+]);
+export type FileRemovalRefusalReason = z.infer<typeof fileRemovalRefusalReasonSchema>;
+
+/**
+ * Strict input for authoritative file-removal eligibility evaluation.
+ * Binds current organisation, file, source record/field ownership, file lifecycle,
+ * recovery deadline, active attachment/share ownership, exact expected revision,
+ * and exact protected legal-hold references/scopes.
+ */
+export const fileRemovalEligibilityInputSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    fileId: fileIdSchema,
+    sourceOrganizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema.optional(),
+    ownerRecordTypeId: recordTypeIdSchema.optional(),
+    ownerRecordId: recordIdSchema.optional(),
+    ownerFieldId: fieldIdSchema.optional(),
+    lifecycleState: fileLifecycleStateSchema,
+    recoveryDeadline: timestampSchema.nullable().optional(),
+    activeAttachmentReferences: z.array(platformIdSchema),
+    activeShareReferences: z.array(platformIdSchema),
+    expectedRevision: revisionSchema,
+    currentRevision: revisionSchema,
+    holds: z.array(protectedLegalHoldReferenceSchema),
+    holdPolicyAvailable: z.boolean(),
+    recoveryPolicyAvailable: z.boolean(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const ownerParts = [value.ownerRecordTypeId, value.ownerRecordId, value.ownerFieldId];
+    if (
+      ownerParts.some((part) => part !== undefined) &&
+      ownerParts.some((part) => part === undefined)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["ownerFieldId"],
+        message: "Owner record type, record and attachment field travel together or not at all",
+      });
+    }
+  });
+export type FileRemovalEligibilityInput = z.infer<typeof fileRemovalEligibilityInputSchema>;
+
+export const fileRemovalEligibleDecisionSchema = z
+  .object({
+    eligible: z.literal(true),
+    status: z.literal("eligible"),
+    reason: z.null(),
+    fileId: fileIdSchema,
+    organizationId: organizationIdSchema,
+    evaluatedRevision: revisionSchema,
+    decidedAt: timestampSchema,
+  })
+  .strict();
+export type FileRemovalEligibleDecision = z.infer<typeof fileRemovalEligibleDecisionSchema>;
+
+export const fileRemovalRefusedDecisionSchema = z
+  .object({
+    eligible: z.literal(false),
+    status: z.literal("refused"),
+    reason: fileRemovalRefusalReasonSchema,
+    fileId: fileIdSchema.nullable(),
+    organizationId: organizationIdSchema.nullable(),
+    evaluatedRevision: revisionSchema.nullable(),
+    decidedAt: timestampSchema,
+  })
+  .strict();
+export type FileRemovalRefusedDecision = z.infer<typeof fileRemovalRefusedDecisionSchema>;
+
+export const fileRemovalEligibilityDecisionSchema = z.discriminatedUnion("eligible", [
+  fileRemovalEligibleDecisionSchema,
+  fileRemovalRefusedDecisionSchema,
+]);
+export type FileRemovalEligibilityDecision = z.infer<typeof fileRemovalEligibilityDecisionSchema>;
+
 export const fileRecordSchema = z
   .object({
     fileId: fileIdSchema,
@@ -437,7 +594,7 @@ export const fileRecordSchema = z
     ownerRecordTypeId: recordTypeIdSchema.optional(),
     ownerRecordId: recordIdSchema.optional(),
     ownerFieldId: fieldIdSchema.optional(),
-    legalHold: z.boolean(),
+    legalHold: fileLegalHoldProjectionSchema,
   })
   .strict()
   .superRefine((value, context) => {

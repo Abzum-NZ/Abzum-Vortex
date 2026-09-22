@@ -10,3 +10,4 @@ export * from "./storage-policy";
 export * from "./content-safety";
 export * from "./attachment-authority";
 export * from "./storage-credentials";
+export * from "./removal-eligibility";

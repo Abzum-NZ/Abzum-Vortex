@@ -20,6 +20,10 @@ import {
   type VerifiedFileActor,
 } from "@vortex/contracts";
 import { createSignedStorageOperationClaims, validateStorageKey } from "./storage-policy";
+import {
+  isCurrentFileRemovalEligibilityEvidence,
+  type FileRemovalEligibilityEvidence,
+} from "./removal-eligibility";
 
 /**
  * The request presented to the trusted, server-injected authority resolver.
@@ -54,7 +58,11 @@ export type CurrentStorageAuthority =
         operation: "upload" | "read";
         transferGrantId: UploadGrant["oneTimeId"];
       }>)
-  | (CurrentStorageAuthorityBase & Readonly<{ operation: "delete" }>);
+  | (CurrentStorageAuthorityBase &
+      Readonly<{
+        operation: "delete";
+        removalEligibility: FileRemovalEligibilityEvidence;
+      }>);
 
 export type StorageAuthorityResolution =
   | CurrentStorageAuthority
@@ -274,8 +282,9 @@ type ValidatedAuthority = Readonly<{
 const validateCurrentAuthority = (
   request: StorageCredentialRequest,
   resolution: StorageAuthorityResolution,
-  nowSeconds: number,
+  now: Date,
 ): ValidatedAuthority => {
+  const nowSeconds = Math.floor(now.getTime() / 1_000);
   if (resolution.authorized !== true) {
     throw new Error("Storage credential minting refused by current authority");
   }
@@ -367,10 +376,21 @@ const validateCurrentAuthority = (
       if (
         !fileIdResult.success ||
         fileIdResult.data !== fileRecord.fileId ||
-        fileRecord.lifecycleState === "removed" ||
-        fileRecord.legalHold
+        fileRecord.lifecycleState === "removed"
       ) {
         throw new Error("Storage credential minting refused: removal scope is not current");
+      }
+      if (!("removalEligibility" in resolution)) {
+        throw new Error("Storage credential minting refused: missing removal eligibility evidence");
+      }
+      if (
+        !isCurrentFileRemovalEligibilityEvidence(
+          resolution.removalEligibility,
+          fileRecord,
+          now,
+        )
+      ) {
+        throw new Error("Storage credential minting refused: file is not eligible for removal");
       }
       break;
     }
@@ -477,7 +497,7 @@ export const createStorageCredentialBridge = (
     } catch {
       throw new Error("Storage credential current authority is unavailable");
     }
-    const authority = validateCurrentAuthority(request, resolution, nowSeconds);
+    const authority = validateCurrentAuthority(request, resolution, now);
     const ttlSeconds = Math.min(
       requestedTtl(input.ttlSeconds),
       authority.expiresAtSeconds - nowSeconds,
