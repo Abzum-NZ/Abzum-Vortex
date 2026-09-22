@@ -42,6 +42,8 @@ import {
   type PlatformBlockReleaseV2,
   type PlatformId,
   type PlatformThemeReleaseV2,
+  type PlatformManagedFlowDependency,
+  type PlatformServiceOperationRelease,
   type Revision,
   type SemanticVersion,
 } from "@vortex/contracts";
@@ -192,6 +194,15 @@ export interface DefinitionPublicationCatalogue {
       }>;
     }>,
   ): Promise<ApplicationCompositionCatalogueSnapshotV2 | undefined>;
+  readPlatformManagedFlowRelease?(
+    flowId: string,
+    releaseVersion: string,
+  ): Promise<PlatformManagedFlowDependency | undefined>;
+  readPlatformServiceOperationRelease?(
+    serviceId: string,
+    operationId: string,
+    releaseVersion: string,
+  ): Promise<PlatformServiceOperationRelease | undefined>;
 }
 
 export type DefinitionReleaseAppend = Readonly<{
@@ -239,6 +250,8 @@ type ResolvedDependencies = Readonly<{
   modules: readonly ResolvableModuleRelease[];
   connections: readonly ResolvableConnectionTypeRelease[];
   compositionV2?: ApplicationCompositionCatalogueSnapshotV2;
+  managedFlows: readonly PlatformManagedFlowDependency[];
+  platformOperations: readonly PlatformServiceOperationRelease[];
 }>;
 
 const stable = (version: string): boolean =>
@@ -345,6 +358,30 @@ const subjectOf = (dependency: ExactDefinitionDependency): string =>
     ? `${dependency.kind}:${dependency.catalogueThemeId}`
     : dependency.kind === "platform_block"
       ? `${dependency.kind}:${dependency.blockId}`
+      : dependency.kind === "platform_flow"
+        ? `${dependency.kind}:${dependency.flowId}`
+        : dependency.kind === "application_flow"
+          ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}`
+          : dependency.kind === "application_flow_node"
+            ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}:${dependency.nodeId}`
+            : dependency.kind === "application_query"
+              ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.queryId}`
+              : dependency.kind === "module_query"
+                ? `${dependency.kind}:${dependency.moduleRootId}:${dependency.queryId}`
+                : dependency.kind === "application_form"
+                  ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.formId}`
+                    : dependency.kind === "application_workflow"
+                      ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.workflowId}`
+                      : dependency.kind === "application_action"
+                        ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.actionId}`
+                    : dependency.kind === "protected_operation"
+                      ? `${dependency.kind}:${dependency.operation.owner.kind}:${
+                          dependency.operation.owner.kind === "application"
+                            ? dependency.operation.owner.applicationRootId
+                            : dependency.operation.owner.kind === "module"
+                              ? dependency.operation.owner.moduleRootId
+                              : dependency.operation.owner.serviceId
+                        }:${dependency.operation.operationId}`
       : `${dependency.kind}:${dependency.key}`;
 
 const sortedManifest = (
@@ -542,6 +579,10 @@ const findPinned = <Kind extends ExactDefinitionDependency["kind"]>(
         ? entry.catalogueThemeId === subject
         : entry.kind === "platform_block"
           ? entry.blockId === subject
+          : entry.kind === "platform_flow"
+            ? String(entry.flowId) === subject
+            : entry.kind === "protected_operation"
+              ? entry.operation.operationId === subject
           : entry.key === subject),
   );
   if (matches.length !== 1) return refuse("DEFINITION_CONFIRMATION_MISMATCH");
@@ -683,6 +724,86 @@ const resolveDependencies = async (
       pinned,
     );
 
+  const managedFlows: PlatformManagedFlowDependency[] = [];
+  const managedFlowSubjects = new Set<string>();
+  const platformOperations: PlatformServiceOperationRelease[] = [];
+  const platformOperationSubjects = new Set<string>();
+  if (candidate.draft.source.kind === "application") {
+    for (const binding of candidate.draft.source.body.flow_bindings) {
+      if (binding.flow.kind !== "platform_managed") continue;
+      const release = await catalogue.readPlatformManagedFlowRelease?.(
+        binding.flow.flow_id,
+        binding.flow.release_version,
+      );
+      if (
+        release === undefined ||
+        release.kind !== "platform_flow" ||
+        release.flowId !== binding.flow.flow_id ||
+        release.releaseVersion !== binding.flow.release_version
+      )
+        refuse("DEFINITION_DEPENDENCY_MISSING");
+      if (pinned !== undefined) {
+        const exact = findPinned(pinned, "platform_flow", String(binding.flow.flow_id));
+        if (
+          exact.releaseVersion !== release.releaseVersion ||
+          exact.contentFingerprint !== release.contentFingerprint ||
+          exact.catalogueFingerprint !== release.catalogueFingerprint
+        )
+          refuse("DEFINITION_CONFIRMATION_MISMATCH");
+      }
+      const subject = `${release.flowId}:${release.releaseVersion}`;
+      if (!managedFlowSubjects.has(subject)) {
+        managedFlowSubjects.add(subject);
+        managedFlows.push(release);
+      }
+    }
+    for (const flow of candidate.draft.source.body.flows) {
+      for (const node of flow.nodes) {
+        if (node.kind !== "action" || node.target.kind !== "protected_operation") continue;
+        const owner = node.target.operation.owner;
+        if (owner.kind !== "platform_service") continue;
+        const release = await catalogue.readPlatformServiceOperationRelease?.(
+          owner.serviceId,
+          node.target.operation.operationId,
+          node.target.release_version!,
+        );
+        if (
+          release === undefined ||
+          release.serviceId !== owner.serviceId ||
+          release.operationId !== node.target.operation.operationId ||
+          release.releaseVersion !== node.target.release_version
+        )
+          refuse(
+            release === undefined
+              ? "DEFINITION_DEPENDENCY_MISSING"
+              : "DEFINITION_DEPENDENCY_SUBSTITUTED",
+          );
+        if (pinned !== undefined) {
+          const exact = pinned.filter(
+            (dependency) =>
+              dependency.kind === "protected_operation" &&
+              dependency.operation.owner.kind === "platform_service" &&
+              dependency.operation.owner.serviceId === owner.serviceId &&
+              dependency.operation.operationId === node.target.operation.operationId,
+          );
+          if (exact.length !== 1) refuse("DEFINITION_CONFIRMATION_MISMATCH");
+          const pinnedOperation = exact[0]!;
+          if (
+            pinnedOperation.releaseVersion !== release.releaseVersion ||
+            pinnedOperation.contentFingerprint !== release.contentFingerprint ||
+            pinnedOperation.catalogueFingerprint !== release.catalogueFingerprint
+          )
+            refuse("DEFINITION_CONFIRMATION_MISMATCH");
+        }
+        const subject = `${release.serviceId}:${release.operationId}:${release.releaseVersion}`;
+        if (!platformOperationSubjects.has(subject)) {
+          platformOperationSubjects.add(subject);
+          platformOperations.push(release);
+        }
+      }
+    }
+  }
+
   const expectedSubjects = [
     ...modules.map((release) => `module:${release.key}`),
     ...connections.map((release) => `connection_type:${release.key}`),
@@ -697,13 +818,24 @@ const resolveDependencies = async (
   ].sort(compareCanonicalStrings);
   if (
     pinned !== undefined &&
-    JSON.stringify([...pinned].map(subjectOf).sort(compareCanonicalStrings)) !==
+    JSON.stringify(
+      [...pinned]
+        .filter((dependency) =>
+          ["module", "connection_type", "platform_block", "platform_theme"].includes(
+            dependency.kind,
+          ),
+        )
+        .map(subjectOf)
+        .sort(compareCanonicalStrings),
+    ) !==
       JSON.stringify(expectedSubjects)
   )
     refuse("DEFINITION_CONFIRMATION_MISMATCH");
   return {
     modules,
     connections,
+    managedFlows,
+    platformOperations,
     ...(compositionV2 === undefined ? {} : { compositionV2 }),
   };
 };
@@ -750,7 +882,133 @@ const assertNoCycle = async (
   for (const module of modules) await visit(module);
 };
 
-const manifestFor = (dependencies: ResolvedDependencies): ExactDefinitionDependency[] =>
+const flowTargetManifestFor = (
+  output: Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>,
+): ExactDefinitionDependency[] => {
+  if (output.kind !== "application") return [];
+  const entries: ExactDefinitionDependency[] = [];
+  const bySubject = new Map<string, ExactDefinitionDependency>();
+  const add = (entry: ExactDefinitionDependency): void => {
+    const subject = subjectOf(entry);
+    const existing = bySubject.get(subject);
+    if (existing !== undefined) {
+      if (fingerprintCanonicalValue(existing) !== fingerprintCanonicalValue(entry))
+        refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+      return;
+    }
+    bySubject.set(subject, entry);
+    entries.push(entry);
+  };
+  const content = output.canonical.content;
+  const applicationRootId = output.canonical.envelope.rootId;
+  for (const flow of content.flows) {
+    add({
+      kind: "application_flow",
+      applicationRootId,
+      flowId: flow.flowId,
+      releaseVersion: flow.releaseVersion,
+      contentFingerprint: flow.contentFingerprint,
+      resolutionFingerprint: flow.resolutionFingerprint,
+    });
+    for (const node of flow.nodes)
+      add({
+        kind: "application_flow_node",
+        applicationRootId,
+        flowId: flow.flowId,
+        nodeId: node.nodeId,
+        releaseVersion: flow.releaseVersion,
+        contentFingerprint: fingerprintCanonicalValue({ kind: "flow_node", node }),
+        resolutionFingerprint: flow.resolutionFingerprint,
+      });
+    for (const node of flow.nodes) {
+      const target = (node as { target?: Record<string, unknown> }).target;
+      if (target === undefined) continue;
+      const targetKind = String(target.kind);
+      if (targetKind === "application_query")
+        add({
+          kind: "application_query",
+          applicationRootId,
+          queryId: String(target.queryId),
+          releaseVersion: String(target.releaseVersion),
+          contentFingerprint: String(target.contentFingerprint),
+          resolutionFingerprint: String(target.resolutionFingerprint),
+        });
+      else if (targetKind === "query")
+        add({
+          kind: "module_query",
+          moduleRootId: String(target.moduleRootId),
+          queryId: String(target.queryId),
+          declaredRequirement: target.declaredRequirement as never,
+          releaseVersion: String(target.moduleReleaseVersion),
+          contentFingerprint: String(target.contentFingerprint),
+          resolutionFingerprint: String(target.resolutionFingerprint),
+        });
+      else if (targetKind === "protected_operation")
+        add({
+          kind: "protected_operation",
+          operation: target.operation as never,
+          releaseVersion: String(target.releaseVersion),
+          contentFingerprint: String(target.contentFingerprint),
+          resolutionFingerprint: String(target.resolutionFingerprint),
+          ...(target.catalogueFingerprint === undefined
+            ? {}
+            : { catalogueFingerprint: String(target.catalogueFingerprint) }),
+        });
+      else if (targetKind === "form_continuation")
+        add({
+          kind: "application_form",
+          applicationRootId,
+          formId: String(target.formId),
+          releaseVersion: String(target.releaseVersion),
+          contentFingerprint: String(target.contentFingerprint),
+          resolutionFingerprint: String(target.resolutionFingerprint),
+        });
+      else if (targetKind === "durable_workflow_start")
+        add({
+          kind: "application_workflow",
+          applicationRootId,
+          workflowId: String(target.workflowId),
+          releaseVersion: String(target.releaseVersion),
+          contentFingerprint: String(target.contentFingerprint),
+          resolutionFingerprint: String(target.resolutionFingerprint),
+        });
+      else if (targetKind === "application_action")
+        add({
+          kind: "application_action",
+          applicationRootId,
+          actionId: String(target.actionId),
+          releaseVersion: String(target.releaseVersion),
+          contentFingerprint: String(target.contentFingerprint),
+          resolutionFingerprint: String(target.resolutionFingerprint),
+        });
+    }
+  }
+  for (const binding of content.flowBindings) {
+    if (binding.flow.kind === "application_owned")
+      add({
+        kind: "application_flow",
+        applicationRootId,
+        flowId: binding.flow.flowId,
+        releaseVersion: binding.flow.releaseVersion,
+        contentFingerprint: binding.flow.contentFingerprint,
+        resolutionFingerprint: binding.flow.resolutionFingerprint,
+      });
+    else
+      add({
+        kind: "platform_flow",
+        flowId: binding.flow.flowId,
+        releaseVersion: binding.flow.releaseVersion,
+        contentFingerprint: binding.flow.contentFingerprint,
+        catalogueFingerprint: binding.flow.catalogueFingerprint,
+      });
+  }
+  return entries;
+};
+
+const manifestFor = (
+  dependencies: ResolvedDependencies,
+  output: Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>,
+): ExactDefinitionDependency[] =>
   sortedManifest([
     ...dependencies.modules.map((release) => ({
       kind: "module" as const,
@@ -787,6 +1045,7 @@ const manifestFor = (dependencies: ResolvedDependencies): ExactDefinitionDepende
             catalogueFingerprint: dependencies.compositionV2.platformTheme.catalogueFingerprint,
           },
         ]),
+    ...flowTargetManifestFor(output),
   ]);
 
 const buildResolution = (
@@ -964,6 +1223,10 @@ const compileCandidate = (
     const output = compileParsedDefinition(
       parsedCompilationRequest(applicationCompilationRequestV2Schema, request),
       dependencyOutputs,
+      {
+        managedFlows: dependencies.managedFlows,
+        platformOperations: dependencies.platformOperations,
+      },
     );
     if (final)
       assertFinalPublicationValidation(
@@ -1115,8 +1378,7 @@ const prepareFromReader = async (
     { assignedVersion: string }
   >;
   if (
-    finalImpact.assignedVersion !== confirmableImpact.assignedVersion ||
-    finalImpact.comparisonFingerprint !== confirmableImpact.comparisonFingerprint
+    finalImpact.assignedVersion !== confirmableImpact.assignedVersion
   )
     refuse("DEFINITION_VERSION_REFUSED");
   const confirmation = definitionPublicationConfirmationSchema.parse({
@@ -1128,7 +1390,7 @@ const prepareFromReader = async (
     contentFingerprint: compilationOutput.artifact.contentFingerprint,
     resolutionFingerprint: compilationOutput.resolutionFingerprint,
     comparisonFingerprint: finalImpact.comparisonFingerprint,
-    dependencyManifest: manifestFor(dependencies),
+    dependencyManifest: manifestFor(dependencies, compilationOutput),
     reasons: finalImpact.reasons,
     ...(finalImpact.outcome === "release_required" ? { impact: finalImpact.impact } : {}),
   });

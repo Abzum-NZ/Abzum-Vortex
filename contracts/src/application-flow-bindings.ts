@@ -14,6 +14,7 @@ import {
   containedComponentIdSchema,
   eventIdSchema,
   fieldIdSchema,
+  fingerprintSchema,
   moduleRootIdSchema,
   namespacedKeySchema,
   permissionIdSchema,
@@ -22,6 +23,7 @@ import {
   recordTypeIdSchema,
   ruleIdSchema,
   semanticVersionSchema,
+  stableDefinitionReleaseVersionSchema,
   versionRequirementSchema,
   workflowIdSchema,
   workflowNodeIdSchema,
@@ -161,19 +163,31 @@ export const typedFlowResultMappingSchema = z
   })
   .strict();
 
+/** Immutable evidence attached to every Definition-owned flow target. */
+export const resolvedFlowTargetEvidenceSchema = z
+  .object({
+    releaseVersion: stableDefinitionReleaseVersionSchema,
+    contentFingerprint: fingerprintSchema,
+    resolutionFingerprint: fingerprintSchema,
+  })
+  .strict();
+
 export const frontendFlowReferenceSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("application_owned"),
       applicationRootId: applicationRootIdSchema,
       flowId: ruleIdSchema,
+      ...resolvedFlowTargetEvidenceSchema.shape,
     })
     .strict(),
   z
     .object({
       kind: z.literal("platform_managed"),
       flowId: ruleIdSchema,
-      releaseVersion: semanticVersionSchema,
+      releaseVersion: stableDefinitionReleaseVersionSchema,
+      contentFingerprint: fingerprintSchema,
+      catalogueFingerprint: fingerprintSchema,
     })
     .strict(),
 ]);
@@ -243,6 +257,107 @@ export const protectedOperationReferenceSchema = z
   })
   .strict();
 
+/**
+ * Exact manifest entries for targets contained by an Application release. These are deliberately
+ * separate from Module/connection dependencies: a target is pinned by its permanent owner and
+ * contained identity, not by a caller-supplied key or label.
+ */
+const flowTargetDependencyCommon = {
+  releaseVersion: stableDefinitionReleaseVersionSchema,
+  contentFingerprint: fingerprintSchema,
+  resolutionFingerprint: fingerprintSchema,
+};
+
+export const flowTargetDependencySchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("application_flow"),
+      applicationRootId: applicationRootIdSchema,
+      flowId: ruleIdSchema,
+      ...flowTargetDependencyCommon,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("application_flow_node"),
+      applicationRootId: applicationRootIdSchema,
+      flowId: ruleIdSchema,
+      nodeId: workflowNodeIdSchema,
+      ...flowTargetDependencyCommon,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("application_query"),
+      applicationRootId: applicationRootIdSchema,
+      queryId: queryIdSchema,
+      ...flowTargetDependencyCommon,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("module_query"),
+      moduleRootId: moduleRootIdSchema,
+      queryId: queryIdSchema,
+      declaredRequirement: versionRequirementSchema,
+      ...flowTargetDependencyCommon,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("protected_operation"),
+      operation: protectedOperationReferenceSchema,
+      ...flowTargetDependencyCommon,
+      catalogueFingerprint: fingerprintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("application_form"),
+      applicationRootId: applicationRootIdSchema,
+      formId: containedComponentIdSchema,
+      ...flowTargetDependencyCommon,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("application_workflow"),
+      applicationRootId: applicationRootIdSchema,
+      workflowId: workflowIdSchema,
+      ...flowTargetDependencyCommon,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("application_action"),
+      applicationRootId: applicationRootIdSchema,
+      actionId: containedComponentIdSchema,
+      ...flowTargetDependencyCommon,
+    })
+    .strict(),
+]);
+
+/** Exact immutable authority for a platform-managed flow catalogue release. */
+export const platformManagedFlowDependencySchema = z
+  .object({
+    kind: z.literal("platform_flow"),
+    flowId: ruleIdSchema,
+    releaseVersion: stableDefinitionReleaseVersionSchema,
+    contentFingerprint: fingerprintSchema,
+    catalogueFingerprint: fingerprintSchema,
+  })
+  .strict();
+
+export const platformServiceOperationReleaseSchema = z
+  .object({
+    serviceId: platformIdSchema,
+    operationId: platformIdSchema,
+    releaseVersion: stableDefinitionReleaseVersionSchema,
+    contentFingerprint: fingerprintSchema,
+    catalogueFingerprint: fingerprintSchema,
+  })
+  .strict();
+
 export const protectedOperationPermissionReferenceSchema = z
   .object({ permissionId: permissionIdSchema, key: namespacedKeySchema })
   .strict();
@@ -298,14 +413,19 @@ export const frontendFlowNodeTargetSchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("protected_operation"),
       operation: protectedOperationReferenceSchema,
+      ...resolvedFlowTargetEvidenceSchema.shape,
+      catalogueFingerprint: fingerprintSchema.optional(),
     })
     .strict(),
   z
     .object({
       kind: z.literal("query"),
       moduleRootId: moduleRootIdSchema,
-      moduleReleaseVersion: semanticVersionSchema,
+      moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
       queryId: queryIdSchema,
+      declaredRequirement: versionRequirementSchema,
+      contentFingerprint: fingerprintSchema,
+      resolutionFingerprint: fingerprintSchema,
     })
     .strict(),
   z
@@ -314,6 +434,7 @@ export const frontendFlowNodeTargetSchema = z.discriminatedUnion("kind", [
       applicationRootId: applicationRootIdSchema,
       formId: containedComponentIdSchema,
       continuationEventId: eventIdSchema,
+      ...resolvedFlowTargetEvidenceSchema.shape,
     })
     .strict(),
   z
@@ -321,6 +442,7 @@ export const frontendFlowNodeTargetSchema = z.discriminatedUnion("kind", [
       kind: z.literal("durable_workflow_start"),
       applicationRootId: applicationRootIdSchema,
       workflowId: workflowIdSchema,
+      ...resolvedFlowTargetEvidenceSchema.shape,
     })
     .strict(),
 ]);
@@ -413,14 +535,21 @@ export const currentUserFlowQueryTargetSchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("query"),
       moduleRootId: moduleRootIdSchema,
-      moduleReleaseVersion: semanticVersionSchema,
+      moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
       queryId: queryIdSchema,
+      declaredRequirement: versionRequirementSchema,
+      contentFingerprint: fingerprintSchema,
+      resolutionFingerprint: fingerprintSchema,
     })
     .strict(),
   z
     .object({
       kind: z.literal("application_query"),
       queryId: queryIdSchema,
+      applicationRootId: applicationRootIdSchema,
+      releaseVersion: stableDefinitionReleaseVersionSchema,
+      contentFingerprint: fingerprintSchema,
+      resolutionFingerprint: fingerprintSchema,
     })
     .strict(),
 ]);
@@ -430,6 +559,8 @@ export const currentUserFlowActionTargetSchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("protected_operation"),
       operation: protectedOperationReferenceSchema,
+      ...resolvedFlowTargetEvidenceSchema.shape,
+      catalogueFingerprint: fingerprintSchema.optional(),
     })
     .strict(),
   z
@@ -438,6 +569,7 @@ export const currentUserFlowActionTargetSchema = z.discriminatedUnion("kind", [
       applicationRootId: applicationRootIdSchema,
       formId: containedComponentIdSchema,
       continuationEventId: eventIdSchema,
+      ...resolvedFlowTargetEvidenceSchema.shape,
     })
     .strict(),
   z
@@ -445,12 +577,18 @@ export const currentUserFlowActionTargetSchema = z.discriminatedUnion("kind", [
       kind: z.literal("durable_workflow_start"),
       applicationRootId: applicationRootIdSchema,
       workflowId: workflowIdSchema,
+      ...resolvedFlowTargetEvidenceSchema.shape,
     })
     .strict(),
   z
     .object({
       kind: z.literal("application_action"),
       actionKey: namespacedKeySchema,
+      applicationRootId: applicationRootIdSchema,
+      actionId: containedComponentIdSchema,
+      releaseVersion: semanticVersionSchema,
+      contentFingerprint: fingerprintSchema,
+      resolutionFingerprint: fingerprintSchema,
     })
     .strict(),
 ]);
@@ -843,6 +981,9 @@ export const currentUserFlowSchema = z
     flowId: ruleIdSchema,
     key: builderKeySchema,
     name: labelSchema,
+    releaseVersion: stableDefinitionReleaseVersionSchema,
+    contentFingerprint: fingerprintSchema,
+    resolutionFingerprint: fingerprintSchema,
     description: z.string().max(1000).optional(),
     runAs: z.literal("current_user").default("current_user"),
     inputs: z.record(builderKeySchema, flowValueDeclarationSchema).default({}),
@@ -975,7 +1116,7 @@ export const sourceFrontendFlowReferenceSchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("platform_managed"),
       flow_id: ruleIdSchema,
-      release_version: semanticVersionSchema,
+      release_version: stableDefinitionReleaseVersionSchema,
     })
     .strict(),
 ]);
@@ -1093,8 +1234,19 @@ export const sourceCurrentUserFlowActionTargetSchema = z.discriminatedUnion("kin
     .object({
       kind: z.literal("protected_operation"),
       operation: protectedOperationReferenceSchema,
+      release_version: stableDefinitionReleaseVersionSchema.optional(),
     })
-    .strict(),
+    .strict()
+    .superRefine((value, context) => {
+      const platformManaged = value.operation.owner.kind === "platform_service";
+      if (platformManaged !== (value.release_version !== undefined))
+        context.addIssue({
+          code: "custom",
+          path: ["release_version"],
+          message:
+            "A platform-service operation requires one exact release; Definition-owned operations inherit their selected Definition release",
+        });
+    }),
   z
     .object({
       kind: z.literal("form_continuation"),
@@ -1505,6 +1657,12 @@ export type ProtectedOperationEffectKind = z.infer<typeof protectedOperationEffe
 export type ComponentFlowBinding = z.infer<typeof componentFlowBindingSchema>;
 export type ProtectedOperationOwner = z.infer<typeof protectedOperationOwnerSchema>;
 export type ProtectedOperationReference = z.infer<typeof protectedOperationReferenceSchema>;
+export type ResolvedFlowTargetEvidence = z.infer<typeof resolvedFlowTargetEvidenceSchema>;
+export type FlowTargetDependency = z.infer<typeof flowTargetDependencySchema>;
+export type PlatformManagedFlowDependency = z.infer<typeof platformManagedFlowDependencySchema>;
+export type PlatformServiceOperationRelease = z.infer<
+  typeof platformServiceOperationReleaseSchema
+>;
 export type ProtectedOperationPermissionReference = z.infer<
   typeof protectedOperationPermissionReferenceSchema
 >;

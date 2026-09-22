@@ -1966,7 +1966,30 @@ export const normaliseModuleContent = <T extends ModuleContent | ModuleContentV2
 
 /** Canonical ordering for the definition-wide fields every Application release shares. */
 const normaliseApplicationSharedContent = (content: ApplicationContentV2): RecordValue => {
-  const value = asRecord(content);
+  const value = asRecord(structuredClone(content));
+  for (const flow of value.flows as RecordValue[]) {
+    delete flow.releaseVersion;
+    delete flow.contentFingerprint;
+    delete flow.resolutionFingerprint;
+    for (const node of flow.nodes as RecordValue[]) {
+      const target = node.target as RecordValue | undefined;
+      if (target === undefined) continue;
+      delete target.contentFingerprint;
+      delete target.resolutionFingerprint;
+      delete target.catalogueFingerprint;
+      const operation = target.operation as RecordValue | undefined;
+      const owner = operation?.owner as RecordValue | undefined;
+      if (!(target.kind === "protected_operation" && owner?.kind === "platform_service"))
+        delete target.releaseVersion;
+    }
+  }
+  for (const binding of value.flowBindings as RecordValue[]) {
+    const flow = binding.flow as RecordValue;
+    delete flow.contentFingerprint;
+    delete flow.catalogueFingerprint;
+    delete flow.resolutionFingerprint;
+    if (flow.kind === "application_owned") delete flow.releaseVersion;
+  }
   return {
     ...value,
     moduleBindings: sorted(value.moduleBindings as unknown[], "moduleRootId"),
