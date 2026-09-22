@@ -1,7 +1,7 @@
 {
   "fixtureSet": "vortex.complete.examples",
   "sourceContractVersions": {
-    "module": "2.0.0",
+    "module": "3.0.0",
     "application": "1.0.0",
     "connection_type": "1.0.0"
   },

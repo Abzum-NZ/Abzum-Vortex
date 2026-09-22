@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "2.0.0",
+  "source_contract_version": "3.0.0",
   "root_alias": "mod_crm_organisations",
   "key": "vortex.crm.organisations",
   "kind": "module",
@@ -568,16 +568,65 @@
         "id": "rule_company_name",
         "key": "company_name_required",
         "record_type": "company",
-        "trigger": "change",
+        "profile": "before_save",
+        "graph_version": "1.0.0",
         "priority": 100,
-        "condition": {
-          "field": "name",
-          "operator": "is_empty"
-        },
-        "effect": {
-          "kind": "refuse",
-          "reason_code": "company_name_required"
-        }
+        "inputs": [],
+        "variables": [],
+        "nodes": [
+          {
+            "id": "start",
+            "node_version": "1.0.0",
+            "type": "start",
+            "operations": [
+              "create",
+              "update"
+            ]
+          },
+          {
+            "id": "name_missing",
+            "node_version": "1.0.0",
+            "type": "condition",
+            "condition": {
+              "kind": "comparison",
+              "operator": "is_empty",
+              "left": {
+                "source": "current_field",
+                "field": "name"
+              }
+            }
+          },
+          {
+            "id": "refuse_without_name",
+            "node_version": "1.0.0",
+            "type": "refuse",
+            "code": "company_name_required",
+            "message": "Enter the company name.",
+            "field": "name"
+          },
+          {
+            "id": "finish",
+            "node_version": "1.0.0",
+            "type": "finish"
+          }
+        ],
+        "edges": [
+          {
+            "from": "start",
+            "port": "next",
+            "to": "name_missing"
+          },
+          {
+            "from": "name_missing",
+            "port": "true",
+            "to": "refuse_without_name"
+          },
+          {
+            "from": "name_missing",
+            "port": "false",
+            "to": "finish"
+          }
+        ]
       }
     ],
     "extension_points": [
