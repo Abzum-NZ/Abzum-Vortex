@@ -183,6 +183,32 @@ export {
   type RegisterFlowExecutionBindingCommand,
   type RevokeFlowExecutionBindingCommand,
 } from "./flow-execution-bindings";
+export {
+  flowEffectiveActorDelegationUseSchema,
+  flowEffectiveActorErrorCodes,
+  FlowEffectiveActorError,
+  flowEffectiveActorIdentitySchema,
+  flowEffectiveActorNodeRequestSchema,
+  flowEffectiveActorPurposeSchema,
+  flowEffectiveActorRefusalReasonSchema,
+  flowEffectiveActorRequestSchema,
+  flowEffectiveActorResolutionSchema,
+  flowEffectiveActorRunActorSchema,
+  openFlowEffectiveActorTransaction,
+  resolveFlowEffectiveActor,
+  type FlowEffectiveActorDelegationUse,
+  type FlowEffectiveActorDependencies,
+  type FlowEffectiveActorErrorCode,
+  type FlowEffectiveActorIdentity,
+  type FlowEffectiveActorNodeRequest,
+  type FlowEffectiveActorPurpose,
+  type FlowEffectiveActorRefusalReason,
+  type FlowEffectiveActorRequest,
+  type FlowEffectiveActorResolution,
+  type FlowEffectiveActorRunActor,
+  type FlowEffectiveActorScopeResolver,
+  type FlowEffectiveActorTransactionRunner,
+} from "./flow-effective-actor";
 
 export const AccessService = Object.freeze({
   key: "access",
