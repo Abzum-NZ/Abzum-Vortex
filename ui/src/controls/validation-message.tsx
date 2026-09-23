@@ -1,3 +1,5 @@
+"use client";
+
 import { builderKeySchema } from "@vortex/contracts";
 import type { ReactElement } from "react";
 import { DefinitionRenderError } from "../definition-error";

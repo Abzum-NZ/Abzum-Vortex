@@ -31,6 +31,7 @@ interface DatabaseDriver {
 interface RuntimeDatabaseConfiguration {
   readonly connectionString: string;
   readonly hostname: string;
+  readonly poolSize: number;
   readonly transport:
     | Readonly<{ kind: "local_loopback" }>
     | Readonly<{ kind: "hosted_tls"; rootCertificate: string }>;
@@ -48,6 +49,9 @@ type ResolvedRequestOperation<Scope, Result> = (
   transaction: RequestDatabaseTransaction,
   scope: Scope,
 ) => Promise<Result>;
+
+const DEFAULT_POOL_SIZE = 5;
+const MAXIMUM_POOL_SIZE = 20;
 
 const databaseError = (code: string): Error => {
   const error = new Error(code);
@@ -114,6 +118,15 @@ const createPostgresDriver = (client: Sql): DatabaseDriver => ({
     (await client.begin(async (sql) => operation(createTransactionDriver(sql)))) as Result,
 });
 
+const parsePoolSize = (candidate: string | undefined): number => {
+  const value = candidate?.trim();
+  if (!value) return DEFAULT_POOL_SIZE;
+  if (!/^[0-9]{1,2}$/.test(value)) throw databaseError("DATABASE_POOL_SIZE_INVALID");
+  const size = Number(value);
+  if (size < 1 || size > MAXIMUM_POOL_SIZE) throw databaseError("DATABASE_POOL_SIZE_INVALID");
+  return size;
+};
+
 export const parseRuntimeDatabaseConfiguration = (
   environment: Readonly<Record<string, string | undefined>>,
 ): RuntimeDatabaseConfiguration => {
@@ -121,6 +134,7 @@ export const parseRuntimeDatabaseConfiguration = (
   const rootCertificate = environment.VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT;
   const environmentName = environment.VORTEX_ENVIRONMENT;
   if (!connectionString || !environmentName) throw databaseError("DATABASE_CONFIGURATION_MISSING");
+  const poolSize = parsePoolSize(environment.VORTEX_RUNTIME_DATABASE_POOL_SIZE);
 
   let address: URL;
   try {
@@ -142,6 +156,7 @@ export const parseRuntimeDatabaseConfiguration = (
     return {
       connectionString,
       hostname: address.hostname,
+      poolSize,
       transport: { kind: "local_loopback" },
     };
 
@@ -159,6 +174,7 @@ export const parseRuntimeDatabaseConfiguration = (
   return {
     connectionString,
     hostname: address.hostname,
+    poolSize,
     transport: { kind: "hosted_tls", rootCertificate },
   };
 };
@@ -166,7 +182,7 @@ export const parseRuntimeDatabaseConfiguration = (
 export const createRuntimePostgresClient = (configuration: RuntimeDatabaseConfiguration): Sql =>
   postgres(configuration.connectionString, {
     prepare: false,
-    max: 1,
+    max: configuration.poolSize,
     idle_timeout: 20,
     connect_timeout: 10,
     max_lifetime: 300,

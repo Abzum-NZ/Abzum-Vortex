@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { builderKeySchema, type BlockPropertyValueV2Contract } from "@vortex/contracts";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import { getAccessibleName } from "../display/display-state-container";
@@ -20,7 +23,7 @@ export type ControlContext<Kind extends ProjectedControlValueKind> = Readonly<{
   location: DefinitionRenderErrorLocation;
   /** Authored accessible name, read only through the declared metadata path. */
   accessibleName: string | undefined;
-  /** Ready values of this control's exact kind, or undefined for any other state. */
+  /** Ready values of this control's exact kind, or the last ready values kept while not ready. */
   values: Extract<ProjectedControlValues, { kind: Kind }> | undefined;
   /** The control's data or a submission it started is pending; it cannot be activated. */
   pending: boolean;
@@ -35,9 +38,28 @@ export type ControlContext<Kind extends ProjectedControlValueKind> = Readonly<{
 }>;
 
 /**
+ * The placement's ready values, or the last ready values while it is loading or disabled, so a
+ * field keeps showing and submitting its value and an open dialog stays open. Kept values
+ * belong to one placement identity and are never carried to another.
+ */
+function useLastReadyValues<Values>(
+  placementId: string,
+  ready: Values | undefined,
+): Values | undefined {
+  const [kept, setKept] = useState<Readonly<{ placementId: string; values: Values }> | undefined>(
+    ready === undefined ? undefined : { placementId, values: ready },
+  );
+  if (ready !== undefined && (kept?.placementId !== placementId || !Object.is(kept.values, ready)))
+    setKept({ placementId, values: ready });
+  if (ready !== undefined) return ready;
+  return kept?.placementId === placementId ? kept.values : undefined;
+}
+
+/**
  * Resolves one control's props, failing closed on a display projection, ready values of another
  * kind, or a callback for an event this block does not declare. The control never fetches data
- * or calls a Record, Query or App service; it only emits its declared semantic events.
+ * or calls a Record, Query or App service; it only emits its declared semantic events. It keeps
+ * the last ready values in state, so each control calls it once, unconditionally, while rendering.
  */
 export function resolveControlContext<Kind extends ProjectedControlValueKind>(
   props: PlatformBlockRenderProps,
@@ -56,15 +78,16 @@ export function resolveControlContext<Kind extends ProjectedControlValueKind>(
       location,
     );
 
-  let values: Extract<ProjectedControlValues, { kind: Kind }> | undefined;
+  let ready: Extract<ProjectedControlValues, { kind: Kind }> | undefined;
   if (controlData?.status === "ready") {
     if (controlData.values.kind !== kind)
       fail(
         `Block '${metadata.key}' expected '${kind}' projected values, got '${controlData.values.kind}'`,
         location,
       );
-    values = controlData.values as Extract<ProjectedControlValues, { kind: Kind }>;
+    ready = controlData.values as Extract<ProjectedControlValues, { kind: Kind }>;
   }
+  const values = useLastReadyValues(placementId, ready);
 
   if (controlEvents !== undefined) {
     for (const name of Object.keys(controlEvents)) {
