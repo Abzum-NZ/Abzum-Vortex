@@ -116,7 +116,8 @@ alter table vortex_access.flow_execution_bindings enable row level security;
 alter table vortex_access.flow_execution_bindings force row level security;
 
 revoke all on table vortex_access.flow_execution_bindings
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
 -- ============================================================================
 -- Canonical binding projection (matches flowExecutionBindingSchema)
@@ -175,10 +176,12 @@ as $function$
 $function$;
 
 revoke all on function vortex_access.flow_execution_binding_timestamp_internal(timestamptz)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 revoke all on function vortex_access.flow_execution_binding_to_json_internal(
   vortex_access.flow_execution_bindings
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
 -- ============================================================================
 -- Administrator authority, re-established from the protected request context
@@ -280,7 +283,8 @@ end
 $function$;
 
 revoke all on function vortex_access.flow_execution_binding_authority_internal(uuid, uuid, uuid, text)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
 -- ============================================================================
 -- Register (no expected revision) or replace (exact expected revision)
@@ -609,7 +613,8 @@ $function$;
 revoke all on function vortex_access.register_flow_execution_binding(
   uuid, uuid, uuid, uuid, uuid, uuid, text, uuid, uuid, text, uuid, uuid, text, uuid, uuid,
   jsonb, jsonb, jsonb, timestamptz, bigint, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
 grant execute on function vortex_access.register_flow_execution_binding(
   uuid, uuid, uuid, uuid, uuid, uuid, text, uuid, uuid, text, uuid, uuid, text, uuid, uuid,
@@ -786,7 +791,8 @@ $function$;
 
 revoke all on function vortex_access.revoke_flow_execution_binding(
   uuid, uuid, uuid, uuid, uuid, bigint, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
 grant execute on function vortex_access.revoke_flow_execution_binding(
   uuid, uuid, uuid, uuid, uuid, bigint, uuid
@@ -888,7 +894,8 @@ $function$;
 
 revoke all on function vortex_access.read_flow_execution_binding(
   uuid, uuid, uuid, uuid, uuid, text, uuid, uuid, text, uuid, uuid, text, uuid, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
 grant execute on function vortex_access.read_flow_execution_binding(
   uuid, uuid, uuid, uuid, uuid, text, uuid, uuid, text, uuid, uuid, text, uuid, uuid
