@@ -40,7 +40,6 @@ export const THEME_VARIABLE_NAMES = [
   "--vortex-space-sm",
   "--vortex-space-md",
   "--vortex-space-lg",
-  "--vortex-space-xl",
   "--vortex-radius-sm",
   "--vortex-radius-md",
   "--vortex-radius-lg",
@@ -189,7 +188,7 @@ function namedOrFirst<Kind extends "focus" | "density">(
  * - colour: #594-selected surface with `text`; `muted_text`; `border`; `primary` (accent);
  *   filled pairs `primary`, `secondary`, `danger` with `<key>_foreground` or `on_<key>`;
  *   `danger_text`, `warning_text`, `info_text`.
- * - typography `body` and `heading`; spacing `space_xs`..`space_xl`; corners
+ * - typography `body` and `heading`; spacing `space_xs`..`space_lg`; corners
  *   `radius_sm`..`radius_lg`; border `border`; elevation `elevation_low`, `elevation_high`;
  *   focus `focus` (or the first focus token); density `density` (or the first density token).
  *
@@ -204,8 +203,8 @@ export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVar
   const surfaceFromTheme = appSurface !== undefined && appText !== undefined;
   // #594 validated text-like colours against the surface actually painted.
   const surfaceValidated = appSurface === undefined || surfaceFromTheme;
-  const surface = surfaceFromTheme ? appSurface : DEFAULT_SURFACE;
-  const text = surfaceFromTheme || appSurface === undefined ? (appText ?? DEFAULT_TEXT) : DEFAULT_TEXT;
+  const surface = (surfaceFromTheme ? appSurface : undefined) ?? DEFAULT_SURFACE;
+  const text = (surfaceValidated ? appText : undefined) ?? DEFAULT_TEXT;
 
   // Fallbacks are concrete values rather than var() references, so a placement override
   // that changes one role never leaves a derived role holding an inherited colour.
@@ -284,7 +283,6 @@ export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVar
     "--vortex-space-sm": spacing("space_sm", "0.5rem"),
     "--vortex-space-md": spacing("space_md", "1rem"),
     "--vortex-space-lg": spacing("space_lg", "1.5rem"),
-    "--vortex-space-xl": spacing("space_xl", "2rem"),
     "--vortex-radius-sm": corners("radius_sm", "0.125rem"),
     "--vortex-radius-md": corners("radius_md", "0.25rem"),
     "--vortex-radius-lg": corners("radius_lg", "0.5rem"),
