@@ -528,9 +528,11 @@ type CurrentAuthorityRow = DatabaseRow & {
  * Reads the delegated node's current binding and effective-actor lifecycle from storage inside the
  * fresh transaction, for an ordinary flow invoker: it needs no administrator permission because the
  * storage function is runtime-only and matches the exact scope the planned resolution names. The
- * binding row (and the effective person's account row) is share-locked until the transaction ends,
- * so a concurrent revoke, replace or suspension commits first and is seen here, or waits for this
- * use. Anything unavailable, malformed or unconfirmed refuses; there is no fallback authority.
+ * binding row (then, for a specified person, the organisation access version and the account row in
+ * main's Access-first order) is share-locked until the transaction ends, so a concurrent revoke,
+ * replace or suspension commits first and is seen here, or waits for this use. It is the default
+ * `readCurrentAuthority` of `openFlowEffectiveActorTransaction`. Anything unavailable, malformed or
+ * unconfirmed refuses; there is no fallback authority.
  */
 export const readFlowEffectiveActorCurrentAuthority: FlowEffectiveActorAuthorityReader = async (
   transaction,
@@ -572,6 +574,8 @@ export const readFlowEffectiveActorCurrentAuthority: FlowEffectiveActorAuthority
     // No exact current binding: report it unavailable so the resolver refuses with its own reason.
     return { binding: { outcome: "unavailable" }, effectiveActorState: "closed" };
   }
+  if (row.outcome !== "available")
+    throw new FlowEffectiveActorError("FLOW_EFFECTIVE_ACTOR_REFUSED");
   const binding = flowExecutionBindingReadResultSchema.safeParse({
     outcome: "available",
     effectiveState: row.effective_state,
@@ -599,8 +603,12 @@ export type FlowEffectiveActorTransactionRunner = <Scope, Result>(
   operation: (transaction: RequestDatabaseTransaction, scope: Scope) => Promise<Result>,
 ) => Promise<Result>;
 
+/**
+ * `readCurrentAuthority` defaults to the runtime-only, share-locked Access reader
+ * (`readFlowEffectiveActorCurrentAuthority`); an override must hold the same lock guarantee.
+ */
 export type FlowEffectiveActorTransactionAccess<Scope> = Readonly<{
-  readCurrentAuthority: FlowEffectiveActorAuthorityReader;
+  readCurrentAuthority?: FlowEffectiveActorAuthorityReader;
   resolveScope: FlowEffectiveActorScopeResolver<Scope>;
 }>;
 
@@ -705,13 +713,15 @@ export const openFlowEffectiveActorTransaction = async <Scope, Result>(
   const initiator = sessionContextSchema.parse(request.initiator);
   const runner: FlowEffectiveActorTransactionRunner =
     dependencies.runner ?? withResolvedRequestTransaction;
+  const readCurrentAuthority =
+    access.readCurrentAuthority ?? readFlowEffectiveActorCurrentAuthority;
 
   let confirmed: FlowEffectiveActorEffectiveResolution | undefined;
   return runner(
     async (transaction) => {
       let current: FlowEffectiveActorResolution = planned;
       if (planned.effectiveActor.kind !== "current_user") {
-        const authority = await access.readCurrentAuthority(transaction, planned);
+        const authority = await readCurrentAuthority(transaction, planned);
         current = resolveFlowEffectiveActor(
           {
             ...request,

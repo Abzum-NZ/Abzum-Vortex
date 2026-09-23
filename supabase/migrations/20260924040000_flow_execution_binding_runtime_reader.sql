@@ -7,8 +7,9 @@
 -- vortex_runtime role only: it selects the exact current binding FOR SHARE, so a
 -- register/replace/revoke (which lock the current row FOR UPDATE) either commits
 -- first and is seen here or waits until this transaction ends, and it shares the
--- effective person's organisation account row so a concurrent suspension or
--- closure is ordered the same way. It performs no administration, returns no
+-- organisation access version and then the effective person's organisation
+-- account row (main's Access-first order) so a concurrent suspension or closure
+-- is ordered the same way. It performs no administration, returns no
 -- write path and leaves read_flow_execution_binding and #687 untouched.
 
 begin;
@@ -94,16 +95,29 @@ begin
   end if;
 
   if current_binding.actor_kind = 'specified_user' then
-    -- Ordered against a concurrent suspension or closure of the effective person.
+    -- Ordered against a concurrent suspension or closure of the effective person,
+    -- in main's Access-first order: the organisation access-version row before the
+    -- Identity account row, as the request resolver and account lifecycle writers
+    -- take them. Binding writers lock the binding before the access version, so
+    -- taking the binding first above keeps this path consistent with them too.
+    perform 1
+    from vortex_access.organization_access_versions as version
+    where version.organization_id = current_binding.organization_id
+    for share of version;
+
     select account.state into account_state
     from vortex_identity.organization_accounts as account
     where account.organization_account_id = current_binding.actor_organization_account_id
       and account.organization_id = current_binding.organization_id
-    for share;
-    if account_state is not null and not exists (
-      select 1 from vortex_identity.organizations as organization
-      where organization.organization_id = current_binding.organization_id
-        and organization.state = 'active'
+    for share of account;
+    -- Only an active or suspended account in an active organisation keeps its
+    -- state; closing, closed, deleted or missing is closed.
+    if account_state is distinct from 'suspended' and (
+      account_state is distinct from 'active' or not exists (
+        select 1 from vortex_identity.organizations as organization
+        where organization.organization_id = current_binding.organization_id
+          and organization.state = 'active'
+      )
     ) then
       account_state := 'closed';
     end if;
@@ -120,7 +134,7 @@ begin
         and current_binding.expires_at <= pg_catalog.clock_timestamp() then 'expired'
       else 'active'
     end,
-    coalesce(account_state, 'closed'),
+    account_state,
     vortex_access.flow_execution_binding_to_json_internal(current_binding);
 end
 $function$;
