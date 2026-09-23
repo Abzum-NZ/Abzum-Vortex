@@ -52,20 +52,47 @@ const string = (value: unknown, at: string) => {
   return value;
 };
 
-const sameOrderMetadata = (a: Record<string, unknown>, b: Record<string, unknown>): boolean => {
-  for (const breakpoint of ["desktop", "tablet", "phone"] as const) {
-    const listA = a[breakpoint];
-    const listB = b[breakpoint];
-    if (!Array.isArray(listA) || !Array.isArray(listB)) {
-      if (listA !== listB) return false;
-      continue;
-    }
-    if (listA.length !== listB.length) return false;
-    for (let i = 0; i < listA.length; i++) {
-      if (listA[i] !== listB[i]) return false;
+/**
+ * Tablet and phone orders are stored as a hint on each child. After the editor
+ * adds, removes or moves blocks, the hint is stale: keep surviving placements in
+ * their saved relative order, drop removed ones and insert new ones at their
+ * desktop position, so every breakpoint lists exactly the slot's placements.
+ */
+const rebuildBreakpointOrder = (saved: unknown, desktop: readonly string[]): string[] => {
+  const present = new Set(desktop);
+  const result = Array.isArray(saved)
+    ? [...new Set(saved.filter((id): id is string => typeof id === "string" && present.has(id)))]
+    : [];
+  const kept = new Set(result);
+  desktop.forEach((id, index) => {
+    if (!kept.has(id)) result.splice(Math.min(index, result.length), 0, id);
+  });
+  return result;
+};
+
+/**
+ * Children moved in from another slot carry that slot's order, so use the hint
+ * that names the most of this slot's placements (the first one on a tie).
+ */
+const bestOrderHint = (
+  hints: readonly Record<string, unknown>[],
+  desktop: readonly string[],
+): Record<string, unknown> | undefined => {
+  const present = new Set(desktop);
+  const overlap = (hint: Record<string, unknown>): number =>
+    Array.isArray(hint.desktop)
+      ? hint.desktop.filter((id: unknown) => typeof id === "string" && present.has(id)).length
+      : 0;
+  let best: Record<string, unknown> | undefined;
+  let bestOverlap = -1;
+  for (const hint of hints) {
+    const current = overlap(hint);
+    if (current > bestOverlap) {
+      best = hint;
+      bestOverlap = current;
     }
   }
-  return true;
+  return best;
 };
 
 type VortexSlot = ReturnType<typeof placementSlotV2Schema.parse>;
@@ -298,7 +325,7 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
       throw new VortexPuckAdapterError(`Invalid Puck adapter data at ${at}`);
     const placements: Record<string, unknown> = {};
     const desktop: string[] = [];
-    let savedOrder: Record<string, unknown> = { desktop: [], tablet: [], phone: [] };
+    const orderHints: Record<string, unknown>[] = [];
     for (const [index, raw] of input.entries()) {
       if (depth > catalogue.compositionPolicy.maximumDepth) {
         throw new VortexPuckAdapterError(
@@ -390,18 +417,10 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
         slots[declaration.key] = childSlot;
       }
 
-      const currentOrder = exact(
-        meta.order,
-        ["desktop", "tablet", "phone"],
-        `${at}[${index}].props.vortex.order`,
-      );
-      if (index === 0) {
-        savedOrder = currentOrder;
-      } else if (!sameOrderMetadata(currentOrder, savedOrder)) {
-        throw new VortexPuckAdapterError(
-          `Contradictory responsive order metadata across siblings at ${at}[${index}].props.vortex.order`,
+      if (meta.order !== undefined)
+        orderHints.push(
+          exact(meta.order, ["desktop", "tablet", "phone"], `${at}[${index}].props.vortex.order`),
         );
-      }
       placements[id] = {
         block,
         settings: clone(settings),
@@ -422,7 +441,15 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
       desktop.push(id);
     }
     try {
-      return placementSlotV2Schema.parse({ placements, order: { ...clone(savedOrder), desktop } });
+      // Every breakpoint is required, including for an empty slot or a slot
+      // whose children carry no saved order.
+      const savedOrder = bestOrderHint(orderHints, desktop);
+      const order = {
+        desktop,
+        tablet: rebuildBreakpointOrder(savedOrder?.tablet, desktop),
+        phone: rebuildBreakpointOrder(savedOrder?.phone, desktop),
+      };
+      return placementSlotV2Schema.parse({ placements, order });
     } catch (error) {
       throw new VortexPuckAdapterError("Invalid placement slot schema", { cause: error });
     }

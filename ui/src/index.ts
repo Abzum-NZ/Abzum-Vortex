@@ -180,3 +180,11 @@ export {
   ALL_PLATFORM_COMPONENT_REGISTRATIONS,
   createFullPlatformComponentRegistry,
 } from "./combined-registry";
+
+// Theme variables and shared component styles
+export {
+  ALL_UI_STYLES_CSS,
+  createThemeRootProps,
+  type ThemeMode,
+  type ThemeRootProps,
+} from "./theme";
