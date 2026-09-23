@@ -10,6 +10,10 @@ import {
   recordIdSchema,
   stableDefinitionReleaseVersionSchema,
 } from "@vortex/contracts";
+import {
+  recordSystemValuesSchema,
+  supportedRecordSystemFieldKeySchema,
+} from "./record-system-values";
 
 /**
  * One protected Query request. It names only the published Module query and the
@@ -29,6 +33,19 @@ export const protectedQueryCommandSchema = z
         (fieldIds) => new Set(fieldIds.map((fieldId) => fieldId.toLowerCase())).size === fieldIds.length,
         { message: "Each requested field is named once" },
       ),
+    /**
+     * The supported Record system metadata fields this request declares. Only
+     * these values may appear in a row's `systemValues`; an unsupported or
+     * repeated key refuses the whole request, and an undeclared value can never
+     * be mapped or inferred.
+     */
+    requestedSystemFieldKeys: z
+      .array(supportedRecordSystemFieldKeySchema)
+      .max(5)
+      .refine((keys) => new Set(keys).size === keys.length, {
+        message: "Each system field is declared once",
+      })
+      .default([]),
     pageSize: z.number().int().min(1).max(200),
     continuationToken: z.string().min(1).max(65_536).optional(),
   })
@@ -40,6 +57,11 @@ export const protectedQueryRowSchema = z
     recordId: recordIdSchema,
     /** Readable requested fields only; a withheld field is absent rather than blank. */
     values: z.record(fieldIdSchema, jsonValueSchema),
+    /**
+     * The declared supported system metadata values for this row, or absent when
+     * the request declares none. Undeclared values never appear.
+     */
+    systemValues: recordSystemValuesSchema.optional(),
   })
   .strict();
 export type ProtectedQueryRow = z.infer<typeof protectedQueryRowSchema>;
@@ -56,6 +78,7 @@ export const protectedQueryRefusalReasonCodes = [
   "page_size_invalid",
   "cursor_invalid",
   "cursor_stale",
+  "freshness_pending",
 ] as const;
 export type ProtectedQueryRefusalReasonCode = (typeof protectedQueryRefusalReasonCodes)[number];
 
