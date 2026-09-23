@@ -26,12 +26,12 @@ import {
   recordTypeIdSchema,
   revisionSchema,
   ruleIdSchema,
+  stableDefinitionReleaseVersionSchema,
   timestampSchema,
   workflowIdSchema,
   workflowNodeIdSchema,
 } from "./identifiers";
 import { versionRequirementSchema } from "./definitions";
-import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
 export const applicationFlowBindingContractVersion = "1.0.0" as const;
 
@@ -562,6 +562,12 @@ export const flowNodeRunAsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("system"), executionBindingId: containedComponentIdSchema }).strict(),
 ]);
 
+/**
+ * An execution binding is an Access-owned grant, separate from the editable run-as reference a
+ * definition carries. It names one exact organisation, application release, flow node, protected
+ * operation and effective actor, plus who may invoke it, on which surfaces, with which declared
+ * inputs and until when. Editing, installing, copying or delegating a role never creates one.
+ */
 export const flowExecutionBindingSurfaceSchema = z.enum([
   "web",
   "mcp",
@@ -599,8 +605,44 @@ const uniqueBy = <Value>(
   identify: (value: Value) => string,
 ): boolean => new Set(values.map(identify)).size === values.length;
 
-const refineActorInvokerAgreement = (
-  value: { actor: FlowExecutionBindingActor; permittedInvokers: FlowExecutionInvoker[] },
+export const flowExecutionPermittedInvokersSchema = z
+  .array(flowExecutionInvokerSchema)
+  .min(1)
+  .max(20)
+  .superRefine((value, context) => {
+    if (
+      !uniqueBy(value, (invoker) =>
+        invoker.kind === "system"
+          ? "system"
+          : `account:${invoker.organizationAccountId.toLowerCase()}`,
+      )
+    )
+      context.addIssue({ code: "custom", message: "Permitted invokers must be unique" });
+  });
+
+export const flowExecutionPermittedSurfacesSchema = z
+  .array(flowExecutionBindingSurfaceSchema)
+  .min(1)
+  .max(flowExecutionBindingSurfaceSchema.options.length)
+  .superRefine((value, context) => {
+    if (!uniqueBy(value, (surface) => surface))
+      context.addIssue({ code: "custom", message: "Permitted surfaces must be unique" });
+  });
+
+export const flowExecutionPermittedInputsSchema = z
+  .array(builderKeySchema)
+  .max(20)
+  .superRefine((value, context) => {
+    if (!uniqueBy(value, (input) => input))
+      context.addIssue({ code: "custom", message: "Permitted inputs must be unique" });
+  });
+
+/** A system actor runs only under the system origin; a specified person never does. */
+export const refineFlowExecutionActorInvokers = (
+  value: {
+    actor: z.infer<typeof flowExecutionBindingActorSchema>;
+    permittedInvokers: z.infer<typeof flowExecutionInvokerSchema>[];
+  },
   context: z.RefinementCtx,
 ): void => {
   const permitsSystemOrigin = value.permittedInvokers.some((invoker) => invoker.kind === "system");
@@ -628,38 +670,9 @@ export const flowExecutionBindingSchema = z
     nodeId: workflowNodeIdSchema,
     operation: protectedOperationReferenceSchema,
     actor: flowExecutionBindingActorSchema,
-    permittedInvokers: z
-      .array(flowExecutionInvokerSchema)
-      .min(1)
-      .max(20)
-      .superRefine((value, context) => {
-        if (
-          !uniqueBy(value, (invoker) =>
-            invoker.kind === "system"
-              ? "system"
-              : `account:${invoker.organizationAccountId.toLowerCase()}`,
-          )
-        )
-          context.addIssue({
-            code: "custom",
-            message: "Permitted invokers must be unique",
-          });
-      }),
-    permittedSurfaces: z
-      .array(flowExecutionBindingSurfaceSchema)
-      .min(1)
-      .max(flowExecutionBindingSurfaceSchema.options.length)
-      .superRefine((value, context) => {
-        if (!uniqueBy(value, (surface) => surface))
-          context.addIssue({ code: "custom", message: "Permitted surfaces must be unique" });
-      }),
-    permittedInputs: z
-      .array(builderKeySchema)
-      .max(20)
-      .superRefine((value, context) => {
-        if (!uniqueBy(value, (input) => input))
-          context.addIssue({ code: "custom", message: "Permitted inputs must be unique" });
-      }),
+    permittedInvokers: flowExecutionPermittedInvokersSchema,
+    permittedSurfaces: flowExecutionPermittedSurfacesSchema,
+    permittedInputs: flowExecutionPermittedInputsSchema,
     expiresAt: timestampSchema.optional(),
     state: flowExecutionBindingStateSchema,
     revision: revisionSchema,
@@ -667,7 +680,15 @@ export const flowExecutionBindingSchema = z
     revokedAt: timestampSchema.optional(),
   })
   .strict()
-  .superRefine(refineActorInvokerAgreement);
+  .superRefine((value, context) => {
+    refineFlowExecutionActorInvokers(value, context);
+    if ((value.state === "revoked") !== (value.revokedAt !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["revokedAt"],
+        message: "Exactly a revoked execution binding records its revocation time",
+      });
+  });
 
 export const frontendFlowNodeTargetSchema = z.discriminatedUnion("kind", [
   z

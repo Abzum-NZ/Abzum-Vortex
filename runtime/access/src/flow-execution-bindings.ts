@@ -5,51 +5,27 @@ import {
   activityIdSchema,
   administrationDuplicateKeySchema,
   applicationRootIdSchema,
-  builderKeySchema,
   containedComponentIdSchema,
   correlationIdSchema,
   flowExecutionBindingActorSchema,
   flowExecutionBindingEffectiveStateSchema,
   flowExecutionBindingSchema,
-  flowExecutionBindingStateSchema,
-  flowExecutionBindingSurfaceSchema,
-  flowExecutionInvokerSchema,
+  flowExecutionPermittedInputsSchema,
+  flowExecutionPermittedInvokersSchema,
+  flowExecutionPermittedSurfacesSchema,
   identityIdSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
   protectedOperationReferenceSchema,
+  refineFlowExecutionActorInvokers,
   revisionSchema,
   ruleIdSchema,
   stableDefinitionReleaseVersionSchema,
   timestampSchema,
   workflowNodeIdSchema,
 } from "@vortex/contracts";
-import type {
-  FlowExecutionBinding,
-  FlowExecutionBindingActor,
-  FlowExecutionBindingEffectiveState,
-  FlowExecutionBindingState,
-  FlowExecutionBindingSurface,
-  FlowExecutionInvoker,
-} from "@vortex/contracts";
+import type { FlowExecutionBinding } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
-
-export {
-  flowExecutionBindingSurfaceSchema,
-  flowExecutionInvokerSchema,
-  flowExecutionBindingActorSchema,
-  flowExecutionBindingStateSchema,
-  flowExecutionBindingEffectiveStateSchema,
-  flowExecutionBindingSchema,
-};
-export type {
-  FlowExecutionBindingSurface,
-  FlowExecutionInvoker,
-  FlowExecutionBindingActor,
-  FlowExecutionBindingState,
-  FlowExecutionBindingEffectiveState,
-  FlowExecutionBinding,
-};
 
 /**
  * One exact execution-authority grant for a published application flow node. A binding names the
@@ -58,6 +34,10 @@ export type {
  * scope and an optional expiry. It is a grant, deliberately separate from an editable run-as
  * reference in a definition and from copied or installed content: registering it never happens as
  * a side effect of editing, installing, copying or delegating a role.
+ *
+ * Granting requires the administrator's current access-assignment permission together with
+ * organisation-wide delegation authority; a bounded role-management delegation cannot create
+ * execution authority.
  *
  * The binding carries no executable endpoint and performs no execution; #686 resolves the effective
  * actor from it at each protected node.
@@ -85,77 +65,20 @@ export const flowExecutionBindingAdministratorAuthoritySchema = z
   })
   .strict();
 
-const uniqueBy = <Value>(
-  values: readonly Value[],
-  identify: (value: Value) => string,
-): boolean => new Set(values.map(identify)).size === values.length;
-
-const permittedInvokersSchema = z
-  .array(flowExecutionInvokerSchema)
-  .min(1)
-  .max(20)
-  .superRefine((value, context) => {
-    if (
-      !uniqueBy(value, (invoker) =>
-        invoker.kind === "system" ? "system" : `account:${invoker.organizationAccountId.toLowerCase()}`,
-      )
-    )
-      context.addIssue({
-        code: "custom",
-        message: "Permitted invokers must be unique",
-      });
-  });
-
-const permittedSurfacesSchema = z
-  .array(flowExecutionBindingSurfaceSchema)
-  .min(1)
-  .max(flowExecutionBindingSurfaceSchema.options.length)
-  .superRefine((value, context) => {
-    if (!uniqueBy(value, (surface) => surface))
-      context.addIssue({ code: "custom", message: "Permitted surfaces must be unique" });
-  });
-
-const permittedInputsSchema = z
-  .array(builderKeySchema)
-  .max(20)
-  .superRefine((value, context) => {
-    if (!uniqueBy(value, (input) => input))
-      context.addIssue({ code: "custom", message: "Permitted inputs must be unique" });
-  });
-
-/** A system actor can only be permitted to run under the system origin; a person cannot. */
-const refineActorInvokerAgreement = (
-  value: { actor: FlowExecutionBindingActor; permittedInvokers: FlowExecutionInvoker[] },
-  context: z.RefinementCtx,
-): void => {
-  const permitsSystemOrigin = value.permittedInvokers.some((invoker) => invoker.kind === "system");
-  if (value.actor.kind === "system" && !permitsSystemOrigin)
-    context.addIssue({
-      code: "custom",
-      path: ["permittedInvokers"],
-      message: "A system execution binding must permit the system origin",
-    });
-  if (value.actor.kind === "specified_user" && permitsSystemOrigin)
-    context.addIssue({
-      code: "custom",
-      path: ["permittedInvokers"],
-      message: "A specified-user execution binding cannot permit the system origin",
-    });
-};
-
 /**
- * Registers a new revision 1 binding, or replaces the mutable bounds of an existing active binding
- * at its next revision. The identity-defining scope (organisation, application, release, flow
- * node, operation and actor) is immutable across revisions, so a replace can never silently
- * re-point or broaden authority; changing the actor or target requires a fresh binding identity.
+ * Without an expected revision, registers a new revision 1 binding. With one, replaces the mutable
+ * bounds of that exact active binding at its next revision. The identity-defining scope
+ * (organisation, application, release, flow node, operation and actor) is immutable across
+ * revisions, so a replace can never re-point authority; changing the actor or target requires a
+ * fresh binding identity.
  */
 export const registerFlowExecutionBindingCommandSchema = z
   .object({
     executionBindingId: containedComponentIdSchema,
     ...flowExecutionBindingScopeShape,
-    permittedInvokers: permittedInvokersSchema,
-    permittedSurfaces: permittedSurfacesSchema,
-    permittedInputs: permittedInputsSchema,
+    permittedInvokers: flowExecutionPermittedInvokersSchema,
+    permittedSurfaces: flowExecutionPermittedSurfacesSchema,
+    permittedInputs: flowExecutionPermittedInputsSchema,
     expiresAt: timestampSchema.optional(),
     expectedRevision: revisionSchema.optional(),
     duplicateKey: administrationDuplicateKeySchema,
@@ -163,7 +86,7 @@ export const registerFlowExecutionBindingCommandSchema = z
     authority: flowExecutionBindingAdministratorAuthoritySchema,
   })
   .strict()
-  .superRefine(refineActorInvokerAgreement);
+  .superRefine(refineFlowExecutionActorInvokers);
 
 /**
  * Reads one exact binding by its identity and complete expected scope. Any mismatch between the
@@ -333,8 +256,10 @@ const ownerIdentity = (
 
 /**
  * Registers or replaces one protected execution-authority binding. The owning storage operation
- * re-establishes the administrator's current organisation permission and fails closed on a stale
- * expected revision, an already-authorised scope, or an attempt to revive a revoked binding.
+ * re-establishes the administrator's current assignment permission and organisation-wide
+ * delegation authority, requires the effective person and named invokers to be active accounts of
+ * the organisation, and fails closed on a stale expected revision, an already-authorised scope, or
+ * an attempt to revive a revoked binding.
  */
 export const registerFlowExecutionBinding = async (
   transaction: RequestDatabaseTransaction,
