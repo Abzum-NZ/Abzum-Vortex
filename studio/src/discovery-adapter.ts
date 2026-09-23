@@ -1,617 +1,331 @@
 import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
-  projectComponentDiscoveryV2,
+  platformBlockReleaseIdentityV2,
   projectPlatformCatalogueDiscoveryV2,
   type BlockPaletteGroup,
   type BlockPropertySchemaV2Contract,
-  type BlockPropertyValueV2Contract,
-  type ComponentDiscoveryProjectionV2,
-  type ComponentDiscoverySlotV2,
+  type BlockReferencePropertyKindV2,
+  type ComponentDiscoveryV2,
   type ComponentPropertyControlV2,
-  type ComponentReferenceKindV2,
-  type ComponentStateOperationCategory,
-  type ComponentStateOperationV2,
   type ImmutablePlatformBlockCatalogueV2,
-  type PlatformBlockReleaseV2,
-  type PlatformCatalogueDiscoveryProjectionV2,
+  type PlatformBlockReleaseSummaryV2,
+  type PlatformCatalogueDiscoveryV2,
 } from "@vortex/contracts";
 
 /**
- * Page, query, action, record and asset options available in current application/module context.
+ * Studio discovery: inspector choices for a selected component, projected from the same
+ * server-owned platform block catalogue that save and publish validation use. Studio keeps no
+ * allowlist of its own; it only narrows catalogue choices to the application draft being edited
+ * and to the page surface. The context lists come from the authoring workspace's server read of
+ * that draft and grant nothing; validation remains the authority on save and publish.
  */
-export type StudioPageOption = Readonly<{
-  pageId: string;
-  key: string;
-  name: string;
-  routeKey?: string;
-  type?: string;
-}>;
 
-export type StudioQueryOption = Readonly<{
-  queryId: string;
-  key: string;
-  name: string;
-  moduleRootId?: string;
-  targetRecordTypeId?: string;
-}>;
+type ThemeTokenKind = Extract<BlockPropertySchemaV2Contract, { kind: "theme_token" }>["tokenKind"];
 
-export type StudioActionOption = Readonly<{
-  actionId: string;
-  key: string;
-  name: string;
-  moduleRootId?: string;
-  recordTypeId?: string;
-  publicSurface?: "allowed" | "refused";
-}>;
-
-export type StudioRecordTypeOption = Readonly<{
-  recordTypeId: string;
-  key: string;
-  name: string;
-}>;
-
-export type StudioFieldOption = Readonly<{
-  fieldId: string;
-  recordTypeId: string;
-  key: string;
-  name: string;
-  type: string;
-}>;
-
-export type StudioRelationshipOption = Readonly<{
-  relationshipId: string;
-  recordTypeId: string;
-  key: string;
-  name: string;
-  targetRecordTypeId: string;
-}>;
-
-export type StudioPipelineOption = Readonly<{
-  pipelineId: string;
-  key: string;
-  name: string;
-}>;
-
-export type StudioAssetOption = Readonly<{
-  assetId: string;
-  name: string;
-  mimeType?: string;
-}>;
+export type StudioReferenceOption = Readonly<{ id: string; key: string; label: string }>;
 
 export type StudioThemeTokenOption = Readonly<{
   tokenKey: string;
-  tokenKind: string;
-  label?: string;
+  tokenKind: ThemeTokenKind;
+  label: string;
 }>;
 
-/** Contextual constraints passed by the application authoring environment. */
+/** Reference targets and theme tokens of the application draft being edited. */
 export type StudioDiscoveryContext = Readonly<{
-  isPublicPage?: boolean;
-  surface?: "public" | "authenticated";
-  applicationId?: string;
-  pages?: readonly StudioPageOption[];
-  queries?: readonly StudioQueryOption[];
-  actions?: readonly StudioActionOption[];
-  recordTypes?: readonly StudioRecordTypeOption[];
-  fields?: readonly StudioFieldOption[];
-  relationships?: readonly StudioRelationshipOption[];
-  pipelines?: readonly StudioPipelineOption[];
-  assets?: readonly StudioAssetOption[];
+  /** `type` is the page type; a public page may link only to other public pages. */
+  pages?: readonly Readonly<{ pageId: string; key: string; name: string; type: string }>[];
+  queries?: readonly Readonly<{ queryId: string; key: string; name: string }>[];
+  actions?: readonly Readonly<{ actionKey: string; name: string }>[];
+  recordTypes?: readonly Readonly<{ recordTypeId: string; key: string; name: string }>[];
+  fields?: readonly Readonly<{
+    fieldId: string;
+    recordTypeId: string;
+    key: string;
+    name: string;
+  }>[];
+  relationships?: readonly Readonly<{
+    relationshipId: string;
+    recordTypeId: string;
+    key: string;
+    name: string;
+  }>[];
+  pipelines?: readonly Readonly<{ pipelineId: string; key: string; name: string }>[];
+  assets?: readonly Readonly<{ assetId: string; name: string }>[];
   themeTokens?: readonly StudioThemeTokenOption[];
 }>;
 
-export type InspectorReferenceChoice = Readonly<{
-  id: string;
-  key: string;
-  label: string;
-}>;
+/** The surface of the page being edited. Shells are always validated as authenticated. */
+export type StudioPageSurface =
+  | Readonly<{ kind: "authenticated" }>
+  | Readonly<{
+      kind: "public";
+      /** Fields the page declares for public display; validation refuses every other field. */
+      publicFieldIds: readonly string[];
+      /** The page's public action, the only action a public placement may name. */
+      publicActionKey?: string;
+      /** Queries the server judged safe for this public page. */
+      publicQueryIds: readonly string[];
+    }>;
+
+/** Where a new placement would go. */
+export type StudioPlacementTarget =
+  /** Page main content, or guided-form step content, in the default shell. */
+  | Readonly<{ kind: "page" }>
+  /** The top level of an application shell layout, which admits only layout components. */
+  | Readonly<{ kind: "shell_layout" }>
+  /** Page content in an application shell's exposed content slot. */
+  | Readonly<{ kind: "shell_content"; allowedChildCategories: readonly BlockPaletteGroup[] }>
+  /** A declared slot of an existing placement. */
+  | Readonly<{
+      kind: "slot";
+      parent: Readonly<{ blockId: string; releaseVersion: string }>;
+      slotKey: string;
+    }>;
 
 export type InspectorPropertyChoice = Readonly<{
-  key: string;
-  label: string;
-  help?: string | undefined;
-  required: boolean;
-  defaultValue?: BlockPropertyValueV2Contract | undefined;
-  controlKind: BlockPropertySchemaV2Contract["kind"];
-  controlType: string;
-  isReference: boolean;
-  referenceKind?: ComponentReferenceKindV2 | undefined;
-  choiceOptions?: readonly { key: string; label: string }[] | undefined;
-  allowedElements?: readonly string[] | undefined;
-  themeTokenChoices?: readonly StudioThemeTokenOption[] | undefined;
-  referenceChoices?: readonly InspectorReferenceChoice[] | undefined;
-  textConstraints?: { minLength: number; maxLength: number } | undefined;
-  numberConstraints?:
-    | { integer: boolean; minimum?: number | undefined; maximum?: number | undefined }
-    | undefined;
-  nestedProperties?: readonly InspectorPropertyChoice[] | undefined;
-  listItem?: InspectorPropertyChoice | undefined;
-  listConstraints?: { minimumItems: number; maximumItems: number } | undefined;
-}>;
-
-export type InspectorSlotChoice = Readonly<{
-  slotKey: string;
-  slotLabel: string;
-  required: boolean;
-  allowedCategories: readonly BlockPaletteGroup[];
-  allowedChildBlocks: readonly {
-    blockId: string;
-    key: string;
-    releaseVersion: string;
-    name: string;
-    icon: string;
-    paletteGroup: BlockPaletteGroup;
-  }[];
-}>;
-
-export type InspectorOperationChoice = Readonly<{
-  key: string;
-  label: string;
-  description?: string | undefined;
-  category: ComponentStateOperationCategory;
+  control: ComponentPropertyControlV2;
+  /**
+   * Targets the author may choose for a reference property. Absent for a record reference: a
+   * record is runtime data found through a governed record search, not a draft definition.
+   */
+  referenceChoices?: readonly StudioReferenceOption[];
+  /** Tokens of the declared kind for a theme-token property. */
+  themeTokenChoices?: readonly StudioThemeTokenOption[];
+  /** Choices for the properties of a group. */
+  properties?: readonly InspectorPropertyChoice[];
+  /** Choice for each item of a list. */
+  item?: InspectorPropertyChoice;
 }>;
 
 export type ComponentInspectorChoices = Readonly<{
-  component: Readonly<{
-    blockId: string;
-    key: string;
-    releaseVersion: string;
-    name: string;
-    icon: string;
-    paletteGroup: BlockPaletteGroup;
-    rendererKey: string;
-    publicSurface: "allowed" | "refused";
-  }>;
+  component: ComponentDiscoveryV2;
+  /** Only properties validation can accept on this surface. */
   properties: readonly InspectorPropertyChoice[];
-  slots: readonly InspectorSlotChoice[];
-  operations: readonly InspectorOperationChoice[];
-  referenceKinds: readonly ComponentReferenceKindV2[];
 }>;
 
 export interface StudioDiscoveryAdapter {
-  /** The immutable catalogue backing this discovery adapter. */
-  readonly catalogue: ImmutablePlatformBlockCatalogueV2;
-
-  /** Current context filtering discovery and choices. */
+  readonly surface: StudioPageSurface;
   readonly context: StudioDiscoveryContext;
-
-  /** Full discovery projection for the entire catalogue under current context. */
-  readonly projection: PlatformCatalogueDiscoveryProjectionV2;
-
-  /** Look up discovery projection for one component by blockId or namespaced key. */
-  getComponentDiscovery(blockIdOrKey: string): ComponentDiscoveryProjectionV2 | undefined;
-
-  /** List all available components under the current context (filtered by public surface). */
-  getAvailableComponents(): readonly ComponentDiscoveryProjectionV2[];
-
-  /** List available components grouped by palette category. */
-  getAvailableComponentsByGroup(): Readonly<Record<string, readonly ComponentDiscoveryProjectionV2[]>>;
-
-  /** Produce comprehensive inspector choices for the selected component. */
+  readonly projection: PlatformCatalogueDiscoveryV2;
+  /** Every component offered on this surface, in catalogue order. */
+  getComponents(): readonly ComponentDiscoveryV2[];
+  /** The exact release a placement names, when it is offered on this surface. */
+  getComponent(
+    block: Readonly<{ blockId: string; releaseVersion: string }>,
+  ): ComponentDiscoveryV2 | undefined;
+  /** Exact releases that validation admits at a placement target. */
+  getPlacementChoices(target: StudioPlacementTarget): readonly PlatformBlockReleaseSummaryV2[];
+  /** Inspector choices for one placed release; `recordTypeId` narrows fields and relationships. */
   getInspectorChoices(
-    blockIdOrKey: string,
-    options?: { recordTypeId?: string; slotKey?: string },
+    block: Readonly<{ blockId: string; releaseVersion: string }>,
+    options?: Readonly<{ recordTypeId?: string }>,
   ): ComponentInspectorChoices | undefined;
-
-  /** Get allowed child blocks that can be placed inside a specific slot of a component. */
-  getAllowedChildBlocks(
-    blockIdOrKey: string,
-    slotKey: string,
-  ): readonly {
-    blockId: string;
-    key: string;
-    releaseVersion: string;
-    name: string;
-    icon: string;
-    paletteGroup: BlockPaletteGroup;
-  }[];
-
-  /** Get valid reference choices for a reference kind in the current application/module context. */
+  /** Draft targets offered for one reference kind on this surface. */
   getReferenceChoices(
-    referenceKind: ComponentReferenceKindV2,
-    options?: { recordTypeId?: string },
-  ): readonly InspectorReferenceChoice[];
-
-  /** Check if a property key is offered by the component's inspector choices. */
-  isPropertyOffered(blockIdOrKey: string, propertyKey: string): boolean;
-
-  /** Check if a child block is offered for a specific slot. */
-  isChildBlockOffered(
-    blockIdOrKey: string,
-    slotKey: string,
-    childBlockIdOrKey: string,
-  ): boolean;
-
-  /** Check if an operation key is offered by the component's inspector choices. */
-  isOperationOffered(blockIdOrKey: string, operationKey: string): boolean;
-
-  /** Check if a reference ID or key is offered for a given reference kind. */
-  isReferenceOffered(
-    referenceKind: ComponentReferenceKindV2,
-    referenceIdOrKey: string,
-    options?: { recordTypeId?: string },
-  ): boolean;
-
-  /** Return a new adapter with updated context. */
-  withContext(updatedContext: StudioDiscoveryContext): StudioDiscoveryAdapter;
+    kind: Exclude<BlockReferencePropertyKindV2, "record_reference">,
+    options?: Readonly<{ recordTypeId?: string }>,
+  ): readonly StudioReferenceOption[];
+  withContext(context: StudioDiscoveryContext): StudioDiscoveryAdapter;
 }
 
-type MutableInspectorPropertyChoice = {
-  key: string;
-  label: string;
-  help?: string | undefined;
-  required: boolean;
-  defaultValue?: BlockPropertyValueV2Contract | undefined;
-  controlKind: BlockPropertySchemaV2Contract["kind"];
-  controlType: string;
-  isReference: boolean;
-  referenceKind?: ComponentReferenceKindV2 | undefined;
-  choiceOptions?: readonly { key: string; label: string }[] | undefined;
-  allowedElements?: readonly string[] | undefined;
-  themeTokenChoices?: readonly StudioThemeTokenOption[] | undefined;
-  referenceChoices?: readonly InspectorReferenceChoice[] | undefined;
-  textConstraints?: { minLength: number; maxLength: number } | undefined;
-  numberConstraints?:
-    | { integer: boolean; minimum?: number | undefined; maximum?: number | undefined }
-    | undefined;
-  nestedProperties?: readonly InspectorPropertyChoice[] | undefined;
-  listItem?: InspectorPropertyChoice | undefined;
-  listConstraints?: { minimumItems: number; maximumItems: number } | undefined;
-};
-
 /**
- * Creates a Studio discovery adapter from the server-owned immutable platform block catalogue.
- * Automatically adapts component releases into inspector choices without duplicating validation rules.
+ * Reference kinds the public-surface rule (`vortex.definition.application_public_surface`)
+ * refuses in every public placement, whatever the draft contains.
  */
-export function createStudioDiscoveryAdapter(options?: {
-  catalogue?: ImmutablePlatformBlockCatalogueV2;
-  context?: StudioDiscoveryContext;
-}): StudioDiscoveryAdapter {
-  const catalogue = options?.catalogue ?? IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2;
-  const context = Object.freeze({ ...(options?.context ?? {}) });
-  const isPublicPage = Boolean(context.isPublicPage || context.surface === "public");
+const publicRefusedReferenceKinds: ReadonlySet<BlockReferencePropertyKindV2> = new Set<
+  BlockReferencePropertyKindV2
+>([
+  "relationship_reference",
+  "record_reference",
+  "pipeline_reference",
+]);
 
-  const projection = projectPlatformCatalogueDiscoveryV2(catalogue, {
-    publicSurfaceOnly: isPublicPage,
-  });
+const option = (id: string, key: string, name: string): StudioReferenceOption =>
+  Object.freeze({ id, key, label: name.length > 0 ? name : key });
 
-  const getComponentDiscovery = (
-    blockIdOrKey: string,
-  ): ComponentDiscoveryProjectionV2 | undefined => {
-    return (
-      projection.componentsByBlockId.get(blockIdOrKey) ??
-      projection.componentsByKey.get(blockIdOrKey)
-    );
-  };
-
-  const getAvailableComponents = (): readonly ComponentDiscoveryProjectionV2[] => {
-    return projection.components;
-  };
-
-  const getAvailableComponentsByGroup = (): Readonly<
-    Record<string, readonly ComponentDiscoveryProjectionV2[]>
-  > => {
-    const groups: Record<string, ComponentDiscoveryProjectionV2[]> = {};
-    for (const comp of projection.components) {
-      const group = comp.release.paletteGroup;
-      if (!groups[group]) groups[group] = [];
-      groups[group].push(comp);
-    }
-    const frozenGroups: Record<string, readonly ComponentDiscoveryProjectionV2[]> = {};
-    for (const [k, v] of Object.entries(groups)) {
-      frozenGroups[k] = Object.freeze(v);
-    }
-    return Object.freeze(frozenGroups);
-  };
+/** Creates discovery over the server-owned catalogue for one page surface and draft context. */
+export function createStudioDiscoveryAdapter(
+  options: Readonly<{
+    catalogue?: ImmutablePlatformBlockCatalogueV2;
+    surface?: StudioPageSurface;
+    context?: StudioDiscoveryContext;
+  }> = {},
+): StudioDiscoveryAdapter {
+  const catalogue = options.catalogue ?? IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2;
+  const surface: StudioPageSurface = options.surface ?? Object.freeze({ kind: "authenticated" });
+  const context: StudioDiscoveryContext = Object.freeze({ ...options.context });
+  const isPublic = surface.kind === "public";
+  const projection = projectPlatformCatalogueDiscoveryV2(catalogue, surface.kind);
 
   const getReferenceChoices = (
-    referenceKind: ComponentReferenceKindV2,
-    refOptions?: { recordTypeId?: string },
-  ): readonly InspectorReferenceChoice[] => {
-    switch (referenceKind) {
-      case "page_reference": {
-        const pages = context.pages ?? [];
-        return Object.freeze(
-          pages.map((p) => ({
-            id: p.pageId,
-            key: p.key,
-            label: p.name || p.key,
-          })),
-        );
-      }
-      case "query_reference": {
-        const queries = context.queries ?? [];
-        return Object.freeze(
-          queries.map((q) => ({
-            id: q.queryId,
-            key: q.key,
-            label: q.name || q.key,
-          })),
-        );
-      }
-      case "action_reference": {
-        const actions = (context.actions ?? []).filter((a) => {
-          if (isPublicPage && a.publicSurface === "refused") return false;
-          return true;
-        });
-        return Object.freeze(
-          actions.map((a) => ({
-            id: a.actionId,
-            key: a.key,
-            label: a.name || a.key,
-          })),
-        );
-      }
-      case "record_type_reference": {
-        const recordTypes = context.recordTypes ?? [];
-        return Object.freeze(
-          recordTypes.map((r) => ({
-            id: r.recordTypeId,
-            key: r.key,
-            label: r.name || r.key,
-          })),
-        );
-      }
-      case "field_reference": {
-        const fields = context.fields ?? [];
-        const filtered = refOptions?.recordTypeId
-          ? fields.filter((f) => f.recordTypeId === refOptions.recordTypeId)
-          : fields;
-        return Object.freeze(
-          filtered.map((f) => ({
-            id: f.fieldId,
-            key: f.key,
-            label: f.name || f.key,
-          })),
-        );
-      }
-      case "relationship_reference": {
-        const relationships = context.relationships ?? [];
-        const filtered = refOptions?.recordTypeId
-          ? relationships.filter((r) => r.recordTypeId === refOptions.recordTypeId)
-          : relationships;
-        return Object.freeze(
-          filtered.map((r) => ({
-            id: r.relationshipId,
-            key: r.key,
-            label: r.name || r.key,
-          })),
-        );
-      }
-      case "pipeline_reference": {
-        const pipelines = context.pipelines ?? [];
-        return Object.freeze(
-          pipelines.map((p) => ({
-            id: p.pipelineId,
-            key: p.key,
-            label: p.name || p.key,
-          })),
-        );
-      }
-      case "asset_reference": {
-        const assets = context.assets ?? [];
-        return Object.freeze(
-          assets.map((a) => ({
-            id: a.assetId,
-            key: a.assetId,
-            label: a.name || a.assetId,
-          })),
-        );
-      }
-      case "record_reference": {
-        const recordTypes = context.recordTypes ?? [];
-        return Object.freeze(
-          recordTypes.map((r) => ({
-            id: r.recordTypeId,
-            key: r.key,
-            label: r.name || r.key,
-          })),
-        );
-      }
-      default:
-        return Object.freeze([]);
+    kind: Exclude<BlockReferencePropertyKindV2, "record_reference">,
+    referenceOptions: Readonly<{ recordTypeId?: string }> = {},
+  ): readonly StudioReferenceOption[] => {
+    if (publicRefusedReferenceKinds.has(kind) && isPublic) return Object.freeze([]);
+    const recordTypeId = referenceOptions.recordTypeId;
+    const choices: StudioReferenceOption[] = [];
+    switch (kind) {
+      case "page_reference":
+        for (const page of context.pages ?? [])
+          if (!isPublic || page.type === "public")
+            choices.push(option(page.pageId, page.key, page.name));
+        break;
+      case "query_reference":
+        for (const query of context.queries ?? [])
+          if (surface.kind !== "public" || surface.publicQueryIds.includes(query.queryId))
+            choices.push(option(query.queryId, query.key, query.name));
+        break;
+      case "action_reference":
+        for (const action of context.actions ?? [])
+          if (surface.kind !== "public" || surface.publicActionKey === action.actionKey)
+            choices.push(option(action.actionKey, action.actionKey, action.name));
+        break;
+      case "record_type_reference":
+        for (const recordType of context.recordTypes ?? [])
+          choices.push(option(recordType.recordTypeId, recordType.key, recordType.name));
+        break;
+      case "field_reference":
+        for (const field of context.fields ?? [])
+          if (
+            (recordTypeId === undefined || field.recordTypeId === recordTypeId) &&
+            (surface.kind !== "public" || surface.publicFieldIds.includes(field.fieldId))
+          )
+            choices.push(option(field.fieldId, field.key, field.name));
+        break;
+      case "relationship_reference":
+        for (const relationship of context.relationships ?? [])
+          if (recordTypeId === undefined || relationship.recordTypeId === recordTypeId)
+            choices.push(option(relationship.relationshipId, relationship.key, relationship.name));
+        break;
+      case "pipeline_reference":
+        for (const pipeline of context.pipelines ?? [])
+          choices.push(option(pipeline.pipelineId, pipeline.key, pipeline.name));
+        break;
+      case "asset_reference":
+        for (const asset of context.assets ?? [])
+          choices.push(option(asset.assetId, asset.assetId, asset.name));
+        break;
     }
+    return Object.freeze(choices);
   };
 
-  const projectPropertyChoices = (
+  /**
+   * Surface-filtered property choices, or undefined when validation would refuse every value:
+   * a public placement drops properties of always-refused reference kinds, and a component or
+   * group that needs one of those values cannot be offered at all.
+   */
+  const propertyChoices = (
     controls: readonly ComponentPropertyControlV2[],
-    propOptions?: { recordTypeId?: string },
-  ): readonly InspectorPropertyChoice[] => {
-    return Object.freeze(
-      controls.map((control) => {
-        const choice: MutableInspectorPropertyChoice = {
-          key: control.key,
-          label: control.label,
-          help: control.help,
-          required: control.required,
-          defaultValue: control.defaultValue,
-          controlKind: control.kind,
-          controlType: control.controlType,
-          isReference: control.isReference,
-          referenceKind: control.referenceKind,
-        };
-
-        if (control.textConstraints) choice.textConstraints = control.textConstraints;
-        if (control.numberConstraints) choice.numberConstraints = control.numberConstraints;
-        if (control.choiceOptions) choice.choiceOptions = control.choiceOptions;
-        if (control.richTextAllowedElements)
-          choice.allowedElements = control.richTextAllowedElements;
-        if (control.listConstraints) choice.listConstraints = control.listConstraints;
-
-        if (control.isReference && control.referenceKind) {
-          choice.referenceChoices = getReferenceChoices(control.referenceKind, propOptions);
-        }
-
-        if (control.kind === "theme_token" && control.themeTokenKind) {
-          const matching = (context.themeTokens ?? []).filter(
-            (t) => t.tokenKind === control.themeTokenKind,
-          );
-          choice.themeTokenChoices = Object.freeze(matching);
-        }
-
-        if (control.nestedProperties) {
-          choice.nestedProperties = projectPropertyChoices(
-            control.nestedProperties,
-            propOptions,
-          );
-        }
-
-        if (control.listItemControl) {
-          choice.listItem = projectPropertyChoices(
-            [control.listItemControl],
-            propOptions,
-          )[0];
-        }
-
-        return Object.freeze(choice);
-      }),
-    );
+    recordTypeId: string | undefined,
+  ): readonly InspectorPropertyChoice[] | undefined => {
+    const choices: InspectorPropertyChoice[] = [];
+    for (const control of controls) {
+      const choice = propertyChoice(control, recordTypeId);
+      if (choice !== undefined) choices.push(choice);
+      else if (control.valueRequired) return undefined;
+    }
+    return Object.freeze(choices);
   };
 
-  const getAllowedChildBlocks = (
-    blockIdOrKey: string,
-    slotKey: string,
-  ): readonly {
-    blockId: string;
-    key: string;
-    releaseVersion: string;
-    name: string;
-    icon: string;
-    paletteGroup: BlockPaletteGroup;
-  }[] => {
-    const comp = getComponentDiscovery(blockIdOrKey);
-    if (!comp) return Object.freeze([]);
-    const slot = comp.slots.find((s) => s.key === slotKey);
-    if (!slot) return Object.freeze([]);
-    return slot.allowedChildBlocks.map((b) =>
-      Object.freeze({
-        blockId: b.blockId,
-        key: b.key,
-        releaseVersion: b.releaseVersion,
-        name: b.name,
-        icon: b.icon,
-        paletteGroup: b.paletteGroup,
-      }),
-    );
+  const propertyChoice = (
+    control: ComponentPropertyControlV2,
+    recordTypeId: string | undefined,
+  ): InspectorPropertyChoice | undefined => {
+    const kind = control.referenceKind;
+    if (kind !== undefined && isPublic && publicRefusedReferenceKinds.has(kind)) return undefined;
+    const declaration = control.declaration;
+    const properties =
+      control.properties === undefined
+        ? undefined
+        : propertyChoices(control.properties, recordTypeId);
+    const item =
+      control.item === undefined ? undefined : propertyChoice(control.item, recordTypeId);
+    if (
+      (control.properties !== undefined && properties === undefined) ||
+      (control.item !== undefined && item === undefined)
+    )
+      return undefined;
+    return Object.freeze({
+      control,
+      ...(kind !== undefined && kind !== "record_reference"
+        ? {
+            referenceChoices: getReferenceChoices(
+              kind,
+              recordTypeId === undefined ? {} : { recordTypeId },
+            ),
+          }
+        : {}),
+      ...(declaration.kind === "theme_token"
+        ? {
+            themeTokenChoices: Object.freeze(
+              (context.themeTokens ?? []).filter(
+                (token) => token.tokenKind === declaration.tokenKind,
+              ),
+            ),
+          }
+        : {}),
+      ...(properties === undefined ? {} : { properties }),
+      ...(item === undefined ? {} : { item }),
+    });
+  };
+
+  /** Components validation can accept on this surface, keyed by exact release identity. */
+  const offered = new Map<string, ComponentDiscoveryV2>();
+  for (const component of projection.components)
+    if (propertyChoices(component.properties, undefined) !== undefined)
+      offered.set(platformBlockReleaseIdentityV2(component.release), component);
+  const components = Object.freeze([...offered.values()]);
+  const summaries = components.map((component) => component.release);
+
+  const getComponent = (
+    block: Readonly<{ blockId: string; releaseVersion: string }>,
+  ): ComponentDiscoveryV2 | undefined => offered.get(platformBlockReleaseIdentityV2(block));
+
+  const getPlacementChoices = (
+    target: StudioPlacementTarget,
+  ): readonly PlatformBlockReleaseSummaryV2[] => {
+    switch (target.kind) {
+      case "page":
+        return Object.freeze(summaries);
+      case "shell_layout":
+        return Object.freeze(summaries.filter((release) => release.paletteGroup === "layout"));
+      case "shell_content": {
+        const categories = new Set<BlockPaletteGroup>(target.allowedChildCategories);
+        return Object.freeze(summaries.filter((release) => categories.has(release.paletteGroup)));
+      }
+      case "slot": {
+        const slot = getComponent(target.parent)?.slots.find(
+          (entry) => entry.key === target.slotKey,
+        );
+        return Object.freeze(
+          (slot?.allowedChildren ?? []).filter((release) =>
+            offered.has(platformBlockReleaseIdentityV2(release)),
+          ),
+        );
+      }
+    }
   };
 
   const getInspectorChoices = (
-    blockIdOrKey: string,
-    choicesOptions?: { recordTypeId?: string; slotKey?: string },
+    block: Readonly<{ blockId: string; releaseVersion: string }>,
+    choiceOptions: Readonly<{ recordTypeId?: string }> = {},
   ): ComponentInspectorChoices | undefined => {
-    const comp = getComponentDiscovery(blockIdOrKey);
-    if (!comp) return undefined;
-
-    // Filter out if publicSurface is refused on a public page
-    if (isPublicPage && comp.release.capabilities.publicSurface !== "allowed") {
-      return undefined;
-    }
-
-    const properties = projectPropertyChoices(comp.propertyControls, choicesOptions);
-
-    const slots: InspectorSlotChoice[] = comp.slots.map((slot) => ({
-      slotKey: slot.key,
-      slotLabel: slot.label,
-      required: slot.required,
-      allowedCategories: slot.allowedChildCategories,
-      allowedChildBlocks: slot.allowedChildBlocks.map((b) => ({
-        blockId: b.blockId,
-        key: b.key,
-        releaseVersion: b.releaseVersion,
-        name: b.name,
-        icon: b.icon,
-        paletteGroup: b.paletteGroup,
-      })),
-    }));
-
-    const operations: InspectorOperationChoice[] = comp.stateOperations.map((op) => ({
-      key: op.key,
-      label: op.label,
-      description: op.description,
-      category: op.category,
-    }));
-
-    return Object.freeze({
-      component: Object.freeze({
-        blockId: comp.release.blockId,
-        key: comp.release.key,
-        releaseVersion: comp.release.releaseVersion,
-        name: comp.release.name,
-        icon: comp.release.icon,
-        paletteGroup: comp.release.paletteGroup,
-        rendererKey: comp.release.rendererKey,
-        publicSurface: comp.release.capabilities.publicSurface,
-      }),
-      properties,
-      slots: Object.freeze(slots),
-      operations: Object.freeze(operations),
-      referenceKinds: comp.referenceKinds,
-    });
-  };
-
-  const isPropertyOffered = (blockIdOrKey: string, propertyKey: string): boolean => {
-    const choices = getInspectorChoices(blockIdOrKey);
-    if (!choices) return false;
-    const checkProperties = (props: readonly InspectorPropertyChoice[]): boolean => {
-      for (const prop of props) {
-        if (prop.key === propertyKey) return true;
-        if (prop.nestedProperties && checkProperties(prop.nestedProperties)) return true;
-        if (prop.listItem && prop.listItem.key === propertyKey) return true;
-      }
-      return false;
-    };
-    return checkProperties(choices.properties);
-  };
-
-  const isChildBlockOffered = (
-    blockIdOrKey: string,
-    slotKey: string,
-    childBlockIdOrKey: string,
-  ): boolean => {
-    const children = getAllowedChildBlocks(blockIdOrKey, slotKey);
-    return children.some(
-      (child) => child.blockId === childBlockIdOrKey || child.key === childBlockIdOrKey,
-    );
-  };
-
-  const isOperationOffered = (blockIdOrKey: string, operationKey: string): boolean => {
-    const choices = getInspectorChoices(blockIdOrKey);
-    if (!choices) return false;
-    return choices.operations.some((op) => op.key === operationKey);
-  };
-
-  const isReferenceOffered = (
-    referenceKind: ComponentReferenceKindV2,
-    referenceIdOrKey: string,
-    refOptions?: { recordTypeId?: string },
-  ): boolean => {
-    const choices = getReferenceChoices(referenceKind, refOptions);
-    return choices.some(
-      (choice) => choice.id === referenceIdOrKey || choice.key === referenceIdOrKey,
-    );
-  };
-
-  const withContext = (updatedContext: StudioDiscoveryContext): StudioDiscoveryAdapter => {
-    return createStudioDiscoveryAdapter({
-      catalogue,
-      context: { ...context, ...updatedContext },
-    });
+    const component = getComponent(block);
+    if (component === undefined) return undefined;
+    const properties = propertyChoices(component.properties, choiceOptions.recordTypeId);
+    return properties === undefined ? undefined : Object.freeze({ component, properties });
   };
 
   return Object.freeze({
-    catalogue,
+    surface,
     context,
     projection,
-    getComponentDiscovery,
-    getAvailableComponents,
-    getAvailableComponentsByGroup,
+    getComponents: () => components,
+    getComponent,
+    getPlacementChoices,
     getInspectorChoices,
-    getAllowedChildBlocks,
     getReferenceChoices,
-    isPropertyOffered,
-    isChildBlockOffered,
-    isOperationOffered,
-    isReferenceOffered,
-    withContext,
+    withContext: (updated: StudioDiscoveryContext) =>
+      createStudioDiscoveryAdapter({ catalogue, surface, context: { ...context, ...updated } }),
   });
 }
