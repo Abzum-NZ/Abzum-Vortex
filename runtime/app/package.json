@@ -15,7 +15,8 @@
     "@vortex/contracts": "workspace:*",
     "@vortex/module": "workspace:*",
     "@vortex/theme": "workspace:*",
-    "server-only": "0.0.1"
+    "server-only": "0.0.1",
+    "zod": "4.6.5"
   },
   "vortex": {
     "tier": 8,

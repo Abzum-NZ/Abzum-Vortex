@@ -46,7 +46,7 @@ The first complete release includes:
 - Published versions so people use a known, validated configuration.
 - Web experiences that work on desktop and phone.
 - Public pages and programmable interfaces where an organisation explicitly enables them.
-- A governed [Model Context Protocol](12-connections-and-interfaces.md#governed-mcp-access) surface through which an authorised external client can discover and use the same navigation, forms, actions, files, builder operations and administration operations available to that person in the web interface.
+- A governed [Model Context Protocol](12-connections-and-interfaces.md#governed-mcp-access) surface through which an authorised agent, whether in the person's browser or a remote client, can discover and use the same navigation, forms, actions, files, builder operations and administration operations available to that person in the web interface.
 - Generic entitlement decisions, resource metering, export, retention, activity history, and recovery.
 - Governed cross-organisation record sharing with the same product behaviour whether the organisations are in one cluster or different clusters.
 
@@ -58,7 +58,7 @@ The first complete release does not include:
 - Automatic sharing of records, definitions, files, or learned information between organisations.
 - Replicating shared records into recipient-cluster storage or directly connecting customer databases. Cross-cluster access uses the approved [Vortex Federation API](17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
 - A marketplace in which unreviewed packages become automatically trusted.
-- A Vortex-provided artificial-intelligence assistant, hosted model, model-generated work, autonomous execution, or model-assisted workflow step. The governed MCP surface is an interoperability boundary for an external client; it does not add a model or assistant to Vortex.
+- A Vortex-provided artificial-intelligence assistant, hosted model, model-generated work, autonomous execution, or model-assisted workflow step. The governed MCP surfaces are interoperability boundaries for an agent the person brings, in their browser or as a remote client; they do not add a model or assistant to Vortex.
 - Privileged business domains. Commercial billing, ordinary approvals, tasks, comments, notices, business calendars and operational case management are built as ordinary applications under the [core contract boundary](appendices/core-contract-boundary.md).
 
 ## Product principles
