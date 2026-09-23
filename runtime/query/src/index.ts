@@ -62,6 +62,35 @@ export {
 
 export { arrangeDataset } from "./arrangements";
 
+export {
+  organizationAccountReferenceChoiceCommandSchema,
+  recordReferenceChoiceCommandSchema,
+  referenceChoiceCommandSchema,
+  referenceChoiceOptionSchema,
+  referenceChoicePageSchema,
+  referenceChoiceRefusalReasonCodes,
+  referenceChoiceRefusalSchema,
+  referenceChoiceResultSchema,
+  referenceChoiceValueSchema,
+  type OrganizationAccountReferenceChoiceCommand,
+  type RecordReferenceChoiceCommand,
+  type ReferenceChoiceCommand,
+  type ReferenceChoiceOption,
+  type ReferenceChoicePage,
+  type ReferenceChoiceRefusal,
+  type ReferenceChoiceRefusalReasonCode,
+  type ReferenceChoiceResult,
+  type ReferenceChoiceValue,
+} from "./reference-choice-contracts";
+
+export {
+  createReferenceChoiceService,
+  projectReferenceChoiceInputValues,
+  resolveReferenceChoiceSelection,
+  type ReferenceChoiceInputValues,
+  type ReferenceChoiceServiceDependencies,
+} from "./reference-choice-service";
+
 export const QueryService = Object.freeze({
   key: "query",
   boundary: "@vortex/query",
