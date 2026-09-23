@@ -4,10 +4,6 @@ import {
   type ImmutablePlatformBlockCatalogueV2,
   immutablePlatformBlockCatalogueV2Schema,
 } from "./application-composition-v2";
-import {
-  type ComponentSemanticEventKind,
-  componentSemanticEventKindSchema,
-} from "./application-flow-bindings";
 
 const deepFreeze = <Value>(value: Value): Value => {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
@@ -16,8 +12,10 @@ const deepFreeze = <Value>(value: Value): Value => {
 };
 
 /**
- * Parses one release through the platform block release contract and deep-freezes it.
- * Fingerprints are the canonical-JSON SHA-256 values derived from the exact specification metadata.
+ * The registered platform block releases: the one source of block metadata for server
+ * validation and for the renderer registrations that pair each release with its component. Each release is parsed through the release contract at module load and
+ * deep-frozen. Fingerprints are the canonical-JSON SHA-256 values the publication catalogue
+ * derives from the same content.
  */
 const release = (definition: unknown): PlatformBlockReleaseV2 =>
   deepFreeze(platformBlockReleaseV2Schema.parse(definition));
@@ -92,14 +90,7 @@ export const RICH_TEXT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
       label: "Content",
       help: "Structured content shown when no projected value is supplied",
       required: false,
-      allowedElements: [
-        "paragraph",
-        "heading",
-        "bulleted_list",
-        "numbered_list",
-        "emphasis",
-        "link",
-      ],
+      allowedElements: ["paragraph", "heading", "bulleted_list", "numbered_list", "emphasis", "link"],
     },
   ],
   slots: [],
@@ -367,11 +358,26 @@ export const TEXT_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
       help: "HTML input type",
       required: false,
       options: [
-        { key: "text", label: "Text" },
-        { key: "email", label: "Email" },
-        { key: "password", label: "Password" },
-        { key: "tel", label: "Telephone" },
-        { key: "url", label: "URL" },
+        {
+          key: "text",
+          label: "Text",
+        },
+        {
+          key: "email",
+          label: "Email",
+        },
+        {
+          key: "password",
+          label: "Password",
+        },
+        {
+          key: "tel",
+          label: "Telephone",
+        },
+        {
+          key: "url",
+          label: "URL",
+        },
       ],
     },
   ],
@@ -560,8 +566,14 @@ export const BOOLEAN_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
       help: "Visual representation as checkbox or switch",
       required: false,
       options: [
-        { key: "checkbox", label: "Checkbox" },
-        { key: "switch", label: "Switch" },
+        {
+          key: "checkbox",
+          label: "Checkbox",
+        },
+        {
+          key: "switch",
+          label: "Switch",
+        },
       ],
     },
   ],
@@ -754,8 +766,14 @@ export const CHOICE_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
       help: "Render as select dropdown or radio buttons",
       required: false,
       options: [
-        { key: "select", label: "Select dropdown" },
-        { key: "radio", label: "Radio buttons" },
+        {
+          key: "select",
+          label: "Select dropdown",
+        },
+        {
+          key: "radio",
+          label: "Radio buttons",
+        },
       ],
     },
   ],
@@ -817,9 +835,18 @@ export const VALIDATION_MESSAGE_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(
       help: "Visual alert severity level",
       required: false,
       options: [
-        { key: "error", label: "Error" },
-        { key: "warning", label: "Warning" },
-        { key: "info", label: "Info" },
+        {
+          key: "error",
+          label: "Error",
+        },
+        {
+          key: "warning",
+          label: "Warning",
+        },
+        {
+          key: "info",
+          label: "Info",
+        },
       ],
     },
   ],
@@ -863,9 +890,18 @@ export const BUTTON_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
       help: "Action emits the action event; Submit and Reset use the enclosing form's one submit or reset event",
       required: false,
       options: [
-        { key: "action", label: "Action" },
-        { key: "submit", label: "Submit form" },
-        { key: "reset", label: "Reset form" },
+        {
+          key: "action",
+          label: "Action",
+        },
+        {
+          key: "submit",
+          label: "Submit form",
+        },
+        {
+          key: "reset",
+          label: "Reset form",
+        },
       ],
     },
     {
@@ -875,10 +911,22 @@ export const BUTTON_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
       help: "Visual appearance style",
       required: false,
       options: [
-        { key: "primary", label: "Primary" },
-        { key: "secondary", label: "Secondary" },
-        { key: "danger", label: "Danger" },
-        { key: "ghost", label: "Ghost" },
+        {
+          key: "primary",
+          label: "Primary",
+        },
+        {
+          key: "secondary",
+          label: "Secondary",
+        },
+        {
+          key: "danger",
+          label: "Danger",
+        },
+        {
+          key: "ghost",
+          label: "Ghost",
+        },
       ],
     },
     {
@@ -929,10 +977,22 @@ export const TABS_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
       help: "Tab selected first when no projected tab is supplied",
       required: false,
       options: [
-        { key: "tab_one", label: "Tab 1" },
-        { key: "tab_two", label: "Tab 2" },
-        { key: "tab_three", label: "Tab 3" },
-        { key: "tab_four", label: "Tab 4" },
+        {
+          key: "tab_one",
+          label: "Tab 1",
+        },
+        {
+          key: "tab_two",
+          label: "Tab 2",
+        },
+        {
+          key: "tab_three",
+          label: "Tab 3",
+        },
+        {
+          key: "tab_four",
+          label: "Tab 4",
+        },
       ],
     },
     {
@@ -1044,9 +1104,18 @@ export const DIALOG_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
       help: "Modal width size",
       required: false,
       options: [
-        { key: "small", label: "Small" },
-        { key: "medium", label: "Medium" },
-        { key: "large", label: "Large" },
+        {
+          key: "small",
+          label: "Small",
+        },
+        {
+          key: "medium",
+          label: "Medium",
+        },
+        {
+          key: "large",
+          label: "Large",
+        },
       ],
     },
   ],
@@ -1110,10 +1179,22 @@ export const DRAWER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
       help: "Drawer slide-in direction",
       required: false,
       options: [
-        { key: "left", label: "Left" },
-        { key: "right", label: "Right" },
-        { key: "top", label: "Top" },
-        { key: "bottom", label: "Bottom" },
+        {
+          key: "left",
+          label: "Left",
+        },
+        {
+          key: "right",
+          label: "Right",
+        },
+        {
+          key: "top",
+          label: "Top",
+        },
+        {
+          key: "bottom",
+          label: "Bottom",
+        },
       ],
     },
     {
@@ -1123,9 +1204,18 @@ export const DRAWER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
       help: "Drawer width or height size",
       required: false,
       options: [
-        { key: "small", label: "Small" },
-        { key: "medium", label: "Medium" },
-        { key: "large", label: "Large" },
+        {
+          key: "small",
+          label: "Small",
+        },
+        {
+          key: "medium",
+          label: "Medium",
+        },
+        {
+          key: "large",
+          label: "Large",
+        },
       ],
     },
   ],
@@ -1227,14 +1317,6 @@ export const PLATFORM_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object
   ...CONTROL_BLOCK_RELEASES,
 ]);
 
-/** Lookup map of platform block releases keyed by permanent UUID string. */
-export const PLATFORM_BLOCK_RELEASES_BY_ID: ReadonlyMap<string, PlatformBlockReleaseV2> =
-  new Map(PLATFORM_BLOCK_RELEASES.map((r) => [String(r.blockId), r]));
-
-/** Lookup map of platform block releases keyed by namespaced key. */
-export const PLATFORM_BLOCK_RELEASES_BY_KEY: ReadonlyMap<string, PlatformBlockReleaseV2> =
-  new Map(PLATFORM_BLOCK_RELEASES.map((r) => [r.key, r]));
-
 /**
  * Closed immutable platform block catalogue for pure V2 composition validation and materialisation.
  * Server-owned; client-side renderer changes cannot alter or expand this allowlist.
@@ -1249,72 +1331,3 @@ export const IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2: ImmutablePlatformBlockCatalo
       releases: PLATFORM_BLOCK_RELEASES,
     }),
   );
-
-/** Registered flow node kinds for application frontend flows. */
-export const REGISTERED_FLOW_NODE_KINDS = Object.freeze([
-  "start",
-  "query",
-  "action",
-  "transform",
-  "return",
-] as const);
-
-export type RegisteredFlowNodeKind = (typeof REGISTERED_FLOW_NODE_KINDS)[number];
-
-/** Registered flow outcome kinds for safe execution outcomes. */
-export const REGISTERED_FLOW_OUTCOMES = Object.freeze([
-  "completed",
-  "committed",
-  "refused",
-  "conflict",
-  "validation",
-  "partial",
-  "uncertain",
-  "background_pending",
-  "failed",
-] as const);
-
-export type RegisteredFlowOutcome = (typeof REGISTERED_FLOW_OUTCOMES)[number];
-
-/** Registered semantic event kinds emitted by application components. */
-export const REGISTERED_SEMANTIC_EVENT_KINDS = componentSemanticEventKindSchema.options;
-
-/**
- * Mapping of component keys to the exact semantic events each component supports.
- * Binding an unsupported event to a component fails catalogue validation.
- */
-export const COMPONENT_SUPPORTED_EVENTS: Readonly<
-  Record<string, readonly ComponentSemanticEventKind[]>
-> = Object.freeze({
-  "platform.display.text": Object.freeze(["refresh", "load"]),
-  "platform.display.rich_text": Object.freeze(["refresh", "load"]),
-  "platform.display.list": Object.freeze([
-    "refresh",
-    "load",
-    "row_action",
-    "selection_changed",
-    "page_changed",
-  ]),
-  "platform.display.table": Object.freeze([
-    "refresh",
-    "load",
-    "row_action",
-    "selection_changed",
-    "sort_changed",
-    "page_changed",
-  ]),
-  "platform.display.record_detail": Object.freeze(["refresh", "load", "row_action"]),
-  "platform.display.grouped_data": Object.freeze(["refresh", "load", "row_action"]),
-  "platform.display.summary_values": Object.freeze(["refresh", "load"]),
-  "platform.form.text_input": Object.freeze(["field_changed"]),
-  "platform.form.number_input": Object.freeze(["field_changed"]),
-  "platform.form.boolean_input": Object.freeze(["field_changed"]),
-  "platform.form.date_input": Object.freeze(["field_changed"]),
-  "platform.form.choice_input": Object.freeze(["field_changed"]),
-  "platform.form.validation_message": Object.freeze([]),
-  "platform.action.button": Object.freeze(["action"]),
-  "platform.layout.tabs": Object.freeze(["tab_changed"]),
-  "platform.layout.dialog": Object.freeze(["action"]),
-  "platform.layout.drawer": Object.freeze(["action"]),
-  "platform.form.container": Object.freeze(["form_ready", "form_reset", "form_submit"]),
-});
