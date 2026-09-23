@@ -52,20 +52,22 @@ const string = (value: unknown, at: string) => {
   return value;
 };
 
-const sameOrderMetadata = (a: Record<string, unknown>, b: Record<string, unknown>): boolean => {
-  for (const breakpoint of ["desktop", "tablet", "phone"] as const) {
-    const listA = a[breakpoint];
-    const listB = b[breakpoint];
-    if (!Array.isArray(listA) || !Array.isArray(listB)) {
-      if (listA !== listB) return false;
-      continue;
-    }
-    if (listA.length !== listB.length) return false;
-    for (let i = 0; i < listA.length; i++) {
-      if (listA[i] !== listB[i]) return false;
-    }
-  }
-  return true;
+/**
+ * Tablet and phone orders are stored as a hint on each child. After the editor
+ * adds, removes or moves blocks, the hint is stale: keep surviving placements in
+ * their saved relative order, drop removed ones and insert new ones at their
+ * desktop position, so every breakpoint lists exactly the slot's placements.
+ */
+const rebuildBreakpointOrder = (saved: unknown, desktop: readonly string[]): string[] => {
+  const present = new Set(desktop);
+  const result = Array.isArray(saved)
+    ? [...new Set(saved.filter((id): id is string => typeof id === "string" && present.has(id)))]
+    : [];
+  const kept = new Set(result);
+  desktop.forEach((id, index) => {
+    if (!kept.has(id)) result.splice(Math.min(index, result.length), 0, id);
+  });
+  return result;
 };
 
 type VortexSlot = ReturnType<typeof placementSlotV2Schema.parse>;
@@ -298,7 +300,7 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
       throw new VortexPuckAdapterError(`Invalid Puck adapter data at ${at}`);
     const placements: Record<string, unknown> = {};
     const desktop: string[] = [];
-    let savedOrder: Record<string, unknown> = { desktop: [], tablet: [], phone: [] };
+    let savedOrder: Record<string, unknown> | undefined;
     for (const [index, raw] of input.entries()) {
       if (depth > catalogue.compositionPolicy.maximumDepth) {
         throw new VortexPuckAdapterError(
@@ -390,18 +392,12 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
         slots[declaration.key] = childSlot;
       }
 
-      const currentOrder = exact(
-        meta.order,
-        ["desktop", "tablet", "phone"],
-        `${at}[${index}].props.vortex.order`,
-      );
-      if (index === 0) {
-        savedOrder = currentOrder;
-      } else if (!sameOrderMetadata(currentOrder, savedOrder)) {
-        throw new VortexPuckAdapterError(
-          `Contradictory responsive order metadata across siblings at ${at}[${index}].props.vortex.order`,
+      if (savedOrder === undefined && meta.order !== undefined)
+        savedOrder = exact(
+          meta.order,
+          ["desktop", "tablet", "phone"],
+          `${at}[${index}].props.vortex.order`,
         );
-      }
       placements[id] = {
         block,
         settings: clone(settings),
@@ -422,7 +418,11 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
       desktop.push(id);
     }
     try {
-      return placementSlotV2Schema.parse({ placements, order: { ...clone(savedOrder), desktop } });
+      const order: Record<string, string[]> = { desktop };
+      for (const breakpoint of ["tablet", "phone"] as const)
+        if (savedOrder?.[breakpoint] !== undefined)
+          order[breakpoint] = rebuildBreakpointOrder(savedOrder[breakpoint], desktop);
+      return placementSlotV2Schema.parse({ placements, order });
     } catch (error) {
       throw new VortexPuckAdapterError("Invalid placement slot schema", { cause: error });
     }
