@@ -17,13 +17,17 @@
 --    is not called here. The Query instead never serves an observable stale
 --    value: when the fields it filters, sorts or projects have a deadline
 --    calculation anywhere in their recursive dependency closure, it checks
---    whether a due transition for such a calculation is unapplied on a record
---    the caller can read (with that calculation and its own dependencies), and
---    if so returns one neutral, retryable 'freshness_pending' refusal before
---    any row is scanned. Records the caller cannot read never influence the
---    outcome, and a query with no deadline-dependent field is never refused.
---    When more due rows exist than one request examines, it is refused rather
---    than served partially.
+--    whether a record of a type owning such a calculation has an unapplied due
+--    transition while the caller can read that calculation there (read_record
+--    discloses a calculation or total only when its whole dependency closure
+--    is readable), and if so returns one neutral, retryable
+--    'freshness_pending' refusal before any row is scanned. A due row names
+--    only the record's earliest pending transition (or, after reselection, one
+--    representative calculation), so it is matched by record type rather than
+--    by the calculation it names. Records the caller cannot read never
+--    influence the outcome, and a query with no deadline-dependent field is
+--    never refused. When more due rows exist than one request examines, it is
+--    refused rather than served partially.
 --
 -- The signature changes, so the old function is dropped and no compatibility
 -- overload remains. run_module_query is not rewritten in place by any later
@@ -67,6 +71,7 @@ begin
   closure_added text[];
   closure_pass integer := 0;
   deadline_ids text[] := array[]::text[];
+  deadline_type_ids text[] := array[]::text[];
   due_examined integer := 0;
   due_record record;
   due_projection jsonb;
@@ -114,9 +119,13 @@ begin
     from pg_catalog.unnest(sort_ids || filter_ids || requested_ids) as referenced(id)
     where fields_by_id -> referenced.id ->> 'type' in ('calculation', 'total')
   ) then
+    -- Every installed field, keyed by lowercase identifier and carrying the
+    -- record type that owns it.
     type_catalogue := vortex_record.relationship_total_catalogue_internal();
     for field_item in
-      select field.value
+      select field.value || pg_catalog.jsonb_build_object(
+        'ownerRecordTypeId', pg_catalog.lower(type_entry.value ->> 'recordTypeId')
+      )
       from pg_catalog.jsonb_array_elements(type_catalogue -> 'recordTypes') as type_entry(value),
         pg_catalog.jsonb_array_elements(coalesce(type_entry.value -> 'fields', '[]'::jsonb)) as field(value)
     loop
@@ -163,18 +172,25 @@ begin
     from pg_catalog.unnest(closure_ids) as member(id)
     where all_fields -> member.id ->> 'type' = 'calculation'
       and all_fields -> member.id #>> '{settings,expression,kind}' = 'deadline_passed';
+    select coalesce(pg_catalog.array_agg(distinct all_fields -> member.id ->> 'ownerRecordTypeId'),
+        array[]::text[])
+    into deadline_type_ids
+    from pg_catalog.unnest(deadline_ids) as member(id);
   end if;
 
-  -- A due transition for such a calculation that is unapplied on a record the
-  -- caller can read, with that calculation and its own dependencies readable,
-  -- makes every observable filter, order, page and projection stale.
-  if pg_catalog.cardinality(deadline_ids) > 0 then
+  -- A due row is the record's earliest pending transition, and it names only
+  -- one of its deadline calculations, so any due row on a record of a type that
+  -- owns one of these calculations may leave it stale. It matters only when
+  -- the caller can read such a calculation on that record (with its own
+  -- dependencies); then every observable filter, order, page and projection
+  -- may be stale.
+  if pg_catalog.cardinality(deadline_type_ids) > 0 then
     for due_record in
-      select due.record_type_id, due.record_id, due.deadline_calculation_field_id
+      select due.record_type_id, due.record_id
       from vortex_record.record_deadline_due_metadata as due
       where due.organization_id = context_organization_id
         and due.transition_at <= pg_catalog.statement_timestamp()
-        and due.deadline_calculation_field_id::text = any (deadline_ids)
+        and due.record_type_id::text = any (deadline_type_ids)
         and (due.application_root_id is null or due.application_root_id = context_application_root_id)
       order by due.transition_at asc, due.record_id asc
       limit due_limit + 1
@@ -186,15 +202,19 @@ begin
       due_projection := vortex_record.read_record(due_record.record_type_id, due_record.record_id);
       if due_projection ->> 'outcome' = 'allowed' then
         due_values := due_projection -> 'values';
-        if due_values ? due_record.deadline_calculation_field_id::text
-          and not exists (
-            select 1
-            from pg_catalog.jsonb_array_elements_text(
-              coalesce(all_fields -> due_record.deadline_calculation_field_id::text
-                #> '{settings,dependencyFieldIds}', '[]'::jsonb)
-            ) as dep(value)
-            where not (due_values ? pg_catalog.lower(dep.value))
-          ) then
+        if exists (
+          select 1
+          from pg_catalog.unnest(deadline_ids) as deadline(id)
+          where all_fields -> deadline.id ->> 'ownerRecordTypeId' = due_record.record_type_id::text
+            and due_values ? deadline.id
+            and not exists (
+              select 1
+              from pg_catalog.jsonb_array_elements_text(
+                coalesce(all_fields -> deadline.id #> '{settings,dependencyFieldIds}', '[]'::jsonb)
+              ) as dep(value)
+              where not (due_values ? pg_catalog.lower(dep.value))
+            )
+        ) then
           return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'freshness_pending');
         end if;
       end if;

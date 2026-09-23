@@ -13,7 +13,6 @@ import {
 import {
   recordSystemValuesSchema,
   supportedRecordSystemFieldKeySchema,
-  type RecordSystemValues,
 } from "./record-system-values";
 
 /**
@@ -66,7 +65,6 @@ export const protectedQueryRowSchema = z
   })
   .strict();
 export type ProtectedQueryRow = z.infer<typeof protectedQueryRowSchema>;
-export type { RecordSystemValues };
 
 export const protectedQueryRefusalReasonCodes = [
   "request_invalid",
