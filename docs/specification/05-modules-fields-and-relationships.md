@@ -292,12 +292,16 @@ All affected link values, edges and record revisions change atomically.
 
 Many-to-many relationships use an explicit joining record type so ownership, permissions, activity, fields, and deletion behaviour remain visible.
 
-The first private relationship mutation in
-[#402](https://github.com/Abzum-NZ/Abzum-Vortex/issues/402) supports the existing
-single-target to-one link facts. It enforces target uniqueness only for declared
-one-to-one relationships; many-to-one permits several sources. It does not infer
-polymorphic targets or implement a hidden many-to-many edge model. Those broader
-relationship integrations remain with
+The private relationship mutation from
+[#402](https://github.com/Abzum-NZ/Abzum-Vortex/issues/402) supports to-one links
+to one target record type or to one of several. It enforces target uniqueness
+only for declared one-to-one relationships; many-to-one permits several sources.
+A link value names its concrete target record type, which must be one of the
+relationship's declared targets. The stored edge keeps that concrete target, and
+[#562](https://github.com/Abzum-NZ/Abzum-Vortex/issues/562) makes save, reads,
+permissions, totals, delete and restore use the same identity. The mutation does
+not implement a hidden many-to-many edge model; that broader relationship
+integration remains with
 [#49](https://github.com/Abzum-NZ/Abzum-Vortex/issues/49).
 
 ### Cross-module relationships
