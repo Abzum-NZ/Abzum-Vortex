@@ -3,96 +3,97 @@ import "server-only";
 import { z } from "zod";
 import {
   fieldIdSchema,
-  moduleRootIdSchema,
   organizationAccountIdSchema,
-  queryIdSchema,
+  publishedModuleQueryDescriptorV3Schema,
   recordIdSchema,
   recordTypeIdSchema,
+  recordTypeReferenceSchema,
 } from "@vortex/contracts";
 
+const choiceSearchSchema = z.string().trim().min(1).max(100);
+const choicePageSizeSchema = z.number().int().min(1).max(100).default(50);
+const choiceContinuationTokenSchema = z.string().min(1).max(65_536);
+
 /**
- * Command to query choices for a record-reference form or action input.
- * Built on #572, returning only records of the allowed types that the current
- * viewer may read, with bounded search and paging.
+ * Choices for one record-reference input. The composing server resolves the
+ * input's declared allowed record types and the published Module query that
+ * lists its choices from the installed release; the organisation, Application
+ * and viewer come only from the verified request. Rows are read through the
+ * #572 protected Query, so only records the viewer may read are ever offered.
  */
 export const recordReferenceChoiceCommandSchema = z
   .object({
     kind: z.literal("record_reference"),
-    /** Allowed record types declared by the reference input. Min 1, max 20. */
-    recordTypeIds: z
-      .array(recordTypeIdSchema)
-      .min(1)
-      .max(20)
-      .refine(
-        (ids) => new Set(ids.map((id) => id.toLowerCase())).size === ids.length,
-        { message: "Each record type is named once" },
-      ),
-    /** Optional search text to filter choices. Bounded length (max 100). */
-    search: z.string().trim().max(100).optional(),
-    /** Bounded page size (min 1, max 200, default 50). */
-    pageSize: z.number().int().min(1).max(200).default(50),
-    /** Opaque continuation token for keyset/offset paging. */
-    continuationToken: z.string().min(1).max(65_536).optional(),
-    /** Optional module root ID if bound to a published module query. */
-    moduleRootId: moduleRootIdSchema.optional(),
-    /** Optional query ID if bound to a published module query. */
-    queryId: queryIdSchema.optional(),
-    /** Optional field ID to use as the choice label. */
-    labelFieldId: fieldIdSchema.optional(),
+    /** The reference input's declared allowed record types. */
+    allowedRecordTypes: z.array(recordTypeReferenceSchema).min(1).max(20),
+    /** The published Module query whose permitted rows are the choices. */
+    source: publishedModuleQueryDescriptorV3Schema,
+    /** A field the source query selects, shown as each choice's label. */
+    labelFieldId: fieldIdSchema,
+    /** Narrows each bounded page to choices whose label contains this text. */
+    search: choiceSearchSchema.optional(),
+    pageSize: choicePageSizeSchema,
+    /** Opaque continuation issued by the previous page of the same source. */
+    continuationToken: choiceContinuationTokenSchema.optional(),
   })
   .strict();
 export type RecordReferenceChoiceCommand = z.infer<typeof recordReferenceChoiceCommandSchema>;
 
 /**
- * Command to query choices for an account-reference form or action input.
- * Limited to active accounts in the current organisation; cross-organisation
- * choices are forbidden.
+ * Choices for one organisation-account reference input: active accounts in
+ * the verified current organisation only. The command names no organisation.
  */
 export const organizationAccountReferenceChoiceCommandSchema = z
   .object({
     kind: z.literal("organization_account_reference"),
-    /** Optional search text to filter account choices by display name. Bounded length (max 100). */
-    search: z.string().trim().max(100).optional(),
-    /** Bounded page size (min 1, max 200, default 50). */
-    pageSize: z.number().int().min(1).max(200).default(50),
-    /** Opaque continuation token for paging. */
-    continuationToken: z.string().min(1).max(65_536).optional(),
+    /** Narrows choices to accounts whose display name contains this text. */
+    search: choiceSearchSchema.optional(),
+    pageSize: choicePageSizeSchema,
+    /** Opaque continuation issued by the previous page of the same search. */
+    continuationToken: choiceContinuationTokenSchema.optional(),
   })
   .strict();
 export type OrganizationAccountReferenceChoiceCommand = z.infer<
   typeof organizationAccountReferenceChoiceCommandSchema
 >;
 
-/** Unified reference choice command. */
 export const referenceChoiceCommandSchema = z.discriminatedUnion("kind", [
   recordReferenceChoiceCommandSchema,
   organizationAccountReferenceChoiceCommandSchema,
 ]);
 export type ReferenceChoiceCommand = z.infer<typeof referenceChoiceCommandSchema>;
 
-/** One reference choice option for form selection. */
+/** The typed value a choice submits, in the owning input type's exact format. */
+export const referenceChoiceValueSchema = z.union([
+  z.object({ recordTypeId: recordTypeIdSchema, recordId: recordIdSchema }).strict(),
+  z.object({ organizationAccountId: organizationAccountIdSchema }).strict(),
+]);
+export type ReferenceChoiceValue = z.infer<typeof referenceChoiceValueSchema>;
+
+/**
+ * One permitted choice. `key` is the choice-input option key derived from the
+ * referenced identity; `value` is what a selection of that key submits.
+ */
 export const referenceChoiceOptionSchema = z
   .object({
-    key: z.string().min(1).max(120),
+    key: z.string().regex(/^[ra]_[0-9a-f]{32}$/),
     label: z.string().min(1).max(200),
-    recordTypeId: recordTypeIdSchema.optional(),
-    recordId: recordIdSchema.optional(),
-    organizationAccountId: organizationAccountIdSchema.optional(),
+    value: referenceChoiceValueSchema,
   })
   .strict();
 export type ReferenceChoiceOption = z.infer<typeof referenceChoiceOptionSchema>;
 
 export const referenceChoiceRefusalReasonCodes = [
   "request_invalid",
-  "scope_unauthorized",
-  "record_type_unsupported",
-  "cross_organization_forbidden",
-  "query_unavailable",
+  "source_invalid",
+  "source_unavailable",
+  "source_stale",
   "cursor_invalid",
   "cursor_stale",
 ] as const;
 export type ReferenceChoiceRefusalReasonCode = (typeof referenceChoiceRefusalReasonCodes)[number];
 
+/** Every refusal is this one neutral shape, decided before any choice is exposed. */
 export const referenceChoiceRefusalSchema = z
   .object({
     outcome: z.literal("refused"),
@@ -105,7 +106,8 @@ export const referenceChoicePageSchema = z
   .object({
     outcome: z.literal("completed"),
     kind: z.enum(["record_reference", "organization_account_reference"]),
-    choices: z.array(referenceChoiceOptionSchema).max(200),
+    choices: z.array(referenceChoiceOptionSchema).max(100),
+    /** Opaque; present only when a later page may hold further permitted choices. */
     nextContinuationToken: z.string().optional(),
   })
   .strict();

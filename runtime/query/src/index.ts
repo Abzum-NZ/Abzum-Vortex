@@ -63,33 +63,31 @@ export {
 export { arrangeDataset } from "./arrangements";
 
 export {
-  recordReferenceChoiceCommandSchema,
   organizationAccountReferenceChoiceCommandSchema,
+  recordReferenceChoiceCommandSchema,
   referenceChoiceCommandSchema,
   referenceChoiceOptionSchema,
+  referenceChoicePageSchema,
   referenceChoiceRefusalReasonCodes,
   referenceChoiceRefusalSchema,
-  referenceChoicePageSchema,
   referenceChoiceResultSchema,
-  type RecordReferenceChoiceCommand,
+  referenceChoiceValueSchema,
   type OrganizationAccountReferenceChoiceCommand,
+  type RecordReferenceChoiceCommand,
   type ReferenceChoiceCommand,
   type ReferenceChoiceOption,
-  type ReferenceChoiceRefusalReasonCode,
-  type ReferenceChoiceRefusal,
   type ReferenceChoicePage,
+  type ReferenceChoiceRefusal,
+  type ReferenceChoiceRefusalReasonCode,
   type ReferenceChoiceResult,
+  type ReferenceChoiceValue,
 } from "./reference-choice-contracts";
 
 export {
   createReferenceChoiceService,
-  deriveRecordReferenceChoices,
-  deriveAccountReferenceChoices,
-  projectReferenceChoicesToControlValues,
-  validateReferenceChoiceSubmission,
-  type ChoiceOption,
-  type ChoiceInputControlProjection,
-  type ActiveAccountCandidate,
+  projectReferenceChoiceInputValues,
+  resolveReferenceChoiceSelection,
+  type ReferenceChoiceInputValues,
   type ReferenceChoiceServiceDependencies,
 } from "./reference-choice-service";
 

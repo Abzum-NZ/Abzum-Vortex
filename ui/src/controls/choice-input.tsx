@@ -16,12 +16,16 @@ import { useFormField } from "./form-context";
 
 export type ChoiceInputProps = PlatformBlockRenderProps;
 
+/** Lists longer than this offer a search box; shorter lists are scanned directly. */
+const SEARCHABLE_OPTION_THRESHOLD = 7;
+
 /**
  * Select or radio-group choice emitting only its declared `field_changed` event with an exact
  * option key or `null`. Options come from the projection when supplied, otherwise from the
- * authored option list; duplicate option keys and unknown selected keys fail closed.
- * A person choosing an option sees only permitted, active options, can search them, and
- * cannot submit a value outside that set.
+ * authored option list; duplicate option keys and unknown selected keys fail closed. Longer
+ * lists, such as permitted record or account reference choices, can be searched by label; the
+ * current selection stays visible while searching, and only an offered option key is ever
+ * registered or emitted.
  */
 export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const context = resolveControlContext(props, "choice_input", ["field_changed"]);
@@ -53,7 +57,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const [selected, setSelected] = useSeededState<string | null>(projected ?? null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Only permitted options from the available set may be registered in the form or submitted.
+  // Only an option from the offered set may be registered in the form or submitted.
   const permittedSelected =
     selected !== null && options.some((option) => option.key === selected)
       ? selected
@@ -67,19 +71,31 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     context.events?.field_changed?.({ event: "field_changed", fieldKey, value });
   };
 
-  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const searchable = options.length > SEARCHABLE_OPTION_THRESHOLD;
+  const normalizedSearch = searchable ? searchTerm.trim().toLowerCase() : "";
   const filteredOptions =
     normalizedSearch.length === 0
       ? options
       : options.filter(
           (option) =>
-            option.label.toLowerCase().includes(normalizedSearch) ||
-            option.key.toLowerCase().includes(normalizedSearch) ||
-            (variant === "select" && option.key === permittedSelected),
+            option.key === permittedSelected ||
+            option.label.toLowerCase().includes(normalizedSearch),
         );
 
   const described = describedBy(ids, help, error, note);
-  const searchId = `${ids.control}-search`;
+  const search = searchable ? (
+    <div className="vortex-choice-search-box">
+      <input
+        id={`${ids.control}-search`}
+        type="search"
+        value={searchTerm}
+        onChange={(event) => setSearchTerm(event.target.value)}
+        aria-label={`Search ${label} options`}
+        disabled={disabled}
+        className="vortex-choice-search"
+      />
+    </div>
+  ) : null;
 
   return (
     <div
@@ -87,7 +103,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
       data-vortex-variant={variant}
-      data-vortex-searchable={options.length > 0 ? "true" : "false"}
+      data-vortex-searchable={searchable ? "true" : "false"}
       className="vortex-field"
     >
       {variant === "radio" ? (
@@ -99,21 +115,8 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
           <legend className="vortex-field-label">
             <FieldLabelText label={label} required={required} />
           </legend>
-          {options.length > 0 && (
-            <div className="vortex-choice-search-box">
-              <input
-                id={searchId}
-                type="search"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder={`Search ${label}...`}
-                aria-label={`Search ${label} options`}
-                disabled={disabled}
-                className="vortex-choice-search"
-              />
-            </div>
-          )}
-          {filteredOptions.length === 0 ? (
+          {search}
+          {normalizedSearch.length > 0 && filteredOptions.length === 0 ? (
             <div className="vortex-choice-empty" role="status">
               No matching options
             </div>
@@ -144,20 +147,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
           <label htmlFor={ids.control} className="vortex-field-label">
             <FieldLabelText label={label} required={required} />
           </label>
-          {options.length > 0 && (
-            <div className="vortex-choice-search-box">
-              <input
-                id={searchId}
-                type="search"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder={`Search ${label}...`}
-                aria-label={`Search ${label} options`}
-                disabled={disabled}
-                className="vortex-choice-search"
-              />
-            </div>
-          )}
+          {search}
           <select
             id={ids.control}
             name={fieldKey}

@@ -1,335 +1,396 @@
 import "server-only";
 
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { z } from "zod";
 import {
   createHumanOrganizationRequestService,
-  type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
 import {
+  organizationAccountIdSchema,
+  organizationIdSchema,
+  type FieldId,
   type IdentitySession,
+  type JsonValue,
   type OrganizationSelectionCandidate,
+  type RecordTypeId,
+  type RecordTypeReference,
   type SelectedOrganizationScope,
 } from "@vortex/contracts";
-import type { RequestDatabaseTransaction } from "@vortex/db";
-import {
-  referenceChoiceCommandSchema,
-  type RecordReferenceChoiceCommand,
-  type OrganizationAccountReferenceChoiceCommand,
-  type ReferenceChoiceCommand,
-  type ReferenceChoiceOption,
-  type ReferenceChoicePage,
-  type ReferenceChoiceRefusal,
-  type ReferenceChoiceRefusalReasonCode,
-  type ReferenceChoiceResult,
-} from "./reference-choice-contracts";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+import type { QueryContinuationKey } from "./continuation-token";
 import type { ProtectedQueryRow } from "./protected-query-contracts";
 import {
   createProtectedQueryService,
   type ProtectedQueryServiceDependencies,
 } from "./protected-query-service";
-import type { QueryContinuationKey } from "./continuation-token";
+import {
+  referenceChoiceCommandSchema,
+  type OrganizationAccountReferenceChoiceCommand,
+  type RecordReferenceChoiceCommand,
+  type ReferenceChoiceOption,
+  type ReferenceChoiceRefusal,
+  type ReferenceChoiceRefusalReasonCode,
+  type ReferenceChoiceResult,
+  type ReferenceChoiceValue,
+} from "./reference-choice-contracts";
 
-/** Choice option shape compatible with UI control projected data. */
-export type ChoiceOption = Readonly<{ key: string; label: string }>;
+export type ReferenceChoiceServiceDependencies = ProtectedQueryServiceDependencies;
 
-/** Projected control values for #582 choice_input controls. */
-export type ChoiceInputControlProjection = Readonly<{
+/** The #582 `choice_input` projected values for one reference input placement. */
+export type ReferenceChoiceInputValues = Readonly<{
   kind: "choice_input";
   value?: string | null;
-  options: readonly ChoiceOption[];
+  options: readonly Readonly<{ key: string; label: string }>[];
   error?: string;
 }>;
 
-/** Candidate account representation from identity or directory sources. */
-export type ActiveAccountCandidate = Readonly<{
-  organizationAccountId: string;
-  organizationId: string;
-  displayName?: string | null;
-  state: string;
-  identityState?: string;
-}>;
-
 const refusal = (reasonCode: ReferenceChoiceRefusalReasonCode): ReferenceChoiceRefusal =>
-  Object.freeze({
-    outcome: "refused",
-    reasonCode,
-  });
+  Object.freeze({ outcome: "refused", reasonCode });
+
+const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
+
+const maximumLabelLength = 200;
+
+const boundedLabel = (text: string): string => {
+  const trimmed = text.trim();
+  return Array.from(trimmed).slice(0, maximumLabelLength).join("");
+};
 
 /**
- * Projects reference choices into #582 choice_input control values for the data-binding runtime.
+ * A choice-input option key for one referenced identity. Option keys are
+ * builder keys, so the UUID is carried as its 32 lowercase hex digits under a
+ * kind prefix; the key is resolved back only against the permitted choices.
  */
-export function projectReferenceChoicesToControlValues(
+const choiceKey = (prefix: "r" | "a", id: string): string =>
+  `${prefix}_${id.replaceAll("-", "").toLowerCase()}`;
+
+const matchesSearch = (label: string, search: string | undefined): boolean =>
+  search === undefined || label.toLowerCase().includes(search.toLowerCase());
+
+const freezeChoices = (choices: readonly ReferenceChoiceOption[]): ReferenceChoiceOption[] =>
+  choices.map((choice) => Object.freeze({ ...choice, value: Object.freeze(choice.value) }));
+
+/**
+ * Projects one page of permitted choices into #582 `choice_input` values. A
+ * selected key outside the permitted choices is dropped rather than shown.
+ */
+export function projectReferenceChoiceInputValues(
   choices: readonly ReferenceChoiceOption[],
-  selected?: string | null,
+  selectedKey?: string | null,
   error?: string,
-): ChoiceInputControlProjection {
-  const options: readonly ChoiceOption[] = Object.freeze(
-    choices.map((choice) =>
-      Object.freeze({
-        key: choice.key,
-        label: choice.label,
-      }),
-    ),
+): ReferenceChoiceInputValues {
+  const options = Object.freeze(
+    choices.map((choice) => Object.freeze({ key: choice.key, label: choice.label })),
   );
+  const selected =
+    selectedKey === undefined || selectedKey === null
+      ? selectedKey
+      : choices.some((choice) => choice.key === selectedKey)
+        ? selectedKey
+        : null;
   return Object.freeze({
     kind: "choice_input",
     options,
-    ...(selected !== undefined ? { value: selected } : {}),
-    ...(error !== undefined ? { error } : {}),
+    ...(selected === undefined ? {} : { value: selected }),
+    ...(error === undefined ? {} : { error }),
   });
 }
 
 /**
- * Ensures that a selected or submitted choice value is strictly one of the permitted options,
- * refusing any out-of-set value.
+ * The typed reference value a submitted option key stands for, or undefined
+ * when the key is not one of the permitted choices, so a value outside the
+ * offered set can never be submitted through the binding.
  */
-export function validateReferenceChoiceSubmission(
-  permittedChoices: readonly { readonly key: string }[],
-  value: string | null,
-): boolean {
-  if (value === null) return true;
-  return permittedChoices.some((choice) => choice.key === value);
+export function resolveReferenceChoiceSelection(
+  choices: readonly ReferenceChoiceOption[],
+  selectedKey: string | null,
+): ReferenceChoiceValue | null | undefined {
+  if (selectedKey === null) return null;
+  return choices.find((choice) => choice.key === selectedKey)?.value;
 }
 
-/**
- * Derives permitted record-reference choices from permission-filtered query rows (#572).
- * Only returns rows the viewer was allowed to read, with bounded search filtering.
- * Never leaks or infers hidden records.
- */
-export function deriveRecordReferenceChoices(
-  rows: readonly ProtectedQueryRow[],
-  options: Readonly<{
-    recordTypeIds?: readonly string[];
-    search?: string;
-    labelFieldId?: string;
-    pageSize?: number;
-  }> = {},
-): readonly ReferenceChoiceOption[] {
-  const searchNormalized = options.search?.trim().toLowerCase();
-  const limit = Math.min(Math.max(1, options.pageSize ?? 50), 200);
+const allowsRecordType = (
+  allowed: readonly RecordTypeReference[],
+  target: RecordTypeReference,
+): target is Extract<RecordTypeReference, { state: "resolved" }> =>
+  target.state === "resolved" &&
+  allowed.some(
+    (candidate) =>
+      candidate.state === "resolved" &&
+      sameId(candidate.moduleRootId, target.moduleRootId) &&
+      sameId(candidate.recordTypeId, target.recordTypeId),
+  );
 
-  const choices: ReferenceChoiceOption[] = [];
-  for (const row of rows) {
-    if (choices.length >= limit) break;
+const recordChoice = (
+  row: ProtectedQueryRow,
+  recordTypeId: RecordTypeId,
+  labelFieldId: FieldId,
+): ReferenceChoiceOption => {
+  // A withheld label field is absent from the row, so the fallback names only
+  // the record the viewer may already read.
+  const labelValue: JsonValue | undefined = row.values[labelFieldId];
+  const labelText =
+    typeof labelValue === "number" && Number.isFinite(labelValue) ? String(labelValue) : labelValue;
+  const label =
+    typeof labelText === "string" && labelText.trim().length > 0
+      ? boundedLabel(labelText)
+      : `Record ${row.recordId.slice(0, 8).toLowerCase()}`;
+  return {
+    key: choiceKey("r", row.recordId),
+    label,
+    value: { recordTypeId, recordId: row.recordId },
+  };
+};
 
-    // Resolve human-readable label: labelFieldId first, then first readable string value, or record ID
-    let label: string | undefined;
-    if (options.labelFieldId !== undefined && row.values[options.labelFieldId] !== undefined) {
-      const val = row.values[options.labelFieldId];
-      if (typeof val === "string" && val.trim().length > 0) {
-        label = val.trim();
-      }
-    }
-    if (label === undefined) {
-      for (const val of Object.values(row.values)) {
-        if (typeof val === "string" && val.trim().length > 0) {
-          label = val.trim();
-          break;
-        }
-      }
-    }
-    if (label === undefined) {
-      label = row.recordId;
-    }
+const recordChoices = async (
+  queries: ReturnType<typeof createProtectedQueryService>,
+  session: IdentitySession,
+  selection: OrganizationSelectionCandidate,
+  command: RecordReferenceChoiceCommand,
+): Promise<HumanOrganizationRequestResult<ReferenceChoiceResult>> => {
+  const { source } = command;
+  const target = source.query.recordType;
+  if (
+    !allowsRecordType(command.allowedRecordTypes, target) ||
+    !source.query.selectedFieldIds.some((fieldId) => sameId(fieldId, command.labelFieldId)) ||
+    source.query.groupByFieldIds.length > 0 ||
+    source.query.aggregates.length > 0 ||
+    source.query.inputs.some((input) => input.required)
+  )
+    return { kind: "available", value: refusal("source_invalid") };
 
-    // Apply bounded search filtering
-    if (
-      searchNormalized !== undefined &&
-      searchNormalized.length > 0 &&
-      !label.toLowerCase().includes(searchNormalized) &&
-      !row.recordId.toLowerCase().includes(searchNormalized)
-    ) {
-      continue;
+  const result = await queries.run(session, selection, {
+    moduleRootId: source.moduleRootId,
+    queryId: source.query.queryId,
+    inputValues: {},
+    requestedFieldIds: [command.labelFieldId],
+    pageSize: Math.min(command.pageSize, source.query.pageSize),
+    ...(command.continuationToken === undefined
+      ? {}
+      : { continuationToken: command.continuationToken }),
+  });
+  if (result.kind !== "available") return result;
+  const page = result.value;
+  if (page.outcome === "refused") {
+    switch (page.reasonCode) {
+      case "cursor_invalid":
+      case "cursor_stale":
+        return { kind: "available", value: refusal(page.reasonCode) };
+      case "request_invalid":
+        return { kind: "available", value: refusal("request_invalid") };
+      default:
+        return { kind: "available", value: refusal("source_unavailable") };
     }
-
-    choices.push(
-      Object.freeze({
-        key: row.recordId,
-        label,
-        recordId: row.recordId,
-      }),
-    );
   }
+  // Choice values name the descriptor's record type, so the rows must come
+  // from that exact installed release.
+  if (
+    !sameId(page.moduleRootId, source.moduleRootId) ||
+    !sameId(page.queryId, source.query.queryId) ||
+    page.moduleReleaseVersion !== source.moduleReleaseVersion
+  )
+    return { kind: "available", value: refusal("source_stale") };
 
-  return Object.freeze(choices);
-}
-
-/**
- * Derives permitted account-reference choices for the current organisation.
- * Strictly limited to active accounts in the current organisation; cross-organisation
- * accounts are refused.
- */
-export function deriveAccountReferenceChoices(
-  candidates: readonly ActiveAccountCandidate[],
-  currentOrganizationId: string,
-  options: Readonly<{
-    search?: string;
-    pageSize?: number;
-  }> = {},
-): readonly ReferenceChoiceOption[] {
-  const currentOrg = currentOrganizationId.toLowerCase();
-  const searchNormalized = options.search?.trim().toLowerCase();
-  const limit = Math.min(Math.max(1, options.pageSize ?? 50), 200);
-
-  const choices: ReferenceChoiceOption[] = [];
-  for (const account of candidates) {
-    if (choices.length >= limit) break;
-
-    // Strict organisation boundary: refuse cross-organisation accounts
-    if (account.organizationId.toLowerCase() !== currentOrg) {
-      continue;
-    }
-
-    // Only active accounts and active identities
-    if (account.state !== "active") {
-      continue;
-    }
-    if (account.identityState !== undefined && account.identityState !== "active") {
-      continue;
-    }
-
-    const label =
-      typeof account.displayName === "string" && account.displayName.trim().length > 0
-        ? account.displayName.trim()
-        : "Account";
-
-    // Bounded search filtering
-    if (
-      searchNormalized !== undefined &&
-      searchNormalized.length > 0 &&
-      !label.toLowerCase().includes(searchNormalized) &&
-      !account.organizationAccountId.toLowerCase().includes(searchNormalized)
-    ) {
-      continue;
-    }
-
-    choices.push(
-      Object.freeze({
-        key: account.organizationAccountId,
-        label,
-        organizationAccountId: account.organizationAccountId,
-      }),
-    );
-  }
-
-  return Object.freeze(choices);
-}
-
-export type ReferenceChoiceServiceDependencies = HumanOrganizationRequestDependencies &
-  Readonly<{
-    continuationKey: QueryContinuationKey;
-    queryService?: ReturnType<typeof createProtectedQueryService>;
-    recordSource?: (
-      transaction: RequestDatabaseTransaction,
-      scope: SelectedOrganizationScope,
-      command: RecordReferenceChoiceCommand,
-    ) => Promise<readonly ProtectedQueryRow[]>;
-    accountSource?: (
-      transaction: RequestDatabaseTransaction,
-      scope: SelectedOrganizationScope,
-      command: OrganizationAccountReferenceChoiceCommand,
-    ) => Promise<readonly ActiveAccountCandidate[]>;
-  }>;
-
-/**
- * Protected reference choice service for form and action controls.
- * Provides permitted choices for record references and account references
- * in the current verified organisation scope with bounded search and paging.
- */
-export function createReferenceChoiceService(dependencies: ReferenceChoiceServiceDependencies) {
-  const requests = createHumanOrganizationRequestService(dependencies);
-  const queryService =
-    dependencies.queryService ??
-    createProtectedQueryService(dependencies as ProtectedQueryServiceDependencies);
-
-  const handleRecordReferenceChoices = async (
-    transaction: RequestDatabaseTransaction,
-    scope: SelectedOrganizationScope,
-    session: IdentitySession,
-    selection: OrganizationSelectionCandidate,
-    command: RecordReferenceChoiceCommand,
-  ): Promise<ReferenceChoiceResult> => {
-    // If bound to a published module query, reuse the #572 query engine
-    if (command.moduleRootId !== undefined && command.queryId !== undefined) {
-      const requestedFieldIds = command.labelFieldId !== undefined ? [command.labelFieldId] : [];
-      const queryResult = await queryService.run(session, selection, {
-        moduleRootId: command.moduleRootId,
-        queryId: command.queryId,
-        inputValues: {},
-        requestedFieldIds: requestedFieldIds.length > 0 ? requestedFieldIds : ["name"],
-        pageSize: command.pageSize,
-        ...(command.continuationToken ? { continuationToken: command.continuationToken } : {}),
-      });
-
-      if (queryResult.kind !== "available" || queryResult.value.outcome === "refused") {
-        return refusal("query_unavailable");
-      }
-
-      const page = queryResult.value;
-      const choices = deriveRecordReferenceChoices(page.rows, {
-        recordTypeIds: command.recordTypeIds,
-        search: command.search,
-        labelFieldId: command.labelFieldId,
-        pageSize: command.pageSize,
-      });
-
-      const response: ReferenceChoicePage = {
-        outcome: "completed",
-        kind: "record_reference",
-        choices,
-        ...(page.nextContinuationToken ? { nextContinuationToken: page.nextContinuationToken } : {}),
-      };
-      return response;
-    }
-
-    // Direct record source if provided
-    if (dependencies.recordSource !== undefined) {
-      const rows = await dependencies.recordSource(transaction, scope, command);
-      const choices = deriveRecordReferenceChoices(rows, {
-        recordTypeIds: command.recordTypeIds,
-        search: command.search,
-        labelFieldId: command.labelFieldId,
-        pageSize: command.pageSize,
-      });
-      const response: ReferenceChoicePage = {
-        outcome: "completed",
-        kind: "record_reference",
-        choices,
-      };
-      return response;
-    }
-
-    // Without a specific query or record source, return empty permitted page
-    return {
+  const choices = page.rows
+    .map((row) => recordChoice(row, target.recordTypeId, command.labelFieldId))
+    .filter((choice) => matchesSearch(choice.label, command.search));
+  return {
+    kind: "available",
+    value: {
       outcome: "completed",
       kind: "record_reference",
-      choices: [],
-    };
+      choices: freezeChoices(choices),
+      ...(page.nextContinuationToken === undefined
+        ? {}
+        : { nextContinuationToken: page.nextContinuationToken }),
+    },
   };
+};
 
-  const handleAccountReferenceChoices = async (
-    transaction: RequestDatabaseTransaction,
-    scope: SelectedOrganizationScope,
-    command: OrganizationAccountReferenceChoiceCommand,
-  ): Promise<ReferenceChoiceResult> => {
-    let candidates: readonly ActiveAccountCandidate[] = [];
+const accountContinuationSchema = z
+  .object({
+    version: z.literal(1),
+    organizationId: organizationIdSchema,
+    organizationAccountId: organizationAccountIdSchema,
+    searchFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    sortKey: z.string().max(1_000),
+    afterOrganizationAccountId: organizationAccountIdSchema,
+  })
+  .strict();
+type AccountContinuation = z.infer<typeof accountContinuationSchema>;
 
-    if (dependencies.accountSource !== undefined) {
-      candidates = await dependencies.accountSource(transaction, scope, command);
+class AccountContinuationError extends Error {
+  constructor() {
+    super("vortex.query.account_choice_continuation_invalid");
+    this.name = "AccountContinuationError";
+  }
+}
+
+const nonceLength = 12;
+const tagLength = 16;
+const accountTokenVersion = 1;
+const accountAssociatedData = Buffer.from("vortex.query.account-choice.continuation.v1", "utf8");
+
+const cipherKey = (key: QueryContinuationKey): Buffer => {
+  if (!(key.key instanceof Uint8Array) || key.key.byteLength !== 32)
+    throw new Error("QUERY_CONTINUATION_KEY_INVALID");
+  return Buffer.from(key.key);
+};
+
+const searchFingerprint = (search: string | undefined): string =>
+  createHash("sha256")
+    .update(search === undefined ? "" : `search:${search.toLowerCase()}`, "utf8")
+    .digest("hex");
+
+// The last position is encrypted as well as authenticated: the token is
+// opaque, bound to the viewer, organisation and search it was issued for.
+const encodeAccountContinuation = (
+  continuation: AccountContinuation,
+  key: QueryContinuationKey,
+): string => {
+  const payload = Buffer.from(JSON.stringify(accountContinuationSchema.parse(continuation)), "utf8");
+  const nonce = randomBytes(nonceLength);
+  const cipher = createCipheriv("aes-256-gcm", cipherKey(key), nonce, { authTagLength: tagLength });
+  cipher.setAAD(accountAssociatedData);
+  const encrypted = Buffer.concat([cipher.update(payload), cipher.final()]);
+  return Buffer.concat([
+    Buffer.from([accountTokenVersion]),
+    nonce,
+    cipher.getAuthTag(),
+    encrypted,
+  ]).toString("base64url");
+};
+
+const decodeAccountContinuation = (
+  token: string,
+  key: QueryContinuationKey,
+): AccountContinuation => {
+  const secret = cipherKey(key);
+  try {
+    if (!/^[A-Za-z0-9_-]+$/.test(token)) throw new AccountContinuationError();
+    const bytes = Buffer.from(token, "base64url");
+    if (bytes.length <= 1 + nonceLength + tagLength || bytes[0] !== accountTokenVersion)
+      throw new AccountContinuationError();
+    const decipher = createDecipheriv(
+      "aes-256-gcm",
+      secret,
+      bytes.subarray(1, 1 + nonceLength),
+      { authTagLength: tagLength },
+    );
+    decipher.setAAD(accountAssociatedData);
+    decipher.setAuthTag(bytes.subarray(1 + nonceLength, 1 + nonceLength + tagLength));
+    const payload = Buffer.concat([
+      decipher.update(bytes.subarray(1 + nonceLength + tagLength)),
+      decipher.final(),
+    ]).toString("utf8");
+    const parsed = accountContinuationSchema.safeParse(JSON.parse(payload));
+    if (!parsed.success) throw new AccountContinuationError();
+    return parsed.data;
+  } catch {
+    throw new AccountContinuationError();
+  }
+};
+
+type ResultRow = DatabaseRow & { readonly result: unknown };
+
+const accountPageSchema = z
+  .object({
+    accounts: z
+      .array(
+        z
+          .object({
+            organizationAccountId: organizationAccountIdSchema,
+            displayName: z.string().optional(),
+          })
+          .strict(),
+      )
+      .max(100),
+    next: z
+      .object({
+        sortKey: z.string().max(1_000),
+        organizationAccountId: organizationAccountIdSchema,
+      })
+      .strict()
+      .nullable(),
+  })
+  .strict();
+
+const accountChoices = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  command: OrganizationAccountReferenceChoiceCommand,
+  continuationKey: QueryContinuationKey,
+): Promise<ReferenceChoiceResult> => {
+  const fingerprint = searchFingerprint(command.search);
+  let after: AccountContinuation | undefined;
+  if (command.continuationToken !== undefined) {
+    try {
+      after = decodeAccountContinuation(command.continuationToken, continuationKey);
+    } catch (error) {
+      if (error instanceof AccountContinuationError) return refusal("cursor_invalid");
+      throw error;
     }
+    if (
+      !sameId(after.organizationId, scope.organizationId) ||
+      !sameId(after.organizationAccountId, scope.organizationAccountId) ||
+      after.searchFingerprint !== fingerprint
+    )
+      return refusal("cursor_stale");
+  }
 
-    const choices = deriveAccountReferenceChoices(candidates, scope.organizationId, {
-      search: command.search,
-      pageSize: command.pageSize,
-    });
+  const rows = await transaction.query<ResultRow>`
+    select vortex_access.list_organization_account_choices(
+      ${command.search ?? null}::text,
+      ${command.pageSize}::integer,
+      ${after?.sortKey ?? null}::text,
+      ${after?.afterOrganizationAccountId ?? null}::uuid
+    ) as result
+  `;
+  if (rows.length !== 1 || rows[0] === undefined)
+    throw new Error("ACCOUNT_CHOICE_RESULT_INVALID");
+  const page = accountPageSchema.parse(rows[0].result);
 
-    const response: ReferenceChoicePage = {
-      outcome: "completed",
-      kind: "organization_account_reference",
-      choices,
-    };
-    return response;
+  const choices: ReferenceChoiceOption[] = page.accounts.map((account) => ({
+    key: choiceKey("a", account.organizationAccountId),
+    label:
+      account.displayName !== undefined && account.displayName.trim().length > 0
+        ? boundedLabel(account.displayName)
+        : `Account ${account.organizationAccountId.slice(0, 8).toLowerCase()}`,
+    value: { organizationAccountId: account.organizationAccountId },
+  }));
+  return {
+    outcome: "completed",
+    kind: "organization_account_reference",
+    choices: freezeChoices(choices),
+    ...(page.next === null
+      ? {}
+      : {
+          nextContinuationToken: encodeAccountContinuation(
+            {
+              version: 1,
+              organizationId: scope.organizationId,
+              organizationAccountId: scope.organizationAccountId,
+              searchFingerprint: fingerprint,
+              sortKey: page.next.sortKey,
+              afterOrganizationAccountId: page.next.organizationAccountId,
+            },
+            continuationKey,
+          ),
+        }),
   };
+};
+
+/**
+ * Protected choices for record- and account-reference inputs. Record choices
+ * are the rows the #572 protected Query admits for a published query of an
+ * allowed record type; account choices are active accounts in the verified
+ * current organisation. Neither carries counts, and every refusal is neutral.
+ */
+export const createReferenceChoiceService = (dependencies: ReferenceChoiceServiceDependencies) => {
+  const requests = createHumanOrganizationRequestService(dependencies);
+  const queries = createProtectedQueryService(dependencies);
+  const { continuationKey } = dependencies;
 
   return Object.freeze({
     async run(
@@ -337,18 +398,14 @@ export function createReferenceChoiceService(dependencies: ReferenceChoiceServic
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
     ): Promise<HumanOrganizationRequestResult<ReferenceChoiceResult>> {
-      const commandParsed = referenceChoiceCommandSchema.safeParse(commandCandidate);
-      if (!commandParsed.success) {
-        return { kind: "available", value: refusal("request_invalid") };
-      }
-      const command = commandParsed.data;
-
-      return requests.run(session, selection, async (transaction, scope) => {
-        if (command.kind === "record_reference") {
-          return handleRecordReferenceChoices(transaction, scope, session, selection, command);
-        }
-        return handleAccountReferenceChoices(transaction, scope, command);
-      });
+      const command = referenceChoiceCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "available", value: refusal("request_invalid") };
+      if (command.data.kind === "record_reference")
+        return recordChoices(queries, session, selection, command.data);
+      const accountCommand = command.data;
+      return requests.run(session, selection, (transaction, scope) =>
+        accountChoices(transaction, scope, accountCommand, continuationKey),
+      );
     },
   });
-}
+};
