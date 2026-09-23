@@ -69,8 +69,6 @@ export type {
   ResolvedTheme,
   SpacingToken,
   ThemeColorRole,
-  ThemeContrastPairUsage,
-  ThemeContrastPairV2,
   ThemeResolutionInput,
   ThemeResolutionOptions,
   ThemeTokenKindV2,

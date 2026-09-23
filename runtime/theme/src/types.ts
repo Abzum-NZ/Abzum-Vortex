@@ -10,11 +10,9 @@ import type {
   PlatformId,
   PlatformThemeReleaseV2 as ContractPlatformThemeReleaseV2,
   ThemeColorRole,
-  ThemeContrastPairUsage,
-  ThemeContrastPairV2,
 } from "@vortex/contracts";
 
-export type { ThemeColorRole, ThemeContrastPairUsage, ThemeContrastPairV2 };
+export type { ThemeColorRole };
 
 export type ApplicationThemeV2 = ApplicationContentV2["theme"];
 export type ExactPlatformThemeDependencyV2 = ApplicationThemeV2["base"];
@@ -80,7 +78,6 @@ export type ThemeResolutionInput = Readonly<{
 export type ResolvedTheme = Readonly<{
   base: ExactPlatformThemeDependencyV2;
   tokens: Readonly<Record<string, ThemeTokenValueV2>>;
-  contrastPairs?: readonly ContrastPairDeclaration[] | undefined;
 }>;
 
 export type ThemeValidationFailure = Readonly<{

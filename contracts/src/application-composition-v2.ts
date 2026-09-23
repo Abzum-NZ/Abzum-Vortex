@@ -740,31 +740,13 @@ export const themeTokenKindV2Schema = z.enum([
 
 const colorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
+/**
+ * Declares how a platform theme colour is used, so readability checks follow the
+ * catalogue's declaration rather than token names. Only platform theme releases
+ * declare roles; application and placement overrides inherit them unchanged.
+ */
 export const themeColorRoleSchema = z.enum(["foreground", "background"]);
 export type ThemeColorRole = z.infer<typeof themeColorRoleSchema>;
-
-export const themeContrastPairUsageSchema = z.enum(["normal_text", "large_text", "non_text"]);
-export type ThemeContrastPairUsage = z.infer<typeof themeContrastPairUsageSchema>;
-
-export const themeContrastPairV2Schema = z
-  .object({
-    foregroundToken: builderKeySchema,
-    backgroundToken: builderKeySchema,
-    usage: themeContrastPairUsageSchema.optional(),
-    minimumRatio: positiveFiniteSchema.optional(),
-  })
-  .strict();
-export type ThemeContrastPairV2 = z.infer<typeof themeContrastPairV2Schema>;
-
-export const sourceThemeContrastPairV2Schema = z
-  .object({
-    foreground_token: builderKeySchema,
-    background_token: builderKeySchema,
-    usage: themeContrastPairUsageSchema.optional(),
-    minimum_ratio: positiveFiniteSchema.optional(),
-  })
-  .strict();
-export type SourceThemeContrastPairV2 = z.infer<typeof sourceThemeContrastPairV2Schema>;
 
 export const themeTokenValueV2Schema = z.discriminatedUnion("kind", [
   z
@@ -807,14 +789,7 @@ export const themeTokenValueV2Schema = z.discriminatedUnion("kind", [
 ]);
 
 export const sourceThemeTokenValueV2Schema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("color_pair"),
-      light: colorSchema,
-      dark: colorSchema,
-      role: themeColorRoleSchema.optional(),
-    })
-    .strict(),
+  z.object({ kind: z.literal("color_pair"), light: colorSchema, dark: colorSchema }).strict(),
   z
     .object({
       kind: z.literal("typography"),
@@ -871,7 +846,6 @@ export const applicationThemeV2Schema = z
   .object({
     base: exactPlatformThemeDependencyV2Schema,
     tokens: z.record(builderKeySchema, themeTokenValueV2Schema),
-    contrastPairs: z.array(themeContrastPairV2Schema).optional(),
   })
   .strict();
 
@@ -880,7 +854,6 @@ export const sourceApplicationThemeV2Schema = z
   .object({
     base: sourceExactPlatformThemeDependencyV2Schema,
     token_overrides: z.record(builderKeySchema, sourceThemeTokenValueV2Schema),
-    contrast_pairs: z.array(sourceThemeContrastPairV2Schema).optional(),
   })
   .strict();
 
@@ -892,7 +865,6 @@ export const platformThemeReleaseV2Schema = z
     contentFingerprint: fingerprintSchema,
     catalogueFingerprint: fingerprintSchema,
     tokens: z.record(builderKeySchema, themeTokenValueV2Schema),
-    contrastPairs: z.array(themeContrastPairV2Schema).optional(),
   })
   .strict();
 
