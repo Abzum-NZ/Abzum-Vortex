@@ -739,8 +739,24 @@ export const themeTokenKindV2Schema = z.enum([
 ]);
 
 const colorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+
+/**
+ * Declares how a platform theme colour is used, so readability checks follow the
+ * catalogue's declaration rather than token names. Only platform theme releases
+ * declare roles; application and placement overrides inherit them unchanged.
+ */
+export const themeColorRoleSchema = z.enum(["foreground", "background"]);
+export type ThemeColorRole = z.infer<typeof themeColorRoleSchema>;
+
 export const themeTokenValueV2Schema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("color_pair"), light: colorSchema, dark: colorSchema }).strict(),
+  z
+    .object({
+      kind: z.literal("color_pair"),
+      light: colorSchema,
+      dark: colorSchema,
+      role: themeColorRoleSchema.optional(),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal("typography"),

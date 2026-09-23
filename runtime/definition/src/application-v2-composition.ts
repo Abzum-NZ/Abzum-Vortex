@@ -11,15 +11,23 @@ import {
   type ApplicationSourceDocumentV2,
   type BlockPropertySchemaV2Contract,
   type BlockPropertyValueV2Contract,
+  type DefinitionValidationLocation,
   type PlatformBlockReleaseV2,
+  type PlatformId,
   type SourceBlockPropertyValueV2Contract,
 } from "@vortex/contracts";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
 import {
   DefinitionCompilationError,
+  isDefinitionCompilerRefusalCode,
   type DefinitionCompilerRefusalCode,
 } from "./compilation-error";
 import type { ApplicationCompositionResolutionV2 } from "./application-v2-resolution";
+import {
+  createThemeLocation,
+  validateApplicationTheme,
+  type ThemeResolutionOptions,
+} from "@vortex/theme";
 
 type SourceSlot = {
   placements: Record<string, SourcePlacement>;
@@ -49,8 +57,9 @@ export type MaterialisedApplicationCompositionV2 = Readonly<{
 const reject = (
   ruleCode: DefinitionCompilerRefusalCode,
   family: ConstructorParameters<typeof DefinitionCompilationError>[1] = "invalid_value",
+  location?: DefinitionValidationLocation,
 ): never => {
-  throw new DefinitionCompilationError(ruleCode, family);
+  throw new DefinitionCompilationError(ruleCode, family, location);
 };
 
 const requireValue = <Value>(
@@ -126,6 +135,38 @@ const validateThemeTokenReferences = (tokens: CanonicalTheme["tokens"]): void =>
       reject("vortex.definition.application_block_settings", "broken_reference");
   }
 };
+
+/**
+ * Runs the Theme engine's readability, focus and asset checks and refuses publication
+ * with the first failure, located at the application theme or the overriding placement.
+ */
+const validateTheme = (
+  theme: CanonicalTheme,
+  documentKey: string,
+  options: ThemeResolutionOptions,
+  scope: readonly { kind: "block"; key: string }[] = [],
+): void => {
+  validateThemeTokenReferences(theme.tokens);
+  const result = validateApplicationTheme(theme, { ...options, documentKey });
+  const first = result.failures[0];
+  if (result.valid || first === undefined) return;
+  reject(
+    isDefinitionCompilerRefusalCode(first.ruleCode)
+      ? first.ruleCode
+      : "vortex.definition.application_block_settings",
+    first.family,
+    createThemeLocation(documentKey, first.tokenKey, scope),
+  );
+};
+
+/** Colour roles are declared by the platform theme release; overrides inherit them. */
+const inheritColorRole = (
+  inherited: Record<string, unknown> | undefined,
+  override: Record<string, unknown>,
+): Record<string, unknown> =>
+  inherited?.kind === "color_pair" && inherited.role !== undefined
+    ? { ...override, role: inherited.role }
+    : override;
 
 const richTextKinds = (value: Extract<BlockPropertyValueV2Contract, { kind: "rich_text" }>) => {
   const kinds = new Set<string>();
@@ -428,13 +469,23 @@ export const materialiseApplicationCompositionV2 = (
     >;
     if (existing === undefined || existing.kind !== compiled.kind)
       reject("vortex.definition.application_block_settings", "broken_reference");
-    tokens[key] = compiled;
+    tokens[key] = inheritColorRole(existing, compiled);
   }
   const theme = applicationThemeV2Schema.parse({
     base: canonicalThemeDependency(source.body.theme.base),
     tokens,
   });
-  validateThemeTokenReferences(theme.tokens);
+
+  // The exact pinned platform theme release is the trusted catalogue of approved,
+  // public theme assets. An application may use only the assets that release ships.
+  const catalogueAssetIds = new Set<PlatformId>();
+  for (const token of Object.values(snapshot.platformTheme.tokens))
+    if (token.kind === "asset") catalogueAssetIds.add(token.assetId);
+  const themeValidationOptions: ThemeResolutionOptions = {
+    approvedAssetIds: catalogueAssetIds,
+    publicAssetIds: catalogueAssetIds,
+  };
+  validateTheme(theme, source.key, themeValidationOptions);
 
   const releaseByIdentity = new Map(
     snapshot.platformBlocks.releases.map((release) => [
@@ -525,6 +576,7 @@ export const materialiseApplicationCompositionV2 = (
       }
       const responsive = materialiseResponsive(authoredPlacement.responsive, release);
       const themeOverrides: Record<string, unknown> = {};
+      const effectiveOverrides: Record<string, unknown> = {};
       for (const [key, authoredValue] of Object.entries(authoredPlacement.theme_overrides)) {
         const inherited = theme.tokens[key] as Record<string, unknown> | undefined;
         const override = canonicalThemeValue(authoredValue as Record<string, unknown>) as Record<
@@ -534,12 +586,18 @@ export const materialiseApplicationCompositionV2 = (
         if (inherited === undefined || inherited.kind !== override.kind)
           reject("vortex.definition.application_block_settings", "broken_reference");
         themeOverrides[key] = override;
+        effectiveOverrides[key] = inheritColorRole(inherited, override);
       }
-      const effectiveTheme = applicationThemeV2Schema.parse({
-        base: theme.base,
-        tokens: { ...theme.tokens, ...themeOverrides },
-      });
-      validateThemeTokenReferences(effectiveTheme.tokens);
+      if (Object.keys(effectiveOverrides).length > 0)
+        validateTheme(
+          applicationThemeV2Schema.parse({
+            base: theme.base,
+            tokens: { ...theme.tokens, ...effectiveOverrides },
+          }),
+          source.key,
+          themeValidationOptions,
+          [{ kind: "block", key: alias }],
+        );
       const settings = compileSettings(
         authoredPlacement.settings,
         release.properties,

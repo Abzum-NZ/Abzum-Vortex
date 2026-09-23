@@ -150,7 +150,24 @@ export function validateComponentThemeOverrides(
       continue;
     }
 
-    effectiveOverrides[key] = parsed.data;
+    // 6. Colour roles come from the platform catalogue. An override inherits the role
+    // and cannot re-declare it to escape the readability checks for that role.
+    const value = parsed.data;
+    if (value.kind === "color_pair" && inherited.kind === "color_pair") {
+      if (value.role !== undefined && value.role !== inherited.role) {
+        addFailure({
+          code: "COLOR_ROLE_OVERRIDE",
+          family: "invalid_value",
+          message: `Component override for "${key}" cannot change the colour role declared by the theme`,
+          tokenKey: key,
+        });
+        continue;
+      }
+      effectiveOverrides[key] =
+        inherited.role === undefined ? value : { ...value, role: inherited.role };
+      continue;
+    }
+    effectiveOverrides[key] = value;
   }
 
   return { effectiveOverrides, failures, ruleFailures };
