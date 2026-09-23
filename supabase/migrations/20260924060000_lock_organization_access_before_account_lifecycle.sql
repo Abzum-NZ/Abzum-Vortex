@@ -2,11 +2,12 @@
 --
 -- Invitation acceptance (vortex_access.accept_organization_invitation) locks the
 -- organisation's `organization_access_versions` row, then the account row.
--- The administration wrappers that suspend, close (begin closing) and
--- reactivate an account locked the account row first and only reached the access
--- version row later, inside `change_organization_account_state` or an explicit
--- lock. An acceptance and a lifecycle change on the same account therefore
--- waited on each other and PostgreSQL aborted one with 40P01.
+-- The administration wrappers that suspend, close, reactivate and begin closing
+-- an account locked the account row first and only reached the access version
+-- row later, inside `change_organization_account_state` (suspend, close,
+-- reactivate) or an explicit later lock (begin closing). An acceptance and a
+-- lifecycle change on the same account therefore waited on each other and
+-- PostgreSQL aborted one with 40P01.
 --
 -- Each wrapper now locks the access version row immediately before it locks the
 -- account row, so both paths acquire access version, then account. Nothing else
