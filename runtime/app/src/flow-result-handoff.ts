@@ -20,10 +20,14 @@ import {
   safeFlowResultDescriptorSchema,
   safeFlowResultDescriptors,
   safeFlowResultKindSchema,
+  safeHttpsUrlSchema,
+  stableDefinitionReleaseVersionSchema,
   timestampSchema,
   typedFlowResultMappingSchema,
   workflowNodeIdSchema,
   workflowValueTypeSchema,
+  type CorrelationId,
+  type ProtectedOperationReference,
 } from "@vortex/contracts";
 import {
   flowEffectiveActorResolutionSchema,
@@ -37,23 +41,28 @@ import {
  * that ran with a broader effective actor may hold values, counts, branch outcomes, errors and
  * derived data the watching viewer still cannot see.
  *
- * The published declaration is the only description of what a node's outputs disclose. It maps
- * each declared result output to its mapping kind and to the exact protected value references the
- * mapping is allowed to use. A concrete result may only project an output that declaration names,
- * and only when every reference it discloses is either currently readable by the viewer or covered
- * by an explicitly authorised disclosure operation. Privileged intermediates stay server-side;
- * the returned shape can carry only the viewer-safe descriptor, a declared result projection, a
- * safe message code, a declared branch outcome and a resolved navigation target.
+ * The operation result is produced server-side under the effective actor and names the protected
+ * provenance of every value it carries. The published declaration is bound to the exact resolved
+ * release, flow, node and operation; it reuses the shared typed result mapping (result key to node
+ * output) and states how each result is handed off. Only a declared result is ever projected, so
+ * every other operation output stays server-side. A result, branch outcome, message, error or
+ * navigation is disclosed only when every protected value it derives from is currently readable
+ * by the viewer, or when its published mapping names an existing disclosure operation the viewer
+ * is explicitly authorised for. Anything else is withheld and reported as withheld.
  *
- * Refusal, partial, uncertain and background-pending results keep their own fixed descriptor, so a
- * permission refusal is never rendered as empty data and a partial or pending outcome is never
- * reported as success. Authored safe-result and typed mapping contracts are reused rather than
- * redefined; row, field, file and component policy is consumed as already-resolved viewer
- * authority and never recomputed here.
+ * The shared safe-result descriptor is always returned, so refusal, partial, uncertain and
+ * background-pending outcomes keep their own commit and recovery semantics, and a withheld result
+ * is never presented as empty data or as success. Row, field, derived-value, file, component and
+ * application policy is consumed as already-resolved viewer authority and never recomputed here.
  */
 
 export const flowResultHandoffContractVersion = "1.0.0" as const;
 
+/**
+ * How a declared result reaches the viewer: returned as it is, transformed into another value, or
+ * carried into a later write. Every kind is disclosure to the viewer and gets the same check; the
+ * kind tells a withheld transformation or later write apart from an unreadable plain return.
+ */
 export const flowResultOutputMappingKindSchema = z.enum(["return", "transform", "later_write"]);
 export type FlowResultOutputMappingKind = z.infer<typeof flowResultOutputMappingKindSchema>;
 
@@ -98,8 +107,15 @@ export type FlowResultProtectedValueReference = z.infer<
   typeof flowResultProtectedValueReferenceSchema
 >;
 
+/**
+ * Every protected value an operation-produced item derives from. It is required rather than
+ * defaulted, so a producer must state it; an empty list means no protected source at all.
+ */
+export const flowResultProvenanceSchema = z.array(flowResultProtectedValueReferenceSchema).max(200);
+export type FlowResultProvenance = z.infer<typeof flowResultProvenanceSchema>;
+
 /** The original initiating viewer. A system-started flow has a system actor instead of a person. */
-export const flowResultViewerViewerSchema = z.discriminatedUnion("kind", [
+export const flowResultViewerSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("organization_account"),
@@ -115,7 +131,7 @@ export const flowResultViewerViewerSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
-export type FlowResultViewerViewer = z.infer<typeof flowResultViewerViewerSchema>;
+export type FlowResultViewer = z.infer<typeof flowResultViewerSchema>;
 
 /**
  * The viewer's current, already-resolved authority, re-read after execution. It is evidence
@@ -125,16 +141,14 @@ export type FlowResultViewerViewer = z.infer<typeof flowResultViewerViewerSchema
  */
 export const flowResultViewerAuthoritySchema = z
   .object({
-    viewer: flowResultViewerViewerSchema,
-    applicationRootId: applicationRootIdSchema.optional(),
+    viewer: flowResultViewerSchema,
+    applicationRootId: applicationRootIdSchema,
     accessVersion: revisionSchema,
     checkedAt: timestampSchema,
     validUntil: timestampSchema,
     applicationReadAllowed: z.boolean(),
     readableRecords: z
-      .array(
-        z.object({ recordTypeId: recordTypeIdSchema, recordId: recordIdSchema }).strict(),
-      )
+      .array(z.object({ recordTypeId: recordTypeIdSchema, recordId: recordIdSchema }).strict())
       .max(5000)
       .default([]),
     readableRecordFields: z
@@ -161,77 +175,75 @@ export const flowResultViewerAuthoritySchema = z
 export type FlowResultViewerAuthority = z.infer<typeof flowResultViewerAuthoritySchema>;
 
 /**
- * The published mapping for one declared result output. `discloses` names every protected value
- * the mapping is allowed to use; `disclosureOperation`, when present, is the existing explicitly
- * authorised operation that permits a transformation or later write to disclose those values to
- * this viewer.
+ * How one declared result is handed off. `disclosureOperation`, when present, is the existing
+ * explicitly authorised operation that permits this result to disclose protected values the
+ * viewer could not otherwise read; it has effect only when the viewer is authorised for it.
  */
 export const flowResultDeclaredMappingSchema = z
   .object({
     mappingKind: flowResultOutputMappingKindSchema,
-    discloses: z.array(flowResultProtectedValueReferenceSchema).max(200).default([]),
     disclosureOperation: protectedOperationReferenceSchema.optional(),
   })
   .strict();
 export type FlowResultDeclaredMapping = z.infer<typeof flowResultDeclaredMappingSchema>;
 
 /**
- * The published declared safe result mapping. `results` reuses the shared typed result mapping;
- * `mappings` may only name an output that `results` already declares.
+ * The published declared safe result mapping for one exact node. `results` is the shared typed
+ * result mapping from result key to node output; `mappings` states the handoff of every result
+ * key and of nothing else.
  */
 export const flowResultDeclarationSchema = z
   .object({
     contractVersion: z.literal(flowResultHandoffContractVersion),
+    releaseVersion: stableDefinitionReleaseVersionSchema,
     flowId: ruleIdSchema,
     nodeId: workflowNodeIdSchema,
-    results: z.record(builderKeySchema, typedFlowResultMappingSchema),
+    operation: protectedOperationReferenceSchema,
+    results: z.record(builderKeySchema, typedFlowResultMappingSchema).default({}),
     mappings: z.record(builderKeySchema, flowResultDeclaredMappingSchema).default({}),
   })
   .strict()
   .superRefine((value, context) => {
-    for (const output of Object.keys(value.mappings))
-      if (!Object.hasOwn(value.results, output))
+    for (const result of Object.keys(value.mappings))
+      if (!Object.hasOwn(value.results, result))
         context.addIssue({
           code: "custom",
-          path: ["mappings", output],
-          message: "A declared mapping must correspond to a published result output",
+          path: ["mappings", result],
+          message: "A handoff mapping must correspond to a declared result",
         });
+    const mappedOutputs = new Set<string>();
+    for (const [result, mapping] of Object.entries(value.results)) {
+      if (!Object.hasOwn(value.mappings, result))
+        context.addIssue({
+          code: "custom",
+          path: ["mappings", result],
+          message: "Every declared result needs a handoff mapping",
+        });
+      if (mappedOutputs.has(mapping.output))
+        context.addIssue({
+          code: "custom",
+          path: ["results", result, "output"],
+          message: "A node output can be mapped only once",
+        });
+      mappedOutputs.add(mapping.output);
+    }
   });
 export type FlowResultDeclaration = z.input<typeof flowResultDeclarationSchema>;
 
-/** A concrete output the effective actor produced; only its declared mapping may project it. */
+/** A concrete node output the effective actor produced, with its protected provenance. */
 export const flowResultOperationOutputSchema = z
   .object({
     output: builderKeySchema,
     value: jsonValueSchema,
+    provenance: flowResultProvenanceSchema,
   })
   .strict();
 export type FlowResultOperationOutput = z.infer<typeof flowResultOperationOutputSchema>;
 
-const flowResultRuntimeDisclosureSchema = {
-  discloses: z.array(flowResultProtectedValueReferenceSchema).max(200).default([]),
-  disclosureOperation: protectedOperationReferenceSchema.optional(),
-} as const;
-
-export const flowResultBranchOutcomeSchema = z
-  .object({
-    outcome: builderKeySchema,
-    ...flowResultRuntimeDisclosureSchema,
-  })
+/** A structured safe code the interface localises; never raw failure detail. */
+const flowResultCodedItemSchema = z
+  .object({ code: builderKeySchema, provenance: flowResultProvenanceSchema })
   .strict();
-export type FlowResultBranchOutcome = z.infer<typeof flowResultBranchOutcomeSchema>;
-
-export const flowResultSafeErrorSchema = z
-  .object({
-    code: builderKeySchema,
-    ...flowResultRuntimeDisclosureSchema,
-  })
-  .strict();
-export type FlowResultSafeError = z.infer<typeof flowResultSafeErrorSchema>;
-
-/** A structured safe message: a declared code the interface localises; never raw failure detail. */
-export const flowResultSafeMessageSchema = z.object({ code: builderKeySchema }).strict();
-export type FlowResultSafeMessage = z.infer<typeof flowResultSafeMessageSchema>;
 
 export const flowResultNavigationTargetSchema = z.discriminatedUnion("kind", [
   z
@@ -254,36 +266,40 @@ export const flowResultNavigationTargetSchema = z.discriminatedUnion("kind", [
       recordId: recordIdSchema,
     })
     .strict(),
-  z.object({ kind: z.literal("external"), address: z.url().max(2000) }).strict(),
+  z.object({ kind: z.literal("external"), address: safeHttpsUrlSchema.max(2000) }).strict(),
 ]);
 export type FlowResultNavigationTarget = z.infer<typeof flowResultNavigationTargetSchema>;
 
 /**
- * The exact #686 effective-actor operation result plus the viewer authority and published mapping.
- * The operation result is produced server-side under the resolution's effective actor; it is a
- * trusted input, not a browser payload.
+ * The exact #686 effective-actor operation result. It is produced server-side under the
+ * resolution's effective actor; it is a trusted input, never a browser payload.
  */
 export const flowResultOperationResultSchema = z
   .object({
     outcome: safeFlowResultKindSchema,
     outputs: z.array(flowResultOperationOutputSchema).max(500).default([]),
-    branchOutcome: flowResultBranchOutcomeSchema.optional(),
-    safeError: flowResultSafeErrorSchema.optional(),
-    safeMessage: flowResultSafeMessageSchema.optional(),
-    navigation: flowResultNavigationTargetSchema.optional(),
+    branchOutcome: z
+      .object({ outcome: builderKeySchema, provenance: flowResultProvenanceSchema })
+      .strict()
+      .optional(),
+    message: flowResultCodedItemSchema.optional(),
+    error: flowResultCodedItemSchema.optional(),
+    navigation: z
+      .object({ target: flowResultNavigationTargetSchema, provenance: flowResultProvenanceSchema })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((value, context) => {
     const seen = new Set<string>();
     for (const [index, output] of value.outputs.entries()) {
-      const key = output.output.toLowerCase();
-      if (seen.has(key))
+      if (seen.has(output.output))
         context.addIssue({
           code: "custom",
           path: ["outputs", index, "output"],
-          message: "A result output may appear only once",
+          message: "A node output may appear only once",
         });
-      seen.add(key);
+      seen.add(output.output);
     }
   });
 export type FlowResultOperationResult = z.input<typeof flowResultOperationResultSchema>;
@@ -303,32 +319,51 @@ export const flowResultHandoffRefusalReasonSchema = z.enum([
   "authority_unavailable",
   "resolution_refused",
   "viewer_scope_mismatch",
-  "undeclared_output",
-  "unsafe_disclosure_mapping",
-  "disclosure_operation_not_authorised",
+  "declaration_mismatch",
 ]);
 export type FlowResultHandoffRefusalReason = z.infer<
   typeof flowResultHandoffRefusalReasonSchema
 >;
 
-/** One viewer-permitted output value. Unreadable values are omitted, never blanked or hidden. */
+/** One viewer-permitted result value, keyed by its declared result key. */
 export const flowResultProjectedValueSchema = z
   .object({
-    output: builderKeySchema,
+    result: builderKeySchema,
     type: workflowValueTypeSchema,
     value: jsonValueSchema,
   })
   .strict();
 export type FlowResultProjectedValue = z.infer<typeof flowResultProjectedValueSchema>;
 
-export const flowResultPresentationSchema = z.enum([
-  "data",
-  "empty",
-  "refusal",
-  "partial",
-  "pending",
+/**
+ * Something the operation produced that this viewer may not see. A withheld result is named by
+ * its declared result key only; `unsafe_disclosure_mapping` marks a transformation or later write
+ * that would launder a protected value without an authorised disclosure operation.
+ */
+export const flowResultWithheldSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("result"),
+      result: builderKeySchema,
+      reason: z.enum(["not_viewer_readable", "unsafe_disclosure_mapping"]),
+    })
+    .strict(),
+  z.object({ kind: z.literal("branch_outcome") }).strict(),
+  z.object({ kind: z.literal("message") }).strict(),
+  z.object({ kind: z.literal("error") }).strict(),
+  z.object({ kind: z.literal("navigation") }).strict(),
 ]);
+export type FlowResultWithheld = z.infer<typeof flowResultWithheldSchema>;
+
+/**
+ * What happened to the declared results: projected, genuinely empty, restricted because at least
+ * one was withheld from this viewer, or unavailable because the outcome makes no results
+ * available. The descriptor carries the commit and recovery semantics independently.
+ */
+export const flowResultPresentationSchema = z.enum(["data", "empty", "restricted", "unavailable"]);
 export type FlowResultPresentation = z.infer<typeof flowResultPresentationSchema>;
+
+const flowResultSafeCodeSchema = z.object({ code: builderKeySchema }).strict();
 
 export const flowResultHandoffPermittedSchema = z
   .object({
@@ -337,8 +372,10 @@ export const flowResultHandoffPermittedSchema = z
     descriptor: safeFlowResultDescriptorSchema,
     presentation: flowResultPresentationSchema,
     data: z.array(flowResultProjectedValueSchema).max(500),
+    withheld: z.array(flowResultWithheldSchema).max(504),
     branchOutcome: builderKeySchema.optional(),
-    message: flowResultSafeMessageSchema.optional(),
+    message: flowResultSafeCodeSchema.optional(),
+    error: flowResultSafeCodeSchema.optional(),
     navigation: flowResultNavigationTargetSchema.optional(),
   })
   .strict();
@@ -362,20 +399,24 @@ export type FlowResultHandoff = z.infer<typeof flowResultHandoffSchema>;
 export type FlowResultHandoffDependencies = Readonly<{ clock?: () => Date }>;
 
 /** A stable, non-nil correlation identifier for a request too malformed to carry its own. */
-const FALLBACK_CORRELATION_ID = correlationIdSchema.parse(
+const FALLBACK_CORRELATION_ID: CorrelationId = correlationIdSchema.parse(
   "00000000-0000-4000-8000-000000000001",
 );
 
-const sameId = (left: string | undefined, right: string | undefined): boolean =>
-  left === undefined || right === undefined
-    ? left === right
-    : left.toLowerCase() === right.toLowerCase();
+const correlationIdFrom = (candidate: unknown): CorrelationId => {
+  const extracted = z
+    .object({ resolution: z.object({ correlationId: correlationIdSchema }) })
+    .safeParse(candidate);
+  return extracted.success ? extracted.data.resolution.correlationId : FALLBACK_CORRELATION_ID;
+};
+
+const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 const sameOperation = (
-  left: z.infer<typeof protectedOperationReferenceSchema>,
-  right: z.infer<typeof protectedOperationReferenceSchema>,
+  left: ProtectedOperationReference,
+  right: ProtectedOperationReference,
 ): boolean => {
-  const ownerId = (owner: typeof left.owner): string =>
+  const ownerId = (owner: ProtectedOperationReference["owner"]): string =>
     owner.kind === "application"
       ? owner.applicationRootId
       : owner.kind === "module"
@@ -419,16 +460,18 @@ const authorityCovers = (
   }
 };
 
-const viewerCanSee = (
-  reference: FlowResultProtectedValueReference,
+const viewerCanRead = (
+  provenance: FlowResultProvenance,
   authority: FlowResultViewerAuthority,
 ): boolean =>
-  reference.kind === "derived"
-    ? reference.sources.every((source) => authorityCovers(source, authority))
-    : authorityCovers(reference, authority);
+  provenance.every((reference) =>
+    reference.kind === "derived"
+      ? reference.sources.every((source) => authorityCovers(source, authority))
+      : authorityCovers(reference, authority),
+  );
 
 const disclosureOperationAuthorised = (
-  operation: z.infer<typeof protectedOperationReferenceSchema> | undefined,
+  operation: ProtectedOperationReference | undefined,
   authority: FlowResultViewerAuthority,
 ): boolean =>
   operation !== undefined &&
@@ -437,7 +480,7 @@ const disclosureOperationAuthorised = (
   );
 
 const viewerMatchesInitiator = (
-  viewer: FlowResultViewerViewer,
+  viewer: FlowResultViewer,
   initiator: FlowEffectiveActorEffectiveResolution["initiator"],
 ): boolean =>
   viewer.kind === "organization_account"
@@ -445,56 +488,39 @@ const viewerMatchesInitiator = (
       sameId(viewer.organizationAccountId, initiator.organizationAccountId)
     : initiator.kind === "system" && sameId(viewer.systemActorId, initiator.systemActorId);
 
-const navigationAvailable = (
-  navigation: FlowResultNavigationTarget,
+const navigationTargetReadable = (
+  target: FlowResultNavigationTarget,
   authority: FlowResultViewerAuthority,
 ): boolean => {
-  switch (navigation.kind) {
+  switch (target.kind) {
     case "external":
       return true;
     case "application":
       return (
         authority.applicationReadAllowed &&
-        sameId(authority.applicationRootId, navigation.applicationRootId)
+        sameId(authority.applicationRootId, target.applicationRootId)
       );
     case "page":
       return (
         authority.applicationReadAllowed &&
-        sameId(authority.applicationRootId, navigation.applicationRootId)
+        sameId(authority.applicationRootId, target.applicationRootId) &&
+        authorityCovers({ kind: "component", componentId: target.pageId }, authority)
       );
     case "record":
-      return authority.readableRecords.some(
-        (record) =>
-          sameId(record.recordId, navigation.recordId) &&
-          sameId(record.recordTypeId, navigation.recordTypeId),
+      return authorityCovers(
+        { kind: "record", recordTypeId: target.recordTypeId, recordId: target.recordId },
+        authority,
       );
-  }
-};
-
-const presentationFor = (
-  outcome: z.infer<typeof safeFlowResultKindSchema>,
-  hasData: boolean,
-): FlowResultPresentation => {
-  switch (outcome) {
-    case "completed":
-    case "committed":
-      return hasData ? "data" : "empty";
-    case "partial":
-      return "partial";
-    case "uncertain":
-    case "background_pending":
-      return "pending";
-    default:
-      return "refusal";
   }
 };
 
 /**
  * Projects one effective-actor operation result onto the initiating viewer's current authority.
- * Total and side-effect free: malformed input, stale or mismatched viewer authority, a refused
- * #686 resolution, an undeclared output, or a transformation/later write that would disclose a
- * protected value without an authorised disclosure operation all return a safe refusal. Only a
- * permitted projection is returned otherwise, and it never carries effective-actor intermediates.
+ * Total and side-effect free. Malformed input, stale or mismatched viewer authority, a refused
+ * #686 resolution, or a declaration for a different release, flow, node or operation returns a
+ * safe refusal. Otherwise the shared safe-result descriptor is always returned with only the
+ * viewer-permitted results, branch outcome, message, error and navigation; everything else is
+ * withheld, reported as withheld, and never carries effective-actor intermediates.
  */
 export const projectFlowResultHandoff = (
   requestCandidate: FlowResultHandoffRequest,
@@ -505,7 +531,7 @@ export const projectFlowResultHandoff = (
     return {
       outcome: "refused",
       reasonCode: "malformed_request",
-      correlationId: FALLBACK_CORRELATION_ID,
+      correlationId: correlationIdFrom(requestCandidate),
     };
 
   const { authority, resolution, declaration, result } = parsed.data;
@@ -523,89 +549,90 @@ export const projectFlowResultHandoff = (
 
   if (resolution.outcome !== "effective") return refuse("resolution_refused");
 
-  const viewer = authority.viewer;
-  if (!sameId(viewer.organizationId, resolution.purpose.organizationId))
+  const { purpose } = resolution;
+  if (
+    !sameId(authority.viewer.organizationId, purpose.organizationId) ||
+    !sameId(authority.applicationRootId, purpose.applicationRootId) ||
+    !viewerMatchesInitiator(authority.viewer, resolution.initiator)
+  )
     return refuse("viewer_scope_mismatch");
-  if (!sameId(authority.applicationRootId, resolution.purpose.applicationRootId))
-    return refuse("viewer_scope_mismatch");
-  if (!viewerMatchesInitiator(viewer, resolution.initiator))
-    return refuse("viewer_scope_mismatch");
+
+  if (
+    declaration.releaseVersion !== purpose.releaseVersion ||
+    !sameId(declaration.flowId, purpose.flowId) ||
+    !sameId(declaration.nodeId, purpose.nodeId) ||
+    !sameOperation(declaration.operation, purpose.operation)
+  )
+    return refuse("declaration_mismatch");
 
   const descriptor = safeFlowResultDescriptors[result.outcome];
-
   const data: FlowResultProjectedValue[] = [];
-  // A partial, uncertain, refused or background-pending descriptor reports outputs unavailable;
-  // its intermediates are withheld entirely rather than projected as partial success.
+  const withheld: FlowResultWithheld[] = [];
+
+  // Only declared results are projected, so every other output stays server-side. An outcome that
+  // makes no outputs available (refused, partial, uncertain, background-pending and the rest)
+  // projects none of them rather than presenting intermediates as partial success.
   if (descriptor.outputs === "available") {
-    for (const output of result.outputs) {
-      const declared = declaration.mappings[output.output];
-      const published = declaration.results[output.output];
-      if (declared === undefined || published === undefined) return refuse("undeclared_output");
-
+    const outputs = new Map(result.outputs.map((output) => [output.output, output] as const));
+    for (const [resultKey, published] of Object.entries(declaration.results)) {
+      const mapping = declaration.mappings[resultKey];
+      const produced = outputs.get(published.output);
+      if (mapping === undefined || produced === undefined) continue;
       if (
-        declared.disclosureOperation !== undefined &&
-        !disclosureOperationAuthorised(declared.disclosureOperation, authority)
+        viewerCanRead(produced.provenance, authority) ||
+        disclosureOperationAuthorised(mapping.disclosureOperation, authority)
       )
-        return refuse("disclosure_operation_not_authorised");
-
-      const blocked = declared.discloses.some(
-        (reference) => !viewerCanSee(reference, authority),
-      );
-      if (blocked) {
-        // A plain return omits an unreadable value; a transformation or later write would launder
-        // it into a viewer-readable output, so it needs its explicitly authorised disclosure.
-        if (declared.mappingKind === "return") continue;
-        if (!disclosureOperationAuthorised(declared.disclosureOperation, authority))
-          return refuse("unsafe_disclosure_mapping");
-      }
-
-      data.push({ output: output.output, type: published.type, value: output.value });
+        data.push({ result: resultKey, type: published.type, value: produced.value });
+      else
+        withheld.push({
+          kind: "result",
+          result: resultKey,
+          reason:
+            mapping.mappingKind === "return"
+              ? "not_viewer_readable"
+              : "unsafe_disclosure_mapping",
+        });
     }
   }
 
-  const branchOutcome = result.branchOutcome;
-  if (branchOutcome !== undefined) {
-    if (
-      branchOutcome.disclosureOperation !== undefined &&
-      !disclosureOperationAuthorised(branchOutcome.disclosureOperation, authority)
-    )
-      return refuse("disclosure_operation_not_authorised");
-    const blocked = branchOutcome.discloses.some(
-      (reference) => !viewerCanSee(reference, authority),
-    );
-    if (blocked && !disclosureOperationAuthorised(branchOutcome.disclosureOperation, authority))
-      return refuse("unsafe_disclosure_mapping");
-  }
+  // Branch outcomes, messages, errors and navigation have no declared disclosure operation, so
+  // they reach the viewer only when everything they derive from is currently readable.
+  const disclose = <Item extends { provenance: FlowResultProvenance }>(
+    item: Item | undefined,
+    kind: Exclude<FlowResultWithheld["kind"], "result">,
+    readable: (candidate: Item) => boolean = () => true,
+  ): Item | undefined => {
+    if (item === undefined) return undefined;
+    if (viewerCanRead(item.provenance, authority) && readable(item)) return item;
+    withheld.push({ kind });
+    return undefined;
+  };
+  const branchOutcome = disclose(result.branchOutcome, "branch_outcome");
+  const message = disclose(result.message, "message");
+  const error = disclose(result.error, "error");
+  const navigation = disclose(result.navigation, "navigation", (candidate) =>
+    navigationTargetReadable(candidate.target, authority),
+  );
 
-  // Errors are only ever surfaced as a declared safe code; raw failure detail is never projected.
-  const safeError = result.safeError;
-  if (safeError !== undefined) {
-    if (
-      safeError.disclosureOperation !== undefined &&
-      !disclosureOperationAuthorised(safeError.disclosureOperation, authority)
-    )
-      return refuse("disclosure_operation_not_authorised");
-    const blocked = safeError.discloses.some((reference) => !viewerCanSee(reference, authority));
-    if (blocked && !disclosureOperationAuthorised(safeError.disclosureOperation, authority))
-      return refuse("unsafe_disclosure_mapping");
-  }
-
-  const message =
-    result.safeMessage ?? (safeError === undefined ? undefined : { code: safeError.code });
-
-  const navigation =
-    result.navigation !== undefined && navigationAvailable(result.navigation, authority)
-      ? result.navigation
-      : undefined;
+  const presentation: FlowResultPresentation =
+    descriptor.outputs !== "available"
+      ? "unavailable"
+      : withheld.some((item) => item.kind === "result")
+        ? "restricted"
+        : data.length > 0
+          ? "data"
+          : "empty";
 
   return {
     outcome: "permitted",
     correlationId: resolution.correlationId,
     descriptor,
-    presentation: presentationFor(result.outcome, data.length > 0),
+    presentation,
     data,
+    withheld,
     ...(branchOutcome === undefined ? {} : { branchOutcome: branchOutcome.outcome }),
-    ...(message === undefined ? {} : { message }),
-    ...(navigation === undefined ? {} : { navigation }),
+    ...(message === undefined ? {} : { message: { code: message.code } }),
+    ...(error === undefined ? {} : { error: { code: error.code } }),
+    ...(navigation === undefined ? {} : { navigation: navigation.target }),
   };
 };

@@ -16,12 +16,13 @@ export {
   type AppTelemetryCollectorDependencies,
 } from "./telemetry";
 export {
+  flowResultDeclarationSchema,
   flowResultHandoffContractVersion,
   flowResultHandoffRefusalReasonSchema,
   flowResultHandoffRequestSchema,
   flowResultHandoffSchema,
-  flowResultDeclarationSchema,
   flowResultOperationResultSchema,
+  flowResultProtectedValueReferenceSchema,
   flowResultViewerAuthoritySchema,
   projectFlowResultHandoff,
   type FlowResultDeclaration,
@@ -30,7 +31,10 @@ export {
   type FlowResultHandoffRefusalReason,
   type FlowResultHandoffRequest,
   type FlowResultOperationResult,
+  type FlowResultPresentation,
+  type FlowResultProtectedValueReference,
   type FlowResultViewerAuthority,
+  type FlowResultWithheld,
 } from "./flow-result-handoff";
 
 export const AppService = Object.freeze({
