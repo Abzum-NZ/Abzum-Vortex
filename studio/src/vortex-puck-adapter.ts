@@ -70,6 +70,31 @@ const rebuildBreakpointOrder = (saved: unknown, desktop: readonly string[]): str
   return result;
 };
 
+/**
+ * Children moved in from another slot carry that slot's order, so use the hint
+ * that names the most of this slot's placements (the first one on a tie).
+ */
+const bestOrderHint = (
+  hints: readonly Record<string, unknown>[],
+  desktop: readonly string[],
+): Record<string, unknown> | undefined => {
+  const present = new Set(desktop);
+  const overlap = (hint: Record<string, unknown>): number =>
+    Array.isArray(hint.desktop)
+      ? hint.desktop.filter((id: unknown) => typeof id === "string" && present.has(id)).length
+      : 0;
+  let best: Record<string, unknown> | undefined;
+  let bestOverlap = -1;
+  for (const hint of hints) {
+    const current = overlap(hint);
+    if (current > bestOverlap) {
+      best = hint;
+      bestOverlap = current;
+    }
+  }
+  return best;
+};
+
 type VortexSlot = ReturnType<typeof placementSlotV2Schema.parse>;
 type RichTextDocument = ReturnType<typeof richTextDocumentV2Schema.parse>;
 type RichTextInline = { kind: string; children?: RichTextInline[] };
@@ -300,7 +325,7 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
       throw new VortexPuckAdapterError(`Invalid Puck adapter data at ${at}`);
     const placements: Record<string, unknown> = {};
     const desktop: string[] = [];
-    let savedOrder: Record<string, unknown> | undefined;
+    const orderHints: Record<string, unknown>[] = [];
     for (const [index, raw] of input.entries()) {
       if (depth > catalogue.compositionPolicy.maximumDepth) {
         throw new VortexPuckAdapterError(
@@ -392,11 +417,9 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
         slots[declaration.key] = childSlot;
       }
 
-      if (savedOrder === undefined && meta.order !== undefined)
-        savedOrder = exact(
-          meta.order,
-          ["desktop", "tablet", "phone"],
-          `${at}[${index}].props.vortex.order`,
+      if (meta.order !== undefined)
+        orderHints.push(
+          exact(meta.order, ["desktop", "tablet", "phone"], `${at}[${index}].props.vortex.order`),
         );
       placements[id] = {
         block,
@@ -418,10 +441,14 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
       desktop.push(id);
     }
     try {
-      const order: Record<string, string[]> = { desktop };
-      for (const breakpoint of ["tablet", "phone"] as const)
-        if (savedOrder?.[breakpoint] !== undefined)
-          order[breakpoint] = rebuildBreakpointOrder(savedOrder[breakpoint], desktop);
+      // Every breakpoint is required, including for an empty slot or a slot
+      // whose children carry no saved order.
+      const savedOrder = bestOrderHint(orderHints, desktop);
+      const order = {
+        desktop,
+        tablet: rebuildBreakpointOrder(savedOrder?.tablet, desktop),
+        phone: rebuildBreakpointOrder(savedOrder?.phone, desktop),
+      };
       return placementSlotV2Schema.parse({ placements, order });
     } catch (error) {
       throw new VortexPuckAdapterError("Invalid placement slot schema", { cause: error });
