@@ -16,6 +16,14 @@ export {
 } from "./protected-query-contracts";
 
 export {
+  supportedRecordSystemFieldKeys,
+  supportedRecordSystemFieldKeySchema,
+  recordSystemValuesSchema,
+  type SupportedRecordSystemFieldKey,
+  type RecordSystemValues,
+} from "./record-system-values";
+
+export {
   createProtectedQueryService,
   type ProtectedQueryServiceDependencies,
 } from "./protected-query-service";
