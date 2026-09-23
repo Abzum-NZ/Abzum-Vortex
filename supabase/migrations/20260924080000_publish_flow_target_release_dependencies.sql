@@ -7,6 +7,51 @@
 -- scalar columns keep their existing shape so the four original kinds and every
 -- reader that only inspects module dependencies keep working unchanged.
 
+-- The one stored subject reference for a flow-target manifest entry. It is the
+-- manifest subject without its kind prefix, so the stored (kind, reference)
+-- order equals the contract's deterministic subject order. Null for any other
+-- kind or an incomplete entry.
+create function vortex_definition.flow_target_dependency_reference(p_dependency jsonb)
+returns text
+language sql
+immutable
+set search_path = ''
+as $function$
+  select case p_dependency ->> 'kind'
+    when 'platform_flow' then p_dependency ->> 'flowId'
+    when 'application_flow' then
+      (p_dependency ->> 'applicationRootId') || ':' || (p_dependency ->> 'flowId')
+    when 'application_flow_node' then
+      (p_dependency ->> 'applicationRootId') || ':' || (p_dependency ->> 'flowId')
+        || ':' || (p_dependency ->> 'nodeId')
+    when 'application_query' then
+      (p_dependency ->> 'applicationRootId') || ':' || (p_dependency ->> 'queryId')
+    when 'module_query' then
+      (p_dependency ->> 'moduleRootId') || ':' || (p_dependency ->> 'queryId')
+    when 'application_form' then
+      (p_dependency ->> 'applicationRootId') || ':' || (p_dependency ->> 'formId')
+    when 'application_workflow' then
+      (p_dependency ->> 'applicationRootId') || ':' || (p_dependency ->> 'workflowId')
+    when 'application_action' then
+      (p_dependency ->> 'applicationRootId') || ':' || (p_dependency ->> 'actionId')
+    when 'protected_operation' then
+      (p_dependency #>> '{operation,owner,kind}') || ':'
+        || case p_dependency #>> '{operation,owner,kind}'
+          when 'application' then p_dependency #>> '{operation,owner,applicationRootId}'
+          when 'module' then p_dependency #>> '{operation,owner,moduleRootId}'
+          when 'platform_service' then p_dependency #>> '{operation,owner,serviceId}'
+        end
+        || ':' || (p_dependency #>> '{operation,operationId}')
+    else null
+  end
+$function$;
+
+revoke all on function vortex_definition.flow_target_dependency_reference(jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+comment on function vortex_definition.flow_target_dependency_reference(jsonb) is
+  'Owner-private canonical subject reference of one flow-target dependency manifest entry.';
+
 alter table vortex_definition.release_dependencies
   add column dependency_entry jsonb,
   drop constraint release_dependencies_kind_valid,
@@ -60,16 +105,26 @@ alter table vortex_definition.release_dependencies
       and catalogue_item_id is null
     )
   ),
+  -- A flow-target row is exactly its stored entry: the scalar columns are
+  -- derived from it, so no reader can see a reference or evidence that differs
+  -- from the entry it returns.
   add constraint release_dependencies_entry_shape check (
-    (
+    coalesce(
       dependency_kind in (
         'platform_flow', 'application_flow', 'application_flow_node', 'application_query',
         'module_query', 'application_form', 'application_workflow', 'application_action',
         'protected_operation'
       )
-      and dependency_entry is not null
       and pg_catalog.jsonb_typeof(dependency_entry) = 'object'
       and dependency_entry ->> 'kind' = dependency_kind
+      and dependency_reference = vortex_definition.flow_target_dependency_reference(dependency_entry)
+      and dependency_version = dependency_entry ->> 'releaseVersion'
+      and dependency_content_fingerprint = dependency_entry ->> 'contentFingerprint'
+      and evidence_fingerprint = case
+        when dependency_kind = 'platform_flow' then dependency_entry ->> 'catalogueFingerprint'
+        else dependency_entry ->> 'resolutionFingerprint'
+      end,
+      false
     )
     or (
       dependency_kind in ('module', 'connection_type', 'platform_block', 'platform_theme')
@@ -82,7 +137,9 @@ comment on column vortex_definition.release_dependencies.dependency_entry is
 
 -- append_release: accept, validate and store the flow-target kinds, and return
 -- the complete manifest. The live body is patched in place (pg_get_functiondef)
--- so every earlier lock, field-policy and transitive-closure change survives.
+-- so every earlier lock, field-policy, history-pointer and transitive-closure
+-- change survives. Each anchor must match exactly once and the patch refuses a
+-- body that already carries it.
 do $patch_append_release$
 declare
   source text;
@@ -96,6 +153,10 @@ begin
   ) into source;
   if source is null then
     raise exception 'Definition append release function is missing';
+  end if;
+  if pg_catalog.strpos(source, 'dependency_entry') <> 0
+    or pg_catalog.strpos(source, 'flow_target_dependency_reference') <> 0 then
+    raise exception 'Definition append release already stores flow-target dependencies';
   end if;
 
   anchors := array[
@@ -133,81 +194,170 @@ begin
 
   replacements := array[
     $r1$  supplied_catalogue_item_id uuid;
-  supplied_entry jsonb;$r1$,
+  supplied_entry jsonb;
+  supplied_owner_kind text;
+  supplied_owner_id_key text;
+  supplied_expected_keys text[];$r1$,
     $r2$    elsif supplied_kind in (
       'platform_flow', 'application_flow', 'application_flow_node', 'application_query',
       'module_query', 'application_form', 'application_workflow', 'application_action',
       'protected_operation'
     ) then
-      supplied_entry := supplied_dependency;
+      -- Flow targets are contained by, or pinned for, one exact Application
+      -- release. Each entry has exactly its contract shape, and its owner is
+      -- this release, an exact pinned Module release in this same manifest, or
+      -- platform catalogue evidence that publication verifies before append.
+      if root_row.kind is distinct from 'application' then
+        raise exception using errcode = '23514',
+          message = 'Flow target dependencies belong only to an Application release';
+      end if;
+      supplied_owner_kind := case supplied_kind
+        when 'protected_operation' then supplied_dependency #>> '{operation,owner,kind}'
+        when 'module_query' then 'module'
+        when 'platform_flow' then 'platform_service'
+        else 'application'
+      end;
+      supplied_expected_keys := pg_catalog.array_cat(
+        array['kind', 'releaseVersion', 'contentFingerprint']::text[],
+        case supplied_kind
+          when 'platform_flow' then array['flowId', 'catalogueFingerprint']::text[]
+          when 'application_flow' then
+            array['applicationRootId', 'flowId', 'resolutionFingerprint']::text[]
+          when 'application_flow_node' then
+            array['applicationRootId', 'flowId', 'nodeId', 'resolutionFingerprint']::text[]
+          when 'application_query' then
+            array['applicationRootId', 'queryId', 'resolutionFingerprint']::text[]
+          when 'module_query' then
+            array['moduleRootId', 'queryId', 'declaredRequirement', 'resolutionFingerprint']::text[]
+          when 'application_form' then
+            array['applicationRootId', 'formId', 'resolutionFingerprint']::text[]
+          when 'application_workflow' then
+            array['applicationRootId', 'workflowId', 'resolutionFingerprint']::text[]
+          when 'application_action' then
+            array['applicationRootId', 'actionId', 'resolutionFingerprint']::text[]
+          when 'protected_operation' then
+            case when supplied_owner_kind = 'platform_service'
+              then array['operation', 'resolutionFingerprint', 'catalogueFingerprint']::text[]
+              else array['operation', 'resolutionFingerprint']::text[]
+            end
+        end
+      );
+      if exists (
+          select 1
+          from pg_catalog.jsonb_object_keys(supplied_dependency) as supplied(key)
+          where supplied.key <> all (supplied_expected_keys)
+        )
+        or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(supplied_dependency))
+          <> pg_catalog.cardinality(supplied_expected_keys)
+        or exists (
+          select 1
+          from pg_catalog.unnest(supplied_expected_keys) as expected(key)
+          where expected.key not in ('operation', 'declaredRequirement')
+            and pg_catalog.jsonb_typeof(supplied_dependency -> expected.key) is distinct from 'string'
+        )
+        or (
+          supplied_kind = 'module_query'
+          and pg_catalog.jsonb_typeof(supplied_dependency -> 'declaredRequirement')
+            is distinct from 'object'
+        )
+        or (
+          supplied_kind = 'protected_operation'
+          and (
+            pg_catalog.jsonb_typeof(supplied_dependency -> 'operation') is distinct from 'object'
+            or pg_catalog.jsonb_typeof(supplied_dependency #> '{operation,owner}')
+              is distinct from 'object'
+            or supplied_owner_kind is null
+            or supplied_owner_kind not in ('application', 'module', 'platform_service')
+          )
+        ) then
+        raise exception using errcode = '22023',
+          message = 'Definition flow target dependency has an invalid shape';
+      end if;
+      if supplied_kind = 'protected_operation' then
+        supplied_owner_id_key := case supplied_owner_kind
+          when 'application' then 'applicationRootId'
+          when 'module' then 'moduleRootId'
+          else 'serviceId'
+        end;
+        if exists (
+            select 1
+            from pg_catalog.jsonb_object_keys(supplied_dependency -> 'operation') as operation_key(key)
+            where operation_key.key not in ('owner', 'operationId')
+          )
+          or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(supplied_dependency -> 'operation')) <> 2
+          or pg_catalog.jsonb_typeof(supplied_dependency #> '{operation,operationId}')
+            is distinct from 'string'
+          or exists (
+            select 1
+            from pg_catalog.jsonb_object_keys(supplied_dependency #> '{operation,owner}') as owner_key(key)
+            where owner_key.key not in ('kind', supplied_owner_id_key)
+          )
+          or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(supplied_dependency #> '{operation,owner}')) <> 2
+          or pg_catalog.jsonb_typeof(
+            supplied_dependency -> 'operation' -> 'owner' -> supplied_owner_id_key
+          ) is distinct from 'string' then
+          raise exception using errcode = '22023',
+            message = 'Definition flow target dependency has an invalid shape';
+        end if;
+      end if;
+
+      supplied_reference := vortex_definition.flow_target_dependency_reference(supplied_dependency);
       supplied_version := supplied_dependency ->> 'releaseVersion';
       supplied_content_fingerprint := supplied_dependency ->> 'contentFingerprint';
-      supplied_evidence_fingerprint := coalesce(
-        supplied_dependency ->> 'resolutionFingerprint',
-        supplied_dependency ->> 'catalogueFingerprint'
-      );
+      supplied_evidence_fingerprint := case
+        when supplied_kind = 'platform_flow' then supplied_dependency ->> 'catalogueFingerprint'
+        else supplied_dependency ->> 'resolutionFingerprint'
+      end;
       supplied_target_root_id := null;
       supplied_target_release_revision := null;
       supplied_catalogue_item_id := null;
-      if supplied_kind = 'platform_flow' then
-        supplied_reference := supplied_dependency ->> 'flowId';
-      elsif supplied_kind = 'application_flow' then
-        supplied_reference := (supplied_dependency ->> 'applicationRootId')
-          || ':' || (supplied_dependency ->> 'flowId');
-      elsif supplied_kind = 'application_flow_node' then
-        supplied_reference := (supplied_dependency ->> 'applicationRootId')
-          || ':' || (supplied_dependency ->> 'flowId')
-          || ':' || (supplied_dependency ->> 'nodeId');
-      elsif supplied_kind = 'application_query' then
-        supplied_reference := (supplied_dependency ->> 'applicationRootId')
-          || ':' || (supplied_dependency ->> 'queryId');
-      elsif supplied_kind = 'module_query' then
-        supplied_reference := (supplied_dependency ->> 'moduleRootId')
-          || ':' || (supplied_dependency ->> 'queryId');
-      elsif supplied_kind = 'application_form' then
-        supplied_reference := (supplied_dependency ->> 'applicationRootId')
-          || ':' || (supplied_dependency ->> 'formId');
-      elsif supplied_kind = 'application_workflow' then
-        supplied_reference := (supplied_dependency ->> 'applicationRootId')
-          || ':' || (supplied_dependency ->> 'workflowId');
-      elsif supplied_kind = 'application_action' then
-        supplied_reference := (supplied_dependency ->> 'applicationRootId')
-          || ':' || (supplied_dependency ->> 'actionId');
-      else
-        supplied_reference := (supplied_dependency #>> '{operation,owner,kind}')
-          || ':' || case supplied_dependency #>> '{operation,owner,kind}'
-            when 'application' then supplied_dependency #>> '{operation,owner,applicationRootId}'
-            when 'module' then supplied_dependency #>> '{operation,owner,moduleRootId}'
-            else supplied_dependency #>> '{operation,owner,serviceId}'
-          end
-          || ':' || (supplied_dependency #>> '{operation,operationId}');
-      end if;
       if supplied_reference is null
         or pg_catalog.char_length(supplied_reference) not between 1 and 500
         or supplied_reference ~ '[[:space:]]'
-        or supplied_version is null
         or supplied_version !~ '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-        or supplied_content_fingerprint is null
         or supplied_content_fingerprint !~ '^sha256:[a-f0-9]{64}$'
-        or supplied_evidence_fingerprint is null
         or supplied_evidence_fingerprint !~ '^sha256:[a-f0-9]{64}$'
-        or exists (
-          select 1
-          from pg_catalog.jsonb_object_keys(supplied_dependency) as supplied(key)
-          where supplied.key not in (
-            'kind', 'flowId', 'applicationRootId', 'nodeId', 'queryId', 'moduleRootId',
-            'declaredRequirement', 'operation', 'releaseVersion', 'contentFingerprint',
-            'resolutionFingerprint', 'catalogueFingerprint', 'formId', 'workflowId', 'actionId'
-          )
+        or (
+          supplied_dependency ? 'resolutionFingerprint'
+          and supplied_dependency ->> 'resolutionFingerprint' !~ '^sha256:[a-f0-9]{64}$'
         )
-        or (supplied_kind = 'module_query'
-          and pg_catalog.jsonb_typeof(supplied_dependency -> 'declaredRequirement') is distinct from 'object')
-        or (supplied_kind = 'protected_operation'
-          and pg_catalog.jsonb_typeof(supplied_dependency -> 'operation') is distinct from 'object')
-        or (supplied_kind = 'platform_flow'
-          and supplied_dependency ->> 'catalogueFingerprint' is null) then
+        or (
+          supplied_dependency ? 'catalogueFingerprint'
+          and supplied_dependency ->> 'catalogueFingerprint' !~ '^sha256:[a-f0-9]{64}$'
+        ) then
         raise exception using errcode = '22023',
           message = 'Definition flow target dependency has invalid evidence';
+      end if;
+
+      if (
+          supplied_owner_kind = 'application'
+          and (
+            case when supplied_kind = 'protected_operation'
+              then supplied_dependency #>> '{operation,owner,applicationRootId}'
+              else supplied_dependency ->> 'applicationRootId'
+            end is distinct from p_root_id::text
+            or supplied_version is distinct from release_version_value
+            or supplied_dependency ->> 'resolutionFingerprint'
+              is distinct from resolution_fingerprint_value
+          )
+        )
+        or (
+          supplied_owner_kind = 'module'
+          and not exists (
+            select 1
+            from pg_catalog.jsonb_array_elements(dependency_manifest_value) as pinned(value)
+            where pinned.value ->> 'kind' = 'module'
+              and pinned.value ->> 'rootId' = case when supplied_kind = 'protected_operation'
+                then supplied_dependency #>> '{operation,owner,moduleRootId}'
+                else supplied_dependency ->> 'moduleRootId'
+              end
+              and pinned.value ->> 'releaseVersion' = supplied_version
+              and pinned.value ->> 'resolutionFingerprint' =
+                supplied_dependency ->> 'resolutionFingerprint'
+          )
+        ) then
+        raise exception using errcode = '23514',
+          message = 'Flow target dependency does not identify this release or an exact pinned module release';
       end if;
     else
       raise exception using errcode = '22023', message = 'Definition dependency has an unknown kind';
@@ -215,56 +365,27 @@ begin
     $r3$        case supplied.value ->> 'kind'
           when 'platform_theme' then supplied.value ->> 'catalogueThemeId'
           when 'platform_block' then supplied.value ->> 'blockId'
-          when 'platform_flow' then supplied.value ->> 'flowId'
-          when 'application_flow' then (supplied.value ->> 'applicationRootId') || ':' || (supplied.value ->> 'flowId')
-          when 'application_flow_node' then (supplied.value ->> 'applicationRootId') || ':' || (supplied.value ->> 'flowId') || ':' || (supplied.value ->> 'nodeId')
-          when 'application_query' then (supplied.value ->> 'applicationRootId') || ':' || (supplied.value ->> 'queryId')
-          when 'module_query' then (supplied.value ->> 'moduleRootId') || ':' || (supplied.value ->> 'queryId')
-          when 'application_form' then (supplied.value ->> 'applicationRootId') || ':' || (supplied.value ->> 'formId')
-          when 'application_workflow' then (supplied.value ->> 'applicationRootId') || ':' || (supplied.value ->> 'workflowId')
-          when 'application_action' then (supplied.value ->> 'applicationRootId') || ':' || (supplied.value ->> 'actionId')
-          when 'protected_operation' then (supplied.value #>> '{operation,owner,kind}') || ':' || case supplied.value #>> '{operation,owner,kind}'
-            when 'application' then supplied.value #>> '{operation,owner,applicationRootId}'
-            when 'module' then supplied.value #>> '{operation,owner,moduleRootId}'
-            else supplied.value #>> '{operation,owner,serviceId}'
-          end || ':' || (supplied.value #>> '{operation,operationId}')
-          else supplied.value ->> 'key'
+          when 'module' then supplied.value ->> 'key'
+          when 'connection_type' then supplied.value ->> 'key'
+          else vortex_definition.flow_target_dependency_reference(supplied.value)
         end as dependency_reference,$r3$,
     $r4$    supplied_catalogue_item_id := case supplied_kind
       when 'connection_type' then (supplied_dependency ->> 'rootId')::uuid
       when 'platform_block' then (supplied_dependency ->> 'blockId')::uuid
       else null
     end;
-
+    supplied_entry := null;
     if supplied_kind in (
       'platform_flow', 'application_flow', 'application_flow_node', 'application_query',
       'module_query', 'application_form', 'application_workflow', 'application_action',
       'protected_operation'
     ) then
       supplied_entry := supplied_dependency;
-      supplied_version := supplied_dependency ->> 'releaseVersion';
-      supplied_content_fingerprint := supplied_dependency ->> 'contentFingerprint';
-      supplied_evidence_fingerprint := coalesce(
-        supplied_dependency ->> 'resolutionFingerprint',
-        supplied_dependency ->> 'catalogueFingerprint'
-      );
-      supplied_reference := case supplied_kind
-        when 'platform_flow' then supplied_dependency ->> 'flowId'
-        when 'application_flow' then (supplied_dependency ->> 'applicationRootId') || ':' || (supplied_dependency ->> 'flowId')
-        when 'application_flow_node' then (supplied_dependency ->> 'applicationRootId') || ':' || (supplied_dependency ->> 'flowId') || ':' || (supplied_dependency ->> 'nodeId')
-        when 'application_query' then (supplied_dependency ->> 'applicationRootId') || ':' || (supplied_dependency ->> 'queryId')
-        when 'module_query' then (supplied_dependency ->> 'moduleRootId') || ':' || (supplied_dependency ->> 'queryId')
-        when 'application_form' then (supplied_dependency ->> 'applicationRootId') || ':' || (supplied_dependency ->> 'formId')
-        when 'application_workflow' then (supplied_dependency ->> 'applicationRootId') || ':' || (supplied_dependency ->> 'workflowId')
-        when 'application_action' then (supplied_dependency ->> 'applicationRootId') || ':' || (supplied_dependency ->> 'actionId')
-        else (supplied_dependency #>> '{operation,owner,kind}') || ':' || case supplied_dependency #>> '{operation,owner,kind}'
-          when 'application' then supplied_dependency #>> '{operation,owner,applicationRootId}'
-          when 'module' then supplied_dependency #>> '{operation,owner,moduleRootId}'
-          else supplied_dependency #>> '{operation,owner,serviceId}'
-        end || ':' || (supplied_dependency #>> '{operation,operationId}')
+      supplied_reference := vortex_definition.flow_target_dependency_reference(supplied_dependency);
+      supplied_evidence_fingerprint := case
+        when supplied_kind = 'platform_flow' then supplied_dependency ->> 'catalogueFingerprint'
+        else supplied_dependency ->> 'resolutionFingerprint'
       end;
-    else
-      supplied_entry := null;
     end if;
 
     insert into vortex_definition.release_dependencies (
@@ -277,19 +398,13 @@ begin
       supplied_target_root_id, supplied_target_release_revision, supplied_catalogue_item_id,
       supplied_entry
     );$r4$,
-    $r5$          else case
-            when dependency.dependency_kind in (
-              'platform_flow', 'application_flow', 'application_flow_node', 'application_query',
-              'module_query', 'application_form', 'application_workflow', 'application_action',
-              'protected_operation'
-            ) then dependency.dependency_entry
-            else pg_catalog.jsonb_build_object(
-              'kind', 'platform_theme', 'catalogueThemeId', dependency.dependency_reference,
-              'releaseVersion', dependency.dependency_version,
-              'contentFingerprint', dependency.dependency_content_fingerprint,
-              'catalogueFingerprint', dependency.evidence_fingerprint
-            )
-          end$r5$
+    $r5$          when 'platform_theme' then pg_catalog.jsonb_build_object(
+            'kind', 'platform_theme', 'catalogueThemeId', dependency.dependency_reference,
+            'releaseVersion', dependency.dependency_version,
+            'contentFingerprint', dependency.dependency_content_fingerprint,
+            'catalogueFingerprint', dependency.evidence_fingerprint
+          )
+          else dependency.dependency_entry$r5$
   ];
 
   for anchor_index in 1..pg_catalog.array_length(anchors, 1) loop
@@ -324,20 +439,14 @@ declare
             'contentFingerprint', dependency.dependency_content_fingerprint,
             'catalogueFingerprint', dependency.evidence_fingerprint
           )$anchor$;
-  replacement text := $replacement$          else case
-            when dependency.dependency_kind in (
-              'platform_flow', 'application_flow', 'application_flow_node', 'application_query',
-              'module_query', 'application_form', 'application_workflow', 'application_action',
-              'protected_operation'
-            ) then dependency.dependency_entry
-            else pg_catalog.jsonb_build_object(
-              'kind', 'platform_theme',
-              'catalogueThemeId', dependency.dependency_reference,
-              'releaseVersion', dependency.dependency_version,
-              'contentFingerprint', dependency.dependency_content_fingerprint,
-              'catalogueFingerprint', dependency.evidence_fingerprint
-            )
-          end$replacement$;
+  replacement text := $replacement$          when 'platform_theme' then pg_catalog.jsonb_build_object(
+            'kind', 'platform_theme',
+            'catalogueThemeId', dependency.dependency_reference,
+            'releaseVersion', dependency.dependency_version,
+            'contentFingerprint', dependency.dependency_content_fingerprint,
+            'catalogueFingerprint', dependency.evidence_fingerprint
+          )
+          else dependency.dependency_entry$replacement$;
   source text;
   occurrence_count integer;
   signature text;
@@ -346,6 +455,9 @@ begin
     select pg_catalog.pg_get_functiondef(signature::regprocedure) into source;
     if source is null then
       raise exception 'Definition reader % is missing', signature;
+    end if;
+    if pg_catalog.strpos(source, 'dependency_entry') <> 0 then
+      raise exception 'Definition reader % already returns flow-target dependencies', signature;
     end if;
     occurrence_count := (
       pg_catalog.char_length(source)
