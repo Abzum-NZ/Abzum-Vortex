@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { blockPaletteGroupSchema } from "./catalogues";
+import { blockPaletteGroupSchema, type BlockPaletteGroup } from "./catalogues";
 import { labelSchema, safeHttpsUrlSchema } from "./common";
 import {
   sourceAliasSchema,
@@ -1257,3 +1257,597 @@ export type BlockPlacementV2Contract = z.infer<typeof blockPlacementV2Schema>;
 export type ApplicationShellV2 = z.infer<typeof applicationShellV2Schema>;
 export type PageCompositionV2 = z.infer<typeof pageCompositionV2Schema>;
 export type GuidedFormPageCompositionV2 = z.infer<typeof guidedFormPageCompositionV2Schema>;
+
+// --- Discovery Constraints Projection (Issue #593) ---
+
+export const componentReferenceKindV2Schema = z.enum([
+  "field_reference",
+  "relationship_reference",
+  "action_reference",
+  "page_reference",
+  "query_reference",
+  "pipeline_reference",
+  "record_type_reference",
+  "record_reference",
+  "asset_reference",
+]);
+export type ComponentReferenceKindV2 = z.infer<typeof componentReferenceKindV2Schema>;
+
+export const COMPONENT_REFERENCE_KINDS_V2: readonly ComponentReferenceKindV2[] = Object.freeze(
+  componentReferenceKindV2Schema.options,
+);
+
+export const componentStateOperationCategorySchema = z.enum([
+  "event",
+  "action",
+  "state",
+  "form",
+  "data",
+  "navigation",
+]);
+export type ComponentStateOperationCategory = z.infer<
+  typeof componentStateOperationCategorySchema
+>;
+
+export const componentStateOperationV2Schema = z
+  .object({
+    key: builderKeySchema,
+    label: labelSchema,
+    description: z.string().optional(),
+    category: componentStateOperationCategorySchema,
+    publicSurface: z.enum(["refused", "allowed"]),
+  })
+  .strict();
+export type ComponentStateOperationV2 = z.infer<typeof componentStateOperationV2Schema>;
+
+export type ComponentPropertyControlV2 = Readonly<{
+  key: string;
+  label: string;
+  help?: string | undefined;
+  required: boolean;
+  defaultValue?: BlockPropertyValueV2Contract | undefined;
+  kind: BlockPropertySchemaV2Contract["kind"];
+  controlType: string;
+  isReference: boolean;
+  referenceKind?: ComponentReferenceKindV2 | undefined;
+  textConstraints?: { minLength: number; maxLength: number } | undefined;
+  numberConstraints?:
+    | { integer: boolean; minimum?: number | undefined; maximum?: number | undefined }
+    | undefined;
+  choiceOptions?: readonly { key: string; label: string }[] | undefined;
+  richTextAllowedElements?: readonly string[] | undefined;
+  themeTokenKind?: string | undefined;
+  nestedProperties?: readonly ComponentPropertyControlV2[] | undefined;
+  listItemControl?: ComponentPropertyControlV2 | undefined;
+  listConstraints?: { minimumItems: number; maximumItems: number } | undefined;
+}>;
+
+export type ComponentDiscoverySlotChildV2 = Readonly<{
+  blockId: string;
+  key: string;
+  releaseVersion: string;
+  name: string;
+  icon: string;
+  paletteGroup: BlockPaletteGroup;
+  publicSurface: "allowed" | "refused";
+}>;
+
+export type ComponentDiscoverySlotV2 = Readonly<{
+  key: string;
+  label: string;
+  required: boolean;
+  allowedChildCategories: readonly BlockPaletteGroup[];
+  allowedChildBlocks: readonly ComponentDiscoverySlotChildV2[];
+}>;
+
+export type ComponentDiscoveryProjectionV2 = Readonly<{
+  release: Readonly<{
+    blockId: string;
+    key: string;
+    releaseVersion: string;
+    name: string;
+    icon: string;
+    paletteGroup: BlockPaletteGroup;
+    rendererKey: string;
+    contentFingerprint: string;
+    catalogueFingerprint: string;
+    capabilities: PlatformBlockReleaseV2["capabilities"];
+  }>;
+  propertyControls: readonly ComponentPropertyControlV2[];
+  referenceKinds: readonly ComponentReferenceKindV2[];
+  slots: readonly ComponentDiscoverySlotV2[];
+  stateOperations: readonly ComponentStateOperationV2[];
+}>;
+
+export type PlatformCatalogueDiscoveryProjectionV2 = Readonly<{
+  components: readonly ComponentDiscoveryProjectionV2[];
+  componentsByBlockId: ReadonlyMap<string, ComponentDiscoveryProjectionV2>;
+  componentsByKey: ReadonlyMap<string, ComponentDiscoveryProjectionV2>;
+  compositionPolicy: ApplicationCompositionPolicyV2;
+}>;
+
+export const extractPropertyReferenceKindsV2 = (
+  properties: readonly BlockPropertySchemaV2Contract[],
+): ComponentReferenceKindV2[] => {
+  const result = new Set<ComponentReferenceKindV2>();
+  const scan = (prop: BlockPropertySchemaV2Contract): void => {
+    switch (prop.kind) {
+      case "field_reference":
+      case "relationship_reference":
+      case "action_reference":
+      case "page_reference":
+      case "query_reference":
+      case "pipeline_reference":
+      case "record_type_reference":
+      case "record_reference":
+      case "asset_reference":
+        result.add(prop.kind);
+        break;
+      case "group":
+        for (const child of prop.properties) scan(child);
+        break;
+      case "list":
+        scan(prop.item);
+        break;
+      default:
+        break;
+    }
+  };
+  for (const property of properties) scan(property);
+  return Array.from(result);
+};
+
+export const projectPropertyControlV2 = (
+  schema: BlockPropertySchemaV2Contract,
+): ComponentPropertyControlV2 => {
+  const isReference = (
+    [
+      "field_reference",
+      "relationship_reference",
+      "action_reference",
+      "page_reference",
+      "query_reference",
+      "pipeline_reference",
+      "record_type_reference",
+      "record_reference",
+      "asset_reference",
+    ] as const
+  ).includes(schema.kind as never);
+
+  let controlType: string = schema.kind;
+  switch (schema.kind) {
+    case "text":
+      controlType = schema.maxLength > 120 ? "long_text" : "text";
+      break;
+    case "number":
+      controlType = "number";
+      break;
+    case "boolean":
+      controlType = "switch";
+      break;
+    case "choice":
+      controlType = "choice";
+      break;
+    case "rich_text":
+      controlType = "formatted_text";
+      break;
+    case "theme_token":
+      controlType = "theme_colour";
+      break;
+    case "icon":
+      controlType = "platform_icon";
+      break;
+    case "asset_reference":
+      controlType = "stored_image";
+      break;
+    case "field_reference":
+      controlType = "field_picker";
+      break;
+    case "relationship_reference":
+      controlType = "relationship_picker";
+      break;
+    case "action_reference":
+      controlType = "action_picker";
+      break;
+    case "page_reference":
+      controlType = "page_picker";
+      break;
+    case "query_reference":
+      controlType = "data_reading";
+      break;
+    case "pipeline_reference":
+      controlType = "process_pipeline_picker";
+      break;
+    case "record_type_reference":
+      controlType = "record_type_picker";
+      break;
+    case "record_reference":
+      controlType = "record_picker";
+      break;
+    default:
+      break;
+  }
+
+  type MutablePropertyControl = {
+    key: string;
+    label: string;
+    help?: string | undefined;
+    required: boolean;
+    defaultValue?: BlockPropertyValueV2Contract | undefined;
+    kind: BlockPropertySchemaV2Contract["kind"];
+    controlType: string;
+    isReference: boolean;
+    referenceKind?: ComponentReferenceKindV2 | undefined;
+    textConstraints?: { minLength: number; maxLength: number } | undefined;
+    numberConstraints?:
+      | { integer: boolean; minimum?: number | undefined; maximum?: number | undefined }
+      | undefined;
+    choiceOptions?: readonly { key: string; label: string }[] | undefined;
+    richTextAllowedElements?: readonly string[] | undefined;
+    themeTokenKind?: string | undefined;
+    nestedProperties?: readonly ComponentPropertyControlV2[] | undefined;
+    listItemControl?: ComponentPropertyControlV2 | undefined;
+    listConstraints?: { minimumItems: number; maximumItems: number } | undefined;
+  };
+
+  const base: MutablePropertyControl = {
+    key: schema.key,
+    label: schema.label,
+    help: schema.help,
+    required: schema.required,
+    defaultValue: schema.defaultValue,
+    kind: schema.kind,
+    controlType,
+    isReference,
+    referenceKind: isReference ? (schema.kind as ComponentReferenceKindV2) : undefined,
+  };
+
+  switch (schema.kind) {
+    case "text":
+      base.textConstraints = { minLength: schema.minLength, maxLength: schema.maxLength };
+      break;
+    case "number":
+      base.numberConstraints = {
+        integer: schema.integer,
+        minimum: schema.minimum,
+        maximum: schema.maximum,
+      };
+      break;
+    case "choice":
+      base.choiceOptions = Object.freeze(schema.options.map((opt) => ({ ...opt })));
+      break;
+    case "rich_text":
+      base.richTextAllowedElements = Object.freeze([...schema.allowedElements]);
+      break;
+    case "theme_token":
+      base.themeTokenKind = schema.tokenKind;
+      break;
+    case "group":
+      base.nestedProperties = Object.freeze(schema.properties.map(projectPropertyControlV2));
+      break;
+    case "list":
+      base.listItemControl = projectPropertyControlV2(schema.item);
+      base.listConstraints = {
+        minimumItems: schema.minimumItems,
+        maximumItems: schema.maximumItems,
+      };
+      break;
+    default:
+      break;
+  }
+
+  return Object.freeze(base) as ComponentPropertyControlV2;
+};
+
+export const deriveComponentStateOperationsV2 = (
+  release: PlatformBlockReleaseV2,
+): readonly ComponentStateOperationV2[] => {
+  const operations: ComponentStateOperationV2[] = [];
+  const publicSurface = release.capabilities.publicSurface;
+
+  // 1. Data display components: load, refresh, row_action, selection_changed, sort_changed, page_changed
+  if (
+    release.paletteGroup === "data" ||
+    release.paletteGroup === "record" ||
+    release.paletteGroup === "figures" ||
+    (release.paletteGroup === "content" &&
+      (release.key === "platform.display.text" || release.key === "platform.display.rich_text"))
+  ) {
+    operations.push({
+      key: "load",
+      label: "Load",
+      description: "Triggered when the component loads data",
+      category: "data",
+      publicSurface,
+    });
+    operations.push({
+      key: "refresh",
+      label: "Refresh",
+      description: "Refreshes component data from its source",
+      category: "data",
+      publicSurface,
+    });
+    if (
+      release.key === "platform.display.list" ||
+      release.key === "platform.display.table" ||
+      release.key === "platform.display.record_detail" ||
+      release.key === "platform.display.grouped_data"
+    ) {
+      operations.push({
+        key: "row_action",
+        label: "Row action",
+        description: "Triggered when an action is executed on a row or record",
+        category: "action",
+        publicSurface,
+      });
+    }
+    if (release.key === "platform.display.list" || release.key === "platform.display.table") {
+      operations.push({
+        key: "selection_changed",
+        label: "Selection changed",
+        description: "Fires when user changes row selection",
+        category: "event",
+        publicSurface,
+      });
+      operations.push({
+        key: "page_changed",
+        label: "Page changed",
+        description: "Fires when pagination page changes",
+        category: "event",
+        publicSurface,
+      });
+    }
+    if (release.key === "platform.display.table") {
+      operations.push({
+        key: "sort_changed",
+        label: "Sort changed",
+        description: "Fires when table column sorting changes",
+        category: "event",
+        publicSurface,
+      });
+    }
+  }
+
+  // 2. Form container
+  if (release.key === "platform.form.container") {
+    operations.push(
+      {
+        key: "form_ready",
+        label: "Form ready",
+        description: "Emitted once when the form and its fields mount",
+        category: "form",
+        publicSurface,
+      },
+      {
+        key: "form_submit",
+        label: "Submit form",
+        description: "Submits all collected form field values",
+        category: "form",
+        publicSurface,
+      },
+      {
+        key: "form_reset",
+        label: "Reset form",
+        description: "Resets all form fields to their defaults",
+        category: "form",
+        publicSurface,
+      },
+      {
+        key: "validate",
+        label: "Validate",
+        description: "Validates form fields without submitting",
+        category: "form",
+        publicSurface,
+      },
+    );
+  } else if (
+    release.paletteGroup === "input" &&
+    release.key !== "platform.form.validation_message"
+  ) {
+    // 3. Form input controls
+    operations.push(
+      {
+        key: "field_changed",
+        label: "Field changed",
+        description: "Emitted when the input value changes",
+        category: "event",
+        publicSurface,
+      },
+      {
+        key: "set_value",
+        label: "Set value",
+        description: "Sets the input value programmatically",
+        category: "state",
+        publicSurface,
+      },
+      {
+        key: "clear_value",
+        label: "Clear value",
+        description: "Clears the input value",
+        category: "state",
+        publicSurface,
+      },
+    );
+  }
+
+  // 4. Action button
+  if (release.paletteGroup === "actions" || release.key === "platform.action.button") {
+    operations.push({
+      key: "action",
+      label: "Action",
+      description: "Triggered when user clicks or activates the action",
+      category: "action",
+      publicSurface,
+    });
+  }
+
+  // 5. Layout components (tabs, dialog, drawer)
+  if (release.key === "platform.layout.tabs") {
+    operations.push(
+      {
+        key: "tab_changed",
+        label: "Tab changed",
+        description: "Fires when user switches tabs",
+        category: "navigation",
+        publicSurface,
+      },
+      {
+        key: "select_tab",
+        label: "Select tab",
+        description: "Programmatically selects an active tab",
+        category: "state",
+        publicSurface,
+      },
+    );
+  } else if (release.key === "platform.layout.dialog" || release.key === "platform.layout.drawer") {
+    operations.push(
+      {
+        key: "action",
+        label: "Dismiss / Action",
+        description: "Emitted when dialog/drawer action or dismiss occurs",
+        category: "action",
+        publicSurface,
+      },
+      {
+        key: "open",
+        label: "Open",
+        description: "Opens the dialog or drawer",
+        category: "state",
+        publicSurface,
+      },
+      {
+        key: "close",
+        label: "Close",
+        description: "Closes the dialog or drawer",
+        category: "state",
+        publicSurface,
+      },
+      {
+        key: "toggle",
+        label: "Toggle",
+        description: "Toggles open/closed state",
+        category: "state",
+        publicSurface,
+      },
+    );
+  } else if (operations.length === 0) {
+    // Systematic fallback for any newly added catalogue entry
+    if (release.properties.some((p) => p.key === "open")) {
+      operations.push(
+        {
+          key: "open",
+          label: "Open",
+          description: "Opens the component",
+          category: "state",
+          publicSurface,
+        },
+        {
+          key: "close",
+          label: "Close",
+          description: "Closes the component",
+          category: "state",
+          publicSurface,
+        },
+        {
+          key: "toggle",
+          label: "Toggle",
+          description: "Toggles component state",
+          category: "state",
+          publicSurface,
+        },
+      );
+    }
+  }
+
+  return Object.freeze(operations);
+};
+
+export const projectComponentDiscoveryV2 = (
+  release: PlatformBlockReleaseV2,
+  catalogue: ImmutablePlatformBlockCatalogueV2,
+  options?: { publicSurfaceOnly?: boolean },
+): ComponentDiscoveryProjectionV2 => {
+  const publicSurfaceOnly = options?.publicSurfaceOnly ?? false;
+  const propertyControls = Object.freeze(release.properties.map(projectPropertyControlV2));
+  const referenceKinds = Object.freeze(extractPropertyReferenceKindsV2(release.properties));
+  const allOps = deriveComponentStateOperationsV2(release);
+  const stateOperations = Object.freeze(
+    publicSurfaceOnly
+      ? allOps.filter((op) => op.publicSurface === "allowed")
+      : allOps,
+  );
+
+  const slots = Object.freeze(
+    release.slots.map((slot) => {
+      const allowedCategories = new Set(slot.allowedChildCategories);
+      const childBlocks = catalogue.releases
+        .filter((candidate) => {
+          if (!allowedCategories.has(candidate.paletteGroup)) return false;
+          if (publicSurfaceOnly && candidate.capabilities.publicSurface !== "allowed") return false;
+          return true;
+        })
+        .map((candidate) =>
+          Object.freeze({
+            blockId: candidate.blockId,
+            key: candidate.key,
+            releaseVersion: candidate.releaseVersion,
+            name: candidate.name,
+            icon: candidate.icon,
+            paletteGroup: candidate.paletteGroup,
+            publicSurface: candidate.capabilities.publicSurface,
+          }),
+        );
+
+      return Object.freeze({
+        key: slot.key,
+        label: slot.label,
+        required: slot.required,
+        allowedChildCategories: Object.freeze([...slot.allowedChildCategories]),
+        allowedChildBlocks: Object.freeze(childBlocks),
+      });
+    }),
+  );
+
+  return Object.freeze({
+    release: Object.freeze({
+      blockId: release.blockId,
+      key: release.key,
+      releaseVersion: release.releaseVersion,
+      name: release.name,
+      icon: release.icon,
+      paletteGroup: release.paletteGroup,
+      rendererKey: release.rendererKey,
+      contentFingerprint: release.contentFingerprint,
+      catalogueFingerprint: release.catalogueFingerprint,
+      capabilities: release.capabilities,
+    }),
+    propertyControls,
+    referenceKinds,
+    slots,
+    stateOperations,
+  });
+};
+
+export const projectPlatformCatalogueDiscoveryV2 = (
+  catalogue: ImmutablePlatformBlockCatalogueV2,
+  options?: { publicSurfaceOnly?: boolean },
+): PlatformCatalogueDiscoveryProjectionV2 => {
+  const publicSurfaceOnly = options?.publicSurfaceOnly ?? false;
+  const eligibleReleases = publicSurfaceOnly
+    ? catalogue.releases.filter((r) => r.capabilities.publicSurface === "allowed")
+    : catalogue.releases;
+
+  const components = Object.freeze(
+    eligibleReleases.map((rel) => projectComponentDiscoveryV2(rel, catalogue, options)),
+  );
+  const componentsByBlockId = new Map(components.map((c) => [c.release.blockId, c]));
+  const componentsByKey = new Map(components.map((c) => [c.release.key, c]));
+
+  return Object.freeze({
+    components,
+    componentsByBlockId,
+    componentsByKey,
+    compositionPolicy: catalogue.compositionPolicy,
+  });
+};
+
