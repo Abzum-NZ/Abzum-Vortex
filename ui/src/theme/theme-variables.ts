@@ -1,5 +1,9 @@
 import type { CSSProperties } from "react";
-import type { ApplicationThemeV2, ThemeTokenValueV2 } from "@vortex/contracts";
+import type { ApplicationContentV2 } from "@vortex/contracts";
+
+/** Resolved #594 application theme, as materialised in application content. */
+export type ApplicationThemeV2 = ApplicationContentV2["theme"];
+type ThemeTokenValueV2 = ApplicationThemeV2["tokens"][string];
 
 /** Appearance selection. `system` follows the person's browser colour-scheme preference. */
 export type ThemeMode = "light" | "dark" | "system";

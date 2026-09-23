@@ -8,6 +8,7 @@ import { LAYOUT_ONLY_STYLES_CSS } from "../layout-styles";
  * stop under reduced motion. Application definitions contribute token values only.
  */
 const SHARED_COMPONENT_STYLES_CSS = `
+/* Theme roots: the runtime page or preview canvas, and each placement with declared overrides */
 [data-vortex-theme] {
   --vortex-motion-feedback: 100ms;
   color: var(--vortex-text);

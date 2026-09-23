@@ -2,7 +2,6 @@ import type { CSSProperties, ReactElement, ReactNode } from "react";
 import type {
   ApplicationContentV2,
   ApplicationShellV2,
-  ApplicationThemeV2,
   BlockPlacementV2Contract,
   GuidedFormPageCompositionV2,
   PageCompositionV2,
@@ -12,6 +11,7 @@ import {
   ALL_UI_STYLES_CSS,
   createThemeRootProps,
   resolvePlacementTheme,
+  type ApplicationThemeV2,
   type PlacementThemeScope,
   type ThemeMode,
 } from "./theme";
@@ -483,7 +483,9 @@ export function PlacementRenderer({
       ? undefined
       : parseControlEventHandlers(suppliedControlEvents, currentLocation);
 
-  // Declared theme overrides apply to this placement and its subtree.
+  // Declared theme overrides apply to this placement and its subtree. A re-themed placement is
+  // also a theme root, so its surface, text and typography repaint from its own variables
+  // rather than keeping the values its ancestors computed.
   const placementTheme = resolvePlacementTheme(themeScope, placement.themeOverrides);
 
   // 6. Recursively render declared named child slots in deterministic order
@@ -534,6 +536,7 @@ export function PlacementRenderer({
       data-vortex-block-key={metadata.key}
       data-vortex-breakpoint={breakpoint}
       data-vortex-visible={String(layout.visible)}
+      {...(placementTheme.style === undefined ? {} : { "data-vortex-theme": "" })}
       className={combinedClassName}
       style={combinedStyle}
     >

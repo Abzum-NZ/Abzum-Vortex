@@ -185,11 +185,6 @@ export {
 export {
   ALL_UI_STYLES_CSS,
   createThemeRootProps,
-  generateThemeCssVariables,
-  THEME_VARIABLE_NAMES,
-  type ThemeCssVariables,
   type ThemeMode,
   type ThemeRootProps,
-  type ThemeTokens,
-  type ThemeVariableName,
 } from "./theme";
