@@ -31,6 +31,13 @@ import {
   type DisplayEventsByPlacement,
   type ProjectedDataByPlacement,
 } from "./display/projected-data";
+import {
+  assertControlProjectionKeysArePlacements,
+  parseControlEventHandlers,
+  parseProjectedControlData,
+  type ControlEventsByPlacement,
+  type ProjectedControlDataByPlacement,
+} from "./controls/projected-data";
 
 export type PlacementSlotV2 = ApplicationShellV2["layout"];
 
@@ -354,6 +361,10 @@ export type PlacementRendererProps = Readonly<{
   projectedData?: ProjectedDataByPlacement | undefined;
   /** Semantic callbacks keyed by stable placement identity. */
   displayEvents?: DisplayEventsByPlacement | undefined;
+  /** Permission-projected control data keyed by stable placement identity. */
+  controlData?: ProjectedControlDataByPlacement | undefined;
+  /** Control semantic callbacks keyed by stable placement identity. */
+  controlEvents?: ControlEventsByPlacement | undefined;
 }>;
 
 /**
@@ -371,6 +382,8 @@ export function PlacementRenderer({
   allowEmptyRequiredSlots = false,
   projectedData,
   displayEvents,
+  controlData,
+  controlEvents,
 }: PlacementRendererProps): ReactElement {
   const currentLocation: DefinitionRenderErrorLocation = {
     ...location,
@@ -444,6 +457,20 @@ export function PlacementRenderer({
       ? undefined
       : parseDisplayEventHandlers(suppliedEvents, currentLocation);
 
+  const suppliedControlData = ownPlacementEntry(controlData, placementId);
+  const placementControlData =
+    suppliedControlData === undefined
+      ? undefined
+      : parseProjectedControlData(suppliedControlData, currentLocation);
+  const suppliedControlEvents =
+    availability.availability === "available"
+      ? ownPlacementEntry(controlEvents, placementId)
+      : undefined;
+  const placementControlEvents =
+    suppliedControlEvents === undefined
+      ? undefined
+      : parseControlEventHandlers(suppliedControlEvents, currentLocation);
+
   // 6. Recursively render declared named child slots in deterministic order
   const renderedSlots: Record<string, ReactNode> = {};
   for (const declaredSlot of metadata.slots) {
@@ -460,6 +487,8 @@ export function PlacementRenderer({
           allowEmptyRequiredSlots={allowEmptyRequiredSlots}
           projectedData={projectedData}
           displayEvents={displayEvents}
+          controlData={controlData}
+          controlEvents={controlEvents}
         />
       );
     } else {
@@ -502,6 +531,8 @@ export function PlacementRenderer({
           {...availability}
           {...(placementData === undefined ? {} : { projectedData: placementData })}
           {...(placementEvents === undefined ? {} : { displayEvents: placementEvents })}
+          {...(placementControlData === undefined ? {} : { controlData: placementControlData })}
+          {...(placementControlEvents === undefined ? {} : { controlEvents: placementControlEvents })}
         />
       ) : null}
     </div>
@@ -526,6 +557,10 @@ export type PlacementSlotRendererProps = Readonly<{
   projectedData?: ProjectedDataByPlacement | undefined;
   /** Semantic callbacks keyed by stable placement identity. */
   displayEvents?: DisplayEventsByPlacement | undefined;
+  /** Permission-projected control data keyed by stable placement identity. */
+  controlData?: ProjectedControlDataByPlacement | undefined;
+  /** Control semantic callbacks keyed by stable placement identity. */
+  controlEvents?: ControlEventsByPlacement | undefined;
 }>;
 
 /**
@@ -543,6 +578,8 @@ export function PlacementSlotRenderer({
   allowEmptyRequiredSlots = false,
   projectedData,
   displayEvents,
+  controlData,
+  controlEvents,
 }: PlacementSlotRendererProps): ReactElement {
   const currentLocation: DefinitionRenderErrorLocation = {
     ...location,
@@ -610,6 +647,8 @@ export function PlacementSlotRenderer({
             allowEmptyRequiredSlots={allowEmptyRequiredSlots}
             projectedData={projectedData}
             displayEvents={displayEvents}
+            controlData={controlData}
+            controlEvents={controlEvents}
           />
         );
       })}
@@ -641,6 +680,12 @@ export type PageLayoutRendererProps = Readonly<{
   projectedData?: ProjectedDataByPlacement;
   /** Semantic callbacks keyed by stable placement identity; the renderer never invokes them. */
   displayEvents?: DisplayEventsByPlacement;
+  /**
+   * Permission-projected control data keyed by stable placement identity.
+   */
+  controlData?: ProjectedControlDataByPlacement;
+  /** Control semantic callbacks keyed by stable placement identity. */
+  controlEvents?: ControlEventsByPlacement;
 }>;
 
 /**
@@ -658,6 +703,8 @@ export function PageLayoutRenderer({
   style,
   projectedData,
   displayEvents,
+  controlData,
+  controlEvents,
 }: PageLayoutRendererProps): ReactElement {
   const resolved = resolveRootPlacementSlotWithContext({
     composition,
@@ -687,6 +734,14 @@ export function PageLayoutRenderer({
       location,
     );
 
+  if (controlData !== undefined || controlEvents !== undefined)
+    assertControlProjectionKeysArePlacements(
+      collectPlacementIds(resolved.slot),
+      controlData,
+      controlEvents,
+      location,
+    );
+
   return (
     <PlacementSlotRenderer
       slot={resolved.slot}
@@ -698,6 +753,8 @@ export function PageLayoutRenderer({
       allowEmptyRequiredSlots={resolved.permissionProjected}
       projectedData={projectedData}
       displayEvents={displayEvents}
+      controlData={controlData}
+      controlEvents={controlEvents}
     />
   );
 }

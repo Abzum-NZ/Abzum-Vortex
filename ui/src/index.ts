@@ -109,3 +109,74 @@ export {
   TEXT_BLOCK_RELEASE,
   createDisplayComponentRegistry,
 } from "./display";
+
+// Control Projected Data & Events Contracts
+export {
+  assertControlProjectionKeysArePlacements,
+  CONTROL_EVENT_NAMES,
+  parseControlEventHandlers,
+  parseControlEventsByPlacement,
+  parseProjectedControlData,
+  parseProjectedControlDataByPlacement,
+  type ChoiceOption,
+  type ControlEventHandler,
+  type ControlEventHandlers,
+  type ControlEventsByPlacement,
+  type ControlSemanticEvent,
+  type ControlSemanticEventName,
+  type ProjectedControlData,
+  type ProjectedControlDataByPlacement,
+  type ProjectedControlValueKind,
+  type ProjectedControlValues,
+  type TypedFieldValue,
+} from "./controls";
+
+// Form & Action Control Components
+export {
+  BooleanInput,
+  Button,
+  ChoiceInput,
+  DateInput,
+  Dialog,
+  Drawer,
+  FormContainer,
+  NumberInput,
+  Tabs,
+  TextInput,
+  ValidationMessage,
+  type BooleanInputProps,
+  type ButtonProps,
+  type ChoiceInputProps,
+  type DateInputProps,
+  type DialogProps,
+  type DrawerProps,
+  type FormContainerProps,
+  type NumberInputProps,
+  type TabsProps,
+  type TextInputProps,
+  type ValidationMessageProps,
+} from "./controls";
+
+// Control Registrations & Registry
+export {
+  BOOLEAN_INPUT_BLOCK_RELEASE,
+  BUTTON_BLOCK_RELEASE,
+  CHOICE_INPUT_BLOCK_RELEASE,
+  CONTROL_BLOCK_RELEASES,
+  CONTROL_COMPONENT_REGISTRATIONS,
+  createControlComponentRegistry,
+  DATE_INPUT_BLOCK_RELEASE,
+  DIALOG_BLOCK_RELEASE,
+  DRAWER_BLOCK_RELEASE,
+  FORM_CONTAINER_BLOCK_RELEASE,
+  NUMBER_INPUT_BLOCK_RELEASE,
+  TABS_BLOCK_RELEASE,
+  TEXT_INPUT_BLOCK_RELEASE,
+  VALIDATION_MESSAGE_BLOCK_RELEASE,
+} from "./controls";
+
+// Full Platform Component Registry (Display + Controls)
+export {
+  ALL_PLATFORM_COMPONENT_REGISTRATIONS,
+  createFullPlatformComponentRegistry,
+} from "./combined-registry";
