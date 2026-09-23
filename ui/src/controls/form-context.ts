@@ -1,3 +1,5 @@
+"use client";
+
 import { createContext, useContext, useEffect, useRef } from "react";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import type { TypedFieldValue } from "./projected-data";
