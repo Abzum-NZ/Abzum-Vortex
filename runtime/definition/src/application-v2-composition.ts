@@ -11,15 +11,23 @@ import {
   type ApplicationSourceDocumentV2,
   type BlockPropertySchemaV2Contract,
   type BlockPropertyValueV2Contract,
+  type DefinitionValidationLocation,
   type PlatformBlockReleaseV2,
+  type PlatformId,
   type SourceBlockPropertyValueV2Contract,
 } from "@vortex/contracts";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
 import {
   DefinitionCompilationError,
+  isDefinitionCompilerRefusalCode,
   type DefinitionCompilerRefusalCode,
 } from "./compilation-error";
 import type { ApplicationCompositionResolutionV2 } from "./application-v2-resolution";
+import {
+  createThemeLocation,
+  validateApplicationTheme,
+  type ThemeResolutionOptions,
+} from "@vortex/theme";
 
 type SourceSlot = {
   placements: Record<string, SourcePlacement>;
@@ -49,8 +57,9 @@ export type MaterialisedApplicationCompositionV2 = Readonly<{
 const reject = (
   ruleCode: DefinitionCompilerRefusalCode,
   family: ConstructorParameters<typeof DefinitionCompilationError>[1] = "invalid_value",
+  location?: DefinitionValidationLocation,
 ): never => {
-  throw new DefinitionCompilationError(ruleCode, family);
+  throw new DefinitionCompilationError(ruleCode, family, location);
 };
 
 const requireValue = <Value>(
@@ -82,6 +91,13 @@ const canonicalThemeDependency = (base: ApplicationSourceDocumentV2["body"]["the
 
 const canonicalThemeValue = (value: Record<string, unknown>): unknown => {
   switch (value.kind) {
+    case "color_pair":
+      return {
+        kind: value.kind,
+        light: value.light,
+        dark: value.dark,
+        ...(value.role !== undefined ? { role: value.role } : {}),
+      };
     case "typography":
       return {
         kind: value.kind,
@@ -124,6 +140,27 @@ const validateThemeTokenReferences = (tokens: CanonicalTheme["tokens"]): void =>
     const colour = tokens[token.colorToken];
     if (colour === undefined || colour.kind !== "color_pair")
       reject("vortex.definition.application_block_settings", "broken_reference");
+  }
+};
+
+const validateTheme = (
+  theme: CanonicalTheme,
+  options: ThemeResolutionOptions,
+  scopeSegments?: readonly { kind: "block" | "setting" | "page"; key: string }[],
+): void => {
+  validateThemeTokenReferences(theme.tokens);
+  const result = validateApplicationTheme(theme, options);
+  if (!result.valid) {
+    const first = result.failures[0]!;
+    const ruleCode: DefinitionCompilerRefusalCode = isDefinitionCompilerRefusalCode(first.ruleCode)
+      ? first.ruleCode
+      : "vortex.definition.application_block_settings";
+    const location =
+      first.location ??
+      (options.documentKey !== undefined
+        ? createThemeLocation(options.documentKey, first.tokenKey, scopeSegments)
+        : undefined);
+    reject(ruleCode, first.family, location);
   }
 };
 
@@ -430,11 +467,39 @@ export const materialiseApplicationCompositionV2 = (
       reject("vortex.definition.application_block_settings", "broken_reference");
     tokens[key] = compiled;
   }
+
+  const baseContrastPairs = snapshot.platformTheme.contrastPairs ?? [];
+  const authoredContrastPairs =
+    source.body.theme.contrast_pairs?.map((pair) => ({
+      foregroundToken: pair.foreground_token,
+      backgroundToken: pair.background_token,
+      ...(pair.usage !== undefined ? { usage: pair.usage } : {}),
+      ...(pair.minimum_ratio !== undefined ? { minimumRatio: pair.minimum_ratio } : {}),
+    })) ?? [];
+  const contrastPairs = [...baseContrastPairs, ...authoredContrastPairs];
+
   const theme = applicationThemeV2Schema.parse({
     base: canonicalThemeDependency(source.body.theme.base),
     tokens,
+    ...(contrastPairs.length > 0 ? { contrastPairs } : {}),
   });
-  validateThemeTokenReferences(theme.tokens);
+
+  const approvedAssetIds = new Set<PlatformId>();
+  const publicAssetIds = new Set<PlatformId>();
+  for (const token of Object.values(snapshot.platformTheme.tokens)) {
+    if (token.kind === "asset") {
+      approvedAssetIds.add(token.assetId);
+      publicAssetIds.add(token.assetId);
+    }
+  }
+
+  const themeValidationOptions: ThemeResolutionOptions = {
+    documentKey: source.key,
+    approvedAssetIds,
+    publicAssetIds,
+  };
+
+  validateTheme(theme, themeValidationOptions);
 
   const releaseByIdentity = new Map(
     snapshot.platformBlocks.releases.map((release) => [
@@ -538,8 +603,11 @@ export const materialiseApplicationCompositionV2 = (
       const effectiveTheme = applicationThemeV2Schema.parse({
         base: theme.base,
         tokens: { ...theme.tokens, ...themeOverrides },
+        ...(theme.contrastPairs !== undefined ? { contrastPairs: theme.contrastPairs } : {}),
       });
-      validateThemeTokenReferences(effectiveTheme.tokens);
+      validateTheme(effectiveTheme, themeValidationOptions, [
+        { kind: "block", key: alias },
+      ]);
       const settings = compileSettings(
         authoredPlacement.settings,
         release.properties,

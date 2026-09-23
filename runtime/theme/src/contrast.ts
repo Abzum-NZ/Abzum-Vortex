@@ -97,10 +97,17 @@ export function findThemeSurface(
       return token?.kind === "color_pair" ? [[key, token] as const] : [];
     });
   const exactPriority = ["background", "canvas", "surface", "bg", "page_background", "app_background"];
+  const roleBackgrounds = colorEntries.filter(([, token]) => token.role === "background");
+  const selectedRole =
+    exactPriority.flatMap((candidate) =>
+      roleBackgrounds.filter(([key]) => key.toLowerCase() === candidate),
+    )[0] ?? roleBackgrounds[0];
   const selected =
+    selectedRole ??
     exactPriority.flatMap((candidate) =>
       colorEntries.filter(([key]) => key.toLowerCase() === candidate),
-    )[0] ?? colorEntries.find(([key]) => isBackgroundTokenKey(key));
+    )[0] ??
+    colorEntries.find(([key]) => isBackgroundTokenKey(key));
   if (selected === undefined)
     return {
       light: DEFAULT_LIGHT_SURFACE,
@@ -204,7 +211,11 @@ export function validateThemeContrast(
 
     // A paired foreground is evaluated against its declared companion below. It
     // need not also contrast with the application surface on which it is not used.
-    if (isTextTokenKey(key) && !pairedForegroundKeys.has(key)) {
+    const isForeground =
+      token.role === "foreground" ||
+      (token.role === undefined && isTextTokenKey(key));
+
+    if (isForeground && !pairedForegroundKeys.has(key)) {
       const lightRatio = contrastRatio(token.light, lightSurface, DEFAULT_LIGHT_SURFACE);
       if (lightRatio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST) {
         addFailure({

@@ -3,11 +3,25 @@ import "server-only";
 import {
   resolveTheme,
   resolveThemeTokens,
+  validateApplicationTheme,
   type ApplicationThemeV2,
   type ResolvedTheme,
   type ThemeResolutionOptions,
   type ThemeTokenValueV2,
+  type ThemeValidationResult,
 } from "@vortex/theme";
+
+export { validateApplicationTheme, type ThemeValidationResult };
+
+/**
+ * Validates an application theme and returns a structured ThemeValidationResult.
+ */
+export function validateApplicationThemeDefinition(
+  theme: ApplicationThemeV2,
+  options?: ThemeResolutionOptions | undefined,
+): ThemeValidationResult {
+  return validateApplicationTheme(theme, options);
+}
 
 /**
  * Resolves the deterministic final application theme for runtime and preview.

@@ -66,18 +66,32 @@ export function validateApplicationTheme(
 
   const tokens = parsedTheme.data.tokens;
 
+  const declaredPairs: ContrastPairDeclaration[] = [
+    ...(parsedTheme.data.contrastPairs?.map((pair) => ({
+      foregroundTokenKey: pair.foregroundToken,
+      backgroundTokenKey: pair.backgroundToken,
+      ...(pair.usage !== undefined ? { usage: pair.usage } : {}),
+      ...(pair.minimumRatio !== undefined ? { minimumRatio: pair.minimumRatio } : {}),
+    })) ?? []),
+    ...(options?.contrastPairs ?? []),
+  ];
+  const effectiveOptions: ThemeResolutionOptions = {
+    ...options,
+    contrastPairs: declaredPairs.length > 0 ? declaredPairs : options?.contrastPairs,
+  };
+
   // 2. Validate Contrast
-  const contrastResult = validateThemeContrast(tokens, options);
+  const contrastResult = validateThemeContrast(tokens, effectiveOptions);
   failures.push(...contrastResult.failures);
   ruleFailures.push(...contrastResult.ruleFailures);
 
   // 3. Validate Focus Visibility
-  const focusResult = validateFocusVisibility(tokens, options);
+  const focusResult = validateFocusVisibility(tokens, effectiveOptions);
   failures.push(...focusResult.failures);
   ruleFailures.push(...focusResult.ruleFailures);
 
   // 4. Validate Public Platform Assets
-  const assetResult = validatePublicPlatformAssets(tokens, options);
+  const assetResult = validatePublicPlatformAssets(tokens, effectiveOptions);
   failures.push(...assetResult.failures);
   ruleFailures.push(...assetResult.ruleFailures);
 
@@ -182,6 +196,16 @@ export function resolveTheme(
   return deepFreeze({
     base: structuredClone(canonicalTheme.base),
     tokens: deterministicTokens,
+    ...(canonicalTheme.contrastPairs !== undefined
+      ? {
+          contrastPairs: canonicalTheme.contrastPairs.map((pair) => ({
+            foregroundTokenKey: pair.foregroundToken,
+            backgroundTokenKey: pair.backgroundToken,
+            ...(pair.usage !== undefined ? { usage: pair.usage } : {}),
+            ...(pair.minimumRatio !== undefined ? { minimumRatio: pair.minimumRatio } : {}),
+          })),
+        }
+      : {}),
   });
 }
 

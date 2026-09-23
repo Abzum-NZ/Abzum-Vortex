@@ -268,6 +268,9 @@ importers:
       '@vortex/rule':
         specifier: workspace:*
         version: link:../rule
+      '@vortex/theme':
+        specifier: workspace:*
+        version: link:../theme
       semver:
         specifier: 'catalog:'
         version: 7.8.5
