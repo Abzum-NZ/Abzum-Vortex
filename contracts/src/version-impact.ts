@@ -13,17 +13,14 @@ import {
   fingerprintSchema,
   moduleRootIdSchema,
   platformIdSchema,
-  semanticVersionSchema,
+  stableDefinitionReleaseVersionSchema,
 } from "./identifiers";
 import { moduleContentV3Schema, moduleDraftV3Schema } from "./module-contracts-v3";
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);
 export const applicationVersionImpactPolicyVersionV2 = "2.0.0" as const;
 export const moduleVersionImpactPolicyVersionV3 = "3.0.0" as const;
-export const stableDefinitionReleaseVersionSchema = semanticVersionSchema.refine(
-  (value) => !value.includes("-") && !value.includes("+"),
-  "Published definition versions must be stable major.minor.patch versions",
-);
+export { stableDefinitionReleaseVersionSchema };
 
 export const versionImpactReasonCodes = [
   "definition_text_changed",
