@@ -163,6 +163,26 @@ export {
   type ReleaseCapabilityReservationCommand,
   type ReserveCapabilityCommand,
 } from "./capability-reservation";
+export {
+  flowExecutionBindingAdministratorAuthoritySchema,
+  flowExecutionBindingErrorCodes,
+  FlowExecutionBindingError,
+  flowExecutionBindingMutationResultSchema,
+  flowExecutionBindingReadResultSchema,
+  readFlowExecutionBinding,
+  readFlowExecutionBindingCommandSchema,
+  registerFlowExecutionBinding,
+  registerFlowExecutionBindingCommandSchema,
+  revokeFlowExecutionBinding,
+  revokeFlowExecutionBindingCommandSchema,
+  type FlowExecutionBindingAdministratorAuthority,
+  type FlowExecutionBindingErrorCode,
+  type FlowExecutionBindingMutationResult,
+  type FlowExecutionBindingReadResult,
+  type ReadFlowExecutionBindingCommand,
+  type RegisterFlowExecutionBindingCommand,
+  type RevokeFlowExecutionBindingCommand,
+} from "./flow-execution-bindings";
 
 export const AccessService = Object.freeze({
   key: "access",
