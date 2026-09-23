@@ -7,7 +7,6 @@ import {
   builderKeySchema,
   containedComponentIdSchema,
   correlationIdSchema,
-  flowExecutionBindingReadResultSchema,
   flowExecutionBindingSurfaceSchema,
   flowNodeRunAsSchema,
   organizationAccountIdSchema,
@@ -21,7 +20,6 @@ import {
   timestampSchema,
   workflowNodeIdSchema,
   type CorrelationId,
-  type FlowExecutionBinding,
   type SessionContext,
 } from "@vortex/contracts";
 import {
@@ -30,6 +28,10 @@ import {
   type ResolvedRequestContext,
   type RuntimeDatabaseTransaction,
 } from "@vortex/db";
+import {
+  flowExecutionBindingReadResultSchema,
+  type FlowExecutionBindingReadResult,
+} from "./flow-execution-bindings";
 
 /**
  * #686 resolves one purpose-bound effective actor for a protected flow node, or refuses.
@@ -46,6 +48,10 @@ import {
  * unavailable actor refuses without fallback. `system` is represented by its registered system
  * actor, never by a database service-role credential. Delegation never borrows the initiator's
  * human-only approval or recent-authentication evidence.
+ *
+ * `openFlowEffectiveActorTransaction` repeats every check inside the fresh short transaction from
+ * the binding and actor state Access reads there, so a revocation, replacement, expiry or actor
+ * lifecycle change between planning and use refuses rather than running on an earlier read.
  *
  * Viewer-safe result handoff remains #687; this module does not execute the node, project its
  * result, or create a durable authority of its own.
@@ -85,10 +91,18 @@ export const flowEffectiveActorNodeRequestSchema = z
   .strict();
 
 /**
+ * The effective actor's current lifecycle at use. For a specified person it is the organisation
+ * account's state; for a system actor `active` means a registered, enabled system actor. Anything
+ * other than a confirmed `active` refuses.
+ */
+export const flowEffectiveActorStateSchema = z.enum(["active", "suspended", "closed"]);
+
+/**
  * The trusted per-use inputs the owning flow runtime already resolved: the verified initiator
  * context, the run actor of the preceding node (absent at the flow start), the exact node request,
  * the active #685 binding read result for a delegated node, and the effective actor's current
- * lifecycle state where trusted wiring resolved one.
+ * lifecycle state. None of these come from the browser; the transaction path re-reads the binding
+ * and actor state inside the fresh transaction rather than trusting this planning read.
  */
 export const flowEffectiveActorRequestSchema = z
   .object({
@@ -98,8 +112,8 @@ export const flowEffectiveActorRequestSchema = z
     binding: flowExecutionBindingReadResultSchema.optional(),
     /** The revision the run already holds for this binding; a stale value refuses. */
     expectedBindingRevision: revisionSchema.optional(),
-    /** The effective actor's resolved account state; `suspended` and `closed` refuse. */
-    effectiveActorState: z.enum(["active", "suspended", "closed"]).optional(),
+    /** The effective actor's resolved state; anything but a confirmed `active` refuses. */
+    effectiveActorState: flowEffectiveActorStateSchema.optional(),
   })
   .strict();
 
@@ -228,7 +242,8 @@ export const flowEffectiveActorResolutionSchema = z.discriminatedUnion("outcome"
 
 export type FlowEffectiveActorRunActor = z.infer<typeof flowEffectiveActorRunActorSchema>;
 export type FlowEffectiveActorNodeRequest = z.infer<typeof flowEffectiveActorNodeRequestSchema>;
-export type FlowEffectiveActorRequest = z.infer<typeof flowEffectiveActorRequestSchema>;
+export type FlowEffectiveActorRequest = z.input<typeof flowEffectiveActorRequestSchema>;
+export type FlowEffectiveActorState = z.infer<typeof flowEffectiveActorStateSchema>;
 export type FlowEffectiveActorRefusalReason = z.infer<
   typeof flowEffectiveActorRefusalReasonSchema
 >;
@@ -287,49 +302,16 @@ const initiatorIdentityOf = (
   return undefined;
 };
 
-/** The run actor identity a resolved node would produce, for change detection across a run. */
-const resolvedRunActor = (
-  node: FlowEffectiveActorNodeRequest,
-  initiator: SessionContext,
-  binding: FlowExecutionBinding | undefined,
-): FlowEffectiveActorRunActor | undefined => {
-  if (node.runAs.kind === "current_user")
-    return initiator.callerKind === "human" || initiator.callerKind === "federated"
-      ? { kind: "current_user" }
-      : undefined;
-  if (node.runAs.kind === "specified_user" && binding?.actor.kind === "specified_user")
-    return { kind: "specified_user", organizationAccountId: binding.actor.organizationAccountId };
-  if (node.runAs.kind === "system" && binding?.actor.kind === "system")
-    return { kind: "system", systemActorId: binding.actor.systemActorId };
-  return undefined;
-};
-
-const sameRunActor = (
-  left: FlowEffectiveActorRunActor | undefined,
-  right: FlowEffectiveActorRunActor | undefined,
-): boolean => {
-  if (left === undefined || right === undefined) return left === right;
-  if (left.kind !== right.kind) return false;
-  if (left.kind === "specified_user" && right.kind === "specified_user")
-    return sameId(left.organizationAccountId, right.organizationAccountId);
-  if (left.kind === "system" && right.kind === "system")
-    return sameId(left.systemActorId, right.systemActorId);
-  return true;
-};
-
 /**
  * Whether the effective actor's own closed context must be established in a fresh, separately
- * Access-resolved short transaction: it does whenever the node's actor is not the actor already
- * active for this run. The first node of a run at the initiator already runs in the initiator's
- * transaction, so its `currentActor` is absent and `current_user` needs no new transaction.
+ * Access-resolved short transaction. Every delegated node does: each execution binding is exact to
+ * one node, so its authority is never inherited from a preceding transaction, even one that ran as
+ * the same actor. `current_user` needs one only when the run's preceding protected node ran under
+ * another actor; the first node of a run already runs in the initiator's own transaction.
  */
-const actorChanged = (
+const currentUserNeedsFreshTransaction = (
   currentActor: FlowEffectiveActorRunActor | undefined,
-  nextActor: FlowEffectiveActorRunActor | undefined,
-): boolean => {
-  if (currentActor === undefined && nextActor?.kind === "current_user") return false;
-  return !sameRunActor(currentActor, nextActor);
-};
+): boolean => currentActor !== undefined && currentActor.kind !== "current_user";
 
 /**
  * Resolves one purpose-bound effective actor for a protected flow node, or a safe refusal. The
@@ -365,13 +347,20 @@ export const resolveFlowEffectiveActor = (
 
   const initiatorIdentity = initiatorIdentityOf(initiator);
   if (initiatorIdentity === undefined) return refuse("initiator_unavailable");
-  if (!sameId(initiator.organizationId, node.organizationId))
+  if (
+    !sameId(initiator.organizationId, node.organizationId) ||
+    (initiator.applicationRootId !== undefined &&
+      !sameId(initiator.applicationRootId, node.applicationRootId))
+  )
     return refuse("invoker_not_permitted");
+  // A node supplies only inputs its published operation declares.
+  if (node.inputKeys.some((key) => !Object.hasOwn(node.operation.inputs, key)))
+    return refuse("input_not_permitted");
 
-  // The original initiator is always the current user; never the preceding overridden actor.
+  // The original initiator is always the current user; never the preceding overridden actor. A
+  // system-started flow has no human initiator, so Current user cannot invent one.
   if (node.runAs.kind === "current_user") {
-    const effective = resolvedRunActor(node, initiator, undefined);
-    if (initiatorIdentity.kind !== "organization_account" || effective === undefined)
+    if (initiatorIdentity.kind !== "organization_account")
       return refuse("current_user_unavailable");
     return {
       outcome: "effective",
@@ -383,10 +372,21 @@ export const resolveFlowEffectiveActor = (
         actorKind: "organization_account",
         actorId: initiatorIdentity.organizationAccountId,
       },
-      requiresFreshTransaction: actorChanged(currentActor, effective),
+      requiresFreshTransaction: currentUserNeedsFreshTransaction(currentActor),
       permittedInputs: [...node.inputKeys],
     };
   }
+
+  // Execution delegation is invoked by the verified person or system origin itself. A context that
+  // is already borrowed through role-management delegation or support access cannot stack another
+  // identity's authority on top of it.
+  if (
+    initiator.callerKind === "human" &&
+    (initiator.delegatedContext !== undefined || initiator.supportContext !== undefined)
+  )
+    return refuse("invoker_not_permitted");
+  if (initiator.callerKind === "system" && initiator.supportContext !== undefined)
+    return refuse("invoker_not_permitted");
 
   if (binding === undefined) return refuse("binding_required");
   if (binding.outcome !== "available") return refuse("binding_unavailable");
@@ -411,15 +411,10 @@ export const resolveFlowEffectiveActor = (
   )
     return refuse("binding_scope_mismatch");
 
-  const expectedActorKind = node.runAs.kind === "specified_user" ? "specified_user" : "system";
-  if (stored.actor.kind !== expectedActorKind) return refuse("actor_kind_mismatch");
-  // A specified person must be confirmed active at use; the system-actor registry is still pending
-  // (#685), so only an explicit non-active state refuses a system actor here.
-  if (stored.actor.kind === "specified_user") {
-    if (effectiveActorState !== "active") return refuse("actor_unavailable");
-  } else if (effectiveActorState !== undefined && effectiveActorState !== "active") {
-    return refuse("actor_unavailable");
-  }
+  if (stored.actor.kind !== node.runAs.kind) return refuse("actor_kind_mismatch");
+  // Both a specified person and a registered system actor must be confirmed active at use; an
+  // unknown state is unavailable, never an implicit pass.
+  if (effectiveActorState !== "active") return refuse("actor_unavailable");
 
   // A human-only approval (a required confirmation) is never satisfied by delegated execution.
   if (node.operation.confirmation === "required") return refuse("operation_non_delegable");
@@ -437,9 +432,6 @@ export const resolveFlowEffectiveActor = (
             sameId(invoker.organizationAccountId, initiatorIdentity.organizationAccountId),
         );
   if (!permittedInvoker) return refuse("invoker_not_permitted");
-
-  const effective = resolvedRunActor(node, initiator, stored);
-  if (effective === undefined) return refuse("actor_kind_mismatch");
 
   const effectiveActor: FlowEffectiveActorIdentity =
     stored.actor.kind === "specified_user"
@@ -472,8 +464,8 @@ export const resolveFlowEffectiveActor = (
     initiator: initiatorIdentity,
     correlationId: initiator.correlationId,
     activity,
-    requiresFreshTransaction: actorChanged(currentActor, effective),
-    permittedInputs: [...stored.permittedInputs],
+    requiresFreshTransaction: true,
+    permittedInputs: [...node.inputKeys],
     executionBinding: {
       executionBindingId: stored.executionBindingId,
       revision: stored.revision,
@@ -487,6 +479,7 @@ export const resolveFlowEffectiveActor = (
 export const flowEffectiveActorErrorCodes = [
   "FLOW_EFFECTIVE_ACTOR_REFUSED",
   "FLOW_EFFECTIVE_ACTOR_TRANSACTION_NOT_REQUIRED",
+  "FLOW_EFFECTIVE_ACTOR_CONTEXT_MISMATCH",
 ] as const;
 
 export type FlowEffectiveActorErrorCode = (typeof flowEffectiveActorErrorCodes)[number];
@@ -501,11 +494,33 @@ export class FlowEffectiveActorError extends Error {
   }
 }
 
+export type FlowEffectiveActorEffectiveResolution = Extract<
+  FlowEffectiveActorResolution,
+  { outcome: "effective" }
+>;
+
+/** The execution binding and effective-actor lifecycle Access reads inside the fresh transaction. */
+export type FlowEffectiveActorCurrentAuthority = Readonly<{
+  binding: FlowExecutionBindingReadResult;
+  effectiveActorState: FlowEffectiveActorState;
+}>;
+
+/**
+ * Trusted Access wiring reads the node's current execution binding and the effective actor's
+ * current lifecycle inside the fresh transaction, from storage and never from the run's earlier
+ * read. It must hold the binding row for the rest of that short transaction (a share lock), so a
+ * concurrent revoke or replace either commits first and is seen here or waits for this use.
+ */
+export type FlowEffectiveActorAuthorityReader = (
+  transaction: RuntimeDatabaseTransaction,
+  resolution: FlowEffectiveActorEffectiveResolution,
+) => Promise<FlowEffectiveActorCurrentAuthority>;
+
 /**
  * Trusted wiring resolves the effective actor's complete closed organisation scope inside the new
  * transaction. It must derive the identity from the actor reference and the database, never from a
  * caller-supplied context; a system actor is established as its registered system actor, never as
- * a database service role.
+ * a database service role, and a specified person's context carries no authentication evidence.
  */
 export type FlowEffectiveActorScopeResolver<Scope> = (
   transaction: RuntimeDatabaseTransaction,
@@ -517,23 +532,143 @@ export type FlowEffectiveActorTransactionRunner = <Scope, Result>(
   operation: (transaction: RequestDatabaseTransaction, scope: Scope) => Promise<Result>,
 ) => Promise<Result>;
 
+export type FlowEffectiveActorTransactionAccess<Scope> = Readonly<{
+  readCurrentAuthority: FlowEffectiveActorAuthorityReader;
+  resolveScope: FlowEffectiveActorScopeResolver<Scope>;
+}>;
+
+export type FlowEffectiveActorTransactionDependencies = Readonly<{
+  clock?: () => Date;
+  runner?: FlowEffectiveActorTransactionRunner;
+}>;
+
+/** The planned and current resolutions name the same actor under the same binding revision. */
+const sameResolvedActor = (
+  planned: FlowEffectiveActorEffectiveResolution,
+  current: FlowEffectiveActorEffectiveResolution,
+): boolean => {
+  const left = planned.effectiveActor;
+  const right = current.effectiveActor;
+  const sameBinding =
+    sameId(
+      planned.executionBinding?.executionBindingId,
+      current.executionBinding?.executionBindingId,
+    ) && planned.executionBinding?.revision === current.executionBinding?.revision;
+  if (left.kind === "specified_user" && right.kind === "specified_user")
+    return sameBinding && sameId(left.organizationAccountId, right.organizationAccountId);
+  if (left.kind === "system" && right.kind === "system")
+    return sameBinding && sameId(left.systemActorId, right.systemActorId);
+  return left.kind === "current_user" && right.kind === "current_user";
+};
+
 /**
- * Establishes the fresh, short Access-resolved transaction for the effective actor of one resolved
+ * The context Access resolved for the fresh transaction must be exactly the purpose-bound
+ * effective actor, in the purpose's organisation and application, carrying the run's correlation.
+ * A delegated person's context never carries borrowed authentication, delegation or support
+ * evidence; the current user's context is the original initiator's own account.
+ */
+const contextRepresents = (
+  context: SessionContext,
+  resolution: FlowEffectiveActorEffectiveResolution,
+  initiator: SessionContext,
+): boolean => {
+  if (
+    !sameId(context.organizationId, resolution.purpose.organizationId) ||
+    (context.applicationRootId !== undefined &&
+      !sameId(context.applicationRootId, resolution.purpose.applicationRootId)) ||
+    !sameId(context.correlationId, resolution.correlationId)
+  )
+    return false;
+  const actor = resolution.effectiveActor;
+  if (actor.kind === "system")
+    return (
+      context.callerKind === "system" &&
+      context.supportContext === undefined &&
+      sameId(context.systemActorId, actor.systemActorId)
+    );
+  if (actor.kind === "specified_user")
+    return (
+      context.callerKind === "human" &&
+      sameId(context.organizationAccountId, actor.organizationAccountId) &&
+      context.authenticationStrength !== "recent_multi_factor" &&
+      context.accessTokenIssuedAt === undefined &&
+      context.primaryAuthenticatedAt === undefined &&
+      context.multiFactorAuthenticatedAt === undefined &&
+      context.delegatedContext === undefined &&
+      context.supportContext === undefined
+    );
+  return (
+    (context.callerKind === "human" || context.callerKind === "federated") &&
+    (initiator.callerKind === "human" || initiator.callerKind === "federated") &&
+    context.callerKind === initiator.callerKind &&
+    sameId(context.identityId, initiator.identityId) &&
+    sameId(context.organizationAccountId, initiator.organizationAccountId)
+  );
+};
+
+/**
+ * Establishes the fresh, short Access-resolved transaction for the effective actor of one
  * protected node and runs its protected operation inside it. It refuses to reuse an existing
- * transaction: a caller must pass a resolution whose `requiresFreshTransaction` is set, so an
- * identity-changing node can never mutate or upgrade the preceding human transaction.
+ * transaction: the request must resolve with `requiresFreshTransaction`, so an identity-changing
+ * node can never mutate or upgrade the preceding human transaction.
+ *
+ * Inside the new transaction, and before the operation runs, a delegated node's binding and
+ * effective actor are re-read by Access and every check is repeated against that current state. A
+ * binding revoked, replaced, expired or re-scoped since planning, or an actor no longer active,
+ * refuses without fallback. The resolved context must then be exactly the effective actor; the
+ * operation receives the resolution confirmed in its own transaction.
  */
 export const openFlowEffectiveActorTransaction = async <Scope, Result>(
-  resolution: FlowEffectiveActorResolution,
-  resolveScope: FlowEffectiveActorScopeResolver<Scope>,
-  operation: (transaction: RequestDatabaseTransaction, scope: Scope) => Promise<Result>,
-  dependencies: Readonly<{ runner?: FlowEffectiveActorTransactionRunner }> = {},
+  request: FlowEffectiveActorRequest,
+  access: FlowEffectiveActorTransactionAccess<Scope>,
+  operation: (
+    transaction: RequestDatabaseTransaction,
+    scope: Scope,
+    resolution: FlowEffectiveActorEffectiveResolution,
+  ) => Promise<Result>,
+  dependencies: FlowEffectiveActorTransactionDependencies = {},
 ): Promise<Result> => {
-  if (resolution.outcome !== "effective")
+  const resolverDependencies: FlowEffectiveActorDependencies =
+    dependencies.clock === undefined ? {} : { clock: dependencies.clock };
+  const planned = resolveFlowEffectiveActor(request, resolverDependencies);
+  if (planned.outcome !== "effective")
     throw new FlowEffectiveActorError("FLOW_EFFECTIVE_ACTOR_REFUSED");
-  if (!resolution.requiresFreshTransaction)
+  if (!planned.requiresFreshTransaction)
     throw new FlowEffectiveActorError("FLOW_EFFECTIVE_ACTOR_TRANSACTION_NOT_REQUIRED");
+  const initiator = sessionContextSchema.parse(request.initiator);
   const runner: FlowEffectiveActorTransactionRunner =
     dependencies.runner ?? withResolvedRequestTransaction;
-  return runner((transaction) => resolveScope(transaction, resolution.effectiveActor), operation);
+
+  let confirmed: FlowEffectiveActorEffectiveResolution | undefined;
+  return runner(
+    async (transaction) => {
+      let current: FlowEffectiveActorResolution = planned;
+      if (planned.effectiveActor.kind !== "current_user") {
+        const authority = await access.readCurrentAuthority(transaction, planned);
+        current = resolveFlowEffectiveActor(
+          {
+            ...request,
+            binding: authority.binding,
+            effectiveActorState: authority.effectiveActorState,
+            ...(planned.executionBinding === undefined
+              ? {}
+              : { expectedBindingRevision: planned.executionBinding.revision }),
+          },
+          resolverDependencies,
+        );
+      }
+      if (current.outcome !== "effective" || !sameResolvedActor(planned, current))
+        throw new FlowEffectiveActorError("FLOW_EFFECTIVE_ACTOR_REFUSED");
+      const resolved = await access.resolveScope(transaction, current.effectiveActor);
+      if (!contextRepresents(resolved.context, current, initiator))
+        throw new FlowEffectiveActorError("FLOW_EFFECTIVE_ACTOR_CONTEXT_MISMATCH");
+      confirmed = current;
+      return resolved;
+    },
+    async (transaction, scope) => {
+      if (confirmed === undefined)
+        throw new FlowEffectiveActorError("FLOW_EFFECTIVE_ACTOR_REFUSED");
+      return operation(transaction, scope, confirmed);
+    },
+  );
 };
