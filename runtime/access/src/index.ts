@@ -205,6 +205,7 @@ export {
   flowEffectiveActorRunActorSchema,
   flowEffectiveActorStateSchema,
   openFlowEffectiveActorTransaction,
+  readFlowEffectiveActorCurrentAuthority,
   resolveFlowEffectiveActor,
   type FlowEffectiveActorAuthorityReader,
   type FlowEffectiveActorCurrentAuthority,
