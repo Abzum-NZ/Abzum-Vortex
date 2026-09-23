@@ -12,6 +12,10 @@ import type {
   DisplayEventHandlers,
   ProjectedDisplayData,
 } from "./display/projected-data";
+import type {
+  ControlEventHandlers,
+  ProjectedControlData,
+} from "./controls/projected-data";
 
 /**
  * Properties passed to a platform block's React renderer.
@@ -27,6 +31,8 @@ export type PlatformBlockRenderProps = Readonly<{
   unavailableReason?: "operation_unavailable";
   projectedData?: ProjectedDisplayData;
   displayEvents?: DisplayEventHandlers;
+  controlData?: ProjectedControlData;
+  controlEvents?: ControlEventHandlers;
 }>;
 
 /**
