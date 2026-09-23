@@ -184,9 +184,11 @@ export {
   type RevokeFlowExecutionBindingCommand,
 } from "./flow-execution-bindings";
 export {
+  meteringEventErrorCodes,
   meteringEventRecordResultSchema,
   recordMeteringEvent,
   type MeteringEvent,
+  type MeteringEventErrorCode,
   type MeteringEventRecordResult,
   type RecordMeteringEventCommand,
 } from "./metering-events";

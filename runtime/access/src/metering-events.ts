@@ -24,24 +24,18 @@ export type MeteringEventRecordResult = z.infer<typeof meteringEventRecordResult
 
 type ResultRow = DatabaseRow & { result: unknown };
 
-const quantityKeys = new Set(["quantity"]);
-
-const quantity = (value: unknown): unknown => {
-  if (typeof value === "number") return value;
-  if (typeof value !== "string") return value;
-  const parsed = Number(value.trim());
-  return Number.isFinite(parsed) && Math.abs(parsed) <= Number.MAX_SAFE_INTEGER ? parsed : value;
-};
-
+// Only the event's own quantity is a numeric fact; dimension values are returned
+// exactly as stored, even when a dimension happens to be named `quantity`.
 const normalizeStoredResult = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(normalizeStoredResult);
   if (typeof value !== "object" || value === null) return value;
-  return Object.fromEntries(
-    Object.entries(value).map(([key, entry]) => [
-      key,
-      quantityKeys.has(key) ? quantity(entry) : normalizeStoredResult(entry),
-    ]),
-  );
+  const event = (value as { readonly event?: unknown }).event;
+  if (typeof event !== "object" || event === null) return value;
+  const quantity = (event as { readonly quantity?: unknown }).quantity;
+  if (typeof quantity !== "string") return value;
+  const parsed = Number(quantity.trim());
+  return Number.isFinite(parsed) && Math.abs(parsed) <= Number.MAX_SAFE_INTEGER
+    ? { ...value, event: { ...event, quantity: parsed } }
+    : value;
 };
 
 const parseResult = <Result>(
@@ -60,18 +54,27 @@ const databaseCode = (error: unknown): string | undefined =>
     ? String((error as { readonly code?: unknown }).code)
     : undefined;
 
-const runCommand = async <Result>(
-  operation: () => Promise<readonly ResultRow[]>,
-  schema: z.ZodType<Result>,
-  conflictCode: string,
-  unavailableCode: string,
-): Promise<Result> => {
-  try {
-    return parseResult(await operation(), schema, unavailableCode);
-  } catch (error) {
-    if (error instanceof Error && error.message === unavailableCode) throw error;
-    if (databaseCode(error) === "V3001") throw new Error(conflictCode);
-    throw new Error(unavailableCode);
+/** Stable safe failures; database detail never crosses this boundary. */
+export const meteringEventErrorCodes = Object.freeze({
+  invalid: "METERING_EVENT_COMMAND_INVALID",
+  conflict: "METERING_EVENT_CONFLICTS",
+  scopeUnavailable: "METERING_EVENT_SCOPE_UNAVAILABLE",
+  unavailable: "METERING_EVENT_UNAVAILABLE",
+} as const);
+
+export type MeteringEventErrorCode =
+  (typeof meteringEventErrorCodes)[keyof typeof meteringEventErrorCodes];
+
+const failureFor = (error: unknown): MeteringEventErrorCode => {
+  switch (databaseCode(error)) {
+    case "V3001":
+      return meteringEventErrorCodes.conflict;
+    case "22023":
+      return meteringEventErrorCodes.invalid;
+    case "42501":
+      return meteringEventErrorCodes.scopeUnavailable;
+    default:
+      return meteringEventErrorCodes.unavailable;
   }
 };
 
@@ -85,10 +88,11 @@ export const recordMeteringEvent = async (
   commandCandidate: RecordMeteringEventCommand,
 ): Promise<MeteringEventRecordResult> => {
   const command = recordMeteringEventCommandSchema.safeParse(commandCandidate);
-  if (!command.success) throw new Error("METERING_EVENT_COMMAND_INVALID");
+  if (!command.success) throw new Error(meteringEventErrorCodes.invalid);
   const value = command.data;
-  return runCommand(
-    () => transaction.query<ResultRow>`
+  let rows: readonly ResultRow[];
+  try {
+    rows = await transaction.query<ResultRow>`
       select result from vortex_access.record_metering_event(
         ${value.tenantId}::uuid,
         ${value.organizationId ?? null}::uuid,
@@ -103,13 +107,14 @@ export const recordMeteringEvent = async (
         ${value.sourceEventId ?? null}::uuid,
         ${value.duplicateProtectionKey}::text,
         ${value.correlationId}::uuid,
-        ${value.correctsMeteringEventId ?? null}::uuid
+        ${value.correctsMeteringEventId ?? null}::uuid,
+        ${value.correctionDirection ?? null}::text
       )
-    `,
-    meteringEventRecordResultSchema,
-    "METERING_EVENT_DUPLICATE_CONFLICTS",
-    "METERING_EVENT_UNAVAILABLE",
-  );
+    `;
+  } catch (error) {
+    throw new Error(failureFor(error));
+  }
+  return parseResult(rows, meteringEventRecordResultSchema, meteringEventErrorCodes.unavailable);
 };
 
 /** Re-exported so callers can name the output without reaching past this boundary. */
