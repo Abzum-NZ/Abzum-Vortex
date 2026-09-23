@@ -169,7 +169,6 @@ export const createStoredPageCapabilityService = (
         !sameUuid(candidate.applicationRootId, applicationRootId)
       )
         return { kind: "unavailable" as const };
-      const fixed = await load();
       return createAuthenticatedPageCapabilityService({
         ...dependencies,
         correlationId: () => dependencies.systemContext.correlationId,
@@ -181,7 +180,7 @@ export const createStoredPageCapabilityService = (
               !sameUuid(scope.applicationRootId, applicationRootId)
             )
               throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
-            return fixed;
+            return load();
           },
         },
       }).project(session, candidate, undefined);
