@@ -155,6 +155,18 @@ const validateAcknowledgementInput = (
   return input;
 };
 
+/**
+ * Storage orders claimed occurrences by microsecond `occurred_at`; `Date.parse`
+ * keeps only milliseconds, so compare the exact instant including microseconds.
+ */
+const occurredAtMicros = (value: string): bigint | undefined => {
+  const match = /^(.*T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (match === null) return undefined;
+  const wholeSeconds = Date.parse(`${match[1]}${match[3]}`);
+  if (!Number.isFinite(wholeSeconds)) return undefined;
+  return BigInt(wholeSeconds) * 1_000n + BigInt((match[2] ?? "").padEnd(6, "0"));
+};
+
 const parseClaimResult = (
   candidate: unknown,
   maximumOccurrenceCount: number,
@@ -196,11 +208,14 @@ const parseClaimResult = (
     parsedOccurrences.some((item, index) => {
       const previous = parsedOccurrences[index - 1];
       if (previous === undefined) return false;
-      const timeOrder =
-        Date.parse(previous.occurrence.occurredAt) - Date.parse(item.occurrence.occurredAt);
+      const previousMicros = occurredAtMicros(previous.occurrence.occurredAt);
+      const itemMicros = occurredAtMicros(item.occurrence.occurredAt);
       return (
-        timeOrder > 0 ||
-        (timeOrder === 0 && previous.occurrence.occurrenceId >= item.occurrence.occurrenceId)
+        previousMicros === undefined ||
+        itemMicros === undefined ||
+        previousMicros > itemMicros ||
+        (previousMicros === itemMicros &&
+          previous.occurrence.occurrenceId >= item.occurrence.occurrenceId)
       );
     })
   )

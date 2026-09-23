@@ -39,7 +39,6 @@ import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
 import {
   hasAuthenticResolutionFingerprint,
   hasAuthenticStoredCustomerDefinitionRelease,
-  releaseManifestMatchesCanonicalContent,
   sameCanonicalJson,
 } from "./definition-release-integrity";
 import {
@@ -261,10 +260,37 @@ const parseOneRow = <Value>(rows: readonly DatabaseRow[], schema: z.ZodType<Valu
   return result.data;
 };
 
+/**
+ * Publication history and Module release readers return only the Module
+ * dependency references of each stored release (no theme, block or connection
+ * entries), so preparation compares exactly those Module references. The full
+ * manifest check belongs to consumer reads, which receive the full manifest.
+ */
 const dependencyReferencesMatch = (
   output: Exclude<z.infer<typeof definitionCompilationOutputSchema>, { kind: "connection_type" }>,
-  references: Parameters<typeof releaseManifestMatchesCanonicalContent>[1],
-): boolean => releaseManifestMatchesCanonicalContent(output, references);
+  references: readonly { readonly kind: string }[],
+): boolean => {
+  const dependencies =
+    output.kind === "module"
+      ? output.canonical.content.dependencies
+      : output.canonical.content.moduleBindings;
+  const moduleReferences = references.filter(
+    (reference): reference is { kind: "module"; rootId: string; releaseVersion: string } =>
+      reference.kind === "module",
+  );
+  const expected = new Set(
+    dependencies.map((dependency) => `${dependency.moduleRootId}:${dependency.resolvedVersion}`),
+  );
+  const actual = new Set(
+    moduleReferences.map((reference) => `${reference.rootId}:${reference.releaseVersion}`),
+  );
+  return (
+    expected.size === dependencies.length &&
+    actual.size === moduleReferences.length &&
+    expected.size === actual.size &&
+    [...expected].every((reference) => actual.has(reference))
+  );
+};
 
 const currentIdentityLookupMatches = (
   source: StoredDefinitionSource,
