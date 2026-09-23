@@ -1,21 +1,39 @@
-import type { ReactElement } from "react";
+import { createContext, useContext, type ReactElement } from "react";
 import { safeHttpsUrlSchema } from "@vortex/contracts";
 import { DefinitionRenderError } from "../definition-error";
 import type { DisplayCellValue } from "./projected-data";
 import { RichTextDocumentView, richTextToPlainText } from "./rich-text";
 
+export type DateFormatOptions = Readonly<{
+  locale?: string;
+  timeZone?: string;
+}>;
+
+export const DateFormatContext = createContext<DateFormatOptions>({});
+
+export const useDateFormat = (): DateFormatOptions => useContext(DateFormatContext);
+
 /**
  * Formats a validated ISO calendar date or offset timestamp for presentation.
  * A calendar date carries no time zone, so it is formatted in UTC to avoid shifting its day.
+ * When options or DateFormatContext supply a locale or time zone, formatting respects them,
+ * giving consistent server and browser output.
  */
-export function formatIsoDate(iso: string): string {
+export function formatIsoDate(iso: string, options?: DateFormatOptions): string {
   const timestamp = Date.parse(iso);
   if (Number.isNaN(timestamp)) return iso;
-  return new Date(timestamp).toLocaleDateString("en-US", {
+  const locale = options?.locale ?? "en-US";
+  const timeZoneOptions =
+    iso.length === 10
+      ? { timeZone: "UTC" }
+      : options?.timeZone !== undefined
+        ? { timeZone: options.timeZone }
+        : {};
+  return new Date(timestamp).toLocaleDateString(locale, {
     year: "numeric",
     month: "short",
     day: "numeric",
-    ...(iso.length === 10 ? { timeZone: "UTC" } : {}),
+    ...timeZoneOptions,
   });
 }
 
@@ -23,7 +41,7 @@ export function formatIsoDate(iso: string): string {
  * Extracts a plain text representation from any display cell value.
  * Useful for accessible names, aria-labels and tooltips.
  */
-export function cellValueToText(value: DisplayCellValue): string {
+export function cellValueToText(value: DisplayCellValue, options?: DateFormatOptions): string {
   switch (value.kind) {
     case "text":
       return value.text;
@@ -32,7 +50,7 @@ export function cellValueToText(value: DisplayCellValue): string {
     case "boolean":
       return value.value ? "Yes" : "No";
     case "date":
-      return formatIsoDate(value.iso);
+      return formatIsoDate(value.iso, options);
     case "choice":
       return value.label;
     case "link":
@@ -51,6 +69,7 @@ export function cellValueToText(value: DisplayCellValue): string {
 export function DisplayCellView({
   value,
 }: Readonly<{ value: DisplayCellValue }>): ReactElement {
+  const dateFormat = useDateFormat();
   switch (value.kind) {
     case "text":
       return <span className="vortex-cell-text">{value.text}</span>;
@@ -69,7 +88,7 @@ export function DisplayCellView({
     case "date":
       return (
         <time className="vortex-cell-date" dateTime={value.iso}>
-          {formatIsoDate(value.iso)}
+          {formatIsoDate(value.iso, dateFormat)}
         </time>
       );
     case "choice":

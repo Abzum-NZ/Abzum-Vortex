@@ -31,6 +31,7 @@ import {
   LAYOUT_CLASS_NAMES,
 } from "./layout-styles";
 import type { PlatformComponentRegistry } from "./registry";
+import { DateFormatContext } from "./display/cell";
 import {
   assertProjectionKeysArePlacements,
   parseDisplayEventHandlers,
@@ -424,19 +425,6 @@ export function PlacementRenderer({
 
   const { metadata, render: Component } = registration;
 
-  const singlePlacementSlot: PlacementSlotV2 = {
-    placements: { [placementId]: placement },
-    order: {
-      desktop: [placementId],
-      tablet: [placementId],
-      phone: [placementId],
-    },
-  };
-  validatePlacementTree(singlePlacementSlot, registry, currentLocation, {
-    allowEmptyRequiredSlots,
-  });
-  validateProjectedAvailabilityTree(singlePlacementSlot, currentLocation);
-
   // 2. Validate renderer key
   if (!metadata.rendererKey || metadata.rendererKey.trim().length === 0 || !Component) {
     throw new DefinitionRenderError(
@@ -611,9 +599,6 @@ export function PlacementSlotRenderer({
     breakpoint,
   };
 
-  validatePlacementTree(slot, registry, currentLocation, { allowEmptyRequiredSlots });
-  validateProjectedAvailabilityTree(slot, currentLocation);
-
   // Validate deterministic child ordering
   const orderedIds = validateSlotOrder(slot, breakpoint, currentLocation);
 
@@ -717,6 +702,10 @@ export type PageLayoutRendererProps = Readonly<{
   theme?: ApplicationThemeV2 | undefined;
   /** Light, dark or system appearance for the runtime page or preview canvas. */
   themeMode?: ThemeMode | undefined;
+  /** Organisation or viewer locale for date and number presentation. */
+  locale?: string | undefined;
+  /** Organisation or viewer IANA time zone for timestamp presentation. */
+  timeZone?: string | undefined;
 }>;
 
 /**
@@ -738,6 +727,8 @@ export function PageLayoutRenderer({
   controlEvents,
   theme,
   themeMode,
+  locale,
+  timeZone,
 }: PageLayoutRendererProps): ReactElement {
   const resolved = resolveRootPlacementSlotWithContext({
     composition,
@@ -758,6 +749,11 @@ export function PageLayoutRenderer({
     ...(activeStepId === undefined ? {} : { stepId: activeStepId }),
     breakpoint,
   };
+
+  validatePlacementTree(resolved.slot, registry, location, {
+    allowEmptyRequiredSlots: resolved.permissionProjected,
+  });
+  validateProjectedAvailabilityTree(resolved.slot, location);
 
   if (projectedData !== undefined || displayEvents !== undefined)
     assertProjectionKeysArePlacements(
@@ -785,20 +781,22 @@ export function PageLayoutRenderer({
       <style href="vortex-ui-styles" precedence="default">
         {ALL_UI_STYLES_CSS}
       </style>
-      <PlacementSlotRenderer
-        slot={resolved.slot}
-        breakpoint={breakpoint}
-        registry={registry}
-        {...(className === undefined ? {} : { className })}
-        {...(style === undefined ? {} : { style })}
-        location={location}
-        allowEmptyRequiredSlots={resolved.permissionProjected}
-        projectedData={projectedData}
-        displayEvents={displayEvents}
-        controlData={controlData}
-        controlEvents={controlEvents}
-        themeScope={{ application: applicationTokens, inherited: applicationTokens }}
-      />
+      <DateFormatContext.Provider value={{ locale, timeZone }}>
+        <PlacementSlotRenderer
+          slot={resolved.slot}
+          breakpoint={breakpoint}
+          registry={registry}
+          {...(className === undefined ? {} : { className })}
+          {...(style === undefined ? {} : { style })}
+          location={location}
+          allowEmptyRequiredSlots={resolved.permissionProjected}
+          projectedData={projectedData}
+          displayEvents={displayEvents}
+          controlData={controlData}
+          controlEvents={controlEvents}
+          themeScope={{ application: applicationTokens, inherited: applicationTokens }}
+        />
+      </DateFormatContext.Provider>
     </div>
   );
 }

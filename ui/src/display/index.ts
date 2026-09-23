@@ -30,7 +30,14 @@ export {
 export { RichTextDocumentView, richTextToPlainText } from "./rich-text";
 
 // Cell Formatting & Display
-export { DisplayCellView, cellValueToText, formatIsoDate } from "./cell";
+export {
+  DateFormatContext,
+  DisplayCellView,
+  cellValueToText,
+  formatIsoDate,
+  useDateFormat,
+  type DateFormatOptions,
+} from "./cell";
 
 // Display State Container & Helpers
 export {

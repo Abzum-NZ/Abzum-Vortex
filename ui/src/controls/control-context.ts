@@ -1,3 +1,6 @@
+"use client";
+
+import { useRef } from "react";
 import { builderKeySchema, type BlockPropertyValueV2Contract } from "@vortex/contracts";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import { getAccessibleName } from "../display/display-state-container";
@@ -20,7 +23,7 @@ export type ControlContext<Kind extends ProjectedControlValueKind> = Readonly<{
   location: DefinitionRenderErrorLocation;
   /** Authored accessible name, read only through the declared metadata path. */
   accessibleName: string | undefined;
-  /** Ready values of this control's exact kind, or undefined for any other state. */
+  /** Ready values of this control's exact kind, or the last ready values kept while not ready. */
   values: Extract<ProjectedControlValues, { kind: Kind }> | undefined;
   /** The control's data or a submission it started is pending; it cannot be activated. */
   pending: boolean;
@@ -56,15 +59,26 @@ export function resolveControlContext<Kind extends ProjectedControlValueKind>(
       location,
     );
 
-  let values: Extract<ProjectedControlValues, { kind: Kind }> | undefined;
+  const lastPlacementIdRef = useRef<string>(placementId);
+  const lastReadyRef = useRef<Extract<ProjectedControlValues, { kind: Kind }> | undefined>(undefined);
+  if (lastPlacementIdRef.current !== placementId) {
+    lastPlacementIdRef.current = placementId;
+    lastReadyRef.current = undefined;
+  }
+
   if (controlData?.status === "ready") {
     if (controlData.values.kind !== kind)
       fail(
         `Block '${metadata.key}' expected '${kind}' projected values, got '${controlData.values.kind}'`,
         location,
       );
-    values = controlData.values as Extract<ProjectedControlValues, { kind: Kind }>;
+    lastReadyRef.current = controlData.values as Extract<ProjectedControlValues, { kind: Kind }>;
   }
+
+  const values =
+    controlData?.status === "ready"
+      ? (controlData.values as Extract<ProjectedControlValues, { kind: Kind }>)
+      : lastReadyRef.current;
 
   if (controlEvents !== undefined) {
     for (const name of Object.keys(controlEvents)) {
@@ -87,6 +101,8 @@ export function resolveControlContext<Kind extends ProjectedControlValueKind>(
     events: availability === "available" ? controlEvents : undefined,
   };
 }
+
+export const useControlContext = resolveControlContext;
 
 /** Typed, fail-closed reads of a placement's settings against its declared properties. */
 export type ControlSettings = Readonly<{
