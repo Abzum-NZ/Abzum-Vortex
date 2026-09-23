@@ -4,6 +4,7 @@ import {
   resolveApplicationTheme,
   resolveApplicationThemeTokens,
 } from "./app-theme";
+import { projectFlowResultHandoff } from "./flow-result-handoff";
 import { createAppTelemetryCollector } from "./telemetry";
 
 export {
@@ -14,6 +15,23 @@ export {
   createAppTelemetryCollector,
   type AppTelemetryCollectorDependencies,
 } from "./telemetry";
+export {
+  flowResultHandoffContractVersion,
+  flowResultHandoffRefusalReasonSchema,
+  flowResultHandoffRequestSchema,
+  flowResultHandoffSchema,
+  flowResultDeclarationSchema,
+  flowResultOperationResultSchema,
+  flowResultViewerAuthoritySchema,
+  projectFlowResultHandoff,
+  type FlowResultDeclaration,
+  type FlowResultHandoff,
+  type FlowResultHandoffDependencies,
+  type FlowResultHandoffRefusalReason,
+  type FlowResultHandoffRequest,
+  type FlowResultOperationResult,
+  type FlowResultViewerAuthority,
+} from "./flow-result-handoff";
 
 export const AppService = Object.freeze({
   key: "app",
@@ -21,4 +39,5 @@ export const AppService = Object.freeze({
   resolveApplicationTheme,
   resolveApplicationThemeTokens,
   createAppTelemetryCollector,
+  projectFlowResultHandoff,
 });
