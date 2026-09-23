@@ -1,3 +1,5 @@
+"use client";
+
 import type { CSSProperties, ReactElement } from "react";
 import type { PlatformBlockRenderProps } from "../registry";
 import { readControlSettings } from "./control-context";

@@ -393,9 +393,9 @@ const exactApplicationDependenciesMatch = (
     theme[0]!.catalogueFingerprint !== base.catalogueFingerprint
   )
     return false;
-  // The compiler places authoritative target evidence on each target. Target entries are
-  // checked one-for-one by the compiler output integrity path and catalogue verification below;
-  // this helper only keeps the legacy module/connection/theme set exact.
+  // The compiler places authoritative target evidence on each target, so the stored flow-target
+  // entries must equal the targets derived from the canonical content one-for-one, and the
+  // module, connection, block and theme subjects must be exactly the canonical bindings.
   return (
     exactApplicationFlowTargetsMatch(output, manifest) &&
     sameStringSet(

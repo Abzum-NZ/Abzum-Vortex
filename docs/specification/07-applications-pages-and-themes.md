@@ -76,7 +76,7 @@ A link declares an open behaviour of replace or new page. Replace uses a client-
 
 ## Semantic interface map
 
-Every published application produces one permission-filtered description of what the current person can see and do. The web interface renders it, and the governed [MCP surface](12-connections-and-interfaces.md#governed-mcp-access) exposes the same meaning to an authorised external client. This description is derived from the published application, page, form, query, action and access contracts; builders do not maintain a second agent-specific definition.
+Every published application produces one permission-filtered description of what the current person can see and do. The web interface renders it, and the governed [MCP surfaces](12-connections-and-interfaces.md#governed-mcp-access) expose the same meaning: as WebMCP tools inside the person's open page, and through the remote MCP server to an authorised external client. Each application's tools come from its [application tool bundle](12-connections-and-interfaces.md#application-tool-bundles), which is compiled into the application release. This description is derived from the published application, page, form, query, action and access contracts; builders do not maintain a second agent-specific definition.
 
 Data components bind versioned Frontend Flows that may call module-exposed queries and return declared viewer-safe outputs. Load and refresh are read-only only when their configured flow is read-only; a deliberate changing node is permitted on its named semantic event. Rendering, prefetch, cache revalidation and automatic retry never manufacture an invocation or repeat a write.
 

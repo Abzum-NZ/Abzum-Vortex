@@ -16,6 +16,14 @@ export {
 } from "./protected-query-contracts";
 
 export {
+  supportedRecordSystemFieldKeys,
+  supportedRecordSystemFieldKeySchema,
+  recordSystemValuesSchema,
+  type SupportedRecordSystemFieldKey,
+  type RecordSystemValues,
+} from "./record-system-values";
+
+export {
   createProtectedQueryService,
   type ProtectedQueryServiceDependencies,
 } from "./protected-query-service";
@@ -53,6 +61,35 @@ export {
 } from "./arrangement-contracts";
 
 export { arrangeDataset } from "./arrangements";
+
+export {
+  organizationAccountReferenceChoiceCommandSchema,
+  recordReferenceChoiceCommandSchema,
+  referenceChoiceCommandSchema,
+  referenceChoiceOptionSchema,
+  referenceChoicePageSchema,
+  referenceChoiceRefusalReasonCodes,
+  referenceChoiceRefusalSchema,
+  referenceChoiceResultSchema,
+  referenceChoiceValueSchema,
+  type OrganizationAccountReferenceChoiceCommand,
+  type RecordReferenceChoiceCommand,
+  type ReferenceChoiceCommand,
+  type ReferenceChoiceOption,
+  type ReferenceChoicePage,
+  type ReferenceChoiceRefusal,
+  type ReferenceChoiceRefusalReasonCode,
+  type ReferenceChoiceResult,
+  type ReferenceChoiceValue,
+} from "./reference-choice-contracts";
+
+export {
+  createReferenceChoiceService,
+  projectReferenceChoiceInputValues,
+  resolveReferenceChoiceSelection,
+  type ReferenceChoiceInputValues,
+  type ReferenceChoiceServiceDependencies,
+} from "./reference-choice-service";
 
 export const QueryService = Object.freeze({
   key: "query",

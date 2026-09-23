@@ -9,7 +9,10 @@ import type {
   NamespacedKey,
   PlatformId,
   PlatformThemeReleaseV2 as ContractPlatformThemeReleaseV2,
+  ThemeColorRole,
 } from "@vortex/contracts";
+
+export type { ThemeColorRole };
 
 export type ApplicationThemeV2 = ApplicationContentV2["theme"];
 export type ExactPlatformThemeDependencyV2 = ApplicationThemeV2["base"];
