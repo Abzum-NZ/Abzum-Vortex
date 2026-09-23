@@ -59,6 +59,8 @@ import {
   type MaterialisedApplicationCompositionV2,
 } from "./application-v2-composition";
 import type { ApplicationCompositionResolutionV2 } from "./application-v2-resolution";
+import { validateApplicationSourceCatalogue } from "./application-catalogue-validation";
+import { settleDefinitionRuleFailures } from "./rule-failure-order";
 
 type Path = (string | number)[];
 type JsonObject = Record<string, unknown>;
@@ -5912,6 +5914,17 @@ function compileParsedApplicationV2Request(
   const source = request.source;
   const sourceObject = source as unknown as JsonObject;
   try {
+    // Publication refuses with the first of the located catalogue results draft save reports,
+    // before materialisation can refuse the same document without its location.
+    const catalogueFailure = settleDefinitionRuleFailures(
+      validateApplicationSourceCatalogue(source),
+    )[0];
+    if (catalogueFailure !== undefined)
+      throw new DefinitionCompilationError(
+        catalogueFailure.ruleCode,
+        catalogueFailure.family,
+        catalogueFailure.location,
+      );
     const resolution = new Resolution(request.resolution, sourceObject);
     const valueIndex = applicationModuleValueIndex(sourceObject, resolution, dependencyOutputs);
     const composition = materialiseApplicationCompositionV2(
