@@ -1,3 +1,5 @@
+"use client";
+
 import type { ChangeEvent, ReactElement } from "react";
 import { DefinitionRenderError } from "../definition-error";
 import type { PlatformBlockRenderProps } from "../registry";

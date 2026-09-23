@@ -1,3 +1,5 @@
+"use client";
+
 import { useId, useState, type ReactElement } from "react";
 import type { ControlContext } from "./control-context";
 import type { ProjectedControlValueKind } from "./projected-data";
