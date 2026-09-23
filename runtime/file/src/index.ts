@@ -101,3 +101,11 @@ export {
   type UpstreamStorageReadOptions,
   type UpstreamStorageReadResult,
 } from "./read";
+export {
+  createSqlFileReadRepository,
+  decideFileRead,
+  locateFileApplication,
+  type FileApplicationLocation,
+  type FileReadDecision,
+  type FileReadSqlTransaction,
+} from "./read-repository";
