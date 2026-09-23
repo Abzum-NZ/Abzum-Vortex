@@ -129,8 +129,8 @@ export const decideFileRead = async (
  */
 export const createSqlFileReadRepository = (
   transaction: FileReadSqlTransaction,
-): FileReadRepository =>
-  Object.freeze({
+): FileReadRepository => {
+  const repository: FileReadRepository = {
     readFile: async (fileId: FileId): Promise<FileRecord | null> => {
       const result = singleResult(
         await transaction.query<ResultRow>`
@@ -179,4 +179,6 @@ export const createSqlFileReadRepository = (
         correlationId: correlationId.data,
       };
     },
-  });
+  };
+  return Object.freeze(repository);
+};
