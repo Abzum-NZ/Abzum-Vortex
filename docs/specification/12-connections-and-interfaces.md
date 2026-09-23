@@ -4,7 +4,7 @@
 
 ## Three integration surfaces
 
-A **connection** lets an organisation call or receive messages from another system. A customer **programmable interface** gives an approved caller a versioned way to use operations that an application deliberately publishes. The platform's governed **Model Context Protocol (MCP)** surface lets an external client act for a signed-in person through the same capabilities that person can use in the Vortex interface.
+A **connection** lets an organisation call or receive messages from another system. A customer **programmable interface** gives an approved caller a versioned way to use operations that an application deliberately publishes. The platform's governed **Model Context Protocol (MCP)** surfaces let an agent act for a signed-in person through the same capabilities that person can use in the Vortex interface: inside the person's open Vortex page through the browser's WebMCP interface, or from an external client through the remote MCP server.
 
 ```mermaid
 flowchart LR
@@ -17,7 +17,9 @@ flowchart LR
     CLIENT[Approved interface client] --> API[Versioned interface operation]
     API --> DATA
     AGENT[Authorised external MCP client] --> MCP[MCP resources and tools]
+    BROWSER[Agent in the person's browser] --> WEBMCP[WebMCP tools in the open Vortex page]
     MCP --> VIEW[Permission-filtered semantic interface map]
+    WEBMCP --> VIEW
     VIEW --> DATA
 ```
 
@@ -108,9 +110,9 @@ When an interface operation binds a published Frontend Flow, it invokes that exa
 
 ## Governed MCP access
 
-Vortex provides one remote MCP server for the platform. The first release follows the current [MCP revision `2026-07-28`](https://modelcontextprotocol.io/specification/2026-07-28) and uses [Streamable HTTP](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http). Every request carries its protocol revision, client information and client capabilities in the required `_meta` fields. Streamable HTTP separately carries `MCP-Protocol-Version`, `Mcp-Method`, an applicable `Mcp-Name`, and any declared `Mcp-Param-*` headers; the server validates the required headers against the request body and returns `HeaderMismatch` when they are missing or disagree. The endpoint accepts MCP messages only by HTTP `POST` with the required JSON or server-sent-event content negotiation, rejects an invalid `Origin`, does not provide `GET` for the modern transport, and keeps requests stateless. The mandatory `server/discover` operation reports the server's identity, supported revision and capabilities. An unsupported revision receives `UnsupportedProtocolVersionError`; the first release does not implement the connection-scoped initialization behaviour of `2025-11-25` or earlier. A later supported revision or backward-compatibility mode is added only through explicit compatibility tests.
+Vortex offers two MCP surfaces over one catalogue of tools: WebMCP tools registered by the open Vortex web page (see [Browser MCP](#browser-mcp-webmcp)), and one remote MCP server for external clients. Both draw on the same permission-filtered platform tools and [application tool bundles](#application-tool-bundles), and both invoke the same owning operations. The remote server lists every bundle the person may discover; the open page registers only the tools for what is being viewed. The remote server's first release follows the current [MCP revision `2026-07-28`](https://modelcontextprotocol.io/specification/2026-07-28) and uses [Streamable HTTP](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http). Every request carries its protocol revision, client information and client capabilities in the required `_meta` fields. Streamable HTTP separately carries `MCP-Protocol-Version`, `Mcp-Method`, an applicable `Mcp-Name`, and any declared `Mcp-Param-*` headers; the server validates the required headers against the request body and returns `HeaderMismatch` when they are missing or disagree. The endpoint accepts MCP messages only by HTTP `POST` with the required JSON or server-sent-event content negotiation, rejects an invalid `Origin`, does not provide `GET` for the modern transport, and keeps requests stateless. The mandatory `server/discover` operation reports the server's identity, supported revision and capabilities. An unsupported revision receives `UnsupportedProtocolVersionError`; the first release does not implement the connection-scoped initialization behaviour of `2025-11-25` or earlier. A later supported revision or backward-compatibility mode is added only through explicit compatibility tests.
 
-The MCP server exposes a small stable set of generic resources and tools rather than generating a separate tool name for every button:
+The MCP surfaces expose a small stable set of platform resources and tools, plus the tools bundled with each installed application. Neither surface generates a tool for every button:
 
 | MCP surface                  | What it provides                                                                                                                                                                                             |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -124,6 +126,33 @@ The MCP server exposes a small stable set of generic resources and tools rather 
 | Operation tools              | Invoke a currently available action, file operation, builder change, publication step or administration operation using the same input contract as the web interface.                                        |
 
 Resources are paginated when needed and announce changes when a role, grant, application version or current view changes. The server returns stable semantic identifiers and typed values; it never requires an agent to parse HTML, inspect CSS, guess a label, execute browser script, or click a screen coordinate.
+
+### Application tool bundles
+
+Every Application release carries its own agent tool bundle. It is part of the release, not separate code:
+
+- At publication the compiler derives the bundle from the release's published navigation, pages, forms, named actions and Frontend Flow entry points, and module queries the application uses. The bundle is stored with the release and versioned with it. Nothing else is published, reviewed or installed separately.
+- One tool represents one business operation: a declared action or flow entry point, a form's commit action, a permitted query read, or a navigation target. Layout, decoration and individual buttons that start the same operation do not produce extra tools.
+- Tool names are namespaced by application key (`<applicationKey>.<operationKey>`); if two installed applications share a key, the listing also qualifies the name with the application's owner so names never collide. Names stay stable across releases while the operation keeps its identity. Input schemas are the operation's declared input contract; descriptions come from the definition's labels and help text. A tool never exposes an internal permission key, role name or private value.
+- Builders do not write tools, tool code or a second agent-specific definition. Changing the application and publishing it changes its tools.
+- A bundle is available only while its release is installed and active in the organisation. Upgrading the installation replaces the bundle; uninstalling or withdrawing the installation removes it.
+- At every listing and call, the bundle is filtered by the person's current access exactly like the semantic interface map: an operation the person may not discover is absent; one they may see but cannot currently use is described as unavailable and is not callable. A direct call is still refused by the central access decision.
+- Calling a tool enters the same published Frontend Flow binding or protected owning operation as the web control, with the same inputs, revisions, duplicate protection, validation, confirmation, activity and safe refusals.
+
+Platform tools (context selection, navigation, generic form drafts, refresh, Studio authoring and administration operations) are owned by the platform, not by an application bundle, and follow the same rules.
+
+### Browser MCP (WebMCP)
+
+When the person's browser supports the WebMCP model-context interface, the open Vortex web application registers the platform tools and the bundle of the application being viewed, filtered for the person in the same way.
+
+- The browser agent acts inside the person's existing signed-in session. It uses the same session, organisation account and live permissions as the page, so no OAuth grant, access token or pairing is needed. It never receives the session token, a DOM handle or a way to run page script.
+- A tool call runs the same server operation as the matching control; it never simulates a click. The visible page updates from the confirmed result, so the person can see what the agent did.
+- Confirmation, reauthentication and human-only steps appear in the page and must be completed by the person. Secrets are never accepted as tool input or returned as output.
+- The registered tools are replaced on navigation, organisation or application change, installation change, permission change and sign-out. Results carry only viewer-safe values.
+- The page shows when browser agent tools are active or a call is running, and the person can turn them off for the rest of the session.
+- Activity records the call as the person's own action, with browser MCP as its source surface.
+- The agent belongs to the person's browser or extension, not to Vortex. Vortex hosts no model and decides nothing for the agent, so the [no embedded AI](01-purpose-and-scope.md#product-boundaries) boundary still holds.
+- Support is detected at run time. A browser without WebMCP sees no difference. WebMCP is still an emerging browser standard, so implementation re-checks its current draft and keeps the registration adapter thin; the tool catalogue and operations do not depend on it.
 
 ### Identity, consent and access
 
@@ -142,7 +171,7 @@ The first release uses administrator [pre-registration](https://supabase.com/doc
 
 ### Live interface control
 
-An authorised person may optionally connect one active web-interface session to one authorised MCP client context. Without that explicit pairing, MCP operations still work headlessly but cannot move or edit an open browser view. The pairing is Vortex application state, not a connection-scoped MCP protocol session; each MCP request remains self-contained.
+An agent in the person's own browser uses [WebMCP](#browser-mcp-webmcp) and needs no pairing. For a remote client, an authorised person may optionally connect one active web-interface session to one authorised MCP client context. Without that explicit pairing, MCP operations still work headlessly but cannot move or edit an open browser view. The pairing is Vortex application state, not a connection-scoped MCP protocol session; each MCP request remains self-contained.
 
 ```mermaid
 sequenceDiagram
@@ -167,7 +196,7 @@ sequenceDiagram
 
 ### Parity rule
 
-Every meaningful capability offered by a Vortex-owned web interface—including customer applications, Studio, tenant administration and organisation administration—must be represented by the semantic interface map and usable through the governed MCP surface. A release test inventories both surfaces and fails on a missing operation, mismatched input, different access result, different validation, different side effect or different activity meaning.
+Every meaningful capability offered by a Vortex-owned web interface—including customer applications, Studio, tenant administration and organisation administration—must be represented by the semantic interface map and usable through both governed MCP surfaces. A release test inventories both surfaces and fails on a missing operation, mismatched input, different access result, different validation, different side effect or different activity meaning.
 
 The reverse is also controlled: the MCP parity surface does not expose a hidden platform or business operation that the same person could not reach through an authorised Vortex interface. Customer-published interfaces and protected system operations remain separate because they serve non-interactive integration and operational purposes.
 
