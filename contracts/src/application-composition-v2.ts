@@ -1247,6 +1247,9 @@ export type PlatformBlockReleaseV2 = z.infer<typeof platformBlockReleaseV2Schema
 export type PlatformBlockDependencyV2 = z.infer<typeof platformBlockDependencyV2Schema>;
 export type PlatformThemeReleaseV2 = z.infer<typeof platformThemeReleaseV2Schema>;
 export type ApplicationCompositionPolicyV2 = z.infer<typeof applicationCompositionPolicyV2Schema>;
+export type ImmutablePlatformBlockCatalogueV2 = z.infer<
+  typeof immutablePlatformBlockCatalogueV2Schema
+>;
 export type ApplicationCompositionCatalogueSnapshotV2 = z.infer<
   typeof applicationCompositionCatalogueSnapshotV2Schema
 >;
