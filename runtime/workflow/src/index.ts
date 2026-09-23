@@ -8,14 +8,15 @@ export {
   DeadlineRefreshDispatchError,
   type DeadlineRefreshDispatcher,
   type DeadlineRefreshDispatchDependencies,
+  type DeadlineRefreshDispatchErrorCode,
   type DeadlineRefreshDispatchInput,
-  type DeadlineRefreshDueWindow,
   type DeadlineRefreshDispatchResult,
-  type DeadlineRefreshDispatchStatus,
+  type DeadlineRefreshDueWindow,
+  type DeadlineRefreshItemIdentity,
   type DeadlineRefreshItemResult,
-  type DeadlineRefreshRecordOutcome,
+  type DeadlineRefreshStop,
   type DeadlineRefreshTransaction,
-  type DeadlineRefreshTransactionRunner,
+  type DeadlineRefreshWorkerTransactionRunner,
 } from "./deadline-refresh-dispatch";
 
 export const WorkflowService = Object.freeze({
