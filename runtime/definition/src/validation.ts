@@ -62,6 +62,11 @@ import {
 } from "./version-impact";
 import { createContractValueWalker } from "./contract-value-walker";
 import { validateRuleGraph, ruleGraphValidationCodes } from "./rule-graph-validation";
+import {
+  applicationCatalogueRuleCodes,
+  validateApplicationSourceCatalogue,
+} from "./application-catalogue-validation";
+import { settleDefinitionRuleFailures } from "./rule-failure-order";
 
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
@@ -4598,11 +4603,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           );
       }
     }
-    for (const block of blocks.values())
-      if ((block.allowedChildBlockIds as string[]).some((childId) => !blocks.has(String(childId))))
-        failures.push(
-          failure(output, "vortex.definition.application_block_references", "broken_reference"),
-        );
     for (const pipeline of array(content.pipelines)) {
       const record = records.get(String(object(pipeline.recordType).recordTypeId));
       const moduleV2 =
@@ -6132,6 +6132,15 @@ function moduleRuleGraphRule(context: DefinitionSetValidationContext): Definitio
   return failures;
 }
 
+function applicationCatalogueRule(context: PreparedValidationContext): DefinitionRuleFailure[] {
+  return editSaveSources(context).flatMap((source, index) => {
+    const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(source);
+    return parsed.success && isV2ApplicationSource(parsed.data)
+      ? validateApplicationSourceCatalogue(parsed.data as ApplicationSourceDocumentV2)
+      : [];
+  });
+}
+
 export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object.freeze([
   {
     ruleId: "vortex.definition.source_shape",
@@ -6168,6 +6177,15 @@ export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object
     requiredContext: ["source"],
     safeLocationFamily: "document",
     run: sourceTypeCompatibilityRule,
+  },
+  {
+    ruleId: "vortex.definition.application_catalogue",
+    emittedCodes: applicationCatalogueRuleCodes,
+    stage: "edit_save",
+    definitionKinds: ["application"],
+    requiredContext: ["source"],
+    safeLocationFamily: "application",
+    run: applicationCatalogueRule,
   },
   {
     ruleId: "vortex.definition.publication_context_required",
@@ -6298,47 +6316,7 @@ export function validateDefinitionSet(
   };
   const failures: DefinitionRuleFailure[] = [];
   for (const rule of eligibleRules) failures.push(...rule.run(preparedContext));
-  const safeLocationKey = (location: DefinitionValidationLocation | undefined) =>
-    location
-      ? JSON.stringify([
-          location.documentKind,
-          location.documentKey,
-          location.segments.map((segment) => [segment.kind, segment.key]),
-        ])
-      : "";
-  const unique = new Map(
-    failures.map((entry) => [
-      `${entry.ruleCode}\0${entry.family}\0${safeLocationKey(entry.location)}`,
-      entry,
-    ]),
-  );
-  const familyOrder = [
-    "required_value",
-    "invalid_value",
-    "unsupported_choice",
-    "unknown_property",
-    "too_few_items",
-    "too_many_items",
-    "duplicate_key",
-    "broken_reference",
-    "unresolved_reference",
-    "scope_conflict",
-    "incompatible_version",
-    "dependency_cycle",
-    "unsafe_content",
-    "incompatible_change",
-    "validation_failed",
-  ];
-  const sorted = [...unique.values()].sort((left, right) => {
-    const locationComparison = compareCanonicalStrings(
-      safeLocationKey(left.location),
-      safeLocationKey(right.location),
-    );
-    if (locationComparison !== 0) return locationComparison;
-    const familyComparison = familyOrder.indexOf(left.family) - familyOrder.indexOf(right.family);
-    if (familyComparison !== 0) return familyComparison;
-    return compareCanonicalStrings(left.ruleCode, right.ruleCode);
-  });
+  const sorted = settleDefinitionRuleFailures(failures);
   return { valid: sorted.length === 0, failures: sorted } as const;
 }
 
