@@ -28,6 +28,7 @@ export {
   computeSlotContainerStyle,
   LAYOUT_CLASS_NAMES,
   LAYOUT_ONLY_STYLES_CSS,
+  ALL_UI_STYLES_CSS,
 } from "./layout-styles";
 
 // Layout Renderer & Recursive Traversal
@@ -180,3 +181,25 @@ export {
   ALL_PLATFORM_COMPONENT_REGISTRATIONS,
   createFullPlatformComponentRegistry,
 } from "./combined-registry";
+
+// Theme Variables, Styles & Narrow Adapter
+export {
+  ALL_THEME_AND_COMPONENT_STYLES_CSS,
+  DEFAULT_THEME_VARIABLES_COMMON,
+  DEFAULT_THEME_VARIABLES_DARK,
+  DEFAULT_THEME_VARIABLES_LIGHT,
+  SHARED_COMPONENTS_CSS,
+  computePlacementThemeStyle,
+  createThemeStyleProps,
+  extractThemeTokens,
+  generateThemeCssVariableStyle,
+  generateThemeCssVariables,
+  generateThemeStylesheet,
+  mergeThemeOverrides,
+  resolveThemeVariablesForMode,
+  sanitizeCssIdentifier,
+  type ThemeCssVariableMap,
+  type ThemeMode,
+  type ThemeStyleProps,
+} from "./theme";
+

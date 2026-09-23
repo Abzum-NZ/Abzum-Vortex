@@ -1,564 +1,29 @@
-:root {
-  --ink: #10211b;
-  --muted: #52615b;
-  --paper: #f3f0e8;
-  --lime: #d7ff54;
-  --line: rgba(16, 33, 27, 0.15);
-
-  /* Vortex Platform Theme Variables (Light Mode / Default) */
-  --vortex-surface: var(--paper, #f3f0e8);
-  --vortex-surface-secondary: #ffffff;
-  --vortex-surface-tertiary: #eae6dc;
-  --vortex-foreground: var(--ink, #10211b);
-  --vortex-foreground-muted: var(--muted, #52615b);
-  --vortex-color-primary: var(--ink, #10211b);
-  --vortex-color-primary-foreground: #ffffff;
-  --vortex-color-primary-hover: #1d382f;
-  --vortex-color-primary-subtle: rgba(16, 33, 27, 0.06);
-  --vortex-color-secondary: #e5e1d8;
-  --vortex-color-secondary-foreground: var(--ink, #10211b);
-  --vortex-color-border: var(--line, rgba(16, 33, 27, 0.15));
-  --vortex-color-border-hover: var(--muted, #52615b);
-  --vortex-color-focus: #2563eb;
-  --vortex-color-danger: #9a3f2e;
-  --vortex-color-danger-foreground: #ffffff;
-  --vortex-color-danger-surface: rgba(154, 63, 46, 0.08);
-  --vortex-color-danger-border: #9a3f2e;
-  --vortex-color-warning: #d97706;
-  --vortex-color-warning-foreground: #78350f;
-  --vortex-color-warning-surface: #fffbeb;
-  --vortex-color-warning-border: #fde68a;
-  --vortex-color-info: #2563eb;
-  --vortex-color-info-foreground: #ffffff;
-  --vortex-color-info-surface: #eff6ff;
-  --vortex-color-info-border: #bfdbfe;
-  --vortex-color-disabled-surface: rgba(16, 33, 27, 0.05);
-  --vortex-color-disabled-foreground: rgba(16, 33, 27, 0.4);
-  --vortex-color-disabled-border: rgba(16, 33, 27, 0.1);
-
-  /* Layout, Typography, Spacing, Radius, Borders, Focus, Elevation */
-  --vortex-font-family: Arial, Helvetica, sans-serif;
-  --vortex-font-size: 1rem;
-  --vortex-line-height: 1.5;
-  --vortex-font-weight: 400;
-  --vortex-font-family-heading: Arial, Helvetica, sans-serif;
-  --vortex-font-size-heading: 1.5rem;
-  --vortex-line-height-heading: 1.25;
-  --vortex-font-weight-heading: 700;
-  --vortex-font-family-mono: monospace;
-  --vortex-spacing-xs: 0.25rem;
-  --vortex-spacing-sm: 0.5rem;
-  --vortex-spacing-md: 1rem;
-  --vortex-spacing-lg: 1.5rem;
-  --vortex-spacing-xl: 2rem;
-  --vortex-spacing-2xl: 3rem;
-  --vortex-radius-none: 0px;
-  --vortex-radius-sm: 2px;
-  --vortex-radius-md: 4px;
-  --vortex-radius-lg: 8px;
-  --vortex-radius-full: 9999px;
-  --vortex-radius: 2px;
-  --vortex-border-width: 1px;
-  --vortex-border-style: solid;
-  --vortex-border: 1px solid var(--vortex-color-border);
-  --vortex-focus-width: 3px;
-  --vortex-focus-offset: 2px;
-  --vortex-focus-outline: 3px solid rgba(16, 33, 27, 0.24);
-  --vortex-focus-ring: 0 0 0 3px rgba(16, 33, 27, 0.12);
-  --vortex-elevation-none: none;
-  --vortex-elevation-low: 0 1px 2px rgba(16, 33, 27, 0.05);
-  --vortex-elevation-medium: 0 4px 6px rgba(16, 33, 27, 0.08);
-  --vortex-elevation-high: 0 28px 80px rgba(16, 33, 27, 0.1);
-  --vortex-density: comfortable;
-  --vortex-density-control-padding-y: 0.5rem;
-  --vortex-density-control-padding-x: 0.75rem;
-  --vortex-density-control-min-height: 2.5rem;
-  --vortex-density-cell-padding-y: 0.625rem;
-  --vortex-density-cell-padding-x: 0.875rem;
+/**
+ * Shared component styles applying theme CSS variables to every state of
+ * #580-#582 components (default, hover, focus, disabled, warning, error, etc.).
+ *
+ * Follows WCAG 2.2 AA contrast standards, preserves visible focus across all
+ * interactive controls, and respects prefers-reduced-motion.
+ */
+export const SHARED_COMPONENTS_CSS = `
+/* --- Global Reset & Root Scoping --- */
+[data-vortex-theme],
+.vortex-root {
+  box-sizing: border-box;
+  color: var(--vortex-foreground);
+  background-color: var(--vortex-surface);
+  font-family: var(--vortex-font-family);
+  font-size: var(--vortex-font-size);
+  line-height: var(--vortex-line-height);
 }
 
-/* Dark Mode Theme Variables */
-[data-vortex-theme-mode="dark"],
-.vortex-dark,
-.dark {
-  --vortex-surface: #10211b;
-  --vortex-surface-secondary: #162c24;
-  --vortex-surface-tertiary: #1d382f;
-  --vortex-foreground: #f3f0e8;
-  --vortex-foreground-muted: #9db0a8;
-  --vortex-color-primary: #d7ff54;
-  --vortex-color-primary-foreground: #10211b;
-  --vortex-color-primary-hover: #c5f03d;
-  --vortex-color-primary-subtle: rgba(215, 255, 84, 0.12);
-  --vortex-color-secondary: #1d382f;
-  --vortex-color-secondary-foreground: #f3f0e8;
-  --vortex-color-border: rgba(243, 240, 232, 0.2);
-  --vortex-color-border-hover: #9db0a8;
-  --vortex-color-focus: #60a5fa;
-  --vortex-color-danger: #f87171;
-  --vortex-color-danger-foreground: #10211b;
-  --vortex-color-danger-surface: #450a0a;
-  --vortex-color-danger-border: #991b1b;
-  --vortex-color-warning: #fbbf24;
-  --vortex-color-warning-foreground: #10211b;
-  --vortex-color-warning-surface: #451a03;
-  --vortex-color-warning-border: #b45309;
-  --vortex-color-info: #60a5fa;
-  --vortex-color-info-foreground: #10211b;
-  --vortex-color-info-surface: #172554;
-  --vortex-color-info-border: #1e40af;
-  --vortex-color-disabled-surface: #162c24;
-  --vortex-color-disabled-foreground: #657770;
-  --vortex-color-disabled-border: rgba(243, 240, 232, 0.1);
-  --vortex-focus-outline: 3px solid rgba(215, 255, 84, 0.35);
-  --vortex-focus-ring: 0 0 0 3px rgba(215, 255, 84, 0.2);
-}
-
-
-* {
+[data-vortex-theme] *,
+.vortex-root * {
   box-sizing: border-box;
 }
 
-html,
-body {
-  margin: 0;
-  min-height: 100%;
-  background: var(--paper);
-  color: var(--ink);
-}
-
-body {
-  font-family: Arial, Helvetica, sans-serif;
-  background-image:
-    linear-gradient(rgba(16, 33, 27, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(16, 33, 27, 0.035) 1px, transparent 1px);
-  background-size: 32px 32px;
-}
-
-main {
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: 72px 6vw 32px;
-}
-
-.hero {
-  max-width: 970px;
-  padding: 40px 0 72px;
-}
-
-.eyebrow,
-.section-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 28px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
-.eyebrow > span {
-  width: 34px;
-  height: 3px;
-  background: var(--ink);
-}
-
-h1 {
-  margin: 0;
-  font-size: clamp(64px, 9vw, 132px);
-  line-height: 0.88;
-  letter-spacing: -0.075em;
-  font-weight: 800;
-}
-h1 em {
-  color: transparent;
-  -webkit-text-stroke: 2px var(--ink);
-  font-style: normal;
-}
-
-.lede {
-  max-width: 740px;
-  margin: 42px 0 28px;
-  font-size: 22px;
-  line-height: 1.5;
-  color: var(--muted);
-}
-
-.status {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  background: var(--ink);
-  color: white;
-  border-radius: 999px;
-  font-size: 13px;
-}
-
-.pulse {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--lime);
-  box-shadow: 0 0 0 5px rgba(215, 255, 84, 0.14);
-}
-
-.layers {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-.layers article {
-  padding: 34px 34px 42px 0;
-}
-.layers article + article {
-  border-left: 1px solid var(--line);
-  padding-left: 34px;
-}
-.number {
-  font-family: monospace;
-  font-size: 12px;
-  color: var(--muted);
-}
-.layers h2 {
-  margin: 48px 0 12px;
-  font-size: 23px;
-  letter-spacing: -0.03em;
-}
-.layers p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.55;
-}
-
-.services {
-  display: grid;
-  grid-template-columns: 0.8fr 1.2fr;
-  gap: 7vw;
-  padding: 92px 0;
-}
-.services h2 {
-  font-size: clamp(40px, 5vw, 70px);
-  line-height: 0.98;
-  letter-spacing: -0.055em;
-  margin: 0;
-}
-.section-label {
-  color: var(--muted);
-}
-.service-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  border-top: 1px solid var(--line);
-}
-.service {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  border-bottom: 1px solid var(--line);
-  padding: 15px 6px;
-  font-weight: 700;
-  text-transform: capitalize;
-}
-.service:nth-child(odd) {
-  border-right: 1px solid var(--line);
-}
-.service span {
-  font-family: monospace;
-  font-size: 10px;
-  color: var(--muted);
-}
-
-footer {
-  display: flex;
-  justify-content: space-between;
-  padding-top: 24px;
-  border-top: 1px solid var(--ink);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-footer span:first-child {
-  font-weight: 900;
-}
-
-a {
-  color: inherit;
-}
-
-.auth-page {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 48px 20px;
-}
-
-.auth-card {
-  width: min(100%, 520px);
-  padding: clamp(28px, 6vw, 52px);
-  border: 1px solid var(--line);
-  background: rgba(243, 240, 232, 0.94);
-  box-shadow: 0 28px 80px rgba(16, 33, 27, 0.1);
-  animation: auth-enter 240ms ease-out both;
-}
-
-.auth-wordmark {
-  display: inline-block;
-  margin-bottom: 52px;
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.16em;
-  text-decoration: none;
-  text-transform: uppercase;
-}
-
-.auth-heading {
-  margin-bottom: 32px;
-}
-
-.auth-eyebrow {
-  margin: 0 0 12px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.auth-heading h1 {
-  margin: 0;
-  font-size: clamp(40px, 8vw, 62px);
-  line-height: 0.98;
-  letter-spacing: -0.055em;
-}
-
-.auth-heading > p:last-child {
-  margin: 20px 0 0;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.55;
-}
-
-.auth-form {
-  display: grid;
-  gap: 10px;
-}
-
-.auth-form label {
-  margin-top: 10px;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.auth-form input:not([type="hidden"]) {
-  width: 100%;
-  min-height: 50px;
-  border: 1px solid rgba(16, 33, 27, 0.3);
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.5);
-  color: var(--ink);
-  font: inherit;
-  padding: 0 14px;
-  transition:
-    border-color 140ms ease,
-    box-shadow 140ms ease,
-    background-color 140ms ease;
-}
-
-.auth-form input:focus-visible {
-  outline: none;
-  border-color: var(--ink);
-  background: white;
-  box-shadow: 0 0 0 3px rgba(16, 33, 27, 0.12);
-}
-
-.auth-submit {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  min-height: 52px;
-  margin-top: 18px;
-  border: 1px solid var(--ink);
-  border-radius: 2px;
-  background: var(--ink);
-  color: white;
-  cursor: pointer;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 700;
-  padding: 0 18px;
-  text-decoration: none;
-  transition:
-    transform 140ms ease,
-    background-color 140ms ease,
-    opacity 140ms ease;
-}
-
-.auth-submit:hover:not(:disabled) {
-  transform: translateY(-1px);
-  background: #1d382f;
-}
-
-.auth-submit:focus-visible {
-  outline: 3px solid rgba(16, 33, 27, 0.24);
-  outline-offset: 3px;
-}
-
-.auth-submit:disabled {
-  cursor: wait;
-  opacity: 0.72;
-}
-
-.auth-hint,
-.auth-message,
-.auth-footer p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.auth-hint {
-  color: var(--muted);
-}
-
-.auth-message {
-  margin-bottom: 16px;
-  border-left: 3px solid #9a3f2e;
-  background: rgba(154, 63, 46, 0.08);
-  padding: 10px 12px;
-}
-
-.auth-footer {
-  margin-top: 28px;
-  border-top: 1px solid var(--line);
-  padding-top: 22px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.auth-footer a,
-.auth-choice-links a {
-  color: var(--ink);
-  font-weight: 700;
-  text-underline-offset: 3px;
-}
-
-.auth-footer-links,
-.auth-choice-links {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 12px 20px;
-}
-
-.auth-state-mark,
-.auth-loading-mark {
-  display: grid;
-  place-items: center;
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  background: var(--lime);
-  color: var(--ink);
-  font-size: 26px;
-  font-weight: 900;
-}
-
-.auth-state-mark-error {
-  background: #f0c9c0;
-}
-
-.auth-choice-links {
-  margin-top: 28px;
-}
-
-.auth-card-loading {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  color: var(--muted);
-}
-
-.auth-loading-mark {
-  width: 24px;
-  height: 24px;
-  border: 3px solid var(--line);
-  border-top-color: var(--ink);
-  background: transparent;
-  animation: auth-spin 700ms linear infinite;
-}
-
-@keyframes auth-enter {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes auth-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 1ms !important;
-  }
-}
-
-@media (max-width: 760px) {
-  main {
-    padding-top: 32px;
-  }
-  .hero {
-    padding-bottom: 48px;
-  }
-  .layers,
-  .services {
-    grid-template-columns: 1fr;
-  }
-  .layers article + article {
-    border-left: 0;
-    border-top: 1px solid var(--line);
-    padding-left: 0;
-  }
-  .services {
-    padding: 60px 0;
-  }
-
-  .auth-page {
-    align-items: start;
-    padding: 18px;
-  }
-
-  .auth-card {
-    padding: 28px 22px;
-  }
-
-  .auth-wordmark {
-    margin-bottom: 38px;
-  }
-}
-
-/* ==========================================================================
-   Vortex Shared Component Theme Styles (#580-#582)
-   ========================================================================== */
-
 /* --- Focus Preservation --- */
+/* Interactive elements MUST preserve visible focus. Focus is never hidden. */
 :focus-visible {
   outline: var(--vortex-focus-outline);
   outline-offset: var(--vortex-focus-offset, 2px);
@@ -576,7 +41,7 @@ a {
   line-height: 1;
   padding: var(--vortex-density-control-padding-y, 0.5rem) var(--vortex-density-control-padding-x, 1rem);
   min-height: var(--vortex-density-control-min-height, 2.5rem);
-  border-radius: var(--vortex-radius, 2px);
+  border-radius: var(--vortex-radius, 0.25rem);
   border: var(--vortex-border-width, 1px) solid transparent;
   cursor: pointer;
   text-decoration: none;
@@ -611,6 +76,7 @@ a {
   opacity: 0.75;
 }
 
+/* Button Variants */
 .vortex-button-primary {
   background-color: var(--vortex-color-primary);
   color: var(--vortex-color-primary-foreground, #ffffff);
@@ -727,7 +193,7 @@ a {
   margin-top: 0.125rem;
 }
 
-/* --- Form Inputs & Controls --- */
+/* --- Text Input, Textarea, Select --- */
 .vortex-input,
 .vortex-textarea,
 .vortex-select {
@@ -737,7 +203,7 @@ a {
   color: var(--vortex-foreground);
   background-color: var(--vortex-surface);
   border: var(--vortex-border-width, 1px) var(--vortex-border-style, solid) var(--vortex-color-border);
-  border-radius: var(--vortex-radius, 2px);
+  border-radius: var(--vortex-radius, 0.25rem);
   padding: var(--vortex-density-control-padding-y, 0.5rem) var(--vortex-density-control-padding-x, 0.75rem);
   min-height: var(--vortex-density-control-min-height, 2.5rem);
   box-sizing: border-box;
@@ -787,7 +253,7 @@ a {
 .vortex-textarea[aria-invalid="true"]:focus-visible,
 .vortex-select[aria-invalid="true"]:focus-visible {
   border-color: var(--vortex-color-danger, #dc2626);
-  box-shadow: 0 0 0 var(--vortex-focus-width, 3px) var(--vortex-color-danger-border, #fca5a5);
+  box-shadow: 0 0 0 var(--vortex-focus-width, 2px) var(--vortex-color-danger-border, #fca5a5);
 }
 
 .vortex-textarea {
@@ -955,7 +421,7 @@ dialog.vortex-drawer {
   background-color: var(--vortex-surface);
   color: var(--vortex-foreground);
   border: var(--vortex-border-width, 1px) solid var(--vortex-color-border);
-  border-radius: var(--vortex-radius-lg, 8px);
+  border-radius: var(--vortex-radius-lg, 0.5rem);
   box-shadow: var(--vortex-elevation-high);
   padding: var(--vortex-spacing-lg, 1.5rem);
   box-sizing: border-box;
@@ -1025,7 +491,7 @@ dialog.vortex-drawer::backdrop {
 
 /* --- Validation Message --- */
 .vortex-validation-message {
-  border-radius: var(--vortex-radius, 2px);
+  border-radius: var(--vortex-radius, 0.25rem);
   padding: var(--vortex-spacing-sm, 0.5rem) var(--vortex-spacing-md, 1rem);
   margin-bottom: var(--vortex-spacing-sm, 0.5rem);
   font-family: var(--vortex-font-family);
@@ -1072,7 +538,7 @@ dialog.vortex-drawer::backdrop {
   align-items: center;
   justify-content: center;
   padding: var(--vortex-spacing-lg, 1.5rem);
-  border-radius: var(--vortex-radius, 2px);
+  border-radius: var(--vortex-radius, 0.25rem);
   font-family: var(--vortex-font-family);
   font-size: 0.875rem;
 }
@@ -1177,7 +643,7 @@ dialog.vortex-drawer::backdrop {
 .vortex-list-item,
 .vortex-group-item {
   padding: var(--vortex-spacing-sm, 0.5rem) var(--vortex-spacing-md, 1rem);
-  border-radius: var(--vortex-radius, 2px);
+  border-radius: var(--vortex-radius, 0.25rem);
   border: var(--vortex-border-width, 1px) solid var(--vortex-color-border);
   background-color: var(--vortex-surface);
   transition: background-color 100ms ease;
@@ -1252,7 +718,7 @@ dialog.vortex-drawer::backdrop {
   padding: var(--vortex-spacing-md, 1rem);
   background-color: var(--vortex-surface);
   border: var(--vortex-border-width, 1px) solid var(--vortex-color-border);
-  border-radius: var(--vortex-radius, 2px);
+  border-radius: var(--vortex-radius, 0.25rem);
   box-shadow: var(--vortex-elevation-low);
 }
 
@@ -1340,7 +806,7 @@ dialog.vortex-drawer::backdrop {
   font-family: var(--vortex-font-family-mono, monospace);
   background-color: var(--vortex-surface-secondary);
   padding: 0.125rem 0.25rem;
-  border-radius: var(--vortex-radius-sm, 2px);
+  border-radius: var(--vortex-radius-sm, 0.125rem);
 }
 
 /* --- Screen Reader Only Utility --- */
@@ -1355,3 +821,30 @@ dialog.vortex-drawer::backdrop {
   white-space: nowrap;
   border-width: 0;
 }
+
+/* --- Motion Preservation Standard --- */
+@media (prefers-reduced-motion: reduce) {
+  .vortex-button,
+  .vortex-input,
+  .vortex-textarea,
+  .vortex-select,
+  .vortex-checkbox,
+  .vortex-radio,
+  .vortex-switch,
+  .vortex-switch-thumb,
+  .vortex-tab,
+  .vortex-table-row,
+  .vortex-list-item,
+  .vortex-group-item {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+  }
+}
+`.trim();
+
+/**
+ * Complete CSS string containing both the fallback CSS variables and the shared components styles.
+ */
+export const ALL_THEME_AND_COMPONENT_STYLES_CSS = `
+${SHARED_COMPONENTS_CSS}
+`.trim();
