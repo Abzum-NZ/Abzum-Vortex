@@ -27,6 +27,16 @@ const isValueMap = (value: unknown): value is Readonly<Record<string, unknown>> 
 const fieldResultType = (field: ModuleFieldV2): string =>
   field.type === "calculation" || field.type === "total" ? field.settings.resultType : field.type;
 
+/**
+ * The single date-due decision shared by the deadline scheduler and the save
+ * path. A deadline is date-based when its due field yields a calendar date: a
+ * plain date field, or a calculation or total whose declared result is a date.
+ * Both a calculation and a total must compare against the organisation-local
+ * date rather than the UTC date, so they are treated identically here.
+ */
+export const isDateDeadlineDueFieldV2 = (field: ModuleFieldV2): boolean =>
+  fieldResultType(field) === "date";
+
 const utcDate = (year: number, month: number, day: number): Date => {
   const output = new Date(0);
   output.setUTCFullYear(year, month, day);
