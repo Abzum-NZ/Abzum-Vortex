@@ -21,13 +21,19 @@
 -- ownership-transfer twin `load_record_access_facts_for_transfer_installation_internal`.
 -- `claim_record_deadline_refresh` (deadline refresh authority) and
 -- `relationship_total_record_snapshot_internal` (the totals and deadline
--- closure snapshot) have their own copies. Each function's current definition
--- exists only as the result of earlier in-place patches, so they are patched
--- in place from their current definitions exactly as
--- `20260924001000_return_target_record_field_values.sql` does: each reviewed
--- source fragment must occur exactly once, or the migration aborts rather than
--- silently skipping a caller. Each is re-created under its own current owner,
--- so its OID, grants, comment, security and search_path stay put.
+-- closure snapshot) have their own copies. `run_module_query` builds its
+-- `filter_values` object the same way, one pair per distinct field its
+-- published filter references; a filter may reference up to 100 operands, so
+-- on a wide record type it can exceed 50 fields too. Its pairs are already a
+-- text array, so the same chunking is applied to that array in array order.
+--
+-- Each function's current definition exists only as the result of earlier
+-- in-place patches, so they are patched in place from their current
+-- definitions exactly as `20260924001000_return_target_record_field_values.sql`
+-- does: each reviewed source fragment must occur exactly once, or the
+-- migration aborts rather than silently skipping a caller. Each is re-created
+-- under its own current owner, so its OID, grants, comment, security and
+-- search_path stay put.
 
 begin;
 
@@ -220,6 +226,24 @@ declare
     group by (ordered_fields.field_number - 1) / 50
   ) as field_chunk;$q$;
 
+  -- `run_module_query` (live body from 20260924010000) passes its filter pairs
+  -- to the scan's `pg_catalog.jsonb_build_object(%s) as filter_values`. An
+  -- empty filter still yields no pairs, exactly as the joined empty array did.
+  query_filter_pairs_old constant text := $q$    pg_catalog.array_to_string(filter_expressions, ', '),$q$;
+  query_filter_pairs_new constant text := $q$    (select pg_catalog.string_agg(
+       filter_chunk.pairs_text,
+       ') || pg_catalog.jsonb_build_object(' order by filter_chunk.chunk_index
+     )
+     from (
+       select (filter_pair.pair_number - 1) / 50 as chunk_index,
+         pg_catalog.string_agg(
+           filter_pair.pair_text, ', ' order by filter_pair.pair_number
+         ) as pairs_text
+       from pg_catalog.unnest(filter_expressions)
+         with ordinality as filter_pair(pair_text, pair_number)
+       group by (filter_pair.pair_number - 1) / 50
+     ) as filter_chunk),$q$;
+
   targets constant jsonb := pg_catalog.jsonb_build_array(
     pg_catalog.jsonb_build_array(
       'vortex_record.load_record_access_facts_internal(uuid,text,uuid,bigint)',
@@ -240,6 +264,10 @@ declare
     pg_catalog.jsonb_build_array(
       'vortex_record.relationship_total_record_snapshot_internal(jsonb,uuid,uuid,boolean)',
       snapshot_pairs_old, snapshot_pairs_new
+    ),
+    pg_catalog.jsonb_build_array(
+      'vortex_record.run_module_query(uuid,uuid,bigint,jsonb,jsonb,integer,jsonb,jsonb)',
+      query_filter_pairs_old, query_filter_pairs_new
     )
   );
 
