@@ -7,11 +7,12 @@ import type {
   GuidedFormPageCompositionV2,
   PageCompositionV2,
   PageDefinitionV2,
-  ThemeTokenValueV2,
 } from "@vortex/contracts";
 import {
-  computePlacementThemeStyle,
-  generateThemeCssVariableStyle,
+  ALL_UI_STYLES_CSS,
+  createThemeRootProps,
+  resolvePlacementTheme,
+  type PlacementThemeScope,
   type ThemeMode,
 } from "./theme";
 import {
@@ -371,7 +372,11 @@ export type PlacementRendererProps = Readonly<{
   controlData?: ProjectedControlDataByPlacement | undefined;
   /** Control semantic callbacks keyed by stable placement identity. */
   controlEvents?: ControlEventsByPlacement | undefined;
+  /** Theme tokens in force where this placement renders. */
+  themeScope?: PlacementThemeScope | undefined;
 }>;
+
+const EMPTY_THEME_SCOPE: PlacementThemeScope = Object.freeze({ application: {}, inherited: {} });
 
 /**
  * Renders an individual placement with deterministic layout, sizing, and recursive slots.
@@ -390,6 +395,7 @@ export function PlacementRenderer({
   displayEvents,
   controlData,
   controlEvents,
+  themeScope = EMPTY_THEME_SCOPE,
 }: PlacementRendererProps): ReactElement {
   const currentLocation: DefinitionRenderErrorLocation = {
     ...location,
@@ -477,6 +483,9 @@ export function PlacementRenderer({
       ? undefined
       : parseControlEventHandlers(suppliedControlEvents, currentLocation);
 
+  // Declared theme overrides apply to this placement and its subtree.
+  const placementTheme = resolvePlacementTheme(themeScope, placement.themeOverrides);
+
   // 6. Recursively render declared named child slots in deterministic order
   const renderedSlots: Record<string, ReactNode> = {};
   for (const declaredSlot of metadata.slots) {
@@ -495,6 +504,7 @@ export function PlacementRenderer({
           displayEvents={displayEvents}
           controlData={controlData}
           controlEvents={controlEvents}
+          themeScope={placementTheme.scope}
         />
       );
     } else {
@@ -506,11 +516,10 @@ export function PlacementRenderer({
   const layout = placement.responsive[breakpoint];
   const placementStyle = computePlacementStyle(layout, breakpoint);
   const placementClassName = computePlacementClassName(layout, breakpoint);
-  const themeOverrideStyle = computePlacementThemeStyle(placement.themeOverrides);
 
   const combinedStyle: CSSProperties = {
     ...style,
-    ...themeOverrideStyle,
+    ...placementTheme.style,
     ...placementStyle,
   };
 
@@ -569,10 +578,8 @@ export type PlacementSlotRendererProps = Readonly<{
   controlData?: ProjectedControlDataByPlacement | undefined;
   /** Control semantic callbacks keyed by stable placement identity. */
   controlEvents?: ControlEventsByPlacement | undefined;
-  /** Explicit light/dark appearance mode. */
-  themeMode?: ThemeMode | undefined;
-  /** When true, marks this container as the theme application root. */
-  themeScope?: boolean | undefined;
+  /** Theme tokens in force where this slot renders. */
+  themeScope?: PlacementThemeScope | undefined;
 }>;
 
 /**
@@ -592,7 +599,6 @@ export function PlacementSlotRenderer({
   displayEvents,
   controlData,
   controlEvents,
-  themeMode,
   themeScope,
 }: PlacementSlotRendererProps): ReactElement {
   const currentLocation: DefinitionRenderErrorLocation = {
@@ -632,8 +638,6 @@ export function PlacementSlotRenderer({
     <div
       data-vortex-slot-key={slotKey ?? "root"}
       data-vortex-breakpoint={breakpoint}
-      {...(themeMode === undefined ? {} : { "data-vortex-theme-mode": themeMode })}
-      {...(themeScope ? { "data-vortex-theme": "app" } : {})}
       className={combinedClassName}
       style={containerStyle}
     >
@@ -665,6 +669,7 @@ export function PlacementSlotRenderer({
             displayEvents={displayEvents}
             controlData={controlData}
             controlEvents={controlEvents}
+            themeScope={themeScope}
           />
         );
       })}
@@ -703,13 +708,11 @@ export type PageLayoutRendererProps = Readonly<{
   /** Control semantic callbacks keyed by stable placement identity. */
   controlEvents?: ControlEventsByPlacement;
   /**
-   * Application theme or token dictionary. When provided (or present on composition),
-   * generates bounded CSS variables mounted onto the layout container.
+   * Resolved #594 application theme. Defaults to the materialised composition's theme;
+   * without one the readable platform defaults apply.
    */
-  theme?: ApplicationThemeV2 | Readonly<Record<string, ThemeTokenValueV2>> | undefined;
-  /**
-   * Explicit theme mode selection: "light" or "dark".
-   */
+  theme?: ApplicationThemeV2 | undefined;
+  /** Light, dark or system appearance for the runtime page or preview canvas. */
   themeMode?: ThemeMode | undefined;
 }>;
 
@@ -769,34 +772,31 @@ export function PageLayoutRenderer({
       location,
     );
 
-  const effectiveTheme =
-    theme ??
-    ("theme" in composition && composition.theme !== undefined ? composition.theme : undefined);
-  const themeVariablesStyle =
-    effectiveTheme !== undefined
-      ? generateThemeCssVariableStyle(effectiveTheme, themeMode)
-      : undefined;
-  const rootStyle: CSSProperties = {
-    ...themeVariablesStyle,
-    ...style,
-  };
+  const applicationTheme = theme ?? ("theme" in composition ? composition.theme : undefined);
+  const applicationTokens = applicationTheme?.tokens ?? {};
 
+  // The theme root serves runtime pages and preview canvases alike; React hoists and
+  // de-duplicates the one shared stylesheet however many layouts render.
   return (
-    <PlacementSlotRenderer
-      slot={resolved.slot}
-      breakpoint={breakpoint}
-      registry={registry}
-      {...(className === undefined ? {} : { className })}
-      style={rootStyle}
-      themeMode={themeMode ?? "light"}
-      themeScope={effectiveTheme !== undefined}
-      location={location}
-      allowEmptyRequiredSlots={resolved.permissionProjected}
-      projectedData={projectedData}
-      displayEvents={displayEvents}
-      controlData={controlData}
-      controlEvents={controlEvents}
-    />
+    <div {...createThemeRootProps(applicationTheme, themeMode)}>
+      <style href="vortex-ui-styles" precedence="default">
+        {ALL_UI_STYLES_CSS}
+      </style>
+      <PlacementSlotRenderer
+        slot={resolved.slot}
+        breakpoint={breakpoint}
+        registry={registry}
+        {...(className === undefined ? {} : { className })}
+        {...(style === undefined ? {} : { style })}
+        location={location}
+        allowEmptyRequiredSlots={resolved.permissionProjected}
+        projectedData={projectedData}
+        displayEvents={displayEvents}
+        controlData={controlData}
+        controlEvents={controlEvents}
+        themeScope={{ application: applicationTokens, inherited: applicationTokens }}
+      />
+    </div>
   );
 }
 

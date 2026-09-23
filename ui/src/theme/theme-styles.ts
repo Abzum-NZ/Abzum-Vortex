@@ -1,850 +1,681 @@
+import { LAYOUT_ONLY_STYLES_CSS } from "../layout-styles";
+
 /**
- * Shared component styles applying theme CSS variables to every state of
- * #580-#582 components (default, hover, focus, disabled, warning, error, etc.).
- *
- * Follows WCAG 2.2 AA contrast standards, preserves visible focus across all
- * interactive controls, and respects prefers-reduced-motion.
+ * Platform stylesheet for every shared #580-#582 component state. It reads only the fixed
+ * variables from `generateThemeCssVariables`; text is always painted on the surface or fill
+ * #594 validated it against, and hover/pressed feedback uses the element's own validated
+ * foreground rather than new colours. Transitions use the platform `feedback` motion token and
+ * stop under reduced motion. Application definitions contribute token values only.
  */
-export const SHARED_COMPONENTS_CSS = `
-/* --- Global Reset & Root Scoping --- */
-[data-vortex-theme],
-.vortex-root {
-  box-sizing: border-box;
-  color: var(--vortex-foreground);
+const SHARED_COMPONENT_STYLES_CSS = `
+[data-vortex-theme] {
+  --vortex-motion-feedback: 100ms;
+  color: var(--vortex-text);
   background-color: var(--vortex-surface);
   font-family: var(--vortex-font-family);
   font-size: var(--vortex-font-size);
   line-height: var(--vortex-line-height);
+  font-weight: var(--vortex-font-weight);
 }
 
-[data-vortex-theme] *,
-.vortex-root * {
+/* Buttons: action button and display refresh, row-action and pagination controls */
+.vortex-button,
+.vortex-button-refresh,
+.vortex-button-row-action,
+.vortex-pagination-prev,
+.vortex-pagination-next {
   box-sizing: border-box;
-}
-
-/* --- Focus Preservation --- */
-/* Interactive elements MUST preserve visible focus. Focus is never hidden. */
-:focus-visible {
-  outline: var(--vortex-focus-outline);
-  outline-offset: var(--vortex-focus-offset, 2px);
-}
-
-/* --- Buttons (.vortex-button) --- */
-.vortex-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--vortex-spacing-xs, 0.25rem);
-  font-family: var(--vortex-font-family);
-  font-size: 0.875rem;
+  gap: var(--vortex-space-xs);
+  min-height: var(--vortex-control-min-height);
+  padding: var(--vortex-control-padding-y) var(--vortex-control-padding-x);
+  border: var(--vortex-border-width) var(--vortex-border-style) var(--vortex-border-color);
+  border-radius: var(--vortex-radius-md);
+  background-color: var(--vortex-secondary);
+  color: var(--vortex-on-secondary);
+  font: inherit;
   font-weight: 600;
-  line-height: 1;
-  padding: var(--vortex-density-control-padding-y, 0.5rem) var(--vortex-density-control-padding-x, 1rem);
-  min-height: var(--vortex-density-control-min-height, 2.5rem);
-  border-radius: var(--vortex-radius, 0.25rem);
-  border: var(--vortex-border-width, 1px) solid transparent;
+  line-height: 1.2;
   cursor: pointer;
-  text-decoration: none;
-  user-select: none;
-  transition:
-    background-color 140ms ease,
-    border-color 140ms ease,
-    color 140ms ease,
-    box-shadow 140ms ease,
-    opacity 140ms ease,
-    transform 140ms ease;
+  transition: box-shadow var(--vortex-motion-feedback) ease-out;
 }
 
-.vortex-button:focus-visible {
-  outline: var(--vortex-focus-outline);
-  outline-offset: var(--vortex-focus-offset, 2px);
-}
-
-.vortex-button:active:not(:disabled) {
-  transform: translateY(1px);
-}
-
-.vortex-button:disabled,
-.vortex-button[aria-disabled="true"] {
-  opacity: 0.6;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-.vortex-button[aria-busy="true"] {
-  cursor: wait;
-  opacity: 0.75;
-}
-
-/* Button Variants */
 .vortex-button-primary {
-  background-color: var(--vortex-color-primary);
-  color: var(--vortex-color-primary-foreground, #ffffff);
-  border-color: var(--vortex-color-primary);
-}
-
-.vortex-button-primary:hover:not(:disabled) {
-  background-color: var(--vortex-color-primary-hover, var(--vortex-color-primary));
-  filter: brightness(1.1);
-}
-
-.vortex-button-secondary {
-  background-color: var(--vortex-color-secondary, var(--vortex-surface-secondary));
-  color: var(--vortex-color-secondary-foreground, var(--vortex-foreground));
-  border-color: var(--vortex-color-border);
-}
-
-.vortex-button-secondary:hover:not(:disabled) {
-  filter: brightness(0.95);
-  border-color: var(--vortex-color-border-hover, var(--vortex-color-border));
+  background-color: var(--vortex-primary);
+  color: var(--vortex-on-primary);
+  border-color: var(--vortex-primary);
 }
 
 .vortex-button-danger {
-  background-color: var(--vortex-color-danger, #dc2626);
-  color: var(--vortex-color-danger-foreground, #ffffff);
-  border-color: var(--vortex-color-danger, #dc2626);
-}
-
-.vortex-button-danger:hover:not(:disabled) {
-  filter: brightness(1.1);
+  background-color: var(--vortex-danger);
+  color: var(--vortex-on-danger);
+  border-color: var(--vortex-danger);
 }
 
 .vortex-button-ghost {
   background-color: transparent;
-  color: var(--vortex-foreground);
+  color: var(--vortex-text);
   border-color: transparent;
 }
 
-.vortex-button-ghost:hover:not(:disabled) {
-  background-color: var(--vortex-color-primary-subtle, var(--vortex-surface-secondary));
+.vortex-button:hover:not(:disabled),
+.vortex-button-refresh:hover:not(:disabled),
+.vortex-button-row-action:hover:not(:disabled),
+.vortex-pagination-prev:hover:not(:disabled),
+.vortex-pagination-next:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 0.125rem currentColor;
 }
 
-/* --- Form Container & Fields --- */
-.vortex-form {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  gap: var(--vortex-spacing-md, 1rem);
+.vortex-button:active:not(:disabled),
+.vortex-button-refresh:active:not(:disabled),
+.vortex-button-row-action:active:not(:disabled),
+.vortex-pagination-prev:active:not(:disabled),
+.vortex-pagination-next:active:not(:disabled) {
+  box-shadow: inset 0 0 0 0.25rem currentColor;
 }
 
-.vortex-form-title {
-  margin: 0;
-  font-family: var(--vortex-font-family-heading, var(--vortex-font-family));
-  font-size: var(--vortex-font-size-heading, 1.5rem);
-  font-weight: var(--vortex-font-weight-heading, 700);
-  line-height: var(--vortex-line-height-heading, 1.25);
-  color: var(--vortex-foreground);
+.vortex-button:disabled,
+.vortex-button-refresh:disabled,
+.vortex-button-row-action:disabled,
+.vortex-pagination-prev:disabled,
+.vortex-pagination-next:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
+.vortex-button[aria-busy="true"] {
+  cursor: progress;
+  opacity: 0.75;
+}
+
+/* Form container and field parts */
+.vortex-form,
 .vortex-form-fields {
   display: flex;
   flex-direction: column;
-  gap: var(--vortex-spacing-sm, 0.5rem);
+  gap: var(--vortex-space-md);
+}
+
+.vortex-form-title,
+.vortex-display-title,
+.vortex-dialog-title,
+.vortex-drawer-title,
+.vortex-group-heading {
+  margin: 0;
+  font-family: var(--vortex-heading-font-family);
+  font-size: var(--vortex-heading-font-size);
+  line-height: var(--vortex-heading-line-height);
+  font-weight: var(--vortex-heading-font-weight);
+  color: var(--vortex-text);
 }
 
 .vortex-field {
   display: flex;
   flex-direction: column;
-  gap: var(--vortex-spacing-xs, 0.25rem);
-  margin-bottom: var(--vortex-spacing-sm, 0.5rem);
-  width: 100%;
+  gap: var(--vortex-space-xs);
 }
 
 .vortex-field-inline {
-  display: flex;
   flex-direction: row;
   align-items: center;
-  gap: var(--vortex-spacing-sm, 0.5rem);
+  gap: var(--vortex-space-sm);
 }
 
 .vortex-field-label {
-  font-family: var(--vortex-font-family);
-  font-size: 0.875rem;
   font-weight: 600;
-  color: var(--vortex-foreground);
-  user-select: none;
+  color: var(--vortex-text);
 }
 
-.vortex-field-required {
-  color: var(--vortex-color-danger, #dc2626);
-  font-weight: 700;
-  margin-left: 0.125rem;
-}
-
-.vortex-field-help {
-  font-family: var(--vortex-font-family);
-  font-size: 0.8125rem;
-  color: var(--vortex-foreground-muted);
-  margin-top: 0.125rem;
-}
-
+.vortex-field-required,
 .vortex-field-error {
-  font-family: var(--vortex-font-family);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--vortex-color-danger, #dc2626);
-  margin-top: 0.125rem;
+  color: var(--vortex-danger-text);
+  font-weight: 600;
 }
 
+.vortex-field-help,
 .vortex-field-note {
-  font-family: var(--vortex-font-family);
-  font-size: 0.8125rem;
-  color: var(--vortex-foreground-muted);
-  margin-top: 0.125rem;
+  color: var(--vortex-text-muted);
 }
 
-/* --- Text Input, Textarea, Select --- */
+/* Text, number, date and select inputs */
 .vortex-input,
 .vortex-textarea,
 .vortex-select {
-  width: 100%;
-  font-family: var(--vortex-font-family);
-  font-size: var(--vortex-font-size, 0.875rem);
-  color: var(--vortex-foreground);
-  background-color: var(--vortex-surface);
-  border: var(--vortex-border-width, 1px) var(--vortex-border-style, solid) var(--vortex-color-border);
-  border-radius: var(--vortex-radius, 0.25rem);
-  padding: var(--vortex-density-control-padding-y, 0.5rem) var(--vortex-density-control-padding-x, 0.75rem);
-  min-height: var(--vortex-density-control-min-height, 2.5rem);
   box-sizing: border-box;
-  transition:
-    border-color 140ms ease,
-    box-shadow 140ms ease,
-    background-color 140ms ease;
-}
-
-.vortex-input:hover:not(:disabled):not([readonly]),
-.vortex-textarea:hover:not(:disabled):not([readonly]),
-.vortex-select:hover:not(:disabled):not([readonly]) {
-  border-color: var(--vortex-color-border-hover, var(--vortex-foreground-muted));
-}
-
-.vortex-input:focus-visible,
-.vortex-textarea:focus-visible,
-.vortex-select:focus-visible {
-  outline: none;
-  border-color: var(--vortex-color-focus);
-  box-shadow: var(--vortex-focus-ring);
-}
-
-.vortex-input:disabled,
-.vortex-textarea:disabled,
-.vortex-select:disabled {
-  background-color: var(--vortex-color-disabled-surface);
-  color: var(--vortex-color-disabled-foreground);
-  border-color: var(--vortex-color-disabled-border);
-  cursor: not-allowed;
-  opacity: 0.85;
-}
-
-.vortex-input[readonly],
-.vortex-textarea[readonly] {
-  background-color: var(--vortex-surface-secondary);
-  cursor: default;
-}
-
-.vortex-input[aria-invalid="true"],
-.vortex-textarea[aria-invalid="true"],
-.vortex-select[aria-invalid="true"] {
-  border-color: var(--vortex-color-danger, #dc2626);
-}
-
-.vortex-input[aria-invalid="true"]:focus-visible,
-.vortex-textarea[aria-invalid="true"]:focus-visible,
-.vortex-select[aria-invalid="true"]:focus-visible {
-  border-color: var(--vortex-color-danger, #dc2626);
-  box-shadow: 0 0 0 var(--vortex-focus-width, 2px) var(--vortex-color-danger-border, #fca5a5);
+  width: 100%;
+  min-height: var(--vortex-control-min-height);
+  padding: var(--vortex-control-padding-y) var(--vortex-control-padding-x);
+  border: var(--vortex-border-width) var(--vortex-border-style) var(--vortex-border-color);
+  border-radius: var(--vortex-radius-md);
+  background-color: var(--vortex-surface);
+  color: var(--vortex-text);
+  font: inherit;
+  transition: border-color var(--vortex-motion-feedback) ease-out;
 }
 
 .vortex-textarea {
   min-height: 5.5rem;
   resize: vertical;
-  line-height: var(--vortex-line-height, 1.5);
 }
 
-/* --- Radio & Checkbox Controls --- */
+.vortex-input:hover:not(:disabled):not([readonly]),
+.vortex-textarea:hover:not(:disabled):not([readonly]),
+.vortex-select:hover:not(:disabled) {
+  border-color: var(--vortex-text);
+}
+
+.vortex-input[readonly],
+.vortex-textarea[readonly] {
+  border-style: dashed;
+}
+
+.vortex-input:disabled,
+.vortex-textarea:disabled,
+.vortex-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.vortex-input[aria-invalid="true"],
+.vortex-textarea[aria-invalid="true"],
+.vortex-select[aria-invalid="true"] {
+  border-color: var(--vortex-danger-text);
+  box-shadow: inset 0 0 0 0.0625rem var(--vortex-danger-text);
+}
+
+/* Checkbox, radio group, table selection and switch */
 .vortex-radio-group {
-  border: none;
-  padding: 0;
-  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--vortex-spacing-xs, 0.25rem);
+  gap: var(--vortex-space-xs);
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .vortex-radio-option {
   display: flex;
   align-items: center;
-  gap: var(--vortex-spacing-sm, 0.5rem);
-  margin: 0.125rem 0;
+  gap: var(--vortex-space-sm);
   cursor: pointer;
 }
 
 .vortex-checkbox,
-.vortex-radio {
-  accent-color: var(--vortex-color-primary);
+.vortex-radio,
+.vortex-selection-checkbox {
   width: 1.125rem;
   height: 1.125rem;
+  margin: 0;
+  accent-color: var(--vortex-accent);
   cursor: pointer;
 }
 
-.vortex-checkbox:focus-visible,
-.vortex-radio:focus-visible {
-  outline: var(--vortex-focus-outline);
-  outline-offset: var(--vortex-focus-offset, 2px);
+.vortex-checkbox:hover:not(:disabled),
+.vortex-radio:hover:not(:disabled),
+.vortex-selection-checkbox:hover:not(:disabled) {
+  box-shadow: 0 0 0 0.125rem var(--vortex-border-color);
 }
 
-.vortex-checkbox:disabled,
-.vortex-radio:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.vortex-checkbox[aria-invalid="true"],
-.vortex-radio[aria-invalid="true"] {
-  outline: 2px solid var(--vortex-color-danger, #dc2626);
-  outline-offset: 2px;
-}
-
-/* Switch */
 .vortex-switch {
+  box-sizing: border-box;
   position: relative;
-  width: 2.75rem;
-  height: 1.5rem;
-  border-radius: var(--vortex-radius-full, 9999px);
-  border: var(--vortex-border-width, 1px) solid var(--vortex-color-border);
-  background-color: var(--vortex-surface-secondary);
-  cursor: pointer;
-  padding: 2px;
   display: inline-flex;
   align-items: center;
+  width: 2.75rem;
+  height: 1.5rem;
+  padding: 0.125rem;
+  border: 0.0625rem solid var(--vortex-border-color);
+  border-radius: 999px;
+  background-color: var(--vortex-surface);
+  cursor: pointer;
   transition:
-    background-color 150ms ease,
-    border-color 150ms ease,
-    box-shadow 150ms ease;
-}
-
-.vortex-switch:focus-visible {
-  outline: var(--vortex-focus-outline);
-  outline-offset: var(--vortex-focus-offset, 2px);
-}
-
-.vortex-switch[aria-checked="true"] {
-  background-color: var(--vortex-color-primary);
-  border-color: var(--vortex-color-primary);
-}
-
-.vortex-switch:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.vortex-switch[aria-invalid="true"] {
-  border-color: var(--vortex-color-danger, #dc2626);
+    background-color var(--vortex-motion-feedback) ease-out,
+    border-color var(--vortex-motion-feedback) ease-out;
 }
 
 .vortex-switch-thumb {
   display: block;
-  width: 1.25rem;
-  height: 1.25rem;
-  border-radius: var(--vortex-radius-full, 9999px);
-  background-color: var(--vortex-surface, #ffffff);
-  box-shadow: var(--vortex-elevation-low);
-  transition: transform 150ms ease, background-color 150ms ease;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 999px;
+  background-color: var(--vortex-text-muted);
+  transition:
+    transform var(--vortex-motion-feedback) ease-out,
+    background-color var(--vortex-motion-feedback) ease-out;
+}
+
+.vortex-switch:hover:not(:disabled) {
+  border-color: var(--vortex-text);
+}
+
+.vortex-switch[aria-checked="true"] {
+  background-color: var(--vortex-accent);
+  border-color: var(--vortex-accent);
 }
 
 .vortex-switch[aria-checked="true"] .vortex-switch-thumb {
   transform: translateX(1.25rem);
+  background-color: var(--vortex-surface);
 }
 
-/* --- Tabs (.vortex-tabs) --- */
-.vortex-tabs {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
+.vortex-checkbox:disabled,
+.vortex-radio:disabled,
+.vortex-selection-checkbox:disabled,
+.vortex-switch:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
+.vortex-checkbox[aria-invalid="true"],
+.vortex-radio[aria-invalid="true"],
+.vortex-switch[aria-invalid="true"] {
+  box-shadow: 0 0 0 0.125rem var(--vortex-danger-text);
+}
+
+/* Tabs */
 .vortex-tablist {
   display: flex;
-  flex-direction: row;
-  border-bottom: var(--vortex-border-width, 1px) solid var(--vortex-color-border);
-  gap: var(--vortex-spacing-xs, 0.25rem);
-  margin-bottom: var(--vortex-spacing-sm, 0.5rem);
+  gap: var(--vortex-space-xs);
+  border-bottom: var(--vortex-border-width) var(--vortex-border-style) var(--vortex-border-color);
 }
 
 .vortex-tab {
+  padding: var(--vortex-control-padding-y) var(--vortex-control-padding-x);
+  border: 0;
+  border-bottom: 0.1875rem solid transparent;
   background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  padding: var(--vortex-spacing-sm, 0.5rem) var(--vortex-spacing-md, 1rem);
-  color: var(--vortex-foreground-muted);
-  font-family: var(--vortex-font-family);
-  font-size: 0.875rem;
-  font-weight: 500;
+  color: var(--vortex-text-muted);
+  font: inherit;
   cursor: pointer;
-  transition: color 140ms ease, border-color 140ms ease;
+  transition: border-color var(--vortex-motion-feedback) ease-out;
 }
 
 .vortex-tab:hover:not(:disabled) {
-  color: var(--vortex-foreground);
-}
-
-.vortex-tab:focus-visible {
-  outline: var(--vortex-focus-outline);
-  outline-offset: -2px;
+  color: var(--vortex-text);
+  border-bottom-color: var(--vortex-border-color);
 }
 
 .vortex-tab[aria-selected="true"] {
-  color: var(--vortex-color-primary, var(--vortex-foreground));
-  border-bottom-color: var(--vortex-color-primary, var(--vortex-foreground));
+  color: var(--vortex-text);
+  border-bottom-color: var(--vortex-accent);
   font-weight: 600;
 }
 
 .vortex-tab:disabled {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: not-allowed;
 }
 
 .vortex-tabpanel {
-  outline: none;
-  padding: var(--vortex-spacing-xs, 0.25rem) 0;
+  padding: var(--vortex-space-md) 0;
 }
 
-.vortex-tabpanel:focus-visible {
-  outline: var(--vortex-focus-outline);
-  outline-offset: 2px;
-}
-
-/* --- Modal Surface: Dialog & Drawer --- */
-dialog.vortex-dialog,
-dialog.vortex-drawer {
+/* Dialog and drawer */
+.vortex-dialog,
+.vortex-drawer {
+  padding: var(--vortex-space-lg);
+  border: var(--vortex-border-width) var(--vortex-border-style) var(--vortex-border-color);
+  border-radius: var(--vortex-radius-lg);
   background-color: var(--vortex-surface);
-  color: var(--vortex-foreground);
-  border: var(--vortex-border-width, 1px) solid var(--vortex-color-border);
-  border-radius: var(--vortex-radius-lg, 0.5rem);
+  color: var(--vortex-text);
   box-shadow: var(--vortex-elevation-high);
-  padding: var(--vortex-spacing-lg, 1.5rem);
-  box-sizing: border-box;
 }
 
-dialog.vortex-dialog::backdrop,
-dialog.vortex-drawer::backdrop {
+.vortex-dialog::backdrop,
+.vortex-drawer::backdrop {
   background-color: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(2px);
 }
 
 .vortex-dialog-header,
-.vortex-drawer-header {
+.vortex-drawer-header,
+.vortex-display-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--vortex-spacing-md, 1rem);
-}
-
-.vortex-dialog-title,
-.vortex-drawer-title {
-  margin: 0;
-  font-family: var(--vortex-font-family-heading, var(--vortex-font-family));
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--vortex-foreground);
+  gap: var(--vortex-space-sm);
+  margin-bottom: var(--vortex-space-md);
 }
 
 .vortex-dialog-close,
 .vortex-drawer-close {
+  min-width: var(--vortex-control-min-height);
+  min-height: var(--vortex-control-min-height);
+  border: 0;
+  border-radius: var(--vortex-radius-sm);
   background: transparent;
-  border: none;
+  color: var(--vortex-text-muted);
+  font: inherit;
   font-size: 1.5rem;
   line-height: 1;
-  color: var(--vortex-foreground-muted);
   cursor: pointer;
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--vortex-radius-sm);
-  transition: color 140ms ease, background-color 140ms ease;
 }
 
 .vortex-dialog-close:hover,
 .vortex-drawer-close:hover {
-  color: var(--vortex-foreground);
-  background-color: var(--vortex-surface-secondary);
-}
-
-.vortex-dialog-close:focus-visible,
-.vortex-drawer-close:focus-visible {
-  outline: var(--vortex-focus-outline);
-  outline-offset: 2px;
+  color: var(--vortex-text);
+  box-shadow: inset 0 0 0 0.125rem currentColor;
 }
 
 .vortex-dialog-body,
 .vortex-drawer-body {
   overflow-y: auto;
-  max-height: 70vh;
 }
 
 .vortex-dialog-actions,
 .vortex-drawer-actions {
   display: flex;
   justify-content: flex-end;
-  gap: var(--vortex-spacing-sm, 0.5rem);
-  margin-top: var(--vortex-spacing-lg, 1.5rem);
+  gap: var(--vortex-space-sm);
+  margin-top: var(--vortex-space-lg);
 }
 
-/* --- Validation Message --- */
+/* Validation messages: meaning is carried by text; the severity colour is an accent */
 .vortex-validation-message {
-  border-radius: var(--vortex-radius, 0.25rem);
-  padding: var(--vortex-spacing-sm, 0.5rem) var(--vortex-spacing-md, 1rem);
-  margin-bottom: var(--vortex-spacing-sm, 0.5rem);
-  font-family: var(--vortex-font-family);
+  padding: var(--vortex-space-sm) var(--vortex-space-md);
+  border: var(--vortex-border-width) var(--vortex-border-style) var(--vortex-border-color);
+  border-left-width: 0.25rem;
+  border-radius: var(--vortex-radius-md);
+  background-color: var(--vortex-surface);
+  color: var(--vortex-text);
 }
 
 .vortex-validation-error {
-  background-color: var(--vortex-color-danger-surface);
-  border: 1px solid var(--vortex-color-danger-border);
-  color: var(--vortex-color-danger);
+  border-left-color: var(--vortex-danger-text);
 }
 
 .vortex-validation-warning {
-  background-color: var(--vortex-color-warning-surface);
-  border: 1px solid var(--vortex-color-warning-border);
-  color: var(--vortex-color-warning);
+  border-left-color: var(--vortex-warning-text);
 }
 
 .vortex-validation-info {
-  background-color: var(--vortex-color-info-surface);
-  border: 1px solid var(--vortex-color-info-border);
-  color: var(--vortex-color-info);
+  border-left-color: var(--vortex-info-text);
 }
 
 .vortex-validation-title {
+  margin: 0 0 var(--vortex-space-xs);
   font-weight: 700;
-  margin: 0 0 0.25rem 0;
-  font-size: 0.875rem;
 }
 
-.vortex-validation-text {
-  margin: 0;
-  font-size: 0.875rem;
+.vortex-validation-error .vortex-validation-title {
+  color: var(--vortex-danger-text);
 }
 
+.vortex-validation-warning .vortex-validation-title {
+  color: var(--vortex-warning-text);
+}
+
+.vortex-validation-info .vortex-validation-title {
+  color: var(--vortex-info-text);
+}
+
+.vortex-validation-text,
 .vortex-validation-list {
   margin: 0;
-  padding-left: 1.25rem;
-  font-size: 0.875rem;
 }
 
-/* --- Display State Container --- */
+/* Display states */
 .vortex-display-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--vortex-spacing-lg, 1.5rem);
-  border-radius: var(--vortex-radius, 0.25rem);
-  font-family: var(--vortex-font-family);
-  font-size: 0.875rem;
-}
-
-.vortex-display-loading {
-  background-color: var(--vortex-surface-secondary);
-  color: var(--vortex-foreground-muted);
+  padding: var(--vortex-space-lg);
+  border: var(--vortex-border-width) solid var(--vortex-border-color);
+  border-radius: var(--vortex-radius-md);
+  background-color: var(--vortex-surface);
+  color: var(--vortex-text-muted);
 }
 
 .vortex-display-empty {
-  background-color: var(--vortex-surface-secondary);
-  color: var(--vortex-foreground-muted);
-  border: 1px dashed var(--vortex-color-border);
+  border-style: dashed;
+}
+
+.vortex-display-refused,
+.vortex-display-unavailable {
+  border-left-width: 0.25rem;
+  color: var(--vortex-text);
 }
 
 .vortex-display-refused {
-  background-color: var(--vortex-color-danger-surface);
-  border-left: 4px solid var(--vortex-color-danger);
-  color: var(--vortex-color-danger);
+  border-left-color: var(--vortex-danger-text);
 }
 
 .vortex-display-unavailable {
-  background-color: var(--vortex-color-warning-surface);
-  border-left: 4px solid var(--vortex-color-warning);
-  color: var(--vortex-color-warning);
-  margin-bottom: var(--vortex-spacing-sm, 0.5rem);
+  border-left-color: var(--vortex-warning-text);
+  margin-bottom: var(--vortex-space-sm);
 }
 
-/* --- Table Display (.vortex-table) --- */
+/* Table */
 .vortex-display-table {
-  width: 100%;
   overflow-x: auto;
 }
 
 .vortex-table {
   width: 100%;
   border-collapse: collapse;
-  font-family: var(--vortex-font-family);
-  font-size: 0.875rem;
-  color: var(--vortex-foreground);
 }
 
-.vortex-table-header-cell {
-  background-color: var(--vortex-surface-secondary);
-  color: var(--vortex-foreground-muted);
-  font-weight: 600;
-  text-align: left;
-  padding: var(--vortex-density-cell-padding-y) var(--vortex-density-cell-padding-x);
-  border-bottom: var(--vortex-border-width, 1px) solid var(--vortex-color-border);
-}
-
-.vortex-table-row {
-  border-bottom: var(--vortex-border-width, 1px) solid var(--vortex-color-border);
-  transition: background-color 100ms ease;
-}
-
-.vortex-table-row:hover {
-  background-color: var(--vortex-surface-secondary);
-}
-
+.vortex-table-header-cell,
 .vortex-table-cell {
-  padding: var(--vortex-density-cell-padding-y) var(--vortex-density-cell-padding-x);
+  padding: var(--vortex-cell-padding-y) var(--vortex-cell-padding-x);
+  text-align: start;
   vertical-align: middle;
 }
 
-.vortex-sort-button {
-  background: transparent;
-  border: none;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
+.vortex-table-header-cell {
   font-weight: 600;
-  border-radius: var(--vortex-radius-sm);
+  border-bottom: 0.125rem solid var(--vortex-border-color);
+}
+
+.vortex-table-row {
+  border-bottom: var(--vortex-border-width) var(--vortex-border-style) var(--vortex-border-color);
+}
+
+.vortex-table-row:hover > :first-child {
+  box-shadow: inset 0.1875rem 0 0 var(--vortex-border-color);
+}
+
+.vortex-table-row:has(.vortex-selection-checkbox:checked) > :first-child {
+  box-shadow: inset 0.25rem 0 0 var(--vortex-accent);
+}
+
+.vortex-table-col-select,
+.vortex-table-col-actions,
+.vortex-table-cell-select,
+.vortex-table-cell-action {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.vortex-sort-button {
   padding: 0.125rem 0.25rem;
+  border: 0;
+  border-radius: var(--vortex-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
 }
 
-.vortex-sort-button:focus-visible {
-  outline: var(--vortex-focus-outline);
-  outline-offset: 2px;
+.vortex-sort-button:hover {
+  text-decoration: underline;
 }
 
-/* --- List & Grouped Data Displays --- */
-.vortex-display-list,
-.vortex-display-grouped-data {
-  width: 100%;
-  font-family: var(--vortex-font-family);
+.vortex-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--vortex-space-sm);
+  margin-top: var(--vortex-space-sm);
 }
 
+.vortex-pagination-info {
+  color: var(--vortex-text-muted);
+}
+
+/* Lists, grouped data, record detail and summary values */
 .vortex-list-items,
 .vortex-group-items {
-  list-style: none;
-  padding: 0;
-  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--vortex-spacing-xs, 0.25rem);
+  gap: var(--vortex-space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .vortex-list-item,
 .vortex-group-item {
-  padding: var(--vortex-spacing-sm, 0.5rem) var(--vortex-spacing-md, 1rem);
-  border-radius: var(--vortex-radius, 0.25rem);
-  border: var(--vortex-border-width, 1px) solid var(--vortex-color-border);
+  display: flex;
+  align-items: center;
+  gap: var(--vortex-space-sm);
+  padding: var(--vortex-cell-padding-y) var(--vortex-cell-padding-x);
+  border: var(--vortex-border-width) var(--vortex-border-style) var(--vortex-border-color);
+  border-radius: var(--vortex-radius-md);
   background-color: var(--vortex-surface);
-  transition: background-color 100ms ease;
+  transition: border-color var(--vortex-motion-feedback) ease-out;
 }
 
 .vortex-list-item:hover,
 .vortex-group-item:hover {
-  background-color: var(--vortex-surface-secondary);
+  border-color: var(--vortex-text);
 }
 
-.vortex-group-heading {
-  font-family: var(--vortex-font-family-heading, var(--vortex-font-family));
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: var(--vortex-foreground);
-  margin: var(--vortex-spacing-md, 1rem) 0 var(--vortex-spacing-xs, 0.25rem);
+.vortex-list-content,
+.vortex-group-item-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
 }
 
 .vortex-list-heading,
 .vortex-group-item-heading {
   font-weight: 600;
-  color: var(--vortex-foreground);
 }
 
 .vortex-list-secondary,
-.vortex-group-item-secondary {
-  color: var(--vortex-foreground-muted);
-  font-size: 0.8125rem;
+.vortex-group-item-secondary,
+.vortex-group-empty,
+.vortex-summary-label,
+.vortex-group-summary-label {
+  color: var(--vortex-text-muted);
 }
 
-/* --- Record Detail Display --- */
-.vortex-display-record-detail {
-  width: 100%;
-  font-family: var(--vortex-font-family);
+.vortex-data-group + .vortex-data-group {
+  margin-top: var(--vortex-space-lg);
 }
 
-.vortex-record-detail-fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--vortex-spacing-md, 1rem);
-  margin: 0;
+.vortex-group-heading {
+  margin-bottom: var(--vortex-space-sm);
 }
 
-.vortex-record-detail-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.vortex-field-value {
-  margin: 0;
-  color: var(--vortex-foreground);
-  font-size: 0.875rem;
-}
-
-/* --- Summary Values Display --- */
-.vortex-display-summary-values {
-  width: 100%;
-  font-family: var(--vortex-font-family);
-}
-
+.vortex-group-summary,
+.vortex-record-detail-fields,
 .vortex-summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: var(--vortex-spacing-md, 1rem);
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--vortex-space-md);
+  margin: var(--vortex-space-sm) 0 0;
+}
+
+.vortex-record-detail-field,
+.vortex-group-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vortex-space-xs);
+}
+
+.vortex-field-value,
+.vortex-group-summary-value {
   margin: 0;
 }
 
 .vortex-summary-card {
   display: flex;
   flex-direction: column;
-  padding: var(--vortex-spacing-md, 1rem);
+  padding: var(--vortex-space-md);
+  border: var(--vortex-border-width) var(--vortex-border-style) var(--vortex-border-color);
+  border-radius: var(--vortex-radius-md);
   background-color: var(--vortex-surface);
-  border: var(--vortex-border-width, 1px) solid var(--vortex-color-border);
-  border-radius: var(--vortex-radius, 0.25rem);
   box-shadow: var(--vortex-elevation-low);
 }
 
-.vortex-summary-label {
-  color: var(--vortex-foreground-muted);
-  font-size: 0.8125rem;
-  font-weight: 500;
-}
-
 .vortex-summary-value {
-  margin: 0.25rem 0 0 0;
-  color: var(--vortex-foreground);
-  font-size: 1.5rem;
-  font-weight: 700;
+  margin: var(--vortex-space-xs) 0 0;
+  font-family: var(--vortex-heading-font-family);
+  font-size: var(--vortex-heading-font-size);
+  font-weight: var(--vortex-heading-font-weight);
 }
 
-/* --- Display Cells --- */
-.vortex-cell-text {
-  color: var(--vortex-foreground);
-}
-
+/* Display cells and rich text */
 .vortex-cell-number {
-  color: var(--vortex-foreground);
   font-variant-numeric: tabular-nums;
-}
-
-.vortex-cell-boolean {
-  color: var(--vortex-foreground);
-}
-
-.vortex-cell-date {
-  color: var(--vortex-foreground);
 }
 
 .vortex-cell-choice {
   display: inline-block;
-  padding: 0.125rem 0.5rem;
-  border-radius: var(--vortex-radius-full, 9999px);
-  background-color: var(--vortex-surface-secondary);
-  color: var(--vortex-foreground);
-  font-size: 0.8125rem;
-  font-weight: 500;
-}
-
-.vortex-cell-link {
-  color: var(--vortex-color-primary);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.vortex-cell-link:hover {
-  filter: brightness(1.15);
+  padding: 0 var(--vortex-space-sm);
+  border: 0.0625rem solid var(--vortex-border-color);
+  border-radius: 999px;
 }
 
 .vortex-cell-empty {
-  color: var(--vortex-foreground-muted);
-  opacity: 0.7;
+  color: var(--vortex-text-muted);
 }
 
-/* --- Rich Text Display --- */
-.vortex-display-rich-text,
-.vortex-cell-rich-text {
-  font-family: var(--vortex-font-family);
-  color: var(--vortex-foreground);
-  line-height: var(--vortex-line-height, 1.5);
-}
-
+.vortex-cell-link,
 .vortex-display-rich-text a,
 .vortex-cell-rich-text a {
-  color: var(--vortex-color-primary);
+  color: var(--vortex-text);
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-underline-offset: 0.125rem;
+}
+
+.vortex-cell-link:hover,
+.vortex-display-rich-text a:hover,
+.vortex-cell-rich-text a:hover {
+  text-decoration-thickness: 0.125rem;
 }
 
 .vortex-display-rich-text blockquote,
 .vortex-cell-rich-text blockquote {
-  border-left: 3px solid var(--vortex-color-border);
-  margin: var(--vortex-spacing-sm, 0.5rem) 0;
-  padding-left: var(--vortex-spacing-sm, 0.5rem);
-  color: var(--vortex-foreground-muted);
+  margin: var(--vortex-space-sm) 0;
+  padding-left: var(--vortex-space-sm);
+  border-left: 0.1875rem solid var(--vortex-border-color);
+  color: var(--vortex-text-muted);
 }
 
 .vortex-display-rich-text code,
 .vortex-cell-rich-text code {
-  font-family: var(--vortex-font-family-mono, monospace);
-  background-color: var(--vortex-surface-secondary);
-  padding: 0.125rem 0.25rem;
-  border-radius: var(--vortex-radius-sm, 0.125rem);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-/* --- Screen Reader Only Utility --- */
 .vortex-sr-only {
   position: absolute;
   width: 1px;
   height: 1px;
-  padding: 0;
   margin: -1px;
+  padding: 0;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
-  border-width: 0;
+  border: 0;
 }
 
-/* --- Motion Preservation Standard --- */
 @media (prefers-reduced-motion: reduce) {
-  .vortex-button,
-  .vortex-input,
-  .vortex-textarea,
-  .vortex-select,
-  .vortex-checkbox,
-  .vortex-radio,
-  .vortex-switch,
-  .vortex-switch-thumb,
-  .vortex-tab,
-  .vortex-table-row,
-  .vortex-list-item,
-  .vortex-group-item {
-    transition-duration: 1ms !important;
-    animation-duration: 1ms !important;
+  [data-vortex-theme] {
+    --vortex-motion-feedback: 0ms;
   }
+}
+
+/* Visible focus is a platform safeguard: no component or theme state may remove it. */
+[data-vortex-theme] :focus-visible {
+  outline: var(--vortex-focus-width) solid var(--vortex-focus-color) !important;
+  outline-offset: 0.125rem !important;
 }
 `.trim();
 
 /**
- * Complete CSS string containing both the fallback CSS variables and the shared components styles.
+ * The complete shared UI stylesheet: deterministic layout rules and themed component states.
+ * `PageLayoutRenderer` mounts it once for runtime pages and preview canvases.
  */
-export const ALL_THEME_AND_COMPONENT_STYLES_CSS = `
-${SHARED_COMPONENTS_CSS}
-`.trim();
+export const ALL_UI_STYLES_CSS = `${LAYOUT_ONLY_STYLES_CSS.trim()}\n\n${SHARED_COMPONENT_STYLES_CSS}`;

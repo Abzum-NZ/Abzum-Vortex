@@ -1,7 +1,6 @@
 import type { CSSProperties } from "react";
 import type { PlacementLayoutV2Contract } from "@vortex/contracts";
 import type { Breakpoint } from "./definition-error";
-import { SHARED_COMPONENTS_CSS } from "./theme/theme-styles";
 
 /**
  * Class names used for deterministic layout rendering.
@@ -170,13 +169,3 @@ export const LAYOUT_ONLY_STYLES_CSS = `
 
 ${GRID_POSITION_STYLES}
 `;
-
-/**
- * Combined stylesheet string including both deterministic layout rules and
- * shared component theme styles for browser-safe rendering.
- */
-export const ALL_UI_STYLES_CSS = `
-${LAYOUT_ONLY_STYLES_CSS}
-
-${SHARED_COMPONENTS_CSS}
-`.trim();

@@ -1,25 +1,14 @@
 export {
-  DEFAULT_THEME_VARIABLES_COMMON,
-  DEFAULT_THEME_VARIABLES_DARK,
-  DEFAULT_THEME_VARIABLES_LIGHT,
-  extractThemeTokens,
+  createThemeRootProps,
   generateThemeCssVariables,
-  generateThemeCssVariableStyle,
-  generateThemeStylesheet,
-  sanitizeCssIdentifier,
-  type ThemeCssVariableMap,
+  resolvePlacementTheme,
+  THEME_VARIABLE_NAMES,
+  type PlacementThemeScope,
+  type ThemeCssVariables,
   type ThemeMode,
+  type ThemeRootProps,
+  type ThemeTokens,
+  type ThemeVariableName,
 } from "./theme-variables";
 
-export {
-  ALL_THEME_AND_COMPONENT_STYLES_CSS,
-  SHARED_COMPONENTS_CSS,
-} from "./theme-styles";
-
-export {
-  computePlacementThemeStyle,
-  createThemeStyleProps,
-  mergeThemeOverrides,
-  resolveThemeVariablesForMode,
-  type ThemeStyleProps,
-} from "./theme-adapter";
+export { ALL_UI_STYLES_CSS } from "./theme-styles";

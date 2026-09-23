@@ -1,395 +1,365 @@
 import type { CSSProperties } from "react";
 import type { ApplicationThemeV2, ThemeTokenValueV2 } from "@vortex/contracts";
 
-export type ThemeMode = "light" | "dark";
+/** Appearance selection. `system` follows the person's browser colour-scheme preference. */
+export type ThemeMode = "light" | "dark" | "system";
 
-export type ThemeCssVariableMap = Readonly<Record<`--${string}`, string>>;
+/** Resolved, validated #594 theme tokens keyed by builder key. */
+export type ThemeTokens = Readonly<Record<string, ThemeTokenValueV2>>;
 
 /**
- * Sanitizes a token key into a safe, bounded CSS custom property identifier segment.
- * Accepts only letters, digits, underscores, and hyphens. Strips illegal characters.
+ * The only CSS custom properties the shared component stylesheet reads. Names are fixed
+ * platform names; application token keys never become CSS names, selectors or class names.
  */
-export function sanitizeCssIdentifier(raw: string): string {
-  const sanitized = raw
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]/g, "-")
-    .replace(/_+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return sanitized.length > 0 ? sanitized : "default";
+export const THEME_VARIABLE_NAMES = [
+  "--vortex-surface",
+  "--vortex-text",
+  "--vortex-text-muted",
+  "--vortex-border-color",
+  "--vortex-accent",
+  "--vortex-primary",
+  "--vortex-on-primary",
+  "--vortex-secondary",
+  "--vortex-on-secondary",
+  "--vortex-danger",
+  "--vortex-on-danger",
+  "--vortex-danger-text",
+  "--vortex-warning-text",
+  "--vortex-info-text",
+  "--vortex-focus-color",
+  "--vortex-focus-width",
+  "--vortex-font-family",
+  "--vortex-font-size",
+  "--vortex-line-height",
+  "--vortex-font-weight",
+  "--vortex-heading-font-family",
+  "--vortex-heading-font-size",
+  "--vortex-heading-line-height",
+  "--vortex-heading-font-weight",
+  "--vortex-space-xs",
+  "--vortex-space-sm",
+  "--vortex-space-md",
+  "--vortex-space-lg",
+  "--vortex-space-xl",
+  "--vortex-radius-sm",
+  "--vortex-radius-md",
+  "--vortex-radius-lg",
+  "--vortex-border-width",
+  "--vortex-border-style",
+  "--vortex-elevation-low",
+  "--vortex-elevation-high",
+  "--vortex-control-padding-y",
+  "--vortex-control-padding-x",
+  "--vortex-control-min-height",
+  "--vortex-cell-padding-y",
+  "--vortex-cell-padding-x",
+] as const;
+
+export type ThemeVariableName = (typeof THEME_VARIABLE_NAMES)[number];
+export type ThemeCssVariables = Readonly<Record<ThemeVariableName, string>>;
+
+type ColorPair = Readonly<{ light: string; dark: string }>;
+
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+const BUILDER_KEY = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+const FONT_FALLBACK = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+
+/**
+ * Surface keys in the exact order #594 selects the surface its text, brand and focus
+ * contrast checks run against. The painted surface must be that same surface.
+ */
+const SURFACE_PRIORITY = ["background", "canvas", "surface", "bg", "page_background", "app_background"];
+const SURFACE_SUFFIXES = ["_background", "_bg", "_surface", "_canvas"];
+
+/** #594 default contrast surfaces, used when a theme declares no surface token. */
+const DEFAULT_SURFACE: ColorPair = { light: "#ffffff", dark: "#000000" };
+const DEFAULT_TEXT: ColorPair = { light: "#111827", dark: "#f3f4f6" };
+
+/** Platform defaults, readable on the default surface in both appearances. */
+const PLATFORM_DEFAULTS: Readonly<{
+  textMuted: ColorPair;
+  border: ColorPair;
+  accent: ColorPair;
+  primary: ColorPair;
+  onPrimary: ColorPair;
+  danger: ColorPair;
+  onDanger: ColorPair;
+  dangerText: ColorPair;
+  warningText: ColorPair;
+  infoText: ColorPair;
+  focus: ColorPair;
+}> = {
+  textMuted: { light: "#4b5563", dark: "#9ca3af" },
+  border: { light: "#8b958f", dark: "#6b7570" },
+  accent: { light: "#10211b", dark: "#d7ff54" },
+  primary: { light: "#10211b", dark: "#d7ff54" },
+  onPrimary: { light: "#ffffff", dark: "#10211b" },
+  danger: { light: "#b91c1c", dark: "#f87171" },
+  onDanger: { light: "#ffffff", dark: "#000000" },
+  dangerText: { light: "#b91c1c", dark: "#f87171" },
+  warningText: { light: "#92400e", dark: "#fbbf24" },
+  infoText: { light: "#1d4ed8", dark: "#60a5fa" },
+  focus: { light: "#1d4ed8", dark: "#60a5fa" },
+};
+
+const PLATFORM_ELEVATION = [
+  "none",
+  "0 1px 2px rgba(0, 0, 0, 0.12)",
+  "0 4px 8px rgba(0, 0, 0, 0.16)",
+  "0 10px 24px rgba(0, 0, 0, 0.2)",
+  "0 20px 48px rgba(0, 0, 0, 0.26)",
+] as const;
+
+const DENSITY = {
+  comfortable: { controlY: "0.5rem", controlX: "0.75rem", minHeight: "2.5rem", cellY: "0.625rem", cellX: "0.875rem" },
+  compact: { controlY: "0.25rem", controlX: "0.5rem", minHeight: "2rem", cellY: "0.375rem", cellX: "0.5rem" },
+} as const;
+
+const colorValue = (pair: ColorPair): string => `light-dark(${pair.light}, ${pair.dark})`;
+
+const rem = (value: number, minimum = 0): string | undefined =>
+  Number.isFinite(value) && value >= minimum ? `${value}rem` : undefined;
+
+const plainNumber = (value: number): string | undefined =>
+  Number.isFinite(value) && value > 0 ? String(value) : undefined;
+
+const fontWeight = (value: number): string | undefined =>
+  Number.isInteger(value) && value >= 100 && value <= 900 ? String(value) : undefined;
+
+const fontFamily = (familyKey: string): string | undefined =>
+  BUILDER_KEY.test(familyKey) ? `"${familyKey.replace(/_/g, " ")}", ${FONT_FALLBACK}` : undefined;
+
+function colorPair(tokens: ThemeTokens, key: string): ColorPair | undefined {
+  const token = tokens[key];
+  if (token?.kind !== "color_pair") return undefined;
+  return HEX_COLOR.test(token.light) && HEX_COLOR.test(token.dark)
+    ? { light: token.light, dark: token.dark }
+    : undefined;
 }
 
-/**
- * Converts an integer elevation level (0..N) to a deterministic box-shadow string.
- */
-function elevationLevelToBoxShadow(level: number): string {
-  switch (level) {
-    case 0:
-      return "none";
-    case 1:
-      return "0 1px 2px 0 rgba(0, 0, 0, 0.05)";
-    case 2:
-      return "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)";
-    case 3:
-      return "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)";
-    case 4:
-      return "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)";
-    default:
-      return "0 25px 50px -12px rgba(0, 0, 0, 0.25)";
+function tokenOfKind<Kind extends ThemeTokenValueV2["kind"]>(
+  tokens: ThemeTokens,
+  key: string,
+  kind: Kind,
+): Extract<ThemeTokenValueV2, { kind: Kind }> | undefined {
+  const token = tokens[key];
+  return token?.kind === kind ? (token as Extract<ThemeTokenValueV2, { kind: Kind }>) : undefined;
+}
+
+/** Mirrors #594's surface selection so painted text is always on its validated surface. */
+function themeSurface(tokens: ThemeTokens): ColorPair | undefined {
+  const keys = Object.keys(tokens).sort();
+  const selected =
+    SURFACE_PRIORITY.find((key) => colorPair(tokens, key) !== undefined) ??
+    keys.find(
+      (key) =>
+        colorPair(tokens, key) !== undefined &&
+        SURFACE_SUFFIXES.some((suffix) => key.endsWith(suffix)),
+    );
+  return selected === undefined ? undefined : colorPair(tokens, selected);
+}
+
+/** A fill and its #594-validated foreground (`<key>_foreground` or `on_<key>`), or nothing. */
+function filledPair(tokens: ThemeTokens, key: string): readonly [ColorPair, ColorPair] | undefined {
+  const fill = colorPair(tokens, key);
+  const foreground = colorPair(tokens, `${key}_foreground`) ?? colorPair(tokens, `on_${key}`);
+  return fill === undefined || foreground === undefined ? undefined : [fill, foreground];
+}
+
+/** The token named after its kind, else the first declared token of that kind. */
+function namedOrFirst<Kind extends "focus" | "density">(
+  tokens: ThemeTokens,
+  kind: Kind,
+): Extract<ThemeTokenValueV2, { kind: Kind }> | undefined {
+  const named = tokenOfKind(tokens, kind, kind);
+  if (named !== undefined) return named;
+  for (const key of Object.keys(tokens).sort()) {
+    const token = tokenOfKind(tokens, key, kind);
+    if (token !== undefined) return token;
   }
+  return undefined;
 }
 
 /**
- * Canonical fallback CSS variables for light appearance.
- * All contrast pairs exceed WCAG 2.2 AA (normal text >= 4.5:1, non-text/focus >= 3.0:1).
- */
-export const DEFAULT_THEME_VARIABLES_LIGHT: ThemeCssVariableMap = Object.freeze({
-  "--vortex-surface": "#ffffff",
-  "--vortex-surface-secondary": "#f9fafb",
-  "--vortex-surface-tertiary": "#f3f4f6",
-  "--vortex-foreground": "#111827",
-  "--vortex-foreground-muted": "#52615b",
-  "--vortex-color-primary": "#10211b",
-  "--vortex-color-primary-foreground": "#ffffff",
-  "--vortex-color-primary-hover": "#1d382f",
-  "--vortex-color-primary-subtle": "rgba(16, 33, 27, 0.06)",
-  "--vortex-color-secondary": "#f3f4f6",
-  "--vortex-color-secondary-foreground": "#1f2937",
-  "--vortex-color-border": "rgba(16, 33, 27, 0.18)",
-  "--vortex-color-border-hover": "#52615b",
-  "--vortex-color-focus": "#2563eb",
-  "--vortex-color-danger": "#dc2626",
-  "--vortex-color-danger-foreground": "#ffffff",
-  "--vortex-color-danger-surface": "#fef2f2",
-  "--vortex-color-danger-border": "#fca5a5",
-  "--vortex-color-warning": "#d97706",
-  "--vortex-color-warning-foreground": "#78350f",
-  "--vortex-color-warning-surface": "#fffbeb",
-  "--vortex-color-warning-border": "#fde68a",
-  "--vortex-color-info": "#2563eb",
-  "--vortex-color-info-foreground": "#ffffff",
-  "--vortex-color-info-surface": "#eff6ff",
-  "--vortex-color-info-border": "#bfdbfe",
-  "--vortex-color-disabled-surface": "#f3f4f6",
-  "--vortex-color-disabled-foreground": "#9ca3af",
-  "--vortex-color-disabled-border": "#e5e7eb",
-});
-
-/**
- * Canonical fallback CSS variables for dark appearance.
- * All contrast pairs exceed WCAG 2.2 AA (normal text >= 4.5:1, non-text/focus >= 3.0:1).
- */
-export const DEFAULT_THEME_VARIABLES_DARK: ThemeCssVariableMap = Object.freeze({
-  "--vortex-surface": "#121816",
-  "--vortex-surface-secondary": "#1a2420",
-  "--vortex-surface-tertiary": "#24322d",
-  "--vortex-foreground": "#f3f0e8",
-  "--vortex-foreground-muted": "#9db0a8",
-  "--vortex-color-primary": "#d7ff54",
-  "--vortex-color-primary-foreground": "#10211b",
-  "--vortex-color-primary-hover": "#c5f03d",
-  "--vortex-color-primary-subtle": "rgba(215, 255, 84, 0.12)",
-  "--vortex-color-secondary": "#24322d",
-  "--vortex-color-secondary-foreground": "#f3f0e8",
-  "--vortex-color-border": "rgba(243, 240, 232, 0.22)",
-  "--vortex-color-border-hover": "#9db0a8",
-  "--vortex-color-focus": "#60a5fa",
-  "--vortex-color-danger": "#f87171",
-  "--vortex-color-danger-foreground": "#121816",
-  "--vortex-color-danger-surface": "#450a0a",
-  "--vortex-color-danger-border": "#991b1b",
-  "--vortex-color-warning": "#fbbf24",
-  "--vortex-color-warning-foreground": "#121816",
-  "--vortex-color-warning-surface": "#451a03",
-  "--vortex-color-warning-border": "#b45309",
-  "--vortex-color-info": "#60a5fa",
-  "--vortex-color-info-foreground": "#121816",
-  "--vortex-color-info-surface": "#172554",
-  "--vortex-color-info-border": "#1e40af",
-  "--vortex-color-disabled-surface": "#1a2420",
-  "--vortex-color-disabled-foreground": "#657770",
-  "--vortex-color-disabled-border": "rgba(243, 240, 232, 0.12)",
-});
-
-/**
- * Common layout, typography, spacing, border, elevation, and density variables.
- */
-export const DEFAULT_THEME_VARIABLES_COMMON: ThemeCssVariableMap = Object.freeze({
-  "--vortex-font-family": 'Arial, Helvetica, system-ui, -apple-system, sans-serif',
-  "--vortex-font-size": "1rem",
-  "--vortex-line-height": "1.5",
-  "--vortex-font-weight": "400",
-  "--vortex-font-family-heading": 'Arial, Helvetica, system-ui, -apple-system, sans-serif',
-  "--vortex-font-size-heading": "1.5rem",
-  "--vortex-line-height-heading": "1.25",
-  "--vortex-font-weight-heading": "700",
-  "--vortex-font-family-mono": 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-  "--vortex-spacing-xs": "0.25rem",
-  "--vortex-spacing-sm": "0.5rem",
-  "--vortex-spacing-md": "1rem",
-  "--vortex-spacing-lg": "1.5rem",
-  "--vortex-spacing-xl": "2rem",
-  "--vortex-spacing-2xl": "3rem",
-  "--vortex-radius-none": "0px",
-  "--vortex-radius-sm": "0.125rem",
-  "--vortex-radius-md": "0.25rem",
-  "--vortex-radius-lg": "0.5rem",
-  "--vortex-radius-full": "9999px",
-  "--vortex-radius": "0.25rem",
-  "--vortex-border-width": "0.0625rem",
-  "--vortex-border-style": "solid",
-  "--vortex-border": "0.0625rem solid var(--vortex-color-border)",
-  "--vortex-focus-width": "0.1875rem",
-  "--vortex-focus-offset": "0.125rem",
-  "--vortex-focus-outline": "0.1875rem solid var(--vortex-color-focus)",
-  "--vortex-focus-ring": "0 0 0 0.1875rem var(--vortex-color-focus)",
-  "--vortex-elevation-none": "none",
-  "--vortex-elevation-low": "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
-  "--vortex-elevation-medium": "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)",
-  "--vortex-elevation-high": "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)",
-  "--vortex-density": "comfortable",
-  "--vortex-density-control-padding-y": "0.5rem",
-  "--vortex-density-control-padding-x": "0.75rem",
-  "--vortex-density-control-min-height": "2.5rem",
-  "--vortex-density-cell-padding-y": "0.625rem",
-  "--vortex-density-cell-padding-x": "0.875rem",
-});
-
-/**
- * Extracts raw tokens from an ApplicationThemeV2 or token map.
- */
-export function extractThemeTokens(
-  themeOrTokens: ApplicationThemeV2 | Readonly<Record<string, ThemeTokenValueV2>>,
-): Readonly<Record<string, ThemeTokenValueV2>> {
-  if ("tokens" in themeOrTokens && typeof themeOrTokens.tokens === "object" && themeOrTokens.tokens !== null) {
-    return themeOrTokens.tokens;
-  }
-  return themeOrTokens as Readonly<Record<string, ThemeTokenValueV2>>;
-}
-
-/**
- * Generates a complete, bounded CSS-variable map from resolved #594 theme tokens.
+ * Generates the complete, bounded CSS-variable map for shared components from resolved
+ * #594 tokens. Every colour carries both appearances through `light-dark()`, so one map
+ * serves light, dark and system selection through the container's `color-scheme`.
  *
- * Covers typography, color, spacing, borders, focus, elevation and density.
- * Evaluates color pairs according to the requested mode ("light", "dark", or mode-independent).
- * Always preserves visible focus with minimum 1px / 0.0625rem width and high-contrast outline.
+ * Declared token roles (one key per role, no aliases):
+ * - colour: #594-selected surface with `text`; `muted_text`; `border`; `primary` (accent);
+ *   filled pairs `primary`, `secondary`, `danger` with `<key>_foreground` or `on_<key>`;
+ *   `danger_text`, `warning_text`, `info_text`.
+ * - typography `body` and `heading`; spacing `space_xs`..`space_xl`; corners
+ *   `radius_sm`..`radius_lg`; border `border`; elevation `elevation_low`, `elevation_high`;
+ *   focus `focus` (or the first focus token); density `density` (or the first density token).
  *
- * Application definitions cannot supply arbitrary CSS strings, class names or scripts.
+ * A colour is applied only where #594 validated it against what is painted beneath it;
+ * otherwise the readable platform value is kept. Only validated hex colours, finite numbers
+ * and builder-key font families are emitted, so a definition cannot inject CSS.
  */
-export function generateThemeCssVariables(
-  themeOrTokens: ApplicationThemeV2 | Readonly<Record<string, ThemeTokenValueV2>>,
-  mode?: ThemeMode,
-): ThemeCssVariableMap {
-  const tokens = extractThemeTokens(themeOrTokens);
-  const result: Record<`--${string}`, string> = {};
+export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables {
+  const appSurface = themeSurface(tokens);
+  const appText = colorPair(tokens, "text");
+  // Surface and text change together so body text is never painted on an unvalidated surface.
+  const surfaceFromTheme = appSurface !== undefined && appText !== undefined;
+  // #594 validated text-like colours against the surface actually painted.
+  const surfaceValidated = appSurface === undefined || surfaceFromTheme;
+  const surface = surfaceFromTheme ? appSurface : DEFAULT_SURFACE;
+  const text = surfaceFromTheme || appSurface === undefined ? (appText ?? DEFAULT_TEXT) : DEFAULT_TEXT;
 
-  // 1. Seed with common and mode fallbacks
-  Object.assign(result, DEFAULT_THEME_VARIABLES_COMMON);
-  if (mode === "dark") {
-    Object.assign(result, DEFAULT_THEME_VARIABLES_DARK);
-  } else {
-    Object.assign(result, DEFAULT_THEME_VARIABLES_LIGHT);
-  }
+  // Fallbacks are concrete values rather than var() references, so a placement override
+  // that changes one role never leaves a derived role holding an inherited colour.
+  /** A surface-relative colour: the theme's validated value, else a readable fallback. */
+  const onSurface = (key: string, platform: ColorPair): string => {
+    const themed = surfaceValidated ? colorPair(tokens, key) : undefined;
+    return colorValue(themed ?? (surfaceFromTheme ? text : platform));
+  };
 
-  // 2. Iterate sorted tokens for determinism
-  const tokenKeys = Object.keys(tokens).sort();
-  for (const key of tokenKeys) {
-    const token = tokens[key];
-    if (token === undefined) continue;
-    const cssKey = sanitizeCssIdentifier(key);
+  const primary = filledPair(tokens, "primary");
+  const secondary = filledPair(tokens, "secondary");
+  const danger = filledPair(tokens, "danger");
 
-    switch (token.kind) {
-      case "color_pair": {
-        // Mode-specific color values
-        result[`--vortex-color-${cssKey}-light`] = token.light;
-        result[`--vortex-color-${cssKey}-dark`] = token.dark;
-        const activeColor = mode === "dark" ? token.dark : token.light;
-        result[`--vortex-color-${cssKey}`] = activeColor;
+  const focus = namedOrFirst(tokens, "focus");
+  const focusColor = focus === undefined || !surfaceValidated ? undefined : colorPair(tokens, focus.colorToken);
+  const border = tokens.border;
+  const borderColor =
+    border?.kind === "border"
+      ? colorPair(tokens, border.colorToken)
+      : border?.kind === "color_pair"
+        ? colorPair(tokens, "border")
+        : undefined;
 
-        // Semantic mappings
-        if (
-          cssKey === "surface" ||
-          cssKey === "background" ||
-          cssKey === "canvas" ||
-          cssKey === "page-background"
-        ) {
-          result["--vortex-surface"] = activeColor;
-        } else if (cssKey === "foreground" || cssKey === "text" || cssKey === "body") {
-          result["--vortex-foreground"] = activeColor;
-        } else if (cssKey === "primary" || cssKey === "brand") {
-          result["--vortex-color-primary"] = activeColor;
-          result["--vortex-color-primary-hover"] = activeColor;
-        } else if (cssKey === "primary-foreground" || cssKey === "on-primary") {
-          result["--vortex-color-primary-foreground"] = activeColor;
-        } else if (cssKey === "secondary") {
-          result["--vortex-color-secondary"] = activeColor;
-        } else if (cssKey === "secondary-foreground" || cssKey === "on-secondary") {
-          result["--vortex-color-secondary-foreground"] = activeColor;
-        } else if (cssKey === "muted" || cssKey === "muted-foreground") {
-          result["--vortex-foreground-muted"] = activeColor;
-        } else if (cssKey === "border") {
-          result["--vortex-color-border"] = activeColor;
-        } else if (cssKey === "danger" || cssKey === "error") {
-          result["--vortex-color-danger"] = activeColor;
-        } else if (cssKey === "danger-foreground") {
-          result["--vortex-color-danger-foreground"] = activeColor;
-        } else if (cssKey === "warning") {
-          result["--vortex-color-warning"] = activeColor;
-        } else if (cssKey === "warning-foreground") {
-          result["--vortex-color-warning-foreground"] = activeColor;
-        } else if (cssKey === "info") {
-          result["--vortex-color-info"] = activeColor;
-        } else if (cssKey === "focus") {
-          result["--vortex-color-focus"] = activeColor;
-        }
-        break;
-      }
+  const body = tokenOfKind(tokens, "body", "typography");
+  const heading = tokenOfKind(tokens, "heading", "typography");
+  const density = DENSITY[namedOrFirst(tokens, "density")?.value ?? "comfortable"];
 
-      case "typography": {
-        result[`--vortex-font-family-${cssKey}`] = token.family;
-        result[`--vortex-font-size-${cssKey}`] = `${token.sizeRem}rem`;
-        result[`--vortex-line-height-${cssKey}`] = String(token.lineHeight);
-        result[`--vortex-font-weight-${cssKey}`] = String(token.weight);
+  const spacing = (key: string, fallback: string): string => {
+    const token = tokenOfKind(tokens, key, "spacing");
+    return (token === undefined ? undefined : rem(token.rem)) ?? fallback;
+  };
+  const corners = (key: string, fallback: string): string => {
+    const token = tokenOfKind(tokens, key, "corners");
+    return (token === undefined ? undefined : rem(token.rem)) ?? fallback;
+  };
+  const elevation = (key: string, fallback: string): string => {
+    const token = tokenOfKind(tokens, key, "elevation");
+    if (token === undefined || !Number.isInteger(token.level) || token.level < 0) return fallback;
+    return PLATFORM_ELEVATION[Math.min(token.level, PLATFORM_ELEVATION.length - 1)] ?? fallback;
+  };
 
-        if (cssKey === "body" || cssKey === "default" || cssKey === "text") {
-          result["--vortex-font-family"] = token.family;
-          result["--vortex-font-size"] = `${token.sizeRem}rem`;
-          result["--vortex-line-height"] = String(token.lineHeight);
-          result["--vortex-font-weight"] = String(token.weight);
-        } else if (cssKey === "heading" || cssKey === "title") {
-          result["--vortex-font-family-heading"] = token.family;
-          result["--vortex-font-size-heading"] = `${token.sizeRem}rem`;
-          result["--vortex-line-height-heading"] = String(token.lineHeight);
-          result["--vortex-font-weight-heading"] = String(token.weight);
-        } else if (cssKey === "mono" || cssKey === "code") {
-          result["--vortex-font-family-mono"] = token.family;
-        }
-        break;
-      }
+  const bodyFamily = (body === undefined ? undefined : fontFamily(body.family)) ?? FONT_FALLBACK;
 
-      case "spacing": {
-        result[`--vortex-spacing-${cssKey}`] = `${token.rem}rem`;
-        if (cssKey === "md" || cssKey === "default") {
-          result["--vortex-spacing-md"] = `${token.rem}rem`;
-        }
-        break;
-      }
+  return Object.freeze({
+    "--vortex-surface": colorValue(surface),
+    "--vortex-text": colorValue(text),
+    "--vortex-text-muted": onSurface("muted_text", PLATFORM_DEFAULTS.textMuted),
+    "--vortex-border-color": colorValue(borderColor ?? PLATFORM_DEFAULTS.border),
+    "--vortex-accent": onSurface("primary", PLATFORM_DEFAULTS.accent),
+    "--vortex-primary": colorValue(primary?.[0] ?? PLATFORM_DEFAULTS.primary),
+    "--vortex-on-primary": colorValue(primary?.[1] ?? PLATFORM_DEFAULTS.onPrimary),
+    "--vortex-secondary": colorValue(secondary?.[0] ?? surface),
+    "--vortex-on-secondary": colorValue(secondary?.[1] ?? text),
+    "--vortex-danger": colorValue(danger?.[0] ?? PLATFORM_DEFAULTS.danger),
+    "--vortex-on-danger": colorValue(danger?.[1] ?? PLATFORM_DEFAULTS.onDanger),
+    "--vortex-danger-text": onSurface("danger_text", PLATFORM_DEFAULTS.dangerText),
+    "--vortex-warning-text": onSurface("warning_text", PLATFORM_DEFAULTS.warningText),
+    "--vortex-info-text": onSurface("info_text", PLATFORM_DEFAULTS.infoText),
+    "--vortex-focus-color": colorValue(
+      focusColor ?? (surfaceFromTheme ? text : PLATFORM_DEFAULTS.focus),
+    ),
+    // Visible focus is never thinner than #594's 1px minimum.
+    "--vortex-focus-width": (focus === undefined ? undefined : rem(focus.widthRem, 0.0625)) ?? "0.125rem",
+    "--vortex-font-family": bodyFamily,
+    "--vortex-font-size": (body === undefined ? undefined : rem(body.sizeRem, 0.5)) ?? "1rem",
+    "--vortex-line-height": (body === undefined ? undefined : plainNumber(body.lineHeight)) ?? "1.5",
+    "--vortex-font-weight": (body === undefined ? undefined : fontWeight(body.weight)) ?? "400",
+    "--vortex-heading-font-family":
+      (heading === undefined ? undefined : fontFamily(heading.family)) ?? bodyFamily,
+    "--vortex-heading-font-size": (heading === undefined ? undefined : rem(heading.sizeRem, 0.5)) ?? "1.25rem",
+    "--vortex-heading-line-height":
+      (heading === undefined ? undefined : plainNumber(heading.lineHeight)) ?? "1.25",
+    "--vortex-heading-font-weight":
+      (heading === undefined ? undefined : fontWeight(heading.weight)) ?? "700",
+    "--vortex-space-xs": spacing("space_xs", "0.25rem"),
+    "--vortex-space-sm": spacing("space_sm", "0.5rem"),
+    "--vortex-space-md": spacing("space_md", "1rem"),
+    "--vortex-space-lg": spacing("space_lg", "1.5rem"),
+    "--vortex-space-xl": spacing("space_xl", "2rem"),
+    "--vortex-radius-sm": corners("radius_sm", "0.125rem"),
+    "--vortex-radius-md": corners("radius_md", "0.25rem"),
+    "--vortex-radius-lg": corners("radius_lg", "0.5rem"),
+    "--vortex-border-width":
+      (border?.kind === "border" ? rem(border.widthRem, 0.0625) : undefined) ?? "0.0625rem",
+    "--vortex-border-style": border?.kind === "border" && border.style === "dashed" ? "dashed" : "solid",
+    "--vortex-elevation-low": elevation("elevation_low", PLATFORM_ELEVATION[1]),
+    "--vortex-elevation-high": elevation("elevation_high", PLATFORM_ELEVATION[3]),
+    "--vortex-control-padding-y": density.controlY,
+    "--vortex-control-padding-x": density.controlX,
+    "--vortex-control-min-height": density.minHeight,
+    "--vortex-cell-padding-y": density.cellY,
+    "--vortex-cell-padding-x": density.cellX,
+  } satisfies Record<ThemeVariableName, string>);
+}
 
-      case "corners": {
-        result[`--vortex-radius-${cssKey}`] = `${token.rem}rem`;
-        if (cssKey === "md" || cssKey === "default") {
-          result["--vortex-radius"] = `${token.rem}rem`;
-          result["--vortex-radius-md"] = `${token.rem}rem`;
-        }
-        break;
-      }
+const COLOR_SCHEME: Readonly<Record<ThemeMode, string>> = {
+  light: "light",
+  dark: "dark",
+  system: "light dark",
+};
 
-      case "border": {
-        const colorIdent = sanitizeCssIdentifier(token.colorToken);
-        const colorVar = `var(--vortex-color-${colorIdent}, var(--vortex-color-border))`;
-        result[`--vortex-border-width-${cssKey}`] = `${token.widthRem}rem`;
-        result[`--vortex-border-style-${cssKey}`] = token.style;
-        result[`--vortex-border-color-${cssKey}`] = colorVar;
-        result[`--vortex-border-${cssKey}`] = `${token.widthRem}rem ${token.style} ${colorVar}`;
+export type ThemeRootProps = Readonly<{
+  style: CSSProperties;
+  "data-vortex-theme": "";
+  "data-vortex-theme-mode": ThemeMode;
+}>;
 
-        if (cssKey === "default") {
-          result["--vortex-border-width"] = `${token.widthRem}rem`;
-          result["--vortex-border-style"] = token.style;
-          result["--vortex-border"] = `${token.widthRem}rem ${token.style} ${colorVar}`;
-        }
-        break;
-      }
-
-      case "focus": {
-        const colorIdent = sanitizeCssIdentifier(token.colorToken);
-        const colorVar = `var(--vortex-color-${colorIdent}, var(--vortex-color-focus))`;
-        // Enforce visible focus: minimum 1px / 0.0625rem
-        const safeWidthRem = Math.max(token.widthRem, 0.0625);
-        result[`--vortex-focus-width-${cssKey}`] = `${safeWidthRem}rem`;
-        result[`--vortex-focus-color-${cssKey}`] = colorVar;
-        result[`--vortex-focus-outline-${cssKey}`] = `${safeWidthRem}rem solid ${colorVar}`;
-        result[`--vortex-focus-ring-${cssKey}`] = `0 0 0 ${safeWidthRem}rem ${colorVar}`;
-
-        if (cssKey === "default" || !result["--vortex-focus-width"]) {
-          result["--vortex-focus-width"] = `${safeWidthRem}rem`;
-          result["--vortex-focus-color"] = colorVar;
-          result["--vortex-focus-outline"] = `${safeWidthRem}rem solid ${colorVar}`;
-          result["--vortex-focus-ring"] = `0 0 0 ${safeWidthRem}rem ${colorVar}`;
-        }
-        break;
-      }
-
-      case "elevation": {
-        const shadow = elevationLevelToBoxShadow(token.level);
-        result[`--vortex-elevation-${cssKey}`] = shadow;
-        break;
-      }
-
-      case "density": {
-        const isCompact = token.value === "compact";
-        result["--vortex-density"] = token.value;
-        result["--vortex-density-control-padding-y"] = isCompact ? "0.375rem" : "0.5rem";
-        result["--vortex-density-control-padding-x"] = isCompact ? "0.625rem" : "0.75rem";
-        result["--vortex-density-control-min-height"] = isCompact ? "2rem" : "2.5rem";
-        result["--vortex-density-cell-padding-y"] = isCompact ? "0.375rem" : "0.625rem";
-        result["--vortex-density-cell-padding-x"] = isCompact ? "0.5rem" : "0.875rem";
-        break;
-      }
-
-      case "asset":
-        // Assets are validated at publication and referenced by asset ID, not CSS properties
-        break;
-    }
-  }
-
-  return Object.freeze(result);
+/**
+ * Props that mount the theme on a runtime page or preview canvas container. The shared
+ * component stylesheet is scoped to `[data-vortex-theme]`.
+ */
+export function createThemeRootProps(
+  theme: ApplicationThemeV2 | undefined,
+  mode: ThemeMode = "light",
+): ThemeRootProps {
+  const style: CSSProperties & ThemeCssVariables = {
+    ...generateThemeCssVariables(theme?.tokens),
+    colorScheme: COLOR_SCHEME[mode],
+  };
+  return {
+    style,
+    "data-vortex-theme": "",
+    "data-vortex-theme-mode": mode,
+  };
 }
 
 /**
- * Converts a theme CSS-variable map to React CSSProperties for inline application
- * in runtime and preview containers.
+ * Theme tokens in force at one point of the placement tree: the application tokens and the
+ * effective tokens of the nearest ancestor placement that declared overrides.
  */
-export function generateThemeCssVariableStyle(
-  themeOrTokens: ApplicationThemeV2 | Readonly<Record<string, ThemeTokenValueV2>>,
-  mode?: ThemeMode,
-): CSSProperties {
-  const vars = generateThemeCssVariables(themeOrTokens, mode);
-  return { ...vars } as unknown as CSSProperties;
-}
+export type PlacementThemeScope = Readonly<{
+  application: ThemeTokens;
+  inherited: ThemeTokens;
+}>;
 
 /**
- * Generates scoped CSS rules declaring theme variables for runtime and preview.
- * Includes both light and dark mode selector blocks for live mode switching.
+ * Applies one placement's declared theme overrides. Its subtree uses exactly the token set
+ * that definition compilation and #594 validated for it (application tokens plus its own
+ * overrides), expressed as the variables that differ from what it would otherwise inherit.
  */
-export function generateThemeStylesheet(
-  themeOrTokens: ApplicationThemeV2 | Readonly<Record<string, ThemeTokenValueV2>>,
-  options?: { selector?: string },
-): string {
-  const selector = options?.selector ?? ":root, [data-vortex-theme]";
-  const lightVars = generateThemeCssVariables(themeOrTokens, "light");
-  const darkVars = generateThemeCssVariables(themeOrTokens, "dark");
-
-  const serializeVars = (map: ThemeCssVariableMap): string =>
-    Object.entries(map)
-      .map(([prop, val]) => `  ${prop}: ${val};`)
-      .join("\n");
-
-  return `
-/* Base & Light Mode Theme Variables */
-${selector}, [data-vortex-theme-mode="light"] {
-${serializeVars(lightVars)}
-}
-
-/* Dark Mode Theme Variables */
-[data-vortex-theme-mode="dark"], .vortex-dark, .dark {
-${serializeVars(darkVars)}
-}
-
-@media (prefers-color-scheme: dark) {
-  ${selector}:not([data-vortex-theme-mode="light"]) {
-${serializeVars(darkVars)}
+export function resolvePlacementTheme(
+  scope: PlacementThemeScope,
+  overrides: ThemeTokens,
+): Readonly<{ style: CSSProperties | undefined; scope: PlacementThemeScope }> {
+  if (Object.keys(overrides).length === 0) return { style: undefined, scope };
+  const effective: ThemeTokens = { ...scope.application, ...overrides };
+  const next = generateThemeCssVariables(effective);
+  const current = generateThemeCssVariables(scope.inherited);
+  const changed: CSSProperties & Partial<Record<ThemeVariableName, string>> = {};
+  for (const name of THEME_VARIABLE_NAMES) {
+    if (next[name] !== current[name]) changed[name] = next[name];
   }
-}
-`.trim();
+  return {
+    style: Object.keys(changed).length === 0 ? undefined : changed,
+    scope: { application: scope.application, inherited: effective },
+  };
 }
