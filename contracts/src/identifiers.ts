@@ -91,6 +91,10 @@ export const semanticVersionSchema = z
     /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/,
     "Use a complete semantic version such as 1.2.3",
   );
+export const stableDefinitionReleaseVersionSchema = semanticVersionSchema.refine(
+  (value) => !value.includes("-") && !value.includes("+"),
+  "Published definition versions must be stable major.minor.patch versions",
+);
 
 export const revisionSchema = z.number().int().positive();
 export const fingerprintSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);

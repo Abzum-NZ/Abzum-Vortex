@@ -142,6 +142,15 @@ const EXPECTED_EXTENSION_KINDS: ReadonlyMap<string, ReadonlySet<ContentKind>> = 
   [".yml", new Set<ContentKind>(["text", "other"])],
 ]);
 
+/**
+ * The content kinds an extension is known to name, or undefined when this
+ * platform does not recognise the extension.
+ */
+export const expectedContentKindsForExtension = (
+  extension: string,
+): ReadonlySet<ContentKind> | undefined =>
+  EXPECTED_EXTENSION_KINDS.get(normalizeFileExtension(extension));
+
 /** Normalises an extension to the canonical lowercase dotted form. */
 export const normalizeFileExtension = (extension: string): string => {
   const trimmed = extension.trim().toLowerCase();
