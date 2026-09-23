@@ -1,17 +1,28 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
-  PRIVATE_FILE_BUCKET,
+  MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
+  applicationRootIdSchema,
   correlationIdSchema,
   downloadGrantSchema,
+  fieldIdSchema,
   fileIdSchema,
   fileRecordSchema,
+  organizationAccountIdSchema,
+  organizationIdSchema,
   platformIdSchema,
+  recordIdSchema,
+  recordTypeIdSchema,
+  timestampSchema,
+  verifiedFileActorSchema,
+  type ApplicationRootId,
   type CorrelationId,
+  type DownloadGrant,
   type FieldId,
   type FileId,
   type FileRecord,
+  type OrganizationAccountId,
   type OrganizationId,
   type PlatformId,
   type RecordId,
@@ -19,64 +30,79 @@ import {
   type SessionContext,
   type VerifiedFileActor,
 } from "@vortex/contracts";
-import {
-  isExecutableContent,
-  normalizeFileExtension,
-} from "./content-safety";
-import {
-  sanitizeFileDisplayName,
-  transitionFileLifecycleState,
-} from "./file-metadata";
-import {
-  resolveVerifiedFileActor,
-  verifyAttachmentFieldAuthority,
-} from "./attachment-authority";
+import { isExecutableContent, normalizeFileExtension } from "./content-safety";
+import { sanitizeFileDisplayName } from "./file-metadata";
+import { resolveVerifiedFileActor, verifyAttachmentFieldAuthority } from "./attachment-authority";
 import type {
   ResolveCurrentStorageAuthority,
   StorageCredentialBridge,
+  StorageCredentialRequest,
+  StorageOperationCredential,
 } from "./storage-credentials";
+import type { FileRemovalCoordinator, FileRemovalResult } from "./object-removal";
+import type { FileRemovalEligibilityService } from "./removal-eligibility";
 
-/** Closed refusal reasons for file read, download, range, and preview operations. */
+/** Closed refusal reasons for private file download, range and preview requests. */
 export type FileReadRefusalReason =
-  | "unauthenticated"
-  | "caller_not_authorized"
+  | "malformed_request"
+  | "authority_unavailable"
   | "file_not_found"
   | "field_not_readable"
-  | "owner_mismatch"
-  | "invalid_lifecycle_state"
-  | "safety_check_failed"
-  | "grant_expired"
-  | "grant_revoked"
+  | "file_not_available"
   | "range_not_satisfiable"
-  | "malformed_request"
-  | "storage_unavailable"
-  | "preview_unavailable";
+  | "preview_not_supported"
+  | "preview_unavailable"
+  | "storage_unavailable";
 
-/** Canonical HTTP status mapping for closed refusal reasons. */
+/**
+ * Canonical HTTP status of each refusal. A file outside the caller's current
+ * organisation, share or owning record is reported as not found, so a copied
+ * route reveals nothing about another organisation's files.
+ */
 export const fileReadRefusalHttpStatus: Readonly<Record<FileReadRefusalReason, number>> =
   Object.freeze({
-    unauthenticated: 401,
-    caller_not_authorized: 403,
+    malformed_request: 400,
+    authority_unavailable: 403,
     file_not_found: 404,
     field_not_readable: 403,
-    owner_mismatch: 403,
-    invalid_lifecycle_state: 410,
-    safety_check_failed: 403,
-    grant_expired: 403,
-    grant_revoked: 403,
+    file_not_available: 410,
     range_not_satisfiable: 416,
-    malformed_request: 400,
-    storage_unavailable: 503,
+    preview_not_supported: 406,
     preview_unavailable: 503,
+    storage_unavailable: 503,
   });
+
+const REFUSAL_MESSAGES = {
+  malformed_request: "The file request is malformed",
+  authority_unavailable: "Current access to this file could not be confirmed",
+  file_not_found: "The file was not found",
+  field_not_readable: "The attachment field is not readable under current access",
+  file_not_available: "The file is not available",
+  range_not_satisfiable: "The requested byte range cannot be served",
+  preview_not_supported: "This file cannot be previewed; download it instead",
+  preview_unavailable: "The preview is temporarily unavailable",
+  storage_unavailable: "The file is temporarily unavailable",
+} as const satisfies Record<FileReadRefusalReason, string>;
 
 export type FileReadPurpose = "download" | "preview";
 
 /**
- * Access-verified grant for reading an attachment on a shared record.
- * A record-sharing grant does not automatically grant file access: the grant must
- * explicitly name the attachment field as readable. Source files remain source-owned,
- * and every request rechecks source record, grant, field, recipient account and application.
+ * The verified viewer of one request, taken from the Access-resolved protected
+ * request context of the organisation the viewer is acting in. For a shared
+ * record that is the recipient organisation, never the source organisation.
+ */
+export type FileReadViewer = Readonly<{
+  organizationId: OrganizationId;
+  actor: VerifiedFileActor;
+  applicationRootId?: ApplicationRootId;
+}>;
+
+/**
+ * The current sharing grant that lets a recipient organisation read one
+ * attachment field of a source record. It is resolved by trusted server wiring
+ * from the live grant on every request and is never built from request input.
+ * A grant that does not name the attachment field exposes neither metadata nor
+ * content, and the bytes remain owned by the source organisation.
  */
 export type SharedRecordFileGrant = Readonly<{
   grantId: PlatformId;
@@ -84,232 +110,317 @@ export type SharedRecordFileGrant = Readonly<{
   sourceRecordTypeId: RecordTypeId;
   sourceRecordId: RecordId;
   recipientOrganizationId: OrganizationId;
+  /** Set when the grant names one recipient organisation account. */
+  recipientOrganizationAccountId?: OrganizationAccountId;
+  /** Set when the grant is bound to one recipient application. */
+  recipientApplicationRootId?: ApplicationRootId;
   readableFieldIds: readonly FieldId[];
   expiresAt: string;
-  revoked?: boolean;
+  revoked: boolean;
 }>;
 
 /**
- * The current record and field viewer authority for the request. Every request,
- * including ranges and previews, must supply fresh authority resolved by trusted server wiring.
+ * Current record and attachment-field viewer authority for the file's owning
+ * record, produced by the ordinary Access-resolved record read inside the
+ * request's protected transaction. Every request, including each range and
+ * preview request, supplies a fresh one; `validUntil` bounds how long the
+ * decision may be relied on.
  */
 export type CurrentReadAuthority = Readonly<{
-  sessionContext: SessionContext;
-  readableFieldIds: readonly FieldId[];
-  organizationId: OrganizationId;
+  viewer: FileReadViewer;
   recordTypeId: RecordTypeId;
   recordId: RecordId;
   fieldId: FieldId;
+  readableFieldIds: readonly FieldId[];
   sharedRecordGrant?: SharedRecordFileGrant;
+  validUntil: string;
 }>;
 
 export type FileReadRequest = Readonly<{
   fileId: FileId;
   purpose: FileReadPurpose;
   rangeHeader?: string;
-  ifNoneMatch?: string;
+  ifRangeHeader?: string;
 }>;
 
-export type ParsedByteRange = Readonly<{
-  start: number;
-  end: number;
-}>;
+/**
+ * Derives the file viewer from a trusted, already-resolved session context. A
+ * public, anonymous or federated caller has no local private-file viewer: a
+ * federated read is served by the source File service's own gateway.
+ */
+export const fileReadViewerFromSessionContext = (
+  context: SessionContext,
+): FileReadViewer | null => {
+  const actor = resolveVerifiedFileActor(context, context.organizationId);
+  if (!actor.authorized) return null;
+  return Object.freeze({
+    organizationId: context.organizationId,
+    actor: actor.actor,
+    ...(context.applicationRootId === undefined
+      ? {}
+      : { applicationRootId: context.applicationRootId }),
+  });
+};
+
+export type ParsedByteRange = Readonly<{ start: number; end: number }>;
 
 export type RangeParseResult =
   | Readonly<{ kind: "none" }>
   | Readonly<{ kind: "satisfiable"; range: ParsedByteRange }>
   | Readonly<{ kind: "unsatisfiable" }>;
 
+const MAXIMUM_RANGE_HEADER_LENGTH = 200;
+
 /**
- * Parses and validates standard HTTP range request headers according to RFC 9110.
- * Multi-range requests are not accepted. Unsatisfiable ranges return kind "unsatisfiable".
+ * Applies RFC 9110 single-range semantics. A missing, malformed, multi-range or
+ * non-byte Range header is ignored and the complete representation is served; a
+ * well-formed byte range that selects nothing is unsatisfiable.
  */
 export const parseRangeHeader = (
   rangeHeader: string | undefined,
   totalBytes: number,
 ): RangeParseResult => {
-  if (rangeHeader === undefined || rangeHeader.trim() === "") {
+  if (rangeHeader === undefined) return { kind: "none" };
+  const candidate = rangeHeader.trim();
+  if (candidate.length === 0 || candidate.length > MAXIMUM_RANGE_HEADER_LENGTH) {
     return { kind: "none" };
   }
-  const match = /^bytes=(\d*)-(\d*)$/i.exec(rangeHeader.trim());
-  if (!match) {
-    if (!rangeHeader.trim().toLowerCase().startsWith("bytes=")) {
-      return { kind: "unsatisfiable" };
-    }
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(candidate);
+  if (match === null) return { kind: "none" };
+  const startText = match[1] ?? "";
+  const endText = match[2] ?? "";
+  if (startText === "" && endText === "") return { kind: "none" };
+
+  if (startText === "") {
+    const suffixLength = Number(endText);
+    if (!Number.isSafeInteger(suffixLength)) return { kind: "none" };
+    if (suffixLength === 0 || totalBytes === 0) return { kind: "unsatisfiable" };
+    return {
+      kind: "satisfiable",
+      range: { start: Math.max(0, totalBytes - suffixLength), end: totalBytes - 1 },
+    };
+  }
+
+  const start = Number(startText);
+  const end = endText === "" ? undefined : Number(endText);
+  if (!Number.isSafeInteger(start) || (end !== undefined && !Number.isSafeInteger(end))) {
     return { kind: "none" };
   }
-
-  const [, startStr, endStr] = match;
-  if (startStr === "" && endStr === "") {
-    return { kind: "unsatisfiable" };
-  }
-
-  let start: number;
-  let end: number;
-
-  if (startStr === "") {
-    const suffixLength = parseInt(endStr, 10);
-    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) {
-      return { kind: "unsatisfiable" };
-    }
-    if (totalBytes === 0) {
-      return { kind: "unsatisfiable" };
-    }
-    start = Math.max(0, totalBytes - suffixLength);
-    end = totalBytes - 1;
-  } else if (endStr === "") {
-    start = parseInt(startStr, 10);
-    if (!Number.isSafeInteger(start) || start < 0) {
-      return { kind: "unsatisfiable" };
-    }
-    if (totalBytes === 0 || start >= totalBytes) {
-      return { kind: "unsatisfiable" };
-    }
-    end = totalBytes - 1;
-  } else {
-    start = parseInt(startStr, 10);
-    end = parseInt(endStr, 10);
-    if (
-      !Number.isSafeInteger(start) ||
-      !Number.isSafeInteger(end) ||
-      start < 0 ||
-      start > end
-    ) {
-      return { kind: "unsatisfiable" };
-    }
-    if (totalBytes === 0 || start >= totalBytes) {
-      return { kind: "unsatisfiable" };
-    }
-    end = Math.min(end, totalBytes - 1);
-  }
-
-  return { kind: "satisfiable", range: { start, end } };
+  if (end !== undefined && end < start) return { kind: "none" };
+  if (start >= totalBytes) return { kind: "unsatisfiable" };
+  return {
+    kind: "satisfiable",
+    range: { start, end: end === undefined ? totalBytes - 1 : Math.min(end, totalBytes - 1) },
+  };
 };
 
+const ACTIVE_BROWSER_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  "text/html",
+  "application/xhtml+xml",
+  "image/svg+xml",
+  "text/xml",
+  "application/xml",
+  "application/xslt+xml",
+  "application/rdf+xml",
+  "application/mathml+xml",
+  "application/javascript",
+  "text/javascript",
+  "application/x-javascript",
+  "application/ecmascript",
+  "text/ecmascript",
+  "application/json",
+  "application/wasm",
+  "application/pdf",
+  "application/hta",
+  "application/x-shockwave-flash",
+  "text/cache-manifest",
+  "multipart/x-mixed-replace",
+]);
+
+const ACTIVE_BROWSER_EXTENSIONS: ReadonlySet<string> = new Set([
+  ".html",
+  ".htm",
+  ".shtml",
+  ".xhtml",
+  ".xht",
+  ".svg",
+  ".svgz",
+  ".xml",
+  ".xsl",
+  ".xslt",
+  ".js",
+  ".mjs",
+  ".json",
+  ".wasm",
+  ".pdf",
+  ".swf",
+  ".hta",
+]);
+
+const normalizeMediaType = (mediaType: string): string =>
+  (mediaType.split(";")[0] ?? "").trim().toLowerCase();
+
 /**
- * Browser-executable or active content types that must never be served inline
- * to a browser. This includes HTML, SVG, script formats, executables, etc.
+ * Reports content a browser could execute or render actively if served under
+ * its own type: markup, scripts, SVG, PDF and executables. Such content is only
+ * ever downloaded as an opaque attachment.
  */
 export const isExecutableOrActiveBrowserContent = (
   mediaType: string,
   extension: string,
 ): boolean => {
-  const normalized = mediaType.split(";")[0]?.trim().toLowerCase() ?? "";
-  const ext = normalizeFileExtension(extension);
-
-  if (isExecutableContent(mediaType, ext)) return true;
-
-  const activeBrowserTypes = [
-    "text/html",
-    "application/xhtml+xml",
-    "image/svg+xml",
-    "text/xml",
-    "application/xml",
-    "application/javascript",
-    "text/javascript",
-    "application/x-javascript",
-    "application/ecmascript",
-    "text/ecmascript",
-    "application/hta",
-    "application/x-shockwave-flash",
-  ];
-
-  if (activeBrowserTypes.includes(normalized)) return true;
-  if (
-    ext === ".html" ||
-    ext === ".htm" ||
-    ext === ".svg" ||
-    ext === ".xhtml" ||
-    ext === ".xml"
-  ) {
-    return true;
-  }
-
-  return false;
+  const normalized = normalizeMediaType(mediaType);
+  const normalizedExtension = normalizeFileExtension(extension);
+  return (
+    isExecutableContent(mediaType, normalizedExtension) ||
+    ACTIVE_BROWSER_MEDIA_TYPES.has(normalized) ||
+    normalized.endsWith("+xml") ||
+    ACTIVE_BROWSER_EXTENSIONS.has(normalizedExtension)
+  );
 };
 
 /**
- * Resolves safe content disposition and media type.
- * Where browser display could execute content, disposition is forced to "attachment"
- * and safe media type "application/octet-stream".
+ * Passive media a browser may display inline from the original bytes. Anything
+ * else is previewed only through an isolated rendition, or not at all.
  */
-export const resolveSafeContentDisposition = (
-  fileRecord: FileRecord,
-  purpose: FileReadPurpose,
-): Readonly<{
-  disposition: "attachment" | "inline";
-  contentDispositionHeader: string;
-  safeMediaType: string;
-}> => {
-  const isExecutable = isExecutableOrActiveBrowserContent(
-    fileRecord.detectedMediaType,
-    fileRecord.extension,
-  );
+const INLINE_PREVIEW_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+  "audio/mpeg",
+  "audio/ogg",
+  "audio/wav",
+  "audio/webm",
+  "audio/aac",
+  "audio/flac",
+  "video/mp4",
+  "video/webm",
+  "video/ogg",
+  "text/plain",
+]);
 
-  const safeFilename = sanitizeFileDisplayName(
-    fileRecord.originalSafeDisplayName,
-    fileRecord.extension,
-  );
-  const encodedFilename = encodeURIComponent(safeFilename);
+/** The only rendition types an isolated preview renderer may return. */
+const PREVIEW_RENDITION_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "text/plain",
+]);
 
-  if (isExecutable) {
-    return Object.freeze({
-      disposition: "attachment",
-      contentDispositionHeader: `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`,
-      safeMediaType: "application/octet-stream",
-    });
-  }
+const canPreviewOriginalInline = (fileRecord: FileRecord): boolean =>
+  !isExecutableOrActiveBrowserContent(fileRecord.detectedMediaType, fileRecord.extension) &&
+  INLINE_PREVIEW_MEDIA_TYPES.has(normalizeMediaType(fileRecord.detectedMediaType));
 
-  if (purpose === "preview") {
-    return Object.freeze({
-      disposition: "inline",
-      contentDispositionHeader: `inline; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`,
-      safeMediaType: fileRecord.detectedMediaType,
-    });
-  }
+const RFC5987_UNRESERVED = /[A-Za-z0-9!#$&+\-.^_`|~]/;
 
-  return Object.freeze({
-    disposition: "attachment",
-    contentDispositionHeader: `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`,
-    safeMediaType: fileRecord.detectedMediaType,
-  });
+const encodeRfc5987 = (value: string): string =>
+  Array.from(Buffer.from(value, "utf8"))
+    .map((byte) => {
+      const character = String.fromCharCode(byte);
+      return byte < 0x80 && RFC5987_UNRESERVED.test(character)
+        ? character
+        : `%${byte.toString(16).toUpperCase().padStart(2, "0")}`;
+    })
+    .join("");
+
+/**
+ * Builds an RFC 6266 Content-Disposition value. The quoted fallback is plain
+ * printable ASCII without quotes or backslashes; the exact sanitised name
+ * travels in the RFC 5987 extended parameter.
+ */
+export const buildContentDisposition = (
+  disposition: "attachment" | "inline",
+  displayName: string,
+  extension: string,
+): string => {
+  const safeName = sanitizeFileDisplayName(displayName, extension);
+  const asciiFallback =
+    safeName
+      .normalize("NFKD")
+      .replace(/[^\x20-\x7E]/g, "")
+      .replace(/["\\%;]/g, "_")
+      .trim() || `download${extension}`;
+  return `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encodeRfc5987(safeName)}`;
 };
 
+/** A strong validator derived from the immutable verified content checksum. */
+const entityTag = (fileRecord: FileRecord): string => `"${fileRecord.checksum}"`;
+
+/**
+ * Response headers shared by every private file response: never stored by a
+ * browser or intermediary, never sniffed, never scriptable and never embeddable
+ * by another origin.
+ */
+export const privateFileResponseHeaders = (): Record<string, string> => ({
+  "Cache-Control": "private, no-store, no-cache, must-revalidate, max-age=0",
+  Pragma: "no-cache",
+  Expires: "0",
+  "X-Content-Type-Options": "nosniff",
+  "Content-Security-Policy":
+    "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox",
+  "Cross-Origin-Resource-Policy": "same-origin",
+  "Referrer-Policy": "no-referrer",
+  "X-Download-Options": "noopen",
+});
+
+/**
+ * Durable File-service store for read grants. Every write runs server-side,
+ * scoped to the file's owning organisation; there is no in-memory production
+ * implementation.
+ */
+export type FileReadRepository = Readonly<{
+  /** Loads the canonical file record; null when no such file exists. */
+  readFile(fileId: FileId): Promise<FileRecord | null>;
+  /** Persists one unclaimed, short-lived read grant for this request. */
+  recordDownloadGrant(
+    input: Readonly<{
+      grant: DownloadGrant;
+      correlationId: CorrelationId;
+      purpose: FileReadPurpose;
+    }>,
+  ): Promise<void>;
+  /**
+   * Atomically marks an unexpired, unclaimed read grant claimed and returns it
+   * with the current canonical file record. An unknown, expired or already
+   * claimed grant returns null, so each grant issues exactly one credential.
+   */
+  claimDownloadGrant(oneTimeId: PlatformId): Promise<ClaimedDownloadGrant | null>;
+}>;
+
 export type ClaimedDownloadGrant = Readonly<{
-  grant: ReturnType<typeof downloadGrantSchema.parse>;
+  grant: DownloadGrant;
   fileRecord: FileRecord;
   correlationId: CorrelationId;
 }>;
 
-export type FileReadRepository = Readonly<{
-  readFile(fileId: FileId): Promise<FileRecord | null>;
-  claimDownloadGrant(oneTimeId: PlatformId): Promise<ClaimedDownloadGrant | null>;
-  recordDownloadGrant?(
-    grant: ReturnType<typeof downloadGrantSchema.parse>,
-    correlationId: CorrelationId,
-  ): Promise<void>;
-}>;
+const sameActor = (left: VerifiedFileActor, right: VerifiedFileActor): boolean =>
+  left.kind === "human" && right.kind === "human"
+    ? left.organizationAccountId === right.organizationAccountId &&
+      left.identityId === right.identityId
+    : left.kind === "system" &&
+      right.kind === "system" &&
+      left.systemActorId === right.systemActorId;
 
-const sameDownloadGrant = (
-  left: ReturnType<typeof downloadGrantSchema.parse>,
-  right: ReturnType<typeof downloadGrantSchema.parse>,
-): boolean =>
-  left.kind === "download" &&
-  right.kind === "download" &&
+const sameDownloadGrant = (left: DownloadGrant, right: DownloadGrant): boolean =>
   left.oneTimeId === right.oneTimeId &&
   left.fileId === right.fileId &&
   left.organizationId === right.organizationId &&
   left.recordTypeId === right.recordTypeId &&
   left.recordId === right.recordId &&
-  left.fieldId === right.fieldId;
+  left.fieldId === right.fieldId &&
+  sameActor(left.actor, right.actor) &&
+  Date.parse(left.expiresAt) === Date.parse(right.expiresAt);
 
 /**
- * Storage credential bridge authority resolver for download/read operations.
- * It claims and verifies the one-time short-lived download grant, rechecking that
- * the file is active, clean, and not expired.
+ * The Storage credential bridge's authority for reads. It claims the one-time
+ * read grant, so a grant mints exactly one server-held credential, and
+ * requires the canonical file to still be active, clean and attached to the
+ * grant's record field.
  */
 export const createReadStorageAuthorityResolver = (
-  repository: FileReadRepository,
+  repository: Pick<FileReadRepository, "claimDownloadGrant">,
   clock: () => Date = () => new Date(),
 ): ResolveCurrentStorageAuthority => {
   return async (request) => {
@@ -322,15 +433,18 @@ export const createReadStorageAuthorityResolver = (
 
     const grant = downloadGrantSchema.safeParse(claimed.grant);
     const fileRecord = fileRecordSchema.safeParse(claimed.fileRecord);
-    const now = clock().getTime();
-
     if (
       !grant.success ||
       !fileRecord.success ||
       !sameDownloadGrant(grant.data, requested.data) ||
+      fileRecord.data.fileId !== grant.data.fileId ||
+      fileRecord.data.organizationId !== grant.data.organizationId ||
+      fileRecord.data.ownerRecordTypeId !== grant.data.recordTypeId ||
+      fileRecord.data.ownerRecordId !== grant.data.recordId ||
+      fileRecord.data.ownerFieldId !== grant.data.fieldId ||
       fileRecord.data.lifecycleState !== "active" ||
       fileRecord.data.scannerResult !== "clean" ||
-      !(now < Date.parse(grant.data.expiresAt))
+      !(clock().getTime() < Date.parse(grant.data.expiresAt))
     ) {
       return { authorized: false };
     }
@@ -350,238 +464,134 @@ export const createReadStorageAuthorityResolver = (
 };
 
 /**
- * Composes multiple Storage authority resolvers into one fallback chain.
+ * Routes each bridge request to the one resolver that owns its operation, so a
+ * read never reaches the upload resolver and vice versa. An operation without a
+ * resolver is refused.
  */
 export const composeStorageAuthorityResolvers = (
-  ...resolvers: readonly ResolveCurrentStorageAuthority[]
+  resolvers: Readonly<Partial<Record<StorageCredentialRequest["operation"], ResolveCurrentStorageAuthority>>>,
 ): ResolveCurrentStorageAuthority => {
+  const routes = Object.freeze({ ...resolvers });
   return async (request) => {
-    for (const resolver of resolvers) {
-      const resolution = await resolver(request);
-      if (resolution.authorized) return resolution;
-    }
-    return { authorized: false };
+    const resolver = routes[request.operation];
+    return resolver === undefined ? { authorized: false } : resolver(request);
   };
 };
 
+/** One server-side Storage read, authorised by a bridge credential that never leaves the server. */
 export type UpstreamStorageReadOptions = Readonly<{
-  destinationProject: string;
-  bucketId: string;
-  objectPath: string;
-  token: string;
+  credential: StorageOperationCredential;
   range?: ParsedByteRange;
-  ifNoneMatch?: string;
 }>;
 
 export type UpstreamStorageReadResult = Readonly<{
-  statusCode: number;
-  contentLength: number;
-  contentType?: string;
+  statusCode: 200 | 206;
+  contentLength?: number;
   contentRange?: string;
-  etag?: string;
   stream: ReadableStream<Uint8Array>;
 }>;
 
-/** Server-side reader port that streams bytes from the upstream Storage service. */
+/** Server-side reader port that streams bytes from private Storage. */
 export type UpstreamStorageReader = (
   options: UpstreamStorageReadOptions,
 ) => Promise<UpstreamStorageReadResult>;
 
-/** Creates a default upstream storage reader using server-side fetch. */
+/**
+ * Reads the exact object named by a server-held bridge credential from the
+ * destination project's authenticated Storage endpoint. Redirects are refused,
+ * nothing is cached, and the upstream address and bearer stay in this process.
+ */
 export const createDefaultUpstreamStorageReader = (
-  fetchImpl: typeof fetch = fetch,
+  fetchImplementation: typeof fetch = fetch,
 ): UpstreamStorageReader => {
-  return async (options) => {
-    const encodedPath = options.objectPath
-      .split("/")
-      .map(encodeURIComponent)
-      .join("/");
-    const url = `https://${options.destinationProject}.supabase.co/storage/v1/object/authenticated/${options.bucketId}/${encodedPath}`;
-    const reqHeaders: Record<string, string> = {
-      Authorization: `Bearer ${options.token}`,
+  return async ({ credential, range }) => {
+    const objectPath = credential.objectPath.split("/").map(encodeURIComponent).join("/");
+    const url = `https://${credential.destinationProject}.supabase.co/storage/v1/object/authenticated/${encodeURIComponent(credential.bucketId)}/${objectPath}`;
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${credential.token}`,
+      "Accept-Encoding": "identity",
     };
-    if (options.range !== undefined) {
-      reqHeaders["Range"] = `bytes=${options.range.start}-${options.range.end}`;
-    }
-    if (options.ifNoneMatch !== undefined) {
-      reqHeaders["If-None-Match"] = options.ifNoneMatch;
-    }
-    const res = await fetchImpl(url, {
+    if (range !== undefined) headers.Range = `bytes=${range.start}-${range.end}`;
+    const response = await fetchImplementation(url, {
       method: "GET",
-      headers: reqHeaders,
+      headers,
       cache: "no-store",
+      redirect: "error",
     });
-    if (!res.ok && res.status !== 206 && res.status !== 304) {
-      throw new Error(`Upstream storage returned HTTP ${res.status}`);
+    const expectedStatus = range === undefined ? 200 : 206;
+    if (response.status !== expectedStatus || response.body === null) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new Error("FILE_UPSTREAM_READ_REFUSED");
     }
-    const bodyStream = res.body ?? new ReadableStream<Uint8Array>();
+    const declaredLength = response.headers.get("content-length");
+    const contentLength =
+      declaredLength !== null && /^\d+$/.test(declaredLength) ? Number(declaredLength) : undefined;
+    const contentRange = response.headers.get("content-range") ?? undefined;
     return {
-      statusCode: res.status,
-      contentLength: Number(res.headers.get("content-length") ?? 0),
-      contentType: res.headers.get("content-type") ?? undefined,
-      contentRange: res.headers.get("content-range") ?? undefined,
-      etag: res.headers.get("etag") ?? undefined,
-      stream: bodyStream,
+      statusCode: expectedStatus,
+      ...(contentLength === undefined ? {} : { contentLength }),
+      ...(contentRange === undefined ? {} : { contentRange }),
+      stream: response.body,
     };
   };
 };
 
-/** Isolated preview generator: never executes scripts, macros or active content. */
-export type FilePreviewGenerator = (
-  input: Readonly<{
-    fileRecord: FileRecord;
-    stream: ReadableStream<Uint8Array>;
-  }>,
-) => Promise<Readonly<{
-  stream: ReadableStream<Uint8Array>;
-  mediaType: string;
-  sizeBytes: number;
-}>>;
-
-/** Repository interface for bounded cleanup of abandoned pending uploads. */
-export type FileAbandonmentCleanupRepository = Readonly<{
-  listExpiredPendingUploads(input: Readonly<{
-    maxBatchSize: number;
-    now: Date;
-  }>): Promise<readonly FileRecord[]>;
-  recordUploadAbandonment(input: Readonly<{
-    fileId: FileId;
-    fileRecord: FileRecord;
-    abandonedAt: string;
-  }>): Promise<
-    | Readonly<{ outcome: "abandoned"; fileRecord: FileRecord }>
-    | Readonly<{ outcome: "refused"; reason: string }>
-  >;
-  recordAbandonedUploadRemoval(input: Readonly<{
-    fileId: FileId;
-    fileRecord: FileRecord;
-    removedAt: string;
-  }>): Promise<
-    | Readonly<{ outcome: "removed"; fileRecord: FileRecord }>
-    | Readonly<{ outcome: "refused"; reason: string }>
-  >;
-}>;
-
-export type AbandonedObjectStorageDeleter = (
-  location: Readonly<{
-    organizationId: OrganizationId;
-    fileId: FileId;
-    bucketId: typeof PRIVATE_FILE_BUCKET;
-    objectPath: string;
-  }>,
-) => Promise<Readonly<{ outcome: "deleted" | "already_absent" }>>;
-
-export type CleanupAbandonedPendingObjectsDependencies = Readonly<{
-  repository: FileAbandonmentCleanupRepository;
-  storageDeleter: AbandonedObjectStorageDeleter;
-  clock?: () => Date;
-}>;
-
-export type CleanupAbandonedPendingObjectsResult = Readonly<{
-  examinedCount: number;
-  abandonedCount: number;
-  removedCount: number;
-  errors: readonly Readonly<{ fileId: FileId; reason: string }>[];
-}>;
+/**
+ * Passes exactly `expectedBytes` through (or at most `maximumBytes` when the
+ * length is unknown) and errors the stream on any excess or shortfall, so a
+ * wrong upstream body can never be delivered under this file's headers.
+ */
+const boundedByteStream = (
+  source: ReadableStream<Uint8Array>,
+  limit: Readonly<{ expectedBytes?: number; maximumBytes: number }>,
+): ReadableStream<Uint8Array> => {
+  let delivered = 0;
+  const ceiling = limit.expectedBytes ?? limit.maximumBytes;
+  return source.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        delivered += chunk.byteLength;
+        if (delivered > ceiling) {
+          controller.error(new Error("FILE_STREAM_LENGTH_EXCEEDED"));
+          return;
+        }
+        controller.enqueue(chunk);
+      },
+      flush(controller) {
+        if (limit.expectedBytes !== undefined && delivered !== limit.expectedBytes) {
+          controller.error(new Error("FILE_STREAM_LENGTH_MISMATCH"));
+        }
+      },
+    }),
+  );
+};
 
 /**
- * Removes abandoned pending uploads whose upload window has expired.
- * Emits no record activity and cleans private storage through owning ports.
+ * Isolated preview rendering. Implementations run outside the application
+ * process (a sandboxed worker or service without network or credentials), never
+ * execute macros, scripts or active document content, and return one passive
+ * rendition. The source is opened on demand through a server-held read.
  */
-export const cleanupAbandonedPendingObjects = async (
-  dependencies: CleanupAbandonedPendingObjectsDependencies,
-  input?: Readonly<{ maxBatchSize?: number; now?: Date }>,
-): Promise<CleanupAbandonedPendingObjectsResult> => {
-  const clock = dependencies.clock ?? (() => new Date());
-  const now = input?.now ?? clock();
-  const maxBatchSize = Math.max(1, Math.min(input?.maxBatchSize ?? 50, 500));
-
-  const expired = await dependencies.repository.listExpiredPendingUploads({
-    maxBatchSize,
-    now,
-  });
-
-  let examinedCount = 0;
-  let abandonedCount = 0;
-  let removedCount = 0;
-  const errors: Readonly<{ fileId: FileId; reason: string }>[] = [];
-
-  for (const fileRecord of expired) {
-    examinedCount++;
-    try {
-      if (fileRecord.lifecycleState === "pending") {
-        const abandoned = transitionFileLifecycleState(
-          fileRecord,
-          "abandoned",
-          { clock: () => now },
-        );
-        const abandonResult = await dependencies.repository.recordUploadAbandonment({
-          fileId: fileRecord.fileId,
-          fileRecord: abandoned,
-          abandonedAt: now.toISOString(),
-        });
-        if (abandonResult.outcome === "abandoned") {
-          abandonedCount++;
-        } else {
-          errors.push({ fileId: fileRecord.fileId, reason: abandonResult.reason });
-          continue;
-        }
-      }
-
-      await dependencies.storageDeleter({
-        organizationId: fileRecord.organizationId,
-        fileId: fileRecord.fileId,
-        bucketId: fileRecord.bucketId,
-        objectPath: fileRecord.storageKey,
-      });
-
-      const removed = transitionFileLifecycleState(
-        { ...fileRecord, lifecycleState: "abandoned" },
-        "removed",
-        { clock: () => now },
-      );
-      const removeResult = await dependencies.repository.recordAbandonedUploadRemoval({
-        fileId: fileRecord.fileId,
-        fileRecord: removed,
-        removedAt: now.toISOString(),
-      });
-      if (removeResult.outcome === "removed") {
-        removedCount++;
-      } else {
-        errors.push({ fileId: fileRecord.fileId, reason: removeResult.reason });
-      }
-    } catch (err) {
-      errors.push({
-        fileId: fileRecord.fileId,
-        reason: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  return Object.freeze({
-    examinedCount,
-    abandonedCount,
-    removedCount,
-    errors: Object.freeze(errors),
-  });
-};
+export type FilePreviewRenderer = (
+  input: Readonly<{
+    fileRecord: FileRecord;
+    source: ReadableStream<Uint8Array>;
+    maximumOutputBytes: number;
+  }>,
+) => Promise<
+  Readonly<{
+    mediaType: string;
+    stream: ReadableStream<Uint8Array>;
+    sizeBytes?: number;
+  }>
+>;
 
 export type FileReadStreamResponse = Readonly<{
   outcome: "success";
   fileId: FileId;
-  statusCode: 200 | 206 | 304;
-  headers: Record<string, string>;
+  statusCode: 200 | 206;
+  headers: Readonly<Record<string, string>>;
   stream: ReadableStream<Uint8Array>;
-  metadata: Readonly<{
-    displayName: string;
-    mediaType: string;
-    sizeBytes: number;
-    checksum: string;
-    isPartial: boolean;
-    contentRange?: string;
-    contentLength: number;
-    disposition: "attachment" | "inline";
-  }>;
 }>;
 
 export type FileReadRefusal = Readonly<{
@@ -589,368 +599,620 @@ export type FileReadRefusal = Readonly<{
   reason: FileReadRefusalReason;
   message: string;
   statusCode: number;
-  headers?: Record<string, string>;
+  headers: Readonly<Record<string, string>>;
 }>;
 
 export type FileReadResult = FileReadStreamResponse | FileReadRefusal;
 
 export type FileReadCoordinatorDependencies = Readonly<{
   repository: FileReadRepository;
-  bridge: StorageCredentialBridge;
+  bridge: Pick<StorageCredentialBridge, "mintStorageOperationCredential">;
   upstreamStorageReader: UpstreamStorageReader;
-  previewGenerator?: FilePreviewGenerator;
-  cleanupRepository?: FileAbandonmentCleanupRepository;
-  abandonedStorageDeleter?: AbandonedObjectStorageDeleter;
+  previewRenderer?: FilePreviewRenderer;
+  /** Largest original a preview renderer is given; defaults to 25 MiB. */
+  maximumPreviewSourceBytes?: number;
+  /** Largest rendition streamed back; defaults to 10 MiB. */
+  maximumPreviewOutputBytes?: number;
   clock?: () => Date;
 }>;
 
 export type FileReadCoordinator = Readonly<{
-  readFile(
-    authority: CurrentReadAuthority,
-    request: FileReadRequest,
-  ): Promise<FileReadResult>;
-  cleanupAbandonedPendingObjects(
-    options?: Readonly<{ maxBatchSize?: number }>,
-  ): Promise<CleanupAbandonedPendingObjectsResult>;
+  readFile(authority: CurrentReadAuthority, request: FileReadRequest): Promise<FileReadResult>;
 }>;
 
-const defaultPrivateHeaders = (): Record<string, string> => ({
-  "Cache-Control": "private, no-cache, no-store, must-revalidate, max-age=0",
-  Pragma: "no-cache",
-  Expires: "0",
-  "X-Content-Type-Options": "nosniff",
-  "Content-Security-Policy": "default-src 'none'; sandbox",
-  "X-Download-Options": "noopen",
-  "Accept-Ranges": "bytes",
-});
+const DEFAULT_MAXIMUM_PREVIEW_SOURCE_BYTES = 25 * 1024 * 1024;
+const DEFAULT_MAXIMUM_PREVIEW_OUTPUT_BYTES = 10 * 1024 * 1024;
 
 const refusal = (
   reason: FileReadRefusalReason,
-  message: string,
-  extraHeaders?: Record<string, string>,
+  extraHeaders?: Readonly<Record<string, string>>,
 ): FileReadRefusal =>
   Object.freeze({
     outcome: "refused",
     reason,
-    message,
+    message: REFUSAL_MESSAGES[reason],
     statusCode: fileReadRefusalHttpStatus[reason],
-    headers: {
-      ...defaultPrivateHeaders(),
-      ...(extraHeaders ?? {}),
-    },
+    headers: Object.freeze({ ...privateFileResponseHeaders(), ...(extraHeaders ?? {}) }),
   });
 
+const positiveLimit = (value: number | undefined, fallback: number): number =>
+  value !== undefined && Number.isSafeInteger(value) && value > 0 ? value : fallback;
+
+const parseAuthority = (candidate: CurrentReadAuthority): CurrentReadAuthority | null => {
+  if (candidate === null || typeof candidate !== "object") return null;
+  const viewer = candidate.viewer;
+  const organizationId = organizationIdSchema.safeParse(viewer?.organizationId);
+  const actor = verifiedFileActorSchema.safeParse(viewer?.actor);
+  const applicationRootId =
+    viewer?.applicationRootId === undefined
+      ? undefined
+      : applicationRootIdSchema.safeParse(viewer.applicationRootId);
+  const recordTypeId = recordTypeIdSchema.safeParse(candidate.recordTypeId);
+  const recordId = recordIdSchema.safeParse(candidate.recordId);
+  const fieldId = fieldIdSchema.safeParse(candidate.fieldId);
+  const readableFieldIds = Array.isArray(candidate.readableFieldIds)
+    ? candidate.readableFieldIds.map((value) => fieldIdSchema.safeParse(value))
+    : undefined;
+  const validUntil = timestampSchema.safeParse(candidate.validUntil);
+  if (
+    !organizationId.success ||
+    !actor.success ||
+    (applicationRootId !== undefined && !applicationRootId.success) ||
+    !recordTypeId.success ||
+    !recordId.success ||
+    !fieldId.success ||
+    readableFieldIds === undefined ||
+    readableFieldIds.some((value) => !value.success) ||
+    !validUntil.success
+  ) {
+    return null;
+  }
+
+  let sharedRecordGrant: SharedRecordFileGrant | undefined;
+  if (candidate.sharedRecordGrant !== undefined) {
+    const grant = candidate.sharedRecordGrant;
+    const grantId = platformIdSchema.safeParse(grant.grantId);
+    const source = organizationIdSchema.safeParse(grant.sourceOrganizationId);
+    const sourceRecordTypeId = recordTypeIdSchema.safeParse(grant.sourceRecordTypeId);
+    const sourceRecordId = recordIdSchema.safeParse(grant.sourceRecordId);
+    const recipient = organizationIdSchema.safeParse(grant.recipientOrganizationId);
+    const recipientAccount =
+      grant.recipientOrganizationAccountId === undefined
+        ? undefined
+        : organizationAccountIdSchema.safeParse(grant.recipientOrganizationAccountId);
+    const recipientApplication =
+      grant.recipientApplicationRootId === undefined
+        ? undefined
+        : applicationRootIdSchema.safeParse(grant.recipientApplicationRootId);
+    const grantFields = Array.isArray(grant.readableFieldIds)
+      ? grant.readableFieldIds.map((value) => fieldIdSchema.safeParse(value))
+      : undefined;
+    const expiresAt = timestampSchema.safeParse(grant.expiresAt);
+    if (
+      !grantId.success ||
+      !source.success ||
+      !sourceRecordTypeId.success ||
+      !sourceRecordId.success ||
+      !recipient.success ||
+      (recipientAccount !== undefined && !recipientAccount.success) ||
+      (recipientApplication !== undefined && !recipientApplication.success) ||
+      grantFields === undefined ||
+      grantFields.some((value) => !value.success) ||
+      !expiresAt.success ||
+      typeof grant.revoked !== "boolean"
+    ) {
+      return null;
+    }
+    sharedRecordGrant = Object.freeze({
+      grantId: grantId.data,
+      sourceOrganizationId: source.data,
+      sourceRecordTypeId: sourceRecordTypeId.data,
+      sourceRecordId: sourceRecordId.data,
+      recipientOrganizationId: recipient.data,
+      ...(recipientAccount !== undefined && recipientAccount.success
+        ? { recipientOrganizationAccountId: recipientAccount.data }
+        : {}),
+      ...(recipientApplication !== undefined && recipientApplication.success
+        ? { recipientApplicationRootId: recipientApplication.data }
+        : {}),
+      readableFieldIds: Object.freeze(grantFields.flatMap((value) => (value.success ? [value.data] : []))),
+      expiresAt: expiresAt.data,
+      revoked: grant.revoked,
+    });
+  }
+
+  return Object.freeze({
+    viewer: Object.freeze({
+      organizationId: organizationId.data,
+      actor: actor.data,
+      ...(applicationRootId !== undefined && applicationRootId.success
+        ? { applicationRootId: applicationRootId.data }
+        : {}),
+    }),
+    recordTypeId: recordTypeId.data,
+    recordId: recordId.data,
+    fieldId: fieldId.data,
+    readableFieldIds: Object.freeze(
+      readableFieldIds.flatMap((value) => (value.success ? [value.data] : [])),
+    ),
+    ...(sharedRecordGrant === undefined ? {} : { sharedRecordGrant }),
+    validUntil: validUntil.data,
+  });
+};
+
 /**
- * Creates the FileReadCoordinator.
- *
- * Rechecks current organisation, record, attachment field, file and grant authority
- * on every single request including range and preview requests.
- * Uses server-held short-lived read credentials and never redirects clients to
- * reusable private Storage bearer URLs.
+ * Whether the viewer's organisation may read this file: its own organisation's
+ * file, or a source organisation's file through a live grant that names this
+ * exact source record, attachment field, recipient organisation and, where the
+ * grant is narrower, recipient account and application.
+ */
+const organisationMayRead = (
+  authority: CurrentReadAuthority,
+  fileRecord: FileRecord,
+  nowMilliseconds: number,
+): boolean => {
+  if (fileRecord.organizationId === authority.viewer.organizationId) return true;
+  const grant = authority.sharedRecordGrant;
+  if (grant === undefined || grant.revoked) return false;
+  const actor = authority.viewer.actor;
+  return (
+    nowMilliseconds < Date.parse(grant.expiresAt) &&
+    grant.sourceOrganizationId === fileRecord.organizationId &&
+    grant.recipientOrganizationId === authority.viewer.organizationId &&
+    grant.sourceRecordTypeId === fileRecord.ownerRecordTypeId &&
+    grant.sourceRecordId === fileRecord.ownerRecordId &&
+    grant.readableFieldIds.includes(authority.fieldId) &&
+    (grant.recipientOrganizationAccountId === undefined ||
+      (actor.kind === "human" && actor.organizationAccountId === grant.recipientOrganizationAccountId)) &&
+    (grant.recipientApplicationRootId === undefined ||
+      authority.viewer.applicationRootId === grant.recipientApplicationRootId)
+  );
+};
+
+type Representation =
+  | Readonly<{ kind: "original"; disposition: "attachment" | "inline"; mediaType: string }>
+  | Readonly<{ kind: "rendition" }>;
+
+const chooseRepresentation = (
+  fileRecord: FileRecord,
+  purpose: FileReadPurpose,
+  hasRenderer: boolean,
+): Representation | null => {
+  const active = isExecutableOrActiveBrowserContent(
+    fileRecord.detectedMediaType,
+    fileRecord.extension,
+  );
+  if (purpose === "download") {
+    return {
+      kind: "original",
+      disposition: "attachment",
+      mediaType: active ? "application/octet-stream" : normalizeMediaType(fileRecord.detectedMediaType),
+    };
+  }
+  if (canPreviewOriginalInline(fileRecord)) {
+    return {
+      kind: "original",
+      disposition: "inline",
+      mediaType: normalizeMediaType(fileRecord.detectedMediaType),
+    };
+  }
+  return hasRenderer ? { kind: "rendition" } : null;
+};
+
+/**
+ * Serves one private file request. Each call independently re-verifies the
+ * Access-resolved viewer authority for the file's owning record and attachment
+ * field, organisation or live sharing grant, file lifecycle and safety; then
+ * records a one-time grant that the bridge claims to mint one server-held read
+ * credential of at most 60 seconds. Bytes are streamed through this process;
+ * no Storage address, bearer or redirect ever reaches the client.
  */
 export const createFileReadCoordinator = (
   dependencies: FileReadCoordinatorDependencies,
 ): FileReadCoordinator => {
+  if (
+    typeof dependencies?.repository?.readFile !== "function" ||
+    typeof dependencies.repository.recordDownloadGrant !== "function" ||
+    typeof dependencies.repository.claimDownloadGrant !== "function"
+  ) {
+    throw new Error("File reads require a durable read-grant repository");
+  }
+  if (typeof dependencies.bridge?.mintStorageOperationCredential !== "function") {
+    throw new Error("File reads require the Storage credential bridge");
+  }
+  if (typeof dependencies.upstreamStorageReader !== "function") {
+    throw new Error("File reads require a server-side Storage reader");
+  }
   const clock = dependencies.clock ?? (() => new Date());
+  const maximumPreviewSourceBytes = positiveLimit(
+    dependencies.maximumPreviewSourceBytes,
+    DEFAULT_MAXIMUM_PREVIEW_SOURCE_BYTES,
+  );
+  const maximumPreviewOutputBytes = positiveLimit(
+    dependencies.maximumPreviewOutputBytes,
+    DEFAULT_MAXIMUM_PREVIEW_OUTPUT_BYTES,
+  );
 
   const readFile = async (
-    authority: CurrentReadAuthority,
+    authorityCandidate: CurrentReadAuthority,
     request: FileReadRequest,
   ): Promise<FileReadResult> => {
     const now = clock();
     const nowMilliseconds = now.getTime();
+    if (!Number.isFinite(nowMilliseconds)) return refusal("authority_unavailable");
 
-    // 1. Session & authentication check
+    const fileId = fileIdSchema.safeParse(request?.fileId);
+    if (!fileId.success || (request.purpose !== "download" && request.purpose !== "preview")) {
+      return refusal("malformed_request");
+    }
+
+    const authority = parseAuthority(authorityCandidate);
+    if (authority === null || !(nowMilliseconds < Date.parse(authority.validUntil))) {
+      return refusal("authority_unavailable");
+    }
+
     if (
-      authority.sessionContext.callerKind === "public" ||
-      authority.sessionContext.callerKind === "anonymous"
+      !verifyAttachmentFieldAuthority({
+        fieldId: authority.fieldId,
+        readableFieldIds: authority.readableFieldIds,
+        changeableFieldIds: [],
+        operation: "read",
+      }).authorized
     ) {
-      return refusal(
-        "unauthenticated",
-        "Public and anonymous callers confer no private file authority",
-      );
+      return refusal("field_not_readable");
     }
 
-    // 2. Verified actor resolution
-    const actorResolution = resolveVerifiedFileActor(
-      authority.sessionContext,
-      authority.organizationId,
-    );
-    if (!actorResolution.authorized) {
-      return refusal("caller_not_authorized", actorResolution.reason);
+    let loaded: FileRecord | null;
+    try {
+      loaded = await dependencies.repository.readFile(fileId.data);
+    } catch {
+      return refusal("storage_unavailable");
     }
-    const actor = actorResolution.actor;
+    const parsedFile = loaded === null ? null : fileRecordSchema.safeParse(loaded);
+    if (parsedFile === null || !parsedFile.success || parsedFile.data.fileId !== fileId.data) {
+      return refusal("file_not_found");
+    }
+    const fileRecord = parsedFile.data;
 
-    // 3. Attachment field readability check
-    const fieldAuthority = verifyAttachmentFieldAuthority({
-      fieldId: authority.fieldId,
-      readableFieldIds: authority.readableFieldIds,
-      changeableFieldIds: [],
-      operation: "read",
-    });
-    if (!fieldAuthority.authorized) {
-      return refusal("field_not_readable", fieldAuthority.reason);
-    }
-
-    // 4. File record load
-    const fileIdParsed = fileIdSchema.safeParse(request.fileId);
-    if (!fileIdParsed.success) {
-      return refusal("malformed_request", "Invalid file identifier");
-    }
-    const fileRecord = await dependencies.repository.readFile(fileIdParsed.data);
-    if (fileRecord === null) {
-      return refusal("file_not_found", `File '${request.fileId}' not found`);
-    }
-
-    // 5. Organisation and shared record authority check
-    if (fileRecord.organizationId !== authority.organizationId) {
-      if (authority.sharedRecordGrant !== undefined) {
-        const grant = authority.sharedRecordGrant;
-        const grantExpiresAt = Date.parse(grant.expiresAt);
-        if (grant.revoked === true) {
-          return refusal("grant_revoked", "Record sharing grant has been revoked");
-        }
-        if (!Number.isFinite(grantExpiresAt) || grantExpiresAt <= nowMilliseconds) {
-          return refusal("grant_expired", "Record sharing grant has expired");
-        }
-        if (grant.sourceOrganizationId !== fileRecord.organizationId) {
-          return refusal(
-            "caller_not_authorized",
-            "Shared grant source organisation mismatch",
-          );
-        }
-        if (grant.recipientOrganizationId !== authority.organizationId) {
-          return refusal(
-            "caller_not_authorized",
-            "Shared grant recipient organisation mismatch",
-          );
-        }
-        if (!grant.readableFieldIds.includes(authority.fieldId)) {
-          return refusal(
-            "field_not_readable",
-            "Attachment field is not readable in the sharing grant",
-          );
-        }
-      } else {
-        return refusal(
-          "caller_not_authorized",
-          "File is not owned by the caller organisation",
-        );
-      }
-    }
-
-    // 6. Record owner binding match
+    // The file must be attached to exactly the record field the Access decision
+    // covered, in the viewer's organisation or a live grant's source record.
     if (
       fileRecord.ownerRecordTypeId !== authority.recordTypeId ||
       fileRecord.ownerRecordId !== authority.recordId ||
-      fileRecord.ownerFieldId !== authority.fieldId
+      fileRecord.ownerFieldId !== authority.fieldId ||
+      !organisationMayRead(authority, fileRecord, nowMilliseconds)
     ) {
-      return refusal(
-        "owner_mismatch",
-        "File is not attached to the specified record and field",
-      );
+      return refusal("file_not_found");
     }
 
-    // 7. Lifecycle state and safety checks
-    if (fileRecord.lifecycleState !== "active") {
-      return refusal(
-        "invalid_lifecycle_state",
-        `File is in lifecycle state '${fileRecord.lifecycleState}', not active`,
-      );
-    }
-    if (fileRecord.scannerResult !== "clean") {
-      return refusal(
-        "safety_check_failed",
-        `File safety check result is '${fileRecord.scannerResult}', refusing access`,
-      );
+    if (fileRecord.lifecycleState !== "active" || fileRecord.scannerResult !== "clean") {
+      return refusal("file_not_available");
     }
 
-    // 8. Range parsing
-    const rangeResult = parseRangeHeader(request.rangeHeader, fileRecord.sizeBytes);
-    if (rangeResult.kind === "unsatisfiable") {
-      return refusal(
-        "range_not_satisfiable",
-        "Requested byte range is unsatisfiable",
-        {
-          "Content-Range": `bytes */${fileRecord.sizeBytes}`,
-        },
-      );
+    const representation = chooseRepresentation(
+      fileRecord,
+      request.purpose,
+      dependencies.previewRenderer !== undefined,
+    );
+    if (representation === null) return refusal("preview_not_supported");
+    if (representation.kind === "rendition" && fileRecord.sizeBytes > maximumPreviewSourceBytes) {
+      return refusal("preview_not_supported");
     }
 
-    // 9. Short-lived internal read grant minting
-    const oneTimeId = randomUUID() as PlatformId;
-    const correlationId = correlationIdSchema.parse(randomUUID());
-    const grantExpiresAt = new Date(nowMilliseconds + 60 * 1000).toISOString();
-    const downloadGrant = downloadGrantSchema.parse({
-      kind: "download",
-      organizationId: fileRecord.organizationId,
-      actor,
-      recordTypeId: fileRecord.ownerRecordTypeId!,
-      recordId: fileRecord.ownerRecordId!,
-      fieldId: fileRecord.ownerFieldId!,
-      fileId: fileRecord.fileId,
-      oneTimeId,
-      expiresAt: grantExpiresAt,
+    // Ranges apply only to the original bytes, and only while the client's
+    // validator still names this exact content.
+    const etag = entityTag(fileRecord);
+    const rangeApplies =
+      representation.kind === "original" &&
+      (request.ifRangeHeader === undefined || request.ifRangeHeader.trim() === etag);
+    const range = rangeApplies
+      ? parseRangeHeader(request.rangeHeader, fileRecord.sizeBytes)
+      : ({ kind: "none" } as const);
+    if (range.kind === "unsatisfiable") {
+      return refusal("range_not_satisfiable", {
+        "Content-Range": `bytes */${fileRecord.sizeBytes}`,
+        "Accept-Ranges": "bytes",
+      });
+    }
+
+    // One unclaimed grant for this request; the bridge's read resolver claims it
+    // to mint exactly one credential bound to this exact object and viewer.
+    let credential: StorageOperationCredential;
+    try {
+      const oneTimeId = platformIdSchema.parse(randomUUID());
+      const correlationId = correlationIdSchema.parse(randomUUID());
+      const grant = downloadGrantSchema.parse({
+        kind: "download",
+        organizationId: fileRecord.organizationId,
+        actor: authority.viewer.actor,
+        recordTypeId: authority.recordTypeId,
+        recordId: authority.recordId,
+        fieldId: authority.fieldId,
+        fileId: fileRecord.fileId,
+        oneTimeId,
+        expiresAt: new Date(
+          Math.min(
+            nowMilliseconds + MAXIMUM_FILE_STORAGE_OPERATION_SECONDS * 1_000,
+            Date.parse(authority.validUntil),
+          ),
+        ).toISOString(),
+      });
+      await dependencies.repository.recordDownloadGrant({
+        grant,
+        correlationId,
+        purpose: request.purpose,
+      });
+      credential = await dependencies.bridge.mintStorageOperationCredential({
+        request: { operation: "read", grant },
+        ttlSeconds: MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
+      });
+    } catch {
+      return refusal("storage_unavailable");
+    }
+    if (
+      credential.operation !== "read" ||
+      credential.organizationId !== fileRecord.organizationId ||
+      credential.objectPath !== fileRecord.storageKey
+    ) {
+      return refusal("storage_unavailable");
+    }
+
+    const selectedRange = range.kind === "satisfiable" ? range.range : undefined;
+    let upstream: UpstreamStorageReadResult;
+    try {
+      upstream = await dependencies.upstreamStorageReader({
+        credential,
+        ...(selectedRange === undefined ? {} : { range: selectedRange }),
+      });
+    } catch {
+      return refusal("storage_unavailable");
+    }
+
+    const expectedBytes =
+      selectedRange === undefined
+        ? fileRecord.sizeBytes
+        : selectedRange.end - selectedRange.start + 1;
+    const expectedContentRange =
+      selectedRange === undefined
+        ? undefined
+        : `bytes ${selectedRange.start}-${selectedRange.end}/${fileRecord.sizeBytes}`;
+    if (
+      (upstream.contentLength !== undefined && upstream.contentLength !== expectedBytes) ||
+      (expectedContentRange !== undefined &&
+        upstream.contentRange !== undefined &&
+        upstream.contentRange.trim() !== expectedContentRange)
+    ) {
+      await upstream.stream.cancel().catch(() => undefined);
+      return refusal("storage_unavailable");
+    }
+    const original = boundedByteStream(upstream.stream, {
+      expectedBytes,
+      maximumBytes: expectedBytes,
     });
 
-    if (dependencies.repository.recordDownloadGrant) {
-      await dependencies.repository.recordDownloadGrant(downloadGrant, correlationId);
-    }
-
-    // 10. Mint server-held short-lived Storage operation credential
-    let credential;
-    try {
-      credential = await dependencies.bridge.mintStorageOperationCredential({
-        request: { operation: "read", grant: downloadGrant },
-        ttlSeconds: 60,
-      });
-    } catch (err) {
-      return refusal(
-        "storage_unavailable",
-        err instanceof Error ? err.message : "Storage credential minting failed",
-      );
-    }
-
-    // 11. Upstream fetch through server-held token
-    const parsedRange =
-      rangeResult.kind === "satisfiable" ? rangeResult.range : undefined;
-
-    let upstreamResult;
-    try {
-      upstreamResult = await dependencies.upstreamStorageReader({
-        destinationProject: credential.destinationProject,
-        bucketId: credential.bucketId,
-        objectPath: credential.objectPath,
-        token: credential.token,
-        range: parsedRange,
-        ifNoneMatch: request.ifNoneMatch,
-      });
-    } catch (err) {
-      return refusal(
-        "storage_unavailable",
-        err instanceof Error ? err.message : "Upstream storage fetch failed",
-      );
-    }
-
-    if (upstreamResult.statusCode === 304) {
+    if (representation.kind === "rendition") {
+      const renderer = dependencies.previewRenderer!;
+      let rendition: Awaited<ReturnType<FilePreviewRenderer>>;
+      try {
+        rendition = await renderer({
+          fileRecord,
+          source: original,
+          maximumOutputBytes: maximumPreviewOutputBytes,
+        });
+      } catch {
+        await original.cancel().catch(() => undefined);
+        return refusal("preview_unavailable");
+      }
+      const renditionType = normalizeMediaType(rendition.mediaType ?? "");
+      if (
+        !PREVIEW_RENDITION_MEDIA_TYPES.has(renditionType) ||
+        (rendition.sizeBytes !== undefined &&
+          (!Number.isSafeInteger(rendition.sizeBytes) ||
+            rendition.sizeBytes < 0 ||
+            rendition.sizeBytes > maximumPreviewOutputBytes))
+      ) {
+        await rendition.stream?.cancel().catch(() => undefined);
+        return refusal("preview_unavailable");
+      }
       return Object.freeze({
-        outcome: "success" as const,
+        outcome: "success",
         fileId: fileRecord.fileId,
-        statusCode: 304 as const,
-        headers: {
-          ...defaultPrivateHeaders(),
-          ...(upstreamResult.etag ? { ETag: upstreamResult.etag } : {}),
-        },
-        stream: upstreamResult.stream,
-        metadata: Object.freeze({
-          displayName: fileRecord.originalSafeDisplayName,
-          mediaType: fileRecord.detectedMediaType,
-          sizeBytes: fileRecord.sizeBytes,
-          checksum: fileRecord.checksum,
-          isPartial: false,
-          contentLength: 0,
-          disposition: "attachment" as const,
+        statusCode: 200,
+        headers: Object.freeze({
+          ...privateFileResponseHeaders(),
+          "Content-Type": renditionType,
+          "Content-Disposition": buildContentDisposition(
+            "inline",
+            fileRecord.originalSafeDisplayName,
+            fileRecord.extension,
+          ),
+          ...(rendition.sizeBytes === undefined
+            ? {}
+            : { "Content-Length": String(rendition.sizeBytes) }),
+        }),
+        stream: boundedByteStream(rendition.stream, {
+          ...(rendition.sizeBytes === undefined ? {} : { expectedBytes: rendition.sizeBytes }),
+          maximumBytes: maximumPreviewOutputBytes,
         }),
       });
     }
 
-    // 12. Safe Content Disposition & Content Type
-    const dispositionResolution = resolveSafeContentDisposition(
-      fileRecord,
-      request.purpose,
-    );
-
-    let outputStream = upstreamResult.stream;
-    let effectiveMediaType = dispositionResolution.safeMediaType;
-    let effectiveSizeBytes = upstreamResult.contentLength;
-
-    // 13. Isolated preview generation (if purpose is preview and generator configured)
-    if (request.purpose === "preview" && dependencies.previewGenerator) {
-      try {
-        const previewResult = await dependencies.previewGenerator({
-          fileRecord,
-          stream: outputStream,
-        });
-        outputStream = previewResult.stream;
-        effectiveMediaType = previewResult.mediaType;
-        effectiveSizeBytes = previewResult.sizeBytes;
-      } catch (err) {
-        return refusal(
-          "preview_unavailable",
-          err instanceof Error ? err.message : "Preview generation failed",
-        );
-      }
-    }
-
-    const isPartial = rangeResult.kind === "satisfiable";
-    const statusCode = isPartial ? 206 : 200;
-
-    const responseHeaders: Record<string, string> = {
-      ...defaultPrivateHeaders(),
-      "Content-Type": effectiveMediaType,
-      "Content-Disposition": dispositionResolution.contentDispositionHeader,
-      "Content-Length": String(effectiveSizeBytes),
-      ...(upstreamResult.contentRange
-        ? { "Content-Range": upstreamResult.contentRange }
-        : isPartial && parsedRange
-          ? {
-              "Content-Range": `bytes ${parsedRange.start}-${parsedRange.end}/${fileRecord.sizeBytes}`,
-            }
-          : {}),
-      ...(upstreamResult.etag ? { ETag: upstreamResult.etag } : {}),
-    };
-
     return Object.freeze({
-      outcome: "success" as const,
+      outcome: "success",
       fileId: fileRecord.fileId,
-      statusCode,
-      headers: Object.freeze(responseHeaders),
-      stream: outputStream,
-      metadata: Object.freeze({
-        displayName: fileRecord.originalSafeDisplayName,
-        mediaType: effectiveMediaType,
-        sizeBytes: fileRecord.sizeBytes,
-        checksum: fileRecord.checksum,
-        isPartial,
-        contentRange: responseHeaders["Content-Range"],
-        contentLength: effectiveSizeBytes,
-        disposition: dispositionResolution.disposition,
+      statusCode: selectedRange === undefined ? 200 : 206,
+      headers: Object.freeze({
+        ...privateFileResponseHeaders(),
+        "Content-Type": representation.mediaType,
+        "Content-Disposition": buildContentDisposition(
+          representation.disposition,
+          fileRecord.originalSafeDisplayName,
+          fileRecord.extension,
+        ),
+        "Content-Length": String(expectedBytes),
+        "Accept-Ranges": "bytes",
+        ETag: etag,
+        ...(expectedContentRange === undefined ? {} : { "Content-Range": expectedContentRange }),
       }),
+      stream: original,
     });
   };
 
-  const cleanupAbandonedPending = async (
-    options?: Readonly<{ maxBatchSize?: number }>,
-  ): Promise<CleanupAbandonedPendingObjectsResult> => {
-    if (
-      !dependencies.cleanupRepository ||
-      !dependencies.abandonedStorageDeleter
-    ) {
-      return Object.freeze({
-        examinedCount: 0,
-        abandonedCount: 0,
-        removedCount: 0,
-        errors: Object.freeze([
-          {
-            fileId: "00000000-0000-0000-0000-000000000000" as FileId,
-            reason: "Cleanup dependencies not configured",
-          },
-        ]),
-      });
-    }
+  return Object.freeze({ readFile });
+};
 
-    return cleanupAbandonedPendingObjects(
-      {
-        repository: dependencies.cleanupRepository,
-        storageDeleter: dependencies.abandonedStorageDeleter,
-        clock,
-      },
-      options,
-    );
-  };
+/** One pending upload whose window closed, or an abandoned upload whose removal has not finished. */
+export type AbandonedUploadCandidate = Readonly<{
+  fileRecord: FileRecord;
+  revision: number;
+  uploadExpiresAt: string;
+}>;
+
+/**
+ * The owning upload store's abandonment boundary. Neither method touches a
+ * record, its revision or its activity history.
+ */
+export type AbandonedUploadCleanupRepository = Readonly<{
+  /**
+   * A bounded, oldest-first batch: pending uploads whose window closed before
+   * `expiredBefore`, and abandoned uploads that are not yet removed.
+   */
+  listAbandonmentCandidates(
+    input: Readonly<{ limit: number; expiredBefore: string }>,
+  ): Promise<readonly AbandonedUploadCandidate[]>;
+  /**
+   * Compare-and-set of an expired pending upload to abandoned, superseding every
+   * upload grant so no further credential can be issued for it.
+   */
+  abandonExpiredUpload(
+    input: Readonly<{ fileId: FileId; expectedRevision: number; abandonedAt: string }>,
+  ): Promise<
+    | Readonly<{ outcome: "abandoned" }>
+    | Readonly<{ outcome: "refused"; reason: "not_pending" | "window_open" | "revision_conflict" }>
+  >;
+}>;
+
+export type AbandonedUploadCleanupDependencies = Readonly<{
+  repository: AbandonedUploadCleanupRepository;
+  /** The #657 removal decision boundary; abandoned files are removal-eligible there. */
+  removalEligibility: Pick<FileRemovalEligibilityService, "decideFileRemovalEligibility">;
+  /** The owning removal coordinator, which deletes previews and the object through the bridge's delete authority. */
+  removalCoordinator: FileRemovalCoordinator;
+  clock?: () => Date;
+}>;
+
+export type AbandonedUploadCleanupOutcome = Readonly<{
+  fileId: FileId;
+  outcome: "removed" | "in_progress" | "skipped" | "failed";
+}>;
+
+export type AbandonedUploadCleanupResult = Readonly<{
+  examined: number;
+  abandoned: number;
+  removed: number;
+  outcomes: readonly AbandonedUploadCleanupOutcome[];
+}>;
+
+export const MAXIMUM_ABANDONED_UPLOAD_BATCH = 100;
+
+/** A stable identifier derived from the removal decision, formatted as a version 8 UUID. */
+const derivedUuid = (material: string): string => {
+  const hex = createHash("sha256").update(material, "utf8").digest("hex");
+  const variant = ((parseInt(hex[16] ?? "0", 16) & 0x3) | 0x8).toString(16);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+};
+
+const isTerminalRemoval = (result: FileRemovalResult): boolean => result.status === "completed";
+
+/**
+ * Removes a bounded batch of abandoned uploads. Expired pending uploads are
+ * first marked abandoned in the owning upload store; each abandoned upload is
+ * then removed through the #657 eligibility decision and the owning removal
+ * coordinator, which cleans previews, the private object and metadata. No
+ * record or record activity is touched, and a failure of one upload does not
+ * stop the batch.
+ */
+export const cleanupAbandonedUploads = async (
+  dependencies: AbandonedUploadCleanupDependencies,
+  options?: Readonly<{ limit?: number }>,
+): Promise<AbandonedUploadCleanupResult> => {
+  const clock = dependencies.clock ?? (() => new Date());
+  const now = clock();
+  if (!Number.isFinite(now.getTime())) throw new Error("Abandoned upload cleanup clock is invalid");
+  const limit = Math.min(
+    positiveLimit(options?.limit, MAXIMUM_ABANDONED_UPLOAD_BATCH),
+    MAXIMUM_ABANDONED_UPLOAD_BATCH,
+  );
+  const candidates = (
+    await dependencies.repository.listAbandonmentCandidates({
+      limit,
+      expiredBefore: now.toISOString(),
+    })
+  ).slice(0, limit);
+
+  let abandoned = 0;
+  let removed = 0;
+  const outcomes: AbandonedUploadCleanupOutcome[] = [];
+  for (const candidate of candidates) {
+    const parsed = fileRecordSchema.safeParse(candidate.fileRecord);
+    if (!parsed.success) continue;
+    const fileRecord = parsed.data;
+    try {
+      if (fileRecord.lifecycleState === "pending") {
+        if (!(Date.parse(candidate.uploadExpiresAt) <= now.getTime())) {
+          outcomes.push({ fileId: fileRecord.fileId, outcome: "skipped" });
+          continue;
+        }
+        const marked = await dependencies.repository.abandonExpiredUpload({
+          fileId: fileRecord.fileId,
+          expectedRevision: candidate.revision,
+          abandonedAt: now.toISOString(),
+        });
+        if (marked.outcome !== "abandoned") {
+          outcomes.push({ fileId: fileRecord.fileId, outcome: "skipped" });
+          continue;
+        }
+        abandoned += 1;
+      } else if (fileRecord.lifecycleState !== "abandoned") {
+        outcomes.push({ fileId: fileRecord.fileId, outcome: "skipped" });
+        continue;
+      }
+
+      const decision = await dependencies.removalEligibility.decideFileRemovalEligibility({
+        fileId: fileRecord.fileId,
+      });
+      if (!decision.eligible) {
+        outcomes.push({ fileId: fileRecord.fileId, outcome: "skipped" });
+        continue;
+      }
+      const material = [
+        "vortex:file:abandoned-upload",
+        fileRecord.fileId,
+        decision.binding.authorityFingerprint,
+        decision.binding.fileRevision,
+        decision.decidedAt,
+      ].join(":");
+      const result = await dependencies.removalCoordinator.coordinateFileRemoval({
+        fileId: fileRecord.fileId,
+        deletionKey: `abandoned-upload:${createHash("sha256").update(material, "utf8").digest("hex")}`,
+        decision,
+        correlationId: derivedUuid(material),
+      });
+      if (isTerminalRemoval(result)) {
+        removed += 1;
+        outcomes.push({ fileId: fileRecord.fileId, outcome: "removed" });
+      } else {
+        outcomes.push({ fileId: fileRecord.fileId, outcome: "in_progress" });
+      }
+    } catch {
+      outcomes.push({ fileId: fileRecord.fileId, outcome: "failed" });
+    }
+  }
 
   return Object.freeze({
-    readFile,
-    cleanupAbandonedPendingObjects: cleanupAbandonedPending,
+    examined: candidates.length,
+    abandoned,
+    removed,
+    outcomes: Object.freeze(outcomes),
   });
 };
