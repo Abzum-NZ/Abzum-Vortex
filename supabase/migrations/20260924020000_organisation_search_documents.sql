@@ -2,11 +2,14 @@
 --
 -- One row holds the searchable text of one Record for the organisation that owns
 -- it: source record identity and version, the weighted entries built by
--- runtime/search/src/document-store.ts, or a deletion marker. Sensitive, hidden,
--- non-searchable and recipient-copied shared-source values never reach this
--- table: the builder excludes them, and the key below has no source-organisation
--- column, so another organisation's content has nowhere to be stored. Index
--- serving and event-driven refresh are later Search work.
+-- runtime/search/src/document-store.ts, or a deletion marker. Sensitive,
+-- unpermitted personal, non-searchable and recipient-copied shared-source values
+-- never reach this table: the builder excludes them, and the key below has no
+-- source-organisation column, so another organisation's content has nowhere to
+-- be stored. Each entry keeps its field identity so serving can match only
+-- fields the current person may read; results are rechecked against current
+-- access at read time. Index serving and event-driven refresh are later Search
+-- work.
 
 begin;
 
@@ -16,26 +19,38 @@ revoke all on schema vortex_search from public, anon, authenticated, service_rol
 grant usage on schema vortex_search to vortex_runtime, vortex_request;
 
 -- Entries are a bounded array of objects holding exactly fieldId, priority,
--- weight and text, so no other value can ride along in a document.
+-- weight and text, with distinct field identifiers and bounded non-empty text,
+-- so no other value can ride along in a document.
 create function vortex_search.document_entries_are_valid(p_entries jsonb)
 returns boolean
 language sql immutable strict parallel safe security invoker set search_path = ''
 as $function$
-  select pg_catalog.jsonb_typeof(p_entries) = 'array'
-    and pg_catalog.jsonb_array_length(p_entries) <= 100
-    and pg_catalog.pg_column_size(p_entries) <= 262144
-    and not exists (
-      select 1
-      from pg_catalog.jsonb_array_elements(p_entries) as entry(value)
-      where pg_catalog.jsonb_typeof(entry.value) <> 'object'
-        or not (entry.value ?& array['fieldId', 'priority', 'weight', 'text'])
-        or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(entry.value)) <> 4
-        or pg_catalog.jsonb_typeof(entry.value -> 'fieldId') <> 'string'
-        or pg_catalog.jsonb_typeof(entry.value -> 'text') <> 'string'
-        or pg_catalog.length(entry.value ->> 'text') > 4000
-        or (entry.value ->> 'priority', entry.value ->> 'weight')
-          not in (('first', '3'), ('normal', '2'), ('last', '1'))
-    );
+  select case
+    when pg_catalog.jsonb_typeof(p_entries) <> 'array' then false
+    else pg_catalog.jsonb_array_length(p_entries) <= 100
+      and pg_catalog.pg_column_size(p_entries) <= 262144
+      and not exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(p_entries) as entry(value)
+        where pg_catalog.jsonb_typeof(entry.value) <> 'object'
+          or not (entry.value ?& array['fieldId', 'priority', 'weight', 'text'])
+          or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(entry.value)) <> 4
+          or pg_catalog.jsonb_typeof(entry.value -> 'fieldId') <> 'string'
+          or (entry.value ->> 'fieldId') !~*
+            '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+          or pg_catalog.jsonb_typeof(entry.value -> 'priority') <> 'string'
+          or pg_catalog.jsonb_typeof(entry.value -> 'weight') <> 'number'
+          or pg_catalog.jsonb_typeof(entry.value -> 'text') <> 'string'
+          or pg_catalog.length(entry.value ->> 'text') not between 1 and 4000
+          or (entry.value ->> 'priority', entry.value ->> 'weight')
+            not in (('first', '3'), ('normal', '2'), ('last', '1'))
+      )
+      and (
+        select pg_catalog.count(distinct entry.value ->> 'fieldId') = pg_catalog.count(*)
+          and coalesce(pg_catalog.sum(pg_catalog.length(entry.value ->> 'text')), 0) <= 20000
+        from pg_catalog.jsonb_array_elements(p_entries) as entry(value)
+      )
+  end;
 $function$;
 
 create table vortex_search.documents (
@@ -70,7 +85,8 @@ create table vortex_search.documents (
   -- A deletion marker holds no content; a live document names its content hash.
   constraint documents_deletion_holds_no_content check (
     (deleted and entries = '[]'::jsonb and content_fingerprint is null)
-    or (not deleted and content_fingerprint ~ '^sha256:[0-9a-f]{64}$')
+    or (not deleted and content_fingerprint is not null
+      and content_fingerprint ~ '^sha256:[0-9a-f]{64}$')
   ),
   -- Entries are a bounded array of exactly the four builder-produced keys.
   constraint documents_entries_shape check (vortex_search.document_entries_are_valid(entries))
@@ -133,9 +149,12 @@ create index documents_application_idx
   where application_root_id is not null;
 
 -- Stores one built document or deletion marker for the request's own
--- organisation. A version older than the stored one is ignored; the same version
--- is a replay; a newer one replaces the row, and a deletion replaces content with
--- a marker so a deleted record's text does not remain searchable.
+-- organisation. A version older than the stored one is ignored. The same version
+-- with the same content is a replay; with changed content (a rebuild after a
+-- search configuration or privacy policy change) it replaces the row, so text
+-- that may no longer be indexed does not remain searchable. A deletion marker is
+-- final for its version. A newer version replaces the row, and a deletion
+-- replaces content with a marker so a deleted record's text is not searchable.
 create function vortex_search.put_document(
   p_organization_id uuid,
   p_record_type_id uuid,
@@ -153,7 +172,9 @@ security definer
 set search_path = ''
 as $function$
 declare
-  stored_version bigint;
+  stored vortex_search.documents%rowtype;
+  next_entries jsonb := case when p_deleted then '[]'::jsonb else p_entries end;
+  next_fingerprint text := case when p_deleted then null else p_content_fingerprint end;
 begin
   if p_organization_id is null or not vortex_context.is_non_nil_uuid(p_organization_id::text)
     or p_record_type_id is null or not vortex_context.is_non_nil_uuid(p_record_type_id::text)
@@ -177,32 +198,45 @@ begin
       p_organization_id::text, p_record_type_id::text, p_record_id::text), 643)
   );
 
-  select stored.source_record_version into stored_version
-  from vortex_search.documents as stored
-  where stored.organization_id = p_organization_id
-    and stored.record_type_id = p_record_type_id
-    and stored.record_id = p_record_id;
+  select existing.* into stored
+  from vortex_search.documents as existing
+  where existing.organization_id = p_organization_id
+    and existing.record_type_id = p_record_type_id
+    and existing.record_id = p_record_id;
 
   if found then
-    if stored_version > p_source_record_version then
+    if stored.source_record_version > p_source_record_version then
       return query select 'ignored_older'::text;
       return;
     end if;
-    if stored_version = p_source_record_version then
-      return query select 'replayed'::text;
-      return;
+    if stored.source_record_version = p_source_record_version then
+      if stored.deleted then
+        return query select
+          case when p_deleted then 'replayed' else 'ignored_deleted' end::text;
+        return;
+      end if;
+      if stored.deleted = p_deleted
+        and stored.entries = next_entries
+        and stored.content_fingerprint is not distinct from next_fingerprint
+        and stored.application_root_id is not distinct from p_application_root_id then
+        return query select 'replayed'::text;
+        return;
+      end if;
     end if;
-    update vortex_search.documents as stored
+    update vortex_search.documents as existing
     set application_root_id = p_application_root_id,
         source_record_version = p_source_record_version,
         deleted = p_deleted,
-        entries = case when p_deleted then '[]'::jsonb else p_entries end,
-        content_fingerprint = case when p_deleted then null else p_content_fingerprint end,
+        entries = next_entries,
+        content_fingerprint = next_fingerprint,
         updated_at = pg_catalog.statement_timestamp()
-    where stored.organization_id = p_organization_id
-      and stored.record_type_id = p_record_type_id
-      and stored.record_id = p_record_id;
-    return query select 'replaced'::text;
+    where existing.organization_id = p_organization_id
+      and existing.record_type_id = p_record_type_id
+      and existing.record_id = p_record_id;
+    return query select case
+      when stored.source_record_version = p_source_record_version then 'rebuilt'
+      else 'replaced'
+    end::text;
     return;
   end if;
 
@@ -212,9 +246,7 @@ begin
     content_fingerprint
   ) values (
     p_organization_id, p_record_type_id, p_record_id, p_application_root_id,
-    p_source_record_version, 1, p_deleted,
-    case when p_deleted then '[]'::jsonb else p_entries end,
-    case when p_deleted then null else p_content_fingerprint end
+    p_source_record_version, 1, p_deleted, next_entries, next_fingerprint
   );
   return query select 'stored'::text;
 end
@@ -242,6 +274,6 @@ comment on table vortex_search.documents is
 comment on function vortex_search.put_document(
   uuid, uuid, uuid, uuid, bigint, boolean, jsonb, text
 ) is
-  'Stores one built search document or deletion marker for the request organisation; an older source version never overwrites a newer one.';
+  'Stores one built search document or deletion marker for the request organisation; an older source version never overwrites a newer one, and a same-version rebuild replaces changed content.';
 
 commit;

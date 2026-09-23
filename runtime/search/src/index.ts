@@ -8,6 +8,7 @@ export const SearchService = Object.freeze({
 export {
   buildSearchDocument,
   searchableFieldConfigurationFor,
+  searchDocumentStoreCommand,
   searchDocumentLimits,
   searchDocumentSchemaVersion,
   searchPriorityWeights,
@@ -19,5 +20,7 @@ export {
   type SearchDocumentDeletion,
   type SearchDocumentEntry,
   type SearchDocumentRefusalCode,
+  type SearchDocumentStoreCommand,
+  type SearchDocumentStoreOutcome,
   type SearchRecordSnapshot,
 } from "./document-store";

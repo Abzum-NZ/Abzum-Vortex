@@ -1,10 +1,15 @@
 import { createHash } from "node:crypto";
-import type {
-  FieldType,
-  ModuleFieldV2,
-  PersonalDataClass,
-  RecordTypeDefinitionV2,
-  SearchPriority,
+import {
+  applicationRootIdSchema,
+  fieldIdSchema,
+  organizationIdSchema,
+  recordIdSchema,
+  recordTypeIdSchema,
+  type FieldType,
+  type ModuleFieldV2,
+  type PersonalDataClass,
+  type RecordTypeDefinitionV2,
+  type SearchPriority,
 } from "@vortex/contracts";
 
 /**
@@ -12,26 +17,38 @@ import type {
  *
  * This module turns one organisation-owned Record snapshot plus the exact
  * searchable-field configuration into a versioned search document, or a deletion
- * marker. It builds and describes documents only: index serving and event-driven
- * refresh belong to later Search work, and shared-source content is never accepted
- * into another organisation's document.
+ * marker, and describes the store command for it. It builds and describes
+ * documents only: index serving and event-driven refresh belong to later Search
+ * work, and shared-source content is never accepted into another organisation's
+ * document.
  */
 
 /** Version of the stored document shape; bumped only by a deliberate rebuild. */
 export const searchDocumentSchemaVersion = 1;
 
-/** Field types whose stored value is plain searchable text or a plain number. */
+/**
+ * Field types whose stored value carries searchable words. Identifier-only
+ * values (links to records or people) and yes/no values carry none, and
+ * attachments are searched only through a separate file-search policy.
+ */
 const searchableFieldTypes = new Set<FieldType>([
   "text",
   "long_text",
-  "email_address",
-  "phone_number",
-  "web_address",
+  "formatted_text",
+  "whole_number",
+  "decimal_number",
+  "money",
+  "date",
+  "date_time",
   "choice",
   "several_choices",
   "reference_number",
-  "whole_number",
-  "decimal_number",
+  "email_address",
+  "phone_number",
+  "web_address",
+  "table",
+  "calculation",
+  "total",
 ]);
 
 /** Ranking weight per declared search priority; ranking never overrides access. */
@@ -52,6 +69,8 @@ export type SearchableFieldConfigurationEntry = Readonly<{
   type: FieldType;
   priority: SearchPriority;
   personalData: PersonalDataClass;
+  /** Published option labels by stored value, for choice fields. */
+  optionLabels?: Readonly<Record<string, string>>;
 }>;
 
 /** The exact set of fields one record type may contribute to its search document. */
@@ -66,17 +85,33 @@ export type SearchableFieldPolicy = Readonly<{
 }>;
 
 const isIndexableField = (
-  field: Pick<ModuleFieldV2, "type" | "searchPriority" | "personalData">,
+  field: Readonly<{
+    type: FieldType;
+    priority: SearchPriority | undefined;
+    personalData: PersonalDataClass;
+  }>,
   policy: SearchableFieldPolicy,
 ): boolean =>
-  field.searchPriority !== undefined &&
+  field.priority !== undefined &&
+  Object.hasOwn(searchPriorityWeights, field.priority) &&
   searchableFieldTypes.has(field.type) &&
-  (field.personalData === "none" || (field.personalData === "personal" && policy.personalDataPermitted));
+  (field.personalData === "none" ||
+    (field.personalData === "personal" && policy.personalDataPermitted === true));
+
+const optionLabelsFor = (field: ModuleFieldV2): Readonly<Record<string, string>> | undefined =>
+  field.type === "choice" || field.type === "several_choices"
+    ? Object.freeze(
+        Object.fromEntries(
+          field.settings.options.map((option) => [option.value, option.label] as const),
+        ),
+      )
+    : undefined;
 
 /**
  * Derives the exact configuration from a published record type. Fields without a
  * declared search priority, sensitive fields, unpermitted personal fields and
- * non-text field types are left out, so a schema is never treated as an indexer.
+ * field types without searchable words are left out, so a schema is never
+ * treated as an indexer.
  */
 export const searchableFieldConfigurationFor = (
   recordType: Pick<RecordTypeDefinitionV2, "recordTypeId" | "fields">,
@@ -85,23 +120,28 @@ export const searchableFieldConfigurationFor = (
   Object.freeze({
     recordTypeId: recordType.recordTypeId,
     fields: Object.freeze(
-      recordType.fields
-        .filter((field) => isIndexableField(field, policy))
-        .map((field) =>
+      recordType.fields.flatMap((field): SearchableFieldConfigurationEntry[] => {
+        const priority = field.searchPriority;
+        if (priority === undefined || !isIndexableField({ ...field, priority }, policy)) return [];
+        const optionLabels = optionLabelsFor(field);
+        return [
           Object.freeze({
             fieldId: field.fieldId,
             type: field.type,
-            priority: field.searchPriority as SearchPriority,
+            priority,
             personalData: field.personalData,
+            ...(optionLabels === undefined ? {} : { optionLabels }),
           }),
-        ),
+        ];
+      }),
     ),
   });
 
 /**
  * One Record version owned by `ownerOrganisationId`, offered to the index of
  * `indexOrganisationId`. They differ only for a recipient-copied shared-source
- * record, which is refused rather than indexed.
+ * record, which is refused rather than indexed. `recordVersion` is the Record's
+ * concurrency number after the change being indexed, including a deletion.
  */
 export type SearchRecordSnapshot = Readonly<{
   indexOrganisationId: string;
@@ -155,40 +195,134 @@ export type BuildSearchDocumentResult =
 const refuse = (code: SearchDocumentRefusalCode): BuildSearchDocumentResult =>
   Object.freeze({ success: false, code });
 
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const nilUuid = "00000000-0000-0000-0000-000000000000";
-const isPlatformId = (value: unknown): value is string =>
-  typeof value === "string" && uuidPattern.test(value) && value !== nilUuid;
-
 const isValidSnapshot = (snapshot: SearchRecordSnapshot): boolean =>
-  isPlatformId(snapshot.indexOrganisationId) &&
-  isPlatformId(snapshot.ownerOrganisationId) &&
-  (snapshot.applicationRootId === undefined || isPlatformId(snapshot.applicationRootId)) &&
-  isPlatformId(snapshot.recordTypeId) &&
-  isPlatformId(snapshot.recordId) &&
+  organizationIdSchema.safeParse(snapshot.indexOrganisationId).success &&
+  organizationIdSchema.safeParse(snapshot.ownerOrganisationId).success &&
+  (snapshot.applicationRootId === undefined ||
+    applicationRootIdSchema.safeParse(snapshot.applicationRootId).success) &&
+  recordTypeIdSchema.safeParse(snapshot.recordTypeId).success &&
+  recordIdSchema.safeParse(snapshot.recordId).success &&
   Number.isSafeInteger(snapshot.recordVersion) &&
   snapshot.recordVersion >= 1 &&
   (snapshot.lifecycle === "active" || snapshot.lifecycle === "deleted") &&
   typeof snapshot.fieldValues === "object" &&
-  snapshot.fieldValues !== null;
+  snapshot.fieldValues !== null &&
+  !Array.isArray(snapshot.fieldValues);
 
-const collapse = (value: string): string => value.normalize("NFC").replace(/\s+/gu, " ").trim();
+/**
+ * One line of well-formed text: lone surrogates are dropped and control
+ * characters and whitespace runs become one space, so every document is valid
+ * stored JSON text.
+ */
+const collapse = (value: string): string =>
+  value
+    .replace(/\p{Cs}/gu, "")
+    .normalize("NFC")
+    .replace(/[\s\p{Cc}]+/gu, " ")
+    .trim();
 
-/** Plain text for one supported field value, or undefined when it holds nothing searchable. */
-const searchableText = (type: FieldType, value: unknown): string | undefined => {
-  if (value === null || value === undefined) return undefined;
-  if (type === "several_choices") {
-    if (!Array.isArray(value)) return undefined;
-    const parts = value.filter((part): part is string => typeof part === "string");
-    return parts.length === 0 ? undefined : collapse(parts.join(" "));
+/** Truncates to `limit` UTF-16 units without splitting a surrogate pair. */
+const bounded = (text: string, limit: number): string => {
+  if (text.length <= limit) return text;
+  const cut = text.slice(0, limit);
+  const last = cut.charCodeAt(cut.length - 1);
+  return (last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut).trimEnd();
+};
+
+const isPlainObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** Text, whole numbers, exact decimals, dates and money; yes/no values carry no words. */
+const scalarText = (value: unknown): string | undefined => {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : undefined;
+  if (
+    isPlainObject(value) &&
+    typeof value.amount === "string" &&
+    typeof value.currency === "string"
+  )
+    return `${value.amount} ${value.currency}`;
+  return undefined;
+};
+
+const richTextDepthLimit = 32;
+
+/** Visible words of formatted text; link addresses and file blocks are not content. */
+const richInlineText = (inlines: unknown, parts: string[], depth: number): void => {
+  if (!Array.isArray(inlines) || depth > richTextDepthLimit) return;
+  for (const inline of inlines) {
+    if (!isPlainObject(inline)) continue;
+    if (inline.kind === "text" && typeof inline.text === "string") parts.push(inline.text);
+    else if (inline.kind === "emphasis" || inline.kind === "link")
+      richInlineText(inline.children, parts, depth + 1);
   }
-  if (type === "whole_number" || type === "decimal_number")
-    return typeof value === "number" && Number.isFinite(value)
-      ? String(value)
-      : typeof value === "string"
-        ? collapse(value)
-        : undefined;
-  return typeof value === "string" ? collapse(value) : undefined;
+};
+
+const formattedText = (value: unknown): string[] => {
+  const parts: string[] = [];
+  if (!isPlainObject(value) || !Array.isArray(value.blocks)) return parts;
+  for (const block of value.blocks) {
+    if (!isPlainObject(block)) continue;
+    if (block.kind === "paragraph" || block.kind === "heading")
+      richInlineText(block.children, parts, 0);
+    else if (
+      (block.kind === "bulleted_list" || block.kind === "numbered_list") &&
+      Array.isArray(block.items)
+    )
+      for (const item of block.items) richInlineText(item, parts, 0);
+    else if (block.kind === "table" && Array.isArray(block.rows))
+      for (const row of block.rows)
+        if (isPlainObject(row) && Array.isArray(row.cells))
+          for (const cell of row.cells)
+            if (isPlainObject(cell)) richInlineText(cell.children, parts, 0);
+  }
+  return parts;
+};
+
+const choiceText = (
+  value: unknown,
+  labels: Readonly<Record<string, string>> | undefined,
+): string | undefined =>
+  typeof value !== "string"
+    ? undefined
+    : labels !== undefined && Object.hasOwn(labels, value)
+      ? labels[value]
+      : value;
+
+/** Searchable words of one configured field value, in a stable order. */
+const valueParts = (field: SearchableFieldConfigurationEntry, value: unknown): string[] => {
+  switch (field.type) {
+    case "formatted_text":
+      return formattedText(value);
+    case "choice": {
+      const text = choiceText(value, field.optionLabels);
+      return text === undefined ? [] : [text];
+    }
+    case "several_choices":
+      return Array.isArray(value)
+        ? value.flatMap((part) => {
+            const text = choiceText(part, field.optionLabels);
+            return text === undefined ? [] : [text];
+          })
+        : [];
+    case "table":
+      return Array.isArray(value)
+        ? value.flatMap((row) =>
+            isPlainObject(row)
+              ? Object.keys(row)
+                  .sort()
+                  .flatMap((key) => {
+                    const text = scalarText(row[key]);
+                    return text === undefined ? [] : [text];
+                  })
+              : [],
+          )
+        : [];
+    default: {
+      const text = scalarText(value);
+      return text === undefined ? [] : [text];
+    }
+  }
 };
 
 const fingerprint = (entries: readonly SearchDocumentEntry[]): string =>
@@ -201,8 +335,9 @@ const fingerprint = (entries: readonly SearchDocumentEntry[]): string =>
  *
  * Only configured fields are read, and each configured field is checked again
  * here, so a hand-made configuration still cannot bring a sensitive, unpermitted
- * personal or non-text field into a document. A record owned by another
- * organisation is refused: shared content stays with its source.
+ * personal or wordless field into a document. Higher-priority fields fill the
+ * bounded document first. A record owned by another organisation is refused:
+ * shared content stays with its source.
  */
 export const buildSearchDocument = (
   snapshot: SearchRecordSnapshot,
@@ -227,28 +362,43 @@ export const buildSearchDocument = (
   if (snapshot.lifecycle === "deleted")
     return Object.freeze({
       success: true,
-      output: Object.freeze({ kind: "deletion", schemaVersion: searchDocumentSchemaVersion, ...identity }),
+      output: Object.freeze({
+        kind: "deletion",
+        schemaVersion: searchDocumentSchemaVersion,
+        ...identity,
+      }),
     });
 
+  // Stable sort: configuration order is kept within one priority.
+  const fields = [...configuration.fields].sort(
+    (left, right) =>
+      (searchPriorityWeights[right.priority] ?? 0) - (searchPriorityWeights[left.priority] ?? 0),
+  );
   const entries: SearchDocumentEntry[] = [];
   const seen = new Set<string>();
   let remaining: number = searchDocumentLimits.documentTextLength;
-  for (const field of configuration.fields) {
+  for (const field of fields) {
     if (entries.length >= searchDocumentLimits.entries || remaining <= 0) break;
-    if (seen.has(field.fieldId) || !isIndexableField({ ...field, searchPriority: field.priority }, policy))
+    if (
+      seen.has(field.fieldId) ||
+      !fieldIdSchema.safeParse(field.fieldId).success ||
+      !isIndexableField(field, policy)
+    )
       continue;
     seen.add(field.fieldId);
     if (!Object.hasOwn(snapshot.fieldValues, field.fieldId)) continue;
-    const text = searchableText(field.type, snapshot.fieldValues[field.fieldId]);
-    if (text === undefined || text === "") continue;
-    const bounded = text.slice(0, Math.min(searchDocumentLimits.entryTextLength, remaining));
-    remaining -= bounded.length;
+    const text = bounded(
+      collapse(valueParts(field, snapshot.fieldValues[field.fieldId]).join(" ")),
+      Math.min(searchDocumentLimits.entryTextLength, remaining),
+    );
+    if (text === "") continue;
+    remaining -= text.length;
     entries.push(
       Object.freeze({
         fieldId: field.fieldId,
         priority: field.priority,
         weight: searchPriorityWeights[field.priority],
-        text: bounded,
+        text,
       }),
     );
   }
@@ -264,3 +414,57 @@ export const buildSearchDocument = (
     }),
   });
 };
+
+/**
+ * Arguments of `vortex_search.put_document`, in its parameter order. The
+ * organisation must be the established request organisation; a deletion marker
+ * carries no entries or fingerprint.
+ */
+export type SearchDocumentStoreCommand = Readonly<{
+  organizationId: string;
+  recordTypeId: string;
+  recordId: string;
+  applicationRootId: string | null;
+  sourceRecordVersion: number;
+  deleted: boolean;
+  entriesJson: string;
+  contentFingerprint: string | null;
+}>;
+
+/**
+ * Stored outcome: `stored` (first row), `replaced` (newer source version),
+ * `rebuilt` (same version, changed content after a configuration or policy
+ * change), `replayed` (same content), `ignored_older` (an older version never
+ * overwrites a newer one) or `ignored_deleted` (a deletion marker is final for
+ * its version).
+ */
+export type SearchDocumentStoreOutcome =
+  | "stored"
+  | "replaced"
+  | "rebuilt"
+  | "replayed"
+  | "ignored_older"
+  | "ignored_deleted";
+
+export const searchDocumentStoreCommand = (
+  output: SearchDocument | SearchDocumentDeletion,
+): SearchDocumentStoreCommand =>
+  Object.freeze({
+    organizationId: output.organisationId,
+    recordTypeId: output.recordTypeId,
+    recordId: output.recordId,
+    applicationRootId: output.applicationRootId ?? null,
+    sourceRecordVersion: output.sourceRecordVersion,
+    deleted: output.kind === "deletion",
+    entriesJson: JSON.stringify(
+      output.kind === "deletion"
+        ? []
+        : output.entries.map((entry) => ({
+            fieldId: entry.fieldId,
+            priority: entry.priority,
+            weight: entry.weight,
+            text: entry.text,
+          })),
+    ),
+    contentFingerprint: output.kind === "deletion" ? null : output.contentFingerprint,
+  });
