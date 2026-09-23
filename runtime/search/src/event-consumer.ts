@@ -203,9 +203,10 @@ export type PlanSearchRebuildInput = Readonly<{
 }>;
 
 /**
- * Delivery failure classification, structurally the same closed set #640
- * recovery accepts. Search reuses the exact names rather than inventing a
- * second vocabulary.
+ * Delivery failure classification. Search emits the same names #640 recovery
+ * accepts for its own failures rather than inventing a second vocabulary; every
+ * value below is one of that closed set, so the dispatcher's
+ * `failureClassificationMatches` accepts it unchanged.
  */
 export type SearchDeliveryFailureCode =
   | "transient_dependency_unavailable"
@@ -234,12 +235,19 @@ export type SearchEventConsumer = Readonly<{
   deliver: (delivery: SearchEventDelivery) => Promise<SearchEventConsumerOutcome>;
 }>;
 
-/** Event kinds that can change a searchable document. Link and declaration events cannot. */
+/**
+ * Event kinds that can change a searchable document. A reassignment can move a
+ * record to another application, which the document records as its
+ * application scope, so it is refreshed too. Link and declaration events cannot:
+ * link and person-link fields carry no indexed text, and declared events are not
+ * a standard record change.
+ */
 const indexableEventKinds: ReadonlySet<string> = new Set([
   "created",
   "changed",
   "deleted",
   "state_changed",
+  "reassigned",
 ]);
 
 const occurrenceIsIndexable = (occurrence: EventOccurrenceEnvelopeV2): boolean =>
@@ -539,6 +547,12 @@ export const planSearchRebuildPage = async (
  * missing record type or snapshot is retryable because publication or a later
  * change can still make it indexable. Duplicate delivery is safe because the
  * store command is idempotent on the document's version and content fingerprint.
+ *
+ * One delivery indexes exactly one occurrence and completes well inside the
+ * lease the dispatcher renews immediately before invoking it, so the delivery's
+ * `renewLease` is not called and no second progress transaction is opened. The
+ * batch entry point {@link consumeSearchEvents} is used where a caller already
+ * holds ordered occurrences without a lease.
  */
 export const createSearchEventConsumer = (
   dependencies: SearchIndexOccurrenceDependencies,
