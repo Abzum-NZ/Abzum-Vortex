@@ -1,159 +1,71 @@
-import { useState, useId, type ChangeEvent, type ReactElement } from "react";
+import type { ChangeEvent, ReactElement } from "react";
 import type { PlatformBlockRenderProps } from "../registry";
+import { readControlSettings, resolveControlContext } from "./control-context";
 import {
-  getAccessibleName,
-  type ControlEventHandlers,
-  type ProjectedControlData,
-} from "./projected-data";
+  describedBy,
+  FieldLabelText,
+  FieldMessages,
+  inactiveNote,
+  useFieldIds,
+  useSeededState,
+} from "./field-parts";
+import { useFormField } from "./form-context";
+import { isIsoCalendarDate } from "./projected-data";
 
-export type DateInputProps = PlatformBlockRenderProps & {
-  controlData?: ProjectedControlData;
-  controlEvents?: ControlEventHandlers;
-};
+export type DateInputProps = PlatformBlockRenderProps;
 
 /**
- * Typed date input component supporting ISO calendar dates, accessible labeling,
- * error announcements, keyboard entry, and declared field_changed semantic event
- * emission with typed string | null values.
+ * ISO calendar date input emitting only its declared `field_changed` event. The typed value is
+ * a real `YYYY-MM-DD` date or `null` for empty or incomplete entry.
  */
-export function DateInput({
-  placementId,
-  settings,
-  metadata,
-  availability,
-  controlData,
-  controlEvents,
-}: DateInputProps): ReactElement {
-  const generatedId = useId();
-  const inputId = `vortex-date-${placementId}-${generatedId}`;
-  const helpId = `vortex-help-${placementId}-${generatedId}`;
-  const errorId = `vortex-error-${placementId}-${generatedId}`;
+export function DateInput(props: DateInputProps): ReactElement {
+  const context = resolveControlContext(props, "date_input", ["field_changed"]);
+  const settings = readControlSettings(props, context.location);
+  const ids = useFieldIds();
+  const fieldKey = settings.fieldKey();
+  const label = context.accessibleName ?? props.metadata.name;
+  const help = settings.text("help_text");
+  const required = settings.boolean("required");
+  const readOnly = settings.boolean("read_only");
+  const disabled = context.inactive || settings.boolean("disabled");
+  const error = context.values?.error;
+  const note = inactiveNote(context);
 
-  // Read settings
-  const fieldKey =
-    settings.name?.kind === "text" && settings.name.value.trim().length > 0
-      ? settings.name.value.trim()
-      : placementId;
-  const labelText = getAccessibleName(settings, metadata) ?? "Date input";
-  const helpText = settings.help_text?.kind === "text" ? settings.help_text.value : undefined;
-  const isRequired = settings.required?.kind === "boolean" ? settings.required.value : false;
-  const isSettingDisabled = settings.disabled?.kind === "boolean" ? settings.disabled.value : false;
-  const isReadOnly = settings.read_only?.kind === "boolean" ? settings.read_only.value : false;
+  const [raw, setRaw] = useSeededState(context.values?.value ?? "");
+  const toTyped = (text: string): string | null => (isIsoCalendarDate(text) ? text : null);
+  useFormField(fieldKey, props.placementId, toTyped(raw));
 
-  // Check projected control data
-  const isControlDisabled = controlData?.status === "disabled";
-  const isDisabled =
-    availability === "unavailable" || isSettingDisabled || isControlDisabled;
-
-  const projectedValue =
-    controlData?.status === "ready" && controlData.values.kind === "date_input"
-      ? controlData.values.value
-      : undefined;
-  const projectedError =
-    controlData?.status === "ready" && controlData.values.kind === "date_input"
-      ? controlData.values.error
-      : undefined;
-
-  const [internalValue, setInternalValue] = useState<string>(projectedValue ?? "");
-  const displayValue =
-    projectedValue !== undefined ? (projectedValue === null ? "" : projectedValue) : internalValue;
-
-  const describedBy = [
-    helpText ? helpId : undefined,
-    projectedError ? errorId : undefined,
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const handleChange = (e: ChangeEvent<HTMLInputElement>): void => {
-    if (isDisabled || isReadOnly) return;
-    const raw = e.target.value;
-    setInternalValue(raw);
-
-    const typedVal: string | null = raw.trim().length > 0 ? raw.trim() : null;
-    if (availability === "available" && controlEvents?.field_changed) {
-      controlEvents.field_changed({
-        event: "field_changed",
-        fieldKey,
-        value: typedVal,
-      });
-    }
+  const onChange = (event: ChangeEvent<HTMLInputElement>): void => {
+    if (disabled || readOnly) return;
+    const next = event.target.value;
+    setRaw(next);
+    context.events?.field_changed?.({ event: "field_changed", fieldKey, value: toTyped(next) });
   };
 
   return (
     <div
       data-vortex-control="date-input"
+      data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
-      data-vortex-availability={availability}
-      className="vortex-field-container"
-      style={{ display: "flex", flexDirection: "column", gap: "0.25rem", width: "100%" }}
+      className="vortex-field"
     >
-      <label
-        htmlFor={inputId}
-        className="vortex-field-label"
-        style={{ fontWeight: 500, fontSize: "0.875rem" }}
-      >
-        {labelText}
-        {isRequired && (
-          <span aria-hidden="true" style={{ color: "red", marginLeft: "0.25rem" }}>
-            *
-          </span>
-        )}
+      <label htmlFor={ids.control} className="vortex-field-label">
+        <FieldLabelText label={label} required={required} />
       </label>
-
       <input
-        id={inputId}
+        id={ids.control}
         type="date"
         name={fieldKey}
-        value={displayValue}
-        onChange={handleChange}
-        disabled={isDisabled}
-        readOnly={isReadOnly}
-        required={isRequired}
-        aria-label={labelText}
-        aria-required={isRequired}
-        aria-invalid={projectedError ? "true" : "false"}
-        {...(describedBy.length > 0 ? { "aria-describedby": describedBy } : {})}
+        value={raw}
+        onChange={onChange}
+        disabled={disabled}
+        readOnly={readOnly}
+        required={required}
+        aria-invalid={error !== undefined}
+        {...describedBy(ids, help, error, note)}
         className="vortex-input"
-        style={{
-          padding: "0.5rem",
-          borderRadius: "0.25rem",
-          border: projectedError ? "1px solid red" : "1px solid #ccc",
-          opacity: isDisabled ? 0.6 : 1,
-          cursor: isDisabled ? "not-allowed" : "text",
-        }}
       />
-
-      {helpText && (
-        <span
-          id={helpId}
-          className="vortex-field-help"
-          style={{ fontSize: "0.75rem", color: "#666" }}
-        >
-          {helpText}
-        </span>
-      )}
-
-      {projectedError && (
-        <span
-          id={errorId}
-          role="alert"
-          aria-live="polite"
-          className="vortex-field-error"
-          style={{ fontSize: "0.75rem", color: "red" }}
-        >
-          {projectedError}
-        </span>
-      )}
-
-      {availability === "unavailable" && (
-        <span
-          className="vortex-unavailable-notice"
-          style={{ fontSize: "0.75rem", color: "#888", fontStyle: "italic" }}
-        >
-          Input is currently unavailable
-        </span>
-      )}
+      <FieldMessages ids={ids} help={help} error={error} note={note} />
     </div>
   );
 }

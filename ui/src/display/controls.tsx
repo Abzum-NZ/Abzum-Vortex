@@ -37,6 +37,13 @@ export function resolveDisplayContext<Kind extends ProjectedDisplayValueKind>(
   isEmpty: (values: Extract<ProjectedDisplayValues, { kind: Kind }>) => boolean,
 ): DisplayContext<Kind> {
   const { projectedData, metadata, settings, placementId } = props;
+  if (props.controlData !== undefined || props.controlEvents !== undefined) {
+    throw new DefinitionRenderError(
+      "INVALID_COMPOSITION",
+      `Display block '${metadata.key}' does not accept control data or control events`,
+      { placementId, blockId: metadata.blockId, releaseVersion: metadata.releaseVersion },
+    );
+  }
   let values: Extract<ProjectedDisplayValues, { kind: Kind }> | undefined;
   if (projectedData?.status === "ready") {
     if (projectedData.values.kind !== kind) {

@@ -1,88 +1,57 @@
+import { builderKeySchema } from "@vortex/contracts";
 import type { ReactElement } from "react";
+import { DefinitionRenderError } from "../definition-error";
 import type { PlatformBlockRenderProps } from "../registry";
-import {
-  getAccessibleName,
-  type ControlEventHandlers,
-  type ProjectedControlData,
-} from "./projected-data";
+import { readControlSettings, resolveControlContext } from "./control-context";
 
-export type ValidationMessageProps = PlatformBlockRenderProps & {
-  controlData?: ProjectedControlData;
-  controlEvents?: ControlEventHandlers;
-};
+export type ValidationMessageProps = PlatformBlockRenderProps;
 
 /**
- * Validation message component displaying form and field errors with full
- * screen-reader announcement (role="alert" or role="status"), severity styling,
- * and fail-closed projected error handling.
+ * Form-wide or field-targeted validation summary. The live region is always present so a later
+ * projected error is announced: errors assertively as an alert, warnings and information politely.
+ * It declares no semantic events.
  */
-export function ValidationMessage({
-  settings,
-  metadata,
-  controlData,
-}: ValidationMessageProps): ReactElement {
-  const authoredTitle = getAccessibleName(settings, metadata);
-  const staticMessage = settings.message?.kind === "text" ? settings.message.value : undefined;
-  const severity = settings.severity?.kind === "choice" ? settings.severity.value : "error";
-  const forField = settings.for_field?.kind === "text" ? settings.for_field.value : undefined;
+export function ValidationMessage(props: ValidationMessageProps): ReactElement {
+  const context = resolveControlContext(props, "validation", []);
+  const settings = readControlSettings(props, context.location);
+  const severity = settings.choice<"error" | "warning" | "info">("severity", "error");
+  const message = settings.text("message");
+  const forField = settings.text("for_field");
+  if (forField !== undefined && !builderKeySchema.safeParse(forField).success)
+    throw new DefinitionRenderError(
+      "INVALID_COMPOSITION",
+      "A validation target must be a field name",
+      { ...context.location, propertyPath: ["for_field"] },
+    );
 
-  const projectedErrors =
-    controlData?.status === "ready" && controlData.values.kind === "validation"
-      ? controlData.values.errors
-      : undefined;
-
-  const errors: readonly string[] =
-    projectedErrors && projectedErrors.length > 0
-      ? projectedErrors
-      : staticMessage
-        ? [staticMessage]
-        : [];
-
-  if (errors.length === 0 && !authoredTitle) {
-    return <div data-vortex-control="validation-message" aria-hidden="true" />;
-  }
-
-  const role = severity === "error" ? "alert" : "status";
-  const ariaLive = severity === "error" ? "assertive" : "polite";
-
-  const colorStyles =
-    severity === "error"
-      ? { bg: "#fef2f2", border: "#f87171", text: "#991b1b" }
-      : severity === "warning"
-        ? { bg: "#fffbeb", border: "#fcd34d", text: "#92400e" }
-        : { bg: "#eff6ff", border: "#93c5fd", text: "#1e40af" };
+  const projected = context.values?.errors;
+  const messages: readonly string[] =
+    projected !== undefined ? projected : message === undefined ? [] : [message];
+  const title = context.accessibleName;
 
   return (
     <div
-      role={role}
-      aria-live={ariaLive}
+      role={severity === "error" ? "alert" : "status"}
       data-vortex-control="validation-message"
+      data-vortex-placement-id={props.placementId}
       data-vortex-severity={severity}
-      {...(forField ? { "data-vortex-for-field": forField } : {})}
-      className="vortex-validation-message"
-      style={{
-        padding: "0.75rem 1rem",
-        borderRadius: "0.375rem",
-        backgroundColor: colorStyles.bg,
-        border: `1px solid ${colorStyles.border}`,
-        color: colorStyles.text,
-        fontSize: "0.875rem",
-      }}
+      {...(forField === undefined ? {} : { "data-vortex-for-field": forField })}
+      className={`vortex-validation-message vortex-validation-${severity}`}
     >
-      {authoredTitle && (
-        <div style={{ fontWeight: 600, marginBottom: errors.length > 0 ? "0.25rem" : 0 }}>
-          {authoredTitle}
-        </div>
+      {messages.length === 0 ? null : (
+        <>
+          {title === undefined ? null : <p className="vortex-validation-title">{title}</p>}
+          {messages.length === 1 ? (
+            <p className="vortex-validation-text">{messages[0]}</p>
+          ) : (
+            <ul className="vortex-validation-list">
+              {messages.map((text, index) => (
+                <li key={index}>{text}</li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
-      {errors.length === 1 ? (
-        <div>{errors[0]}</div>
-      ) : errors.length > 1 ? (
-        <ul style={{ margin: 0, paddingLeft: "1.25rem" }}>
-          {errors.map((err, idx) => (
-            <li key={idx}>{err}</li>
-          ))}
-        </ul>
-      ) : null}
     </div>
   );
 }

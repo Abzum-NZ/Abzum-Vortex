@@ -1,47 +1,37 @@
-import type {
-  BlockPropertyValueV2Contract,
-  ComponentSemanticEventKind,
-  PlatformBlockReleaseV2,
-} from "@vortex/contracts";
+import { builderKeySchema, type ComponentSemanticEventKind } from "@vortex/contracts";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 
-/**
- * Declared semantic event names for form and action controls.
- * Every name is an exact variant of ComponentSemanticEventKind from application-flow-bindings.
- */
-export const CONTROL_EVENT_NAMES = Object.freeze([
+/** Declared semantic event names this form and action family can emit. */
+export type ControlSemanticEventName = Extract<
+  ComponentSemanticEventKind,
+  "action" | "field_changed" | "form_ready" | "form_reset" | "form_submit" | "tab_changed"
+>;
+
+/** Every event name any control accepts; each block further narrows this to its own declaration. */
+export const CONTROL_EVENT_NAMES: readonly ControlSemanticEventName[] = Object.freeze([
   "action",
   "field_changed",
   "form_ready",
   "form_reset",
   "form_submit",
   "tab_changed",
-  "guided_step_changed",
-] as const);
+]);
 
-export type ControlSemanticEventName = (typeof CONTROL_EVENT_NAMES)[number];
-
-/**
- * Closed set of typed values that can be collected or emitted by form field inputs.
- */
+/** Closed set of typed values that form field inputs collect and emit. */
 export type TypedFieldValue = string | number | boolean | null;
 
 /**
- * Declared semantic events emitted by form and action controls.
- * Emitted only upon deliberate user interaction or lifecycle completion.
+ * One declared semantic event. Events are emitted only by a real user interaction, except
+ * `form_ready`, which a form emits once when it mounts. The bound flow, not the component,
+ * decides what an event does; no component saves, queries or calls an application service.
  */
 export type ControlSemanticEvent =
-  | Readonly<{ event: "action"; actionKey?: string }>
+  | Readonly<{ event: "action"; intent: "activate" | "dismiss" }>
   | Readonly<{ event: "field_changed"; fieldKey: string; value: TypedFieldValue }>
-  | Readonly<{ event: "form_ready"; formId?: string }>
-  | Readonly<{ event: "form_reset"; formId?: string }>
-  | Readonly<{
-      event: "form_submit";
-      formId?: string;
-      values?: Readonly<Record<string, TypedFieldValue>>;
-    }>
-  | Readonly<{ event: "tab_changed"; tabKey: string }>
-  | Readonly<{ event: "guided_step_changed"; stepId: string }>;
+  | Readonly<{ event: "form_ready" }>
+  | Readonly<{ event: "form_reset" }>
+  | Readonly<{ event: "form_submit"; values: Readonly<Record<string, TypedFieldValue>> }>
+  | Readonly<{ event: "tab_changed"; tabKey: string }>;
 
 export type ControlEventHandler = (event: ControlSemanticEvent) => void;
 
@@ -53,7 +43,7 @@ export type ControlEventHandlers = Readonly<
 /** One choice option available in a choice input. */
 export type ChoiceOption = Readonly<{ key: string; label: string }>;
 
-/** Closed projected payload shapes for each control block. */
+/** Closed projected payload shapes, one per control block. */
 export type ProjectedControlValues =
   | Readonly<{ kind: "text_input"; value?: string; error?: string }>
   | Readonly<{ kind: "number_input"; value?: number | null; error?: string }>
@@ -66,20 +56,18 @@ export type ProjectedControlValues =
       error?: string;
     }>
   | Readonly<{ kind: "validation"; errors: readonly string[] }>
-  | Readonly<{ kind: "button"; loading?: boolean; disabled?: boolean }>
+  | Readonly<{ kind: "button" }>
   | Readonly<{ kind: "tabs"; activeTab?: string }>
-  | Readonly<{ kind: "dialog"; open?: boolean }>
-  | Readonly<{ kind: "drawer"; open?: boolean }>
-  | Readonly<{
-      kind: "form";
-      values?: Readonly<Record<string, TypedFieldValue>>;
-      errors?: Readonly<Record<string, string>>;
-    }>;
+  | Readonly<{ kind: "dialog"; open: boolean }>
+  | Readonly<{ kind: "drawer"; open: boolean }>
+  | Readonly<{ kind: "form" }>;
 
 export type ProjectedControlValueKind = ProjectedControlValues["kind"];
 
 /**
- * Data-safe state passed for one control placement.
+ * Explicit, data-safe state passed for one control placement. `loading` means the control's
+ * data or a submission it started is pending, so it cannot be activated again; `disabled`
+ * carries an optional safe reason; only `ready` carries values.
  */
 export type ProjectedControlData =
   | Readonly<{ status: "loading" }>
@@ -92,61 +80,106 @@ export type ProjectedControlDataByPlacement = Readonly<Record<string, ProjectedC
 /** Semantic callbacks keyed by stable placement identity. */
 export type ControlEventsByPlacement = Readonly<Record<string, ControlEventHandlers>>;
 
+const LOADING_STATE: ProjectedControlData = Object.freeze({ status: "loading" });
+const EMPTY_CONTROL_HANDLERS: ControlEventHandlers = Object.freeze({});
+const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
+
 const fail = (message: string, location: DefinitionRenderErrorLocation): never => {
   throw new DefinitionRenderError("INVALID_COMPOSITION", message, location);
 };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const requireRecord = (
   value: unknown,
   message: string,
   location: DefinitionRenderErrorLocation,
-): Record<string, unknown> => {
-  if (value === null || typeof value !== "object" || Array.isArray(value))
-    fail(message, location);
-  return value as Record<string, unknown>;
+): Record<string, unknown> => (isRecord(value) ? value : fail(message, location));
+
+const requireExactKeys = (
+  value: Record<string, unknown>,
+  allowed: readonly string[],
+  location: DefinitionRenderErrorLocation,
+): void => {
+  for (const key of Object.keys(value)) {
+    if (!allowed.includes(key)) fail(`Unexpected projected control field '${key}'`, location);
+  }
 };
 
 const requireString = (
   value: unknown,
   message: string,
   location: DefinitionRenderErrorLocation,
+): string => (typeof value === "string" ? value : fail(message, location));
+
+const requireNonEmptyString = (
+  value: unknown,
+  message: string,
+  location: DefinitionRenderErrorLocation,
 ): string => {
-  if (typeof value !== "string") fail(message, location);
-  return value;
+  const text = requireString(value, message, location);
+  return text.trim().length > 0 ? text : fail(message, location);
 };
 
-/**
- * Reads the authored accessible name only through the block's declared
- * `accessibleNamePropertyPath`; it never guesses a setting from its key.
- * Returns undefined when the block declares no name or the optional name is absent.
- */
-export function getAccessibleName(
-  settings: Readonly<Record<string, BlockPropertyValueV2Contract>>,
-  metadata: PlatformBlockReleaseV2,
-): string | undefined {
-  const capabilities = metadata.capabilities;
-  if (capabilities.accessibleName === "not_applicable") return undefined;
-  let current: Readonly<Record<string, BlockPropertyValueV2Contract>> = settings;
-  const path = capabilities.accessibleNamePropertyPath;
-  for (const [index, key] of path.entries()) {
-    const value = Object.hasOwn(current, key) ? current[key] : undefined;
-    if (value === undefined) return undefined;
-    if (index === path.length - 1)
-      return value.kind === "text" && value.value.trim().length > 0 ? value.value.trim() : undefined;
-    if (value.kind !== "group") return undefined;
-    current = value.properties;
-  }
-  return undefined;
-}
+const requireBoolean = (
+  value: unknown,
+  message: string,
+  location: DefinitionRenderErrorLocation,
+): boolean => (typeof value === "boolean" ? value : fail(message, location));
 
-const parseChoiceOption = (
+const requireBuilderKey = (
+  value: unknown,
+  message: string,
+  location: DefinitionRenderErrorLocation,
+): string => {
+  const parsed = builderKeySchema.safeParse(value);
+  return parsed.success ? parsed.data : fail(message, location);
+};
+
+/** True for a real ISO calendar date such as 2026-02-28; 2026-02-30 is refused. */
+export const isIsoCalendarDate = (value: string): boolean => {
+  if (!ISO_CALENDAR_DATE.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+
+const optionalError = (
+  record: Record<string, unknown>,
+  location: DefinitionRenderErrorLocation,
+): Readonly<{ error?: string }> =>
+  record.error === undefined
+    ? {}
+    : {
+        error: requireNonEmptyString(
+          record.error,
+          "A projected field error must be non-empty text",
+          location,
+        ),
+      };
+
+/** Parses choice options, refusing duplicate keys so every option has one stable identity. */
+export const parseChoiceOptions = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
-): ChoiceOption => {
-  const record = requireRecord(value, "Choice option must be an object", location);
-  const key = requireString(record.key, "Choice option key must be a string", location);
-  const label = requireString(record.label, "Choice option label must be a string", location);
-  return Object.freeze({ key, label });
+): readonly ChoiceOption[] => {
+  if (!Array.isArray(value)) return fail("Choice options must be an array", location);
+  const seen = new Set<string>();
+  return Object.freeze(
+    value.map((item) => {
+      const record = requireRecord(item, "A choice option must be an object", location);
+      requireExactKeys(record, ["key", "label"], location);
+      const key = requireBuilderKey(record.key, "A choice option key is invalid", location);
+      if (seen.has(key)) fail(`Duplicate choice option key '${key}'`, location);
+      seen.add(key);
+      const label = requireNonEmptyString(
+        record.label,
+        "A choice option label must be non-empty text",
+        location,
+      );
+      return Object.freeze({ key, label });
+    }),
+  );
 };
 
 const parseProjectedControlValues = (
@@ -154,163 +187,168 @@ const parseProjectedControlValues = (
   location: DefinitionRenderErrorLocation,
 ): ProjectedControlValues => {
   const record = requireRecord(value, "Projected control values must be an object", location);
-  const kind = record.kind;
-
-  switch (kind) {
-    case "text_input": {
-      const error = record.error === undefined ? undefined : requireString(record.error, "Error must be a string", location);
-      const val = record.value === undefined ? undefined : requireString(record.value, "Value must be a string", location);
+  switch (record.kind) {
+    case "text_input":
+      requireExactKeys(record, ["kind", "value", "error"], location);
       return Object.freeze({
-        kind: "text_input" as const,
-        ...(val === undefined ? {} : { value: val }),
-        ...(error === undefined ? {} : { error }),
+        kind: "text_input",
+        ...(record.value === undefined
+          ? {}
+          : { value: requireString(record.value, "A text value must be text", location) }),
+        ...optionalError(record, location),
       });
-    }
     case "number_input": {
-      const error = record.error === undefined ? undefined : requireString(record.error, "Error must be a string", location);
-      let val: number | null | undefined = undefined;
-      if (record.value !== undefined) {
-        if (record.value === null) val = null;
-        else if (typeof record.value === "number" && Number.isFinite(record.value)) val = record.value;
-        else fail("Number input value must be a finite number or null", location);
-      }
+      requireExactKeys(record, ["kind", "value", "error"], location);
+      if (
+        record.value !== undefined &&
+        record.value !== null &&
+        !(typeof record.value === "number" && Number.isFinite(record.value))
+      )
+        fail("A number value must be a finite number or null", location);
       return Object.freeze({
-        kind: "number_input" as const,
-        ...(val === undefined ? {} : { value: val }),
-        ...(error === undefined ? {} : { error }),
+        kind: "number_input",
+        ...(record.value === undefined ? {} : { value: record.value as number | null }),
+        ...optionalError(record, location),
       });
     }
-    case "boolean_input": {
-      const error = record.error === undefined ? undefined : requireString(record.error, "Error must be a string", location);
-      const val = record.value === undefined ? undefined : Boolean(record.value);
+    case "boolean_input":
+      requireExactKeys(record, ["kind", "value", "error"], location);
       return Object.freeze({
-        kind: "boolean_input" as const,
-        ...(val === undefined ? {} : { value: val }),
-        ...(error === undefined ? {} : { error }),
+        kind: "boolean_input",
+        ...(record.value === undefined
+          ? {}
+          : {
+              value: requireBoolean(
+                record.value,
+                "A boolean value must be true or false",
+                location,
+              ),
+            }),
+        ...optionalError(record, location),
       });
-    }
     case "date_input": {
-      const error = record.error === undefined ? undefined : requireString(record.error, "Error must be a string", location);
-      const val = record.value === undefined ? undefined : record.value === null ? null : requireString(record.value, "Date value must be a string or null", location);
+      requireExactKeys(record, ["kind", "value", "error"], location);
+      if (
+        record.value !== undefined &&
+        record.value !== null &&
+        !(typeof record.value === "string" && isIsoCalendarDate(record.value))
+      )
+        fail("A date value must be an ISO calendar date or null", location);
       return Object.freeze({
-        kind: "date_input" as const,
-        ...(val === undefined ? {} : { value: val }),
-        ...(error === undefined ? {} : { error }),
+        kind: "date_input",
+        ...(record.value === undefined ? {} : { value: record.value as string | null }),
+        ...optionalError(record, location),
       });
     }
     case "choice_input": {
-      const error = record.error === undefined ? undefined : requireString(record.error, "Error must be a string", location);
-      const val = record.value === undefined ? undefined : record.value === null ? null : requireString(record.value, "Choice value must be a string or null", location);
-      let options: readonly ChoiceOption[] | undefined = undefined;
-      if (record.options !== undefined) {
-        if (!Array.isArray(record.options)) fail("Choice options must be an array", location);
-        options = Object.freeze(record.options.map((opt) => parseChoiceOption(opt, location)));
+      requireExactKeys(record, ["kind", "value", "options", "error"], location);
+      const options =
+        record.options === undefined ? undefined : parseChoiceOptions(record.options, location);
+      if (record.value !== undefined && record.value !== null) {
+        const key = requireBuilderKey(
+          record.value,
+          "A choice value must be an option key",
+          location,
+        );
+        if (options !== undefined && !options.some((option) => option.key === key))
+          fail(`Choice value '${key}' is not a projected option`, location);
       }
       return Object.freeze({
-        kind: "choice_input" as const,
-        ...(val === undefined ? {} : { value: val }),
+        kind: "choice_input",
+        ...(record.value === undefined ? {} : { value: record.value as string | null }),
         ...(options === undefined ? {} : { options }),
-        ...(error === undefined ? {} : { error }),
+        ...optionalError(record, location),
       });
     }
     case "validation": {
-      if (!Array.isArray(record.errors)) fail("Validation errors must be an array", location);
-      const errors = Object.freeze(record.errors.map((err) => requireString(err, "Validation error must be a string", location)));
-      return Object.freeze({ kind: "validation" as const, errors });
-    }
-    case "button": {
-      const loading = record.loading === undefined ? undefined : Boolean(record.loading);
-      const disabled = record.disabled === undefined ? undefined : Boolean(record.disabled);
+      requireExactKeys(record, ["kind", "errors"], location);
+      if (!Array.isArray(record.errors))
+        return fail("Validation errors must be an array", location);
       return Object.freeze({
-        kind: "button" as const,
-        ...(loading === undefined ? {} : { loading }),
-        ...(disabled === undefined ? {} : { disabled }),
+        kind: "validation",
+        errors: Object.freeze(
+          record.errors.map((error) =>
+            requireNonEmptyString(error, "A validation error must be non-empty text", location),
+          ),
+        ),
       });
     }
-    case "tabs": {
-      const activeTab = record.activeTab === undefined ? undefined : requireString(record.activeTab, "Active tab must be a string", location);
+    case "button":
+      requireExactKeys(record, ["kind"], location);
+      return Object.freeze({ kind: "button" });
+    case "tabs":
+      requireExactKeys(record, ["kind", "activeTab"], location);
       return Object.freeze({
-        kind: "tabs" as const,
-        ...(activeTab === undefined ? {} : { activeTab }),
+        kind: "tabs",
+        ...(record.activeTab === undefined
+          ? {}
+          : {
+              activeTab: requireBuilderKey(
+                record.activeTab,
+                "An active tab must be a tab key",
+                location,
+              ),
+            }),
       });
-    }
-    case "dialog": {
-      const open = record.open === undefined ? undefined : Boolean(record.open);
+    case "dialog":
+      requireExactKeys(record, ["kind", "open"], location);
       return Object.freeze({
-        kind: "dialog" as const,
-        ...(open === undefined ? {} : { open }),
+        kind: "dialog",
+        open: requireBoolean(record.open, "Open state must be true or false", location),
       });
-    }
-    case "drawer": {
-      const open = record.open === undefined ? undefined : Boolean(record.open);
+    case "drawer":
+      requireExactKeys(record, ["kind", "open"], location);
       return Object.freeze({
-        kind: "drawer" as const,
-        ...(open === undefined ? {} : { open }),
+        kind: "drawer",
+        open: requireBoolean(record.open, "Open state must be true or false", location),
       });
-    }
-    case "form": {
-      let values: Readonly<Record<string, TypedFieldValue>> | undefined = undefined;
-      if (record.values !== undefined) {
-        const valuesRec = requireRecord(record.values, "Form values must be an object", location);
-        const parsedVals: Record<string, TypedFieldValue> = {};
-        for (const [k, v] of Object.entries(valuesRec)) {
-          if (v === null || typeof v === "string" || typeof v === "boolean") parsedVals[k] = v;
-          else if (typeof v === "number" && Number.isFinite(v)) parsedVals[k] = v;
-          else fail(`Form field value for '${k}' must be typed (string, number, boolean, null)`, location);
-        }
-        values = Object.freeze(parsedVals);
-      }
-      let errors: Readonly<Record<string, string>> | undefined = undefined;
-      if (record.errors !== undefined) {
-        const errorsRec = requireRecord(record.errors, "Form errors must be an object", location);
-        const parsedErrs: Record<string, string> = {};
-        for (const [k, v] of Object.entries(errorsRec)) {
-          parsedErrs[k] = requireString(v, `Form error for '${k}' must be a string`, location);
-        }
-        errors = Object.freeze(parsedErrs);
-      }
-      return Object.freeze({
-        kind: "form" as const,
-        ...(values === undefined ? {} : { values }),
-        ...(errors === undefined ? {} : { errors }),
-      });
-    }
+    case "form":
+      requireExactKeys(record, ["kind"], location);
+      return Object.freeze({ kind: "form" });
     default:
-      return fail(`Unknown projected control value kind '${String(kind)}'`, location);
+      return fail(`Unknown projected control value kind '${String(record.kind)}'`, location);
   }
 };
 
 /**
- * Fail-closed parser for projected control data.
+ * Validates unknown projected control data for one placement and returns its frozen
+ * fail-closed shape. Throws a located definition error for unknown or malformed input.
  */
 export const parseProjectedControlData = (
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
 ): ProjectedControlData => {
   const record = requireRecord(value, "Projected control data must be an object", location);
-  const status = record.status;
-  if (status === "loading") return Object.freeze({ status: "loading" as const });
-  if (status === "disabled") {
-    const reason = record.reason === undefined ? undefined : requireString(record.reason, "Disabled reason must be a string", location);
-    return Object.freeze({
-      status: "disabled" as const,
-      ...(reason === undefined ? {} : { reason }),
-    });
+  switch (record.status) {
+    case "loading":
+      requireExactKeys(record, ["status"], location);
+      return LOADING_STATE;
+    case "disabled":
+      requireExactKeys(record, ["status", "reason"], location);
+      return Object.freeze({
+        status: "disabled",
+        ...(record.reason === undefined
+          ? {}
+          : {
+              reason: requireNonEmptyString(
+                record.reason,
+                "A disabled reason must be non-empty text",
+                location,
+              ),
+            }),
+      });
+    case "ready":
+      requireExactKeys(record, ["status", "values"], location);
+      return Object.freeze({
+        status: "ready",
+        values: parseProjectedControlValues(record.values, location),
+      });
+    default:
+      return fail(`Unknown projected control status '${String(record.status)}'`, location);
   }
-  if (status === "ready") {
-    return Object.freeze({
-      status: "ready" as const,
-      values: parseProjectedControlValues(record.values, location),
-    });
-  }
-  return fail(`Unknown projected control status '${String(status)}'`, location);
 };
 
-const EMPTY_CONTROL_HANDLERS: ControlEventHandlers = Object.freeze({});
-
-/**
- * Validates unknown callback bag into a typed ControlEventHandlers record, fail-closed.
- */
+/** Validates unknown semantic callbacks for one placement keyed by a known event name. */
 export const parseControlEventHandlers = (
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
@@ -336,6 +374,7 @@ const parseKeyedRecords = <Value>(
 ): Readonly<Record<string, Value>> => {
   if (value === undefined) return Object.freeze({});
   const record = requireRecord(value, message, location);
+  // Own data properties only: a supplied "__proto__" key stays an ordinary (unknown) key.
   return Object.freeze(
     Object.fromEntries(
       Object.entries(record).map(([placementId, entry]) => {
@@ -373,6 +412,7 @@ export const parseControlEventsByPlacement = (
 
 /**
  * Rejects projection or callback entries that do not name a placement in the resolved tree.
+ * Absent entries are allowed; a supplied entry must resolve to an exact stable identity.
  */
 export const assertControlProjectionKeysArePlacements = (
   placementIds: ReadonlySet<string>,

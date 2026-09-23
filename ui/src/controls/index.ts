@@ -2,7 +2,6 @@
 export {
   assertControlProjectionKeysArePlacements,
   CONTROL_EVENT_NAMES,
-  getAccessibleName,
   parseControlEventHandlers,
   parseControlEventsByPlacement,
   parseProjectedControlData,
