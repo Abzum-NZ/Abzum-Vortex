@@ -119,9 +119,10 @@ const createPostgresDriver = (client: Sql): DatabaseDriver => ({
 });
 
 const parsePoolSize = (candidate: string | undefined): number => {
-  if (candidate === undefined || candidate.trim() === "") return DEFAULT_POOL_SIZE;
-  if (!/^[0-9]{1,3}$/.test(candidate.trim())) throw databaseError("DATABASE_POOL_SIZE_INVALID");
-  const size = Number(candidate.trim());
+  const value = candidate?.trim();
+  if (!value) return DEFAULT_POOL_SIZE;
+  if (!/^[0-9]{1,2}$/.test(value)) throw databaseError("DATABASE_POOL_SIZE_INVALID");
+  const size = Number(value);
   if (size < 1 || size > MAXIMUM_POOL_SIZE) throw databaseError("DATABASE_POOL_SIZE_INVALID");
   return size;
 };
