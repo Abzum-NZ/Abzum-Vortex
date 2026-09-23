@@ -1,29 +1,16 @@
 import type { ReactElement } from "react";
 import { safeHttpsUrlSchema } from "@vortex/contracts";
 import { DefinitionRenderError } from "../definition-error";
+import { formatIsoDate, type DateFormatOptions } from "./date-format";
+import { FormattedDate } from "./date-format-context";
 import type { DisplayCellValue } from "./projected-data";
 import { RichTextDocumentView, richTextToPlainText } from "./rich-text";
-
-/**
- * Formats a validated ISO calendar date or offset timestamp for presentation.
- * A calendar date carries no time zone, so it is formatted in UTC to avoid shifting its day.
- */
-export function formatIsoDate(iso: string): string {
-  const timestamp = Date.parse(iso);
-  if (Number.isNaN(timestamp)) return iso;
-  return new Date(timestamp).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    ...(iso.length === 10 ? { timeZone: "UTC" } : {}),
-  });
-}
 
 /**
  * Extracts a plain text representation from any display cell value.
  * Useful for accessible names, aria-labels and tooltips.
  */
-export function cellValueToText(value: DisplayCellValue): string {
+export function cellValueToText(value: DisplayCellValue, options?: DateFormatOptions): string {
   switch (value.kind) {
     case "text":
       return value.text;
@@ -32,7 +19,7 @@ export function cellValueToText(value: DisplayCellValue): string {
     case "boolean":
       return value.value ? "Yes" : "No";
     case "date":
-      return formatIsoDate(value.iso);
+      return formatIsoDate(value.iso, options);
     case "choice":
       return value.label;
     case "link":
@@ -69,7 +56,7 @@ export function DisplayCellView({
     case "date":
       return (
         <time className="vortex-cell-date" dateTime={value.iso}>
-          {formatIsoDate(value.iso)}
+          <FormattedDate iso={value.iso} />
         </time>
       );
     case "choice":

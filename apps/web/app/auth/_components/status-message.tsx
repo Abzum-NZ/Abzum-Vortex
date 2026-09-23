@@ -12,7 +12,7 @@ const messages: Readonly<Record<string, string>> = {
 };
 
 export function StatusMessage({ status }: StatusMessageProps) {
-  const message = status ? messages[status] : undefined;
+  const message = status && Object.hasOwn(messages, status) ? messages[status] : undefined;
   return message ? (
     <p className="auth-message" role="alert">
       {message}
