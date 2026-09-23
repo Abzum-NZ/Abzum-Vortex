@@ -184,7 +184,7 @@ export const deriveEarliestPendingDeadlineTransitionV2 = (
     if (!dueField || typeof dueValue !== "string") continue;
 
     let transitionAt: string | undefined;
-    if (fieldResultType(dueField) === "date") {
+    if (isDateDeadlineDueFieldV2(dueField)) {
       const followingDate = dateAfter(dueValue);
       transitionAt =
         followingDate === undefined

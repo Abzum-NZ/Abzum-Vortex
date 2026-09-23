@@ -17,12 +17,15 @@
 -- transfer paths keep their record's due row at the revision they actually
 -- wrote.
 --
--- The functions below exist only as the result of earlier in-place patches, so
--- they are patched in place from their current definitions exactly as
--- `20260924070000_wide_record_field_values.sql` and `20260924010000_query_system_values_and_deadline_refresh.sql`
--- do: each reviewed source fragment must occur exactly once, or the migration
--- aborts rather than silently skipping a caller. Each is re-created under its
--- own current owner, so its OID, grants, comment, security and search_path stay
+-- The functions below are defined by earlier migrations and
+-- `claim_record_deadline_refresh` was patched in place by
+-- `20260924070000_wide_record_field_values.sql`, so they are patched in place
+-- from their current definitions exactly as
+-- `20260924070000_wide_record_field_values.sql` and
+-- `20260924010000_query_system_values_and_deadline_refresh.sql` do: each
+-- reviewed source fragment must occur exactly once, or the migration aborts
+-- rather than silently skipping a caller. Each is re-created under its own
+-- current owner, so its OID, grants, comment, security and search_path stay
 -- put.
 
 begin;
@@ -32,8 +35,10 @@ grant create on schema vortex_record to vortex_record_adapter;
 grant create on schema vortex_record to postgres;
 reset role;
 
-set local role vortex_record_adapter;
-
+-- The claim has a postgres-owned row-selection helper and adapter-owned
+-- callers, so the patch loop runs as the migrator and re-creates each function
+-- under its own current owner, exactly as
+-- `20260923180000_protected_record_delete_and_recovery.sql` does.
 do $migration$
 declare
   -- The batch claim must consider only an active binding; an inactive binding's
@@ -236,7 +241,7 @@ begin
     where procedure.oid = procedure_id;
     execute pg_catalog.format('set local role %I', owner_name);
     execute definition;
-    set local role vortex_record_adapter;
+    reset role;
   end loop;
 end
 $migration$;
@@ -248,7 +253,9 @@ revoke create on schema vortex_record from vortex_record_adapter;
 revoke create on schema vortex_record from postgres;
 reset role;
 
+set local role vortex_record_adapter;
 comment on function vortex_record.claim_record_deadline_refresh(uuid, uuid, uuid, timestamptz) is
   'Private atomic due-row claim returning locked root, attribution, effect identity and calculation inputs; patches in #857 select only active bindings, reselect a stale revision in place and retire a due row whose storage or record can no longer serve it.';
+reset role;
 
 commit;
