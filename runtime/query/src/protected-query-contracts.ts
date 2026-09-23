@@ -80,6 +80,7 @@ export const protectedQueryRefusalReasonCodes = [
   "page_size_invalid",
   "cursor_invalid",
   "cursor_stale",
+  "freshness_pending",
 ] as const;
 export type ProtectedQueryRefusalReasonCode = (typeof protectedQueryRefusalReasonCodes)[number];
 

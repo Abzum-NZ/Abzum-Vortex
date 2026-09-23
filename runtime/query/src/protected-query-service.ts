@@ -32,6 +32,7 @@ import {
   type ProtectedQueryRefusalReasonCode,
   type ProtectedQueryResult,
 } from "./protected-query-contracts";
+import { recordSystemValuesSchema } from "./record-system-values";
 import {
   parseQueryInputDeclarations,
   QueryInputRefusalError,
@@ -83,6 +84,7 @@ const pageReadSchema = z.discriminatedUnion("outcome", [
             .object({
               recordId: recordIdSchema,
               values: z.record(fieldIdSchema, jsonValueSchema),
+              systemValues: recordSystemValuesSchema.optional(),
             })
             .strict(),
         )
@@ -126,7 +128,8 @@ const readPage = async (
       ${JSON.stringify(inputValues)}::text::jsonb,
       ${JSON.stringify(command.requestedFieldIds)}::text::jsonb,
       ${command.pageSize}::integer,
-      ${after === undefined ? null : JSON.stringify({ sortKey: after.sortKey, recordId: after.recordId })}::text::jsonb
+      ${after === undefined ? null : JSON.stringify({ sortKey: after.sortKey, recordId: after.recordId })}::text::jsonb,
+      ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb
     ) as result
   `;
   return pageReadSchema.parse(one(rows));
@@ -186,6 +189,18 @@ const runCommand = async (
     after,
   );
   if (page.outcome === "refused") return refusal(page.reasonCode);
+  // Only the declared system values may appear; a row carrying any other is a
+  // contract breach, not something to pass on.
+  const declaredSystemKeys = new Set<string>(command.requestedSystemFieldKeys);
+  for (const row of page.rows) {
+    const disclosed = Object.keys(row.systemValues ?? {});
+    if (
+      disclosed.some((key) => !declaredSystemKeys.has(key)) ||
+      (declaredSystemKeys.size > 0) !== (row.systemValues !== undefined) ||
+      declaredSystemKeys.size !== disclosed.length
+    )
+      throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+  }
 
   return {
     outcome: "completed",
