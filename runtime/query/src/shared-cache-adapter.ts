@@ -5,10 +5,11 @@ import type { QueryCacheDecision } from "./cache-policy";
 
 /**
  * The shared cache boundary for Query results. The store is injected (the
- * deployment's shared runtime cache); this adapter adds expiry and the fallback
- * rule: a bypass, a miss, an expired or mismatched entry, an unreadable entry or
- * any store failure runs the ordinary authorised query. Cache trouble never
- * refuses a request and never serves unverifiable content.
+ * deployment's shared runtime cache); this adapter adds expiry, the current
+ * permission recheck on every hit, and the fallback rule: a bypass, a miss, an
+ * expired or mismatched entry, an unreadable entry, a failed recheck or any
+ * store failure runs the ordinary authorised query. Cache trouble never refuses
+ * a request and never serves unverifiable content.
  */
 export interface SharedCacheStore {
   get(key: string): Promise<string | undefined | null>;
@@ -34,6 +35,12 @@ export type QueryCacheAdapterOptions<Value> = Readonly<{
   load: () => Promise<Value>;
   /** Accepts a stored value only if it still has the exact result shape. */
   parse: (stored: unknown) => Value | undefined;
+  /**
+   * Rechecks, at the current authority, that this actor may still run the Query
+   * and read every field in the stored value. It runs before every hit is
+   * returned; anything but `true` discards the hit and runs the ordinary load.
+   */
+  recheck: (value: Value) => Promise<boolean>;
   /** True only for a completed result that may be stored; refusals are never stored. */
   shouldStore: (value: Value) => boolean;
 }>;
@@ -54,7 +61,9 @@ const readEntry = async <Value>(
       Date.parse(envelope.data.expiresAt) > Date.parse(decision.expiresAt)
     )
       return undefined;
-    return options.parse(envelope.data.value);
+    const value = options.parse(envelope.data.value);
+    if (value === undefined || (await options.recheck(value)) !== true) return undefined;
+    return value;
   } catch {
     return undefined;
   }

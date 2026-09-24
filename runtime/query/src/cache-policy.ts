@@ -21,7 +21,8 @@ import { protectedQueryCommandSchema } from "./protected-query-contracts";
  * returns either one canonical bounded cache key with its expiry or a bypass.
  *
  * It never reads a store, a clock or a database and never grants anything: a
- * hit still needs the caller's current permission and field check before reuse.
+ * hit still passes the current permission and field recheck that
+ * `readThroughQueryCache` requires before reuse.
  * Anything that cannot be established (a missing or repeated dependency, an
  * unproven authority window, sensitive fields, a shared-source result, or a
  * malformed input) bypasses, so the ordinary authorised query runs instead.
@@ -132,8 +133,6 @@ const canonicalJson = (value: unknown): string => {
   return JSON.stringify(value) ?? "null";
 };
 
-const sortedUnique = (values: readonly string[]): string[] => [...new Set(values.map(lower))].sort();
-
 export const decideQueryCache = (input: unknown): QueryCacheDecision => {
   const parsed = queryCacheInputSchema.safeParse(input);
   if (!parsed.success) return bypass("policy_invalid");
@@ -182,10 +181,13 @@ export const decideQueryCache = (input: unknown): QueryCacheDecision => {
           application: definition.application,
         },
         dependencies,
+        // The request's own identifiers keep their exact spelling: the Query
+        // result echoes them, so a hit must come from an identical request.
         query: {
-          queryId: lower(request.queryId),
+          moduleRootId: request.moduleRootId,
+          queryId: request.queryId,
           inputValues: request.inputValues,
-          requestedFieldIds: sortedUnique(request.requestedFieldIds),
+          requestedFieldIds: [...request.requestedFieldIds].sort(),
           requestedSystemFieldKeys: [...request.requestedSystemFieldKeys].sort(),
           pageSize: request.pageSize,
           continuationToken: request.continuationToken ?? null,
