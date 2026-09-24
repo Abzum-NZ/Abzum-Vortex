@@ -18,6 +18,3 @@ export const crmModuleSources: readonly ModuleSourceDocument[] = Object.freeze(
     tagsSource,
   ].map((source) => moduleSourceDocumentSchema.parse(source)),
 );
-
-/** Primary CRM Module export for consumers that register one definition at a time. */
-export const module: ModuleSourceDocument = crmModuleSources[0]!;

@@ -1,4 +1,4 @@
-﻿{
+{
     "source_contract_version":  "2.0.0",
     "kind":  "application",
     "root_alias":  "app_service_desk",
@@ -214,6 +214,27 @@
                                                      ]
                                     },
                                     {
+                                        "id":  "nav_sd_customers",
+                                        "type":  "heading",
+                                        "label":  "Customers",
+                                        "children":  [
+                                                         {
+                                                             "id":  "nav_sd_companies",
+                                                             "type":  "page",
+                                                             "label":  "Companies",
+                                                             "page":  "service_desk_customers",
+                                                             "permission":  "vortex.crm.organisations.company.read"
+                                                         },
+                                                         {
+                                                             "id":  "nav_sd_requesters",
+                                                             "type":  "page",
+                                                             "label":  "Requesters",
+                                                             "page":  "service_desk_requesters",
+                                                             "permission":  "vortex.crm.people.contact.read"
+                                                         }
+                                                     ]
+                                    },
+                                    {
                                         "id":  "nav_sd_knowledge",
                                         "type":  "page",
                                         "label":  "Knowledge",
@@ -362,6 +383,32 @@
                                                     ],
                                      "page_size":  50,
                                      "relationship_hops":  0
+                                 },
+                                 {
+                                     "id":  "qry_sd_requesters",
+                                     "key":  "service_desk_requesters",
+                                     "record_type":  "vortex.crm.people:contact",
+                                     "select":  [
+                                                    "contact_number",
+                                                    "full_name",
+                                                    "email",
+                                                    "company"
+                                                ],
+                                     "filter":  null,
+                                     "group_by":  [
+
+                                                  ],
+                                     "aggregates":  [
+
+                                                    ],
+                                     "sort":  [
+                                                  {
+                                                      "field":  "full_name",
+                                                      "direction":  "ascending"
+                                                  }
+                                              ],
+                                     "page_size":  50,
+                                     "relationship_hops":  0
                                  }
                              ],
                  "pages":  [
@@ -488,7 +535,11 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   }
+                                                   },
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "list",
+                                                                     "record_type":  "vortex.service_desk.cases:case"
+                                                                 }
                                },
                                {
                                    "id":  "page_sd_case_detail",
@@ -545,7 +596,11 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   }
+                                                   },
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "detail",
+                                                                     "record_type":  "vortex.service_desk.cases:case"
+                                                                 }
                                },
                                {
                                    "id":  "page_sd_new_case",
@@ -683,7 +738,11 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   }
+                                                   },
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "create_form",
+                                                                     "record_type":  "vortex.service_desk.cases:case"
+                                                                 }
                                },
                                {
                                    "id":  "page_sd_knowledge",
@@ -746,7 +805,11 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   }
+                                                   },
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "list",
+                                                                     "record_type":  "vortex.service_desk.knowledge:article"
+                                                                 }
                                },
                                {
                                    "id":  "page_sd_article",
@@ -803,7 +866,11 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   }
+                                                   },
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "detail",
+                                                                     "record_type":  "vortex.service_desk.knowledge:article"
+                                                                 }
                                },
                                {
                                    "id":  "page_sd_public_article",
@@ -833,7 +900,7 @@
                                                                     "placements":  {
                                                                                        "content_6":  {
                                                                                                          "block":  {
-                                                                                                                       "block_id":  "addfad00-1b11-4674-83fa-913667f87e79",
+                                                                                                                       "block_id":  "e2569df0-2f10-4b20-b41d-177b66cd136c",
                                                                                                                        "release_version":  "1.0.0"
                                                                                                                    },
                                                                                                          "settings":  {
@@ -929,7 +996,11 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   }
+                                                   },
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "list",
+                                                                     "record_type":  "vortex.service_desk.sla:service_level"
+                                                                 }
                                },
                                {
                                    "id":  "page_sd_case_edit",
@@ -1064,6 +1135,321 @@
                                                                     "order":  {
                                                                                   "desktop":  [
                                                                                                   "form_service_desk_case_edit"
+                                                                                              ]
+                                                                              }
+                                                                }
+                                                   }
+                               },
+                               {
+                                   "id":  "page_service_desk_service_level_detail",
+                                   "key":  "service_desk_service_level_detail",
+                                   "name":  "Service level detail",
+                                   "type":  "detail",
+                                   "record_type":  "vortex.service_desk.sla:service_level",
+                                   "permission":  "vortex.service_desk.sla.service_level.read",
+                                   "states":  [
+                                                  "normal",
+                                                  "loading",
+                                                  "refused",
+                                                  "conflict",
+                                                  "failure",
+                                                  "recovery"
+                                              ],
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "detail",
+                                                                     "record_type":  "vortex.service_desk.sla:service_level"
+                                                                 },
+                                   "composition":  {
+                                                       "shell_kind":  "default",
+                                                       "main":  {
+                                                                    "placements":  {
+                                                                                       "detail_sd_service_level":  {
+                                                                                                                       "block":  {
+                                                                                                                                     "block_id":  "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                                                                                                                                     "release_version":  "1.0.0"
+                                                                                                                                 },
+                                                                                                                       "settings":  {
+                                                                                                                                        "title":  {
+                                                                                                                                                      "kind":  "text",
+                                                                                                                                                      "value":  "Service level detail"
+                                                                                                                                                  }
+                                                                                                                                    },
+                                                                                                                       "theme_overrides":  {
+
+                                                                                                                                           },
+                                                                                                                       "responsive":  {
+                                                                                                                                          "desktop":  {
+                                                                                                                                                          "visible":  true,
+                                                                                                                                                          "width":  {
+                                                                                                                                                                        "kind":  "fill"
+                                                                                                                                                                    },
+                                                                                                                                                          "height":  {
+                                                                                                                                                                         "kind":  "content"
+                                                                                                                                                                     }
+                                                                                                                                                      }
+                                                                                                                                      },
+                                                                                                                       "slots":  {
+
+                                                                                                                                 }
+                                                                                                                   }
+                                                                                   },
+                                                                    "order":  {
+                                                                                  "desktop":  [
+                                                                                                  "detail_sd_service_level"
+                                                                                              ]
+                                                                              }
+                                                                }
+                                                   }
+                               },
+                               {
+                                   "id":  "page_service_desk_customers",
+                                   "key":  "service_desk_customers",
+                                   "name":  "Customer companies",
+                                   "type":  "list",
+                                   "record_type":  "vortex.crm.organisations:company",
+                                   "permission":  "vortex.crm.organisations.company.read",
+                                   "query":  "service_desk_customers",
+                                   "arrangements":  [
+                                                        "table"
+                                                    ],
+                                   "states":  [
+                                                  "normal",
+                                                  "loading",
+                                                  "empty",
+                                                  "refused",
+                                                  "failure",
+                                                  "recovery"
+                                              ],
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "list",
+                                                                     "record_type":  "vortex.crm.organisations:company"
+                                                                 },
+                                   "composition":  {
+                                                       "shell_kind":  "default",
+                                                       "main":  {
+                                                                    "placements":  {
+                                                                                       "list_sd_customers":  {
+                                                                                                                 "block":  {
+                                                                                                                               "block_id":  "4881c816-e4ce-4c39-b0b7-20958b947748",
+                                                                                                                               "release_version":  "1.0.0"
+                                                                                                                           },
+                                                                                                                 "settings":  {
+                                                                                                                                  "title":  {
+                                                                                                                                                "kind":  "text",
+                                                                                                                                                "value":  "Customer companies"
+                                                                                                                                            }
+                                                                                                                              },
+                                                                                                                 "theme_overrides":  {
+
+                                                                                                                                     },
+                                                                                                                 "responsive":  {
+                                                                                                                                    "desktop":  {
+                                                                                                                                                    "visible":  true,
+                                                                                                                                                    "width":  {
+                                                                                                                                                                  "kind":  "fill"
+                                                                                                                                                              },
+                                                                                                                                                    "height":  {
+                                                                                                                                                                   "kind":  "content"
+                                                                                                                                                               }
+                                                                                                                                                }
+                                                                                                                                },
+                                                                                                                 "slots":  {
+
+                                                                                                                           },
+                                                                                                                 "query":  "service_desk_customers"
+                                                                                                             }
+                                                                                   },
+                                                                    "order":  {
+                                                                                  "desktop":  [
+                                                                                                  "list_sd_customers"
+                                                                                              ]
+                                                                              }
+                                                                }
+                                                   }
+                               },
+                               {
+                                   "id":  "page_service_desk_customer_detail",
+                                   "key":  "service_desk_customer_detail",
+                                   "name":  "Customer company detail",
+                                   "type":  "detail",
+                                   "record_type":  "vortex.crm.organisations:company",
+                                   "permission":  "vortex.crm.organisations.company.read",
+                                   "states":  [
+                                                  "normal",
+                                                  "loading",
+                                                  "refused",
+                                                  "conflict",
+                                                  "failure",
+                                                  "recovery"
+                                              ],
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "detail",
+                                                                     "record_type":  "vortex.crm.organisations:company"
+                                                                 },
+                                   "composition":  {
+                                                       "shell_kind":  "default",
+                                                       "main":  {
+                                                                    "placements":  {
+                                                                                       "detail_sd_customer":  {
+                                                                                                                  "block":  {
+                                                                                                                                "block_id":  "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                                                                                                                                "release_version":  "1.0.0"
+                                                                                                                            },
+                                                                                                                  "settings":  {
+                                                                                                                                   "title":  {
+                                                                                                                                                 "kind":  "text",
+                                                                                                                                                 "value":  "Customer company detail"
+                                                                                                                                             }
+                                                                                                                               },
+                                                                                                                  "theme_overrides":  {
+
+                                                                                                                                      },
+                                                                                                                  "responsive":  {
+                                                                                                                                     "desktop":  {
+                                                                                                                                                     "visible":  true,
+                                                                                                                                                     "width":  {
+                                                                                                                                                                   "kind":  "fill"
+                                                                                                                                                               },
+                                                                                                                                                     "height":  {
+                                                                                                                                                                    "kind":  "content"
+                                                                                                                                                                }
+                                                                                                                                                 }
+                                                                                                                                 },
+                                                                                                                  "slots":  {
+
+                                                                                                                            }
+                                                                                                              }
+                                                                                   },
+                                                                    "order":  {
+                                                                                  "desktop":  [
+                                                                                                  "detail_sd_customer"
+                                                                                              ]
+                                                                              }
+                                                                }
+                                                   }
+                               },
+                               {
+                                   "id":  "page_service_desk_requesters",
+                                   "key":  "service_desk_requesters",
+                                   "name":  "Requesters",
+                                   "type":  "list",
+                                   "record_type":  "vortex.crm.people:contact",
+                                   "permission":  "vortex.crm.people.contact.read",
+                                   "query":  "service_desk_requesters",
+                                   "arrangements":  [
+                                                        "table"
+                                                    ],
+                                   "states":  [
+                                                  "normal",
+                                                  "loading",
+                                                  "empty",
+                                                  "refused",
+                                                  "failure",
+                                                  "recovery"
+                                              ],
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "list",
+                                                                     "record_type":  "vortex.crm.people:contact"
+                                                                 },
+                                   "composition":  {
+                                                       "shell_kind":  "default",
+                                                       "main":  {
+                                                                    "placements":  {
+                                                                                       "list_sd_requesters":  {
+                                                                                                                  "block":  {
+                                                                                                                                "block_id":  "4881c816-e4ce-4c39-b0b7-20958b947748",
+                                                                                                                                "release_version":  "1.0.0"
+                                                                                                                            },
+                                                                                                                  "settings":  {
+                                                                                                                                   "title":  {
+                                                                                                                                                 "kind":  "text",
+                                                                                                                                                 "value":  "Requesters"
+                                                                                                                                             }
+                                                                                                                               },
+                                                                                                                  "theme_overrides":  {
+
+                                                                                                                                      },
+                                                                                                                  "responsive":  {
+                                                                                                                                     "desktop":  {
+                                                                                                                                                     "visible":  true,
+                                                                                                                                                     "width":  {
+                                                                                                                                                                   "kind":  "fill"
+                                                                                                                                                               },
+                                                                                                                                                     "height":  {
+                                                                                                                                                                    "kind":  "content"
+                                                                                                                                                                }
+                                                                                                                                                 }
+                                                                                                                                 },
+                                                                                                                  "slots":  {
+
+                                                                                                                            },
+                                                                                                                  "query":  "service_desk_requesters"
+                                                                                                              }
+                                                                                   },
+                                                                    "order":  {
+                                                                                  "desktop":  [
+                                                                                                  "list_sd_requesters"
+                                                                                              ]
+                                                                              }
+                                                                }
+                                                   }
+                               },
+                               {
+                                   "id":  "page_service_desk_requester_detail",
+                                   "key":  "service_desk_requester_detail",
+                                   "name":  "Requester detail",
+                                   "type":  "detail",
+                                   "record_type":  "vortex.crm.people:contact",
+                                   "permission":  "vortex.crm.people.contact.read",
+                                   "states":  [
+                                                  "normal",
+                                                  "loading",
+                                                  "refused",
+                                                  "conflict",
+                                                  "failure",
+                                                  "recovery"
+                                              ],
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "detail",
+                                                                     "record_type":  "vortex.crm.people:contact"
+                                                                 },
+                                   "composition":  {
+                                                       "shell_kind":  "default",
+                                                       "main":  {
+                                                                    "placements":  {
+                                                                                       "detail_sd_requester":  {
+                                                                                                                   "block":  {
+                                                                                                                                 "block_id":  "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                                                                                                                                 "release_version":  "1.0.0"
+                                                                                                                             },
+                                                                                                                   "settings":  {
+                                                                                                                                    "title":  {
+                                                                                                                                                  "kind":  "text",
+                                                                                                                                                  "value":  "Requester detail"
+                                                                                                                                              }
+                                                                                                                                },
+                                                                                                                   "theme_overrides":  {
+
+                                                                                                                                       },
+                                                                                                                   "responsive":  {
+                                                                                                                                      "desktop":  {
+                                                                                                                                                      "visible":  true,
+                                                                                                                                                      "width":  {
+                                                                                                                                                                    "kind":  "fill"
+                                                                                                                                                                },
+                                                                                                                                                      "height":  {
+                                                                                                                                                                     "kind":  "content"
+                                                                                                                                                                 }
+                                                                                                                                                  }
+                                                                                                                                  },
+                                                                                                                   "slots":  {
+
+                                                                                                                             }
+                                                                                                               }
+                                                                                   },
+                                                                    "order":  {
+                                                                                  "desktop":  [
+                                                                                                  "detail_sd_requester"
                                                                                               ]
                                                                               }
                                                                 }

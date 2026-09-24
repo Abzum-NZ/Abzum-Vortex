@@ -1,4 +1,4 @@
-﻿{
+{
     "source_contract_version":  "2.0.0",
     "kind":  "application",
     "root_alias":  "app_crm",
@@ -574,7 +574,11 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   }
+                                                   },
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "list",
+                                                                     "record_type":  "vortex.crm.organisations:company"
+                                                                 }
                                },
                                {
                                    "id":  "page_crm_contacts",
@@ -636,7 +640,11 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   }
+                                                   },
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "list",
+                                                                     "record_type":  "vortex.crm.people:contact"
+                                                                 }
                                },
                                {
                                    "id":  "page_crm_leads",
@@ -699,7 +707,11 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   }
+                                                   },
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "list",
+                                                                     "record_type":  "vortex.crm.people:lead"
+                                                                 }
                                },
                                {
                                    "id":  "page_crm_opportunities",
@@ -768,7 +780,11 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   }
+                                                   },
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "list",
+                                                                     "record_type":  "vortex.crm.opportunities:opportunity"
+                                                                 }
                                },
                                {
                                    "id":  "page_crm_activities",
@@ -836,7 +852,11 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   }
+                                                   },
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "list",
+                                                                     "record_type":  "vortex.crm.activities:activity"
+                                                                 }
                                },
                                {
                                    "id":  "page_crm_qualify",
@@ -1551,7 +1571,11 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   }
+                                                   },
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "create_form",
+                                                                     "record_type":  "vortex.crm.organisations:company"
+                                                                 }
                                },
                                {
                                    "id":  "page_crm_company_edit",
@@ -1827,7 +1851,11 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   }
+                                                   },
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "create_form",
+                                                                     "record_type":  "vortex.crm.people:contact"
+                                                                 }
                                },
                                {
                                    "id":  "page_crm_contact_edit",
@@ -2103,7 +2131,11 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   }
+                                                   },
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "create_form",
+                                                                     "record_type":  "vortex.crm.people:lead"
+                                                                 }
                                },
                                {
                                    "id":  "page_crm_lead_edit",
@@ -2238,6 +2270,311 @@
                                                                     "order":  {
                                                                                   "desktop":  [
                                                                                                   "form_crm_lead_edit"
+                                                                                              ]
+                                                                              }
+                                                                }
+                                                   }
+                               },
+                               {
+                                   "id":  "page_crm_company_detail",
+                                   "key":  "crm_company_detail",
+                                   "name":  "Company detail",
+                                   "type":  "detail",
+                                   "record_type":  "vortex.crm.organisations:company",
+                                   "permission":  "vortex.crm.organisations.company.read",
+                                   "states":  [
+                                                  "normal",
+                                                  "loading",
+                                                  "refused",
+                                                  "conflict",
+                                                  "failure",
+                                                  "recovery"
+                                              ],
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "detail",
+                                                                     "record_type":  "vortex.crm.organisations:company"
+                                                                 },
+                                   "composition":  {
+                                                       "shell_kind":  "default",
+                                                       "main":  {
+                                                                    "placements":  {
+                                                                                       "detail_crm_company":  {
+                                                                                                                  "block":  {
+                                                                                                                                "block_id":  "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                                                                                                                                "release_version":  "1.0.0"
+                                                                                                                            },
+                                                                                                                  "settings":  {
+                                                                                                                                   "title":  {
+                                                                                                                                                 "kind":  "text",
+                                                                                                                                                 "value":  "Company detail"
+                                                                                                                                             }
+                                                                                                                               },
+                                                                                                                  "theme_overrides":  {
+
+                                                                                                                                      },
+                                                                                                                  "responsive":  {
+                                                                                                                                     "desktop":  {
+                                                                                                                                                     "visible":  true,
+                                                                                                                                                     "width":  {
+                                                                                                                                                                   "kind":  "fill"
+                                                                                                                                                               },
+                                                                                                                                                     "height":  {
+                                                                                                                                                                    "kind":  "content"
+                                                                                                                                                                }
+                                                                                                                                                 }
+                                                                                                                                 },
+                                                                                                                  "slots":  {
+
+                                                                                                                            }
+                                                                                                              }
+                                                                                   },
+                                                                    "order":  {
+                                                                                  "desktop":  [
+                                                                                                  "detail_crm_company"
+                                                                                              ]
+                                                                              }
+                                                                }
+                                                   }
+                               },
+                               {
+                                   "id":  "page_crm_contact_detail",
+                                   "key":  "crm_contact_detail",
+                                   "name":  "Contact detail",
+                                   "type":  "detail",
+                                   "record_type":  "vortex.crm.people:contact",
+                                   "permission":  "vortex.crm.people.contact.read",
+                                   "states":  [
+                                                  "normal",
+                                                  "loading",
+                                                  "refused",
+                                                  "conflict",
+                                                  "failure",
+                                                  "recovery"
+                                              ],
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "detail",
+                                                                     "record_type":  "vortex.crm.people:contact"
+                                                                 },
+                                   "composition":  {
+                                                       "shell_kind":  "default",
+                                                       "main":  {
+                                                                    "placements":  {
+                                                                                       "detail_crm_contact":  {
+                                                                                                                  "block":  {
+                                                                                                                                "block_id":  "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                                                                                                                                "release_version":  "1.0.0"
+                                                                                                                            },
+                                                                                                                  "settings":  {
+                                                                                                                                   "title":  {
+                                                                                                                                                 "kind":  "text",
+                                                                                                                                                 "value":  "Contact detail"
+                                                                                                                                             }
+                                                                                                                               },
+                                                                                                                  "theme_overrides":  {
+
+                                                                                                                                      },
+                                                                                                                  "responsive":  {
+                                                                                                                                     "desktop":  {
+                                                                                                                                                     "visible":  true,
+                                                                                                                                                     "width":  {
+                                                                                                                                                                   "kind":  "fill"
+                                                                                                                                                               },
+                                                                                                                                                     "height":  {
+                                                                                                                                                                    "kind":  "content"
+                                                                                                                                                                }
+                                                                                                                                                 }
+                                                                                                                                 },
+                                                                                                                  "slots":  {
+
+                                                                                                                            }
+                                                                                                              }
+                                                                                   },
+                                                                    "order":  {
+                                                                                  "desktop":  [
+                                                                                                  "detail_crm_contact"
+                                                                                              ]
+                                                                              }
+                                                                }
+                                                   }
+                               },
+                               {
+                                   "id":  "page_crm_lead_detail",
+                                   "key":  "crm_lead_detail",
+                                   "name":  "Lead detail",
+                                   "type":  "detail",
+                                   "record_type":  "vortex.crm.people:lead",
+                                   "permission":  "vortex.crm.people.lead.read",
+                                   "states":  [
+                                                  "normal",
+                                                  "loading",
+                                                  "refused",
+                                                  "conflict",
+                                                  "failure",
+                                                  "recovery"
+                                              ],
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "detail",
+                                                                     "record_type":  "vortex.crm.people:lead"
+                                                                 },
+                                   "composition":  {
+                                                       "shell_kind":  "default",
+                                                       "main":  {
+                                                                    "placements":  {
+                                                                                       "detail_crm_lead":  {
+                                                                                                               "block":  {
+                                                                                                                             "block_id":  "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                                                                                                                             "release_version":  "1.0.0"
+                                                                                                                         },
+                                                                                                               "settings":  {
+                                                                                                                                "title":  {
+                                                                                                                                              "kind":  "text",
+                                                                                                                                              "value":  "Lead detail"
+                                                                                                                                          }
+                                                                                                                            },
+                                                                                                               "theme_overrides":  {
+
+                                                                                                                                   },
+                                                                                                               "responsive":  {
+                                                                                                                                  "desktop":  {
+                                                                                                                                                  "visible":  true,
+                                                                                                                                                  "width":  {
+                                                                                                                                                                "kind":  "fill"
+                                                                                                                                                            },
+                                                                                                                                                  "height":  {
+                                                                                                                                                                 "kind":  "content"
+                                                                                                                                                             }
+                                                                                                                                              }
+                                                                                                                              },
+                                                                                                               "slots":  {
+
+                                                                                                                         }
+                                                                                                           }
+                                                                                   },
+                                                                    "order":  {
+                                                                                  "desktop":  [
+                                                                                                  "detail_crm_lead"
+                                                                                              ]
+                                                                              }
+                                                                }
+                                                   }
+                               },
+                               {
+                                   "id":  "page_crm_opportunity_detail",
+                                   "key":  "crm_opportunity_detail",
+                                   "name":  "Opportunity detail",
+                                   "type":  "detail",
+                                   "record_type":  "vortex.crm.opportunities:opportunity",
+                                   "permission":  "vortex.crm.opportunities.opportunity.read",
+                                   "states":  [
+                                                  "normal",
+                                                  "loading",
+                                                  "refused",
+                                                  "conflict",
+                                                  "failure",
+                                                  "recovery"
+                                              ],
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "detail",
+                                                                     "record_type":  "vortex.crm.opportunities:opportunity"
+                                                                 },
+                                   "composition":  {
+                                                       "shell_kind":  "default",
+                                                       "main":  {
+                                                                    "placements":  {
+                                                                                       "detail_crm_opportunity":  {
+                                                                                                                      "block":  {
+                                                                                                                                    "block_id":  "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                                                                                                                                    "release_version":  "1.0.0"
+                                                                                                                                },
+                                                                                                                      "settings":  {
+                                                                                                                                       "title":  {
+                                                                                                                                                     "kind":  "text",
+                                                                                                                                                     "value":  "Opportunity detail"
+                                                                                                                                                 }
+                                                                                                                                   },
+                                                                                                                      "theme_overrides":  {
+
+                                                                                                                                          },
+                                                                                                                      "responsive":  {
+                                                                                                                                         "desktop":  {
+                                                                                                                                                         "visible":  true,
+                                                                                                                                                         "width":  {
+                                                                                                                                                                       "kind":  "fill"
+                                                                                                                                                                   },
+                                                                                                                                                         "height":  {
+                                                                                                                                                                        "kind":  "content"
+                                                                                                                                                                    }
+                                                                                                                                                     }
+                                                                                                                                     },
+                                                                                                                      "slots":  {
+
+                                                                                                                                }
+                                                                                                                  }
+                                                                                   },
+                                                                    "order":  {
+                                                                                  "desktop":  [
+                                                                                                  "detail_crm_opportunity"
+                                                                                              ]
+                                                                              }
+                                                                }
+                                                   }
+                               },
+                               {
+                                   "id":  "page_crm_activity_detail",
+                                   "key":  "crm_activity_detail",
+                                   "name":  "Activity detail",
+                                   "type":  "detail",
+                                   "record_type":  "vortex.crm.activities:activity",
+                                   "permission":  "vortex.crm.activities.activity.read",
+                                   "states":  [
+                                                  "normal",
+                                                  "loading",
+                                                  "refused",
+                                                  "conflict",
+                                                  "failure",
+                                                  "recovery"
+                                              ],
+                                   "standard_page_replacement":  {
+                                                                     "standard_page":  "detail",
+                                                                     "record_type":  "vortex.crm.activities:activity"
+                                                                 },
+                                   "composition":  {
+                                                       "shell_kind":  "default",
+                                                       "main":  {
+                                                                    "placements":  {
+                                                                                       "detail_crm_activity":  {
+                                                                                                                   "block":  {
+                                                                                                                                 "block_id":  "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                                                                                                                                 "release_version":  "1.0.0"
+                                                                                                                             },
+                                                                                                                   "settings":  {
+                                                                                                                                    "title":  {
+                                                                                                                                                  "kind":  "text",
+                                                                                                                                                  "value":  "Activity detail"
+                                                                                                                                              }
+                                                                                                                                },
+                                                                                                                   "theme_overrides":  {
+
+                                                                                                                                       },
+                                                                                                                   "responsive":  {
+                                                                                                                                      "desktop":  {
+                                                                                                                                                      "visible":  true,
+                                                                                                                                                      "width":  {
+                                                                                                                                                                    "kind":  "fill"
+                                                                                                                                                                },
+                                                                                                                                                      "height":  {
+                                                                                                                                                                     "kind":  "content"
+                                                                                                                                                                 }
+                                                                                                                                                  }
+                                                                                                                                  },
+                                                                                                                   "slots":  {
+
+                                                                                                                             }
+                                                                                                               }
+                                                                                   },
+                                                                    "order":  {
+                                                                                  "desktop":  [
+                                                                                                  "detail_crm_activity"
                                                                                               ]
                                                                               }
                                                                 }

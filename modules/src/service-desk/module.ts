@@ -12,6 +12,3 @@ export const serviceDeskModuleSources: readonly ModuleSourceDocument[] = Object.
     moduleSourceDocumentSchema.parse(source),
   ),
 );
-
-/** Primary Service Desk Module export for consumers that register one definition at a time. */
-export const module: ModuleSourceDocument = serviceDeskModuleSources[0]!;
