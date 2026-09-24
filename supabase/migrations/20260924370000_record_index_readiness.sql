@@ -330,6 +330,7 @@ declare
   catalogue_observed text;
   catalogue_revision bigint;
   ready boolean;
+  target_count integer := 0;
   indexes jsonb := '[]'::jsonb;
   uniqueness_ready boolean := true;
 begin
@@ -368,6 +369,8 @@ begin
       and catalogue.state = 'active'
     order by catalogue.storage_contract_id
   loop
+    target_count := target_count + 1;
+
     for mapping in
       select stored.field_id, stored.physical_column_token, stored.field_definition
       from vortex_record.field_storage_mappings as stored
@@ -433,6 +436,14 @@ begin
       ));
     end loop;
   end loop;
+
+  -- Every installation storage contract must be an active catalogue entry; a
+  -- target this read cannot account for is an incomplete installation, never an
+  -- implicitly unindexed record type.
+  if target_count <> pg_catalog.cardinality(target_storage_contract_ids) then
+    raise exception using errcode = '23514',
+      message = 'Index activation targets are incomplete';
+  end if;
 
   return pg_catalog.jsonb_build_object(
     'organizationId', p_organization_id,

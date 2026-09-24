@@ -202,11 +202,11 @@ const requireReadyUniquenessIndexes = async (
   )
     throw bindingsIncomplete();
 
-  for (const index of readiness.data.indexes) {
+  for (const entry of readiness.data.indexes) {
     // Performance indexes are advisory: they never refuse activation. Only a
     // required uniqueness index that is not observed ready does.
-    if (index.purpose !== "uniqueness") continue;
-    if (!index.ready || index.observedState !== "present") throw bindingsIncomplete();
+    if (entry.purpose !== "uniqueness") continue;
+    if (!entry.ready || entry.observedState !== "present") throw bindingsIncomplete();
   }
 };
 
