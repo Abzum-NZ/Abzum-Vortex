@@ -354,10 +354,16 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
             shell_kind: "application",
             shell: "shell_organisation_administration",
             content: {
-              slot_primary: slot(
-                "accounts_region",
-                readModelBlock("organization_accounts", "Organisation accounts"),
-              ),
+              slot_primary: {
+                placements: {
+                  accounts_text: textBlock(
+                    "Organisation accounts",
+                    "Organisation accounts are read live from protected Identity and Access data; no account directory is copied into this application. Role grants run in the IAM application, never here.",
+                  ),
+                  accounts_region: readModelBlock("organization_accounts", "Organisation accounts"),
+                },
+                order: { desktop: ["accounts_text", "accounts_region"] },
+              },
             },
           },
         },
@@ -416,10 +422,14 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
             content: {
               slot_primary: {
                 placements: {
+                  roles_text: textBlock(
+                    "Roles and groups",
+                    "Roles and groups are read live from protected Access. Role grants, group membership and assignments are managed in the IAM application; this application offers no parallel grant control.",
+                  ),
                   roles_region: readModelBlock("roles", "Roles"),
                   groups_region: readModelBlock("groups", "Groups"),
                 },
-                order: { desktop: ["roles_region", "groups_region"] },
+                order: { desktop: ["roles_text", "roles_region", "groups_region"] },
               },
             },
           },

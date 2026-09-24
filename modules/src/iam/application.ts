@@ -64,27 +64,15 @@ const singleBlockComposition = (
   main: slot({ [alias]: placement(release, settings, extra) }, [alias]),
 });
 
-const regionComposition = (
-  aliasPrefix: string,
-  heading: string,
-  regionTitle: string,
-) => ({
-  shell_kind: "default" as const,
-  main: slot(
-    {
-      [`${aliasPrefix}_heading`]: placement(TEXT_BLOCK_RELEASE, {
-        title: textValue(heading),
-        text: textValue(
-          `${regionTitle} is not yet available from a protected read model.`,
-        ),
-      }),
-      [`${aliasPrefix}_region`]: placement(TABLE_BLOCK_RELEASE, {
-        title: textValue(regionTitle),
-      }),
-    },
-    [`${aliasPrefix}_heading`, `${aliasPrefix}_region`],
-  ),
-});
+/**
+ * A display with no declared protected read model yet. It stays honest text rather than an unbound
+ * table, so it never reads as an empty result or binds an approximate model.
+ */
+const unavailableComposition = (aliasPrefix: string, heading: string, regionTitle: string) =>
+  singleBlockComposition(`${aliasPrefix}_heading`, TEXT_BLOCK_RELEASE, {
+    title: textValue(heading),
+    text: textValue(`${regionTitle} are not yet available from a protected read model.`),
+  });
 
 /**
  * A region that reads one or more declared protected read models. Each region placement binds one
@@ -539,7 +527,7 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
           type: "dashboard",
           permission: "application.iam.open",
           states: ["normal", "loading", "empty", "refused", "failure", "recovery"],
-          composition: regionComposition(
+          composition: unavailableComposition(
             "iam_privileged_eligible",
             "Eligible roles",
             "Privileged roles the current person may activate",
@@ -552,7 +540,7 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
           type: "dashboard",
           permission: "application.iam.open",
           states: ["normal", "loading", "empty", "refused", "failure", "recovery"],
-          composition: regionComposition(
+          composition: unavailableComposition(
             "iam_privileged_active",
             "Active roles",
             "Privileged roles currently active for the current person",

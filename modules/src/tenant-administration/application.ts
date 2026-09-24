@@ -301,10 +301,19 @@ export const tenantAdministrationApplication: ApplicationSourceDocumentV2 =
             shell_kind: "application",
             shell: "shell_tenant_administration",
             content: {
-              slot_primary: slot(
-                "administrators_region",
-                readModelBlock("effective_assignments", "Tenant administrators"),
-              ),
+              slot_primary: {
+                placements: {
+                  administrators_text: textBlock(
+                    "Tenant administrators",
+                    "Tenant administrator assignments are among the current effective assignments below, read live from protected Access. Granting and revoking tenant-administrator access runs through IAM, never from this application.",
+                  ),
+                  administrators_region: readModelBlock(
+                    "effective_assignments",
+                    "Current effective assignments",
+                  ),
+                },
+                order: { desktop: ["administrators_text", "administrators_region"] },
+              },
             },
           },
         },
