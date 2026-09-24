@@ -20,6 +20,7 @@ export type ApplicationAddressResult =
     }>
   | Readonly<{
       kind: "application_page";
+      /** Addressed read: holds only the addressed application and no organisation default. */
       read: Extract<PermittedApplicationsRead, { kind: "available" }>;
       application: PermittedApplication;
       pageKey: string;

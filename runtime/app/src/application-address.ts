@@ -192,8 +192,10 @@ const permittedApplication = async (
 
 /**
  * Resolve an exact tenant and organisation, then project only current page authority.
- * When an addressed application key is supplied, only that application is evaluated;
- * the full permitted list, including the organisation default, is built when it is absent.
+ * Without an application key this is the launcher read: every permitted application and
+ * the organisation default. With a key it is an addressed page read: only that application
+ * is evaluated, `applications` holds at most that one entry and `defaultApplicationRootId`
+ * is null, so it must only resolve that address and never feed a launcher.
  */
 export const readPermittedApplicationsAtAddress = async (
   session: IdentitySession,
