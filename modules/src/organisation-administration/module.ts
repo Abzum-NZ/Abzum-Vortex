@@ -139,7 +139,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
               id: "fld_case_request_kind",
               key: "request_kind",
               label: "Request kind",
-              required: true,
+              required: false,
               unique: false,
               filterable: true,
               sortable: false,
