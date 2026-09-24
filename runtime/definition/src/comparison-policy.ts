@@ -1094,6 +1094,14 @@ export const compareModuleContents = (
         "description",
       ]),
   );
+  compareKeyed(
+    reasons,
+    (previous.contributions as RecordValue[] | undefined) ?? [],
+    (candidate.contributions as RecordValue[] | undefined) ?? [],
+    "contributionId",
+    "extension_point",
+    (left, right) => compareContribution(reasons, left, right),
+  );
   return finaliseReasons(reasons);
 };
 
@@ -1131,6 +1139,39 @@ const compareExtensionPoint = (
     id,
     "behavior",
   );
+};
+
+/**
+ * One contribution declares that a Module-owned field or action joins a dependency's extension
+ * point. Adding a contribution is additive, while retargeting an installed one changes what a
+ * consumer receives, so every changed declared part is a major change.
+ */
+const compareContribution = (
+  reasons: VersionImpactReason[],
+  previous: RecordValue,
+  candidate: RecordValue,
+): void => {
+  const id = candidate.contributionId;
+  for (const key of [
+    "targetModule",
+    "targetExtensionPointId",
+    "kind",
+    "recordTypeId",
+    "fieldId",
+    "actionId",
+  ])
+    pushChange(
+      reasons,
+      previous[key],
+      candidate[key],
+      "major",
+      key === "targetExtensionPointId" || key === "kind"
+        ? "existing_behavior_changed"
+        : "public_contract_changed",
+      "extension_point",
+      "behavior",
+      id,
+    );
 };
 
 const compareEvent = (
@@ -1948,6 +1989,11 @@ export const normaliseModuleContent = <T extends ModuleContent | ModuleContentV2
       })),
       "extensionPointId",
     ),
+    // Superseded Module contents carry no contributions. Their order is never meaningful, so the
+    // collection is ordered by the contribution identity the compiler assigned.
+    ...(value.contributions === undefined
+      ? {}
+      : { contributions: sorted(value.contributions as unknown[], "contributionId") }),
     // Superseded Module contents carry no queries. Ordering inside one query is meaningful, so
     // only the collection itself is ordered; its typed inputs share the Action input shape.
     ...(value.queries === undefined
@@ -2112,6 +2158,8 @@ export const assertUnambiguousModuleContent = (content: unknown): void => {
   ] as const)
     assertUnique(value[collection] as RecordValue[], key);
   assertUnique(value.permissions as RecordValue[], "key");
+  if (value.contributions !== undefined)
+    assertUnique(value.contributions as RecordValue[], "contributionId");
   if (value.queries !== undefined) {
     assertUnique(value.queries as RecordValue[], "queryId");
     assertUnique(value.queries as RecordValue[], "key");
