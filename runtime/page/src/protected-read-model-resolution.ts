@@ -7,6 +7,8 @@ import {
   type IdentitySession,
   type ListOrganizationAccountsCommand,
   type ListOrganizationAccountsResult,
+  type ListOrganizationInvitationsCommand,
+  type ListOrganizationInvitationsResult,
   type ListOrganizationAdministrationGroupsCommand,
   type ListOrganizationAdministrationGroupsResult,
   type ListOrganizationAdministrationMembershipsCommand,
@@ -18,6 +20,8 @@ import {
   type OrganizationSelectionCandidate,
   type ProtectedReadModelKey,
   type ProtectedReadModelPageRequest,
+  type ReadOrganizationRuntimeSettingsCommand,
+  type ReadOrganizationRuntimeSettingsResult,
   type TenantHierarchyQuery,
   type TenantHierarchyResult,
 } from "@vortex/contracts";
@@ -58,6 +62,16 @@ export type ProtectedReadModelReaders = Readonly<{
       selection: OrganizationSelectionCandidate,
       command: ListOrganizationAccountsCommand,
     ): Promise<OwnerResult<ListOrganizationAccountsResult>>;
+    listOrganizationInvitations(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      command: ListOrganizationInvitationsCommand,
+    ): Promise<OwnerResult<ListOrganizationInvitationsResult>>;
+    readOrganizationRuntimeSettings(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      command: ReadOrganizationRuntimeSettingsCommand,
+    ): Promise<OwnerResult<ReadOrganizationRuntimeSettingsResult>>;
   }>;
   identity: Readonly<{
     listTenantHierarchy(
@@ -157,6 +171,25 @@ export const createProtectedReadModelResolver = (readers: ProtectedReadModelRead
               pageSize: page.pageSize,
               ...(page.after === undefined ? {} : { afterRoleAssignmentId: page.after }),
             } as ListOrganizationAdministrationRoleAssignmentsCommand),
+          );
+        case "organization_invitations":
+          return fromOwner(
+            model,
+            await readers.access.listOrganizationInvitations(context.session, context.selection, {
+              pageSize: page.pageSize,
+              ...(page.after === undefined ? {} : { afterInvitationId: page.after }),
+            } as ListOrganizationInvitationsCommand),
+          );
+        case "organization_runtime_settings":
+          // One settings document: no cursor, so a continuation cursor is never meaningful here.
+          if (page.after !== undefined) return refused;
+          return fromOwner(
+            model,
+            await readers.access.readOrganizationRuntimeSettings(
+              context.session,
+              context.selection,
+              {} as ReadOrganizationRuntimeSettingsCommand,
+            ),
           );
         case "tenant_structure": {
           const result = await readers.identity.listTenantHierarchy(context.session, {
