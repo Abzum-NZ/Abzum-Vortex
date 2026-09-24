@@ -254,11 +254,10 @@ const resolvePolicy = (policy: unknown): RecoveryConfiguration => {
     )
   )
     throw invalidInput();
-  if (
-    batchLimit !== undefined &&
-    !boundedInteger(batchLimit, 1, deadlineRefreshRecoveryLimits.maximumBatchLimit)
-  )
-    throw invalidInput();
+  if (batchLimit !== undefined) {
+    if (!boundedInteger(batchLimit, 1, deadlineRefreshRecoveryLimits.maximumBatchLimit))
+      throw invalidInput();
+  }
 
   return {
     maximumAttempts,
