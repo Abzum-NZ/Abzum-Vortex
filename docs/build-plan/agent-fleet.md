@@ -21,8 +21,8 @@ Phase labels and Pickup Order are preserved as planning/reporting metadata, whil
 | Work | Preferred model |
 | --- | --- |
 | Main orchestrator | One session of Claude Opus 5.5 (High) or GPT-6 Sol (Codex - High) |
-| Bounded implementation, schemas, catalogues, adapters and services | GPT-6 Luna (Codex - High), DeepSeek 4.1 Flash (`deepseek/deepseek-flash`, OpenCode) or GLM 5.3 Flash (OpenCode) |
-| Bounded UI components, pages and wiring | Gemini 3.8 Flash (Antigravity - Max or High) or GPT-6 Luna (Codex - High) |
+| Bounded implementation, schemas, catalogues, adapters and services | GPT-6 Luna (Codex - Max, never below High), DeepSeek 4.1 Flash (`deepseek/deepseek-flash`, OpenCode) or GLM 5.3 Flash (OpenCode) |
+| Bounded UI components, pages and wiring | Gemini 3.8 Flash (Antigravity - Max or High) or GPT-6 Luna (Codex - Max, never below High) |
 | Alternative implementation | Claude Sonnet 5 (High) |
 | Complex architecture, authorization or transactions | Claude Opus 5.5 (High) or GPT-6 Sol (High), whichever has capacity |
 | All final reviews, fixes and re-reviews | Claude Opus 5.5 (High) or GPT-6 Sol (High), separate session from implementer, spread across both |
