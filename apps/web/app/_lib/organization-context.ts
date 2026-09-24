@@ -7,7 +7,11 @@ import {
   type OrganizationLauncherResolution,
 } from "@vortex/contracts";
 import { createHumanOrganizationRequestService } from "@vortex/access";
-import { createAppTelemetryCollector } from "@vortex/app";
+import {
+  createAppTelemetryCollector,
+  readPermittedApplicationsAtAddress,
+  type PermittedApplicationsRead,
+} from "@vortex/app";
 import { listOrganizationLauncher } from "@vortex/identity";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 
@@ -20,6 +24,13 @@ const requestTelemetry = createAppTelemetryCollector();
 export const loadOrganizationLauncher = async (
   session: IdentitySession,
 ): Promise<OrganizationLauncherResolution> => listOrganizationLauncher(session);
+
+export const loadPermittedApplicationsAtAddress = (
+  session: IdentitySession,
+  tenantShortName: string,
+  organizationShortName: string,
+): Promise<PermittedApplicationsRead> =>
+  readPermittedApplicationsAtAddress(session, tenantShortName, organizationShortName);
 
 export type SelectedOrganizationResult =
   | Readonly<{ kind: "available"; entry: OrganizationLauncherEntry }>

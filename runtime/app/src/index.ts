@@ -7,6 +7,10 @@ import {
 import { projectFlowResultHandoff } from "./flow-result-handoff";
 import { createApplicationInstallationCoordinator } from "./installation-coordinator";
 import { createAppTelemetryCollector } from "./telemetry";
+import {
+  readPermittedApplicationsAtAddress,
+  resolvePermittedApplicationAddress,
+} from "./application-address";
 
 export {
   resolveApplicationTheme,
@@ -16,6 +20,14 @@ export {
   createAppTelemetryCollector,
   type AppTelemetryCollectorDependencies,
 } from "./telemetry";
+export {
+  permittedApplicationSchema,
+  permittedApplicationsReadSchema,
+  readPermittedApplicationsAtAddress,
+  resolvePermittedApplicationAddress,
+  type PermittedApplication,
+  type PermittedApplicationsRead,
+} from "./application-address";
 export {
   flowResultDeclarationSchema,
   flowResultHandoffContractVersion,
