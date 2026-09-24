@@ -904,9 +904,11 @@ export const platformThemeReleaseV2Schema = z
  * The token-role vocabulary shared by the platform theme release, the readability checks and
  * the renderer. Each entry names one role and the token kind a complete platform theme release
  * must map it with; a colour role also declares the foreground/background role the release must
- * mark that pair with. Defining the roles once here keeps those three consumers from drifting
- * into separate token conventions. A platform theme release is complete only when it maps every
- * role below; application and placement overrides inherit the kind and declared colour role.
+ * mark that pair with, and a colour role that declares none stays unmarked (fills such as
+ * `primary` are judged through their paired foreground). Defining the roles once here keeps
+ * those three consumers from drifting into separate token conventions. A platform theme release
+ * is complete only when it maps every role below; application and placement overrides inherit
+ * the kind and declared colour role.
  */
 export const platformThemeTokenRoleV2Schema = z
   .object({

@@ -201,9 +201,10 @@ const ensureUniqueApplicationCompositionReleases = (
 
 /**
  * A platform theme release is complete only when it maps every role in the shared
- * token-role vocabulary with the kind, and — for colour roles — the declared colour role,
- * that vocabulary requires. An incomplete release refuses here instead of publishing a
- * theme that would leave the renderer or the readability checks on another convention.
+ * token-role vocabulary with the kind that vocabulary requires, and marks each colour pair
+ * with exactly the declared colour role (none where the vocabulary declares none). An
+ * incomplete or mismarked release refuses here instead of publishing a theme that would
+ * leave the renderer or the readability checks on another convention.
  */
 const ensurePlatformThemeReleasesCoverEveryRole = (
   definition: ApplicationCompositionCatalogueDefinitionV2 | undefined,
@@ -213,11 +214,10 @@ const ensurePlatformThemeReleasesCoverEveryRole = (
   for (const release of definition.platformThemeReleases) {
     for (const role of roles) {
       const token = release.tokens[role.key];
-      if (token === undefined || token.kind !== role.kind) duplicate();
       if (
-        role.colorRole !== undefined &&
-        token.kind === "color_pair" &&
-        token.role !== role.colorRole
+        token === undefined ||
+        token.kind !== role.kind ||
+        (token.kind === "color_pair" && token.role !== role.colorRole)
       )
         duplicate();
     }
