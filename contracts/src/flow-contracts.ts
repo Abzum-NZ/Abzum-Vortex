@@ -27,9 +27,10 @@ import {
  * node-and-edge graph.
  *
  * This contract owns structure and the limits that can be decided from one flow. The task
- * registry (which task types exist, where they run, their typed properties), the value-type
- * catalogue, permanent-identity compilation and cross-definition validation are separate issues
- * and only read the shapes declared here. Value types currently reuse `workflowValueTypeSchema`
+ * registry (`flow-task-registry.ts`: which task types exist, where they run, their typed
+ * properties, and the publication placement check), the value-type catalogue, permanent-identity
+ * compilation and cross-definition validation are separate contracts that only read the shapes
+ * declared here. Value types currently reuse `workflowValueTypeSchema`
  * until the value-type catalogue replaces it.
  */
 export const flowContractVersion = "1.0.0" as const;
@@ -883,13 +884,13 @@ const flowTaskTreeSchema: z.ZodType<FlowTask> = z.lazy(() => {
 });
 export const flowTaskSchema: z.ZodType<FlowTask> = flowTaskTreeSchema;
 
-const isControlTask = (task: FlowTask): boolean =>
+export const isFlowControlTask = (task: FlowTask): boolean =>
   (flowControlTaskTypeKeys as readonly string[]).includes(task.type);
 
 /** The nested task lists a task owns, with the path segments that reach each. */
-const taskChildLists = (task: FlowTask): { path: (string | number)[]; tasks: FlowTask[] }[] => {
+export const flowTaskChildLists = (task: FlowTask): { path: (string | number)[]; tasks: FlowTask[] }[] => {
   const lists: { path: (string | number)[]; tasks: FlowTask[] }[] = [];
-  if (!isControlTask(task)) return lists;
+  if (!isFlowControlTask(task)) return lists;
   const control = task as Extract<FlowTask, { type: (typeof flowControlTaskTypeKeys)[number] }>;
   switch (control.type) {
     case "if":
@@ -921,7 +922,7 @@ const taskChildLists = (task: FlowTask): { path: (string | number)[]; tasks: Flo
 const taskFormulas = (task: FlowTask): FlowFormula[] => {
   const values: FlowValue[] = [];
   const formulas: FlowFormula[] = [];
-  if (isControlTask(task)) {
+  if (isFlowControlTask(task)) {
     const control = task as Extract<FlowTask, { type: (typeof flowControlTaskTypeKeys)[number] }>;
     if (control.type === "if") formulas.push(control.condition);
     else if (control.type === "switch") values.push(control.value);
@@ -1068,7 +1069,7 @@ const refineFlow = (flow: FlowShape, context: z.RefinementCtx) => {
         );
       if (!timeAllowed && taskFormulas(task).some(flowFormulaUsesNow))
         issue(taskPath, "The now operator is allowed only in interactive and background flows");
-      for (const child of taskChildLists(task)) visit(child.tasks, [...taskPath, ...child.path], depth + 1);
+      for (const child of flowTaskChildLists(task)) visit(child.tasks, [...taskPath, ...child.path], depth + 1);
     });
   };
   visit(flow.tasks, ["tasks"], 1);
@@ -1135,7 +1136,7 @@ const collectRunFlowTargets = (flow: FlowDefinition | FlowSource): FlowId[] => {
   const walk = (tasks: readonly FlowTask[]) => {
     for (const task of tasks) {
       if (task.type === "run_flow") targets.push((task as { flowId: FlowId }).flowId);
-      for (const child of taskChildLists(task)) walk(child.tasks);
+      for (const child of flowTaskChildLists(task)) walk(child.tasks);
     }
   };
   walk(flow.tasks);
