@@ -6,9 +6,11 @@ import {
   secretReferenceSchema,
 } from "./common";
 import {
+  activityIdSchema,
   actorIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
+  containedComponentIdSchema,
   eventIdSchema,
   eventOccurrenceIdSchema,
   fieldIdSchema,
@@ -23,6 +25,7 @@ import {
   platformIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
+  removalReceiptIdSchema,
   retentionPolicyIdSchema,
   revisionSchema,
   semanticVersionSchema,
@@ -190,6 +193,7 @@ export const liveInvalidationSchema = z
     correlationId: correlationIdSchema,
   })
   .strict();
+
 export const fileLifecycleStateSchema = z.enum([
   "pending",
   "uploaded",
@@ -880,12 +884,59 @@ export type FileUploadActivationRefusalReason = z.infer<
   typeof fileUploadActivationRefusalReasonSchema
 >;
 
+const canonicalActivitySubjectIdsSchema = z
+  .array(platformIdSchema)
+  .min(1)
+  .superRefine((identifiers, context) => {
+    const canonicalIdentifiers = identifiers.map((identifier) => identifier.toLowerCase());
+    for (let index = 1; index < canonicalIdentifiers.length; index += 1) {
+      if (canonicalIdentifiers[index - 1]! >= canonicalIdentifiers[index]!) {
+        context.addIssue({
+          code: "custom",
+          message: "Activity subject identifiers must be unique and in canonical order",
+        });
+        return;
+      }
+    }
+  });
+
+const canonicalActivityChangedFieldIdsSchema = z
+  .array(fieldIdSchema)
+  .superRefine((identifiers, context) => {
+    const canonicalIdentifiers = identifiers.map((identifier) => identifier.toLowerCase());
+    for (let index = 1; index < canonicalIdentifiers.length; index += 1) {
+      if (canonicalIdentifiers[index - 1]! >= canonicalIdentifiers[index]!) {
+        context.addIssue({
+          code: "custom",
+          message: "Changed field identifiers must be unique and in canonical order",
+        });
+        return;
+      }
+    }
+  });
+
 export const activityActorKindSchema = z.enum([
   "identity",
   "organization_account",
   "system",
   "public_session",
 ]);
+
+export const activityEntrySchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    activityId: activityIdSchema,
+    occurredAt: timestampSchema,
+    actorKind: activityActorKindSchema,
+    actorId: actorIdSchema,
+    action: builderKeySchema,
+    subjectIds: canonicalActivitySubjectIdsSchema,
+    changedFieldIds: canonicalActivityChangedFieldIdsSchema,
+    source: z.enum(["web", "workflow", "interface", "connection", "federation", "system"]),
+    correlationId: correlationIdSchema,
+    outcome: z.enum(["completed", "refused", "failed"]),
+  })
+  .strict();
 
 export const activitySourceSchema = z.enum([
   "web",
@@ -934,6 +985,76 @@ export const activityAggregateDimensionSchema = z.enum([
   "source",
   "outcome",
 ]);
+export const retentionPolicySchema = z
+  .object({
+    retentionPolicyId: retentionPolicyIdSchema,
+    organizationId: organizationIdSchema,
+    dataCategory: builderKeySchema,
+    savedConditionId: containedComponentIdSchema.optional(),
+    savedConditionRevision: revisionSchema.optional(),
+    savedConditionFingerprint: fingerprintSchema.optional(),
+    activeDays: z.number().int().min(0).max(36_500),
+    recoveryDays: z.number().int().min(0).max(3_650),
+    removalSchedule: z.string().min(1).max(200),
+    legalConstraintKeys: z.array(builderKeySchema),
+    state: z.enum(["draft", "active", "retired"]),
+    createdBy: organizationAccountIdSchema,
+    approvedBy: organizationAccountIdSchema,
+    version: revisionSchema,
+  })
+  .strict()
+  .refine(
+    (value) => {
+      const suppliedReferenceParts = [
+        value.savedConditionId,
+        value.savedConditionRevision,
+        value.savedConditionFingerprint,
+      ].filter((item) => item !== undefined).length;
+      return suppliedReferenceParts === 0 || suppliedReferenceParts === 3;
+    },
+    {
+      path: ["savedConditionId"],
+      message: "A saved condition identifier, revision and fingerprint are supplied together",
+    },
+  );
+export const permanentRemovalReceiptSchema = z
+  .object({
+    removalReceiptId: removalReceiptIdSchema,
+    organizationId: organizationIdSchema,
+    protectedFingerprint: fingerprintSchema,
+    category: builderKeySchema,
+    selectionFingerprint: fingerprintSchema,
+    completedAt: timestampSchema,
+    retentionPolicyId: retentionPolicyIdSchema,
+    jobId: platformIdSchema,
+    outcome: z.enum(["removed", "partially_removed", "lawful_exception"]),
+    lawfulExceptionCode: builderKeySchema.optional(),
+  })
+  .strict();
+export const protectedRemovalCommandSchema = z
+  .object({
+    commandId: platformIdSchema,
+    tenantId: tenantIdSchema,
+    organizationIds: z.array(organizationIdSchema).min(1),
+    dataCategories: z.array(builderKeySchema).min(1),
+    savedConditionId: containedComponentIdSchema.optional(),
+    savedConditionRevision: revisionSchema.optional(),
+    subjectFingerprint: fingerprintSchema.optional(),
+    requestedBy: platformIdSchema,
+    authorizedBy: platformIdSchema,
+    issuedAt: timestampSchema,
+    correlationId: correlationIdSchema,
+  })
+  .strict()
+  .refine(
+    (value) =>
+      (value.savedConditionId === undefined) === (value.savedConditionRevision === undefined),
+    {
+      path: ["savedConditionRevision"],
+      message: "A saved condition identifier and revision are supplied together",
+    },
+  );
+
 export const entitlementCheckRequestSchema = z
   .object({
     tenantId: tenantIdSchema,
@@ -1110,6 +1231,23 @@ export const safeErrorResponseSchema = z.discriminatedUnion("code", [
   safeErrorVariant("temporarily_unavailable"),
   safeErrorVariant("operation_failed"),
 ]);
+export const performanceMeasurementSchema = z
+  .object({
+    operation: builderKeySchema,
+    dataset: builderKeySchema,
+    cacheState: z.enum(["cold", "warm", "bypass"]),
+    region: z.string().min(1).max(100),
+    device: z.string().min(1).max(100),
+    network: z.string().min(1).max(100),
+    percentile: z.enum(["p50", "p75", "p95", "p99"]),
+    clientMilliseconds: z.number().nonnegative(),
+    serverMilliseconds: z.number().nonnegative(),
+    databaseMilliseconds: z.number().nonnegative(),
+    codeRevision: z.string().min(7).max(64),
+    comparisonBaseline: z.string().min(1).max(200),
+  })
+  .strict();
+
 export type EventOccurrenceEnvelopeV2 = z.infer<typeof eventOccurrenceEnvelopeV2Schema>;
 export type LiveInvalidation = z.infer<typeof liveInvalidationSchema>;
 export type FileLifecycleState = z.infer<typeof fileLifecycleStateSchema>;
@@ -1120,11 +1258,15 @@ export type FileStorageOperationClaims = z.infer<typeof fileStorageOperationClai
 export type FileRecord = z.infer<typeof fileRecordSchema>;
 export type UploadGrant = z.infer<typeof uploadGrantSchema>;
 export type DownloadGrant = z.infer<typeof downloadGrantSchema>;
+export type ActivityEntry = z.infer<typeof activityEntrySchema>;
 export type ActivitySource = z.infer<typeof activitySourceSchema>;
 export type ActivityOutcome = z.infer<typeof activityOutcomeSchema>;
 export type ActivityProjection = z.infer<typeof activityProjectionSchema>;
 export type ActivityHistoryFilter = z.infer<typeof activityHistoryFilterSchema>;
 export type ActivityAggregateDimension = z.infer<typeof activityAggregateDimensionSchema>;
+export type RetentionPolicy = z.infer<typeof retentionPolicySchema>;
+export type PermanentRemovalReceipt = z.infer<typeof permanentRemovalReceiptSchema>;
+export type ProtectedRemovalCommand = z.infer<typeof protectedRemovalCommandSchema>;
 export type EntitlementCheckRequest = z.infer<typeof entitlementCheckRequestSchema>;
 export type MeteringEvent = z.infer<typeof meteringEventSchema>;
 export type MeteringEventSource = z.infer<typeof meteringEventSourceSchema>;
@@ -1133,3 +1275,4 @@ export type MeteringCorrectionDirection = z.infer<typeof meteringCorrectionDirec
 export type MeteringEventDimensions = z.infer<typeof meteringEventDimensionsSchema>;
 export type RecordMeteringEventCommand = z.infer<typeof recordMeteringEventCommandSchema>;
 export type SafeErrorResponse = z.infer<typeof safeErrorResponseSchema>;
+export type PerformanceMeasurement = z.infer<typeof performanceMeasurementSchema>;
