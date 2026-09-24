@@ -1,0 +1,104 @@
+# The application Kestra instance: customer durable flows only.
+#
+# This stack is deliberately separate from the operations instance in
+# ../docker-compose.yml. Kestra's open-source edition lets any namespace read any
+# instance secret, so customer flows must never share an instance with Vortex's
+# operational delivery and database secrets (architecture decisions of
+# 25 September 2026, Decision 1; issue #1152).
+#
+# Its environment holds exactly one flow secret, the callback signing key,
+# referenced by name and never committed here. It holds no delivery, database or
+# provider secret. It runs no --flow-path: customer flows are registered through
+# the Workflow adapter at install time, so no operational flow or script is baked
+# into this image.
+#
+# Like the operations stack, both images are pinned to exact tags and
+# multi-platform digests, the Docker socket is not mounted, and no password is
+# written down. Kestra's own PostgreSQL password and its interface basic-auth
+# password are engine bootstrap values supplied by the deployment environment;
+# they are never available to a customer flow as a secret. Every other value
+# below comes from the environment.
+
+volumes:
+  kestra-application-postgres-data:
+    driver: local
+  kestra-application-storage:
+    driver: local
+
+services:
+  postgres:
+    image: postgres:18.4-bookworm@sha256:882236b897e39051d2368c5ccc6cda944904723506b2dfc97f2a8f5bc9afa382
+    restart: unless-stopped
+    volumes:
+      - kestra-application-postgres-data:/var/lib/postgresql
+    environment:
+      POSTGRES_DB: kestra
+      POSTGRES_USER: kestra
+      POSTGRES_PASSWORD: ${KESTRA_APPLICATION_DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  kestra:
+    # The same reviewed upstream image the operations instance derives from,
+    # without the operational Supabase and Doppler tooling that instance adds.
+    image: kestra/kestra:v1.0.57@sha256:bc6704c896afbd846602cd5655c3569fe5953a8c91ccc84d64012545fc204101
+    restart: unless-stopped
+    stop_grace_period: 6m
+    user: "root"
+    command: server standalone
+    volumes:
+      - kestra-application-storage:/app/storage
+      - /tmp/kestra-application-wd:/tmp/kestra-wd
+    environment:
+      SERVICE_FQDN_KESTRA_8080: /
+      # The only flow secret on this instance. The callback signing key signs the
+      # protected-operation envelope Vortex verifies, and authorises nothing
+      # else. Kestra exposes a flow secret only when the instance variable begins
+      # with SECRET_ and its value is base64-encoded; base64 is not encryption,
+      # so the deployment host remains the protected boundary.
+      SECRET_VORTEX_WORKFLOW_CALLBACK_KEY: ${VORTEX_WORKFLOW_CALLBACK_KEY_BASE64}
+      KESTRA_CONFIGURATION: |
+        datasources:
+          postgres:
+            url: jdbc:postgresql://postgres:5432/kestra
+            driverClassName: org.postgresql.Driver
+            username: kestra
+            password: ${KESTRA_APPLICATION_DB_PASSWORD}
+        kestra:
+          anonymous-usage-report:
+            enabled: false
+          ui-anonymous-usage-report:
+            enabled: false
+          tutorialFlows:
+            enabled: false
+          server:
+            basic-auth:
+              enabled: true
+              username: ${KESTRA_APPLICATION_BASIC_AUTH_USERNAME}
+              password: ${KESTRA_APPLICATION_BASIC_AUTH_PASSWORD}
+          repository:
+            type: postgres
+          storage:
+            type: local
+            local:
+              base-path: "/app/storage"
+          queue:
+            type: postgres
+          tasks:
+            tmp-dir:
+              path: /tmp/kestra-wd/tmp
+          url: ${KESTRA_APPLICATION_PUBLIC_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 3g

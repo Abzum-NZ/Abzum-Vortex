@@ -70,6 +70,19 @@ export {
   type KestraProtectedOperationBinding,
 } from "./kestra-compiler";
 
+export {
+  parseApplicationKestraInstanceTarget,
+  applicationKestraBaseUrlEnvironmentKey,
+  applicationKestraCallbackKeySecretName,
+  kestraInstanceKinds,
+  kestraInstanceTargetErrorCodes,
+  workflowServiceKestraInstanceKind,
+  KestraInstanceTargetError,
+  type ApplicationKestraInstanceTarget,
+  type KestraInstanceKind,
+  type KestraInstanceTargetErrorCode,
+} from "./kestra-instance";
+
 export const WorkflowService = Object.freeze({
   key: "workflow",
   boundary: "@vortex/workflow",

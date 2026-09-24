@@ -141,6 +141,30 @@ environment values, or invoke an operational script. Application workflows are c
 published generic node catalogue and call protected Vortex operations; adding any raw command node
 would be a separate security decision and is refused by the current specification.
 
+## The application instance holds only the callback key
+
+Kestra open source lets any namespace read any instance secret, so customer flows must never share an
+instance with Vortex's operational secrets. Two separate instances exist:
+
+| Instance | Directory | Holds |
+|---|---|---|
+| Operations (this directory) | `workflows/kestra/` | Vortex's own reviewed delivery flows and their operational bootstrap secrets |
+| Application | `workflows/kestra/application/` | Customer durable flows and exactly one flow secret, the callback signing key |
+
+The application instance's environment holds exactly one flow secret,
+`VORTEX_WORKFLOW_CALLBACK_KEY`. It holds no delivery, database or provider secret: the delivery
+webhook keys, the Testing and Production Doppler tokens and the event-dispatch credential above
+exist only in this operations instance. Its own PostgreSQL password and interface basic-auth
+password are engine bootstrap values supplied from the deployment environment, and they are never
+available to a customer flow as a secret. The application instance bakes no operational flow or
+script and starts with no `--flow-path`.
+
+The Workflow service's registration and start adapters resolve their provider target only through
+`runtime/workflow/src/kestra-instance.ts`, which knows only the application instance and exposes no
+operations address, credential or secret. An operational secret must never be added to the
+application instance's environment, and no Workflow adapter may be pointed at this operations
+instance.
+
 ## Database delivery
 
 `testing_database_delivery` accepts the GitHub push webhook for `refs/heads/testing`, fetches the
