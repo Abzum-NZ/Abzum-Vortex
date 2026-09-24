@@ -226,6 +226,8 @@ const sourceWorkflowValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("current_actor") }).strict(),
   z.object({ source: z.literal("current_time") }).strict(),
 ]);
+const isSourceRecordReferenceType = (type: string) =>
+  type === "record_reference" || type === "record_reference_list";
 const sourceWorkflowDeclaredOutputSchema = z
   .object({
     key: builderKeySchema,
@@ -234,8 +236,7 @@ const sourceWorkflowDeclaredOutputSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if ((value.type === "record_reference" || value.type === "record_reference_list") !==
-      (value.record_types !== undefined))
+    if (isSourceRecordReferenceType(value.type) !== (value.record_types !== undefined))
       context.addIssue({
         code: "custom",
         path: ["record_types"],
@@ -389,8 +390,7 @@ const sourceWorkflowTriggerInputSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if ((value.type === "record_reference" || value.type === "record_reference_list") !==
-      (value.record_types !== undefined))
+    if (isSourceRecordReferenceType(value.type) !== (value.record_types !== undefined))
       context.addIssue({
         code: "custom",
         path: ["record_types"],
