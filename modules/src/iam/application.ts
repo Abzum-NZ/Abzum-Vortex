@@ -576,7 +576,6 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
       connection_bindings: [],
       interfaces: [],
       actions: [],
-      rules: [],
       events: [
         {
           id: administrationEventId,
