@@ -18,6 +18,7 @@ export {
 } from "./compiler";
 export * from "./application-v2-composition";
 export * from "./application-v2-resolution";
+export * from "./application-preview";
 export * from "./validation";
 export * from "./definition-store";
 export * from "./source-identities";
