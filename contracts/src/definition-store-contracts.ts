@@ -203,36 +203,40 @@ const dependencyManifestSchema = z
   .array(exactDefinitionDependencySchema)
   .max(10_000)
   .superRefine((entries, context) => {
+    // IDs compare lower-cased, matching the database's lowercase dependency references,
+    // so casing differences cannot hide a duplicate subject or break canonical order.
     const subjects = entries.map((entry) =>
-      entry.kind === "platform_theme"
-        ? `${entry.kind}:${entry.catalogueThemeId}`
-        : entry.kind === "platform_block"
-          ? `${entry.kind}:${entry.blockId}`
-          : entry.kind === "platform_flow"
-            ? `${entry.kind}:${entry.flowId}`
-            : entry.kind === "application_flow"
-              ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}`
-              : entry.kind === "application_flow_node"
-                ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}:${entry.nodeId}`
-                : entry.kind === "application_query"
-                  ? `${entry.kind}:${entry.applicationRootId}:${entry.queryId}`
-                  : entry.kind === "module_query"
-                    ? `${entry.kind}:${entry.moduleRootId}:${entry.queryId}`
-                    : entry.kind === "application_form"
-                      ? `${entry.kind}:${entry.applicationRootId}:${entry.formId}`
-              : entry.kind === "application_workflow"
-                ? `${entry.kind}:${entry.applicationRootId}:${entry.workflowId}`
-                : entry.kind === "application_action"
-                  ? `${entry.kind}:${entry.applicationRootId}:${entry.actionId}`
-                        : entry.kind === "protected_operation"
-                          ? `${entry.kind}:${entry.operation.owner.kind}:${
-                              entry.operation.owner.kind === "application"
-                                ? entry.operation.owner.applicationRootId
-                                : entry.operation.owner.kind === "module"
-                                  ? entry.operation.owner.moduleRootId
-                                  : entry.operation.owner.serviceId
-                            }:${entry.operation.operationId}`
-          : `${entry.kind}:${entry.key}`,
+      (
+        entry.kind === "platform_theme"
+          ? `${entry.kind}:${entry.catalogueThemeId}`
+          : entry.kind === "platform_block"
+            ? `${entry.kind}:${entry.blockId}`
+            : entry.kind === "platform_flow"
+              ? `${entry.kind}:${entry.flowId}`
+              : entry.kind === "application_flow"
+                ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}`
+                : entry.kind === "application_flow_node"
+                  ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}:${entry.nodeId}`
+                  : entry.kind === "application_query"
+                    ? `${entry.kind}:${entry.applicationRootId}:${entry.queryId}`
+                    : entry.kind === "module_query"
+                      ? `${entry.kind}:${entry.moduleRootId}:${entry.queryId}`
+                      : entry.kind === "application_form"
+                        ? `${entry.kind}:${entry.applicationRootId}:${entry.formId}`
+                : entry.kind === "application_workflow"
+                  ? `${entry.kind}:${entry.applicationRootId}:${entry.workflowId}`
+                  : entry.kind === "application_action"
+                    ? `${entry.kind}:${entry.applicationRootId}:${entry.actionId}`
+                          : entry.kind === "protected_operation"
+                            ? `${entry.kind}:${entry.operation.owner.kind}:${
+                                entry.operation.owner.kind === "application"
+                                  ? entry.operation.owner.applicationRootId
+                                  : entry.operation.owner.kind === "module"
+                                    ? entry.operation.owner.moduleRootId
+                                    : entry.operation.owner.serviceId
+                              }:${entry.operation.operationId}`
+            : `${entry.kind}:${entry.key}`
+      ).toLowerCase(),
     );
     if (new Set(subjects).size !== subjects.length)
       context.addIssue({
