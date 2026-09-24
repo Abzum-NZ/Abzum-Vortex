@@ -359,8 +359,7 @@ begin
     v_operating_role_revision, v_setup_revision, v_access_version,
     v_correlation_id;
 exception
-  when invalid_text_representation or invalid_parameter_value
-    or numeric_value_out_of_range then
+  when invalid_text_representation or invalid_parameter_value then
     raise exception using errcode = '22023',
       message = 'Initial operating-role grant manifest is invalid';
 end
