@@ -1,13 +1,20 @@
 import {
   applicationSourceDocumentV2Schema,
+  BUTTON_BLOCK_RELEASE,
+  CHOICE_INPUT_BLOCK_RELEASE,
   DEFAULT_PLATFORM_THEME_RELEASE_V2,
   FORM_CONTAINER_BLOCK_RELEASE,
+  NUMBER_INPUT_BLOCK_RELEASE,
+  PLATFORM_SERVICE_OPERATIONS,
   TABLE_BLOCK_RELEASE,
   TABS_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
+  platformServiceOperationBindingSource,
+  platformServiceOperationFlowSource,
   type ApplicationSourceDocumentV2,
   type PlatformBlockReleaseV2,
+  type PlatformServiceOperationCatalogueEntry,
   type ProtectedReadModelKey,
   type SourceBlockPropertyValueV2Contract,
 } from "@vortex/contracts";
@@ -47,10 +54,103 @@ const textInput = (name: string, label: string, multiline: boolean) =>
     multiline: { kind: "boolean", value: multiline },
   });
 
+/**
+ * The protected organisation settings operations this application offers: each is one registered
+ * platform-service operation of an existing Access settings method. The owning service derives the
+ * organisation and authority from the request context, so no form can name another organisation.
+ */
+const settingsOperations: readonly PlatformServiceOperationCatalogueEntry[] = [
+  PLATFORM_SERVICE_OPERATIONS.update_runtime_settings,
+  PLATFORM_SERVICE_OPERATIONS.set_default_application,
+];
+const settingsEventId = "event_organisation_settings_action";
+
+/** Closed choices, matching the settings contract's own closed vocabularies exactly. */
+const choiceOptions: Readonly<Record<string, readonly (readonly [string, string])[]>> = {
+  date_format: [
+    ["short", "Short"],
+    ["medium", "Medium"],
+    ["long", "Long"],
+    ["full", "Full"],
+  ],
+  number_format: [
+    ["auto", "Automatic grouping"],
+    ["always", "Always group"],
+    ["min2", "Group from two digits"],
+    ["never", "Never group"],
+  ],
+};
+
+const humanise = (key: string): string => {
+  const words = key.replaceAll("_", " ");
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+};
+
+const controlAlias = (operation: PlatformServiceOperationCatalogueEntry) =>
+  `button_${operation.key}`;
+const formAlias = (operation: PlatformServiceOperationCatalogueEntry) => `form_${operation.key}`;
+
+/**
+ * One form for one operation: an input for each typed flow input, named by the input's key, and the
+ * button whose `action` event starts the bound flow.
+ */
+const settingsForm = (operation: PlatformServiceOperationCatalogueEntry) => {
+  const children: Record<string, unknown> = {};
+  const order: string[] = [];
+  for (const [key, declaration] of Object.entries(operation.descriptor.inputs)) {
+    const alias = `input_${operation.key}_${key}`;
+    const name = { kind: "text" as const, value: key };
+    const label = { kind: "text" as const, value: humanise(key) };
+    const required = { kind: "boolean" as const, value: declaration.required };
+    const choices = choiceOptions[key];
+    children[alias] =
+      declaration.type === "whole_number"
+        ? placement(NUMBER_INPUT_BLOCK_RELEASE, {
+            name,
+            label,
+            required,
+            integer: { kind: "boolean", value: true },
+            min_value: { kind: "number", value: 1 },
+          })
+        : declaration.type === "choice" && choices !== undefined
+          ? placement(CHOICE_INPUT_BLOCK_RELEASE, {
+              name,
+              label,
+              required,
+              options: {
+                kind: "list",
+                items: choices.map(([value, optionLabel]) => ({
+                  kind: "group" as const,
+                  properties: {
+                    key: { kind: "text" as const, value },
+                    label: { kind: "text" as const, value: optionLabel },
+                  },
+                })),
+              },
+            })
+          : placement(TEXT_INPUT_BLOCK_RELEASE, { name, label, required });
+    order.push(alias);
+  }
+  children[controlAlias(operation)] = placement(BUTTON_BLOCK_RELEASE, {
+    label: { kind: "text", value: operation.name },
+    action_kind: { kind: "choice", value: "action" },
+    variant: { kind: "choice", value: "primary" },
+  });
+  order.push(controlAlias(operation));
+  return placement(
+    FORM_CONTAINER_BLOCK_RELEASE,
+    { title: { kind: "text", value: operation.name } },
+    { content: { placements: children, order: { desktop: order } } },
+  );
+};
+
 const usedBlockReleases = [
+  BUTTON_BLOCK_RELEASE,
+  CHOICE_INPUT_BLOCK_RELEASE,
+  FORM_CONTAINER_BLOCK_RELEASE,
+  NUMBER_INPUT_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE,
-  FORM_CONTAINER_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
   TABS_BLOCK_RELEASE,
 ];
@@ -317,7 +417,15 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
       interfaces: [],
       actions: [],
       rules: [],
-      events: [],
+      events: [
+        {
+          id: settingsEventId,
+          key: "vortex.app.organisation_administration.settings_action",
+          record_type: "vortex.organisation_administration:organisation_notice",
+          carries: [],
+          personal_or_sensitive_values_allowed: false,
+        },
+      ],
       public_addresses: [],
       platform_block_dependencies: platformBlockDependencies,
       shells: [shell],
@@ -399,13 +507,26 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
             shell_kind: "application",
             shell: "shell_organisation_administration",
             content: {
-              slot_primary: slot(
-                "settings_text",
-                textBlock(
-                  "Runtime settings",
-                  "The organisation's runtime localisation settings are not yet available from a protected read model; changing them invokes the protected settings operation. These settings are never copied into ordinary records.",
-                ),
-              ),
+              slot_primary: {
+                placements: {
+                  settings_text: textBlock(
+                    "Runtime settings",
+                    "The organisation's current runtime localisation settings are not yet available from a protected read model. Change them or the organisation default application with the forms below: each runs under your own authority in protected Access, is checked against the settings revision you supply, and is refused if you lack the authority. These settings are never copied into ordinary records.",
+                  ),
+                  ...Object.fromEntries(
+                    settingsOperations.map((operation) => [
+                      formAlias(operation),
+                      settingsForm(operation),
+                    ]),
+                  ),
+                },
+                order: {
+                  desktop: [
+                    "settings_text",
+                    ...settingsOperations.map((operation) => formAlias(operation)),
+                  ],
+                },
+              },
             },
           },
         },
@@ -554,7 +675,13 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
         },
       ],
       theme,
-      flows: [],
-      flow_bindings: [],
+      flows: settingsOperations.map(platformServiceOperationFlowSource),
+      flow_bindings: settingsOperations.map((operation) =>
+        platformServiceOperationBindingSource(operation, {
+          control: controlAlias(operation),
+          form: formAlias(operation),
+          eventId: settingsEventId,
+        }),
+      ),
     },
   });
