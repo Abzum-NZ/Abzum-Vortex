@@ -5,7 +5,7 @@
   "kind": "module",
   "body": {
     "name": "Operations Incidents",
-    "description": "Operational incident records for the Operations application. Content-free operational evidence only: timeline, scope, containment, recovery, evidence, communication, cause and follow-up. No customer content.",
+    "description": "Operational incident records for the Operations application: timeline, scope, containment, recovery, evidence, communication, cause, follow-up and verification, plus the alert signal an operator last attached. Operational evidence only; no customer content or personal data.",
     "dependencies": [],
     "record_types": [
       {
@@ -317,6 +317,26 @@
             }
           },
           {
+            "id": "fld_incident_verification",
+            "key": "verification",
+            "label": "Verification",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "formatted_text",
+            "settings": {
+              "allowed_blocks": [
+                "paragraph",
+                "heading",
+                "list",
+                "link"
+              ]
+            }
+          },
+          {
             "id": "fld_incident_state",
             "key": "state",
             "label": "State",
@@ -359,9 +379,45 @@
             "default": "open"
           },
           {
-            "id": "fld_incident_opened_at",
-            "key": "opened_at",
-            "label": "Opened at",
+            "id": "fld_incident_attached_signal_key",
+            "key": "attached_signal_key",
+            "label": "Last attached signal",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 200
+            }
+          },
+          {
+            "id": "fld_incident_attached_signal_evidence",
+            "key": "attached_signal_evidence",
+            "label": "Last attached signal evidence",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "formatted_text",
+            "settings": {
+              "allowed_blocks": [
+                "paragraph",
+                "heading",
+                "list",
+                "link"
+              ]
+            }
+          },
+          {
+            "id": "fld_incident_attached_at",
+            "key": "attached_at",
+            "label": "Last signal attached at",
             "required": false,
             "unique": false,
             "filterable": true,
@@ -410,8 +466,11 @@
             "communication",
             "cause",
             "follow_up",
+            "verification",
             "state",
-            "opened_at"
+            "attached_signal_key",
+            "attached_signal_evidence",
+            "attached_at"
           ],
           "changeable_fields": [
             "code",
@@ -427,7 +486,8 @@
             "evidence",
             "communication",
             "cause",
-            "follow_up"
+            "follow_up",
+            "verification"
           ]
         }
       },
@@ -463,8 +523,11 @@
             "communication",
             "cause",
             "follow_up",
+            "verification",
             "state",
-            "opened_at"
+            "attached_signal_key",
+            "attached_signal_evidence",
+            "attached_at"
           ],
           "changeable_fields": []
         }
@@ -501,8 +564,11 @@
             "communication",
             "cause",
             "follow_up",
+            "verification",
             "state",
-            "opened_at"
+            "attached_signal_key",
+            "attached_signal_evidence",
+            "attached_at"
           ],
           "changeable_fields": [
             "code",
@@ -518,7 +584,8 @@
             "evidence",
             "communication",
             "cause",
-            "follow_up"
+            "follow_up",
+            "verification"
           ]
         }
       },
@@ -594,8 +661,11 @@
             "communication",
             "cause",
             "follow_up",
+            "verification",
             "state",
-            "opened_at"
+            "attached_signal_key",
+            "attached_signal_evidence",
+            "attached_at"
           ],
           "changeable_fields": []
         }
@@ -604,7 +674,7 @@
         "id": "perm_incident_attach",
         "key": "vortex.operations.incidents.incident.attach",
         "label": "Attach a signal to an incident",
-        "description": "Allows the named attach operation to record a signal's deduplication key and evidence on an incident.",
+        "description": "Allows the named attach operation to record an alert signal deduplication key and its evidence on an open incident.",
         "record_type": "incident",
         "action_kind": "named",
         "named_action": "attach",
@@ -618,13 +688,15 @@
         },
         "field_policy": {
           "readable_fields": [
-            "deduplication_key",
-            "evidence",
-            "state"
+            "state",
+            "attached_signal_key",
+            "attached_signal_evidence",
+            "attached_at"
           ],
           "changeable_fields": [
-            "deduplication_key",
-            "evidence"
+            "attached_signal_key",
+            "attached_signal_evidence",
+            "attached_at"
           ]
         }
       }
@@ -651,13 +723,29 @@
             "key": "evidence",
             "label": "Evidence",
             "required": true,
-            "type": "formatted_text"
+            "type": "formatted_text",
+            "validation": {
+              "allowed_blocks": [
+                "paragraph",
+                "heading",
+                "list",
+                "link"
+              ]
+            }
           }
         ],
+        "precondition": {
+          "field": "state",
+          "operator": "not_in",
+          "value": [
+            "resolved",
+            "closed"
+          ]
+        },
         "effects": [
           {
             "kind": "set_field",
-            "field": "deduplication_key",
+            "field": "attached_signal_key",
             "value": {
               "source": "input",
               "input": "deduplication_key"
@@ -665,10 +753,17 @@
           },
           {
             "kind": "set_field",
-            "field": "evidence",
+            "field": "attached_signal_evidence",
             "value": {
               "source": "input",
               "input": "evidence"
+            }
+          },
+          {
+            "kind": "set_field",
+            "field": "attached_at",
+            "value": {
+              "source": "current_time"
             }
           },
           {
@@ -696,7 +791,7 @@
         "record_type": "incident",
         "carries": [
           "incident_number",
-          "deduplication_key"
+          "attached_signal_key"
         ],
         "personal_or_sensitive_values_allowed": false
       }
