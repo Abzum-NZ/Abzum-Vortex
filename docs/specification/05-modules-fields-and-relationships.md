@@ -210,7 +210,7 @@ explicit product operations.
 
 ## Calculations and totals
 
-Deadline-based stored calculations refresh automatically at their next transition, not only at save time. [Scheduled calculations](appendices/record-ownership-and-lifecycle.md#scheduled-time-based-calculations) defines rescheduling, catch-up and consistent read/filter/sort freshness through the same calculation engine.
+A deadline-passed calculation is evaluated when it is read, not stored and refreshed later, and it is never a relationship total's dependency. [Scheduled time-based calculations](appendices/record-ownership-and-lifecycle.md#scheduled-time-based-calculations) defines that read-time evaluation and how overdue escalations run as scheduled workflows.
 
 The [calculation-engine plan](../build-plan/issue-48-calculation-engine.md) defines
 the first executable arithmetic and missing-value meanings. Decimal/money
@@ -235,7 +235,7 @@ and MCP. Computing from authoritative inputs and omitting disallowed output is
 different from computing from a redacted subset or refusing a permitted save.
 
 - A calculation is deterministic and cannot perform network calls, change records, or read data the current operation is not allowed to read.
-- The first release uses only six closed calculation forms: join named text fields, apply one of four numeric operations to named field/literal operands, subtract a named percentage field from a named amount field, evaluate a typed condition, offset a named date/date-time field by a named/literal amount, or determine whether a named deadline has passed while excluding explicitly listed terminal status values. The declared result type must match that form. Arbitrary objects, scripts, and user-defined expressions are refused.
+- The first release uses only six closed calculation forms: join named text fields, apply one of four numeric operations to named field/literal operands, subtract a named percentage field from a named amount field, evaluate a typed condition, offset a named date/date-time field by a named/literal amount, or determine whether a named deadline has passed while excluding explicitly listed terminal status values. The deadline-passed form is evaluated at read time and is never stored, so it cannot be a total's aggregate source. The declared result type must match that form. Arbitrary objects, scripts, and user-defined expressions are refused.
 - Calculation dependencies are known at publication and cycles are refused.
 - A total names the relationship with its exact `module:record_type.relationship` owner, plus an operation, explicit result type, optional aggregate-source field, and optional aggregate-source filter expressed through the same closed typed condition tree used by rules. The relationship must point from its source records to the record that owns the total. This makes reverse totals unambiguous, resolves fields and filters in the related source record rather than the total-owning record, and refuses unrelated outgoing relationships and arbitrary filter objects.
 - Supported operations are count, sum, minimum, maximum, and average where the source type permits them. Count produces a whole number; sum, minimum, and maximum preserve the compatible source-field type; average produces a decimal number, or money when averaging money. Publication checks the declared result against the referenced field instead of treating every calculated or total value as a number.

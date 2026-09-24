@@ -155,34 +155,29 @@ flowchart TD
 
 ## Scheduled time-based calculations
 
-A stored calculation that changes at a deadline refreshes automatically without
-a person editing its record. The same calculation engine supplies its next due
-time. A committed save updates that due time alongside the value; changing or
-clearing the deadline cancels/replaces the pending work. This covers named
-actions, the records they create and every changed parent total. Activating an
-installation reselects the due work of its records. Detaching it removes the
-Application's due work. Changing the organisation time zone reselects the
-organisation's pending work. Each change takes effect in its own transaction,
-and the recalculation operation below re-derives every reselected transition.
-The shared scheduler
-processes due work in bounded batches through a protected recalculation operation,
-not a separate formula engine or one deployed Kestra flow per record.
+A calculation that determines whether a named deadline has passed is evaluated
+when the value is read, not stored and refreshed by a background worker. The read
+uses the record's own stored inputs—the deadline and the explicitly listed
+terminal status values—together with the statement time, so an overdue record is
+correct at every read without a person editing it and without a recalculation
+running first. Detail views, list filters, sorting, grouping/aggregation, exports
+and MCP evaluate the same expression the same way; one statement uses one read
+time so its rows are internally consistent, and no read is refused for pending
+freshness.
 
-Recalculation rechecks the current definition, record revision and authority,
-reuses the calculation engine's transitive dependency closure (including parent
-relationship totals), updates affected values and revision/Activity/events atomically,
-and schedules the next transition if one exists. Retries do not repeat successful
-effects; deleted records and stale deadlines do not reactivate obsolete work.
-Restart catch-up selects overdue work. No provider scheduler guarantees execution
-at an exact instant: before a query filters, sorts or aggregates a due calculation,
-the Query/Record boundary refreshes the relevant due set through this same operation,
-including due child inputs of a parent total with no own deadline, or returns an
-explicit temporary-unavailable result. It must not silently use stale
-values or fix only the already-selected page of rows. This freshness rule also
-applies to detail views, exports and MCP.
+Relationship totals never depend on a deadline-passed value. A total aggregates
+stored related inputs, so a deadline-passed calculation cannot be a total's
+aggregate source or a dependency of one, and publication refuses that dependency.
+Ordinary non-time-based calculations and totals remain save-driven.
 
-Publication accepts only supported time expressions with a determinable next
-transition; it does not promise continuously changing arbitrary expressions through
-an unbounded polling loop. Ordinary non-time-based calculations remain save-driven.
-Background work uses existing Event/worker scheduling and later durable workflow
-integration where appropriate; it does not create a second scheduling platform.
+An overdue escalation is a scheduled durable workflow, not a stored value. A
+deadline-driven escalation event or pipeline time target starts its published
+[Kestra flow](../09-workflows-and-pipelines.md) through the ordinary protected
+workflow-start path; Kestra owns the schedule and is authoritative for whether
+the run occurred. Escalation does not introduce a separate Vortex recalculation
+engine, a stored deadline-passed value, a background worker or one deployed flow
+per record. Installation registers and verifies the application's exact
+schedules, an explicit upgrade or rollback activates the matching revision, and
+detaching or uninstalling deactivates them without erasing completed runs.
+Duplicate protection follows the published trigger and installation revision, so
+a retry converges on the same escalation rather than starting another.
