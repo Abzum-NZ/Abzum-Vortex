@@ -8,6 +8,7 @@ import {
   TEXT_INPUT_BLOCK_RELEASE,
   type ApplicationSourceDocumentV2,
   type PlatformBlockReleaseV2,
+  type ProtectedReadModelKey,
   type SourceBlockPropertyValueV2Contract,
 } from "@vortex/contracts";
 
@@ -113,12 +114,22 @@ const textBlock = (title: string, text: string) =>
   });
 
 /**
+ * A protected read-model placement. The closed placement binding names one declared platform read
+ * model and reads it live under the viewer's current authority. It never carries a query, so live
+ * protected data is never copied into an application record.
+ */
+const readModelBlock = (key: ProtectedReadModelKey, title: string) => ({
+  ...placement(TABLE_BLOCK_RELEASE, { title: { kind: "text", value: title } }),
+  read_model: key,
+});
+
+/**
  * The Organisation Administration application definition. Every visible region is
  * definition-led. Ordinary notices and privacy request cases come from the bound
- * module; the organisation-account, invitation and runtime-settings regions are
- * intentionally left unbound until the protected Identity and Access read-model
- * sources are published (#908) and bound (#909). No region offers a parallel
- * access-grant control: role grants run in the IAM application.
+ * module; the organisation-account, roles and groups regions read live protected
+ * read models. Invitation and runtime-settings regions stay honest "not yet
+ * available" text until a protected read model covers them. No region offers a
+ * parallel access-grant control: role grants run in the IAM application.
  */
 export const organisationAdministrationApplication: ApplicationSourceDocumentV2 =
   applicationSourceDocumentV2Schema.parse({
@@ -326,7 +337,7 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
                 "overview_text",
                 textBlock(
                   "Organisation overview",
-                  "Review organisation accounts, invitations, runtime settings, notices and privacy request cases. Account, invitation and settings displays come from protected Identity and Access read models and stay unbound until their protected sources are published and bound.",
+                  "Review organisation accounts, invitations, runtime settings, notices and privacy request cases. Account, role and group displays are read live from protected Identity and Access read models; invitation and runtime-settings displays are not yet available.",
                 ),
               ),
             },
@@ -343,13 +354,16 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
             shell_kind: "application",
             shell: "shell_organisation_administration",
             content: {
-              slot_primary: slot(
-                "accounts_text",
-                textBlock(
-                  "Organisation accounts",
-                  "Organisation accounts appear here from the protected Identity account administration projections once they are bound; no account directory is copied into this application. Suspending, reactivating or closing an account runs through its protected operation, and role grants run in the IAM application, never here.",
-                ),
-              ),
+              slot_primary: {
+                placements: {
+                  accounts_text: textBlock(
+                    "Organisation accounts",
+                    "Organisation accounts are read live from protected Identity and Access data; no account directory is copied into this application. Role grants run in the IAM application, never here.",
+                  ),
+                  accounts_region: readModelBlock("organization_accounts", "Organisation accounts"),
+                },
+                order: { desktop: ["accounts_text", "accounts_region"] },
+              },
             },
           },
         },
@@ -368,7 +382,7 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
                 "invitations_text",
                 textBlock(
                   "Invitations",
-                  "Pending and past invitations appear here from the protected Identity invitation projections once they are bound. Invitations carrying intended role assignments follow the governed IAM journey; this application offers no grant control.",
+                  "Pending and past invitations are not yet available from a protected read model. Invitations carrying intended role assignments follow the governed IAM journey; this application offers no grant control.",
                 ),
               ),
             },
@@ -389,7 +403,7 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
                 "settings_text",
                 textBlock(
                   "Runtime settings",
-                  "The organisation's runtime localisation settings appear here from the protected runtime-settings reader once it is bound; changing them invokes the protected settings operation. These settings are never copied into ordinary records.",
+                  "The organisation's runtime localisation settings are not yet available from a protected read model; changing them invokes the protected settings operation. These settings are never copied into ordinary records.",
                 ),
               ),
             },
@@ -406,13 +420,17 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
             shell_kind: "application",
             shell: "shell_organisation_administration",
             content: {
-              slot_primary: slot(
-                "roles_text",
-                textBlock(
-                  "Roles and groups",
-                  "Role grants, groups and assignments are managed in the IAM application. This application contributes its permissions and role templates to the organisation catalogue and offers no parallel grant control.",
-                ),
-              ),
+              slot_primary: {
+                placements: {
+                  roles_text: textBlock(
+                    "Roles and groups",
+                    "Roles and groups are read live from protected Access. Role grants, group membership and assignments are managed in the IAM application; this application offers no parallel grant control.",
+                  ),
+                  roles_region: readModelBlock("roles", "Roles"),
+                  groups_region: readModelBlock("groups", "Groups"),
+                },
+                order: { desktop: ["roles_text", "roles_region", "groups_region"] },
+              },
             },
           },
         },
