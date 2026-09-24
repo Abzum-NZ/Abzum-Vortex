@@ -21,6 +21,7 @@ export {
   createStoredPageCapabilityService,
   type StoredPageCapabilityDependencies,
   type StoredPageCapabilitySelection,
+  type StoredPageReadModelValue,
 } from "./stored-page-capability";
 export {
   createProtectedReadModelResolver,

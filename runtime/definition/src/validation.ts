@@ -4613,13 +4613,15 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         ...pageContentPlacementEntriesV2(page).map(([, placement]) => placement),
         ...pageShellPlacementEntriesV2(page).map(([, placement]) => placement),
       ];
+      // A placement reads one data source: a declared protected read model or a query, never both.
       if (
         placements.some(
           (placement) =>
             placement.readModel !== undefined &&
-            !(protectedReadModelKeys as readonly string[]).includes(
-              String(object(placement.readModel).key),
-            ),
+            (placement.queryId !== undefined ||
+              !(protectedReadModelKeys as readonly string[]).includes(
+                String(object(placement.readModel).key),
+              )),
         )
       )
         failures.push(

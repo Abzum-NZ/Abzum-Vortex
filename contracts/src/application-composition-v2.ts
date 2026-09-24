@@ -948,31 +948,37 @@ export const protectedReadModelDeclarations = Object.freeze({
   people: Object.freeze({
     label: "People (Group membership)",
     ownerReader: "access.listGroupMemberships",
+    filters: Object.freeze(["groupId"] as const),
     resultContract: "ListOrganizationAdministrationMembershipsResult",
   }),
   organization_accounts: Object.freeze({
     label: "Organisation accounts",
     ownerReader: "access.listOrganizationAccounts",
+    filters: Object.freeze([] as const),
     resultContract: "ListOrganizationAccountsResult",
   }),
   roles: Object.freeze({
     label: "Roles",
     ownerReader: "access.listRoles",
+    filters: Object.freeze([] as const),
     resultContract: "ListOrganizationAdministrationRolesResult",
   }),
   groups: Object.freeze({
     label: "Groups",
     ownerReader: "access.listGroups",
+    filters: Object.freeze([] as const),
     resultContract: "ListOrganizationAdministrationGroupsResult",
   }),
   effective_assignments: Object.freeze({
     label: "Effective assignments",
     ownerReader: "access.listRoleAssignments",
+    filters: Object.freeze([] as const),
     resultContract: "ListOrganizationAdministrationRoleAssignmentsResult",
   }),
   tenant_structure: Object.freeze({
     label: "Tenant structure",
     ownerReader: "identity.listTenantHierarchy",
+    filters: Object.freeze([] as const),
     resultContract: "TenantHierarchyResult",
   }),
 } satisfies Record<
@@ -985,12 +991,13 @@ export const protectedReadModelDeclarations = Object.freeze({
   }>
 >);
 
-/** Request-time input is closed: a bounded page, the reader's own cursor and the declared filters. */
+/** A placement's binding names one declared read model and nothing else. */
 export const protectedReadModelBindingV2Schema = z
   .object({ key: protectedReadModelKeySchema })
   .strict();
 export type ProtectedReadModelBindingV2 = z.infer<typeof protectedReadModelBindingV2Schema>;
 
+/** Request-time input is closed: a bounded page, the reader's own cursor and the declared filters. */
 export const protectedReadModelPageRequestSchema = z
   .object({
     pageSize: z.number().int().min(1).max(100),
@@ -1023,6 +1030,7 @@ type SourceBlockPlacementV2 = {
   use_permission?: z.infer<typeof namespacedKeySchema> | undefined;
   visibility_condition?: z.infer<typeof sourceQualifiedConditionSchema> | undefined;
   query?: z.infer<typeof builderKeySchema> | undefined;
+  read_model?: ProtectedReadModelKey | undefined;
   settings: Record<string, SourceBlockPropertyValueV2Contract>;
   theme_overrides: Record<string, z.infer<typeof sourceThemeTokenValueV2Schema>>;
   responsive: z.infer<typeof sourceResponsivePlacementV2Schema>;
@@ -1088,6 +1096,7 @@ export const sourceBlockPlacementV2Schema: z.ZodType<SourceBlockPlacementV2> = z
       use_permission: namespacedKeySchema.optional(),
       visibility_condition: sourceQualifiedConditionSchema.optional(),
       query: builderKeySchema.optional(),
+      read_model: protectedReadModelKeySchema.optional(),
       settings: z.record(builderKeySchema, sourceBlockPropertyValueV2Schema),
       theme_overrides: z.record(builderKeySchema, sourceThemeTokenValueV2Schema),
       responsive: sourceResponsivePlacementV2Schema,
