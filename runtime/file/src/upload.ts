@@ -93,11 +93,16 @@ type AttachmentOwner = Readonly<{
 
 /**
  * The current record and field authority of this request, resolved by the
- * ordinary Access operation for the effective actor. Every upload step takes it
- * afresh; none reuses an earlier step's authority.
+ * ordinary Access operation for the effective actor on one record. Every upload
+ * step takes it afresh; none reuses an earlier step's authority. The field
+ * permissions apply only to the record named here, so continuing an upload
+ * requires that record to be the file's own owning record.
  */
 type CurrentUploadAuthority = Readonly<{
   sessionContext: SessionContext;
+  /** The record the field permissions below were resolved for. */
+  recordTypeId: RecordTypeId;
+  recordId: RecordId;
   readableFieldIds: readonly FieldId[];
   changeableFieldIds: readonly FieldId[];
 }>;
@@ -143,10 +148,12 @@ export type ClaimedUploadGrant = Readonly<{
 export type FileUploadRepository = Readonly<{
   /**
    * Under a lock on the owning record field: refuses a capability reservation
-   * already used by another upload, a replacement target that is not an active
-   * file of the same field, and a field whose attachments plus unexpired
-   * in-flight uploads already reach `maxFiles`; otherwise inserts the pending
-   * file, its reservation and its first grant together.
+   * that is not a live, unconsumed reservation of this request or is already
+   * used by another upload, a replacement target that is not an active file of
+   * the same field, and a field whose active attachments (counted by the store,
+   * not taken from `existingAttachmentCount`) plus unexpired in-flight uploads
+   * already reach `maxFiles`; otherwise inserts the pending file, its
+   * reservation and its first grant together.
    */
   reservePendingUpload(reservation: PendingUploadReservation): Promise<
     | Readonly<{ outcome: "reserved"; fileRecord: FileRecord }>
@@ -244,11 +251,12 @@ export type FileUploadAdmissionInput = CurrentUploadAuthority &
   Readonly<{
     organizationId: OrganizationId;
     applicationRootId?: ApplicationRootId;
-    recordTypeId: RecordTypeId;
-    recordId: RecordId;
     fieldId: FieldId;
     attachmentSettings: UploadAttachmentSettings;
-    /** Files the saved record currently holds in this field, from the Record service. */
+    /**
+     * Files the saved record currently holds in this field, from the Record
+     * service. Used only to refuse early; the store counts the field itself.
+     */
     existingAttachmentCount: number;
     replacingFileId?: FileId;
     /** Browser-supplied values: used only to refuse early, never to accept content. */
@@ -466,7 +474,8 @@ const sameUploadGrant = (left: UploadGrant, right: UploadGrant): boolean =>
 /**
  * Current authority to continue an admitted upload: the request actor must be
  * the file's own organisation's verified uploader, and the owning attachment
- * field must still be changeable under the request's current Access resolution.
+ * field must still be changeable on the file's own record under the request's
+ * current Access resolution.
  */
 const authorizeUploader = (
   state: PendingUploadState,
@@ -485,9 +494,12 @@ const authorizeUploader = (
   ) {
     return { authorized: false, reason: "caller_not_authorized" };
   }
+  // Field permissions granted on some other record say nothing about this file.
   const fieldId = state.fileRecord.ownerFieldId;
   if (
     fieldId === undefined ||
+    !sameId(state.fileRecord.ownerRecordTypeId, authority.recordTypeId) ||
+    !sameId(state.fileRecord.ownerRecordId, authority.recordId) ||
     !verifyAttachmentFieldAuthority({
       fieldId,
       readableFieldIds: authority.readableFieldIds,
