@@ -250,10 +250,11 @@ the already-initialized request transaction as a required capability and cannot 
 transaction. Package-boundary checks reserve context initialization to the database package and
 resolved human-request composition to Access.
 
-Vercel's serverless database client disables prepared statements for transaction pooling and begins
-with one client connection per instance. A protected operation keeps all context setup and work
-inside one transaction; it never expects a later statement or request to receive the same physical
-connection. Testing and Production runtime and operational database connections require full
+Vercel's serverless database client disables prepared statements for transaction pooling and keeps
+a per-instance pool whose size comes from `VORTEX_RUNTIME_DATABASE_POOL_SIZE`: default 5, a whole
+number from 1 to 20, and any other value fails closed without opening a connection. A protected
+operation keeps all context setup and work inside one transaction; it never expects a later
+statement or request to receive the same physical connection. Testing and Production runtime and operational database connections require full
 certificate and hostname verification.
 
 A hosted runtime is not ready merely because its migrations and Vercel build succeeded. Its release

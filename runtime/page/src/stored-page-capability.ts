@@ -12,14 +12,17 @@ import {
   type PermissionRegistryEntryCandidate,
 } from "@vortex/contracts";
 import {
+  createHumanOrganizationRequestService,
   createStoredApplicationPermissionSource,
   type HumanOrganizationRequestDependencies,
+  type HumanOrganizationRequestResult,
   type StoredApplicationPermissionSourceDependencies,
 } from "@vortex/access";
 import {
   createAuthenticatedPageCapabilityService,
   type FixedAuthenticatedPageCapability,
 } from "./authenticated-page-capability";
+import type { ProjectedPageCapability } from "./page-capability-projection";
 import { resolvePageComposition } from "./page-composition-resolution";
 
 export type StoredPageCapabilitySelection = Readonly<{
@@ -84,7 +87,14 @@ export const createStoredPageCapabilityService = (
       : { resolvedRequestTransaction: dependencies.resolvedRequestTransaction }),
   });
 
-  const load = async (): Promise<FixedAuthenticatedPageCapability> =>
+  const requestDependencies = {
+    ...dependencies,
+    correlationId: () => dependencies.systemContext.correlationId,
+  };
+  const requests = createHumanOrganizationRequestService(requestDependencies);
+
+  // Undefined means the selected page is not in the release: a lasting answer, not a fault.
+  const load = async (): Promise<FixedAuthenticatedPageCapability | undefined> =>
     source
       .readExact()
       .then(({ applicationRelease: release, permissionRegistration: registration }) => {
@@ -94,6 +104,7 @@ export const createStoredPageCapabilityService = (
         const pages = applicationRelease.content.pages.filter((page) =>
           sameUuid(page.pageId, selectedPageId),
         );
+        if (pages.length === 0) return undefined;
         if (pages.length !== 1 || pages[0] === undefined)
           throw new Error("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
         const page = pages[0];
@@ -162,17 +173,32 @@ export const createStoredPageCapabilityService = (
       });
 
   return Object.freeze({
-    async project(session: IdentitySession, candidate: OrganizationSelectionCandidate) {
+    async project(
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+    ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> {
       if (
         !sameUuid(candidate.organizationId, dependencies.systemContext.organizationId) ||
         candidate.applicationRootId === undefined ||
         !sameUuid(candidate.applicationRootId, applicationRootId)
       )
-        return { kind: "unavailable" as const };
-      const fixed = await load();
+        return { kind: "unavailable" };
+      // Verify the session and application scope before the system-rights read, so a caller
+      // without access gets the same answer whether or not the page exists. The read opens its
+      // own transaction, so it runs between the verification and the projection rather than
+      // inside either: the runtime client holds one connection and would wait on itself.
+      const verified = await requests.run(session, candidate, async () => undefined);
+      if (verified.kind !== "available") return verified;
+      let fixed: FixedAuthenticatedPageCapability | undefined;
+      try {
+        fixed = await load();
+      } catch {
+        return { kind: "temporarily_unavailable" };
+      }
+      if (fixed === undefined) return { kind: "unavailable" };
+      const stored = fixed;
       return createAuthenticatedPageCapabilityService({
-        ...dependencies,
-        correlationId: () => dependencies.systemContext.correlationId,
+        ...requestDependencies,
         adapter: {
           load: async (_transaction, scope) => {
             if (
@@ -181,7 +207,7 @@ export const createStoredPageCapabilityService = (
               !sameUuid(scope.applicationRootId, applicationRootId)
             )
               throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
-            return fixed;
+            return stored;
           },
         },
       }).project(session, candidate, undefined);

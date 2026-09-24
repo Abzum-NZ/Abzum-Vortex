@@ -87,6 +87,16 @@ export function contrastRatio(
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+/**
+ * A theme whose catalogue declares any colour role is judged only by declared roles.
+ * Themes without roles keep the key-name conventions below.
+ */
+export function declaresColorRoles(tokens: Readonly<Record<string, ThemeTokenValueV2>>): boolean {
+  return Object.values(tokens).some(
+    (token) => token.kind === "color_pair" && token.role !== undefined,
+  );
+}
+
 export function findThemeSurface(
   tokens: Readonly<Record<string, ThemeTokenValueV2>>,
 ): Readonly<{ key?: string; light: string; dark: string; name: string }> {
@@ -97,10 +107,17 @@ export function findThemeSurface(
       return token?.kind === "color_pair" ? [[key, token] as const] : [];
     });
   const exactPriority = ["background", "canvas", "surface", "bg", "page_background", "app_background"];
-  const selected =
+  const byPriority = (entries: typeof colorEntries) =>
     exactPriority.flatMap((candidate) =>
-      colorEntries.filter(([key]) => key.toLowerCase() === candidate),
-    )[0] ?? colorEntries.find(([key]) => isBackgroundTokenKey(key));
+      entries.filter(([key]) => key.toLowerCase() === candidate),
+    )[0];
+  let selected: (typeof colorEntries)[number] | undefined;
+  if (declaresColorRoles(tokens)) {
+    const backgrounds = colorEntries.filter(([, token]) => token.role === "background");
+    selected = byPriority(backgrounds) ?? backgrounds[0];
+  } else {
+    selected = byPriority(colorEntries) ?? colorEntries.find(([key]) => isBackgroundTokenKey(key));
+  }
   if (selected === undefined)
     return {
       light: DEFAULT_LIGHT_SURFACE,
@@ -181,7 +198,15 @@ export function validateThemeContrast(
     ruleFailures.push(located.ruleFailure);
   };
 
+  const roleAware = declaresColorRoles(tokens);
   const surface = findThemeSurface(tokens);
+  if (roleAware && surface.key === undefined) {
+    addFailure({
+      code: "MISSING_BACKGROUND_ROLE",
+      family: "invalid_value",
+      message: "A theme that declares colour roles must declare a background colour",
+    });
+  }
   const lightSurface = surface.light;
   const darkSurface = surface.dark;
   const surfaceName = surface.name;
@@ -204,7 +229,9 @@ export function validateThemeContrast(
 
     // A paired foreground is evaluated against its declared companion below. It
     // need not also contrast with the application surface on which it is not used.
-    if (isTextTokenKey(key) && !pairedForegroundKeys.has(key)) {
+    const isForeground = roleAware ? token.role === "foreground" : isTextTokenKey(key);
+
+    if (isForeground && !pairedForegroundKeys.has(key)) {
       const lightRatio = contrastRatio(token.light, lightSurface, DEFAULT_LIGHT_SURFACE);
       if (lightRatio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST) {
         addFailure({
@@ -223,7 +250,7 @@ export function validateThemeContrast(
           tokenKey: key,
         });
       }
-    } else if (isBrandOrPrimaryTokenKey(key)) {
+    } else if (!roleAware && isBrandOrPrimaryTokenKey(key)) {
       const lightRatio = contrastRatio(token.light, lightSurface, DEFAULT_LIGHT_SURFACE);
       if (lightRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
         addFailure({
