@@ -7,7 +7,7 @@ import {
   type IdentitySession,
 } from "@vortex/contracts";
 import { createHumanOrganizationRequestService } from "@vortex/access";
-import { createAppTelemetryCollector } from "@vortex/app";
+import { createAppTelemetryCollector, createOperationsAlertSink } from "@vortex/app";
 import {
   composeStorageAuthorityResolvers,
   createDefaultUpstreamStorageReader,
@@ -83,7 +83,9 @@ const upstreamStorageReader = createDefaultUpstreamStorageReader();
  * The collector is stateless and frozen, so one instance is shared and then
  * injected explicitly into the Access dependencies.
  */
-const requestTelemetry = createAppTelemetryCollector();
+const requestTelemetry = createAppTelemetryCollector({
+  downstream: createOperationsAlertSink(),
+});
 
 const refusalResponse = (
   reason: FileReadRefusalReason | "unauthenticated",
