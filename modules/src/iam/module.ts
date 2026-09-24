@@ -43,6 +43,49 @@ const recordPermission = (
   },
 });
 
+const scopedRecordPermission = (
+  recordKey: string,
+  action: (typeof standardActions)[number],
+  suffix: string,
+  scope: {
+    routes: readonly Record<string, string>[];
+    saved_condition?: {
+      condition: string;
+      parameter_bindings: readonly {
+        key: string;
+        source: "current_organization_account_id";
+      }[];
+    };
+  },
+  readableFields: string[],
+  changeableFields: string[],
+) => ({
+  ...recordPermission(recordKey, action, readableFields, changeableFields),
+  id: `perm_${recordKey}_${action}_${suffix}`,
+  key: `vortex.iam.core.${recordKey}.${action}_${suffix}`,
+  label: `${recordKey.replace(/_/g, " ")} ${action.replace(/_/g, " ")} ${suffix.replace(/_/g, " ")}`,
+  description: `Allows ${action} on ${suffix.replace(/_/g, " ")} ${recordKey.replace(/_/g, " ")} records only.`,
+  record_scope: scope,
+});
+
+const ownRecords = { routes: [{ kind: "ownership" }] } as const;
+const assignedReviews = {
+  routes: [{ kind: "all_records" }],
+  saved_condition: {
+    condition: "assigned_reviewer",
+    parameter_bindings: [{ key: "current_account", source: "current_organization_account_id" }],
+  },
+} as const;
+const reviewedRequests = {
+  routes: [
+    {
+      kind: "relationship",
+      relationship: "vortex.iam.core:access_review.request",
+      source_permission: "vortex.iam.core.access_review.read_assigned",
+    },
+  ],
+} as const;
+
 const requestChangeable = [
   "title",
   "request_type",
@@ -54,7 +97,6 @@ const requestChangeable = [
   "reason",
   "starts_on",
   "expires_on",
-  "activation_requires_independent_review",
   "proposal_revision",
 ];
 const requestReadable = [
@@ -69,7 +111,6 @@ const requestReadable = [
   "reason",
   "starts_on",
   "expires_on",
-  "activation_requires_independent_review",
   "proposal_revision",
   "submitted_at",
   "decided_at",
@@ -90,7 +131,6 @@ const reviewChangeable = [
   "decision",
   "reviewer",
   "decided_at",
-  "workflow_evidence",
   "comments",
 ];
 const reviewReadable = [
@@ -100,12 +140,22 @@ const reviewReadable = [
   "decision",
   "reviewer",
   "decided_at",
-  "workflow_evidence",
   "comments",
 ];
 
 const reviewResponseChangeable = ["review", "responder", "outcome", "comment", "responded_at"];
 const reviewResponseReadable = ["review", "responder", "outcome", "comment", "responded_at"];
+
+const ownRequestChangeable = [
+  "title",
+  "request_type",
+  "target_role_key",
+  "target_group_key",
+  "application_context",
+  "reason",
+  "starts_on",
+  "expires_on",
+];
 
 const permissions = [
   ...standardActions.flatMap((action) => {
@@ -135,6 +185,24 @@ const permissions = [
       action === "create" || action === "update" ? reviewResponseChangeable : [];
     return [recordPermission("access_review_response", action, readable, changeable)];
   }),
+  scopedRecordPermission(
+    "access_request", "create", "own", ownRecords, requestReadable, ownRequestChangeable,
+  ),
+  scopedRecordPermission("access_request", "read", "own", ownRecords, requestReadable, []),
+  scopedRecordPermission(
+    "access_request", "update", "own", ownRecords, requestReadable, ownRequestChangeable,
+  ),
+  scopedRecordPermission("access_request", "soft_delete", "own", ownRecords, [], []),
+  scopedRecordPermission(
+    "access_request_item", "create", "own", ownRecords, requestItemReadable, requestItemChangeable,
+  ),
+  scopedRecordPermission("access_request_item", "read", "own", ownRecords, requestItemReadable, []),
+  scopedRecordPermission(
+    "access_review", "read", "assigned", assignedReviews, reviewReadable, [],
+  ),
+  scopedRecordPermission(
+    "access_request", "read", "reviewed", reviewedRequests, requestReadable, [],
+  ),
 ];
 
 export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse({
@@ -156,7 +224,7 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
         title_field: "title",
         storage_contract_id: "srt_iam_access_request",
         storage_scope: "organisation_shared",
-        ownership_mode: "none",
+        ownership_mode: "organisation_account",
         standard_actions: [...standardActions],
         custom_actions: [],
         fields: [
@@ -234,7 +302,6 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
             id: "fld_iam_request_beneficiary",
             key: "beneficiary",
             label: "Beneficiary",
-            required: true,
             filterable: true,
             personal_data: "personal",
             type: "link_to_person",
@@ -299,17 +366,6 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
             sortable: true,
             type: "date",
             settings: {},
-          },
-          {
-            ...fieldBase,
-            id: "fld_iam_request_activation_review",
-            key: "activation_requires_independent_review",
-            label: "Activation requires independent review",
-            required: true,
-            filterable: true,
-            type: "yes_no",
-            settings: {},
-            default: false,
           },
           {
             ...fieldBase,
@@ -511,6 +567,7 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
             id: "fld_iam_review_reviewer",
             key: "reviewer",
             label: "Reviewer",
+            required: true,
             filterable: true,
             personal_data: "personal",
             type: "link_to_person",
@@ -568,8 +625,7 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
         title_field: "outcome",
         storage_contract_id: "srt_iam_access_review_response",
         storage_scope: "organisation_shared",
-        ownership_mode: "inherited",
-        ownership_relationship: "review",
+        ownership_mode: "none",
         standard_actions: [...standardActions],
         custom_actions: [],
         fields: [
@@ -656,6 +712,33 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
     events: [],
     rules: [],
     extension_points: [],
-    sharing_conditions: [],
+    sharing_conditions: [
+      {
+        id: "condition_iam_assigned_review",
+        source_record_type: "access_review",
+        key: "assigned_reviewer",
+        parameters: [{ key: "current_account", type: "organization_account_reference" }],
+        condition: { field: "reviewer", operator: "equals", parameter: "current_account" },
+        declared_fields: ["reviewer"],
+        publication_tests: [
+          {
+            name: "Assigned reviewer may see review",
+            parameters: { current_account: "11111111-1111-4111-8111-111111111111" },
+            field_values: {
+              reviewer: { organization_account_id: "11111111-1111-4111-8111-111111111111" },
+            },
+            expected: true,
+          },
+          {
+            name: "Other reviewer cannot see review",
+            parameters: { current_account: "22222222-2222-4222-8222-222222222222" },
+            field_values: {
+              reviewer: { organization_account_id: "11111111-1111-4111-8111-111111111111" },
+            },
+            expected: false,
+          },
+        ],
+      },
+    ],
   },
 });
