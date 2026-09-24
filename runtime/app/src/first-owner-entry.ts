@@ -61,6 +61,8 @@ export class FirstOwnerApplicationEntryError extends Error {
 
 const safeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 
+const sameUuid = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
+
 export const firstOwnerApplicationEntryRequestSchema = z
   .object({
     organizationId: organizationIdSchema,
@@ -161,6 +163,13 @@ export const createFirstOwnerApplicationEntryComposition = <InstalledEvents = ne
         operatingRoleId: value.operatingRoleId,
         operatingRoleSourceId: value.operatingRoleSourceId,
       });
+      if (
+        operatingRoleChangeEvidence.candidate.operation !== "accept_new_application_role" ||
+        !sameUuid(operatingRoleChangeEvidence.candidate.roleId, value.operatingRoleId)
+      )
+        throw new FirstOwnerApplicationEntryError(
+          "FIRST_OWNER_APPLICATION_ENTRY_MANIFEST_INVALID",
+        );
 
       // 3. Freeze the manifest and let Access establish the exact operating rights once.
       const manifest = initialOperatingRoleGrantManifestSchema.safeParse({

@@ -95,10 +95,7 @@ const mapStorageFailure = (error: unknown): InitialOperatingRoleGrantError => {
     case "42501":
       return fail("INITIAL_OPERATING_ROLE_GRANT_SCOPE_UNAVAILABLE", error);
     case "40001":
-    case "23503":
     case "23505":
-    case "23514":
-    case "55000":
       return fail("INITIAL_OPERATING_ROLE_GRANT_ALREADY_ESTABLISHED", error);
     case "22003":
       return fail("INITIAL_OPERATING_ROLE_GRANT_VERSION_EXHAUSTED", error);
