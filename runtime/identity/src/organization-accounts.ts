@@ -21,6 +21,7 @@ import {
   type RequestDatabaseTransaction,
   type RuntimeDatabaseTransaction,
 } from "@vortex/db";
+import { requireRequestIdentityNotDisabled } from "./identity-disablement-publication";
 
 export const organizationAccountErrorCodes = [
   "INVALID_ORGANIZATION_ACCOUNT_COMMAND",
@@ -1109,6 +1110,7 @@ const executeBeginOrganizationAccountClosing = async (
   const expectedRevision = commandRevision(fields.expectedRevision);
 
   try {
+    await requireRequestIdentityNotDisabled(transaction);
     const rows = await transaction.query<BeginClosingSqlRow>`
       select *
       from vortex_access.begin_organization_account_closing_for_administration(
@@ -1145,6 +1147,7 @@ const executeFinalizeOrganizationAccountDeletion = async (
   const organizationAccountId = commandUuid(organizationAccountIdCandidate);
 
   try {
+    await requireRequestIdentityNotDisabled(transaction);
     const rows = await transaction.query<FinalizeAccountDeletionSqlRow>`
       select vortex_record.finalize_account_deletion_fence(
         ${organizationAccountId}::uuid
