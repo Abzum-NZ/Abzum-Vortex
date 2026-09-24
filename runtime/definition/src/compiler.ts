@@ -5,6 +5,7 @@ import {
   applicationCompilationOutputV2Schema,
   applicationCompilationRequestV2Schema,
   applicationDraftV2Schema,
+  applicationToolBundleSchema,
   conditionNodeSchema,
   jsonValueSchema,
   walkDefinitionContract,
@@ -25,6 +26,10 @@ import {
   readModuleSourceRecordOwnershipMode,
   type ApplicationCompilationOutputV2,
   type ApplicationCompilationRequestV2,
+  type ApplicationDraftV2,
+  type ApplicationTool,
+  type ApplicationToolBundle,
+  type NavigationItem,
   type ModuleCompilationOutputV3,
   type ModuleCompilationRequestV3,
   type ModuleSourceDocument,
@@ -5978,6 +5983,103 @@ function applicationProvenanceV2(
   return entries;
 }
 
+const applicationToolName = (applicationKey: string, operationKind: string, key: string): string =>
+  `${applicationKey}.${operationKind}.${key}`;
+
+/**
+ * Derives the one deterministic agent tool bundle an Application release carries. Every tool maps
+ * to exactly one real operation, so repeated buttons, repeated form commits and a declared action
+ * reused by a form share a single tool; names are namespaced by the application key and canonically
+ * ordered, and each input contract and permission meaning is copied from the owning operation.
+ */
+function compileApplicationToolBundle(canonical: ApplicationDraftV2): ApplicationToolBundle {
+  const applicationKey = String(canonical.envelope.key);
+  const content = canonical.content;
+  const actionsByKey = new Map(content.actions.map((action) => [String(action.key), action]));
+  const pagesById = new Map(content.pages.map((page) => [String(page.pageId), page]));
+  const tools = new Map<string, ApplicationTool>();
+  const add = (identity: string, tool: ApplicationTool): void => {
+    if (!tools.has(identity)) tools.set(identity, tool);
+  };
+
+  for (const action of content.actions)
+    add(`action:${String(action.key)}`, {
+      name: applicationToolName(applicationKey, "action", String(action.key)),
+      description: action.label,
+      inputSchema: { kind: "action_inputs", inputs: action.inputs },
+      operation: { kind: "action", key: action.key, actionId: action.actionId },
+      permission: { discover: "page_access", use: "operation_permission" },
+    });
+
+  for (const flow of content.flows)
+    add(`flow:${String(flow.flowId)}`, {
+      name: applicationToolName(applicationKey, "flow", String(flow.key)),
+      ...(flow.description ? { description: flow.description } : {}),
+      inputSchema: { kind: "flow_inputs", inputs: flow.inputs },
+      operation: { kind: "flow", key: flow.key, flowId: flow.flowId },
+      permission: { discover: "page_access", use: "operation_permission" },
+    });
+
+  for (const query of content.queries)
+    add(`query:${String(query.queryId)}`, {
+      name: applicationToolName(applicationKey, "query", String(query.key)),
+      inputSchema: { kind: "none" },
+      operation: { kind: "query", key: query.key, queryId: query.queryId },
+      permission: { discover: "page_access", use: "none" },
+    });
+
+  const addCommitAction = (pageName: string, commitActionKey: string): void => {
+    const action = actionsByKey.get(commitActionKey);
+    add(`action:${commitActionKey}`, {
+      name: applicationToolName(applicationKey, "action", commitActionKey),
+      description: action === undefined ? pageName : action.label,
+      inputSchema:
+        action === undefined ? { kind: "none" } : { kind: "action_inputs", inputs: action.inputs },
+      operation: {
+        kind: "action",
+        key: commitActionKey,
+        actionId: action?.actionId ?? null,
+      },
+      permission: { discover: "page_access", use: "operation_permission" },
+    });
+  };
+
+  for (const page of content.pages) {
+    if (page.type === "form" || page.type === "guided_form")
+      addCommitAction(page.name, String(page.commitActionKey));
+    else if (page.type === "public" && page.publicActionKey !== undefined)
+      addCommitAction(page.name, String(page.publicActionKey));
+  }
+
+  const addNavigation = (items: readonly NavigationItem[]): void => {
+    for (const item of items) {
+      if (item.type === "heading") {
+        addNavigation(item.children);
+        continue;
+      }
+      if (item.type !== "page") continue;
+      const page = pagesById.get(String(item.pageId));
+      if (page === undefined) continue;
+      add(`navigation:${String(page.pageId)}`, {
+        name: applicationToolName(applicationKey, "navigation", String(page.key)),
+        description: item.label,
+        inputSchema: { kind: "none" },
+        operation: { kind: "navigation", key: page.key, pageId: page.pageId },
+        permission: { discover: "application_navigation", use: "none" },
+      });
+    }
+  };
+  addNavigation(content.navigation);
+
+  return applicationToolBundleSchema.parse({
+    contractVersion: "1.0.0",
+    applicationKey,
+    tools: [...tools.values()].sort((left, right) =>
+      compareCanonicalStrings(left.name, right.name),
+    ),
+  });
+}
+
 function compileApplicationV2Internal(
   input: unknown,
   context?: DefinitionCompilationContext,
@@ -6045,6 +6147,7 @@ function compileParsedApplicationV2Request(
       dependencyOrder: dependencyOrder(sourceObject),
       resolvedDependencies: resolvedDependencies(sourceObject, resolution),
       resolutionFingerprint: request.resolution.fingerprint,
+      toolBundle: compileApplicationToolBundle(canonical),
     });
     if (!output.success) fail("vortex.definition.invalid_compilation_output", "invalid_value");
     return output.data;

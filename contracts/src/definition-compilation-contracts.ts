@@ -3,11 +3,15 @@ import { applicationDraftV2Schema } from "./application-contracts";
 import { applicationCompositionCatalogueSnapshotV2Schema } from "./application-composition-v2";
 import { applicationSourceDocumentV2Schema } from "./application-source-contracts";
 import { publishedApplicationDefinitionSchema } from "./application-contracts";
+import { flowValueDeclarationSchema } from "./application-flow-bindings";
 import { connectionTypeSourceDocumentSchema } from "./connection-source-contracts";
 import { connectionTypeSchema } from "./integration-contracts";
+import { actionInputDefinitionSchema } from "./module-contracts";
 import { moduleContractVersionPairV3Schema, moduleDraftV3Schema } from "./module-contracts-v3";
 import { moduleSourceDocumentSchema } from "./definition-source";
+import { descriptionSchema } from "./common";
 import {
+  actionIdSchema,
   actorIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
@@ -17,8 +21,11 @@ import {
   moduleRootIdSchema,
   namespacedKeySchema,
   organizationIdSchema,
+  pageIdSchema,
   platformIdSchema,
+  queryIdSchema,
   revisionSchema,
+  ruleIdSchema,
   semanticVersionSchema,
   timestampSchema,
 } from "./identifiers";
@@ -272,6 +279,114 @@ export const compiledDefinitionArtifactSchema = z.discriminatedUnion("kind", [
   compiledConnectionArtifactSchema,
 ]);
 
+/**
+ * One exact business operation a compiled application tool invokes. The reference keeps the
+ * operation's declared key and its permanent owning identity, so a call reaches the same published
+ * binding as the matching web control and never a caller-supplied target. A bound Module's standard
+ * record action has no Application-owned action identity, so `actionId` is null for it.
+ */
+export const applicationToolOperationReferenceSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("action"),
+      key: namespacedKeySchema,
+      actionId: actionIdSchema.nullable(),
+    })
+    .strict(),
+  z
+    .object({ kind: z.literal("flow"), key: builderKeySchema, flowId: ruleIdSchema })
+    .strict(),
+  z
+    .object({ kind: z.literal("query"), key: builderKeySchema, queryId: queryIdSchema })
+    .strict(),
+  z
+    .object({ kind: z.literal("navigation"), key: builderKeySchema, pageId: pageIdSchema })
+    .strict(),
+]);
+
+/**
+ * The declared input contract of one compiled tool, copied from the operation's own definition:
+ * a named action's typed inputs, a Frontend Flow's typed inputs, or no declared inputs (a
+ * navigation target or a permitted query read). Nothing is invented here; the projection at the
+ * MCP surfaces renders exactly what the operation already declares.
+ */
+export const applicationToolInputSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("action_inputs"),
+      inputs: z.array(actionInputDefinitionSchema).max(50),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("flow_inputs"),
+      inputs: z.record(builderKeySchema, flowValueDeclarationSchema),
+    })
+    .strict(),
+  z.object({ kind: z.literal("none") }).strict(),
+]);
+
+/**
+ * The permission meaning one compiled tool carries. It names the gates that govern discoverability
+ * and invocation without carrying any internal permission key, role name or private value: the
+ * runtime reader resolves the exact Access declaration from the owning operation and its page.
+ * `discover` is `application_navigation` when the application navigation gate admits the viewer,
+ * otherwise `page_access` for the page that hosts the operation; `use` is `operation_permission`
+ * when the owning operation declares its own permission, otherwise `none`.
+ */
+export const applicationToolPermissionMeaningSchema = z
+  .object({
+    discover: z.enum(["application_navigation", "page_access"]),
+    use: z.enum(["operation_permission", "none"]),
+  })
+  .strict();
+
+export const applicationToolSchema = z
+  .object({
+    name: namespacedKeySchema,
+    description: descriptionSchema.optional(),
+    inputSchema: applicationToolInputSchema,
+    operation: applicationToolOperationReferenceSchema,
+    permission: applicationToolPermissionMeaningSchema,
+  })
+  .strict();
+
+/**
+ * The agent tools one Application release carries, compiled from its published navigation, pages,
+ * forms, named actions, Frontend Flow entry points and queries. Names are deterministic and
+ * namespaced by the application key, and each tool maps to exactly one real operation, so buttons
+ * that start the same operation never add a second tool. Nothing is authored here separately from
+ * the definition.
+ */
+export const applicationToolBundleSchema = z
+  .object({
+    contractVersion: z.literal("1.0.0"),
+    applicationKey: namespacedKeySchema,
+    tools: z.array(applicationToolSchema).max(10_000),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const names = value.tools.map((tool) => tool.name);
+    if (new Set(names).size !== names.length)
+      context.addIssue({
+        code: "custom",
+        path: ["tools"],
+        message: "Compiled tool names must be unique",
+      });
+    if (names.some((name, index) => index > 0 && names[index - 1]! >= name))
+      context.addIssue({
+        code: "custom",
+        path: ["tools"],
+        message: "Compiled tools must use canonical name order",
+      });
+    if (value.tools.some((tool) => !tool.name.startsWith(`${value.applicationKey}.`)))
+      context.addIssue({
+        code: "custom",
+        path: ["tools"],
+        message: "Every compiled tool name must be namespaced by its application key",
+      });
+  });
+
 export const applicationCompilationOutputV2Schema = z
   .object({
     kind: z.literal("application"),
@@ -282,6 +397,9 @@ export const applicationCompilationOutputV2Schema = z
     dependencyOrder: z.array(namespacedKeySchema),
     resolvedDependencies: z.array(resolvedDefinitionSchema),
     resolutionFingerprint: fingerprintSchema,
+    // Always produced by the compiler for a fresh release; optional so the additive field can be
+    // decoded from releases compiled before the bundle contract existed.
+    toolBundle: applicationToolBundleSchema.optional(),
   })
   .strict();
 
@@ -461,6 +579,15 @@ export type ApplicationCompilationRequestV2 = z.input<typeof applicationCompilat
 export type DefinitionCompilationOutput = z.infer<typeof definitionCompilationOutputSchema>;
 export type ModuleCompilationOutputV3 = z.infer<typeof moduleCompilationOutputV3Schema>;
 export type ApplicationCompilationOutputV2 = z.infer<typeof applicationCompilationOutputV2Schema>;
+export type ApplicationTool = z.infer<typeof applicationToolSchema>;
+export type ApplicationToolBundle = z.infer<typeof applicationToolBundleSchema>;
+export type ApplicationToolOperationReference = z.infer<
+  typeof applicationToolOperationReferenceSchema
+>;
+export type ApplicationToolInputSchema = z.infer<typeof applicationToolInputSchema>;
+export type ApplicationToolPermissionMeaning = z.infer<
+  typeof applicationToolPermissionMeaningSchema
+>;
 export type CompiledDefinitionArtifact = z.infer<typeof compiledDefinitionArtifactSchema>;
 export type DefinitionProvenanceEntry = z.infer<typeof definitionProvenanceEntrySchema>;
 export type PublishedDefinitionHistory = z.infer<typeof publishedDefinitionHistorySchema>;
