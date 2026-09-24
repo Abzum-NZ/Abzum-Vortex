@@ -852,7 +852,10 @@ export function PageLayoutRenderer({
   // The theme root serves runtime pages and preview canvases alike; React hoists and
   // de-duplicates the one shared stylesheet however many layouts render.
   return (
-    <div {...createThemeRootProps(applicationTheme, themeMode)}>
+    <div
+      {...createThemeRootProps(applicationTheme, themeMode)}
+      {...(breakpoint === undefined ? { "data-vortex-live-layout": "" } : {})}
+    >
       <style href="vortex-ui-styles" precedence="default">
         {ALL_UI_STYLES_CSS}
       </style>

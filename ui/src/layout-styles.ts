@@ -157,13 +157,18 @@ export function slotDeclaresGridChildren(slot: {
   );
 }
 
-/** Builds the attribute selector for one placement identity, escaping CSS string metacharacters. */
+/**
+ * Attribute the live layout root carries so responsive rules cannot leak into an explicit
+ * breakpoint preview rendered on the same document. Escapes CSS string metacharacters.
+ */
+const LIVE_LAYOUT_SCOPE_ATTRIBUTE = "data-vortex-live-layout";
+
 function placementCssSelector(placementId: string): string {
   const escaped = placementId
     .replace(/\\/g, "\\\\")
     .replace(/"/g, '\\"')
     .replace(/[\n\r\f]/g, "");
-  return `[data-vortex-placement-id="${escaped}"]`;
+  return `[${LIVE_LAYOUT_SCOPE_ATTRIBUTE}] [data-vortex-placement-id="${escaped}"]`;
 }
 
 /**
