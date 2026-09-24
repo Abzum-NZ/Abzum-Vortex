@@ -2361,6 +2361,7 @@
                                    "states":  [
                                                   "normal",
                                                   "loading",
+                                                  "validation",
                                                   "refused",
                                                   "conflict",
                                                   "failure",
@@ -2374,7 +2375,128 @@
                                                        "shell_kind":  "default",
                                                        "main":  {
                                                                     "placements":  {
-                                                                                       "detail_crm_company":  {
+                                                                                       "form_crm_company_merge":  {
+    "block":  {
+        "block_id":  "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+        "release_version":  "1.0.0"
+    },
+    "view_permission":  "vortex.crm.organisations.company.merge",
+    "settings":  {
+        "title":  {
+            "kind":  "text",
+            "value":  "Merge into another company"
+        }
+    },
+    "theme_overrides":  {
+    },
+    "responsive":  {
+        "desktop":  {
+            "visible":  true,
+            "width":  {
+                "kind":  "fill"
+            },
+            "height":  {
+                "kind":  "content"
+            }
+        }
+    },
+    "slots":  {
+        "content":  {
+            "placements":  {
+                "input_crm_company_merge_duplicate":  {
+                    "block":  {
+                        "block_id":  "8d1b6a2f-4c3e-4f0a-9c2b-6f1d2e7a5b94",
+                        "release_version":  "1.0.0"
+                    },
+                    "settings":  {
+                        "name":  {
+                            "kind":  "text",
+                            "value":  "duplicate_company"
+                        },
+                        "label":  {
+                            "kind":  "text",
+                            "value":  "Company to keep"
+                        },
+                        "help_text":  {
+                            "kind":  "text",
+                            "value":  "The company you choose is kept and receives this company's parent company link. This company is then removed."
+                        },
+                        "required":  {
+                            "kind":  "boolean",
+                            "value":  true
+                        },
+                        "record_types":  {
+                            "kind":  "list",
+                            "items":  [
+                                {
+                                    "kind":  "record_type_reference",
+                                    "record_type":  "vortex.crm.organisations:company"
+                                }
+                            ]
+                        }
+                    },
+                    "theme_overrides":  {
+                    },
+                    "responsive":  {
+                        "desktop":  {
+                            "visible":  true,
+                            "width":  {
+                                "kind":  "fill"
+                            },
+                            "height":  {
+                                "kind":  "content"
+                            }
+                        }
+                    },
+                    "slots":  {
+                    }
+                },
+                "submit_crm_company_merge":  {
+                    "block":  {
+                        "block_id":  "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                        "release_version":  "1.0.0"
+                    },
+                    "settings":  {
+                        "label":  {
+                            "kind":  "text",
+                            "value":  "Merge and remove this company"
+                        },
+                        "action_kind":  {
+                            "kind":  "choice",
+                            "value":  "submit"
+                        },
+                        "variant":  {
+                            "kind":  "choice",
+                            "value":  "danger"
+                        }
+                    },
+                    "theme_overrides":  {
+                    },
+                    "responsive":  {
+                        "desktop":  {
+                            "visible":  true,
+                            "width":  {
+                                "kind":  "fill"
+                            },
+                            "height":  {
+                                "kind":  "content"
+                            }
+                        }
+                    },
+                    "slots":  {
+                    }
+                }
+            },
+            "order":  {
+                "desktop":  [
+                    "input_crm_company_merge_duplicate",
+                    "submit_crm_company_merge"
+                ]
+            }
+        }
+    }
+},
+    "detail_crm_company":  {
                                                                                                                   "block":  {
                                                                                                                                 "block_id":  "e2569df0-2f10-4b20-b41d-177b66cd136c",
                                                                                                                                 "release_version":  "1.0.0"
@@ -2406,7 +2528,8 @@
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
-                                                                                                  "detail_crm_company"
+                                                                                                  "detail_crm_company",
+                                                                                                  "form_crm_company_merge"
                                                                                               ]
                                                                               }
                                                                 }
@@ -2557,6 +2680,40 @@
                                                        "shell_kind":  "default",
                                                        "main":  {
                                                                     "placements":  {
+        "action_crm_opportunity_mark_won": {
+            "block": {
+                "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                "release_version": "1.0.0"
+            },
+            "view_permission": "vortex.crm.opportunities.opportunity.mark_won",
+            "settings": {
+                "label": {
+                    "kind": "text",
+                    "value": "Mark won"
+                },
+                "action_kind": {
+                    "kind": "choice",
+                    "value": "action"
+                },
+                "variant": {
+                    "kind": "choice",
+                    "value": "primary"
+                }
+            },
+            "theme_overrides": {},
+            "responsive": {
+                "desktop": {
+                    "visible": true,
+                    "width": {
+                        "kind": "fill"
+                    },
+                    "height": {
+                        "kind": "content"
+                    }
+                }
+            },
+            "slots": {}
+        },
                                                                                        "detail_crm_opportunity":  {
                                                                                                                       "block":  {
                                                                                                                                     "block_id":  "e2569df0-2f10-4b20-b41d-177b66cd136c",
@@ -2589,7 +2746,8 @@
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
-                                                                                                  "detail_crm_opportunity"
+                                                                                                  "detail_crm_opportunity",
+                                                                                                  "action_crm_opportunity_mark_won"
                                                                                               ]
                                                                               }
                                                                 }
@@ -2618,6 +2776,40 @@
                                                        "shell_kind":  "default",
                                                        "main":  {
                                                                     "placements":  {
+        "action_crm_activity_complete": {
+            "block": {
+                "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                "release_version": "1.0.0"
+            },
+            "view_permission": "vortex.crm.activities.activity.complete",
+            "settings": {
+                "label": {
+                    "kind": "text",
+                    "value": "Mark complete"
+                },
+                "action_kind": {
+                    "kind": "choice",
+                    "value": "action"
+                },
+                "variant": {
+                    "kind": "choice",
+                    "value": "primary"
+                }
+            },
+            "theme_overrides": {},
+            "responsive": {
+                "desktop": {
+                    "visible": true,
+                    "width": {
+                        "kind": "fill"
+                    },
+                    "height": {
+                        "kind": "content"
+                    }
+                }
+            },
+            "slots": {}
+        },
                                                                                        "detail_crm_activity":  {
                                                                                                                    "block":  {
                                                                                                                                  "block_id":  "e2569df0-2f10-4b20-b41d-177b66cd136c",
@@ -2650,7 +2842,8 @@
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
-                                                                                                  "detail_crm_activity"
+                                                                                                  "detail_crm_activity",
+                                                                                                  "action_crm_activity_complete"
                                                                                               ]
                                                                               }
                                                                 }
@@ -3557,6 +3750,15 @@
                            ],
                  "events":  [
                                 {
+                                    "id":  "form_submit_crm_company_merge",
+                                    "key":  "vortex.app.events.vortex_app_crm_form_submit_company_merge",
+                                    "record_type":  "vortex.crm.organisations:company",
+                                    "carries":  [
+
+                                                ],
+                                    "personal_or_sensitive_values_allowed":  false
+                                },
+                                {
                                     "id":  "form_submit_0",
                                     "key":  "vortex.app.events.vortex_app_crm_form_submit_0",
                                     "record_type":  "vortex.crm.people:lead",
@@ -3645,7 +3847,21 @@
 
                                                 ],
                                     "personal_or_sensitive_values_allowed":  false
-                                }
+                                },
+    {
+        "id": "event_crm_opportunity_mark_won",
+        "key": "vortex.app.events.vortex_app_crm_action_mark_won",
+        "record_type": "vortex.crm.opportunities:opportunity",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+    },
+    {
+        "id": "event_crm_activity_complete",
+        "key": "vortex.app.events.vortex_app_crm_action_complete_activity",
+        "record_type": "vortex.crm.activities:activity",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+    }
                             ],
                  "public_addresses":  [
 
@@ -3657,6 +3873,132 @@
 
                             ],
                  "flows":  [
+    {
+        "id": "crm_named_action_company_merge",
+        "key": "crm_named_action_company_merge",
+        "name": "Merge company",
+        "description": "Merges the current company into the selected company through the bound company.merge named action: the selected company receives the current company's parent company link and the current company is removed.",
+        "run_as": "current_user",
+        "inputs": {
+            "duplicate_company": {
+                "type": "record_reference",
+                "required": true,
+                "record_types": [
+                    "vortex.crm.organisations:company"
+                ]
+            }
+        },
+        "outputs": {},
+        "variables": {},
+        "nodes": [
+            {
+                "id": "start_company_merge",
+                "key": "start",
+                "kind": "start",
+                "outputs": {
+                    "duplicate_company": {
+                        "type": "record_reference",
+                        "required": true,
+                        "record_types": [
+                            "vortex.crm.organisations:company"
+                        ]
+                    }
+                }
+            },
+            {
+                "id": "merge_company",
+                "key": "merge_company",
+                "kind": "action",
+                "target": {
+                    "kind": "named_action",
+                    "action": "vortex.crm.organisations.company.merge"
+                },
+                "inputs": {
+                    "duplicate_company": {
+                        "type": "record_reference",
+                        "value": {
+                            "source": "flow_input",
+                            "input": "duplicate_company"
+                        }
+                    }
+                },
+                "outputs": {},
+                "results": {}
+            },
+            {
+                "id": "return_company_merge_committed",
+                "key": "return_committed",
+                "kind": "return",
+                "results": {},
+                "outcome": "committed"
+            },
+            {
+                "id": "return_company_merge_validation",
+                "key": "return_validation",
+                "kind": "return",
+                "results": {},
+                "outcome": "validation"
+            },
+            {
+                "id": "return_company_merge_refused",
+                "key": "return_refused",
+                "kind": "return",
+                "results": {},
+                "outcome": "refused"
+            },
+            {
+                "id": "return_company_merge_conflict",
+                "key": "return_conflict",
+                "kind": "return",
+                "results": {},
+                "outcome": "conflict"
+            },
+            {
+                "id": "return_company_merge_uncertain",
+                "key": "return_uncertain",
+                "kind": "return",
+                "results": {},
+                "outcome": "uncertain"
+            }
+        ],
+        "edges": [
+            {
+                "id": "begin_company_merge",
+                "from_node": "start_company_merge",
+                "to_node": "merge_company"
+            },
+            {
+                "id": "merge_company_committed",
+                "from_node": "merge_company",
+                "to_node": "return_company_merge_committed",
+                "outcome": "committed"
+            },
+            {
+                "id": "merge_company_validation",
+                "from_node": "merge_company",
+                "to_node": "return_company_merge_validation",
+                "outcome": "validation"
+            },
+            {
+                "id": "merge_company_refused",
+                "from_node": "merge_company",
+                "to_node": "return_company_merge_refused",
+                "outcome": "refused"
+            },
+            {
+                "id": "merge_company_conflict",
+                "from_node": "merge_company",
+                "to_node": "return_company_merge_conflict",
+                "outcome": "conflict"
+            },
+            {
+                "id": "merge_company_uncertain",
+                "from_node": "merge_company",
+                "to_node": "return_company_merge_uncertain",
+                "outcome": "uncertain"
+            }
+        ]
+    },
     {
         "id": "crm_form_flow_0",
         "key": "crm_form_flow_0",
@@ -4664,9 +5006,240 @@
                 "outcome": "uncertain"
             }
         ]
+    },
+    {
+        "id": "crm_named_action_opportunity_mark_won",
+        "key": "crm_named_action_opportunity_mark_won",
+        "name": "Mark opportunity won",
+        "description": "Marks the current opportunity won through the bound opportunity.mark_won named action.",
+        "run_as": "current_user",
+        "inputs": {},
+        "outputs": {},
+        "variables": {},
+        "nodes": [
+            {
+                "id": "start_crm_named_action_opportunity_mark_won",
+                "key": "start",
+                "kind": "start",
+                "outputs": {}
+            },
+            {
+                "id": "run_crm_named_action_opportunity_mark_won",
+                "key": "run_action",
+                "kind": "action",
+                "target": {
+                    "kind": "named_action",
+                    "action": "vortex.crm.opportunities.opportunity.mark_won"
+                },
+                "inputs": {},
+                "outputs": {},
+                "results": {}
+            },
+            {
+                "id": "return_crm_named_action_opportunity_mark_won_committed",
+                "key": "return_committed",
+                "kind": "return",
+                "results": {},
+                "outcome": "committed"
+            },
+            {
+                "id": "return_crm_named_action_opportunity_mark_won_validation",
+                "key": "return_validation",
+                "kind": "return",
+                "results": {},
+                "outcome": "validation"
+            },
+            {
+                "id": "return_crm_named_action_opportunity_mark_won_refused",
+                "key": "return_refused",
+                "kind": "return",
+                "results": {},
+                "outcome": "refused"
+            },
+            {
+                "id": "return_crm_named_action_opportunity_mark_won_conflict",
+                "key": "return_conflict",
+                "kind": "return",
+                "results": {},
+                "outcome": "conflict"
+            },
+            {
+                "id": "return_crm_named_action_opportunity_mark_won_uncertain",
+                "key": "return_uncertain",
+                "kind": "return",
+                "results": {},
+                "outcome": "uncertain"
+            }
+        ],
+        "edges": [
+            {
+                "id": "begin_crm_named_action_opportunity_mark_won",
+                "from_node": "start_crm_named_action_opportunity_mark_won",
+                "to_node": "run_crm_named_action_opportunity_mark_won"
+            },
+            {
+                "id": "run_crm_named_action_opportunity_mark_won_committed",
+                "from_node": "run_crm_named_action_opportunity_mark_won",
+                "to_node": "return_crm_named_action_opportunity_mark_won_committed",
+                "outcome": "committed"
+            },
+            {
+                "id": "run_crm_named_action_opportunity_mark_won_validation",
+                "from_node": "run_crm_named_action_opportunity_mark_won",
+                "to_node": "return_crm_named_action_opportunity_mark_won_validation",
+                "outcome": "validation"
+            },
+            {
+                "id": "run_crm_named_action_opportunity_mark_won_refused",
+                "from_node": "run_crm_named_action_opportunity_mark_won",
+                "to_node": "return_crm_named_action_opportunity_mark_won_refused",
+                "outcome": "refused"
+            },
+            {
+                "id": "run_crm_named_action_opportunity_mark_won_conflict",
+                "from_node": "run_crm_named_action_opportunity_mark_won",
+                "to_node": "return_crm_named_action_opportunity_mark_won_conflict",
+                "outcome": "conflict"
+            },
+            {
+                "id": "run_crm_named_action_opportunity_mark_won_uncertain",
+                "from_node": "run_crm_named_action_opportunity_mark_won",
+                "to_node": "return_crm_named_action_opportunity_mark_won_uncertain",
+                "outcome": "uncertain"
+            }
+        ]
+    },
+    {
+        "id": "crm_named_action_activity_complete",
+        "key": "crm_named_action_activity_complete",
+        "name": "Complete activity",
+        "description": "Completes the current activity through the bound activity.complete named action.",
+        "run_as": "current_user",
+        "inputs": {},
+        "outputs": {},
+        "variables": {},
+        "nodes": [
+            {
+                "id": "start_crm_named_action_activity_complete",
+                "key": "start",
+                "kind": "start",
+                "outputs": {}
+            },
+            {
+                "id": "run_crm_named_action_activity_complete",
+                "key": "run_action",
+                "kind": "action",
+                "target": {
+                    "kind": "named_action",
+                    "action": "vortex.crm.activities.activity.complete"
+                },
+                "inputs": {},
+                "outputs": {},
+                "results": {}
+            },
+            {
+                "id": "return_crm_named_action_activity_complete_committed",
+                "key": "return_committed",
+                "kind": "return",
+                "results": {},
+                "outcome": "committed"
+            },
+            {
+                "id": "return_crm_named_action_activity_complete_validation",
+                "key": "return_validation",
+                "kind": "return",
+                "results": {},
+                "outcome": "validation"
+            },
+            {
+                "id": "return_crm_named_action_activity_complete_refused",
+                "key": "return_refused",
+                "kind": "return",
+                "results": {},
+                "outcome": "refused"
+            },
+            {
+                "id": "return_crm_named_action_activity_complete_conflict",
+                "key": "return_conflict",
+                "kind": "return",
+                "results": {},
+                "outcome": "conflict"
+            },
+            {
+                "id": "return_crm_named_action_activity_complete_uncertain",
+                "key": "return_uncertain",
+                "kind": "return",
+                "results": {},
+                "outcome": "uncertain"
+            }
+        ],
+        "edges": [
+            {
+                "id": "begin_crm_named_action_activity_complete",
+                "from_node": "start_crm_named_action_activity_complete",
+                "to_node": "run_crm_named_action_activity_complete"
+            },
+            {
+                "id": "run_crm_named_action_activity_complete_committed",
+                "from_node": "run_crm_named_action_activity_complete",
+                "to_node": "return_crm_named_action_activity_complete_committed",
+                "outcome": "committed"
+            },
+            {
+                "id": "run_crm_named_action_activity_complete_validation",
+                "from_node": "run_crm_named_action_activity_complete",
+                "to_node": "return_crm_named_action_activity_complete_validation",
+                "outcome": "validation"
+            },
+            {
+                "id": "run_crm_named_action_activity_complete_refused",
+                "from_node": "run_crm_named_action_activity_complete",
+                "to_node": "return_crm_named_action_activity_complete_refused",
+                "outcome": "refused"
+            },
+            {
+                "id": "run_crm_named_action_activity_complete_conflict",
+                "from_node": "run_crm_named_action_activity_complete",
+                "to_node": "return_crm_named_action_activity_complete_conflict",
+                "outcome": "conflict"
+            },
+            {
+                "id": "run_crm_named_action_activity_complete_uncertain",
+                "from_node": "run_crm_named_action_activity_complete",
+                "to_node": "return_crm_named_action_activity_complete_uncertain",
+                "outcome": "uncertain"
+            }
+        ]
     }
 ],
                  "flow_bindings":  [
+                                       {
+                                           "id":  "form_binding_crm_company_merge",
+                                           "control":  "form_crm_company_merge",
+                                           "event_id":  "form_submit_crm_company_merge",
+                                           "event":  "form_submit",
+                                           "flow":  {
+                                                        "kind":  "application_owned",
+                                                        "flow":  "crm_named_action_company_merge"
+                                                    },
+                                           "inputs":  {
+                                                          "duplicate_company":  {
+                                                                                    "type":  "record_reference",
+                                                                                    "value":  {
+                                                                                                  "source":  "form_input",
+                                                                                                  "form":  "form_crm_company_merge",
+                                                                                                  "input":  "duplicate_company"
+                                                                                              }
+                                                                                }
+                                                      },
+                                           "results":  {
+
+                                                       },
+                                           "declared_effects":  [
+                                                                    "form_interaction",
+                                                                    "change"
+                                                                ]
+                                       },
                                        {
                                            "id":  "form_binding_0",
                                            "control":  "form_6_0",
@@ -4863,7 +5436,37 @@
                                                                     "form_interaction",
                                                                     "change"
                                                                 ]
-                                       }
+                                       },
+    {
+        "id": "action_binding_crm_opportunity_mark_won",
+        "control": "action_crm_opportunity_mark_won",
+        "event_id": "event_crm_opportunity_mark_won",
+        "event": "action",
+        "flow": {
+            "kind": "application_owned",
+            "flow": "crm_named_action_opportunity_mark_won"
+        },
+        "inputs": {},
+        "results": {},
+        "declared_effects": [
+            "change"
+        ]
+    },
+    {
+        "id": "action_binding_crm_activity_complete",
+        "control": "action_crm_activity_complete",
+        "event_id": "event_crm_activity_complete",
+        "event": "action",
+        "flow": {
+            "kind": "application_owned",
+            "flow": "crm_named_action_activity_complete"
+        },
+        "inputs": {},
+        "results": {},
+        "declared_effects": [
+            "change"
+        ]
+    }
                                    ]
              }
 }
