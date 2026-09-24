@@ -15,8 +15,17 @@ export type PlacementCapabilityState = Readonly<{
 export type PageCapabilityState = Readonly<{
   pageAllowed: boolean;
   placements: Readonly<Record<string, PlacementCapabilityState>>;
+  /** Current organisation Access version this projection was decided under, when known. */
+  accessVersion?: number;
+  /** Exact installed application release revision this projection was decided under, when known. */
+  applicationReleaseRevision?: number;
 }>;
 
+/**
+ * The permission-filtered page definition the viewer may render. It carries the `accessVersion`
+ * and `applicationReleaseRevision` it was decided under when the server knows them; `undefined`
+ * means the page itself is refused, never an empty page.
+ */
 export type ProjectedPageCapability = Readonly<Record<string, unknown>> | undefined;
 
 /**
@@ -146,12 +155,20 @@ const projectV2 = (
 
 /**
  * Pure server projection over an already verified, exact page and server-owned
- * permission results. Callers never supply this state directly.
+ * permission results. Callers never supply this state directly. The current organisation Access
+ * version and installed application release revision are carried on the result when the server
+ * knows them, so a client can refuse to restore older history, cache or late responses.
  */
 export const projectPageCapability = (
   resolved: ResolvedPageComposition,
   capability: PageCapabilityState,
 ): ProjectedPageCapability => {
   if (!capability.pageAllowed) return undefined;
-  return projectV2(resolved, capability.placements);
+  return {
+    ...projectV2(resolved, capability.placements),
+    ...(capability.accessVersion === undefined ? {} : { accessVersion: capability.accessVersion }),
+    ...(capability.applicationReleaseRevision === undefined
+      ? {}
+      : { applicationReleaseRevision: capability.applicationReleaseRevision }),
+  };
 };

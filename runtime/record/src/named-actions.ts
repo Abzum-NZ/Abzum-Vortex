@@ -22,6 +22,18 @@ import {
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+import type { BeforeSaveRuleWarning } from "@vortex/rule";
+import {
+  beginBeforeSaveRuleExecution,
+  parseBeforeSaveRuleSet,
+  type BeforeSaveRuleExecution,
+} from "./before-save-rules";
+import {
+  performProtectedRecordDelete,
+  settleRecordLifecycleError,
+  type RecordDeleteResult,
+  type Settled,
+} from "./delete-record";
 import {
   deriveEarliestPendingDeadlineTransitionV2,
   deriveParentDeadlineDueTransitions,
@@ -57,7 +69,16 @@ type PreparedAction = PreparedNamedAction &
     changeableFieldIds: ReadonlySet<string>;
     eventDescriptorCount: number;
     correlationId: string;
+    /** The exact release's compiled before-save rules for the subject, unparsed. */
+    beforeSaveRules?: unknown;
   }>;
+
+/**
+ * The named-action result plus any before-save rule warnings of a completed
+ * attempt. The closed result contract has no warning field, so they travel beside it.
+ */
+export type NamedActionServiceResult = HumanOrganizationRequestResult<ExecuteNamedActionResultV2> &
+  Readonly<{ warnings?: readonly BeforeSaveRuleWarning[] }>;
 
 type ActionPreparation =
   | PreparedAction
@@ -185,6 +206,7 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     ),
     eventDescriptorCount: value.eventDescriptors.length,
     correlationId,
+    ...(value.beforeSaveRules === undefined ? {} : { beforeSaveRules: value.beforeSaveRules }),
   };
 };
 
@@ -385,7 +407,7 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
-    ): Promise<HumanOrganizationRequestResult<ExecuteNamedActionResultV2>> {
+    ): Promise<NamedActionServiceResult> {
       const command = executeNamedActionCommandV2Schema.safeParse(commandCandidate);
       if (!command.success || selection.applicationRootId === undefined)
         return { kind: "unavailable" };
@@ -398,7 +420,12 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
       let standardOccurrenceId: string | undefined;
       let declaredOccurrenceIds: readonly string[] | undefined;
       let creationOccurrenceIds: readonly string[] | undefined;
+      let deleteActivityId: string | undefined;
+      let deleteOccurrenceId: string | undefined;
       for (let attempt = 0; attempt < 3; attempt += 1) {
+        // A failed subject delete discards the whole command, receipt included.
+        let deleteSettlement: Settled<unknown> | undefined;
+        const attempted: { rules?: BeforeSaveRuleExecution } = {};
         const result = await requests.runChange(
           session,
           selection,
@@ -469,6 +496,7 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
                 JSON.stringify(previewComposition.creations) ||
               JSON.stringify(composition.relationshipCopies) !==
                 JSON.stringify(previewComposition.relationshipCopies) ||
+              composition.softDeletesSubject !== previewComposition.softDeletesSubject ||
               JSON.stringify(composition.announcedEventKeys) !==
                 JSON.stringify(previewComposition.announcedEventKeys)
             )
@@ -478,6 +506,27 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
               return refusal.outcome === "refused_recorded"
                 ? recordedRefusal
                 : safeRefusal(prepared.correlationId, "operation_refused");
+            }
+
+            // A save that writes subject fields runs the exact release's compiled
+            // before-save rules once. A totals-prepared closure is only reached
+            // when no rule is installed anywhere. Other records the action writes
+            // are not evaluated here: a relationship copy changes another record
+            // of the subject's own type, so a subject rule refuses it rather than
+            // skip it (creations already refuse under any installed rule).
+            if (totalPreparation.outcome !== "prepared") {
+              const ruleSet = parseBeforeSaveRuleSet(
+                prepared.beforeSaveRules,
+                prepared.recordType.recordTypeId,
+              );
+              if (
+                ruleSet === undefined ||
+                (ruleSet.rules.length > 0 &&
+                  (composition.creations.length > 0 || composition.relationshipCopies.length > 0))
+              )
+                return safeRefusal(prepared.correlationId, "operation_refused");
+              if (Object.keys(composition.submittedValues).length > 0)
+                attempted.rules = beginBeforeSaveRuleExecution(ruleSet);
             }
 
             let finalValues: Record<string, unknown> = {};
@@ -541,6 +590,7 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
                         issuedAt,
                         settings?.currency,
                         settings?.timeZone,
+                        attempted.rules,
                       );
               if (
                 !calculated.success ||
@@ -670,14 +720,76 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
                 prepared.correlationId,
                 stored.reasonCode === "command_invalid" ? "invalid_request" : "operation_refused",
               );
-            return completedResult(stored) ?? recordedRefusal;
+            const storedResult = completedResult(stored);
+            // A writer replay means this command already completed, its delete
+            // included, so the subject is never deleted a second time.
+            if (
+              storedResult === undefined ||
+              !composition.softDeletesSubject ||
+              stored.replayed === true
+            )
+              return storedResult ?? recordedRefusal;
+
+            // The subject delete is the shared protected lifecycle delete, run
+            // last in this same transaction against the revision the action
+            // left the subject at: the action's own effects write nothing to a
+            // subject it deletes. It carries the action's command identity and
+            // its own Activity and `deleted` Event identities, and any refusal
+            // throws so the receipt, Activity and Events roll back with it.
+            try {
+              deleteActivityId ??= activityIdSchema.parse(newActivityId());
+              deleteOccurrenceId ??= eventOccurrenceIdSchema.parse(newOccurrenceId());
+            } catch {
+              throw new Error("NAMED_ACTION_OCCURRENCE_ID_INVALID");
+            }
+            try {
+              const deleted = await performProtectedRecordDelete(transaction, issuedAt, {
+                commandId: command.data.commandId,
+                recordTypeId: command.data.recordTypeId,
+                recordId: command.data.recordId,
+                expectedConcurrencyNumber: command.data.expectedConcurrencyNumber,
+                activityId: deleteActivityId,
+                occurrenceId: deleteOccurrenceId,
+              });
+              const deletedResult =
+                deleted.outcome === "deleted" && !deleted.replayed
+                  ? completedResult({
+                      recordId: deleted.recordId,
+                      concurrencyNumber: deleted.concurrencyNumber,
+                      // A deleted subject exposes no values.
+                      values: {},
+                      correlationId: deleted.correlationId,
+                      backgroundDelivery: "pending",
+                    })
+                  : undefined;
+              if (deletedResult === undefined) throw new Error("NAMED_ACTION_DELETE_RESULT_INVALID");
+              return deletedResult;
+            } catch (error) {
+              deleteSettlement = settleRecordLifecycleError(error);
+              throw error;
+            }
           },
         );
+        if (deleteSettlement?.kind === "restart") continue;
+        if (deleteSettlement?.kind === "result") {
+          const refused = deleteSettlement.value as RecordDeleteResult;
+          return {
+            kind: "available",
+            value: safeRefusal(
+              refused.correlationId,
+              refused.outcome === "conflict" ? "conflict" : "operation_refused",
+            ),
+          };
+        }
         if (result.kind !== "available") return result;
         if (result.value === restart) continue;
-        return result.value === recordedRefusal
-          ? { kind: "unavailable" }
-          : { kind: "available", value: result.value as ExecuteNamedActionResultV2 };
+        if (result.value === recordedRefusal) return { kind: "unavailable" };
+        const value = result.value as ExecuteNamedActionResultV2;
+        return value.outcome === "completed" &&
+          attempted.rules !== undefined &&
+          attempted.rules.warnings.length > 0
+          ? { kind: "available", value, warnings: [...attempted.rules.warnings] }
+          : { kind: "available", value };
       }
       return { kind: "temporarily_unavailable" };
     },
