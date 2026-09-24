@@ -234,11 +234,12 @@ const sourceWorkflowDeclaredOutputSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if ((value.type === "record_reference") !== (value.record_types !== undefined))
+    if ((value.type === "record_reference" || value.type === "record_reference_list") !==
+      (value.record_types !== undefined))
       context.addIssue({
         code: "custom",
         path: ["record_types"],
-        message: "Record-reference outputs require their allowed record types",
+        message: "Record-reference and record-list outputs require their allowed record types",
       });
   });
 const sourceWorkflowConfigByType = {
@@ -388,11 +389,12 @@ const sourceWorkflowTriggerInputSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if ((value.type === "record_reference") !== (value.record_types !== undefined))
+    if ((value.type === "record_reference" || value.type === "record_reference_list") !==
+      (value.record_types !== undefined))
       context.addIssue({
         code: "custom",
         path: ["record_types"],
-        message: "Record-reference inputs require their allowed record types",
+        message: "Record-reference and record-list inputs require their allowed record types",
       });
   });
 const sourceWorkflowTriggerCommon = {
