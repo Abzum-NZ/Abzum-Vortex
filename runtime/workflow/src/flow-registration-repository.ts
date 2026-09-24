@@ -224,8 +224,8 @@ const parseRegistration = (value: unknown): KestraFlowRegistration => {
 };
 
 const parseResult = (rows: readonly RegistrationRow[]): KestraFlowRegistrationResult => {
-  if (rows.length !== 1 || rows[0] === undefined) throw invalidStorageResult();
   const row = rows[0];
+  if (rows.length !== 1 || row === undefined) throw invalidStorageResult();
   if (row.outcome === "registered" || row.outcome === "existing")
     return Object.freeze({ outcome: row.outcome, registration: parseRegistration(row.result) });
   if (row.outcome === "refused") {

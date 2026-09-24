@@ -187,8 +187,11 @@ begin
       message = 'Workflow flow candidate is invalid or active';
   end if;
 
-  if (p_candidate ->> 'workflowRevision') !~ '^[1-9][0-9]*$'
-    or (p_candidate ->> 'workflowRevision')::bigint <> p_workflow_revision then
+  if (p_candidate ->> 'workflowRevision') !~ '^[1-9][0-9]*$' then
+    raise exception using errcode = '22023',
+      message = 'Workflow flow candidate revision is invalid';
+  end if;
+  if (p_candidate ->> 'workflowRevision')::bigint <> p_workflow_revision then
     raise exception using errcode = '22023',
       message = 'Workflow flow candidate revision does not match its identity';
   end if;
