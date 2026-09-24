@@ -19,9 +19,7 @@ export const safeHttpsUrlSchema = z
     protocol: /^https$/,
     error: "Only valid HTTPS addresses are accepted",
   })
-  .max(safeHttpsUrlMaximumLength, {
-    message: `Only HTTPS addresses of at most ${safeHttpsUrlMaximumLength} characters are accepted`,
-  })
+  .max(safeHttpsUrlMaximumLength)
   .refine(
     (value) => {
       const address = new URL(value);
