@@ -2,7 +2,7 @@ import { z } from "zod";
 import { correlationIdSchema } from "./common";
 import { builderKeySchema, namespacedKeySchema } from "./identifiers";
 
-export const definitionValidationCatalogueVersion = "1.0.0" as const;
+export const definitionValidationCatalogueVersion = "1.1.0" as const;
 
 export const definitionDocumentKindSchema = z.enum(["module", "application", "connection_type"]);
 
@@ -67,6 +67,7 @@ export const definitionValidationErrorCodes = [
   "definition_dependency_cycle",
   "definition_unsafe_content",
   "definition_incompatible_change",
+  "definition_more_errors",
   "definition_validation_failed",
 ] as const;
 
@@ -161,6 +162,11 @@ const definitionValidationErrorCatalogueSource = {
     message: "The definition change is not compatible with its published contract.",
     guidance: "Make a compatible change or publish it through the required version process.",
   },
+  definition_more_errors: {
+    order: 900,
+    message: "Additional validation errors were omitted.",
+    guidance: "Resolve the displayed errors and validate the definition again.",
+  },
   definition_validation_failed: {
     order: 1_000,
     message: "The definition could not be validated.",
@@ -244,7 +250,7 @@ export const definitionRuleFailureSchema = z
   })
   .strict();
 
-const rawIssuePathSchema = z.array(z.union([z.string(), z.number().int().nonnegative()])).max(50);
+const rawIssuePathSchema = z.array(z.union([z.string(), z.number().int().nonnegative()])).max(64);
 
 export const definitionValidationPathMapEntrySchema = z
   .object({
@@ -257,8 +263,8 @@ export const definitionValidationTranslationContextSchema = z
   .object({
     correlationId: correlationIdSchema,
     rootLocation: definitionValidationLocationSchema,
-    pathMap: z.array(definitionValidationPathMapEntrySchema).max(500).default([]),
-    requiredPaths: z.array(rawIssuePathSchema).max(500).default([]),
+    pathMap: z.array(definitionValidationPathMapEntrySchema).max(50_000).default([]),
+    requiredPaths: z.array(rawIssuePathSchema).max(50_000).default([]),
   })
   .strict();
 
@@ -416,7 +422,11 @@ function finishResult(
     catalogueVersion: definitionValidationCatalogueVersion,
     correlationId,
     errors:
-      sorted.length > 0 ? sorted : [makePublicError("definition_validation_failed", correlationId)],
+      sorted.length > 200
+        ? [...sorted.slice(0, 199), makePublicError("definition_more_errors", correlationId)]
+        : sorted.length > 0
+          ? sorted
+          : [makePublicError("definition_validation_failed", correlationId)],
   });
 }
 
