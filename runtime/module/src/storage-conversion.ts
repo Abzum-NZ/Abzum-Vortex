@@ -33,7 +33,7 @@ const databaseValueTypeValues = [
 
 export type StorageConversionDatabaseValueType = (typeof databaseValueTypeValues)[number];
 
-const planStateValues = ["planned", "converting", "converted", "failed"] as const;
+const planStateValues = ["planned", "converting", "converted"] as const;
 
 export type StorageConversionPlanState = (typeof planStateValues)[number];
 
@@ -100,8 +100,6 @@ export interface StorageConversionPlanSummary {
   readonly conversionSemantic: StorageConversionSemantic;
   readonly sourceDatabaseValueType: StorageConversionDatabaseValueType;
   readonly targetDatabaseValueType: StorageConversionDatabaseValueType;
-  readonly sourceColumnToken: string;
-  readonly targetColumnToken: string;
   readonly organisationId: string;
   readonly applicationRootId: string | null;
   readonly state: StorageConversionPlanState;
@@ -140,7 +138,6 @@ export interface StorageConversionCorrections {
 type PlanRow = DatabaseRow & { readonly conversion_plan: unknown };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const columnTokenPattern = /^f_[a-f0-9]{32}$/;
 const nilUuid = "00000000-0000-0000-0000-000000000000";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -226,8 +223,6 @@ const parsePlanSummary = (value: unknown): StorageConversionPlanSummary => {
   const conversionSemantic = asSemantic(value.conversionSemantic);
   const sourceDatabaseValueType = asDatabaseValueType(value.sourceDatabaseValueType);
   const targetDatabaseValueType = asDatabaseValueType(value.targetDatabaseValueType);
-  const sourceColumnToken = value.sourceColumnToken;
-  const targetColumnToken = value.targetColumnToken;
   const organisationId = value.organisationId;
   const planRevision = asRevision(value.planRevision);
   const convertedCount = asNonNegativeCount(value.convertedCount);
@@ -239,10 +234,6 @@ const parsePlanSummary = (value: unknown): StorageConversionPlanSummary => {
     conversionSemantic === undefined ||
     sourceDatabaseValueType === undefined ||
     targetDatabaseValueType === undefined ||
-    typeof sourceColumnToken !== "string" ||
-    !columnTokenPattern.test(sourceColumnToken) ||
-    typeof targetColumnToken !== "string" ||
-    !columnTokenPattern.test(targetColumnToken) ||
     !isUuid(organisationId) ||
     !isNullableUuid(value.applicationRootId) ||
     asPlanState(value.state) === undefined ||
@@ -259,8 +250,6 @@ const parsePlanSummary = (value: unknown): StorageConversionPlanSummary => {
     conversionSemantic,
     sourceDatabaseValueType,
     targetDatabaseValueType,
-    sourceColumnToken,
-    targetColumnToken,
     organisationId,
     applicationRootId: value.applicationRootId as string | null,
     state: value.state as StorageConversionPlanState,
