@@ -425,7 +425,9 @@ export const identitySessionResolutionSchema = z.discriminatedUnion("kind", [
 export const organizationLauncherEntrySchema = z
   .object({
     organizationId: organizationIdSchema,
+    tenantShortName: builderKeySchema,
     tenantDisplayName: z.string().trim().min(1).max(120),
+    organizationShortName: builderKeySchema,
     organizationDisplayName: z.string().trim().min(1).max(120),
     accountDisplayName: z.string().trim().min(1).max(120).optional(),
   })
