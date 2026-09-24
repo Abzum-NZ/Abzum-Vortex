@@ -358,7 +358,8 @@ const asResult = (record: FileRemovalPersistedRecord): FileRemovalResult =>
  * Coordinates one source-organisation-scoped, permanently authorised file
  * removal. Caller evidence is parsed, re-evaluated through the #657 authority
  * boundary, and then bound to the canonical versioned FileRecord before any
- * side effect occurs.
+ * side effect occurs. Eligibility is decided again before each external stage,
+ * including on resume, and must still match the recorded intent's binding.
  */
 export const createFileRemovalCoordinator = (
   dependencies: FileRemovalCoordinatorDependencies,
@@ -483,6 +484,9 @@ export const createFileRemovalCoordinator = (
         if (record.kind === "terminal") return terminalResult(record);
         assertProgressRecord(record);
         const stage = record.currentStage;
+        // Only previews and the storage object are external deletions. Metadata
+        // is reached after the object is already gone; its finalize stays
+        // guarded by the intent's file revision and claim.
         if (stage !== "metadata") await assertIntentStillEligible(intent);
         const claimedAt = nowIso(clock);
         const claimId = platformIdSchema.parse(idGenerator());
