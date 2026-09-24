@@ -7,6 +7,11 @@ import { loadOrganizationLauncher } from "../_lib/organization-context";
 
 export const dynamic = "force-dynamic";
 
+const organizationAddressPath = (entry: {
+  tenantShortName: string;
+  organizationShortName: string;
+}) => `/${encodeURIComponent(entry.tenantShortName)}/${encodeURIComponent(entry.organizationShortName)}`;
+
 export default async function SignedInPage() {
   const result = await resolveIdentitySession();
   if (result.kind === "temporarily_unavailable")
@@ -35,8 +40,8 @@ export default async function SignedInPage() {
       </AuthShell>
     );
   if (launcher.kind !== "available") redirect("/auth/session-ended");
-  if (launcher.entries.length === 1)
-    redirect(`/organizations/${launcher.entries[0]?.organizationId}`);
+  const onlyEntry = launcher.entries[0];
+  if (launcher.entries.length === 1 && onlyEntry) redirect(organizationAddressPath(onlyEntry));
 
   return (
     <AuthShell
@@ -55,7 +60,7 @@ export default async function SignedInPage() {
           <ul>
             {launcher.entries.map((entry) => (
               <li key={entry.organizationId}>
-                <Link href={`/organizations/${entry.organizationId}`}>
+                <Link href={organizationAddressPath(entry)}>
                   {entry.organizationDisplayName} · {entry.tenantDisplayName}
                   {entry.accountDisplayName ? ` · ${entry.accountDisplayName}` : ""}
                 </Link>

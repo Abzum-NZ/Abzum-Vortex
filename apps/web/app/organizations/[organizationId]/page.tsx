@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { signOut } from "../../auth/actions";
 import { AuthShell } from "../../auth/_components/auth-shell";
 import { resolveIdentitySession } from "../../auth/_lib/session-server";
 import { loadSelectedOrganization } from "../../_lib/organization-context";
@@ -52,20 +51,7 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
       </AuthShell>
     );
 
-  return (
-    <AuthShell
-      eyebrow={selected.entry.tenantDisplayName}
-      title={selected.entry.organizationDisplayName}
-      description={
-        selected.entry.accountDisplayName
-          ? `Signed in as ${selected.entry.accountDisplayName}.`
-          : "Your organisation context is active for this tab."
-      }
-    >
-      <Link href="/signed-in">Switch organisation</Link>
-      <form action={signOut} className="auth-form">
-        <button type="submit">Sign out</button>
-      </form>
-    </AuthShell>
+  redirect(
+    `/${encodeURIComponent(selected.entry.tenantShortName)}/${encodeURIComponent(selected.entry.organizationShortName)}`,
   );
 }
