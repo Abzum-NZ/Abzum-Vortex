@@ -1,0 +1,2057 @@
+{
+  "source_contract_version": "2.0.0",
+  "root_alias": "app_organisation_administration",
+  "key": "vortex.app.organisation_administration",
+  "kind": "application",
+  "body": {
+    "name": "Organisation Administration",
+    "description": "Organisation accounts, invitations, runtime settings, notices and privacy request cases for an organisation administrator, entirely definition-led.",
+    "icon": "sliders-horizontal",
+    "home_page": "organisation_overview",
+    "module_bindings": [
+      {
+        "module": "vortex.organisation_administration",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        },
+        "purpose": "primary"
+      }
+    ],
+    "permissions": [
+      {
+        "id": "app_permission_open",
+        "key": "application.organisation_administration.open",
+        "label": "Open Organisation Administration",
+        "description": "Allows opening the Organisation Administration application.",
+        "action_kind": "named",
+        "named_action": "open",
+        "administrative": false
+      },
+      {
+        "id": "app_permission_manage",
+        "key": "application.organisation_administration.manage",
+        "label": "Manage Organisation Administration",
+        "description": "Allows managing Organisation Administration definition-level administration.",
+        "action_kind": "manage",
+        "administrative": true
+      }
+    ],
+    "roles": [
+      {
+        "id": "role_organisation_administrator",
+        "key": "organisation_administrator",
+        "name": "Organisation administrator",
+        "home_page": "organisation_overview",
+        "permissions": [
+          "application.organisation_administration.open",
+          "vortex.organisation_administration.organisation_notice.create",
+          "vortex.organisation_administration.organisation_notice.read",
+          "vortex.organisation_administration.organisation_notice.update",
+          "vortex.organisation_administration.organisation_notice.soft_delete",
+          "vortex.organisation_administration.organisation_notice.restore",
+          "vortex.organisation_administration.organisation_notice.export",
+          "vortex.organisation_administration.organisation_notice.record_notice",
+          "vortex.organisation_administration.organisation_notice.withdraw",
+          "vortex.organisation_administration.privacy_request_case.create",
+          "vortex.organisation_administration.privacy_request_case.read",
+          "vortex.organisation_administration.privacy_request_case.update",
+          "vortex.organisation_administration.privacy_request_case.soft_delete",
+          "vortex.organisation_administration.privacy_request_case.restore",
+          "vortex.organisation_administration.privacy_request_case.export",
+          "vortex.organisation_administration.privacy_request_case.record_privacy_request",
+          "vortex.organisation_administration.privacy_request_case.complete",
+          "vortex.organisation_administration.privacy_request_case.refuse"
+        ]
+      }
+    ],
+    "navigation": [
+      {
+        "id": "nav_organisation",
+        "type": "heading",
+        "label": "Organisation",
+        "children": [
+          {
+            "id": "nav_overview",
+            "type": "page",
+            "label": "Overview",
+            "page": "organisation_overview",
+            "permission": "application.organisation_administration.open"
+          },
+          {
+            "id": "nav_accounts",
+            "type": "page",
+            "label": "Organisation accounts",
+            "page": "organisation_accounts",
+            "permission": "application.organisation_administration.open"
+          },
+          {
+            "id": "nav_invitations",
+            "type": "page",
+            "label": "Invitations",
+            "page": "organisation_invitations",
+            "permission": "application.organisation_administration.open"
+          },
+          {
+            "id": "nav_runtime_settings",
+            "type": "page",
+            "label": "Runtime settings",
+            "page": "organisation_runtime_settings",
+            "permission": "application.organisation_administration.open"
+          }
+        ]
+      },
+      {
+        "id": "nav_content",
+        "type": "heading",
+        "label": "Organisation content",
+        "children": [
+          {
+            "id": "nav_notices",
+            "type": "page",
+            "label": "Notices",
+            "page": "organisation_notices",
+            "permission": "vortex.organisation_administration.organisation_notice.read"
+          },
+          {
+            "id": "nav_record_notice",
+            "type": "page",
+            "label": "Record notice",
+            "page": "record_organisation_notice",
+            "permission": "vortex.organisation_administration.organisation_notice.record_notice"
+          },
+          {
+            "id": "nav_privacy_cases",
+            "type": "page",
+            "label": "Privacy request cases",
+            "page": "privacy_request_cases",
+            "permission": "vortex.organisation_administration.privacy_request_case.read"
+          },
+          {
+            "id": "nav_record_privacy_request",
+            "type": "page",
+            "label": "Record privacy request",
+            "page": "record_privacy_request_case",
+            "permission": "vortex.organisation_administration.privacy_request_case.record_privacy_request"
+          }
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "id": "qry_organisation_notices",
+        "key": "organisation_notices",
+        "record_type": "vortex.organisation_administration:organisation_notice",
+        "select": [
+          "title",
+          "body",
+          "state",
+          "published_at"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "title",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_privacy_request_cases",
+        "key": "privacy_request_cases",
+        "record_type": "vortex.organisation_administration:privacy_request_case",
+        "select": [
+          "subject",
+          "request_kind",
+          "state",
+          "received_at",
+          "closed_at"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "received_at",
+            "direction": "descending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      }
+    ],
+    "workflows": [],
+    "pipelines": [],
+    "connection_bindings": [],
+    "interfaces": [],
+    "actions": [],
+    "events": [
+      {
+        "id": "event_organisation_settings_action",
+        "key": "vortex.app.organisation_administration.settings_action",
+        "record_type": "vortex.organisation_administration:organisation_notice",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      }
+    ],
+    "public_addresses": [],
+    "platform_block_dependencies": [],
+    "shells": [
+      {
+        "id": "shell_organisation_administration",
+        "key": "organisation_administration_shell",
+        "name": "Organisation administration shell",
+        "layout": {
+          "placements": {
+            "shell_root": {
+              "block": {
+                "block_id": "a3b7065b-47ef-4c92-93d1-59300f8b059c",
+                "release_version": "1.0.0"
+              },
+              "settings": {
+                "title": {
+                  "kind": "text",
+                  "value": "Organisation administration"
+                }
+              },
+              "theme_overrides": {},
+              "responsive": {
+                "desktop": {
+                  "visible": true,
+                  "width": {
+                    "kind": "fill"
+                  },
+                  "height": {
+                    "kind": "content"
+                  }
+                }
+              },
+              "slots": {
+                "tab_one": {
+                  "placements": {},
+                  "order": {
+                    "desktop": []
+                  }
+                }
+              }
+            }
+          },
+          "order": {
+            "desktop": [
+              "shell_root"
+            ]
+          }
+        },
+        "content_slots": [
+          {
+            "id": "slot_primary",
+            "key": "primary",
+            "label": "Primary",
+            "required": true,
+            "allowed_child_categories": [
+              "content",
+              "data",
+              "figures",
+              "record",
+              "actions",
+              "input",
+              "layout"
+            ],
+            "parent_placement": "shell_root",
+            "parent_slot": "tab_one"
+          }
+        ]
+      }
+    ],
+    "pages": [
+      {
+        "id": "page_organisation_overview",
+        "key": "organisation_overview",
+        "name": "Organisation overview",
+        "type": "dashboard",
+        "permission": "application.organisation_administration.open",
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "failure",
+          "recovery"
+        ],
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_organisation_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "overview_text": {
+                  "block": {
+                    "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Organisation overview"
+                    },
+                    "text": {
+                      "kind": "text",
+                      "value": "Review organisation accounts, invitations, runtime settings, notices and privacy request cases. Account, invitation and runtime-settings displays are read live from protected Identity and Access read models. Role grants, group membership and assignments are managed in the IAM application."
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                }
+              },
+              "order": {
+                "desktop": [
+                  "overview_text"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_organisation_accounts",
+        "key": "organisation_accounts",
+        "name": "Organisation accounts",
+        "type": "dashboard",
+        "permission": "application.organisation_administration.open",
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "failure",
+          "recovery"
+        ],
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_organisation_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "accounts_text": {
+                  "block": {
+                    "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Organisation accounts"
+                    },
+                    "text": {
+                      "kind": "text",
+                      "value": "Organisation accounts are read live from protected Identity and Access data; no account directory is copied into this application. Role grants run in the IAM application, never here."
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                },
+                "accounts_region": {
+                  "block": {
+                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Organisation accounts"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "read_model": "organization_accounts"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "accounts_text",
+                  "accounts_region"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_organisation_invitations",
+        "key": "organisation_invitations",
+        "name": "Invitations",
+        "type": "dashboard",
+        "permission": "application.organisation_administration.open",
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "failure",
+          "recovery"
+        ],
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_organisation_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "invitations_text": {
+                  "block": {
+                    "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Invitations"
+                    },
+                    "text": {
+                      "kind": "text",
+                      "value": "Pending and past invitations are read live from protected Identity and Access data. Invitations carrying intended role assignments follow the governed IAM journey; this application offers no grant control."
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                },
+                "invitations_region": {
+                  "block": {
+                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Invitations"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "read_model": "organization_invitations"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "invitations_text",
+                  "invitations_region"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_organisation_runtime_settings",
+        "key": "organisation_runtime_settings",
+        "name": "Runtime settings",
+        "type": "dashboard",
+        "permission": "application.organisation_administration.open",
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "failure",
+          "recovery"
+        ],
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_organisation_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "settings_text": {
+                  "block": {
+                    "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Runtime settings"
+                    },
+                    "text": {
+                      "kind": "text",
+                      "value": "The organisation's current runtime localisation settings are read live from protected Access data below. Change them or the organisation default application with the forms below: each runs under your own authority in protected Access, is checked against the settings revision you supply, and is refused if you lack the authority. These settings are never copied into ordinary records."
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                },
+                "settings_region": {
+                  "block": {
+                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Current runtime settings"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "read_model": "organization_runtime_settings"
+                },
+                "form_update_runtime_settings": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Update runtime settings"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "input_update_runtime_settings_expected_revision": {
+                          "block": {
+                            "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "expected_revision"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Expected revision"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "integer": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "min_value": {
+                              "kind": "number",
+                              "value": 1
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_update_runtime_settings_language": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "language"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Language"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_update_runtime_settings_time_zone": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "time_zone"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Time zone"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_update_runtime_settings_currency": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "currency"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Currency"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_update_runtime_settings_date_format": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "date_format"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Date format"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "options": {
+                              "kind": "list",
+                              "items": [
+                                {
+                                  "kind": "group",
+                                  "properties": {
+                                    "key": {
+                                      "kind": "text",
+                                      "value": "short"
+                                    },
+                                    "label": {
+                                      "kind": "text",
+                                      "value": "Short"
+                                    }
+                                  }
+                                },
+                                {
+                                  "kind": "group",
+                                  "properties": {
+                                    "key": {
+                                      "kind": "text",
+                                      "value": "medium"
+                                    },
+                                    "label": {
+                                      "kind": "text",
+                                      "value": "Medium"
+                                    }
+                                  }
+                                },
+                                {
+                                  "kind": "group",
+                                  "properties": {
+                                    "key": {
+                                      "kind": "text",
+                                      "value": "long"
+                                    },
+                                    "label": {
+                                      "kind": "text",
+                                      "value": "Long"
+                                    }
+                                  }
+                                },
+                                {
+                                  "kind": "group",
+                                  "properties": {
+                                    "key": {
+                                      "kind": "text",
+                                      "value": "full"
+                                    },
+                                    "label": {
+                                      "kind": "text",
+                                      "value": "Full"
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_update_runtime_settings_number_format": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "number_format"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Number format"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "options": {
+                              "kind": "list",
+                              "items": [
+                                {
+                                  "kind": "group",
+                                  "properties": {
+                                    "key": {
+                                      "kind": "text",
+                                      "value": "auto"
+                                    },
+                                    "label": {
+                                      "kind": "text",
+                                      "value": "Automatic grouping"
+                                    }
+                                  }
+                                },
+                                {
+                                  "kind": "group",
+                                  "properties": {
+                                    "key": {
+                                      "kind": "text",
+                                      "value": "always"
+                                    },
+                                    "label": {
+                                      "kind": "text",
+                                      "value": "Always group"
+                                    }
+                                  }
+                                },
+                                {
+                                  "kind": "group",
+                                  "properties": {
+                                    "key": {
+                                      "kind": "text",
+                                      "value": "min2"
+                                    },
+                                    "label": {
+                                      "kind": "text",
+                                      "value": "Group from two digits"
+                                    }
+                                  }
+                                },
+                                {
+                                  "kind": "group",
+                                  "properties": {
+                                    "key": {
+                                      "kind": "text",
+                                      "value": "never"
+                                    },
+                                    "label": {
+                                      "kind": "text",
+                                      "value": "Never group"
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "button_update_runtime_settings": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Update runtime settings"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "action"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "input_update_runtime_settings_expected_revision",
+                          "input_update_runtime_settings_language",
+                          "input_update_runtime_settings_time_zone",
+                          "input_update_runtime_settings_currency",
+                          "input_update_runtime_settings_date_format",
+                          "input_update_runtime_settings_number_format",
+                          "button_update_runtime_settings"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "form_set_default_application": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Set default application"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "input_set_default_application_expected_revision": {
+                          "block": {
+                            "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "expected_revision"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Expected revision"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "integer": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "min_value": {
+                              "kind": "number",
+                              "value": 1
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_set_default_application_default_application_root_id": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "default_application_root_id"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Default application root id"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": false
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "button_set_default_application": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Set default application"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "action"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "input_set_default_application_expected_revision",
+                          "input_set_default_application_default_application_root_id",
+                          "button_set_default_application"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "order": {
+                "desktop": [
+                  "settings_text",
+                  "settings_region",
+                  "form_update_runtime_settings",
+                  "form_set_default_application"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_organisation_notices",
+        "key": "organisation_notices",
+        "name": "Organisation notices",
+        "type": "list",
+        "record_type": "vortex.organisation_administration:organisation_notice",
+        "permission": "vortex.organisation_administration.organisation_notice.read",
+        "query": "organisation_notices",
+        "arrangements": [
+          "table",
+          "summary"
+        ],
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "access_ended",
+          "failure",
+          "recovery"
+        ],
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_organisation_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "notices_table": {
+                  "block": {
+                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Organisation notices"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "query": "organisation_notices"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "notices_table"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_record_notice",
+        "key": "record_organisation_notice",
+        "name": "Record organisation notice",
+        "type": "form",
+        "record_type": "vortex.organisation_administration:organisation_notice",
+        "permission": "vortex.organisation_administration.organisation_notice.record_notice",
+        "commit_action": "vortex.organisation_administration.organisation_notice.record_notice",
+        "states": [
+          "normal",
+          "loading",
+          "validation",
+          "refused",
+          "conflict",
+          "failure",
+          "recovery"
+        ],
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_organisation_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "notice_form": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Record organisation notice"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "notice_title_input": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "title"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Title"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "multiline": {
+                              "kind": "boolean",
+                              "value": false
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "notice_body_input": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "body"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Notice text"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "multiline": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "notice_title_input",
+                          "notice_body_input"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "order": {
+                "desktop": [
+                  "notice_form"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_privacy_request_cases",
+        "key": "privacy_request_cases",
+        "name": "Privacy request cases",
+        "type": "list",
+        "record_type": "vortex.organisation_administration:privacy_request_case",
+        "permission": "vortex.organisation_administration.privacy_request_case.read",
+        "query": "privacy_request_cases",
+        "arrangements": [
+          "table",
+          "summary"
+        ],
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "access_ended",
+          "failure",
+          "recovery"
+        ],
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_organisation_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "privacy_cases_table": {
+                  "block": {
+                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Privacy request cases"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "query": "privacy_request_cases"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "privacy_cases_table"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_record_privacy_request",
+        "key": "record_privacy_request_case",
+        "name": "Record privacy request case",
+        "type": "form",
+        "record_type": "vortex.organisation_administration:privacy_request_case",
+        "permission": "vortex.organisation_administration.privacy_request_case.record_privacy_request",
+        "commit_action": "vortex.organisation_administration.privacy_request_case.record_privacy_request",
+        "states": [
+          "normal",
+          "loading",
+          "validation",
+          "refused",
+          "conflict",
+          "failure",
+          "recovery"
+        ],
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_organisation_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "privacy_form": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Record privacy request case"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "privacy_subject_input": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "subject"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Subject"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "multiline": {
+                              "kind": "boolean",
+                              "value": false
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "privacy_details_input": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "details"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Request details"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "multiline": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "privacy_subject_input",
+                          "privacy_details_input"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "order": {
+                "desktop": [
+                  "privacy_form"
+                ]
+              }
+            }
+          }
+        }
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow_update_runtime_settings",
+        "key": "update_runtime_settings",
+        "name": "Update runtime settings",
+        "run_as": "current_user",
+        "inputs": {
+          "expected_revision": {
+            "type": "whole_number",
+            "required": true
+          },
+          "language": {
+            "type": "text",
+            "required": true
+          },
+          "time_zone": {
+            "type": "text",
+            "required": true
+          },
+          "currency": {
+            "type": "text",
+            "required": true
+          },
+          "date_format": {
+            "type": "choice",
+            "required": true
+          },
+          "number_format": {
+            "type": "choice",
+            "required": true
+          }
+        },
+        "outputs": {
+          "revision": {
+            "type": "whole_number",
+            "required": false
+          }
+        },
+        "variables": {},
+        "nodes": [
+          {
+            "id": "node_start",
+            "key": "start",
+            "kind": "start",
+            "outputs": {
+              "expected_revision": {
+                "type": "whole_number",
+                "required": true
+              },
+              "language": {
+                "type": "text",
+                "required": true
+              },
+              "time_zone": {
+                "type": "text",
+                "required": true
+              },
+              "currency": {
+                "type": "text",
+                "required": true
+              },
+              "date_format": {
+                "type": "choice",
+                "required": true
+              },
+              "number_format": {
+                "type": "choice",
+                "required": true
+              }
+            }
+          },
+          {
+            "id": "node_operation",
+            "key": "operation",
+            "kind": "action",
+            "target": {
+              "kind": "protected_operation",
+              "operation": {
+                "owner": {
+                  "kind": "platform_service",
+                  "serviceId": "e0a60e5a-cb5c-449d-ab9d-4a47ab344e3f"
+                },
+                "operationId": "4de3ad3d-c6d2-4523-9113-255093526b45"
+              },
+              "release_version": "1.0.0"
+            },
+            "inputs": {
+              "expected_revision": {
+                "type": "whole_number",
+                "value": {
+                  "source": "flow_input",
+                  "input": "expected_revision"
+                }
+              },
+              "language": {
+                "type": "text",
+                "value": {
+                  "source": "flow_input",
+                  "input": "language"
+                }
+              },
+              "time_zone": {
+                "type": "text",
+                "value": {
+                  "source": "flow_input",
+                  "input": "time_zone"
+                }
+              },
+              "currency": {
+                "type": "text",
+                "value": {
+                  "source": "flow_input",
+                  "input": "currency"
+                }
+              },
+              "date_format": {
+                "type": "choice",
+                "value": {
+                  "source": "flow_input",
+                  "input": "date_format"
+                }
+              },
+              "number_format": {
+                "type": "choice",
+                "value": {
+                  "source": "flow_input",
+                  "input": "number_format"
+                }
+              }
+            },
+            "outputs": {
+              "revision": {
+                "type": "whole_number",
+                "required": false
+              }
+            },
+            "results": {
+              "revision": {
+                "output": "revision",
+                "type": "whole_number"
+              }
+            }
+          },
+          {
+            "id": "node_committed",
+            "key": "return_committed",
+            "kind": "return",
+            "outcome": "committed",
+            "results": {
+              "revision": {
+                "source": "node_output",
+                "node": "node_operation",
+                "output": "revision"
+              }
+            }
+          },
+          {
+            "id": "node_refused",
+            "key": "return_refused",
+            "kind": "return",
+            "outcome": "refused",
+            "results": {}
+          },
+          {
+            "id": "node_conflict",
+            "key": "return_conflict",
+            "kind": "return",
+            "outcome": "conflict",
+            "results": {}
+          },
+          {
+            "id": "node_validation",
+            "key": "return_validation",
+            "kind": "return",
+            "outcome": "validation",
+            "results": {}
+          },
+          {
+            "id": "node_failed",
+            "key": "return_failed",
+            "kind": "return",
+            "outcome": "failed",
+            "results": {}
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge_start",
+            "from_node": "node_start",
+            "to_node": "node_operation"
+          },
+          {
+            "id": "edge_committed",
+            "from_node": "node_operation",
+            "to_node": "node_committed",
+            "outcome": "committed"
+          },
+          {
+            "id": "edge_refused",
+            "from_node": "node_operation",
+            "to_node": "node_refused",
+            "outcome": "refused"
+          },
+          {
+            "id": "edge_conflict",
+            "from_node": "node_operation",
+            "to_node": "node_conflict",
+            "outcome": "conflict"
+          },
+          {
+            "id": "edge_validation",
+            "from_node": "node_operation",
+            "to_node": "node_validation",
+            "outcome": "validation"
+          },
+          {
+            "id": "edge_failed",
+            "from_node": "node_operation",
+            "to_node": "node_failed",
+            "outcome": "failed"
+          }
+        ]
+      },
+      {
+        "id": "flow_set_default_application",
+        "key": "set_default_application",
+        "name": "Set default application",
+        "run_as": "current_user",
+        "inputs": {
+          "expected_revision": {
+            "type": "whole_number",
+            "required": true
+          },
+          "default_application_root_id": {
+            "type": "text",
+            "required": false
+          }
+        },
+        "outputs": {
+          "default_application_root_id": {
+            "type": "text",
+            "required": false
+          },
+          "revision": {
+            "type": "whole_number",
+            "required": false
+          }
+        },
+        "variables": {},
+        "nodes": [
+          {
+            "id": "node_start",
+            "key": "start",
+            "kind": "start",
+            "outputs": {
+              "expected_revision": {
+                "type": "whole_number",
+                "required": true
+              },
+              "default_application_root_id": {
+                "type": "text",
+                "required": false
+              }
+            }
+          },
+          {
+            "id": "node_operation",
+            "key": "operation",
+            "kind": "action",
+            "target": {
+              "kind": "protected_operation",
+              "operation": {
+                "owner": {
+                  "kind": "platform_service",
+                  "serviceId": "e0a60e5a-cb5c-449d-ab9d-4a47ab344e3f"
+                },
+                "operationId": "9116e660-375d-4157-b3be-d0943a1c988a"
+              },
+              "release_version": "1.0.0"
+            },
+            "inputs": {
+              "expected_revision": {
+                "type": "whole_number",
+                "value": {
+                  "source": "flow_input",
+                  "input": "expected_revision"
+                }
+              },
+              "default_application_root_id": {
+                "type": "text",
+                "value": {
+                  "source": "flow_input",
+                  "input": "default_application_root_id"
+                }
+              }
+            },
+            "outputs": {
+              "default_application_root_id": {
+                "type": "text",
+                "required": false
+              },
+              "revision": {
+                "type": "whole_number",
+                "required": false
+              }
+            },
+            "results": {
+              "default_application_root_id": {
+                "output": "default_application_root_id",
+                "type": "text"
+              },
+              "revision": {
+                "output": "revision",
+                "type": "whole_number"
+              }
+            }
+          },
+          {
+            "id": "node_committed",
+            "key": "return_committed",
+            "kind": "return",
+            "outcome": "committed",
+            "results": {
+              "default_application_root_id": {
+                "source": "node_output",
+                "node": "node_operation",
+                "output": "default_application_root_id"
+              },
+              "revision": {
+                "source": "node_output",
+                "node": "node_operation",
+                "output": "revision"
+              }
+            }
+          },
+          {
+            "id": "node_refused",
+            "key": "return_refused",
+            "kind": "return",
+            "outcome": "refused",
+            "results": {}
+          },
+          {
+            "id": "node_conflict",
+            "key": "return_conflict",
+            "kind": "return",
+            "outcome": "conflict",
+            "results": {}
+          },
+          {
+            "id": "node_validation",
+            "key": "return_validation",
+            "kind": "return",
+            "outcome": "validation",
+            "results": {}
+          },
+          {
+            "id": "node_failed",
+            "key": "return_failed",
+            "kind": "return",
+            "outcome": "failed",
+            "results": {}
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge_start",
+            "from_node": "node_start",
+            "to_node": "node_operation"
+          },
+          {
+            "id": "edge_committed",
+            "from_node": "node_operation",
+            "to_node": "node_committed",
+            "outcome": "committed"
+          },
+          {
+            "id": "edge_refused",
+            "from_node": "node_operation",
+            "to_node": "node_refused",
+            "outcome": "refused"
+          },
+          {
+            "id": "edge_conflict",
+            "from_node": "node_operation",
+            "to_node": "node_conflict",
+            "outcome": "conflict"
+          },
+          {
+            "id": "edge_validation",
+            "from_node": "node_operation",
+            "to_node": "node_validation",
+            "outcome": "validation"
+          },
+          {
+            "id": "edge_failed",
+            "from_node": "node_operation",
+            "to_node": "node_failed",
+            "outcome": "failed"
+          }
+        ]
+      }
+    ],
+    "flow_bindings": [
+      {
+        "id": "binding_update_runtime_settings",
+        "control": "button_update_runtime_settings",
+        "event_id": "event_organisation_settings_action",
+        "event": "action",
+        "flow": {
+          "kind": "application_owned",
+          "flow": "flow_update_runtime_settings"
+        },
+        "inputs": {
+          "expected_revision": {
+            "type": "whole_number",
+            "value": {
+              "source": "form_input",
+              "form": "form_update_runtime_settings",
+              "input": "expected_revision"
+            }
+          },
+          "language": {
+            "type": "text",
+            "value": {
+              "source": "form_input",
+              "form": "form_update_runtime_settings",
+              "input": "language"
+            }
+          },
+          "time_zone": {
+            "type": "text",
+            "value": {
+              "source": "form_input",
+              "form": "form_update_runtime_settings",
+              "input": "time_zone"
+            }
+          },
+          "currency": {
+            "type": "text",
+            "value": {
+              "source": "form_input",
+              "form": "form_update_runtime_settings",
+              "input": "currency"
+            }
+          },
+          "date_format": {
+            "type": "choice",
+            "value": {
+              "source": "form_input",
+              "form": "form_update_runtime_settings",
+              "input": "date_format"
+            }
+          },
+          "number_format": {
+            "type": "choice",
+            "value": {
+              "source": "form_input",
+              "form": "form_update_runtime_settings",
+              "input": "number_format"
+            }
+          }
+        },
+        "results": {
+          "revision": {
+            "output": "revision",
+            "type": "whole_number"
+          }
+        },
+        "declared_effects": [
+          "change"
+        ]
+      },
+      {
+        "id": "binding_set_default_application",
+        "control": "button_set_default_application",
+        "event_id": "event_organisation_settings_action",
+        "event": "action",
+        "flow": {
+          "kind": "application_owned",
+          "flow": "flow_set_default_application"
+        },
+        "inputs": {
+          "expected_revision": {
+            "type": "whole_number",
+            "value": {
+              "source": "form_input",
+              "form": "form_set_default_application",
+              "input": "expected_revision"
+            }
+          },
+          "default_application_root_id": {
+            "type": "text",
+            "value": {
+              "source": "form_input",
+              "form": "form_set_default_application",
+              "input": "default_application_root_id"
+            }
+          }
+        },
+        "results": {
+          "default_application_root_id": {
+            "output": "default_application_root_id",
+            "type": "text"
+          },
+          "revision": {
+            "output": "revision",
+            "type": "whole_number"
+          }
+        },
+        "declared_effects": [
+          "change"
+        ]
+      }
+    ]
+  }
+}
