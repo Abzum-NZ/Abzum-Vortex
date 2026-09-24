@@ -441,14 +441,16 @@ begin
   select context.* into strict scope
   from vortex_page.private_form_draft_context_internal() as context;
 
+  -- Another person's draft is never locked and is indistinguishable from a
+  -- missing one.
   select draft.* into stored
   from vortex_page.form_drafts as draft
   where draft.draft_id = p_draft_id
+    and draft.organization_id = scope.organization_id
+    and draft.organization_account_id = scope.organization_account_id
+    and draft.identity_id = scope.identity_id
   for update;
   if not found
-    or stored.organization_id <> scope.organization_id
-    or stored.organization_account_id <> scope.organization_account_id
-    or stored.identity_id <> scope.identity_id
     or stored.state <> 'active'
     or stored.expires_at <= pg_catalog.clock_timestamp() then
     return query select 'unavailable'::text, null::jsonb;
@@ -517,11 +519,11 @@ begin
   select draft.* into stored
   from vortex_page.form_drafts as draft
   where draft.draft_id = p_draft_id
+    and draft.organization_id = scope.organization_id
+    and draft.organization_account_id = scope.organization_account_id
+    and draft.identity_id = scope.identity_id
   for update;
   if not found
-    or stored.organization_id <> scope.organization_id
-    or stored.organization_account_id <> scope.organization_account_id
-    or stored.identity_id <> scope.identity_id
     or stored.state <> 'active'
     or stored.expires_at <= pg_catalog.clock_timestamp() then
     return query select 'unavailable'::text, null::jsonb;
@@ -545,7 +547,9 @@ begin
 end
 $function$;
 
--- Retires a bounded batch of untouched drafts that have reached thirty days.
+-- Retires a bounded batch of the current person's untouched drafts that have
+-- reached thirty days. Expired drafts are already never returned, so this is
+-- only a self-service cleanup of already unreachable rows.
 create function vortex_page.expire_private_form_drafts(p_limit integer default 500)
 returns integer
 language plpgsql
@@ -554,6 +558,7 @@ security definer
 set search_path = ''
 as $function$
 declare
+  scope record;
   affected integer;
 begin
   if p_limit is null or p_limit not between 1 and 10000 then
@@ -561,10 +566,16 @@ begin
       message = 'Private form draft expiry command is invalid';
   end if;
 
+  select context.* into strict scope
+  from vortex_page.private_form_draft_context_internal() as context;
+
   with expired as (
     select draft.draft_id
     from vortex_page.form_drafts as draft
-    where draft.state = 'active'
+    where draft.organization_id = scope.organization_id
+      and draft.organization_account_id = scope.organization_account_id
+      and draft.identity_id = scope.identity_id
+      and draft.state = 'active'
       and draft.expires_at <= pg_catalog.clock_timestamp()
     order by draft.expires_at
     limit p_limit
@@ -634,6 +645,6 @@ comment on function vortex_page.update_private_form_draft(uuid, bigint, uuid, uu
 comment on function vortex_page.abandon_private_form_draft(uuid, bigint) is
   'Abandons one exact owned active private form draft at its expected revision.';
 comment on function vortex_page.expire_private_form_drafts(integer) is
-  'Retires a bounded batch of untouched private form drafts after thirty days.';
+  'Retires a bounded batch of the current person''s untouched private form drafts after thirty days.';
 
 commit;
