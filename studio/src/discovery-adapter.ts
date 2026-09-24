@@ -7,6 +7,8 @@ import {
   type BlockReferencePropertyKindV2,
   type ComponentDiscoveryV2,
   type ComponentPropertyControlV2,
+  type ComponentSemanticEventKind,
+  type ComponentStateOperationKind,
   type ImmutablePlatformBlockCatalogueV2,
   type PlatformBlockReleaseSummaryV2,
   type PlatformCatalogueDiscoveryV2,
@@ -113,6 +115,17 @@ export interface StudioDiscoveryAdapter {
   getComponent(
     block: Readonly<{ blockId: string; releaseVersion: string }>,
   ): ComponentDiscoveryV2 | undefined;
+  /**
+   * Semantic events the catalogue declares for one placed release; a flow binding to any other
+   * event is refused. Empty when the release is not offered on this surface.
+   */
+  getSupportedEvents(
+    block: Readonly<{ blockId: string; releaseVersion: string }>,
+  ): readonly ComponentSemanticEventKind[];
+  /** State operations the catalogue declares for one placed release. */
+  getSupportedStateOperations(
+    block: Readonly<{ blockId: string; releaseVersion: string }>,
+  ): readonly ComponentStateOperationKind[];
   /** Exact releases that validation admits at a placement target. */
   getPlacementChoices(target: StudioPlacementTarget): readonly PlatformBlockReleaseSummaryV2[];
   /** Inspector choices for one placed release; `recordTypeId` narrows fields and relationships. */
@@ -281,6 +294,14 @@ export function createStudioDiscoveryAdapter(
     block: Readonly<{ blockId: string; releaseVersion: string }>,
   ): ComponentDiscoveryV2 | undefined => offered.get(platformBlockReleaseIdentityV2(block));
 
+  const getSupportedEvents = (
+    block: Readonly<{ blockId: string; releaseVersion: string }>,
+  ): readonly ComponentSemanticEventKind[] => getComponent(block)?.supportedEvents ?? [];
+
+  const getSupportedStateOperations = (
+    block: Readonly<{ blockId: string; releaseVersion: string }>,
+  ): readonly ComponentStateOperationKind[] => getComponent(block)?.supportedStateOperations ?? [];
+
   const getPlacementChoices = (
     target: StudioPlacementTarget,
   ): readonly PlatformBlockReleaseSummaryV2[] => {
@@ -322,6 +343,8 @@ export function createStudioDiscoveryAdapter(
     projection,
     getComponents: () => components,
     getComponent,
+    getSupportedEvents,
+    getSupportedStateOperations,
     getPlacementChoices,
     getInspectorChoices,
     getReferenceChoices,

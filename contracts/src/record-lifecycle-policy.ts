@@ -212,12 +212,29 @@ const validatePolicyLimitsConsistency = (
 };
 
 /**
- * Policy contract for recoverable deletion. Carries no archive metadata.
+ * The maximum recovery window a policy may configure, in whole days.  Every
+ * window is converted to milliseconds for the elapsed-time comparison, so the
+ * ceiling is the largest day count whose millisecond value is still a
+ * JSON-safe integer.  A larger configured window is a refusal, never a silent
+ * unlimited-recovery fallback.
+ */
+export const maximumRecoveryWindowDays = Math.floor(
+  Number.MAX_SAFE_INTEGER / (24 * 60 * 60 * 1000),
+);
+
+const recoveryWindowDaysSchema = jsonSafePositiveIntegerSchema.max(maximumRecoveryWindowDays);
+
+/**
+ * Policy contract for recoverable deletion. Carries no archive metadata; it may
+ * carry the recovery window that bounds restoring a deleted record.
  */
 export const deleteRecordLifecyclePolicySchema = z
   .object({
     ...policyBaseFields,
     action: z.literal("delete"),
+    // Absent means no recovery window is configured, so restore is refused.
+    // It is never read as unlimited recovery.
+    recoveryWindowDays: recoveryWindowDaysSchema.optional(),
   })
   .strict()
   .superRefine(validatePolicyLimitsConsistency);
@@ -313,19 +330,6 @@ export const lifecycleReadinessEvidenceSchema = z
   })
   .strict();
 export type LifecycleReadinessEvidence = z.infer<typeof lifecycleReadinessEvidenceSchema>;
-
-/**
- * The maximum recovery window a policy may configure, in whole days.  Every
- * window is converted to milliseconds for the elapsed-time comparison, so the
- * ceiling is the largest day count whose millisecond value is still a
- * JSON-safe integer.  A larger configured window is a refusal, never a silent
- * unlimited-recovery fallback.
- */
-export const maximumRecoveryWindowDays = Math.floor(
-  Number.MAX_SAFE_INTEGER / (24 * 60 * 60 * 1000),
-);
-
-const recoveryWindowDaysSchema = jsonSafePositiveIntegerSchema.max(maximumRecoveryWindowDays);
 
 /**
  * The immutable facts a caller must carry into a recovery decision.  The
