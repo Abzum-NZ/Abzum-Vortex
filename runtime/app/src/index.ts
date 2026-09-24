@@ -6,6 +6,7 @@ import {
 } from "./app-theme";
 import { projectFlowResultHandoff } from "./flow-result-handoff";
 import { createApplicationInstallationCoordinator } from "./installation-coordinator";
+import { createInstalledRuntimeContextLoader } from "./installed-runtime-context";
 import { createAppTelemetryCollector } from "./telemetry";
 
 export {
@@ -16,6 +17,15 @@ export {
   createAppTelemetryCollector,
   type AppTelemetryCollectorDependencies,
 } from "./telemetry";
+export {
+  isReservedTenantSegment,
+  permittedApplicationSchema,
+  permittedApplicationsReadSchema,
+  readPermittedApplicationsAtAddress,
+  resolvePermittedApplicationAddress,
+  type PermittedApplication,
+  type PermittedApplicationsRead,
+} from "./application-address";
 export {
   flowResultDeclarationSchema,
   flowResultHandoffContractVersion,
@@ -37,6 +47,18 @@ export {
   type FlowResultViewerAuthority,
   type FlowResultWithheld,
 } from "./flow-result-handoff";
+
+export {
+  createInstalledRuntimeContextLoader,
+  InstalledRuntimeContextError,
+  installedRuntimeContextErrorCodes,
+  requireInstalledRuntimeContext,
+  type InstalledRuntimeActiveInstallationReader,
+  type InstalledRuntimeContext,
+  type InstalledRuntimeContextDependencies,
+  type InstalledRuntimeContextErrorCode,
+  type InstalledRuntimeContextLoader,
+} from "./installed-runtime-context";
 
 export {
   applicationInstallationActivationRequestSchema,
@@ -66,4 +88,5 @@ export const AppService = Object.freeze({
   createAppTelemetryCollector,
   projectFlowResultHandoff,
   createApplicationInstallationCoordinator,
+  createInstalledRuntimeContextLoader,
 });

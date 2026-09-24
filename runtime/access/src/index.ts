@@ -29,7 +29,11 @@ export {
 } from "./human-organization-request";
 export {
   createOrganizationRuntimeSettingsAdministrationService,
+  readCurrentOrganizationDefaultApplicationAfterAuthorization,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
+  type OrganizationDefaultApplication,
+  type OrganizationRuntimeSettingsAdministrationDependencies,
+  type SetOrganizationDefaultApplicationCommand,
   type UpdateOrganizationRuntimeSettingsCommand,
 } from "./organization-runtime-settings-administration";
 export {

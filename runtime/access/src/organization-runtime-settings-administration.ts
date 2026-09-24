@@ -1,10 +1,15 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import {
+  activityIdSchema,
+  applicationRootIdSchema,
   identitySessionSchema,
   organizationRuntimeSettingsSchema,
   organizationSelectionCandidateSchema,
   type IdentitySession,
+  type ApplicationRootId,
+  type OrganizationId,
   type OrganizationRuntimeSettings,
   type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
@@ -21,6 +26,28 @@ export interface UpdateOrganizationRuntimeSettingsCommand {
   readonly settings: OrganizationRuntimeSettings;
 }
 
+/**
+ * Sets, changes or clears the organisation default application. A null
+ * `defaultApplicationRootId` clears it so the organisation address falls back
+ * to the permitted launcher.
+ */
+export interface SetOrganizationDefaultApplicationCommand {
+  readonly expectedRevision: number;
+  readonly defaultApplicationRootId: ApplicationRootId | null;
+}
+
+export interface OrganizationDefaultApplication {
+  readonly organizationId: OrganizationId;
+  readonly defaultApplicationRootId: ApplicationRootId | null;
+  readonly revision: number;
+}
+
+export type OrganizationRuntimeSettingsAdministrationDependencies =
+  HumanOrganizationRequestDependencies &
+    Readonly<{
+      activityId?: () => string;
+    }>;
+
 type UpdateRow = DatabaseRow & { organization_id: unknown; settings: unknown };
 type ReadRow = DatabaseRow & {
   organization_id: unknown;
@@ -30,6 +57,13 @@ type ReadRow = DatabaseRow & {
   date_format: unknown;
   number_format: unknown;
   revision: unknown;
+};
+type DefaultApplicationRow = DatabaseRow & { default_application_root_id: unknown };
+type DefaultApplicationChangeRow = DatabaseRow & {
+  organization_id: unknown;
+  default_application_root_id: unknown;
+  revision: unknown;
+  changed: unknown;
 };
 
 const sameUuid = (left: string, right: string): boolean =>
@@ -70,6 +104,22 @@ export const readCurrentOrganizationRuntimeSettingsAfterAuthorization = async (
   return settings.data;
 };
 
+/** The request context fixes the organisation; the application still needs its own Access check. */
+export const readCurrentOrganizationDefaultApplicationAfterAuthorization = async (
+  transaction: RequestDatabaseTransaction,
+): Promise<ApplicationRootId | null> => {
+  const rows = await transaction.query<DefaultApplicationRow>`
+    select vortex_access.read_current_organization_default_application_for_application()
+      as default_application_root_id
+  `;
+  if (rows.length !== 1 || rows[0] === undefined) throw unavailable();
+  const value = rows[0].default_application_root_id;
+  if (value === null) return null;
+  const parsed = applicationRootIdSchema.safeParse(value);
+  if (!parsed.success) throw unavailable();
+  return parsed.data;
+};
+
 const parseCommand = (
   candidate: UpdateOrganizationRuntimeSettingsCommand,
 ): UpdateOrganizationRuntimeSettingsCommand | undefined => {
@@ -85,15 +135,35 @@ const parseCommand = (
   return { expectedRevision: candidate.expectedRevision, settings: settings.data };
 };
 
+const parseDefaultApplicationCommand = (
+  candidate: SetOrganizationDefaultApplicationCommand,
+): SetOrganizationDefaultApplicationCommand | undefined => {
+  if (
+    !Number.isSafeInteger(candidate.expectedRevision) ||
+    candidate.expectedRevision < 1 ||
+    candidate.expectedRevision > Number.MAX_SAFE_INTEGER
+  )
+    return undefined;
+  if (candidate.defaultApplicationRootId === null)
+    return { expectedRevision: candidate.expectedRevision, defaultApplicationRootId: null };
+  const application = applicationRootIdSchema.safeParse(candidate.defaultApplicationRootId);
+  if (!application.success) return undefined;
+  return {
+    expectedRevision: candidate.expectedRevision,
+    defaultApplicationRootId: application.data,
+  };
+};
+
 /**
  * The settings object is contract-validated and transaction-bound while still
  * under vortex_runtime. The later request-role operation receives only the
  * revision; it cannot substitute raw setting values through SQL.
  */
 export const createOrganizationRuntimeSettingsAdministrationService = (
-  dependencies: HumanOrganizationRequestDependencies,
+  dependencies: OrganizationRuntimeSettingsAdministrationDependencies,
 ) => {
   const requests = createHumanOrganizationRequestService(dependencies);
+  const newActivityId = dependencies.activityId ?? randomUUID;
 
   return Object.freeze({
     async update(
@@ -133,6 +203,77 @@ export const createOrganizationRuntimeSettingsAdministrationService = (
           return settings.data;
         },
       );
+    },
+
+    /**
+     * Sets, changes or clears the organisation default application. The SQL
+     * operation derives authority and organisation from the validated request
+     * context and accepts only an exact active installed application of that
+     * organisation; nothing in the command can choose another organisation.
+     */
+    async setDefaultApplication(
+      sessionCandidate: IdentitySession,
+      selectionCandidate: OrganizationSelectionCandidate,
+      commandCandidate: SetOrganizationDefaultApplicationCommand,
+    ): Promise<HumanOrganizationRequestResult<OrganizationDefaultApplication>> {
+      const session = identitySessionSchema.safeParse(sessionCandidate);
+      const selection = organizationSelectionCandidateSchema.safeParse(selectionCandidate);
+      const command = parseDefaultApplicationCommand(commandCandidate);
+      if (!session.success || !selection.success || command === undefined)
+        return { kind: "unavailable" };
+      let activityId: string;
+      try {
+        activityId = activityIdSchema.parse(newActivityId());
+      } catch {
+        return { kind: "temporarily_unavailable" };
+      }
+
+      return requests.runChange(session.data, selection.data, async (transaction, scope) => {
+        const rows = await transaction.query<DefaultApplicationChangeRow>`
+          select organization_id, default_application_root_id, revision, changed
+          from vortex_access.set_organization_default_application_for_administration(
+            ${command.defaultApplicationRootId}::uuid,
+            ${command.expectedRevision}::bigint,
+            ${activityId}::uuid
+          )
+        `;
+        if (
+          rows.length !== 1 ||
+          rows[0] === undefined ||
+          !sameUuid(String(rows[0].organization_id), scope.organizationId)
+        )
+          throw unavailable();
+        const changed = rows[0].changed;
+        const nextRevision = revision(rows[0].revision);
+        if (
+          typeof changed !== "boolean" ||
+          typeof nextRevision !== "number" ||
+          (changed && nextRevision !== command.expectedRevision + 1) ||
+          (!changed && nextRevision !== command.expectedRevision)
+        )
+          throw unavailable();
+        const value = rows[0].default_application_root_id;
+        if (value === null) {
+          if (command.defaultApplicationRootId !== null) throw unavailable();
+          return {
+            organizationId: scope.organizationId,
+            defaultApplicationRootId: null,
+            revision: nextRevision,
+          };
+        }
+        const parsed = applicationRootIdSchema.safeParse(value);
+        if (
+          !parsed.success ||
+          command.defaultApplicationRootId === null ||
+          !sameUuid(parsed.data, command.defaultApplicationRootId)
+        )
+          throw unavailable();
+        return {
+          organizationId: scope.organizationId,
+          defaultApplicationRootId: parsed.data,
+          revision: nextRevision,
+        };
+      });
     },
   });
 };
