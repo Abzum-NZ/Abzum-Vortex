@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { RequestDatabaseTransaction } from "@vortex/db";
 import {
   applicationRootIdSchema,
   liveInvalidationSchema,
@@ -24,8 +25,8 @@ import {
  * parses the same topic string and derives the organisation from the verified
  * identity rather than from the topic. Wiring the publisher into a specific
  * Record or operation path is a later change; this module only exposes the
- * bounded envelope, the deterministic topic, the publisher port and the
- * authorise/reauthorise decision.
+ * bounded envelope, the deterministic topic, the publisher port with its
+ * transaction-bound database transport, and the authorise/reauthorise decision.
  */
 
 /** The Broadcast event name for one invalidation; the SQL publisher emits the same name. */
@@ -43,6 +44,7 @@ export const privateInvalidationChannelErrorCodes = [
   "INVALID_INVALIDATION_ENVELOPE",
   "INVALID_INVALIDATION_TOPIC",
   "INVALID_INVALIDATION_PUBLISHER",
+  "INVALIDATION_PUBLISH_MISMATCH",
 ] as const;
 
 export type PrivateInvalidationChannelErrorCode =
@@ -71,24 +73,46 @@ export type PrivateInvalidationTopicScope = Readonly<{
  */
 export type PrivateInvalidationEnvelope = LiveInvalidation;
 
+/**
+ * What a committed-change path supplies: the envelope without its contract
+ * version and occurrence time, which the protected SQL publisher stamps itself.
+ * It keeps the canonical schema's strictness, so extra content is refused.
+ */
+const privateInvalidationNoticeSchema = liveInvalidationSchema.omit({
+  contractVersion: true,
+  occurredAt: true,
+});
+
+export type PrivateInvalidationNotice = Omit<
+  PrivateInvalidationEnvelope,
+  "contractVersion" | "occurredAt"
+>;
+
+/**
+ * Matches exactly the canonical lower-case text form PostgreSQL gives a uuid,
+ * which is what the SQL `change_topic` produces and its parsers accept.
+ */
 const topicPattern =
-  /^vortex:invalidation:([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}):([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/;
+  /^vortex:invalidation:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
 const positiveSafeInteger = (value: unknown): value is number =>
   Number.isSafeInteger(value) && (value as number) >= 1;
 
 /**
  * The deterministic private topic for one organisation and application. Both
- * identifiers are validated as platform UUIDs and the result is checked against
- * the Realtime topic length bound.
+ * identifiers are validated as platform UUIDs and lower-cased to match the SQL
+ * topic byte for byte, and the result is checked against the Realtime topic
+ * length bound.
  */
 export const privateInvalidationTopic = (scope: {
   organizationId: string;
   applicationRootId: string;
 }): string => {
-  const organizationId = organizationIdSchema.parse(scope.organizationId);
-  const applicationRootId = applicationRootIdSchema.parse(scope.applicationRootId);
-  const topic = `${privateInvalidationTopicPrefix}:${organizationId}:${applicationRootId}`;
+  const organizationId = organizationIdSchema.safeParse(scope.organizationId);
+  const applicationRootId = applicationRootIdSchema.safeParse(scope.applicationRootId);
+  if (!organizationId.success || !applicationRootId.success)
+    throw new PrivateInvalidationChannelError("INVALID_INVALIDATION_TOPIC");
+  const topic = `${privateInvalidationTopicPrefix}:${organizationId.data.toLowerCase()}:${applicationRootId.data.toLowerCase()}`;
   if (topic.length > privateInvalidationChannelLimits.maximumTopicLength)
     throw new PrivateInvalidationChannelError("INVALID_INVALIDATION_TOPIC");
   return topic;
@@ -108,7 +132,11 @@ export const parsePrivateInvalidationTopic = (
   });
 };
 
-/** Validates one candidate against the strict content-free envelope contract. */
+/**
+ * Validates one received candidate against the strict content-free envelope
+ * contract. A consumer must strip transport metadata that Realtime adds around
+ * the Broadcast payload before calling this.
+ */
 export const parsePrivateInvalidationEnvelope = (
   candidate: unknown,
 ): PrivateInvalidationEnvelope => {
@@ -118,7 +146,7 @@ export const parsePrivateInvalidationEnvelope = (
   return envelope.data;
 };
 
-/** The private channel and event one validated envelope belongs to. */
+/** The private channel and event one validated notice belongs to. */
 export type PrivateInvalidationChannel = Readonly<{
   topic: string;
   event: string;
@@ -127,22 +155,22 @@ export type PrivateInvalidationChannel = Readonly<{
 
 /**
  * The low-level transport the protected SQL publisher backs. It receives an
- * already-validated envelope and its derived private channel, so it can only
- * ever publish the bounded content-free notice.
+ * already-validated notice and its derived private channel, so it can only ever
+ * publish the bounded content-free notice.
  */
 export type PrivateInvalidationEmit = (
   channel: PrivateInvalidationChannel,
-  envelope: PrivateInvalidationEnvelope,
+  notice: PrivateInvalidationNotice,
 ) => Promise<void>;
 
 export interface PrivateInvalidationPublisher {
-  publish(envelope: PrivateInvalidationEnvelope): Promise<void>;
+  publish(notice: PrivateInvalidationNotice): Promise<void>;
 }
 
 /**
- * The publisher port Record and operation paths call after commit. It validates
- * the envelope, derives the topic from that envelope's verified scope and hands
- * the pair to the protected transport. Nothing the caller supplies can name a
+ * The publisher port Record and operation paths call for a committed change. It
+ * validates the notice, derives the topic from that notice's scope and hands the
+ * pair to the protected transport. Nothing the caller supplies can name a
  * different topic or add content to the payload.
  */
 export const createPrivateInvalidationPublisher = (
@@ -152,20 +180,55 @@ export const createPrivateInvalidationPublisher = (
     throw new PrivateInvalidationChannelError("INVALID_INVALIDATION_PUBLISHER");
   return Object.freeze({
     async publish(candidate: unknown): Promise<void> {
-      const envelope = parsePrivateInvalidationEnvelope(candidate);
+      const parsed = privateInvalidationNoticeSchema.safeParse(candidate);
+      if (!parsed.success)
+        throw new PrivateInvalidationChannelError("INVALID_INVALIDATION_ENVELOPE");
+      const notice: PrivateInvalidationNotice = parsed.data;
       const scope: PrivateInvalidationTopicScope = Object.freeze({
-        organizationId: envelope.organizationId,
-        applicationRootId: envelope.applicationRootId,
+        organizationId: notice.organizationId,
+        applicationRootId: notice.applicationRootId,
       });
       const channel: PrivateInvalidationChannel = Object.freeze({
         topic: privateInvalidationTopic(scope),
         event: privateInvalidationBroadcastEvent,
         scope,
       });
-      await emit(channel, envelope);
+      await emit(channel, notice);
     },
   });
 };
+
+type PublishedTopicRow = Readonly<{ topic: unknown }>;
+
+/**
+ * The database transport for one open transaction. It calls the protected
+ * `vortex_invalidation.publish_change_notice`, which rechecks the organisation
+ * and current installation, refuses another organisation's notice when the
+ * transaction carries a request context, stamps the contract version and time,
+ * and queues the private Broadcast. Realtime delivers it only after that transaction commits, so the
+ * Record or operation path calls this inside the transaction that makes the
+ * change, and a rolled-back change emits nothing.
+ */
+export const createTransactionPrivateInvalidationEmit = (
+  transaction: RequestDatabaseTransaction,
+): PrivateInvalidationEmit =>
+  async (channel, notice) => {
+    const rows = await transaction.query<PublishedTopicRow>`
+      select vortex_invalidation.publish_change_notice(
+        ${notice.organizationId}::uuid,
+        ${notice.applicationRootId}::uuid,
+        ${notice.recordTypeId}::uuid,
+        ${notice.recordId ?? null}::uuid,
+        ${notice.recordVersion ?? null}::bigint,
+        ${notice.changeKind}::text,
+        ${notice.dataVersion}::bigint,
+        ${notice.sequence}::bigint,
+        ${notice.correlationId}::uuid
+      ) as topic
+    `;
+    if (rows.length !== 1 || rows[0]?.topic !== channel.topic)
+      throw new PrivateInvalidationChannelError("INVALIDATION_PUBLISH_MISMATCH");
+  };
 
 /**
  * The current, identity-derived state of one organisation account and its open
@@ -182,6 +245,10 @@ export type PrivateInvalidationChannelAccess = Readonly<{
   applicationAvailable: boolean;
 }>;
 
+/**
+ * Reads the current access for the one verified identity this reader is bound
+ * to. It never accepts an identity or organisation from the topic.
+ */
 export interface PrivateInvalidationChannelAccessReader {
   readCurrent(request: PrivateInvalidationTopicScope): Promise<
     PrivateInvalidationChannelAccess | undefined
@@ -268,8 +335,8 @@ export const createPrivateInvalidationChannelAuthorizer = (
       );
       if (
         access === undefined ||
-        access.organizationId !== request.organizationId ||
-        access.applicationRootId !== request.applicationRootId
+        access.organizationId.toLowerCase() !== request.organizationId.toLowerCase() ||
+        access.applicationRootId.toLowerCase() !== request.applicationRootId.toLowerCase()
       )
         return refused("scope_mismatch");
       if (!access.accountAvailable) return refused("account_unavailable");
