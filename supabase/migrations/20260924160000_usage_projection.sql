@@ -154,8 +154,11 @@ begin
     from originals group by organization_id, (pg_catalog.date_trunc('day', occurred_at at time zone 'UTC') at time zone 'UTC'), capability_key, unit
   ), comparisons as (
     select coalesce(expected.bucket_start, stored.bucket_start) as bucket_start
-    from expected full join vortex_access.usage_projection_rollups stored
-      on stored.tenant_id = p_tenant_id and stored.rollup_scope = expected.rollup_scope
+    from expected full join (
+      select * from vortex_access.usage_projection_rollups
+      where tenant_id = p_tenant_id and bucket_start >= p_period_start and bucket_start < p_period_end
+    ) stored
+      on stored.rollup_scope = expected.rollup_scope
       and stored.scope_id = expected.scope_id
       and stored.organization_id is not distinct from expected.organization_id
       and stored.bucket_start = expected.bucket_start
@@ -189,8 +192,11 @@ begin
       from originals group by organization_id, (pg_catalog.date_trunc('day', occurred_at at time zone 'UTC') at time zone 'UTC'), capability_key, unit
     )
     select distinct coalesce(expected.bucket_start, stored.bucket_start) as bucket_start
-    from expected full join vortex_access.usage_projection_rollups stored
-      on stored.tenant_id = p_tenant_id and stored.rollup_scope = expected.rollup_scope
+    from expected full join (
+      select * from vortex_access.usage_projection_rollups
+      where tenant_id = p_tenant_id and bucket_start >= p_period_start and bucket_start < p_period_end
+    ) stored
+      on stored.rollup_scope = expected.rollup_scope
       and stored.scope_id = expected.scope_id
       and stored.organization_id is not distinct from expected.organization_id
       and stored.bucket_start = expected.bucket_start
