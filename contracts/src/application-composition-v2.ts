@@ -34,6 +34,7 @@ import {
   richTextElementKindV2Schema,
   type RichTextInlineV2,
 } from "./rich-text";
+import type { DefinitionRuleFailureFamily } from "./validation-errors";
 
 export {
   richTextBlockV2Schema,
@@ -257,11 +258,100 @@ const propertySchemaBase = {
   defaultValue: blockPropertyValueV2Schema.optional(),
 };
 
-const richTextKinds = (document: z.infer<typeof richTextDocumentV2Schema>): Set<string> => {
+/**
+ * Undeclared setting names that would carry markup, script, styling, data access or component
+ * code. Any undeclared setting is refused; these are refused as unsafe content rather than as a
+ * merely unknown property.
+ */
+const executableSettingKeys: ReadonlySet<string> = new Set([
+  "class",
+  "class_name",
+  "classes",
+  "code",
+  "component",
+  "component_code",
+  "css",
+  "dangerously_set_inner_html",
+  "handler",
+  "html",
+  "inner_html",
+  "jsx",
+  "markup",
+  "raw_html",
+  "rpc",
+  "script",
+  "source_code",
+  "sql",
+  "style",
+  "styles",
+  "tsx",
+]);
+
+/** True when an undeclared setting name would carry executable or presentational code. */
+export const isExecutableComponentSettingKey = (key: string): boolean =>
+  executableSettingKeys.has(key) || /^on_[a-z]/.test(key);
+
+/**
+ * Syntax that marks authored text as markup, script, styling or a data-access statement rather
+ * than prose. Each pattern needs structural syntax, so ordinary sentences such as "Select a
+ * department from the list" or "Delete from list" remain valid text.
+ */
+const unsafeSettingTextPatterns: readonly RegExp[] = Object.freeze([
+  // Raw HTML, XML or JSX: an element, closing tag, comment or declaration opener.
+  /<[/!?]?[a-z]/i,
+  /&(?:lt|#0*60|#x0*3c);\s*[/!?]?[a-z]/i,
+  // Script-bearing addresses and inline handlers.
+  /\b(?:javascript|vbscript|livescript)\s*:/i,
+  /\bdata\s*:\s*(?:text\/html|[a-z]+\/[a-z.+-]*script)/i,
+  /\bon[a-z]+\s*=\s*["'`{]/i,
+  // Script execution and JSX escape hatches.
+  /\b(?:eval|setTimeout|setInterval)\(/,
+  /\bnew Function\(/,
+  /\b(?:document|window)\.(?:cookie|write|writeln|location|open|eval)\b/,
+  /\([\w\s,]*\)\s*=>\s*\{/,
+  /\bdangerouslySetInnerHTML\b/i,
+  // Arbitrary CSS and class names.
+  /\b(?:style|class|className)\s*=\s*["'{]/i,
+  /@(?:import\s+(?:url\s*\(|["'])|media\s*(?:\(|screen\b|print\b)|font-face\s*\{|keyframes\s+[\w-]+\s*\{)/i,
+  /:\s*expression\s*\(/i,
+  /\{\s*[a-z-]+\s*:\s*[^;{}]+;/i,
+  // SQL statements.
+  /\bunion\s+(?:all\s+)?select\b/i,
+  /'\s*(?:or|and)\s+(?:'[^']*'|\d+)\s*=\s*(?:'[^']*'|\d+)/i,
+  /\bselect\s+(?:\*|[\w."]+(?:\s*,\s*[\w."]+)+)\s+from\s+[\w."]+/i,
+  /\binsert\s+into\s+[\w."]+\s*(?:\([\w\s,."]+\)\s*)?(?:values\s*\(|select\b)/i,
+  /\bupdate\s+[\w."]+\s+set\s+[\w."]+\s*=/i,
+  /\bdelete\s+from\s+[\w."]+\s*(?:;|where\s+[\w."]+\s*(?:[=<>!]|\b(?:in|is|like)\b))/i,
+  /\b(?:drop|truncate)\s+table\s+(?:if\s+exists\s+)?[\w."]+\s*(?:;|--|\bcascade\b|\brestrict\b)/i,
+  /\balter\s+table\s+[\w."]+\s+(?:add|drop|alter|rename|enable|disable|owner)\b/i,
+  /\bcreate\s+(?:or\s+replace\s+)?(?:table\s+[\w."]+\s*\(\s*[\w"]+\s+[\w"]+|(?:function|procedure)\s+[\w."]+\s*\([^)]*\)\s*(?:returns|language|as)\b|view\s+[\w."]+\s+as\s+select\b)/i,
+  /\bexec(?:ute)?\s+(?:procedure\s+[\w."]+|immediate\s+["'])/i,
+  /\bpg_(?:sleep|read_file|ls_dir|read_binary_file)\s*\(/i,
+  // Remote procedure calls outside the governed operation model.
+  /\/rpc\//i,
+  /\.\s*rpc\s*\(/i,
+  /\bjson-?rpc\b/i,
+  /\bgrpcs?:\/\//i,
+]);
+
+/** True when authored text carries markup, script, styling or a data-access statement. */
+export const isUnsafeComponentSettingText = (text: string): boolean =>
+  unsafeSettingTextPatterns.some((pattern) => pattern.test(text));
+
+type RichTextSettingDocument = z.infer<typeof richTextDocumentV2Schema>;
+
+const richTextSettingViolations = (
+  document: RichTextSettingDocument,
+): Readonly<{ kinds: ReadonlySet<string>; unsafe: boolean }> => {
   const kinds = new Set<string>();
+  let unsafe = false;
   const visitInline = (inline: RichTextInlineV2): void => {
-    if (inline.kind === "text") return;
+    if (inline.kind === "text") {
+      if (isUnsafeComponentSettingText(inline.text)) unsafe = true;
+      return;
+    }
     kinds.add(inline.kind);
+    if (inline.kind === "link" && isUnsafeComponentSettingText(inline.address)) unsafe = true;
     for (const child of inline.children) visitInline(child);
   };
   for (const block of document.blocks) {
@@ -270,8 +360,11 @@ const richTextKinds = (document: z.infer<typeof richTextDocumentV2Schema>): Set<
       for (const child of block.children) visitInline(child);
     else for (const item of block.items) for (const child of item) visitInline(child);
   }
-  return kinds;
+  return { kinds, unsafe };
 };
+
+const richTextKinds = (document: z.infer<typeof richTextDocumentV2Schema>): Set<string> =>
+  new Set(richTextSettingViolations(document).kinds);
 
 const defaultMatchesProperty = (schema: BlockPropertySchemaV2Contract): boolean => {
   const value = schema.defaultValue;
@@ -461,6 +554,148 @@ export const blockPropertySchemaV2Schema: z.ZodType<BlockPropertySchemaV2Contrac
         });
     }),
 );
+
+/** Setting-value or setting-key violation families the shared component-setting validator emits. */
+export type ComponentSettingFailureFamily = Extract<
+  DefinitionRuleFailureFamily,
+  | "required_value"
+  | "invalid_value"
+  | "unsupported_choice"
+  | "unknown_property"
+  | "too_few_items"
+  | "too_many_items"
+  | "unsafe_content"
+>;
+
+export type ComponentSettingFailure = Readonly<{
+  family: ComponentSettingFailureFamily;
+  /** Key path from the settings object root, including list item indices. */
+  path: readonly (string | number)[];
+}>;
+
+/** Any authored or canonical value a component setting may hold. */
+export type ComponentSettingValue =
+  | BlockPropertyValueV2Contract
+  | SourceBlockPropertyValueV2Contract;
+
+/**
+ * The one component-setting validator: it judges a supplied setting value against its exact
+ * declaration, including unsafe text, so the designer can never accept what publishing rejects.
+ * Authored and canonical values share the same kind vocabulary, so both forms use this function.
+ */
+export const validateComponentSettingValue = (
+  value: ComponentSettingValue,
+  declaration: BlockPropertySchemaV2Contract,
+  path: readonly (string | number)[] = [],
+): ComponentSettingFailure[] => {
+  const failures: ComponentSettingFailure[] = [];
+  const report = (family: ComponentSettingFailureFamily): void => {
+    failures.push({ family, path });
+  };
+  if (value.kind !== declaration.kind) {
+    report("invalid_value");
+    return failures;
+  }
+  switch (declaration.kind) {
+    case "text": {
+      const text = (value as { value: string }).value;
+      if (text.length < declaration.minLength || text.length > declaration.maxLength)
+        report("invalid_value");
+      if (isUnsafeComponentSettingText(text)) report("unsafe_content");
+      break;
+    }
+    case "number": {
+      const number = (value as { value: number }).value;
+      if (
+        (declaration.integer && !Number.isInteger(number)) ||
+        (declaration.minimum !== undefined && number < declaration.minimum) ||
+        (declaration.maximum !== undefined && number > declaration.maximum)
+      )
+        report("invalid_value");
+      break;
+    }
+    case "choice": {
+      const choice = (value as { value: string }).value;
+      if (!declaration.options.some((option) => option.key === choice))
+        report("unsupported_choice");
+      break;
+    }
+    case "rich_text": {
+      const document = (value as { value: RichTextSettingDocument }).value;
+      const allowed = new Set<string>(declaration.allowedElements);
+      const used = richTextSettingViolations(document);
+      if ([...used.kinds].some((kind) => !allowed.has(kind))) report("unsupported_choice");
+      if (used.unsafe) report("unsafe_content");
+      break;
+    }
+    case "url": {
+      if (isUnsafeComponentSettingText((value as { value: string }).value))
+        report("unsafe_content");
+      break;
+    }
+    case "group": {
+      const properties = (value as { properties: Record<string, ComponentSettingValue> })
+        .properties;
+      const declared = new Set(declaration.properties.map((property) => property.key));
+      for (const key of Object.keys(properties))
+        if (!declared.has(key))
+          failures.push({
+            family: isExecutableComponentSettingKey(key) ? "unsafe_content" : "unknown_property",
+            path: [...path, key],
+          });
+      for (const property of declaration.properties) {
+        const nested = properties[property.key];
+        if (nested === undefined) {
+          if (property.required && property.defaultValue === undefined)
+            failures.push({ family: "required_value", path: [...path, property.key] });
+        } else {
+          failures.push(
+            ...validateComponentSettingValue(nested, property, [...path, property.key]),
+          );
+        }
+      }
+      break;
+    }
+    case "list": {
+      const items = (value as { items: ComponentSettingValue[] }).items;
+      if (items.length < declaration.minimumItems) report("too_few_items");
+      if (items.length > declaration.maximumItems) report("too_many_items");
+      items.forEach((item, index) => {
+        failures.push(...validateComponentSettingValue(item, declaration.item, [...path, index]));
+      });
+      break;
+    }
+    default:
+      break;
+  }
+  return failures;
+};
+
+/**
+ * Validates one settings object against its declarations: every undeclared key, every supplied
+ * value and every missing required value. Returns all failures with their setting key path.
+ */
+export const validateComponentSettings = (
+  settings: Readonly<Record<string, ComponentSettingValue>>,
+  declarations: readonly BlockPropertySchemaV2Contract[],
+): ComponentSettingFailure[] => {
+  const failures: ComponentSettingFailure[] = [];
+  const byKey = new Set(declarations.map((declaration) => declaration.key));
+  for (const key of Object.keys(settings))
+    if (!byKey.has(key))
+      failures.push({
+        family: isExecutableComponentSettingKey(key) ? "unsafe_content" : "unknown_property",
+        path: [key],
+      });
+  for (const declaration of declarations) {
+    const value = settings[declaration.key];
+    if (value !== undefined)
+      failures.push(...validateComponentSettingValue(value, declaration, [declaration.key]));
+    else if (declaration.required && declaration.defaultValue === undefined)
+      failures.push({ family: "required_value", path: [declaration.key] });
+  }
+  return failures;
+};
 
 export const blockSlotDeclarationV2Schema = z
   .object({

@@ -5,12 +5,15 @@ import {
   blockPropertyValueV2Schema,
   guidedFormPageCompositionV2Schema,
   pageCompositionV2Schema,
+  validateComponentSettingValue,
+  validateComponentSettings,
   type ApplicationCompositionCatalogueSnapshotV2,
   type ApplicationContentV2,
   type ApplicationShellV2,
   type ApplicationSourceDocumentV2,
   type BlockPropertySchemaV2Contract,
   type BlockPropertyValueV2Contract,
+  type ComponentSettingFailure,
   type DefinitionValidationLocation,
   type PlatformBlockReleaseV2,
   type PlatformId,
@@ -170,44 +173,10 @@ const inheritColorRole = (
     ? { ...override, role: inherited.role }
     : override;
 
-const richTextKinds = (value: Extract<BlockPropertyValueV2Contract, { kind: "rich_text" }>) => {
-  const kinds = new Set<string>();
-  const visitInline = (inline: { kind: string; children?: unknown[] }) => {
-    if (inline.kind !== "text") kinds.add(inline.kind);
-    for (const child of inline.children ?? []) visitInline(child as typeof inline);
-  };
-  for (const block of value.value.blocks) {
-    kinds.add(block.kind);
-    const children = "children" in block ? block.children : block.items.flat();
-    for (const child of children) visitInline(child);
-  }
-  return kinds;
-};
-
-const validateScalarProperty = (
-  value: BlockPropertyValueV2Contract,
-  schema: BlockPropertySchemaV2Contract,
-): void => {
-  if (value.kind !== schema.kind)
-    reject("vortex.definition.application_block_settings", "invalid_value");
-  if (schema.kind === "text" && value.kind === "text") {
-    if (value.value.length < schema.minLength || value.value.length > schema.maxLength)
-      reject("vortex.definition.application_block_settings");
-  } else if (schema.kind === "number" && value.kind === "number") {
-    if (
-      (schema.integer && !Number.isInteger(value.value)) ||
-      (schema.minimum !== undefined && value.value < schema.minimum) ||
-      (schema.maximum !== undefined && value.value > schema.maximum)
-    )
-      reject("vortex.definition.application_block_settings");
-  } else if (schema.kind === "choice" && value.kind === "choice") {
-    if (!schema.options.some((option) => option.key === value.value))
-      reject("vortex.definition.application_block_settings");
-  } else if (schema.kind === "rich_text" && value.kind === "rich_text") {
-    const allowed = new Set(schema.allowedElements);
-    if ([...richTextKinds(value)].some((kind) => !allowed.has(kind as never)))
-      reject("vortex.definition.application_block_settings");
-  }
+const rejectSettingFailures = (failures: readonly ComponentSettingFailure[]): void => {
+  const first = failures[0];
+  if (first !== undefined)
+    reject("vortex.definition.application_block_settings", first.family);
 };
 
 const validateCanonicalPropertyValue = (
@@ -215,29 +184,11 @@ const validateCanonicalPropertyValue = (
   schema: BlockPropertySchemaV2Contract,
   theme: CanonicalTheme,
 ): void => {
-  validateScalarProperty(value, schema);
+  rejectSettingFailures(validateComponentSettingValue(value, schema));
   if (schema.kind === "theme_token" && value.kind === "theme_token") {
     const token = theme.tokens[value.tokenKey];
     if (token === undefined || token.kind !== schema.tokenKind)
       reject("vortex.definition.application_block_settings", "broken_reference");
-  } else if (schema.kind === "group" && value.kind === "group") {
-    const declarations = new Map(schema.properties.map((property) => [property.key, property]));
-    if (Object.keys(value.properties).some((key) => !declarations.has(key)))
-      reject("vortex.definition.application_block_settings", "unknown_property");
-    for (const [key, nested] of Object.entries(value.properties))
-      validateCanonicalPropertyValue(
-        nested,
-        requireValue(
-          declarations.get(key),
-          "vortex.definition.application_block_settings",
-          "unknown_property",
-        ),
-        theme,
-      );
-  } else if (schema.kind === "list" && value.kind === "list") {
-    if (value.items.length < schema.minimumItems || value.items.length > schema.maximumItems)
-      reject("vortex.definition.application_block_settings", "invalid_value");
-    for (const item of value.items) validateCanonicalPropertyValue(item, schema.item, theme);
   }
 };
 
@@ -297,11 +248,6 @@ const compilePropertyValue = (
         schema.kind === "group"
           ? schema
           : reject("vortex.definition.application_block_settings", "invalid_value");
-      const declarations = new Map(
-        groupSchema.properties.map((property) => [property.key, property]),
-      );
-      if (Object.keys(authored.properties).some((key) => !declarations.has(key)))
-        reject("vortex.definition.application_block_settings", "unknown_property");
       compiled = {
         kind: "group",
         properties: compileSettings(authored.properties, groupSchema.properties, resolution, theme),
@@ -313,11 +259,6 @@ const compilePropertyValue = (
         schema.kind === "list"
           ? schema
           : reject("vortex.definition.application_block_settings", "invalid_value");
-      if (
-        authored.items.length < listSchema.minimumItems ||
-        authored.items.length > listSchema.maximumItems
-      )
-        reject("vortex.definition.application_block_settings");
       compiled = {
         kind: "list",
         items: authored.items.map((item) =>
@@ -342,9 +283,6 @@ const compileSettings = (
   resolution: ApplicationCompositionResolutionV2,
   theme: CanonicalTheme,
 ): Record<string, BlockPropertyValueV2Contract> => {
-  const byKey = new Map(declarations.map((declaration) => [declaration.key, declaration]));
-  if (Object.keys(authored).some((key) => !byKey.has(key)))
-    reject("vortex.definition.application_block_settings", "unknown_property");
   const result: Record<string, BlockPropertyValueV2Contract> = {};
   for (const declaration of declarations) {
     const value = authored[declaration.key];
@@ -353,8 +291,7 @@ const compileSettings = (
     else if (declaration.defaultValue !== undefined) {
       validateCanonicalPropertyValue(declaration.defaultValue, declaration, theme);
       result[declaration.key] = declaration.defaultValue;
-    } else if (declaration.required)
-      reject("vortex.definition.application_block_settings", "required_value");
+    }
   }
   return result;
 };
@@ -609,6 +546,9 @@ export const materialiseApplicationCompositionV2 = (
           themeValidationOptions,
           [{ kind: "block", key: alias }],
         );
+      rejectSettingFailures(
+        validateComponentSettings(authoredPlacement.settings, release.properties),
+      );
       const settings = compileSettings(
         authoredPlacement.settings,
         release.properties,
