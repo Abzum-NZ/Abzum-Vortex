@@ -40,6 +40,9 @@ export const workflowValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("current_time") }).strict(),
 ]);
 
+const isRecordReferenceType = (type: string) =>
+  type === "record_reference" || type === "record_reference_list";
+
 const workflowDeclaredOutputSchema = z
   .object({
     key: builderKeySchema,
@@ -48,11 +51,11 @@ const workflowDeclaredOutputSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if ((value.type === "record_reference") !== (value.recordTypeIds !== undefined))
+    if (isRecordReferenceType(value.type) !== (value.recordTypeIds !== undefined))
       context.addIssue({
         code: "custom",
         path: ["recordTypeIds"],
-        message: "Record-reference outputs require their allowed record types",
+        message: "Record-reference and record-list outputs require their allowed record types",
       });
   });
 
@@ -174,6 +177,17 @@ export const workflowEdgeSchema = z
     outcome: builderKeySchema.optional(),
   })
   .strict();
+const requireTriggerInputRecordTypes = (
+  value: { type: string; recordTypeIds?: unknown },
+  context: z.RefinementCtx,
+) => {
+  if (isRecordReferenceType(value.type) !== (value.recordTypeIds !== undefined))
+    context.addIssue({
+      code: "custom",
+      path: ["recordTypeIds"],
+      message: "Record-reference and record-list inputs require their allowed record types",
+    });
+};
 const workflowTriggerInputSchema = z.discriminatedUnion("source", [
   z
     .object({
@@ -183,7 +197,8 @@ const workflowTriggerInputSchema = z.discriminatedUnion("source", [
       fieldId: fieldIdSchema,
       recordTypeIds: z.array(recordTypeIdSchema).min(1).optional(),
     })
-    .strict(),
+    .strict()
+    .superRefine(requireTriggerInputRecordTypes),
   z
     .object({
       source: z.literal("payload"),
@@ -193,14 +208,7 @@ const workflowTriggerInputSchema = z.discriminatedUnion("source", [
       recordTypeIds: z.array(recordTypeIdSchema).min(1).optional(),
     })
     .strict()
-    .superRefine((value, context) => {
-      if ((value.type === "record_reference") !== (value.recordTypeIds !== undefined))
-        context.addIssue({
-          code: "custom",
-          path: ["recordTypeIds"],
-          message: "Record-reference inputs require their allowed record types",
-        });
-    }),
+    .superRefine(requireTriggerInputRecordTypes),
 ]);
 const workflowTriggerCommon = {
   inputs: z.array(workflowTriggerInputSchema).max(100),
