@@ -1,12 +1,13 @@
 "use client";
 
 import type { ReactElement } from "react";
-import { DisplayCellView, cellValueToText } from "../display/cell";
+import { cellValueToText } from "../display/cell";
 import { DisplayHeader, RowActionControl } from "../display/controls";
 import { DisplayStateContainer } from "../display/display-state-container";
 import type { DisplayCellValue } from "../display/projected-data";
 import type { PlatformBlockRenderProps } from "../registry";
 import { readLauncherSettings, resolveLauncherListContext } from "./launcher-context";
+import { externalLinkActivation } from "./link-navigation";
 import { filterLauncherRows, useLauncherRowFilter } from "./view-filter-context";
 
 const cellText = (cells: Readonly<Record<string, DisplayCellValue>>, key: string): string => {
@@ -17,9 +18,12 @@ const cellText = (cells: Readonly<Record<string, DisplayCellValue>>, key: string
 /**
  * Browser-safe link-tile surface for already-returned query rows (see `linkTilesToListValues`). It
  * renders only the declared label, safe HTTPS address and description cells of a closed `list`
- * projection; it never executes the bound query (#584) and never resolves a destination (#619). A
- * non-link address cell is ignored rather than promoted, so a tile can show only a validated safe
- * address. An enclosing view filter can only hide rows it already received.
+ * projection; it never executes the bound query (#584). Each address is re-validated against the
+ * bounded HTTPS contract and opened in a new browsing context without opener access or referrer
+ * (#619); internal application and page destinations are re-checked on the server by the page
+ * capability service, never here. A non-link address cell is ignored rather than promoted, so a
+ * tile can show only a validated safe address. An enclosing view filter can only hide rows it
+ * already received.
  */
 export function LinkTiles(props: PlatformBlockRenderProps): ReactElement {
   const filter = useLauncherRowFilter();
@@ -71,7 +75,14 @@ export function LinkTiles(props: PlatformBlockRenderProps): ReactElement {
                       <span className="vortex-link-tile-label">{label}</span>
                       {address === undefined || address.kind !== "link" ? null : (
                         <span className="vortex-link-tile-address">
-                          <DisplayCellView value={address} />
+                          <a className="vortex-cell-link" {...externalLinkActivation(address.address)}>
+                            {address.label}
+                            <span aria-hidden="true"> ↗</span>
+                            <span className="vortex-sr-only">
+                              {" "}
+                              (external link, opens in a new page)
+                            </span>
+                          </a>
                         </span>
                       )}
                       {description === "" ? null : (
