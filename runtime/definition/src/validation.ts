@@ -2904,6 +2904,8 @@ function validateCurrentUserFlow(
   placementIds: ReadonlySet<string>,
   eventIds: ReadonlySet<string>,
   fields: ReadonlyMap<string, JsonObject>,
+  records: ReadonlyMap<string, JsonObject>,
+  recordModuleRootIds: ReadonlyMap<string, string>,
 ): DefinitionRuleFailure[] {
   const failures: DefinitionRuleFailure[] = [];
   const flowFailure = (ruleCode: string, family: DefinitionRuleFailure["family"]) =>
@@ -3205,6 +3207,28 @@ function validateCurrentUserFlow(
               ),
             );
         }
+      } else if (target.kind === "record_save") {
+        // A generic record save commits through the ordinary Record operation, so the bound
+        // Module must own the record type and the record type must allow that standard action.
+        const moduleRootId = String(target.moduleRootId);
+        const moduleEvidence = definitionEvidenceByRoot.get(moduleRootId);
+        const record = records.get(String(target.recordTypeId));
+        if (
+          target.applicationRootId !== applicationRootId ||
+          !boundModuleRootIds.has(moduleRootId) ||
+          moduleEvidence === undefined ||
+          target.releaseVersion !== moduleEvidence.releaseVersion ||
+          target.resolutionFingerprint !== moduleEvidence.resolutionFingerprint ||
+          record === undefined ||
+          recordModuleRootIds.get(String(target.recordTypeId)) !== moduleRootId ||
+          !array(record.standardActions).some((action) => action === target.mode)
+        )
+          failures.push(
+            flowFailure(
+              "vortex.definition.application_flow_node_references",
+              "broken_reference",
+            ),
+          );
       }
     }
 
@@ -3852,6 +3876,13 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       array(object(object(module.canonical).content).recordTypes),
     );
     const records = new Map(recordTypes.map((record) => [String(record.recordTypeId), record]));
+    const recordModuleRootIds = new Map(
+      boundModules.flatMap((module) =>
+        array(object(object(module.canonical).content).recordTypes).map(
+          (record) => [String(record.recordTypeId), String(module.artifact.rootId)] as const,
+        ),
+      ),
+    );
     const recordValuePairs = new Map<string, ApplicationFieldValuePair["moduleV2"]>(
       boundModules.flatMap((module) =>
         array(object(object(module.canonical).content).recordTypes).map(
@@ -4087,6 +4118,48 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       }),
     );
     const standardActionKeys = new Set(standardActionRecordTypes.keys());
+    const standardActionKeysByRecordAction = new Map(
+      [...standardActionRecordTypes].map(
+        ([key, recordTypeId]) =>
+          [`${recordTypeId}:${key.slice(key.lastIndexOf(".") + 1)}`, key] as const,
+      ),
+    );
+    /**
+     * The executable action key a flow action node commits, or undefined for a node that commits
+     * nothing. An unresolvable commit yields an empty key so it never matches a declared commit.
+     */
+    const flowCommitActionKey = (target: JsonObject): string | undefined => {
+      if (target.kind === "record_save")
+        return (
+          standardActionKeysByRecordAction.get(
+            `${String(target.recordTypeId)}:${String(target.mode)}`,
+          ) ?? ""
+        );
+      if (target.kind === "application_action") return String(target.actionKey);
+      if (target.kind === "protected_operation") {
+        const operation = object(target.operation);
+        const owner = object(operation.owner);
+        const ownerRootId =
+          owner.kind === "application"
+            ? String(owner.applicationRootId)
+            : owner.kind === "module"
+              ? String(owner.moduleRootId)
+              : undefined;
+        if (ownerRootId === undefined) return undefined;
+        const action = array(
+          ownerRootId === applicationRootId
+            ? content.actions
+            : object(
+                object(
+                  boundModules.find((module) => String(module.artifact.rootId) === ownerRootId)
+                    ?.canonical,
+                ).content,
+              ).actions,
+        ).find((candidate) => String(candidate.actionId) === String(operation.operationId));
+        return action === undefined ? "" : String(action.key);
+      }
+      return undefined;
+    };
     const executableActionKeys = new Set([...actionKeys, ...standardActionKeys]);
     const events = new Map(
       [
@@ -4365,13 +4438,23 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       applicationPlacementEntries.map(([placementId]) => placementId),
     );
     const pageSubjectRecordTypesByPlacement = new Map<string, Set<string>>();
+    // The declared commit action of every form page that places each component. A form's
+    // submission flow may commit only that action, so the page and its flow share one commit.
+    const pageCommitActionKeysByPlacement = new Map<string, Set<string>>();
     for (const page of pages.values()) {
-      const recordTypeId = object(page.recordType).recordTypeId;
-      if (typeof recordTypeId !== "string") continue;
-      for (const [placementId] of [
+      const pagePlacementIds = [
         ...pageContentPlacementEntriesV2(page),
         ...pageShellPlacementEntriesV2(page),
-      ]) {
+      ].map(([placementId]) => placementId);
+      if (page.commitActionKey !== undefined)
+        for (const placementId of pagePlacementIds) {
+          const commitKeys = pageCommitActionKeysByPlacement.get(placementId) ?? new Set<string>();
+          commitKeys.add(String(page.commitActionKey));
+          pageCommitActionKeysByPlacement.set(placementId, commitKeys);
+        }
+      const recordTypeId = object(page.recordType).recordTypeId;
+      if (typeof recordTypeId !== "string") continue;
+      for (const placementId of pagePlacementIds) {
         const recordTypes = pageSubjectRecordTypesByPlacement.get(placementId) ?? new Set<string>();
         recordTypes.add(recordTypeId);
         pageSubjectRecordTypesByPlacement.set(placementId, recordTypes);
@@ -5688,6 +5771,8 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           applicationPlacementIds,
           eventIds,
           allFields,
+          records,
+          recordModuleRootIds,
         ),
       );
     }
@@ -5722,6 +5807,22 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           bindingFailure("vortex.definition.application_flow_binding_target", "broken_reference"),
         );
       }
+      const pageCommitKeys = pageCommitActionKeysByPlacement.get(String(binding.controlId));
+      if (
+        flow &&
+        binding.event === "form_submit" &&
+        pageCommitKeys !== undefined &&
+        array(flow.nodes).some((node) => {
+          if (node.kind !== "action") return false;
+          const committed = flowCommitActionKey(object(node.target));
+          return (
+            committed !== undefined && (pageCommitKeys.size !== 1 || !pageCommitKeys.has(committed))
+          );
+        })
+      )
+        failures.push(
+          bindingFailure("vortex.definition.application_flow_binding_target", "scope_conflict"),
+        );
       const inputs = object(binding.inputs ?? {});
       const boundEvent = eventsById.get(String(binding.eventId));
       if (flow) {

@@ -107,7 +107,8 @@ export type ApplicationPreviewSimulatedEffect =
 export type ApplicationPreviewFlowTargetKind =
   | FrontendFlowNodeTarget["kind"]
   | "application_action"
-  | "application_query";
+  | "application_query"
+  | "record_save";
 
 export type ApplicationPreviewFlowNodeSimulation = Readonly<{
   nodeId: string;
@@ -183,6 +184,8 @@ const simulateActionTargetEffect = (
   if (targetKind === "query" || targetKind === "application_query") return "read";
   if (targetKind === "form_continuation") return "form_interaction";
   if (targetKind === "durable_workflow_start") return "background_start";
+  // A generic record save always commits one record through the ordinary Record operation.
+  if (targetKind === "record_save") return "change";
   // Protected operations and application actions carry their own effect; read the binding's
   // declared effects rather than guessing. A change is the conservative default.
   if (declaredEffects.includes("background_start")) return "background_start";

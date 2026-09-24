@@ -988,6 +988,8 @@ const flowTargetManifestFor = (
           contentFingerprint: String(target.contentFingerprint),
           resolutionFingerprint: String(target.resolutionFingerprint),
         });
+      // A record save adds no entry of its own: its record type belongs to a Module release the
+      // Module binding already pins exactly.
     }
   }
   for (const binding of content.flowBindings) {

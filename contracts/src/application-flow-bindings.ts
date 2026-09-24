@@ -871,6 +871,18 @@ export const currentUserFlowActionTargetSchema = z.discriminatedUnion("kind", [
       ...resolvedFlowTargetEvidenceSchema.shape,
     })
     .strict(),
+  // A generic record save commits the form draft through the ordinary create or update Record
+  // operation of one bound Module record type; its evidence is that Module's exact release.
+  z
+    .object({
+      kind: z.literal("record_save"),
+      applicationRootId: applicationRootIdSchema,
+      moduleRootId: moduleRootIdSchema,
+      recordTypeId: recordTypeIdSchema,
+      mode: z.enum(["create", "update"]),
+      ...resolvedFlowTargetEvidenceSchema.shape,
+    })
+    .strict(),
 ]);
 
 /**
@@ -881,6 +893,7 @@ export const currentUserFlowActionResults = {
   form_continuation: ["completed", "validation", "refused"],
   durable_workflow_start: ["background_pending", "validation", "refused", "uncertain"],
   application_action: ["committed", "validation", "refused", "conflict", "uncertain"],
+  record_save: ["committed", "validation", "refused", "conflict", "uncertain"],
 } as const satisfies Readonly<
   Record<
     Exclude<CurrentUserFlowActionTarget["kind"], "protected_operation">,
@@ -1908,6 +1921,26 @@ export const sourceCurrentUserFlowActionTargetSchema = z.discriminatedUnion("kin
       action: namespacedKeySchema,
     })
     .strict(),
+  // A generic record commit binds one module record type by its published permanent identity and
+  // commits the bound form draft through the ordinary create/update Record operation. It carries
+  // no application-specific action identity.
+  z
+    .object({
+      kind: z.literal("record_save"),
+      record_type: sourceQualifiedRecordTypeSchema,
+      mode: z.enum(["create", "update"]),
+    })
+    .strict(),
+  // A named action binds one bound Module's published action by its namespaced key. The compiler
+  // resolves it to that Module's protected operation by the action's permanent identity, so it
+  // publishes, routes and executes exactly as a protected operation. Application-owned actions
+  // use `application_action`.
+  z
+    .object({
+      kind: z.literal("named_action"),
+      action: namespacedKeySchema,
+    })
+    .strict(),
 ]);
 
 export const sourceCurrentUserFlowStartNodeSchema = z
@@ -2273,7 +2306,15 @@ export function validateSourceCurrentUserFlowGraph(
     value.nodes.map((node) => ({
       id: node.id,
       kind: node.kind,
-      ...(node.kind === "action" ? { actionTarget: node.target.kind } : {}),
+      // A named action resolves to its Module's protected operation and routes as one.
+      ...(node.kind === "action"
+        ? {
+            actionTarget:
+              node.target.kind === "named_action"
+                ? ("protected_operation" as const)
+                : node.target.kind,
+          }
+        : {}),
       ...(node.kind === "return" ? { returnOutcome: node.outcome } : {}),
     })),
     value.edges.map((edge) => ({
