@@ -10,6 +10,7 @@ import {
   activityOutcomeSchema,
   activityProjectionSchema,
   activitySourceSchema,
+  actorIdSchema,
   builderKeySchema,
   correlationIdSchema,
   fieldIdSchema,

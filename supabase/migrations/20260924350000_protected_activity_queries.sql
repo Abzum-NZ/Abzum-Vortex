@@ -9,6 +9,15 @@
 -- only inside that authorised audit projection, and no business value payload
 -- is ever returned.
 
+-- Keyset support for the newest-first organisation page and for the own
+-- projection, so one bounded page never sorts an organisation's full history.
+create index organization_activity_entries_recent_idx
+  on vortex_activity.organization_activity_entries
+  (organization_id, occurred_at desc, activity_id desc);
+create index organization_activity_entries_actor_recent_idx
+  on vortex_activity.organization_activity_entries
+  (organization_id, actor_kind, actor_id, occurred_at desc, activity_id desc);
+
 create function vortex_activity.read_organization_activity_page(
   p_occurred_from timestamptz,
   p_occurred_to timestamptz,
@@ -98,7 +107,7 @@ begin
     )
   ) as evaluated;
 
-  audit_projection := pg_catalog.coalesce(
+  audit_projection := coalesce(
     decision_outcome = 'eligible'
       and decision_organization_id = context_organization_id
       and decision_account_id = context_account_id,
@@ -109,7 +118,9 @@ begin
     select entry.*
     from vortex_activity.organization_activity_entries as entry
     where entry.organization_id = context_organization_id
-      and (audit_projection or entry.actor_id in (context_identity_id, context_account_id))
+      and (audit_projection
+        or (entry.actor_kind = 'organization_account' and entry.actor_id = context_account_id)
+        or (entry.actor_kind = 'identity' and entry.actor_id = context_identity_id))
       and (p_occurred_from is null or entry.occurred_at >= p_occurred_from)
       and (p_occurred_to is null or entry.occurred_at <= p_occurred_to)
       and (p_actor_kind is null or entry.actor_kind = p_actor_kind)
@@ -136,7 +147,7 @@ begin
     from ordered
   )
   select
-    pg_catalog.coalesce(
+    coalesce(
       pg_catalog.jsonb_agg(
         pg_catalog.jsonb_build_object(
           'activityId', numbered.activity_id,
@@ -158,7 +169,7 @@ begin
       ) filter (where numbered.ordinal <= p_page_size),
       '[]'::jsonb
     ),
-    pg_catalog.coalesce(pg_catalog.max(numbered.ordinal) > p_page_size, false),
+    coalesce(pg_catalog.max(numbered.ordinal) > p_page_size, false),
     (pg_catalog.array_agg(numbered.occurred_at order by numbered.ordinal)
       filter (where numbered.ordinal = p_page_size))[1],
     (pg_catalog.array_agg(numbered.activity_id order by numbered.ordinal)
@@ -263,7 +274,7 @@ begin
     )
   ) as evaluated;
 
-  audit_projection := pg_catalog.coalesce(
+  audit_projection := coalesce(
     decision_outcome = 'eligible'
       and decision_organization_id = context_organization_id
       and decision_account_id = context_account_id,
@@ -274,7 +285,9 @@ begin
     select entry.*
     from vortex_activity.organization_activity_entries as entry
     where entry.organization_id = context_organization_id
-      and (audit_projection or entry.actor_id in (context_identity_id, context_account_id))
+      and (audit_projection
+        or (entry.actor_kind = 'organization_account' and entry.actor_id = context_account_id)
+        or (entry.actor_kind = 'identity' and entry.actor_id = context_identity_id))
       and (p_occurred_from is null or entry.occurred_at >= p_occurred_from)
       and (p_occurred_to is null or entry.occurred_at <= p_occurred_to)
       and (p_actor_kind is null or entry.actor_kind = p_actor_kind)
@@ -303,14 +316,14 @@ begin
     from grouped
   )
   select
-    pg_catalog.coalesce(
+    coalesce(
       pg_catalog.jsonb_agg(
         pg_catalog.jsonb_build_object('value', ranked.value, 'count', ranked.entry_count)
         order by ranked.entry_count desc, ranked.value
       ) filter (where ranked.ordinal <= 100),
       '[]'::jsonb
     ),
-    pg_catalog.coalesce(pg_catalog.sum(ranked.entry_count), 0),
+    coalesce(pg_catalog.sum(ranked.entry_count), 0),
     pg_catalog.count(*) > 100
   into groups, total, truncated
   from ranked;
