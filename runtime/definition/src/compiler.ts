@@ -3994,6 +3994,36 @@ function compileWorkflow(
   };
 }
 
+const standardRecordActions = new Set([
+  "create",
+  "read",
+  "update",
+  "soft_delete",
+  "restore",
+  "export",
+]);
+
+/**
+ * Resolves a form commit to a custom action or to a bound Module's standard record action
+ * (`module.record.action`), matching the executable actions Definition validation accepts.
+ */
+function resolveFormCommitAction(
+  source: JsonObject,
+  resolution: Resolution,
+  key: string,
+  allowedOwners: readonly string[],
+): string {
+  const standard = /^(.+)\.([^.]+)\.([^.]+)$/.exec(key);
+  const boundModules = (asObject(source.body).module_bindings as JsonObject[]).map((binding) =>
+    String(binding.module),
+  );
+  if (standard && standardRecordActions.has(standard[3]!) && boundModules.includes(standard[1]!)) {
+    resolution.recordType(`${standard[1]}:${standard[2]}`);
+    return key;
+  }
+  return resolution.exactOwnedReference("action", key, allowedOwners);
+}
+
 function compileApplicationPagesV2(
   source: JsonObject,
   resolution: Resolution,
@@ -4070,8 +4100,9 @@ function compileApplicationPagesV2(
         ...base,
         type: "form",
         recordType: resolution.recordType(String(page.record_type)),
-        commitActionKey: resolution.exactOwnedReference(
-          "action",
+        commitActionKey: resolveFormCommitAction(
+          source,
+          resolution,
           String(page.commit_action),
           allowedPermissionOwners,
         ),
@@ -4081,8 +4112,9 @@ function compileApplicationPagesV2(
         ...base,
         type: "guided_form",
         recordType: resolution.recordType(String(page.record_type)),
-        commitActionKey: resolution.exactOwnedReference(
-          "action",
+        commitActionKey: resolveFormCommitAction(
+          source,
+          resolution,
           String(page.commit_action),
           allowedPermissionOwners,
         ),
@@ -5541,6 +5573,7 @@ function v2SlotSourceTargets(
     if (property === "view_permission") return [[...canonicalRoot, "viewPermissionKey"]];
     if (property === "use_permission") return [[...canonicalRoot, "usePermissionKey"]];
     if (property === "query") return [[...canonicalRoot, "queryId"]];
+    if (property === "read_model") return [[...canonicalRoot, "readModel", "key"]];
     if (property === "visibility_condition")
       return conditionSourceTargets(source as unknown as JsonObject, sourcePath, {
         sourceRoot: [...sourceRoot, "visibility_condition"],
