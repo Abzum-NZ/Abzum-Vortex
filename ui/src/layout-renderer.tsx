@@ -1,6 +1,4 @@
-"use client";
-
-import type { CSSProperties, ReactElement, ReactNode } from "react";
+import { useId, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import type {
   ApplicationContentV2,
   ApplicationShellV2,
@@ -29,13 +27,14 @@ import {
 import {
   computePlacementClassName,
   computePlacementStyle,
-  computeResponsivePlacementCss,
+  computeResponsiveLayoutCss,
   computeSlotContainerStyle,
   LAYOUT_CLASS_NAMES,
+  LIVE_LAYOUT_SCOPE_ATTRIBUTE,
   RESPONSIVE_BREAKPOINT_ORDER,
   slotDeclaresGridChildren,
 } from "./layout-styles";
-import { LayoutBreakpointProvider, useLayoutBreakpoint } from "./breakpoint";
+import { BreakpointOrderedChildren, LayoutBreakpointProvider } from "./breakpoint";
 import type { PlatformComponentRegistry } from "./registry";
 import { DateFormatProvider } from "./display/date-format-context";
 import {
@@ -381,13 +380,13 @@ export type PlacementRendererProps = Readonly<{
   controlEvents?: ControlEventsByPlacement | undefined;
   /** Theme tokens in force where this placement renders. */
   themeScope?: PlacementThemeScope | undefined;
-  /**
-   * Live-page mode. Per-breakpoint geometry comes from the generated responsive stylesheet and the
-   * current breakpoint only selects child order; preview keeps the explicit single-breakpoint
-   * inline styles instead.
-   */
-  responsive?: boolean | undefined;
 }>;
+
+/**
+ * Internal live-page mode. Geometry comes from the scoped responsive stylesheet and child order
+ * from the browser breakpoint provider; only PageLayoutRenderer, which emits both, enables it.
+ */
+type LiveLayoutMode = Readonly<{ responsive?: boolean | undefined }>;
 
 const EMPTY_THEME_SCOPE: PlacementThemeScope = Object.freeze({ application: {}, inherited: {} });
 
@@ -425,7 +424,7 @@ function PlacementView({
   controlEvents,
   themeScope = EMPTY_THEME_SCOPE,
   responsive = false,
-}: PlacementRendererProps): ReactElement {
+}: PlacementRendererProps & LiveLayoutMode): ReactElement {
   const currentLocation: DefinitionRenderErrorLocation = {
     ...location,
     placementId,
@@ -523,6 +522,7 @@ function PlacementView({
           controlData={controlData}
           controlEvents={controlEvents}
           themeScope={placementTheme.scope}
+          responsive={responsive}
         />
       );
     } else {
@@ -531,9 +531,10 @@ function PlacementView({
   }
 
   // 7. Apply declared visibility, content/fill/grid placement and content/bounded-height sizing.
-  //    Live pages take all of it from the generated per-breakpoint stylesheet; the current
-  //    breakpoint only labels the element and decides child order. A placement visible at any
-  //    breakpoint must stay in the document so a narrower media rule can reveal it.
+  //    Live pages take all of it from the scoped per-breakpoint stylesheet, so the element carries
+  //    no breakpoint-specific style or label. A placement visible at any breakpoint stays in the
+  //    document so a narrower media rule can reveal it. Its block renders once, server-side, with
+  //    the desktop base breakpoint; a client block that must adapt reads useLayoutBreakpoint().
   const layout = placement.responsive[breakpoint];
   const placementStyle = responsive ? undefined : computePlacementStyle(layout, breakpoint);
   const placementClassName = responsive
@@ -558,8 +559,9 @@ function PlacementView({
       data-vortex-placement-id={placementId}
       data-vortex-block-id={metadata.blockId}
       data-vortex-block-key={metadata.key}
-      data-vortex-breakpoint={breakpoint}
-      data-vortex-visible={String(layout.visible)}
+      {...(responsive
+        ? {}
+        : { "data-vortex-breakpoint": breakpoint, "data-vortex-visible": String(layout.visible) })}
       {...(placementTheme.style === undefined ? {} : { "data-vortex-theme": "" })}
       className={combinedClassName}
       style={combinedStyle}
@@ -607,11 +609,6 @@ export type PlacementSlotRendererProps = Readonly<{
   controlEvents?: ControlEventsByPlacement | undefined;
   /** Theme tokens in force where this slot renders. */
   themeScope?: PlacementThemeScope | undefined;
-  /**
-   * Live-page mode. Children still follow the current breakpoint's declared order, but the slot
-   * container and per-breakpoint geometry come from the generated responsive stylesheet.
-   */
-  responsive?: boolean | undefined;
 }>;
 
 /**
@@ -650,7 +647,7 @@ function PlacementSlotView({
   controlEvents,
   themeScope,
   responsive = false,
-}: PlacementSlotRendererProps): ReactElement {
+}: PlacementSlotRendererProps & LiveLayoutMode): ReactElement {
   const currentLocation: DefinitionRenderErrorLocation = {
     ...location,
     ...(slotKey === undefined ? {} : { slotKey }),
@@ -658,9 +655,13 @@ function PlacementSlotView({
     breakpoint,
   };
 
-  // Validate deterministic child ordering for the current breakpoint. Live pages read the child
-  // order of the visitor's breakpoint, so focus order follows the meaningful reading order.
+  // Validate deterministic child ordering. A live slot renders in desktop order on the server and
+  // adopts the visitor's breakpoint order in the browser, so every breakpoint's order must be
+  // complete before anything renders; the DOM order then always equals the declared reading order.
   const orderedIds = validateSlotOrder(slot, breakpoint, currentLocation);
+  if (responsive)
+    for (const candidate of RESPONSIVE_BREAKPOINT_ORDER)
+      validateSlotOrder(slot, candidate, { ...currentLocation, breakpoint: candidate });
 
   // Check if any child placement declares 12-column grid width. A live slot keeps one container
   // mode across breakpoints; the generated rules make each child fill or span per breakpoint.
@@ -685,46 +686,61 @@ function PlacementSlotView({
     ? `${containerClassName} ${className}`
     : containerClassName;
 
+  const renderChild = (childId: string): ReactElement => {
+    const childPlacement = slot.placements[childId];
+    if (childPlacement === undefined) {
+      throw new DefinitionRenderError(
+        "INCOMPLETE_CHILD_ORDERING",
+        `Ordered child placement '${childId}' is missing`,
+        { ...currentLocation, childPlacementId: childId },
+      );
+    }
+    const childLayout = childPlacement.responsive[breakpoint];
+    const gridItemStyle =
+      !responsive && hasGridChildren && childLayout.width.kind !== "grid"
+        ? ({ gridColumn: "1 / -1" } satisfies CSSProperties)
+        : undefined;
+    return (
+      <PlacementView
+        key={childId}
+        placementId={childId}
+        placement={childPlacement}
+        breakpoint={breakpoint}
+        registry={registry}
+        location={currentLocation}
+        {...(gridItemStyle === undefined ? {} : { style: gridItemStyle })}
+        allowEmptyRequiredSlots={allowEmptyRequiredSlots}
+        projectedData={projectedData}
+        displayEvents={displayEvents}
+        controlData={controlData}
+        controlEvents={controlEvents}
+        themeScope={themeScope}
+        responsive={responsive}
+      />
+    );
+  };
+
   return (
     <div
       data-vortex-slot-key={slotKey ?? "root"}
-      data-vortex-breakpoint={breakpoint}
+      {...(responsive ? {} : { "data-vortex-breakpoint": breakpoint })}
       className={combinedClassName}
       style={containerStyle}
     >
-      {orderedIds.map((childId) => {
-        const childPlacement = slot.placements[childId];
-        if (childPlacement === undefined) {
-          throw new DefinitionRenderError(
-            "INCOMPLETE_CHILD_ORDERING",
-            `Ordered child placement '${childId}' is missing`,
-            { ...currentLocation, childPlacementId: childId },
-          );
-        }
-        const childLayout = childPlacement.responsive[breakpoint];
-        const gridItemStyle =
-          !responsive && hasGridChildren && childLayout.width.kind !== "grid"
-            ? ({ gridColumn: "1 / -1" } satisfies CSSProperties)
-            : undefined;
-        return (
-          <PlacementView
-            key={childId}
-            placementId={childId}
-            placement={childPlacement}
-            breakpoint={breakpoint}
-            registry={registry}
-            location={currentLocation}
-            {...(gridItemStyle === undefined ? {} : { style: gridItemStyle })}
-            allowEmptyRequiredSlots={allowEmptyRequiredSlots}
-            projectedData={projectedData}
-            displayEvents={displayEvents}
-            controlData={controlData}
-            controlEvents={controlEvents}
-            themeScope={themeScope}
-            responsive={responsive}
-          />
-        );
-      })}
+      {responsive ? (
+        // Children render here (on the server for live pages); the client component only picks
+        // their order, so it receives serialisable order lists and already rendered placements.
+        <BreakpointOrderedChildren
+          order={{
+            desktop: [...slot.order.desktop],
+            tablet: [...slot.order.tablet],
+            phone: [...slot.order.phone],
+          }}
+          items={Object.fromEntries(orderedIds.map((childId) => [childId, renderChild(childId)]))}
+        />
+      ) : (
+        orderedIds.map(renderChild)
+      )}
     </div>
   );
 }
@@ -739,6 +755,10 @@ export type PageLayoutRendererProps = Readonly<{
     | PageCompositionV2
     | GuidedFormCompositionV2
     | ProjectedPageCapability;
+  /**
+   * Explicit breakpoint for preview canvases, rendered with that breakpoint's inline geometry and
+   * order. Omit it for a live page, which adapts to the visitor's width (#1010).
+   */
   breakpoint?: Breakpoint;
   registry: PlatformComponentRegistry;
   shells?: readonly ApplicationShellV2[];
@@ -794,6 +814,8 @@ export function PageLayoutRenderer({
   locale,
   timeZone,
 }: PageLayoutRendererProps): ReactElement {
+  // Stable across server render and hydration; scopes this root's responsive rules.
+  const liveLayoutScope = useId();
   const resolved = resolveRootPlacementSlotWithContext({
     composition,
     shells,
@@ -854,24 +876,29 @@ export function PageLayoutRenderer({
   return (
     <div
       {...createThemeRootProps(applicationTheme, themeMode)}
-      {...(breakpoint === undefined ? { "data-vortex-live-layout": "" } : {})}
+      {...(breakpoint === undefined ? { [LIVE_LAYOUT_SCOPE_ATTRIBUTE]: liveLayoutScope } : {})}
     >
       <style href="vortex-ui-styles" precedence="default">
         {ALL_UI_STYLES_CSS}
       </style>
       <DateFormatProvider locale={locale} timeZone={timeZone}>
         {breakpoint === undefined ? (
-          // Live page: breakpoint-independent HTML plus one responsive stylesheet. The browser
-          // provider adopts the visitor's declared child order after load; geometry is pure CSS.
-          <LayoutBreakpointProvider>
-            <LivePageLayout
-              slot={resolved.slot}
-              {...sharedProps}
-              responsiveStylesheet={collectResponsivePlacementCss(resolved.slot)}
-              {...(className === undefined ? {} : { className })}
-              {...(style === undefined ? {} : { style })}
-            />
-          </LayoutBreakpointProvider>
+          // Live page: breakpoint-independent HTML plus one stylesheet scoped to this root, so the
+          // same server HTML adapts at every width before any script runs. The browser provider
+          // then adopts each slot's declared child order for the visitor's breakpoint.
+          <>
+            <style>{computeResponsiveLayoutCss(liveLayoutScope, resolved.slot)}</style>
+            <LayoutBreakpointProvider>
+              <PlacementSlotView
+                slot={resolved.slot}
+                breakpoint="desktop"
+                responsive
+                {...sharedProps}
+                {...(className === undefined ? {} : { className })}
+                {...(style === undefined ? {} : { style })}
+              />
+            </LayoutBreakpointProvider>
+          </>
         ) : (
           // Explicit preview breakpoint: one breakpoint rendered with inline geometry.
           <PlacementSlotView
@@ -885,42 +912,6 @@ export function PageLayoutRenderer({
       </DateFormatProvider>
     </div>
   );
-}
-
-type LivePageLayoutProps = Omit<PlacementSlotRendererProps, "breakpoint" | "responsive"> &
-  Readonly<{ responsiveStylesheet: string }>;
-
-/** Client subscriber that renders the resolved tree in the visitor's breakpoint order. */
-function LivePageLayout({ responsiveStylesheet, ...slotProps }: LivePageLayoutProps): ReactElement {
-  const breakpoint = useLayoutBreakpoint();
-  return (
-    <>
-      <style>{responsiveStylesheet}</style>
-      <PlacementSlotView {...slotProps} breakpoint={breakpoint} responsive />
-    </>
-  );
-}
-
-/**
- * Collects per-breakpoint geometry for every placement in the resolved tree as one stylesheet.
- * It is keyed by stable placement identity, so it is safe when several pages render at once, and
- * the deterministic placement order keeps server and client markup identical.
- */
-function collectResponsivePlacementCss(slot: PlacementSlotV2): string {
-  const gridContainer = slotDeclaresGridChildren(slot);
-  let css = "";
-  for (const placementId of Object.keys(slot.placements).sort()) {
-    const placement = slot.placements[placementId];
-    if (placement === undefined) continue;
-    css += computeResponsivePlacementCss(placementId, placement.responsive, {
-      gridItem: gridContainer,
-    });
-    for (const slotKey of Object.keys(placement.slots).sort()) {
-      const childSlot = placement.slots[slotKey];
-      if (childSlot !== undefined) css += collectResponsivePlacementCss(childSlot);
-    }
-  }
-  return css;
 }
 
 /**

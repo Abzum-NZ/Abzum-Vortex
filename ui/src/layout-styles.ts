@@ -142,14 +142,25 @@ export function computeSlotContainerStyle(hasGridChildren: boolean): CSSProperti
   };
 }
 
+/** Structural slot shape the responsive stylesheet walks; the renderer's placement slot fits it. */
+export type ResponsiveLayoutSlot = Readonly<{
+  placements: Readonly<
+    Record<
+      string,
+      Readonly<{
+        responsive: ResponsivePlacementLayoutsV2;
+        slots: Readonly<Record<string, ResponsiveLayoutSlot>>;
+      }>
+    >
+  >;
+}>;
+
 /**
  * Whether any child placement of this slot declares twelve-column grid width at any breakpoint.
  * A live slot keeps one container mode for every breakpoint so its responsive geometry stays pure
  * CSS; non-grid children span the full row through their own media rules.
  */
-export function slotDeclaresGridChildren(slot: {
-  placements: Readonly<Record<string, Readonly<{ responsive: ResponsivePlacementLayoutsV2 }>>>;
-}): boolean {
+export function slotDeclaresGridChildren(slot: ResponsiveLayoutSlot): boolean {
   return Object.values(slot.placements).some((placement) =>
     RESPONSIVE_BREAKPOINT_ORDER.some(
       (breakpoint) => placement.responsive[breakpoint].width.kind === "grid",
@@ -158,17 +169,26 @@ export function slotDeclaresGridChildren(slot: {
 }
 
 /**
- * Attribute the live layout root carries so responsive rules cannot leak into an explicit
- * breakpoint preview rendered on the same document. Escapes CSS string metacharacters.
+ * Attribute carrying one live layout root's scope. Every responsive rule is prefixed with that
+ * exact scope, so rules never leak into an explicit-breakpoint preview or another live layout
+ * rendered on the same document.
  */
-const LIVE_LAYOUT_SCOPE_ATTRIBUTE = "data-vortex-live-layout";
+export const LIVE_LAYOUT_SCOPE_ATTRIBUTE = "data-vortex-live-layout";
 
-function placementCssSelector(placementId: string): string {
-  const escaped = placementId
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/[\n\r]/g, "\\a ");
-  return `[${LIVE_LAYOUT_SCOPE_ATTRIBUTE}] [data-vortex-placement-id="${escaped}"]`;
+/**
+ * Escapes a value for a double-quoted CSS attribute selector. Everything except ASCII letters,
+ * digits, hyphen and underscore becomes a hexadecimal escape, so the value can close neither the
+ * CSS string nor the surrounding HTML style element.
+ */
+function cssAttributeValue(value: string): string {
+  return value.replace(
+    /[^A-Za-z0-9_-]/gu,
+    (character) => `\\${(character.codePointAt(0) ?? 0xfffd).toString(16)} `,
+  );
+}
+
+function placementCssSelector(scope: string, placementId: string): string {
+  return `[${LIVE_LAYOUT_SCOPE_ATTRIBUTE}="${cssAttributeValue(scope)}"] [data-vortex-placement-id="${cssAttributeValue(placementId)}"]`;
 }
 
 /**
@@ -184,7 +204,7 @@ function responsiveLayoutDeclarations(
   const declarations: string[] = ["display: block"];
 
   if (layout.width.kind === "fill") {
-    declarations.push("width: 100%");
+    declarations.push("width: 100%", "max-width: none");
     if (gridItem) declarations.push("grid-column: 1 / -1");
   } else if (layout.width.kind === "content") {
     declarations.push("width: fit-content", "max-width: 100%");
@@ -207,21 +227,42 @@ function responsiveLayoutDeclarations(
 }
 
 /**
- * Per-breakpoint width, visibility and height for one placement as a media-query stylesheet. This
- * is the live-page path: the server emits the same rules for every visitor and the browser applies
- * the matching breakpoint inline, so phone visitors never receive a desktop-only inline style.
+ * Per-breakpoint width, visibility and height for one placement: a desktop base rule plus tablet
+ * and phone media-query overrides, widest first so the narrowest matching rule wins.
  */
 export function computeResponsivePlacementCss(
+  scope: string,
   placementId: string,
   responsive: ResponsivePlacementLayoutsV2,
   options: Readonly<{ gridItem?: boolean }> = {},
 ): string {
   const gridItem = options.gridItem ?? false;
-  const selector = placementCssSelector(placementId);
+  const selector = placementCssSelector(scope, placementId);
   let css = `${selector} { ${responsiveLayoutDeclarations(responsive.desktop, gridItem)}; }\n`;
   for (const breakpoint of RESPONSIVE_BREAKPOINT_ORDER) {
     if (breakpoint === "desktop") continue;
     css += `@media ${LAYOUT_BREAKPOINT_MEDIA[breakpoint]} { ${selector} { ${responsiveLayoutDeclarations(responsive[breakpoint], gridItem)}; } }\n`;
+  }
+  return css;
+}
+
+/**
+ * The live-page stylesheet: per-breakpoint geometry for every placement in the resolved tree,
+ * scoped to one live layout root. The server emits the same rules for every visitor and the
+ * browser applies the matching breakpoint, so phone visitors never receive desktop-only geometry.
+ * Placements are visited in sorted identity order, so server and client output are identical.
+ */
+export function computeResponsiveLayoutCss(scope: string, slot: ResponsiveLayoutSlot): string {
+  const gridItem = slotDeclaresGridChildren(slot);
+  let css = "";
+  for (const placementId of Object.keys(slot.placements).sort()) {
+    const placement = slot.placements[placementId];
+    if (placement === undefined) continue;
+    css += computeResponsivePlacementCss(scope, placementId, placement.responsive, { gridItem });
+    for (const slotKey of Object.keys(placement.slots).sort()) {
+      const childSlot = placement.slots[slotKey];
+      if (childSlot !== undefined) css += computeResponsiveLayoutCss(scope, childSlot);
+    }
   }
   return css;
 }
