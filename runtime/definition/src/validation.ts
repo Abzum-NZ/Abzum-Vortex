@@ -2185,8 +2185,8 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       moduleRootId,
       ...array(content.dependencies).map((dependency) => String(dependency.moduleRootId)),
     ]);
-    const declaredDependencyRoots = new Set(
-      array(content.dependencies).map((dependency) => String(dependency.moduleRootId)),
+    const declaredDependencies = new Set(
+      array(content.dependencies).map((dependency) => fingerprintCanonicalValue(dependency)),
     );
     const choicePermissionValid = (permissionId: unknown): boolean => {
       const owners = permissionOwnersById.get(String(permissionId));
@@ -2709,11 +2709,11 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         kind: "extension_point" as const,
         key: String(targetModule.moduleKey),
       };
-      // A contribution must target a declared dependency other than the contributing module,
-      // and that release must declare the exact extension point it claims.
+      // A contribution must target exactly one of this module's declared dependency entries,
+      // never the contributing module, and that release must declare the extension point it claims.
       if (
         targetRootId === moduleRootId ||
-        !declaredDependencyRoots.has(targetRootId) ||
+        !declaredDependencies.has(fingerprintCanonicalValue(targetModule)) ||
         targetContent === undefined
       ) {
         failures.push(
