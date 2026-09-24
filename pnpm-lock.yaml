@@ -488,6 +488,9 @@ importers:
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
+      '@vortex/db':
+        specifier: workspace:*
+        version: link:../../db
       '@vortex/event':
         specifier: workspace:*
         version: link:../event
