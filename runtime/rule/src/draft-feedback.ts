@@ -34,19 +34,20 @@ export type RuleDraftFeedbackProjectionInput = EvaluateBeforeSaveRuleGraphsInput
 /**
  * Located presentation state for one draft field. The before-save profile
  * currently declares no visibility or disable nodes, so a field with no rule
- * effect stays visible and enabled. The projection recomputes every field from
- * the current draft, so a form clears any state that no longer applies.
+ * effect remains visible and not disabled. The projection recomputes every
+ * field from the current draft, so a form clears any state that no longer
+ * applies.
  */
 export type RuleDraftFeedbackFieldState = Readonly<{
   fieldId: string;
   required: boolean;
   visible: boolean;
-  enabled: boolean;
+  disabled: boolean;
 }>;
 
 /**
  * Effect-free feedback for the current draft. `fields` carries the located
- * required/visible/enabled state for each subject field, `requirements` carries
+ * required/visible/disabled state for each subject field, `requirements` carries
  * the located requirement messages, and `refusal` carries a located refusal
  * when a rule refuses the draft. Warning nodes carry no field in the current
  * contract, so warnings are form-level. The projection never persists, mutates,
@@ -150,7 +151,7 @@ export const projectRuleDraftFeedback = (
       fieldId: field.fieldId,
       required: false,
       visible: true,
-      enabled: true,
+      disabled: false,
     });
   for (const requirement of requirements) {
     const current = fieldsById.get(requirement.fieldId);
@@ -158,7 +159,7 @@ export const projectRuleDraftFeedback = (
       fieldId: requirement.fieldId,
       required: true,
       visible: current?.visible ?? true,
-      enabled: current?.enabled ?? true,
+      disabled: current?.disabled ?? false,
     });
   }
   const fields = [...fieldsById.values()].sort((left, right) =>
