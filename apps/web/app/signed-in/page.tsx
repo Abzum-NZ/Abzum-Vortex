@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { OrganizationLauncherEntry } from "@vortex/contracts";
 import {
-  LIST_BLOCK_RELEASE,
-  ListDisplay,
+  ALL_UI_STYLES_CSS,
+  APPLICATION_LAUNCHER_BLOCK_RELEASE,
+  ApplicationLauncher,
+  createThemeRootProps,
   type DisplayRow,
   type DisplaySemanticEvent,
   type ProjectedDisplayValues,
@@ -19,29 +22,51 @@ const organizationAddressPath = (entry: {
   organizationShortName: string;
 }) => `/${encodeURIComponent(entry.tenantShortName)}/${encodeURIComponent(entry.organizationShortName)}`;
 
-const organizationListValues = (
-  entries: readonly {
-    organizationId: string;
-    tenantDisplayName: string;
-    organizationDisplayName: string;
-    accountDisplayName?: string;
-  }[],
+/**
+ * Closed launcher projection of the person's current organisation entries. Each tile's identity is
+ * the organisation's permanent identity and its only cell is the name the chooser always showed
+ * (organisation, tenant and, when present, account), so no address or authority reaches the page.
+ */
+const organizationTileValues = (
+  entries: readonly OrganizationLauncherEntry[],
 ): ProjectedDisplayValues => {
-  const rows: readonly DisplayRow[] = entries.map((entry): DisplayRow => ({
-    recordId: entry.organizationId,
-    cells: {
-      name: { kind: "text", text: entry.organizationDisplayName },
-      tenant: {
-        kind: "text",
-        text:
-          entry.accountDisplayName === undefined
-            ? entry.tenantDisplayName
-            : `${entry.tenantDisplayName} · ${entry.accountDisplayName}`,
+  const rows = entries.map(
+    (entry): DisplayRow => ({
+      recordId: entry.organizationId,
+      cells: {
+        name: {
+          kind: "text",
+          text: [entry.organizationDisplayName, entry.tenantDisplayName, entry.accountDisplayName]
+            .filter((part) => part !== undefined)
+            .join(" · "),
+        },
       },
-    },
-  }));
-  return { kind: "list", headingKey: "name", secondaryKey: "tenant", rows };
+    }),
+  );
+  return { kind: "list", headingKey: "name", rows };
 };
+
+/**
+ * Tile activation is the launcher block's declared `row_action` event. The browser supplies only
+ * the tile's identity; this server action re-resolves the signed-in person's current organisation
+ * entries and opens the matching one, so a withdrawn or foreign organisation is never opened from
+ * stale page data or a crafted identity.
+ */
+async function openOrganization(event: DisplaySemanticEvent): Promise<void> {
+  "use server";
+  if (event?.event !== "row_action" || typeof event.recordId !== "string") return;
+  const identity = await resolveIdentitySession();
+  if (identity.kind === "temporarily_unavailable") redirect("/signed-in");
+  if (identity.kind === "invalid_session_state" || identity.kind === "expired_or_revoked")
+    redirect("/auth/session-ended");
+  if (identity.kind !== "active") redirect("/auth/sign-in?status=session-ended");
+
+  const current = await loadOrganizationLauncher(identity.session);
+  if (current.kind !== "available") redirect("/signed-in");
+  const entry = current.entries.find((candidate) => candidate.organizationId === event.recordId);
+  if (entry === undefined) redirect("/signed-in");
+  redirect(organizationAddressPath(entry));
+}
 
 export default async function SignedInPage() {
   const result = await resolveIdentitySession();
@@ -74,31 +99,6 @@ export default async function SignedInPage() {
   const onlyEntry = launcher.entries[0];
   if (launcher.entries.length === 1 && onlyEntry) redirect(organizationAddressPath(onlyEntry));
 
-  /**
-   * Tile activation is the declared `row_action` event. It is handled by this server action, which
-   * re-resolves the signed-in person's current organisation entries before opening the chosen
-   * organisation, so a withdrawn or foreign organisation is never opened from stale page data.
-   */
-  async function openOrganization(event: DisplaySemanticEvent): Promise<void> {
-    "use server";
-    if (event.event !== "row_action") return;
-    const currentIdentity = await resolveIdentitySession();
-    if (
-      currentIdentity.kind === "invalid_session_state" ||
-      currentIdentity.kind === "expired_or_revoked"
-    )
-      redirect("/auth/session-ended");
-    if (currentIdentity.kind !== "active") redirect("/auth/sign-in?status=session-ended");
-
-    const current = await loadOrganizationLauncher(currentIdentity.session);
-    if (current.kind !== "available") redirect("/signed-in");
-    const entry = current.entries.find(
-      (candidate) => candidate.organizationId === event.recordId,
-    );
-    if (entry === undefined) redirect("/signed-in");
-    redirect(organizationAddressPath(entry));
-  }
-
   return (
     <AuthShell
       eyebrow="Organisation access"
@@ -112,19 +112,21 @@ export default async function SignedInPage() {
       }
     >
       {launcher.entries.length > 0 ? (
-        <ListDisplay
-          placementId="organization-chooser"
-          settings={{ title: { kind: "text", value: "Available organisations" } }}
-          slots={{}}
-          breakpoint="desktop"
-          metadata={LIST_BLOCK_RELEASE}
-          availability="available"
-          projectedData={{
-            status: "ready",
-            values: organizationListValues(launcher.entries),
-          }}
-          displayEvents={{ row_action: openOrganization }}
-        />
+        <div {...createThemeRootProps(undefined)}>
+          <style href="vortex-ui-styles" precedence="default">
+            {ALL_UI_STYLES_CSS}
+          </style>
+          <ApplicationLauncher
+            placementId="organization-chooser"
+            settings={{ title: { kind: "text", value: "Available organisations" } }}
+            slots={{}}
+            breakpoint="desktop"
+            metadata={APPLICATION_LAUNCHER_BLOCK_RELEASE}
+            availability="available"
+            projectedData={{ status: "ready", values: organizationTileValues(launcher.entries) }}
+            displayEvents={{ row_action: openOrganization }}
+          />
+        </div>
       ) : null}
       <form action={signOut} className="auth-form">
         <button type="submit">Sign out</button>

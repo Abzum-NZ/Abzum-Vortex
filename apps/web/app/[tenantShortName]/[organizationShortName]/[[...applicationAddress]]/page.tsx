@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
+  ALL_UI_STYLES_CSS,
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   ApplicationLauncher,
+  createThemeRootProps,
   parsePermittedApplicationsLauncherProjection,
   permittedApplicationsToListValues,
   type DisplaySemanticEvent,
@@ -43,14 +45,17 @@ export default async function ApplicationAddressPage({ params }: ApplicationAddr
   const addressSegments = applicationAddress ?? [];
 
   /**
-   * Tile activation is the declared `row_action` event. It is handled by this server action, which
-   * re-resolves the current permitted applications for the signed-in person before it opens the
-   * tile's target, so a withdrawn or refused application is never opened from stale page data.
+   * Tile activation is the launcher block's declared `row_action` event. The browser supplies only
+   * the tile's application identity; this server action re-resolves the signed-in person's current
+   * permitted applications at this address and opens the matching one, so a withdrawn or refused
+   * application is never opened from stale page data or a crafted identity.
    */
   async function openApplication(event: DisplaySemanticEvent): Promise<void> {
     "use server";
-    if (event.event !== "row_action") return;
+    if (event?.event !== "row_action" || typeof event.recordId !== "string") return;
+    const chooser = launcherPath(tenantShortName, organizationShortName);
     const currentIdentity = await resolveIdentitySession();
+    if (currentIdentity.kind === "temporarily_unavailable") redirect(chooser);
     if (
       currentIdentity.kind === "invalid_session_state" ||
       currentIdentity.kind === "expired_or_revoked"
@@ -63,7 +68,6 @@ export default async function ApplicationAddressPage({ params }: ApplicationAddr
       tenantShortName,
       organizationShortName,
     );
-    const chooser = launcherPath(tenantShortName, organizationShortName);
     if (rechecked.kind !== "organization_launcher") redirect(chooser);
     const application = rechecked.read.applications.find(
       (candidate) => candidate.applicationRootId === event.recordId,
@@ -152,16 +156,21 @@ export default async function ApplicationAddressPage({ params }: ApplicationAddr
         {launcherValues === undefined ? (
           <p>No applications are available for this organisation.</p>
         ) : (
-          <ApplicationLauncher
-            placementId="organization-application-launcher"
-            settings={{ title: { kind: "text", value: "Available applications" } }}
-            slots={{}}
-            breakpoint="desktop"
-            metadata={APPLICATION_LAUNCHER_BLOCK_RELEASE}
-            availability="available"
-            projectedData={{ status: "ready", values: launcherValues }}
-            displayEvents={{ row_action: openApplication }}
-          />
+          <div {...createThemeRootProps(undefined)}>
+            <style href="vortex-ui-styles" precedence="default">
+              {ALL_UI_STYLES_CSS}
+            </style>
+            <ApplicationLauncher
+              placementId="organization-application-launcher"
+              settings={{ title: { kind: "text", value: "Available applications" } }}
+              slots={{}}
+              breakpoint="desktop"
+              metadata={APPLICATION_LAUNCHER_BLOCK_RELEASE}
+              availability="available"
+              projectedData={{ status: "ready", values: launcherValues }}
+              displayEvents={{ row_action: openApplication }}
+            />
+          </div>
         )}
         <Link href="/signed-in">Choose another organisation</Link>
       </AuthShell>
