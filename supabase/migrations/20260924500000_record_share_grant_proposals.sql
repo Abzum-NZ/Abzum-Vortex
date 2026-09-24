@@ -17,13 +17,30 @@
 -- these three values and a cross-organisation proposal stops at pending_consent.
 --
 -- The source organisation, account and application always come from the
--- validated human request context; the caller supplies only the proposed terms.
--- The proposer must currently hold the share permission for the exact record
--- type (and, for a single record, the exact record with read/update ceilings on
--- the proposed fields), evaluated fresh under the organisation Access-version
--- lock. A grant can never carry delete, restore, permission-change, ownership
--- transfer or re-sharing authority. The definition mapping fingerprint is
--- stored exactly as supplied; compatibility enforcement belongs to #728/#739.
+-- validated human request context; the caller supplies only the proposed terms
+-- and never any record facts. Source authority is evaluated fresh, under the
+-- organisation Access-version lock, from the live permission catalogue and the
+-- proposer's current role paths only:
+--
+-- * every scope, a single record included, needs a currently effective share
+--   permission whose record scope reaches every record of the record type
+--   without reading a row (an all_records route and no saved condition, the
+--   same row-independent rule protected share revocation uses,
+--   20260910114716_coordinate_protected_record_share.sql F2). A record-specific
+--   route (ownership, direct share, relationship or condition) needs the real
+--   record row, which only the fixed Record adapter may load; functions a
+--   request role can call never accept caller-supplied record facts
+--   (20260910114716 F5), so such a route does not admit a grant proposal yet;
+-- * the proposed readable and changeable fields must lie inside the proposer's
+--   own current row-independent read and update field policies for the record
+--   types it may share, for every scope kind;
+-- * the record type must belong to the proposed module, which Access knows from
+--   the module's own permission declarations.
+--
+-- A grant can never carry delete, restore, permission-change, ownership
+-- transfer or re-sharing authority. The definition mapping and saved-condition
+-- fingerprints are stored exactly as supplied; compatibility and condition
+-- enforcement belong to #728/#739.
 
 create table vortex_access.record_share_grants (
   grant_id uuid primary key,
@@ -353,16 +370,145 @@ begin
 end
 $function$;
 
+-- The proposer's current row-independent source authority over one proposed
+-- module or record type, from the live catalogue and the proposer's own current
+-- role paths. It returns the record types in scope the proposer may currently
+-- share, and the union of the read and update field policies it currently holds
+-- on exactly those record types. A record type belongs to the module when the
+-- module's own permission declarations name it; an unknown pairing reaches
+-- nothing. Only a record scope that needs no row (an all_records route and no
+-- saved condition) counts. It never admits anything by itself and changes
+-- nothing; a delegated or support context has no such authority.
+create function vortex_access.record_share_grant_source_authority_internal(
+  p_context jsonb,
+  p_module_root_id uuid,
+  p_record_type_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  context_organization_id uuid := (p_context ->> 'organizationId')::uuid;
+  context_application_root_id uuid := (p_context ->> 'applicationRootId')::uuid;
+  checked_at timestamptz := pg_catalog.clock_timestamp();
+  authority jsonb;
+begin
+  if p_context ? 'delegatedContext' or p_context ? 'supportContext'
+    or context_organization_id is null or context_application_root_id is null
+    or p_module_root_id is null then
+    return pg_catalog.jsonb_build_object(
+      'recordTypeIds', '[]'::jsonb,
+      'readableFieldIds', '[]'::jsonb,
+      'changeableFieldIds', '[]'::jsonb
+    );
+  end if;
+
+  with current_entries as materialized (
+    select entry.*
+    from vortex_access.permission_catalogue_entries as entry
+    join vortex_access.permission_registrations as registration
+      on registration.organization_id = entry.organization_id
+      and registration.registration_kind = entry.registration_kind
+      and registration.registration_owner_id = entry.registration_owner_id
+      and registration.revision = entry.registration_revision
+      and registration.state = 'active'
+    where entry.organization_id = context_organization_id
+      and entry.application_root_id = context_application_root_id
+      and entry.record_type_id is not null
+      and (p_record_type_id is null or entry.record_type_id = p_record_type_id)
+  ), module_record_types as materialized (
+    select distinct entry.record_type_id
+    from current_entries as entry
+    where entry.owner_kind = 'module'
+      and entry.owner_id = p_module_root_id
+  ), candidates as materialized (
+    select entry.record_type_id, entry.action_kind, entry.field_policy,
+      entry.owner_kind, entry.owner_id, entry.permission_id
+    from current_entries as entry
+    join module_record_types as scoped
+      on scoped.record_type_id = entry.record_type_id
+    where (
+        (entry.owner_kind = 'application' and entry.owner_id = context_application_root_id)
+        or (entry.owner_kind = 'module' and entry.owner_id = p_module_root_id)
+      )
+      and entry.action_kind in ('share', 'read', 'update')
+      and entry.named_action is null
+      and entry.record_scope is not null
+      and exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(entry.record_scope -> 'routes') as route(value)
+        where route.value ->> 'kind' = 'all_records'
+      )
+      and not (entry.record_scope ? 'savedCondition')
+  ), effective as materialized (
+    select candidate.*
+    from candidates as candidate
+    where exists (
+      select 1
+      from vortex_access.evaluate_permission_role_path_internal(
+        p_context,
+        checked_at,
+        pg_catalog.jsonb_build_object(
+          'applicationRootId', context_application_root_id,
+          'ownerKind', candidate.owner_kind,
+          'ownerId', candidate.owner_id,
+          'permissionId', candidate.permission_id
+        ),
+        pg_catalog.jsonb_build_object('actionKind', candidate.action_kind),
+        candidate.record_type_id
+      ) as path
+      where path.path_valid_until > checked_at
+    )
+  ), shareable_types as materialized (
+    select distinct effective.record_type_id
+    from effective
+    where effective.action_kind = 'share'
+  )
+  select pg_catalog.jsonb_build_object(
+    'recordTypeIds', coalesce((
+      select pg_catalog.jsonb_agg(shareable.record_type_id order by shareable.record_type_id)
+      from shareable_types as shareable
+    ), '[]'::jsonb),
+    'readableFieldIds', coalesce((
+      select pg_catalog.jsonb_agg(distinct pg_catalog.lower(field.value))
+      from effective
+      join shareable_types as shareable
+        on shareable.record_type_id = effective.record_type_id
+      cross join lateral pg_catalog.jsonb_array_elements_text(
+        case when pg_catalog.jsonb_typeof(effective.field_policy -> 'readableFieldIds') = 'array'
+          then effective.field_policy -> 'readableFieldIds' else '[]'::jsonb end
+      ) as field(value)
+      where effective.action_kind = 'read'
+    ), '[]'::jsonb),
+    'changeableFieldIds', coalesce((
+      select pg_catalog.jsonb_agg(distinct pg_catalog.lower(field.value))
+      from effective
+      join shareable_types as shareable
+        on shareable.record_type_id = effective.record_type_id
+      cross join lateral pg_catalog.jsonb_array_elements_text(
+        case when pg_catalog.jsonb_typeof(effective.field_policy -> 'changeableFieldIds') = 'array'
+          then effective.field_policy -> 'changeableFieldIds' else '[]'::jsonb end
+      ) as field(value)
+      where effective.action_kind = 'update'
+    ), '[]'::jsonb)
+  )
+  into authority;
+
+  return authority;
+end
+$function$;
+
 -- Validates one proposal's terms and the proposer's current source authority.
 -- The caller has already established the validated request context and taken
--- the organisation Access-version lock; both are passed in, never re-derived
--- from the terms. Raises 22023 for an invalid proposal and 42501 when the
--- proposer lacks authority; it changes nothing.
+-- the organisation Access-version lock; the context is passed in, never
+-- re-derived from the terms. Raises 22023 for an invalid proposal and 42501
+-- when the proposer lacks authority; it changes nothing.
 create function vortex_access.check_record_share_grant_terms_internal(
   p_terms jsonb,
-  p_facts jsonb,
-  p_organization_id uuid,
-  p_application_root_id uuid
+  p_context jsonb
 )
 returns void
 language plpgsql
@@ -371,6 +517,8 @@ security definer
 set search_path = ''
 as $function$
 declare
+  context_organization_id uuid := (p_context ->> 'organizationId')::uuid;
+  context_application_root_id uuid := (p_context ->> 'applicationRootId')::uuid;
   scope_kind_value text;
   module_id uuid;
   type_id uuid;
@@ -388,20 +536,12 @@ declare
   starts_value timestamptz;
   expires_value timestamptz;
   cross_organization boolean;
-  needed record;
-  entry record;
-  required_permissions jsonb;
-  declaration jsonb;
-  decision jsonb;
-  bounds jsonb;
-  facts_binding jsonb;
-  read_admitted boolean := false;
-  readable_ceiling uuid[] := array[]::uuid[];
-  changeable_ceiling uuid[] := array[]::uuid[];
-  eligibility record;
-  share_admitted boolean := false;
+  authority jsonb;
+  readable_ceiling uuid[];
+  changeable_ceiling uuid[];
 begin
   if p_terms is null or pg_catalog.jsonb_typeof(p_terms) <> 'object'
+    or context_organization_id is null or context_application_root_id is null
     or exists (
       select 1 from pg_catalog.jsonb_object_keys(p_terms) as supplied(key)
       where supplied.key <> all (array[
@@ -435,7 +575,7 @@ begin
     p_terms -> 'changeableFieldIds', 0, 500);
   recipient_roles := vortex_access.record_share_grant_uuid_array_internal(
     p_terms -> 'recipientRoleIds', 1, 100);
-  cross_organization := recipient_org <> p_organization_id;
+  cross_organization := recipient_org <> context_organization_id;
 
   select coalesce(pg_catalog.array_agg(item.value order by item.ordinality), array[]::text[])
   into action_keys
@@ -476,7 +616,14 @@ begin
     or (scope_kind_value <> 'saved_condition' and (
       p_terms ? 'savedConditionId' or p_terms ? 'savedConditionRevision'
       or p_terms ? 'savedConditionFingerprint' or p_terms ? 'parameters'))
-    or (cross_organization and expires_value is null) then
+    or (cross_organization and expires_value is null)
+    -- One organisation lives on one cluster: a same-organisation proposal and
+    -- a recipient organisation this database holds are both on this cluster.
+    or (not cross_organization and recipient_cluster <> source_cluster)
+    or (recipient_cluster <> source_cluster and exists (
+      select 1 from vortex_identity.organizations as organization
+      where organization.organization_id = recipient_org
+    )) then
     raise exception using errcode = '22023',
       message = 'Record-share grant proposal is invalid';
   end if;
@@ -500,12 +647,6 @@ begin
       message = 'A record-share grant cannot authorise that action';
   end if;
 
-  -- The source side is always the caller's own organisation and application.
-  if p_terms ? 'sourceOrganizationId' then
-    raise exception using errcode = '22023',
-      message = 'Record-share grant proposal is invalid';
-  end if;
-
   if cross_organization then
     source_roles := vortex_access.record_share_grant_uuid_array_internal(
       p_terms -> 'sourceAuthorizingRoleIds', 1, 100);
@@ -514,11 +655,17 @@ begin
     if exists (
       select 1 from pg_catalog.unnest(source_roles) as wanted(role_value)
       where not exists (
-        select 1 from vortex_access.organization_roles as org_role
-        where org_role.organization_id = p_organization_id
+        select 1
+        from vortex_access.organization_roles as org_role
+        join vortex_access.organization_role_revisions as revision
+          on revision.organization_id = org_role.organization_id
+          and revision.role_id = org_role.role_id
+          and revision.revision = org_role.live_revision
+        where org_role.organization_id = context_organization_id
           and org_role.role_id = wanted.role_value
           and (org_role.application_root_id is null
-            or org_role.application_root_id = p_application_root_id)
+            or org_role.application_root_id = context_application_root_id)
+          and revision.lifecycle in ('active', 'acceptance_required')
       )
     ) then
       raise exception using errcode = '22023',
@@ -529,11 +676,13 @@ begin
       message = 'Record-share grant proposal is invalid';
   end if;
 
-  -- Same-cluster recipients can be verified here: the recipient organisation
-  -- must be active, the recipient application an exact active installation and
-  -- every recipient role one of that organisation's. A recipient on another
-  -- cluster cannot be read from this database; its identities are recorded as
-  -- proposed and remain unverified until protected consent (#154).
+  -- Same-cluster recipients are verified here: the recipient organisation must
+  -- be active, the recipient application actively registered there (the same
+  -- evidence an application selection requires) and every recipient role a
+  -- current role of that organisation. A recipient on another cluster cannot be
+  -- read from this database; its identities are recorded as proposed and are
+  -- confirmed by that organisation's own acceptance under protected consent
+  -- (#154). Nothing here activates, so an unverified proposal confers nothing.
   if recipient_cluster = source_cluster then
     if not exists (
       select 1
@@ -549,22 +698,10 @@ begin
     if not exists (
       select 1
       from vortex_access.permission_registrations as registration
-      join vortex_definition.roots as root
-        on root.root_id = registration.registration_owner_id
-        and root.organization_id = registration.organization_id
-        and root.kind = 'application'
       where registration.organization_id = recipient_org
         and registration.registration_kind = 'application'
         and registration.registration_owner_id = recipient_app
         and registration.state = 'active'
-        and exists (
-          select 1
-          from vortex_module.installation_bindings as binding
-          where binding.organization_id = recipient_org
-            and binding.application_root_id = recipient_app
-            and binding.application_release_revision = registration.source_revision
-            and binding.state = 'active'
-        )
     ) then
       raise exception using errcode = '42501',
         message = 'Record-share grant recipient application is unavailable';
@@ -572,11 +709,17 @@ begin
     if exists (
       select 1 from pg_catalog.unnest(recipient_roles) as wanted(role_value)
       where not exists (
-        select 1 from vortex_access.organization_roles as org_role
+        select 1
+        from vortex_access.organization_roles as org_role
+        join vortex_access.organization_role_revisions as revision
+          on revision.organization_id = org_role.organization_id
+          and revision.role_id = org_role.role_id
+          and revision.revision = org_role.live_revision
         where org_role.organization_id = recipient_org
           and org_role.role_id = wanted.role_value
           and (org_role.application_root_id is null
             or org_role.application_root_id = recipient_app)
+          and revision.lifecycle in ('active', 'acceptance_required')
       )
     ) then
       raise exception using errcode = '42501',
@@ -584,166 +727,30 @@ begin
     end if;
   end if;
 
-  -- Source authority. Every scope needs a current share permission for the
-  -- exact record type; a single record is decided against its real facts with
-  -- the proposer's own read and update ceilings on the proposed fields.
-  if scope_kind_value = 'record' then
-    if p_facts is null or pg_catalog.jsonb_typeof(p_facts) <> 'object'
-      or pg_catalog.jsonb_typeof(p_facts -> 'binding') <> 'object' then
-      raise exception using errcode = '22023',
-        message = 'Record-share grant proposal is invalid';
-    end if;
-    facts_binding := p_facts -> 'binding';
-    if (facts_binding ->> 'moduleRootId')::uuid is distinct from module_id
-      or (facts_binding ->> 'recordTypeId')::uuid is distinct from type_id then
-      raise exception using errcode = '22023',
-        message = 'Record-share grant proposal is invalid';
-    end if;
-
-    for needed in
-      select 1 as step, 'share' as action_kind, 'record.share' as operation_key
-      union all
-      select 2, 'read', 'record.share.read'
-      union all
-      select 3, 'update', 'record.share.update'
-      where pg_catalog.cardinality(changeable) > 0
-      order by step
-    loop
-      select pg_catalog.jsonb_agg(
-        pg_catalog.jsonb_build_object(
-          'applicationRootId', catalogue.application_root_id,
-          'ownerKind', catalogue.owner_kind, 'ownerId', catalogue.owner_id,
-          'permissionId', catalogue.permission_id
-        )
-        order by catalogue.owner_kind, catalogue.owner_id, catalogue.permission_id
-      )
-      into required_permissions
-      from vortex_access.permission_catalogue_entries as catalogue
-      join vortex_access.permission_registrations as registration
-        on registration.organization_id = catalogue.organization_id
-        and registration.registration_kind = catalogue.registration_kind
-        and registration.registration_owner_id = catalogue.registration_owner_id
-        and registration.revision = catalogue.registration_revision
-        and registration.state = 'active'
-      where catalogue.organization_id = p_organization_id
-        and catalogue.application_root_id = p_application_root_id
-        and catalogue.owner_kind in ('application', 'module')
-        and ((catalogue.owner_kind = 'application' and catalogue.owner_id = p_application_root_id)
-          or (catalogue.owner_kind = 'module' and catalogue.owner_id = module_id))
-        and catalogue.record_type_id = type_id
-        and catalogue.action_kind = needed.action_kind
-        and catalogue.record_scope is not null;
-
-      if required_permissions is null then
-        if needed.action_kind = 'share' then
-          raise exception using errcode = '42501',
-            message = 'Record-share grant requires a current share permission';
-        end if;
-        continue;
-      end if;
-
-      declaration := pg_catalog.jsonb_build_object(
-        'operationKey', needed.operation_key,
-        'action', pg_catalog.jsonb_build_object('actionKind', needed.action_kind),
-        'target', pg_catalog.jsonb_build_object(
-          'kind', 'application', 'applicationRootId', p_application_root_id
-        ),
-        'requiredPermissions', required_permissions,
-        'recordBinding', facts_binding,
-        'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
-        'authority', pg_catalog.jsonb_build_object('kind', 'permission')
-      );
-      decision := vortex_access.evaluate_organization_record_access_internal(
-        declaration, record_value, p_facts
-      );
-
-      if needed.action_kind = 'share' then
-        if decision ->> 'outcome' <> 'allowed' then
-          raise exception using errcode = '42501',
-            message = 'Record-share grant target record is not within your current share authority';
-        end if;
-      elsif needed.action_kind = 'read' then
-        if decision ->> 'outcome' = 'allowed' then
-          read_admitted := true;
-          bounds := vortex_access.resolve_record_field_bounds_internal(decision);
-          select coalesce(pg_catalog.array_agg((elem.value)::uuid), array[]::uuid[])
-          into readable_ceiling
-          from pg_catalog.jsonb_array_elements_text(bounds -> 'readableFieldIds') as elem(value);
-        end if;
-      else
-        if decision ->> 'outcome' = 'allowed' then
-          bounds := vortex_access.resolve_record_field_bounds_internal(decision);
-          select coalesce(pg_catalog.array_agg((elem.value)::uuid), array[]::uuid[])
-          into changeable_ceiling
-          from pg_catalog.jsonb_array_elements_text(bounds -> 'changeableFieldIds') as elem(value);
-        end if;
-      end if;
-    end loop;
-
-    if not read_admitted or not (readable <@ readable_ceiling) then
-      raise exception using errcode = '42501',
-        message = 'Record-share grant exceeds current read authority';
-    end if;
-    if pg_catalog.cardinality(changeable) > 0 and not (changeable <@ changeable_ceiling) then
-      raise exception using errcode = '42501',
-        message = 'Record-share grant exceeds current update authority';
-    end if;
-  else
-    -- A broader scope needs an organisation-wide (all_records) share route for
-    -- the exact record type (or, for a module, any of its record types), and
-    -- that permission must currently be eligible for this human context.
-    for entry in
-      select catalogue.application_root_id, catalogue.owner_kind, catalogue.owner_id,
-        catalogue.permission_id
-      from vortex_access.permission_catalogue_entries as catalogue
-      join vortex_access.permission_registrations as registration
-        on registration.organization_id = catalogue.organization_id
-        and registration.registration_kind = catalogue.registration_kind
-        and registration.registration_owner_id = catalogue.registration_owner_id
-        and registration.revision = catalogue.registration_revision
-        and registration.state = 'active'
-      where catalogue.organization_id = p_organization_id
-        and catalogue.application_root_id = p_application_root_id
-        and catalogue.owner_kind in ('application', 'module')
-        and ((catalogue.owner_kind = 'application' and catalogue.owner_id = p_application_root_id)
-          or (catalogue.owner_kind = 'module' and catalogue.owner_id = module_id))
-        and (type_id is null or catalogue.record_type_id = type_id)
-        and catalogue.record_type_id is not null
-        and catalogue.action_kind = 'share'
-        and catalogue.record_scope is not null
-        and exists (
-          select 1
-          from pg_catalog.jsonb_array_elements(catalogue.record_scope -> 'routes') as route(value)
-          where route.value ->> 'kind' = 'all_records'
-        )
-      order by catalogue.owner_kind, catalogue.owner_id, catalogue.permission_id
-    loop
-      select evaluated.* into strict eligibility
-      from vortex_access.evaluate_organization_permission_eligibility(
-        pg_catalog.jsonb_build_object(
-          'operationKey', 'record.share',
-          'action', pg_catalog.jsonb_build_object('actionKind', 'share'),
-          'target', pg_catalog.jsonb_build_object(
-            'kind', 'application', 'applicationRootId', p_application_root_id
-          ),
-          'requiredPermission', pg_catalog.jsonb_build_object(
-            'applicationRootId', entry.application_root_id,
-            'ownerKind', entry.owner_kind, 'ownerId', entry.owner_id,
-            'permissionId', entry.permission_id
-          ),
-          'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
-          'authority', pg_catalog.jsonb_build_object('kind', 'permission')
-        )
-      ) as evaluated;
-      if eligibility.outcome = 'eligible' then
-        share_admitted := true;
-        exit;
-      end if;
-    end loop;
-    if not share_admitted then
-      raise exception using errcode = '42501',
-        message = 'Record-share grant requires a current share permission';
-    end if;
+  -- Source authority, the same rule for every scope kind: a current
+  -- row-independent share permission on the record type (or, for a module, on
+  -- at least one of its record types), and the proposed fields inside the
+  -- proposer's own current read and update field policies on what it may share.
+  authority := vortex_access.record_share_grant_source_authority_internal(
+    p_context, module_id, type_id
+  );
+  if pg_catalog.jsonb_array_length(authority -> 'recordTypeIds') = 0 then
+    raise exception using errcode = '42501',
+      message = 'Record-share grant requires a current share permission';
+  end if;
+  select coalesce(pg_catalog.array_agg(field.value::uuid), array[]::uuid[])
+  into readable_ceiling
+  from pg_catalog.jsonb_array_elements_text(authority -> 'readableFieldIds') as field(value);
+  select coalesce(pg_catalog.array_agg(field.value::uuid), array[]::uuid[])
+  into changeable_ceiling
+  from pg_catalog.jsonb_array_elements_text(authority -> 'changeableFieldIds') as field(value);
+  if not (readable <@ readable_ceiling) then
+    raise exception using errcode = '42501',
+      message = 'Record-share grant exceeds current read authority';
+  end if;
+  if not (changeable <@ changeable_ceiling) then
+    raise exception using errcode = '42501',
+      message = 'Record-share grant exceeds current update authority';
   end if;
 end
 $function$;
@@ -753,7 +760,6 @@ create function vortex_access.propose_record_share_grant_for_administration(
   p_consent_request_id uuid,
   p_terms jsonb,
   p_proposal_fingerprint text,
-  p_facts jsonb,
   p_activity_id uuid
 )
 returns jsonb
@@ -812,9 +818,7 @@ begin
       message = 'Record-share grant proposal is unavailable';
   end if;
 
-  perform vortex_access.check_record_share_grant_terms_internal(
-    p_terms, p_facts, context_organization_id, context_application_root_id
-  );
+  perform vortex_access.check_record_share_grant_terms_internal(p_terms, context_value);
 
   cross_organization := (p_terms ->> 'recipientOrganizationId')::uuid
     <> context_organization_id;
@@ -898,7 +902,6 @@ create function vortex_access.revise_record_share_grant_for_administration(
   p_expected_revision bigint,
   p_terms jsonb,
   p_proposal_fingerprint text,
-  p_facts jsonb,
   p_activity_id uuid
 )
 returns jsonb
@@ -972,9 +975,7 @@ begin
       message = 'Record-share grant is stale or no longer a proposal';
   end if;
 
-  perform vortex_access.check_record_share_grant_terms_internal(
-    p_terms, p_facts, context_organization_id, context_application_root_id
-  );
+  perform vortex_access.check_record_share_grant_terms_internal(p_terms, context_value);
 
   -- A revision cannot turn a same-organisation proposal into a cross-organisation
   -- one or back: consent is bound to the grant's recipient organisation.
@@ -1127,9 +1128,21 @@ begin
       message = 'Record-share grant is stale or no longer a proposal';
   end if;
 
-  -- Withdrawing narrows what the proposal could ever become, so it needs no
-  -- fresh share ceiling; the caller must still be the source organisation's own
-  -- current human context (validated and locked above).
+  -- Withdrawing only narrows, so it needs no field ceiling. The proposer may
+  -- always withdraw its own proposal; anyone else needs the same current
+  -- row-independent share authority over the proposal's scope that proposing
+  -- it would need (the protected share revocation rule, 20260910114716 F2).
+  if (stored.created_by_organization_account_id <> context_account_id
+      or context_value ? 'delegatedContext' or context_value ? 'supportContext')
+    and pg_catalog.jsonb_array_length(
+      vortex_access.record_share_grant_source_authority_internal(
+        context_value, stored.module_root_id, stored.record_type_id
+      ) -> 'recordTypeIds'
+    ) = 0 then
+    raise exception using errcode = '42501',
+      message = 'Record-share grant withdrawal is unavailable';
+  end if;
+
   update vortex_access.record_share_grants as grants
   set status = 'revoked',
       revoked_at = now_value,
@@ -1198,16 +1211,19 @@ revoke all on function vortex_access.record_share_grant_uuid_array_internal(json
 revoke all on function vortex_access.record_share_grant_json_internal(uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner;
-revoke all on function vortex_access.check_record_share_grant_terms_internal(
-  jsonb, jsonb, uuid, uuid
+revoke all on function vortex_access.record_share_grant_source_authority_internal(
+  jsonb, uuid, uuid
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner;
+revoke all on function vortex_access.check_record_share_grant_terms_internal(jsonb, jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner;
 revoke all on function vortex_access.propose_record_share_grant_for_administration(
-  uuid, uuid, jsonb, text, jsonb, uuid
+  uuid, uuid, jsonb, text, uuid
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner;
 revoke all on function vortex_access.revise_record_share_grant_for_administration(
-  uuid, bigint, jsonb, text, jsonb, uuid
+  uuid, bigint, jsonb, text, uuid
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner;
 revoke all on function vortex_access.withdraw_record_share_grant_for_administration(
@@ -1219,10 +1235,10 @@ revoke all on function vortex_access.get_record_share_grant_for_administration(u
     vortex_record_owner;
 
 grant execute on function vortex_access.propose_record_share_grant_for_administration(
-  uuid, uuid, jsonb, text, jsonb, uuid
+  uuid, uuid, jsonb, text, uuid
 ) to vortex_request;
 grant execute on function vortex_access.revise_record_share_grant_for_administration(
-  uuid, bigint, jsonb, text, jsonb, uuid
+  uuid, bigint, jsonb, text, uuid
 ) to vortex_request;
 grant execute on function vortex_access.withdraw_record_share_grant_for_administration(
   uuid, bigint, text, uuid
@@ -1231,16 +1247,16 @@ grant execute on function vortex_access.get_record_share_grant_for_administratio
   to vortex_request;
 
 comment on function vortex_access.propose_record_share_grant_for_administration(
-  uuid, uuid, jsonb, text, jsonb, uuid
+  uuid, uuid, jsonb, text, uuid
 ) is
   'Fixed protected proposer: stores one exact record-share grant proposal for the context organisation after re-checking its current share authority; cross-organisation proposals stop at pending_consent with a consent request bound to the proposal fingerprint.';
 comment on function vortex_access.revise_record_share_grant_for_administration(
-  uuid, bigint, jsonb, text, jsonb, uuid
+  uuid, bigint, jsonb, text, uuid
 ) is
   'Fixed protected reviser: replaces the terms and fingerprints of a draft or pending_consent proposal under an exact expected revision, re-checking current share authority and resetting its consent request.';
 comment on function vortex_access.withdraw_record_share_grant_for_administration(
   uuid, bigint, text, uuid
 ) is
-  'Fixed protected withdrawal: revokes a draft or pending_consent proposal of the context organisation under an exact expected revision and withdraws its consent request.';
+  'Fixed protected withdrawal: its proposer, or a holder of current row-independent share authority over its scope, revokes a draft or pending_consent proposal of the context organisation and application under an exact expected revision and withdraws its consent request.';
 comment on function vortex_access.get_record_share_grant_for_administration(uuid) is
   'Fixed protected read of one record-share grant proposal for its source or recipient organisation.';

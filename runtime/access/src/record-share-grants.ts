@@ -16,7 +16,7 @@ import {
   type OrganizationSelectionCandidate,
   type SelectedOrganizationScope,
 } from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+import type { DatabaseRow } from "@vortex/db";
 import { fingerprintCanonicalValue } from "@vortex/definition";
 import { z } from "zod";
 import {
@@ -26,25 +26,14 @@ import {
 } from "./human-organization-request";
 
 /**
- * A server-owned binding that resolves the real facts of one source record for
- * a single-record proposal, the same projection the protected direct record
- * share reads. Request data never supplies facts, so a proposal cannot claim
- * authority over a record it cannot actually reach.
+ * Source authority is decided entirely by the protected Access operations from
+ * the live permission catalogue and the proposer's current role paths; no
+ * caller, and no runtime adapter, supplies record facts to them.
  */
-export interface FixedRecordShareGrantFactsAdapter {
-  resolveRecordFacts(
-    transaction: RequestDatabaseTransaction,
-    scope: SelectedOrganizationScope,
-    target: Readonly<{ moduleRootId: string; recordTypeId: string; recordId: string }>,
-  ): Promise<unknown>;
-}
-
 export type RecordShareGrantDependencies = HumanOrganizationRequestDependencies &
   Readonly<{
     /** The cluster this runtime serves; it is always the source cluster of a proposal. */
     sourceClusterId: string;
-    /** Required to propose or revise a single-record grant. */
-    recordFacts?: FixedRecordShareGrantFactsAdapter;
     grantId?: () => string;
     consentRequestId?: () => string;
     activityId?: () => string;
@@ -115,6 +104,71 @@ const sameUuid = (left: string, right: string): boolean => left.toLowerCase() ==
 const sortedLower = (values: readonly string[]): string[] =>
   values.map((value) => value.toLowerCase()).sort();
 
+const uuidTermKeys = [
+  "recipientClusterId",
+  "recipientOrganizationId",
+  "recipientApplicationRootId",
+  "moduleRootId",
+  "recordTypeId",
+  "recordId",
+  "savedConditionId",
+  "recipientBindingId",
+] as const;
+const uuidListTermKeys = [
+  "readableFieldIds",
+  "changeableFieldIds",
+  "recipientRoleIds",
+  "sourceAuthorizingRoleIds",
+  "recipientAcceptingRoleIds",
+] as const;
+
+/**
+ * The stored form of one instant: UTC with exactly microsecond precision, as
+ * the protected operations read it back. A finer fraction cannot be stored
+ * exactly, so it is refused rather than silently rounded.
+ */
+const canonicalInstant = (value: string): string | undefined => {
+  const match =
+    /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (match === null) return undefined;
+  const wholeSecond = Date.parse(`${match[1]}${match[3]}`);
+  if (!Number.isFinite(wholeSecond)) return undefined;
+  const utc = new Date(wholeSecond).toISOString();
+  if (!/^\d{4}-/.test(utc)) return undefined;
+  return `${utc.slice(0, 19)}.${(match[2] ?? "").padEnd(6, "0")}Z`;
+};
+
+/**
+ * Rewrites request terms into the exact form the database stores: lower-case
+ * identifiers and canonical UTC instants. The proposal fingerprint is taken
+ * over this form, so it can be recomputed from the stored grant. Values of the
+ * wrong type are left for the contract schema to refuse.
+ */
+const canonicalTerms = (
+  candidate: Record<string, unknown>,
+): Record<string, unknown> | undefined => {
+  const terms: Record<string, unknown> = { ...candidate };
+  for (const key of uuidTermKeys) {
+    const value = terms[key];
+    if (typeof value === "string") terms[key] = value.toLowerCase();
+  }
+  for (const key of uuidListTermKeys) {
+    const value = terms[key];
+    if (Array.isArray(value))
+      terms[key] = value.map((item: unknown) =>
+        typeof item === "string" ? item.toLowerCase() : item,
+      );
+  }
+  for (const key of ["startsAt", "expiresAt"] as const) {
+    const value = terms[key];
+    if (typeof value !== "string") continue;
+    const instant = canonicalInstant(value);
+    if (instant === undefined) return undefined;
+    terms[key] = instant;
+  }
+  return terms;
+};
+
 type ProposalTerms = Readonly<{
   terms: Record<string, unknown>;
   sourceAuthorizingRoleIds: readonly string[];
@@ -147,11 +201,13 @@ const buildProposal = (
   if (!isRecord(candidate)) return undefined;
   if (Object.keys(candidate).some((key) => !(grantTermKeys as readonly string[]).includes(key)))
     return undefined;
+  const canonical = canonicalTerms(candidate);
+  if (canonical === undefined) return undefined;
   const {
     sourceAuthorizingRoleIds = [],
     recipientAcceptingRoleIds = [],
     ...grantTerms
-  } = candidate as Record<string, unknown> & {
+  } = canonical as Record<string, unknown> & {
     sourceAuthorizingRoleIds?: unknown;
     recipientAcceptingRoleIds?: unknown;
   };
@@ -209,15 +265,26 @@ const buildProposal = (
 };
 
 /**
- * Fingerprints exactly the proposed terms. Collections whose order carries no
- * meaning are sorted, so re-submitting the same terms reproduces the value and
- * any real change replaces it.
+ * Fingerprints exactly the proposed terms, never lifecycle facts. Collections
+ * whose order carries no meaning are sorted and terms are canonical, so the
+ * same terms reproduce the value, the stored grant recomputes it, and any real
+ * change replaces it.
  */
-const fingerprintProposal = (grant: AccessGrant, proposal: ProposalTerms): string => {
+const fingerprintProposal = (
+  grant: AccessGrant,
+  consentRoles: Readonly<{
+    sourceAuthorizingRoleIds: readonly string[];
+    recipientAcceptingRoleIds: readonly string[];
+  }>,
+): string => {
   const {
     status: _status,
     createdByOrganizationAccountId: _createdBy,
     consentRequestId: _consentRequestId,
+    activatedAt: _activatedAt,
+    revokedAt: _revokedAt,
+    revokedByOrganizationAccountId: _revokedBy,
+    revocationReason: _revocationReason,
     ...terms
   } = grant;
   return fingerprintCanonicalValue({
@@ -228,8 +295,19 @@ const fingerprintProposal = (grant: AccessGrant, proposal: ProposalTerms): strin
       recipientRoleIds: sortedLower(grant.recipientRoleIds),
       allowedActionKeys: [...grant.allowedActionKeys].sort(),
     },
-    sourceAuthorizingRoleIds: sortedLower(proposal.sourceAuthorizingRoleIds),
-    recipientAcceptingRoleIds: sortedLower(proposal.recipientAcceptingRoleIds),
+    sourceAuthorizingRoleIds: sortedLower(consentRoles.sourceAuthorizingRoleIds),
+    recipientAcceptingRoleIds: sortedLower(consentRoles.recipientAcceptingRoleIds),
+  });
+};
+
+/** Recomputes the fingerprint of a stored proposal from its stored terms. */
+const storedFingerprint = (state: RecordShareGrantState): string => {
+  const rolesFor = (side: "source_authorization" | "recipient_acceptance"): string[] =>
+    state.consentRequest?.requiredDecisions.find((decision) => decision.side === side)
+      ?.authorizedRoleIds ?? [];
+  return fingerprintProposal(state.grant, {
+    sourceAuthorizingRoleIds: rolesFor("source_authorization"),
+    recipientAcceptingRoleIds: rolesFor("recipient_acceptance"),
   });
 };
 
@@ -257,18 +335,22 @@ const parseState = (rows: readonly ResultRow[]): RecordShareGrantState => {
         consentRequest.recipientOrganizationId !== grant.recipientOrganizationId))
   )
     throw new Error("INVALID_GRANT_RESULT");
-  return {
+  const state: RecordShareGrantState = {
     grant,
     ...(consentRequest === undefined ? {} : { consentRequest }),
     proposalFingerprint: raw.proposalFingerprint,
     revision,
     changedAt: raw.changedAt,
   };
+  // The stored terms must reproduce the stored fingerprint exactly.
+  if (storedFingerprint(state) !== state.proposalFingerprint)
+    throw new Error("INVALID_GRANT_RESULT");
+  return state;
 };
 
 export const createRecordShareGrantService = (dependencies: RecordShareGrantDependencies) => {
   const requests = createHumanOrganizationRequestService(dependencies);
-  const sourceClusterId = clusterIdSchema.parse(dependencies.sourceClusterId);
+  const sourceClusterId = clusterIdSchema.parse(dependencies.sourceClusterId.toLowerCase());
   const newGrantId = dependencies.grantId ?? randomUUID;
   const newConsentRequestId = dependencies.consentRequestId ?? randomUUID;
   const newActivityId = dependencies.activityId ?? randomUUID;
@@ -303,20 +385,6 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
     )
       throw new Error("INVALID_SCOPE_RESULT");
     return scope.applicationRootId;
-  };
-
-  const recordFactsFor = async (
-    transaction: RequestDatabaseTransaction,
-    scope: SelectedOrganizationScope,
-    grant: AccessGrant,
-  ): Promise<unknown> => {
-    if (grant.scopeKind !== "record") return null;
-    if (dependencies.recordFacts === undefined) throw new Error("RECORD_FACTS_UNAVAILABLE");
-    return dependencies.recordFacts.resolveRecordFacts(transaction, scope, {
-      moduleRootId: grant.moduleRootId,
-      recordTypeId: grant.recordTypeId,
-      recordId: grant.recordId,
-    });
   };
 
   const prevalidate = (
@@ -357,7 +425,6 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
           organizationAccountId: scope.organizationAccountId,
         });
         if (built === undefined) throw new Error("INVALID_PROPOSAL");
-        const facts = await recordFactsFor(transaction, scope, built.grant);
         const fingerprint = fingerprintProposal(built.grant, built.proposal);
         const state = parseState(
           await transaction.query<ResultRow>`
@@ -366,13 +433,13 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
               ${built.grant.consentRequestId ?? null}::uuid,
               ${JSON.stringify(built.proposal.terms)}::text::jsonb,
               ${fingerprint}::text,
-              ${facts === null ? null : JSON.stringify(facts)}::text::jsonb,
               ${ids.activityId}::uuid
             ) as result
           `,
         );
         if (
           state.proposalFingerprint !== fingerprint ||
+          state.grant.status === "active" ||
           state.revision !== 1 ||
           !sameUuid(state.grant.grantId, built.grant.grantId) ||
           !sameUuid(state.grant.sourceOrganizationId, scope.organizationId)
@@ -393,7 +460,9 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
     ): Promise<HumanOrganizationRequestResult<RecordShareGrantState>> => {
       if (!isRecord(commandCandidate)) return { kind: "unavailable" };
       const { grantId: grantIdCandidate, expectedRevision, ...termsCandidate } = commandCandidate;
-      const grantId = grantIdSchema.safeParse(grantIdCandidate);
+      const grantId = grantIdSchema.safeParse(
+        typeof grantIdCandidate === "string" ? grantIdCandidate.toLowerCase() : grantIdCandidate,
+      );
       if (!grantId.success || !positiveRevision(expectedRevision)) return { kind: "unavailable" };
       const ids = identifiers();
       if (ids === undefined) return { kind: "temporarily_unavailable" };
@@ -413,7 +482,6 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
           organizationAccountId: scope.organizationAccountId,
         });
         if (built === undefined) throw new Error("INVALID_PROPOSAL");
-        const facts = await recordFactsFor(transaction, scope, built.grant);
         const fingerprint = fingerprintProposal(built.grant, built.proposal);
         const state = parseState(
           await transaction.query<ResultRow>`
@@ -422,13 +490,13 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
               ${expectedRevision}::bigint,
               ${JSON.stringify(built.proposal.terms)}::text::jsonb,
               ${fingerprint}::text,
-              ${facts === null ? null : JSON.stringify(facts)}::text::jsonb,
               ${ids.activityId}::uuid
             ) as result
           `,
         );
         if (
           state.proposalFingerprint !== fingerprint ||
+          state.grant.status === "active" ||
           state.revision !== expectedRevision + 1 ||
           !sameUuid(state.grant.grantId, grantId.data) ||
           !sameUuid(state.grant.sourceOrganizationId, scope.organizationId)
@@ -447,7 +515,9 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
       if (!isRecord(commandCandidate)) return { kind: "unavailable" };
       const { grantId: grantIdCandidate, expectedRevision, reason, ...unknownKeys } =
         commandCandidate;
-      const grantId = grantIdSchema.safeParse(grantIdCandidate);
+      const grantId = grantIdSchema.safeParse(
+        typeof grantIdCandidate === "string" ? grantIdCandidate.toLowerCase() : grantIdCandidate,
+      );
       if (
         Object.keys(unknownKeys).length !== 0 ||
         !grantId.success ||
@@ -488,7 +558,9 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
       candidate: OrganizationSelectionCandidate,
       grantIdCandidate: unknown,
     ): Promise<HumanOrganizationRequestResult<RecordShareGrantState>> => {
-      const grantId = grantIdSchema.safeParse(grantIdCandidate);
+      const grantId = grantIdSchema.safeParse(
+        typeof grantIdCandidate === "string" ? grantIdCandidate.toLowerCase() : grantIdCandidate,
+      );
       if (!grantId.success) return { kind: "unavailable" };
       return requests.run(session, candidate, async (transaction, scope) => {
         const state = parseState(
