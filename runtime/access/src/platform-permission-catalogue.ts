@@ -9,7 +9,7 @@ import { fingerprintCanonicalValue } from "@vortex/definition";
 export const platformPermissionCatalogueOwnerId = "cabe121e-0baf-4084-9471-cce915d460a8";
 export const platformPermissionCatalogueVersionV1 = "1.0.0";
 export const platformPermissionCatalogueVersionV1_0_1 = "1.0.1";
-export const platformPermissionCatalogueVersion = "1.1.0";
+export const platformPermissionCatalogueVersion = "1.3.0";
 
 const historicalPermissionsV1 = [
   {
@@ -160,6 +160,42 @@ const currentPermissions = [
     label: "Manage applications",
     description:
       "Install, upgrade or detach exact application bindings in the selected organisation without receiving business-record use or role-assignment authority.",
+    actionKind: "manage" as const,
+    administrative: true,
+  },
+  {
+    permissionId: "ec2908a1-f3cd-4c4a-8bf7-91bffbf4cb3d",
+    key: "platform.organization.connections.manage",
+    label: "Manage connections",
+    description:
+      "Register, grant, check, revoke and reauthorise connection instances in the selected organisation without application-installation or access-assignment authority.",
+    actionKind: "manage" as const,
+    administrative: true,
+  },
+  {
+    permissionId: "e85c2232-2ed7-4ce8-b1e5-7e2ad8e2b847",
+    key: "platform.security.identities.disable",
+    label: "Disable identities",
+    description:
+      "Disable an identity and revoke its active sessions through the identity owner's protected operation without receiving general identity-administration or business-record authority.",
+    actionKind: "manage" as const,
+    administrative: true,
+  },
+  {
+    permissionId: "014d2898-1969-4434-805c-eeb0f0e6f797",
+    key: "platform.support.access.request",
+    label: "Request support access",
+    description:
+      "Request time-bounded support access to another organisation for a named operator and exact scope without receiving standing access to that organisation.",
+    actionKind: "manage" as const,
+    administrative: true,
+  },
+  {
+    permissionId: "07e4653c-d358-489f-8067-46e085d99478",
+    key: "platform.organization.support.approve",
+    label: "Approve support access",
+    description:
+      "Approve or refuse a time-bounded support-access request for one's own organisation without granting the requester standing authority.",
     actionKind: "manage" as const,
     administrative: true,
   },
