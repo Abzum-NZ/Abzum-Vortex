@@ -2,9 +2,10 @@
 -- frozen, server-owned manifest that names the exact organisation, nominated
 -- steward, installed management-application release, operating role acceptance,
 -- provisioning receipt and expected setup revision. In one protected transaction
--- it binds that receipt and coordinates the existing owner-only role, assignment
--- and management-application requirement compositions, then records one idempotent
--- setup result. It accepts no browser-authored context and grants no later path.
+-- it binds that receipt and the expected stewardship requirement revision,
+-- coordinates the existing owner-only role, assignment and management-application
+-- requirement compositions, then records one idempotent setup result and its
+-- Activity entry. It accepts no browser-authored context and grants no later path.
 
 create table vortex_access.organization_initial_operating_role_grants (
   organization_id uuid primary key,
@@ -105,6 +106,8 @@ declare
   v_assignment_revision bigint;
   v_access_version bigint;
   operation_at timestamptz;
+  activity_subject_ids uuid[];
+  activity_result text;
   role_changed record;
   assignment_changed record;
   requirement_changed record;
@@ -163,25 +166,30 @@ begin
   v_correlation_id := (p_manifest ->> 'correlationId')::uuid;
   v_role_assignment_id := (p_manifest ->> 'roleAssignmentId')::uuid;
 
+  -- Every comparison is null-safe: a missing evidence path must refuse, never
+  -- make the whole condition unknown and silently pass.
   evidence := p_manifest -> 'operatingRoleChangeEvidence';
   candidate := evidence -> 'candidate';
   if pg_catalog.jsonb_typeof(candidate) is distinct from 'object'
     or candidate ->> 'operation' is distinct from 'accept_new_application_role'
+    or candidate #>> '{assignmentPolicy,kind}' is distinct from 'standing'
     or pg_catalog.jsonb_typeof(candidate -> 'roleId') is distinct from 'string'
     or not vortex_context.is_non_nil_uuid(candidate ->> 'roleId')
     or pg_catalog.jsonb_typeof(candidate -> 'organizationId') is distinct from 'string'
-    or (candidate ->> 'organizationId')::uuid <> v_organization_id
+    or (candidate ->> 'organizationId')::uuid is distinct from v_organization_id
     or candidate #>> '{preparedTemplates,preparationBasis,kind}'
       is distinct from 'current_active_registration'
     or (candidate #>>
       '{preparedTemplates,permissionRegistration,organizationId}')::uuid
-      <> v_organization_id
+      is distinct from v_organization_id
     or (candidate #>>
       '{preparedTemplates,permissionRegistration,applicationRootId}')::uuid
-      <> v_application_root_id
+      is distinct from v_application_root_id
     or (candidate #>>
       '{preparedTemplates,permissionRegistration,applicationRelease,releaseRevision}')::numeric::bigint
-      <> v_release_revision
+      is distinct from v_release_revision
+    or pg_catalog.jsonb_typeof(candidate -> 'permissions') is distinct from 'array'
+    or pg_catalog.jsonb_array_length(candidate -> 'permissions') = 0
     or pg_catalog.jsonb_typeof(
       candidate #> '{preparedTemplates,preparationBasis,registrationRevision}'
     ) is distinct from 'number'
@@ -196,8 +204,9 @@ begin
       select 1
       from pg_catalog.jsonb_array_elements(candidate -> 'permissions') as item(value)
       where item.value ->> 'ownerKind' is distinct from 'application'
-        or (item.value ->> 'applicationRootId')::uuid <> v_application_root_id
-        or (item.value ->> 'ownerId')::uuid <> v_application_root_id
+        or (item.value ->> 'applicationRootId')::uuid
+          is distinct from v_application_root_id
+        or (item.value ->> 'ownerId')::uuid is distinct from v_application_root_id
     ) then
     raise exception using errcode = '22023',
       message = 'Initial operating-role grant evidence is invalid';
@@ -238,18 +247,29 @@ begin
         existing.access_version, existing.correlation_id;
       return;
     end if;
-    raise exception using errcode = '40001',
+    raise exception using errcode = '23505',
       message = 'Initial operating-role grant is already established for this organisation';
   end if;
 
-  -- The provisioning receipt is the only setup authority. It must match the
-  -- exact accepted provisioning actor, organisation and nominated steward.
+  -- The original tenant or organisation provisioning receipt is the only setup
+  -- authority. It must match the exact configured actor, tenant, organisation
+  -- and nominated steward that configured provisioning accepted.
   perform 1
   from vortex_identity.accepted_administration_receipts as receipt
+  join vortex_identity.organizations as organization
+    on organization.organization_id = v_organization_id
   where receipt.receipt_id = v_receipt_id
-    and receipt.operation_key = 'provision_tenant'
     and receipt.actor_id = v_setup_actor_id
-    and receipt.subject_ids @> array[v_organization_id, v_steward_account_id]::uuid[];
+    and receipt.subject_ids @> array[v_organization_id, v_steward_account_id]::uuid[]
+    and (
+      (
+        receipt.operation_key = 'provision_tenant'
+        and receipt.subject_ids @> array[organization.tenant_id]::uuid[]
+      ) or (
+        receipt.operation_key = 'adopt_organization'
+        and receipt.tenant_id = organization.tenant_id
+      )
+    );
   if not found then
     raise exception using errcode = '42501',
       message = 'Initial operating-role grant receipt is unavailable';
@@ -275,9 +295,15 @@ begin
   for update;
   if not found
     or requirement.management_application_root_id is not null
-    or requirement.original_organization_account_id <> v_steward_account_id then
+    or requirement.original_organization_account_id is distinct from v_steward_account_id then
     raise exception using errcode = '40001',
       message = 'Initial operating-role grant stewardship evidence is unavailable';
+  end if;
+  -- The expected setup revision is the stewardship requirement revision the
+  -- trusted setup observed; any intervening stewardship change makes it stale.
+  if requirement.revision is distinct from v_setup_revision then
+    raise exception using errcode = '40001',
+      message = 'Initial operating-role grant setup revision is stale';
   end if;
 
   -- The management application release must already be the exact active
@@ -330,7 +356,7 @@ begin
   select changed.* into strict requirement_changed
   from vortex_access.coordinate_organization_management_application_requirement(
     'activate_management_application_requirement', v_organization_id,
-    requirement.revision, v_application_root_id, v_operating_role_id,
+    v_setup_revision, v_application_root_id, v_operating_role_id,
     v_operating_role_revision, v_setup_actor_id, v_correlation_id
   ) as changed;
   if requirement_changed.outcome is distinct from 'changed' then
@@ -352,6 +378,26 @@ begin
     v_operating_role_revision, v_access_version, v_correlation_id, p_manifest,
     operation_at
   );
+
+  -- 4. Record the rights outcome through the existing Activity writer in the
+  --    same transaction. The ledger admits one establishment per organisation,
+  --    so this entry is written exactly once and never on replay.
+  select pg_catalog.array_agg(distinct subject.subject_id order by subject.subject_id)
+  into activity_subject_ids
+  from pg_catalog.unnest(array[
+    v_organization_id, v_steward_account_id, v_operating_role_id,
+    v_role_assignment_id
+  ]::uuid[]) as subject(subject_id);
+  activity_result := vortex_activity.append_organization_activity_entry(
+    v_organization_id, pg_catalog.gen_random_uuid(), operation_at, 'system',
+    v_setup_actor_id, 'establish_initial_operating_rights',
+    activity_subject_ids, array[]::uuid[], 'system', v_correlation_id,
+    'completed'
+  );
+  if activity_result is distinct from 'inserted' then
+    raise exception using errcode = '40001',
+      message = 'Initial operating-role grant Activity is stale';
+  end if;
 
   return query select 'established'::text, v_organization_id,
     v_operating_role_id, v_operating_role_revision, v_role_assignment_id,
@@ -380,4 +426,4 @@ to vortex_runtime;
 comment on table vortex_access.organization_initial_operating_role_grants is
   'Private idempotent ledger of one bounded first-owner setup per organisation; the frozen manifest is retained so only the exact original retry replays.';
 comment on function vortex_access.compose_initial_operating_role_grant(jsonb) is
-  'Owner-only bounded first-owner setup: binds the provisioning receipt and coordinates the exact role, assignment and management-application requirement compositions once, or replays the original result.';
+  'Owner-only bounded first-owner setup: binds the provisioning receipt and expected setup revision, coordinates the exact role, assignment and management-application requirement compositions and records their Activity once, or replays the original result.';

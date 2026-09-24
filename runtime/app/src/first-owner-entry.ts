@@ -22,6 +22,7 @@ import {
 import type { InitialOperatingRoleGrant } from "@vortex/access";
 import { z } from "zod";
 import {
+  ApplicationInstallationCoordinatorError,
   createApplicationInstallationCoordinator,
   type ApplicationInstallationActivationResult,
   type ApplicationInstallationCoordinatorDependencies,
@@ -43,6 +44,7 @@ import {
 export const firstOwnerApplicationEntryErrorCodes = [
   "INVALID_FIRST_OWNER_APPLICATION_ENTRY_REQUEST",
   "FIRST_OWNER_APPLICATION_ENTRY_MANIFEST_INVALID",
+  "FIRST_OWNER_APPLICATION_ENTRY_EVIDENCE_UNAVAILABLE",
   "FIRST_OWNER_APPLICATION_ENTRY_INSTALLATION_FAILED",
 ] as const;
 
@@ -91,7 +93,10 @@ export type FirstOwnerApplicationEntryCompositionDependencies<InstalledEvents> =
   /**
    * Server-owned preparation of the exact operating application-role acceptance
    * against the already active registration. It is supplied by the trusted
-   * deployment, which alone holds the current continuity evidence.
+   * deployment, which alone holds the current continuity evidence. It must be
+   * deterministic for unchanged registration facts (as
+   * `prepareOrganizationRoleChangeEvidence` is) so an exact retry reproduces the
+   * frozen manifest and Access replays the original result.
    */
   prepareOperatingRoleEvidence: (input: {
     readonly session: IdentitySession;
@@ -133,14 +138,25 @@ export const createFirstOwnerApplicationEntryComposition = <InstalledEvents = ne
       const value = request.data;
 
       // 1. Prepare and activate exactly the named management-application release.
-      //    Both steps are idempotent, so an interrupted setup resumes safely.
+      //    Preparation refuses once any release is active, so a resumed setup
+      //    continues to activation, which reports the same active release as
+      //    unchanged and refuses any other active release as stale.
       let activation: ApplicationInstallationActivationResult<InstalledEvents>;
       try {
-        await installation.prepare(verifiedSession.data, {
-          organizationId: value.organizationId,
-          applicationRootId: value.applicationRootId,
-          applicationReleaseRevision: value.applicationReleaseRevision,
-        });
+        await installation
+          .prepare(verifiedSession.data, {
+            organizationId: value.organizationId,
+            applicationRootId: value.applicationRootId,
+            applicationReleaseRevision: value.applicationReleaseRevision,
+          })
+          .catch((error: unknown) => {
+            if (
+              error instanceof ApplicationInstallationCoordinatorError &&
+              error.code === "APPLICATION_INSTALLATION_STALE"
+            )
+              return undefined;
+            throw error;
+          });
         activation = await installation.activate(verifiedSession.data, {
           organizationId: value.organizationId,
           applicationRootId: value.applicationRootId,
@@ -155,17 +171,27 @@ export const createFirstOwnerApplicationEntryComposition = <InstalledEvents = ne
       }
 
       // 2. Freeze the operating-role acceptance only after the registration is active.
-      const operatingRoleChangeEvidence = await dependencies.prepareOperatingRoleEvidence({
-        session: verifiedSession.data,
-        organizationId: value.organizationId,
-        applicationRootId: value.applicationRootId,
-        applicationReleaseRevision: value.applicationReleaseRevision,
-        operatingRoleId: value.operatingRoleId,
-        operatingRoleSourceId: value.operatingRoleSourceId,
-      });
+      let operatingRoleChangeEvidence: PreparedOrganizationRoleChange;
+      try {
+        operatingRoleChangeEvidence = await dependencies.prepareOperatingRoleEvidence({
+          session: verifiedSession.data,
+          organizationId: value.organizationId,
+          applicationRootId: value.applicationRootId,
+          applicationReleaseRevision: value.applicationReleaseRevision,
+          operatingRoleId: value.operatingRoleId,
+          operatingRoleSourceId: value.operatingRoleSourceId,
+        });
+      } catch (error) {
+        throw new FirstOwnerApplicationEntryError(
+          "FIRST_OWNER_APPLICATION_ENTRY_EVIDENCE_UNAVAILABLE",
+          { cause: error },
+        );
+      }
+      const evidenceCandidate = operatingRoleChangeEvidence.candidate;
       if (
-        operatingRoleChangeEvidence.candidate.operation !== "accept_new_application_role" ||
-        !sameUuid(operatingRoleChangeEvidence.candidate.roleId, value.operatingRoleId)
+        evidenceCandidate.operation !== "accept_new_application_role" ||
+        !sameUuid(evidenceCandidate.roleId, value.operatingRoleId) ||
+        !sameUuid(evidenceCandidate.sourceRoleId, value.operatingRoleSourceId)
       )
         throw new FirstOwnerApplicationEntryError(
           "FIRST_OWNER_APPLICATION_ENTRY_MANIFEST_INVALID",

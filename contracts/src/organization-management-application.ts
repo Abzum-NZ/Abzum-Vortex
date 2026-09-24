@@ -107,7 +107,9 @@ export type OrganizationManagementApplicationRequirementChangeResult = z.infer<
  * composes it from the exact installed management-application release and the
  * nominated steward; Access owns applying it. It names no raw authority: the
  * operating-role evidence is the same prepared application-role acceptance the
- * protected role-change composition already validates.
+ * protected role-change composition already validates. `provisioningReceiptId`
+ * is the original tenant or organisation provisioning receipt, and
+ * `setupRevision` is the expected stewardship requirement revision.
  */
 export const initialOperatingRoleGrantManifestSchema = z
   .object({
@@ -134,6 +136,12 @@ export const initialOperatingRoleGrantManifestSchema = z
       });
       return;
     }
+    if (candidate.assignmentPolicy.kind !== "standing")
+      context.addIssue({
+        code: "custom",
+        path: ["operatingRoleChangeEvidence", "candidate", "assignmentPolicy"],
+        message: "The management operating role must permit a standing steward assignment",
+      });
     if (!representsSameUuid(candidate.organizationId, value.organizationId))
       context.addIssue({
         code: "custom",
