@@ -201,7 +201,9 @@ export function readControlSettings(
         value.items.map((item) => {
           if (item.kind !== "record_type_reference")
             return fail(`Setting '${key}' items must be record type references`, location);
-          return item.recordType.recordTypeId;
+          return item.recordType.state === "resolved"
+            ? item.recordType.recordTypeId
+            : fail(`Setting '${key}' must reference resolved record types`, location);
         }),
       );
     },
