@@ -2374,7 +2374,119 @@
                                                        "shell_kind":  "default",
                                                        "main":  {
                                                                     "placements":  {
-                                                                                       "detail_crm_company":  {
+                                                                                       "form_crm_company_merge":  {
+    "block":  {
+        "block_id":  "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+        "release_version":  "1.0.0"
+    },
+    "settings":  {
+        "title":  {
+            "kind":  "text",
+            "value":  "Merge company"
+        }
+    },
+    "theme_overrides":  {
+    },
+    "responsive":  {
+        "desktop":  {
+            "visible":  true,
+            "width":  {
+                "kind":  "fill"
+            },
+            "height":  {
+                "kind":  "content"
+            }
+        }
+    },
+    "slots":  {
+        "content":  {
+            "placements":  {
+                "input_crm_company_merge_duplicate":  {
+                    "block":  {
+                        "block_id":  "8d1b6a2f-4c3e-4f0a-9c2b-6f1d2e7a5b94",
+                        "release_version":  "1.0.0"
+                    },
+                    "settings":  {
+                        "name":  {
+                            "kind":  "text",
+                            "value":  "duplicate_company"
+                        },
+                        "label":  {
+                            "kind":  "text",
+                            "value":  "Duplicate company"
+                        },
+                        "required":  {
+                            "kind":  "boolean",
+                            "value":  true
+                        },
+                        "record_types":  {
+                            "kind":  "list",
+                            "items":  [
+                                {
+                                    "kind":  "record_type_reference",
+                                    "record_type":  "vortex.crm.organisations:company"
+                                }
+                            ]
+                        }
+                    },
+                    "theme_overrides":  {
+                    },
+                    "responsive":  {
+                        "desktop":  {
+                            "visible":  true,
+                            "width":  {
+                                "kind":  "fill"
+                            },
+                            "height":  {
+                                "kind":  "content"
+                            }
+                        }
+                    },
+                    "slots":  {
+                    }
+                },
+                "submit_crm_company_merge":  {
+                    "block":  {
+                        "block_id":  "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                        "release_version":  "1.0.0"
+                    },
+                    "settings":  {
+                        "label":  {
+                            "kind":  "text",
+                            "value":  "Merge"
+                        },
+                        "action_kind":  {
+                            "kind":  "choice",
+                            "value":  "submit"
+                        }
+                    },
+                    "theme_overrides":  {
+                    },
+                    "responsive":  {
+                        "desktop":  {
+                            "visible":  true,
+                            "width":  {
+                                "kind":  "fill"
+                            },
+                            "height":  {
+                                "kind":  "content"
+                            }
+                        }
+                    },
+                    "slots":  {
+                    }
+                }
+            },
+            "order":  {
+                "desktop":  [
+                    "input_crm_company_merge_duplicate",
+                    "submit_crm_company_merge"
+                ]
+            }
+        }
+    }
+},
+    "detail_crm_company":  {
                                                                                                                   "block":  {
                                                                                                                                 "block_id":  "e2569df0-2f10-4b20-b41d-177b66cd136c",
                                                                                                                                 "release_version":  "1.0.0"
@@ -2406,7 +2518,8 @@
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
-                                                                                                  "detail_crm_company"
+                                                                                                  "detail_crm_company",
+                                                                                                  "form_crm_company_merge"
                                                                                               ]
                                                                               }
                                                                 }
@@ -3557,6 +3670,15 @@
                            ],
                  "events":  [
                                 {
+                                    "id":  "form_submit_crm_company_merge",
+                                    "key":  "vortex.app.events.vortex_app_crm_form_submit_company_merge",
+                                    "record_type":  "vortex.crm.organisations:company",
+                                    "carries":  [
+
+                                                ],
+                                    "personal_or_sensitive_values_allowed":  false
+                                },
+                                {
                                     "id":  "form_submit_0",
                                     "key":  "vortex.app.events.vortex_app_crm_form_submit_0",
                                     "record_type":  "vortex.crm.people:lead",
@@ -3657,6 +3779,132 @@
 
                             ],
                  "flows":  [
+    {
+        "id": "crm_named_action_company_merge",
+        "key": "crm_named_action_company_merge",
+        "name": "Merge company",
+        "description": "Merge a duplicate company into the current company through the bound company.merge named action.",
+        "run_as": "current_user",
+        "inputs": {
+            "duplicate_company": {
+                "type": "record_reference",
+                "required": true,
+                "record_types": [
+                    "vortex.crm.organisations:company"
+                ]
+            }
+        },
+        "outputs": {},
+        "variables": {},
+        "nodes": [
+            {
+                "id": "start_company_merge",
+                "key": "start",
+                "kind": "start",
+                "outputs": {
+                    "duplicate_company": {
+                        "type": "record_reference",
+                        "required": true,
+                        "record_types": [
+                            "vortex.crm.organisations:company"
+                        ]
+                    }
+                }
+            },
+            {
+                "id": "merge_company",
+                "key": "merge_company",
+                "kind": "action",
+                "target": {
+                    "kind": "named_action",
+                    "action": "vortex.crm.organisations.company.merge"
+                },
+                "inputs": {
+                    "duplicate_company": {
+                        "type": "record_reference",
+                        "value": {
+                            "source": "flow_input",
+                            "input": "duplicate_company"
+                        }
+                    }
+                },
+                "outputs": {},
+                "results": {}
+            },
+            {
+                "id": "return_company_merge_committed",
+                "key": "return_committed",
+                "kind": "return",
+                "results": {},
+                "outcome": "committed"
+            },
+            {
+                "id": "return_company_merge_validation",
+                "key": "return_validation",
+                "kind": "return",
+                "results": {},
+                "outcome": "validation"
+            },
+            {
+                "id": "return_company_merge_refused",
+                "key": "return_refused",
+                "kind": "return",
+                "results": {},
+                "outcome": "refused"
+            },
+            {
+                "id": "return_company_merge_conflict",
+                "key": "return_conflict",
+                "kind": "return",
+                "results": {},
+                "outcome": "conflict"
+            },
+            {
+                "id": "return_company_merge_uncertain",
+                "key": "return_uncertain",
+                "kind": "return",
+                "results": {},
+                "outcome": "uncertain"
+            }
+        ],
+        "edges": [
+            {
+                "id": "begin_company_merge",
+                "from_node": "start_company_merge",
+                "to_node": "merge_company"
+            },
+            {
+                "id": "merge_company_committed",
+                "from_node": "merge_company",
+                "to_node": "return_company_merge_committed",
+                "outcome": "committed"
+            },
+            {
+                "id": "merge_company_validation",
+                "from_node": "merge_company",
+                "to_node": "return_company_merge_validation",
+                "outcome": "validation"
+            },
+            {
+                "id": "merge_company_refused",
+                "from_node": "merge_company",
+                "to_node": "return_company_merge_refused",
+                "outcome": "refused"
+            },
+            {
+                "id": "merge_company_conflict",
+                "from_node": "merge_company",
+                "to_node": "return_company_merge_conflict",
+                "outcome": "conflict"
+            },
+            {
+                "id": "merge_company_uncertain",
+                "from_node": "merge_company",
+                "to_node": "return_company_merge_uncertain",
+                "outcome": "uncertain"
+            }
+        ]
+    },
     {
         "id": "crm_form_flow_0",
         "key": "crm_form_flow_0",
@@ -4667,6 +4915,33 @@
     }
 ],
                  "flow_bindings":  [
+                                       {
+                                           "id":  "form_binding_crm_company_merge",
+                                           "control":  "form_crm_company_merge",
+                                           "event_id":  "form_submit_crm_company_merge",
+                                           "event":  "form_submit",
+                                           "flow":  {
+                                                        "kind":  "application_owned",
+                                                        "flow":  "crm_named_action_company_merge"
+                                                    },
+                                           "inputs":  {
+                                                          "duplicate_company":  {
+                                                                                    "type":  "record_reference",
+                                                                                    "value":  {
+                                                                                                  "source":  "form_input",
+                                                                                                  "form":  "form_crm_company_merge",
+                                                                                                  "input":  "duplicate_company"
+                                                                                              }
+                                                                                }
+                                                      },
+                                           "results":  {
+
+                                                       },
+                                           "declared_effects":  [
+                                                                    "form_interaction",
+                                                                    "change"
+                                                                ]
+                                       },
                                        {
                                            "id":  "form_binding_0",
                                            "control":  "form_6_0",
