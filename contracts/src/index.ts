@@ -17,6 +17,7 @@ export * from "./definition-history-contracts";
 export * from "./definition-store-contracts";
 export * from "./identifiers";
 export * from "./identity-access";
+export * from "./index-readiness";
 export * from "./integration-contracts";
 export * from "./lineage";
 export * from "./loopback-hostname";
