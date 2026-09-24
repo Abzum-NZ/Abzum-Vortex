@@ -92,6 +92,18 @@ export {
   type FirstOwnerApplicationEntryResult,
 } from "./first-owner-entry";
 
+export {
+  createIdentityDisablementCoordinator,
+  identityDisablementRefusalCodes,
+  identityDisablementRequestSchema,
+  type IdentityAuthorityDisabler,
+  type IdentityDisablementCoordinator,
+  type IdentityDisablementDependencies,
+  type IdentityDisablementOperationResult,
+  type IdentityDisablementRefusalCode,
+  type IdentityDisablementRequest,
+} from "./identity-disablement";
+
 export const AppService = Object.freeze({
   key: "app",
   boundary: "@vortex/app",
@@ -101,4 +113,5 @@ export const AppService = Object.freeze({
   projectFlowResultHandoff,
   createApplicationInstallationCoordinator,
   createInstalledRuntimeContextLoader,
+  createIdentityDisablementCoordinator,
 });
