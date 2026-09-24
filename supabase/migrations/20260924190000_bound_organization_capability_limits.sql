@@ -12,12 +12,13 @@
 --    it is not wider. Both `resolve_effective_capability_policy` (the read
 --    path) and `lock_effective_capability_policy` (the reservation path) apply
 --    the same rule.
--- 2. `refresh_capability_reservation_balance` summed active, consumed and
---    released quantities under a scope that, for a tenant balance, also
---    included every organisation-scoped reservation. The sums now select on
---    the reservation's own `applied_scope`, so a tenant balance counts only
---    tenant-scoped reservations and an organisation balance only that
---    organisation's organisation-scoped reservations.
+-- 2. `refresh_capability_reservation_balance` used different scope rules for
+--    active, consumed and released quantities. The tenant balance now counts
+--    every organisation and the organisation balance counts all reservations
+--    requested by that organisation, using the same rule for all three sums.
+--    An organisation's available quantity is also bounded by the aggregate
+--    tenant balance, so separate organisation assignments cannot multiply the
+--    tenant's capacity.
 -- 3. The balance and reservation quantity constraints required every running
 --    total to survive a float8 round-trip (`x = x::float8::numeric`). Past
 --    about 15 significant digits any accepted byte count made every later
@@ -36,8 +37,8 @@
 --    references the tenant needs. They lock it `FOR NO KEY UPDATE` instead, so
 --    metering and organisation inserts no longer block on a reservation.
 --
--- Scope: the capability policy and reservation functions only. Capability keys,
--- policy contents and metering events are unchanged. The live bodies are patched
+-- SQL scope: the capability policy and reservation functions only. Capability
+-- keys, policy contents and metering events are unchanged. The live bodies are patched
 -- in place from `pg_get_functiondef`: each reviewed fragment must occur exactly
 -- once or the migration aborts, and each function is re-created under its own
 -- current owner so its OID, grants, comment, security and search_path stay put.
@@ -198,21 +199,90 @@ begin$frag$),
     end if;
   end if;$frag$)
         )),
-      -- 2. One `applied_scope` rule for active, consumed and released sums.
+      -- 2. The tenant balance is aggregate; an organisation balance is local.
       ('vortex_access.refresh_capability_reservation_balance(uuid,uuid,text,text,text,uuid,uuid,bigint,uuid,bigint,numeric,timestamptz)'::pg_catalog.regprocedure,
         pg_catalog.jsonb_build_array(
           pg_catalog.jsonb_build_array(
-            $frag$  where reservation.tenant_id = p_tenant_id
-    and reservation.capability_key = p_capability_key and reservation.unit = p_unit
-    and (p_applied_scope = 'tenant'
-      or reservation.request_organization_id
-        is not distinct from p_assignment_organization_id);$frag$,
-            $frag$  where reservation.tenant_id = p_tenant_id
-    and reservation.capability_key = p_capability_key and reservation.unit = p_unit
-    and reservation.applied_scope = p_applied_scope
-    and (p_applied_scope = 'tenant'
-      or reservation.request_organization_id
-        is not distinct from p_assignment_organization_id);$frag$)
+            $frag$  released numeric;
+begin$frag$,
+            $frag$  released numeric;
+  tenant_bound record;
+  tenant_balance record;
+begin$frag$),
+          pg_catalog.jsonb_build_array(
+            $frag$    coalesce(sum(case when reservation.state = 'active'
+      and reservation.policy_id = p_policy_id
+      and reservation.policy_revision = p_policy_revision
+      and reservation.assignment_id = p_assignment_id
+      and reservation.assignment_revision = p_assignment_revision
+      then reservation.reserved_quantity - reservation.consumed_quantity
+        - reservation.released_quantity else 0 end), 0),$frag$,
+            $frag$    coalesce(sum(case when reservation.state = 'active'
+      then reservation.reserved_quantity - reservation.consumed_quantity
+        - reservation.released_quantity else 0 end), 0),$frag$),
+          pg_catalog.jsonb_build_array(
+            $frag$  return query select p_quantity_limit, active_reserved, consumed, released,
+    greatest(0::numeric, p_quantity_limit - active_reserved - consumed);$frag$,
+            $frag$  if p_applied_scope = 'organization' then
+    select assignment.policy_id, assignment.policy_revision,
+      assignment.assignment_id, assignment.revision as assignment_revision,
+      definition.quantity_limit
+    into tenant_bound
+    from vortex_access.capability_policy_assignments as assignment
+    join vortex_access.capability_policy_definitions as definition
+      on definition.tenant_id = assignment.tenant_id
+      and definition.policy_id = assignment.policy_id
+      and definition.revision = assignment.policy_revision
+    where assignment.tenant_id = p_tenant_id
+      and assignment.organization_id is null
+      and assignment.capability_key = p_capability_key and assignment.unit = p_unit
+      and assignment.revoked_at is null and assignment.starts_at <= p_evaluated_at
+      and (assignment.expires_at is null or assignment.expires_at > p_evaluated_at)
+    order by assignment.assignment_id limit 1 for update of assignment;
+    if not found then
+      return query select p_quantity_limit, active_reserved, consumed, released,
+        0::numeric;
+      return;
+    end if;
+    select refreshed.* into strict tenant_balance
+    from vortex_access.refresh_capability_reservation_balance(
+      p_tenant_id, null::uuid, p_capability_key, p_unit, 'tenant'::text,
+      null::uuid, tenant_bound.policy_id, tenant_bound.policy_revision,
+      tenant_bound.assignment_id, tenant_bound.assignment_revision,
+      tenant_bound.quantity_limit, p_evaluated_at
+    ) as refreshed;
+    return query select p_quantity_limit, active_reserved, consumed, released,
+      least(greatest(0::numeric, p_quantity_limit - active_reserved - consumed),
+        tenant_balance.available_quantity);
+    return;
+  end if;
+  return query select p_quantity_limit, active_reserved, consumed, released,
+    greatest(0::numeric, p_quantity_limit - active_reserved - consumed);$frag$)
+        )),
+      -- Refresh both balances after a reservation, including the tenant total.
+      ('vortex_access.reserve_capability_quantity(uuid,uuid,text,text,jsonb,numeric,uuid)'::pg_catalog.regprocedure,
+        pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_array(
+            $frag$  update vortex_access.capability_reservation_balances as stored
+  set active_reserved_quantity = balance.active_reserved_quantity + p_requested_quantity,
+      updated_at = evaluated_at
+  where stored.tenant_id = p_tenant_id
+    and stored.organization_id is not distinct from effective.assignment_organization_id
+    and stored.capability_key = p_capability_key and stored.unit = p_unit;$frag$,
+            $frag$  select refreshed.* into strict balance
+  from vortex_access.refresh_capability_reservation_balance(
+    p_tenant_id, effective.request_organization_id, p_capability_key, p_unit,
+    effective.applied_scope, effective.assignment_organization_id,
+    effective.policy_id, effective.policy_revision, effective.assignment_id,
+    effective.assignment_revision, effective.quantity_limit, evaluated_at
+  ) as refreshed;$frag$),
+          pg_catalog.jsonb_build_array(
+            $frag$      'activeReservedQuantity',
+        (balance.active_reserved_quantity + p_requested_quantity)::text,$frag$,
+            $frag$      'activeReservedQuantity', balance.active_reserved_quantity::text,$frag$),
+          pg_catalog.jsonb_build_array(
+            $frag$      'availableQuantity', (balance.available_quantity - p_requested_quantity)::text)$frag$,
+            $frag$      'availableQuantity', balance.available_quantity::text)$frag$)
         )),
       -- 4. Release uses the canonical balance refresh instead of its own sums.
       ('vortex_access.release_capability_reservation(uuid,uuid,text,text,uuid,bigint,uuid,bigint,uuid,uuid,numeric)'::pg_catalog.regprocedure,
@@ -302,7 +372,7 @@ comment on function vortex_access.lock_effective_capability_policy(uuid, uuid, t
 comment on function vortex_access.refresh_capability_reservation_balance(
   uuid, uuid, text, text, text, uuid, uuid, bigint, uuid, bigint, numeric, timestamptz
 ) is
-  'Rebuilds one balance row from reservations in the same applied scope; active, consumed and released totals share one scope rule.';
+  'Rebuilds tenant-aggregate or organisation-local balance evidence using one scope rule for active, consumed and released totals; an organisation is also bounded by the tenant balance.';
 comment on function vortex_access.release_capability_reservation(
   uuid, uuid, text, text, uuid, bigint, uuid, bigint, uuid, uuid, numeric
 ) is
