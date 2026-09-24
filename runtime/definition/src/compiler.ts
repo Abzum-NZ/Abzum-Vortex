@@ -194,6 +194,7 @@ const sourceCollectionIdKeys: Readonly<Record<string, string>> = Object.freeze({
   roles: "roleId",
   navigation: "id",
   queries: "queryId",
+  contributions: "contributionId",
   block_registrations: "blockId",
   placements: "placementId",
   pages: "pageId",
@@ -1101,6 +1102,23 @@ function explicitSourceTargets(
     return ["moduleRootId", "moduleKey", "resolvedVersion"].map((key) => [...base, key]);
   }
   if (
+    source.kind === "module" &&
+    sourcePath[0] === "body" &&
+    sourcePath[1] === "contributions" &&
+    typeof sourcePath[2] === "number" &&
+    typeof sourcePath[3] === "string"
+  ) {
+    const base: Path = ["content", "contributions", sourcePath[2]];
+    if (sourcePath[3] === "dependency" && sourcePath.length === 4) {
+      const targetModulePath: Path = [...base, "targetModule"];
+      return leafPaths(valueAtPath(canonical, targetModulePath), targetModulePath);
+    }
+    if (sourcePath[3] === "extension_point" && sourcePath.length === 4)
+      return [[...base, "targetExtensionPointId"]];
+    if (sourcePath[3] === "contributed_action" && sourcePath.length === 4)
+      return [[...base, "actionId"]];
+  }
+  if (
     source.kind === "application" &&
     sourcePath[0] === "body" &&
     sourcePath[1] === "pipelines" &&
@@ -1542,6 +1560,7 @@ const moduleSourceTransformPatterns = [
   /^body\/(?:record_types|permissions|actions|events|rules|extension_points|sharing_conditions|queries)\/#\/id$/,
   /^body\/record_types\/#\/(?:fields|relationships)\/#\/id$/,
   /^body\/dependencies\/#\/module$/,
+  /^body\/contributions\/#\/(?:id|dependency|extension_point|record_type|field|contributed_action)$/,
   /^body\/record_types\/#\/(?:name|plural_name|custom_actions\/#|ownership_mode|storage_scope)$/,
   /^body\/record_types\/#\/(?:storage_contract_id|title_field|ownership_relationship)$/,
   /^body\/record_types\/#\/fields\/#\/default(?:\/.*)?$/,
@@ -1757,7 +1776,7 @@ function sourceResolvesIdentity(sourcePath: Path, positions: SourceContractPosit
     /\/(?:custom_actions|carries|declared_fields|public_fields|select|group_by|component_order|relationships|record_types|allowed_child_blocks)\/#$/.test(
       path,
     ) ||
-    /\/(?:record_type|source_record_type|to_record_type|target|field|page|query|block|home_page|module|connection_type|workflow|node|relationship|amount_field|percentage_field|date_field|due_field|status_field|required_permission)$/.test(
+    /\/(?:record_type|source_record_type|to_record_type|target|field|page|query|block|home_page|module|connection_type|workflow|node|relationship|amount_field|percentage_field|date_field|due_field|status_field|required_permission|dependency|extension_point|contributed_action)$/.test(
       path,
     ) ||
     /\/expression\/fields\/#$/.test(path) ||
@@ -3483,6 +3502,106 @@ function compileModule(
       relationshipHops: query.relationship_hops,
     };
   });
+  const dependencies = (body.dependencies as JsonObject[]).map((dependency) => {
+    const requirement = dependency.version as Parameters<typeof compatibleVersion>[0];
+    const target = resolution.definition(String(dependency.module), "module");
+    return {
+      dependencyKey: dependency.dependency_key,
+      moduleRootId: target.rootId,
+      moduleKey: target.key,
+      version: requirement,
+      resolvedVersion: exactVersion(resolution, String(dependency.module), "module", requirement),
+    };
+  });
+  const dependencyByKey = new Map(
+    (body.dependencies as JsonObject[]).map((dependency, index) => [
+      String(dependency.dependency_key),
+      dependencies[index]!,
+    ]),
+  );
+  const contributionExtensionPointId = (moduleKey: string, key: string): string => {
+    try {
+      return resolution.id(moduleKey, "extension_point", key, "content");
+    } catch (error) {
+      if (!(error instanceof DefinitionCompilationError)) throw error;
+      return fail(
+        "vortex.definition.module_extension_references",
+        "broken_reference",
+        resolution.location("extension_point", key),
+      );
+    }
+  };
+  const contributionRecordIdentity = (record: string): string => {
+    try {
+      return resolution.recordType(record).recordTypeId;
+    } catch (error) {
+      if (!(error instanceof DefinitionCompilationError)) throw error;
+      return fail(
+        "vortex.definition.module_extension_references",
+        "broken_reference",
+        resolution.location("record_type", record),
+      );
+    }
+  };
+  const contributionFieldIdentity = (record: string, field: string): string => {
+    try {
+      return resolution.field(record, field);
+    } catch (error) {
+      if (!(error instanceof DefinitionCompilationError)) throw error;
+      return fail(
+        "vortex.definition.module_extension_references",
+        "broken_reference",
+        resolution.location("field", field),
+      );
+    }
+  };
+  const contributionActionIdentity = (alias: string): string => {
+    try {
+      return resolution.id(definitionKey, "action", alias, "content");
+    } catch (error) {
+      if (!(error instanceof DefinitionCompilationError)) throw error;
+      return fail(
+        "vortex.definition.module_extension_references",
+        "broken_reference",
+        resolution.location("action", alias),
+      );
+    }
+  };
+  const authoredContributions = (body.contributions as JsonObject[] | undefined) ?? [];
+  const contributions = authoredContributions.map((contribution) => {
+    const targetModule = dependencyByKey.get(String(contribution.dependency));
+    if (targetModule === undefined)
+      return fail(
+        "vortex.definition.module_extension_references",
+        "broken_reference",
+        resolution.location("extension_point", String(contribution.dependency)),
+      );
+    const targetExtensionPointId = contributionExtensionPointId(
+      String(targetModule.moduleKey),
+      String(contribution.extension_point),
+    );
+    if (contribution.kind === "field") {
+      const record = qualifiedForRecord(String(contribution.record_type));
+      const recordTypeId = contributionRecordIdentity(record);
+      const fieldId = contributionFieldIdentity(record, String(contribution.field));
+      return {
+        contributionId: fieldId,
+        targetModule,
+        targetExtensionPointId,
+        kind: "field" as const,
+        recordTypeId,
+        fieldId,
+      };
+    }
+    const actionId = contributionActionIdentity(String(contribution.contributed_action));
+    return {
+      contributionId: actionId,
+      targetModule,
+      targetExtensionPointId,
+      kind: "action" as const,
+      actionId,
+    };
+  });
   const canonical = moduleDraftV3Schema.parse({
     envelope: {
       kind: "module",
@@ -3499,22 +3618,7 @@ function compileModule(
     content: {
       name: body.name,
       description: body.description,
-      dependencies: (body.dependencies as JsonObject[]).map((dependency) => {
-        const requirement = dependency.version as Parameters<typeof compatibleVersion>[0];
-        const target = resolution.definition(String(dependency.module), "module");
-        return {
-          dependencyKey: dependency.dependency_key,
-          moduleRootId: target.rootId,
-          moduleKey: target.key,
-          version: requirement,
-          resolvedVersion: exactVersion(
-            resolution,
-            String(dependency.module),
-            "module",
-            requirement,
-          ),
-        };
-      }),
+      dependencies,
       recordTypes,
       permissions,
       actions,
@@ -3534,6 +3638,7 @@ function compileModule(
         accepts: point.accepts,
       })),
       queries,
+      ...(contributions.length > 0 ? { contributions } : {}),
     },
   });
   return canonical;

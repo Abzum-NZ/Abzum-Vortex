@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { conditionNodeSchema } from "./module-contracts";
+import { conditionNodeSchema, moduleDependencySchema } from "./module-contracts";
 import {
   actionInputDefinitionV2Schema,
   moduleContentV2Schema,
@@ -7,7 +7,14 @@ import {
 } from "./module-contracts-v2";
 import { moduleSourceContractVersion as moduleSourceContractVersionV3 } from "./module-source-contracts";
 import { ruleGraphSchema } from "./rule-graph-contracts";
-import { builderKeySchema, fieldIdSchema, queryIdSchema } from "./identifiers";
+import {
+  actionIdSchema,
+  builderKeySchema,
+  containedComponentIdSchema,
+  fieldIdSchema,
+  queryIdSchema,
+  recordTypeIdSchema,
+} from "./identifiers";
 import { recordTypeReferenceSchema } from "./definitions";
 
 export const moduleValidationContractVersionV3 = "3.0.0" as const;
@@ -58,9 +65,51 @@ export const moduleQueryDefinitionV3Schema = z
   })
   .strict();
 
+/**
+ * One Module-owned declaration that a component from this Module adds itself to an
+ * extension point declared by a dependency. The contributed field or action keeps its
+ * existing permanent identity, which is also the contribution's stable identity. The
+ * target module is the exact resolved dependency entry, never a fresh reference.
+ */
+export const moduleContributionV3Schema = z
+  .object({
+    contributionId: containedComponentIdSchema,
+    targetModule: moduleDependencySchema,
+    targetExtensionPointId: containedComponentIdSchema,
+    kind: z.enum(["field", "action"]),
+    recordTypeId: recordTypeIdSchema.optional(),
+    fieldId: fieldIdSchema.optional(),
+    actionId: actionIdSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const invalid = (message: string, path: (string | number)[]) =>
+      context.addIssue({ code: "custom", path, message });
+    if (value.kind === "field") {
+      if (
+        value.actionId !== undefined ||
+        value.recordTypeId === undefined ||
+        value.fieldId === undefined
+      )
+        invalid("A field contribution declares exactly its contributing record type and field", [
+          "fieldId",
+        ]);
+      else if (String(value.contributionId) !== String(value.fieldId))
+        invalid("A field contribution is identified by its contributed field", ["contributionId"]);
+      return;
+    }
+    if (value.fieldId !== undefined || value.recordTypeId !== undefined || value.actionId === undefined)
+      invalid("An action contribution declares exactly its contributing action", ["actionId"]);
+    else if (String(value.contributionId) !== String(value.actionId))
+      invalid("An action contribution is identified by its contributed action", [
+        "contributionId",
+      ]);
+  });
+
 export const moduleContentV3Schema = moduleContentV2Schema.extend({
   rules: z.array(ruleGraphSchema).max(100),
   queries: z.array(moduleQueryDefinitionV3Schema).max(100).default([]),
+  contributions: z.array(moduleContributionV3Schema).max(100).optional(),
 });
 
 export const moduleDraftV3Schema = moduleDraftV2Schema.extend({
@@ -78,6 +127,7 @@ export type ModuleContractVersionPairV3 = z.infer<typeof moduleContractVersionPa
 export type ModuleQuerySort = z.infer<typeof moduleQuerySortSchema>;
 export type ModuleQueryAggregate = z.infer<typeof moduleQueryAggregateSchema>;
 export type ModuleQueryDefinitionV3 = z.infer<typeof moduleQueryDefinitionV3Schema>;
+export type ModuleContributionV3 = z.infer<typeof moduleContributionV3Schema>;
 export type ModuleContentV3 = z.infer<typeof moduleContentV3Schema>;
 export type ModuleDraftV3 = z.infer<typeof moduleDraftV3Schema>;
 export type ModuleCanonicalDocumentV3 = z.infer<typeof moduleCanonicalDocumentV3Schema>;

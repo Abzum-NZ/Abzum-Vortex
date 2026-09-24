@@ -12,6 +12,16 @@ export {
   type IdentityJourneyResult,
   type VerifiedSignInResult,
 } from "./auth-journeys";
+export {
+  createIdentityAuthorityDisablement,
+  identityDisablementFailureCodes,
+  type IdentityAuthorityDisablement,
+  type IdentityAuthorityDisablementConfiguration,
+  type IdentityAuthorityDisablementDependencies,
+  type IdentityDisablementCommand,
+  type IdentityDisablementFailureCode,
+  type IdentityDisablementResult,
+} from "./identity-authority-disablement";
 export { createIdentityVerifier, type IdentityVerifier } from "./identity-verifier";
 export {
   adoptOrganization,

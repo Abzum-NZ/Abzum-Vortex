@@ -1379,6 +1379,40 @@ export const moduleSourceQuerySchema = z
   .strict();
 
 // ---------------------------------------------------------------------------
+// Module contributions.
+// ---------------------------------------------------------------------------
+
+const moduleSourceContributionBase = {
+  id: sourceAliasSchema,
+  dependency: builderKeySchema,
+  extension_point: builderKeySchema,
+};
+
+/**
+ * One authored declaration that a field or action this Module already owns is added to
+ * an extension point declared by a declared dependency. `dependency` names the dependency
+ * entry by its local `dependency_key`; `extension_point` names the target's extension-point
+ * key. The contribution is additive and never names the Module's own extension points.
+ */
+export const moduleSourceContributionSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      ...moduleSourceContributionBase,
+      kind: z.literal("field"),
+      record_type: builderKeySchema,
+      field: builderKeySchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...moduleSourceContributionBase,
+      kind: z.literal("action"),
+      contributed_action: sourceAliasSchema,
+    })
+    .strict(),
+]);
+
+// ---------------------------------------------------------------------------
 // Module body and document.
 // ---------------------------------------------------------------------------
 
@@ -1455,8 +1489,24 @@ const moduleSourceBodySchema = z
     ).max(100),
     sharing_conditions: z.array(moduleSourceSharingConditionSchema).max(100),
     queries: z.array(moduleSourceQuerySchema).max(100).default([]),
+    // Optional rather than defaulted so an authored source that declares no contributions
+    // keeps the exact fingerprint it had before contributions existed.
+    contributions: z.array(moduleSourceContributionSchema).max(100).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    // Contributions resolve their target by a local dependency key, so a Module that
+    // declares contributions needs unambiguous keys. Modules without contributions keep
+    // their existing acceptance unchanged.
+    if ((value.contributions ?? []).length === 0) return;
+    const keys = value.dependencies.map((dependency) => dependency.dependency_key);
+    if (new Set(keys).size !== keys.length)
+      context.addIssue({
+        code: "custom",
+        path: ["dependencies"],
+        message: "Module dependency keys must be unique when contributions are declared",
+      });
+  });
 
 export const moduleSourceDocumentSchema = z
   .object({
@@ -1475,5 +1525,6 @@ export type ModuleSourceSharingCondition = z.infer<typeof moduleSourceSharingCon
 export type ModuleSourceQuerySort = z.infer<typeof moduleSourceQuerySortSchema>;
 export type ModuleSourceQueryAggregate = z.infer<typeof moduleSourceQueryAggregateSchema>;
 export type ModuleSourceQuery = z.infer<typeof moduleSourceQuerySchema>;
+export type ModuleSourceContribution = z.infer<typeof moduleSourceContributionSchema>;
 export type ModuleSourceBody = z.infer<typeof moduleSourceBodySchema>;
 export type ModuleSourceDocument = z.infer<typeof moduleSourceDocumentSchema>;

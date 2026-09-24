@@ -78,9 +78,6 @@ export const rolePermissionEntrySchema = z
   .strict()
   .superRefine(addPermissionScopeIssue);
 
-/** Retained package export, corrected from the unused legacy wildcard union to exact live authority. */
-export const permissionEntrySchema = rolePermissionEntrySchema;
-
 const rolePermissionSetSchema = z
   .array(rolePermissionEntrySchema)
   .superRefine((entries, context) => {
@@ -828,7 +825,6 @@ export const preparedApplicationRoleTemplatesSchema = z
   });
 
 export type RolePermissionEntry = z.infer<typeof rolePermissionEntrySchema>;
-export type PermissionEntry = z.infer<typeof permissionEntrySchema>;
 export type RolePrivilegeClassification = z.infer<typeof rolePrivilegeClassificationSchema>;
 export type RoleRecentAuthenticationRequirement = z.infer<
   typeof roleRecentAuthenticationRequirementSchema
