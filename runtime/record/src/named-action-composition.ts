@@ -76,6 +76,12 @@ export type NamedActionComposition = Readonly<{
   submittedValues: Readonly<Record<string, JsonValue | null>>;
   creations: readonly NamedActionCreation[];
   relationshipCopies: readonly NamedActionRelationshipCopy[];
+  /**
+   * Whether the action soft-deletes its subject. The delete itself is never
+   * composed here: it runs through the shared protected lifecycle delete after
+   * the action's own effects, so this is a verified statement of intent only.
+   */
+  softDeletesSubject: boolean;
   announcedEventKeys: readonly string[];
   normalizedInputs: Readonly<Record<string, JsonValue>>;
   preconditionSatisfied: boolean;
@@ -387,6 +393,7 @@ export const composeNamedAction = (
   const creations: NamedActionCreation[] = [];
   const relationshipCopies: NamedActionRelationshipCopy[] = [];
   const setFieldIds = new Set<string>();
+  let softDeletesSubject = false;
   const announcedEventKeys: string[] = [];
   for (const [ordinal, effect] of prepared.action.effects.entries()) {
     if (effect.kind === "announce_event") {
@@ -421,6 +428,12 @@ export const composeNamedAction = (
       relationshipCopies.push(copy);
       continue;
     }
+    if (effect.kind === "soft_delete_subject") {
+      // One delete per action; a second could only name the same subject.
+      if (softDeletesSubject) return undefined;
+      softDeletesSubject = true;
+      continue;
+    }
     if (effect.kind !== "set_field") return undefined;
     setFieldIds.add(effect.fieldId.toLowerCase());
     const field = fields.get(effect.fieldId);
@@ -430,10 +443,19 @@ export const composeNamedAction = (
     submittedValues[effect.fieldId] = value;
   }
   if (creations.length !== prepared.createTargets.length) return undefined;
+  // The delete removes the subject the other effects would write to, link to or
+  // copy from, so a deleting action may only announce Events. Refusing the
+  // combination keeps every stored value and edge exactly what the action says.
+  if (
+    softDeletesSubject &&
+    (setFieldIds.size > 0 || creations.length > 0 || relationshipCopies.length > 0)
+  )
+    return undefined;
   return {
     submittedValues,
     creations,
     relationshipCopies,
+    softDeletesSubject,
     announcedEventKeys,
     normalizedInputs,
     preconditionSatisfied,
