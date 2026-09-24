@@ -18,7 +18,8 @@ import {
   effectiveCapabilityPolicySchema,
 } from "./capability-policy";
 
-const storedQuantitySchema = z.number().nonnegative().finite().max(Number.MAX_SAFE_INTEGER);
+/** Running totals retain PostgreSQL's exact numeric text, including values above JS's safe range. */
+const storedQuantitySchema = z.string().regex(/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/);
 const reservationQuantitySchema = capabilityPolicyQuantitySchema.max(Number.MAX_SAFE_INTEGER);
 
 /** Current evidence only; it never grants capability authority. */
@@ -309,19 +310,21 @@ const revision = (value: unknown): unknown => {
   return Number.isSafeInteger(parsed) && String(parsed) === value ? parsed : value;
 };
 
-const quantityKeys = new Set([
-  "policyLimit",
+const storedQuantityKeys = new Set([
   "activeReservedQuantity",
   "consumedQuantity",
   "releasedQuantity",
   "availableQuantity",
+  "totalConsumedQuantity",
+  "remainingReservedQuantity",
+  "totalReleasedQuantity",
+]);
+const quantityKeys = new Set([
+  "policyLimit",
   "requestedQuantity",
   "reservedQuantity",
   "consumedAmount",
-  "totalConsumedQuantity",
-  "remainingReservedQuantity",
   "releasedAmount",
-  "totalReleasedQuantity",
 ]);
 const revisionKeys = new Set(["policyRevision", "assignmentRevision"]);
 
@@ -331,11 +334,13 @@ const normalizeStoredResult = (value: unknown): unknown => {
   return Object.fromEntries(
     Object.entries(value).map(([key, entry]) => [
       key,
-      quantityKeys.has(key)
-        ? quantity(entry)
-        : revisionKeys.has(key)
-          ? revision(entry)
-          : normalizeStoredResult(entry),
+      storedQuantityKeys.has(key)
+        ? entry
+        : quantityKeys.has(key)
+          ? quantity(entry)
+          : revisionKeys.has(key)
+            ? revision(entry)
+            : normalizeStoredResult(entry),
     ]),
   );
 };
