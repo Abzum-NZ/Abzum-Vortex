@@ -11,7 +11,7 @@ import {
   type OrganizationId,
   type SemanticVersion,
 } from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+import type { DatabaseRow, RuntimeDatabaseTransaction } from "@vortex/db";
 import {
   kestraFlowCompilerEnvironments,
   type KestraFlowCandidate,
@@ -26,8 +26,9 @@ import {
  * WorkflowDefinition and its installation identity. This repository persists
  * that candidate through the protected `register_workflow_flow_candidate`
  * function, which derives nothing from the candidate's diagnostic labels: the
- * namespace must equal the one derived from the permanent identity, the flow id
- * must name the exact release, and the candidate must be inactive.
+ * namespace and flow id must equal the ones derived from the permanent identity,
+ * the identity must name the organisation's own published Application release
+ * containing that workflow, and the candidate must be inactive.
  *
  * It runs inside an already established private flow-preparation transaction on
  * the runtime connection, never a human request transaction, and it never calls,
@@ -223,11 +224,26 @@ const parseRegistration = (value: unknown): KestraFlowRegistration => {
   });
 };
 
-const parseResult = (rows: readonly RegistrationRow[]): KestraFlowRegistrationResult => {
+/** A stored mapping must echo exactly the identity and generated flow it was asked for. */
+const matchesCommand = (
+  registration: KestraFlowRegistration,
+  command: KestraFlowRegistrationCommand,
+): boolean =>
+  identityKeys.every((key) => registration[key] === command.identity[key]) &&
+  registration.namespace === command.flow.namespace &&
+  registration.flowId === command.flow.id;
+
+const parseResult = (
+  rows: readonly RegistrationRow[],
+  command: KestraFlowRegistrationCommand,
+): KestraFlowRegistrationResult => {
   const row = rows[0];
   if (rows.length !== 1 || row === undefined) throw invalidStorageResult();
-  if (row.outcome === "registered" || row.outcome === "existing")
-    return Object.freeze({ outcome: row.outcome, registration: parseRegistration(row.result) });
+  if (row.outcome === "registered" || row.outcome === "existing") {
+    const registration = parseRegistration(row.result);
+    if (!matchesCommand(registration, command)) throw invalidStorageResult();
+    return Object.freeze({ outcome: row.outcome, registration });
+  }
   if (row.outcome === "refused") {
     if (!isObject(row.result)) throw invalidStorageResult();
     const reasonCode = row.result.reasonCode;
@@ -270,7 +286,7 @@ const mapStorageFailure = (error: unknown): KestraFlowRegistrationError => {
  * candidate for an existing identity. It never enables, calls or deploys a flow.
  */
 export const registerKestraFlowCandidate = async (
-  transaction: RequestDatabaseTransaction,
+  transaction: RuntimeDatabaseTransaction,
   commandCandidate: unknown,
 ): Promise<KestraFlowRegistrationResult> => {
   const command = parseCommand(commandCandidate);
@@ -287,7 +303,7 @@ export const registerKestraFlowCandidate = async (
         ${JSON.stringify(command.flow)}::text::jsonb
       )
     `;
-    return parseResult(rows);
+    return parseResult(rows, command);
   } catch (error) {
     throw mapStorageFailure(error);
   }

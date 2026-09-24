@@ -18,13 +18,15 @@
 --    is `inactive`; activation is a separate, later operation, so this table can
 --    never hold an active flow.
 -- 2. `vortex_workflow.register_workflow_flow_candidate` validates one candidate
---    against its identity and is duplicate-safe: repeating one exact identity
---    and candidate converges on the stored row, while a different candidate for
---    the same identity is refused, never overwritten.
+--    against its identity and the stored release evidence (the organisation's
+--    own Application root, the exact published release and version, and the
+--    workflow published in it) and is duplicate-safe: repeating one exact
+--    identity and candidate converges on the stored row, while a different
+--    candidate for the same identity is refused, never overwritten.
 --
--- The fingerprint and the stored namespace and flow id all come from the
--- validated candidate, and the namespace must equal the one derived from the
--- permanent identity. Identity is never recovered from diagnostic labels. The
+-- The fingerprint is computed here from the validated candidate, and the stored
+-- namespace and flow id must equal the ones derived from the permanent
+-- identity. Identity is never recovered from diagnostic labels. The
 -- table is revoked from every role and reached only through the function, which
 -- is granted to the private runtime that prepares flows. No flow is called, run
 -- or deployed and nothing here enables anything.
@@ -153,6 +155,7 @@ as $function$
 declare
   expected_namespace text;
   flow_id_value text;
+  workflow_id_value text;
   expected_id_suffix text;
   candidate_fingerprint text;
   stored vortex_workflow.flow_registrations%rowtype;
@@ -178,7 +181,7 @@ begin
   -- A candidate is prepared inactive: registration must never hold a runnable
   -- flow. The typed fields are checked before any value is read out of them.
   if p_candidate -> 'active' is distinct from 'false'::jsonb
-    or p_candidate #>> '{trigger,disabled}' is distinct from 'true'
+    or p_candidate #> '{trigger,disabled}' is distinct from 'true'::jsonb
     or coalesce(pg_catalog.jsonb_typeof(p_candidate -> 'id'), 'missing') <> 'string'
     or coalesce(pg_catalog.jsonb_typeof(p_candidate -> 'namespace'), 'missing') <> 'string'
     or coalesce(pg_catalog.jsonb_typeof(p_candidate -> 'workflowRevision'), 'missing')
@@ -187,7 +190,7 @@ begin
       message = 'Workflow flow candidate is invalid or active';
   end if;
 
-  if (p_candidate ->> 'workflowRevision') !~ '^[1-9][0-9]*$' then
+  if (p_candidate ->> 'workflowRevision') !~ '^[1-9][0-9]{0,15}$' then
     raise exception using errcode = '22023',
       message = 'Workflow flow candidate revision is invalid';
   end if;
@@ -196,8 +199,10 @@ begin
       message = 'Workflow flow candidate revision does not match its identity';
   end if;
 
-  -- The namespace is derived only from permanent identity, exactly as the part
-  -- A compiler derives it; the prepared flow id must end in this exact release.
+  -- The namespace and flow id are derived only from permanent identity, exactly
+  -- as the part A compiler derives them: `w_<workflow id>_<version>_r<revision>`
+  -- with the lower-case workflow UUID, so the flow names one exact workflow of
+  -- this exact release.
   expected_namespace := pg_catalog.concat_ws(
     '.',
     'vortex',
@@ -210,13 +215,51 @@ begin
   flow_id_value := p_candidate ->> 'id';
   expected_id_suffix := '_' || pg_catalog.replace(p_application_version, '.', '-')
     || '_r' || p_workflow_revision::text;
+  workflow_id_value := pg_catalog.substr(flow_id_value, 3, 36);
   if (p_candidate ->> 'namespace') <> expected_namespace
-    or pg_catalog.left(flow_id_value, 2) <> 'w_'
-    or pg_catalog.char_length(flow_id_value) not between 3 and 100
-    or pg_catalog.right(flow_id_value, pg_catalog.char_length(expected_id_suffix))
-      <> expected_id_suffix then
+    or pg_catalog.char_length(flow_id_value) > 100
+    or flow_id_value <> 'w_' || workflow_id_value || expected_id_suffix
+    or workflow_id_value !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    or not vortex_context.is_non_nil_uuid(workflow_id_value) then
     raise exception using errcode = '22023',
       message = 'Workflow flow candidate identity does not match its installation';
+  end if;
+
+  -- The identity must name a real published release of an Application the
+  -- organisation owns, and the flow's workflow must be published in exactly that
+  -- release. A caller can never register a mapping for another organisation's
+  -- Application, an unpublished revision or a workflow the release lacks. The
+  -- key-share locks keep that release evidence in place for this transaction.
+  perform 1
+  from vortex_definition.releases as application_release
+  join vortex_definition.roots as application_root
+    on application_root.root_id = application_release.root_id
+  where application_release.root_id = p_application_root_id
+    and application_release.release_revision = p_installation_revision
+    and application_release.release_version = p_application_version
+    and application_root.organization_id = p_organization_id
+    and application_root.kind = 'application'
+    and application_release.compilation_output #>> '{kind}' = 'application'
+    and application_release.compilation_output #>> '{canonical,envelope,rootId}'
+      = p_application_root_id::text
+    and exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(
+        case
+          when pg_catalog.jsonb_typeof(
+            application_release.compilation_output #> '{canonical,content,workflows}'
+          ) = 'array'
+            then application_release.compilation_output #> '{canonical,content,workflows}'
+          else '[]'::jsonb
+        end
+      ) as workflow(value)
+      where pg_catalog.jsonb_typeof(workflow.value) = 'object'
+        and pg_catalog.lower(workflow.value ->> 'workflowId') = workflow_id_value
+    )
+  for key share of application_release, application_root;
+  if not found then
+    raise exception using errcode = '22023',
+      message = 'Workflow flow candidate does not belong to a published release';
   end if;
 
   candidate_fingerprint := 'sha256:' || pg_catalog.encode(
@@ -258,8 +301,13 @@ begin
     and registration.installation_revision = p_installation_revision
     and registration.workflow_revision = p_workflow_revision
     and registration.flow_id = flow_id_value;
+  -- Rows are never deleted, so a conflict always leaves one row to compare.
+  if not found then
+    raise exception using errcode = '55000',
+      message = 'Workflow flow registration is unavailable';
+  end if;
 
-  if stored.candidate_fingerprint is distinct from candidate_fingerprint then
+  if stored.candidate_fingerprint <> candidate_fingerprint then
     return query select 'refused'::text,
       pg_catalog.jsonb_build_object('reasonCode', 'candidate_changed');
     return;
