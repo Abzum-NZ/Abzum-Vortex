@@ -1321,6 +1321,195 @@ export const FORM_CONTAINER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   supportedStateOperations: [],
 });
 
+/** Exact immutable metadata release for the link input block. */
+export const LINK_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
+  blockId: "8d1b6a2f-4c3e-4f0a-9c2b-6f1d2e7a5b94",
+  key: "platform.form.link_input",
+  releaseVersion: "1.0.0",
+  contentFingerprint: "sha256:b499216c1d2ec71075ac05cc66dc1d0a55fb66cafccd39a860625e8a2c45d563",
+  catalogueFingerprint: "sha256:f74884790796039763c528e21b6d77d791e3b6c907ca838db9d137cd8aaed7fc",
+  name: "Link input",
+  icon: "link",
+  paletteGroup: "input",
+  rendererKey: "platform.renderer.link_input",
+  properties: [
+    {
+      kind: "text",
+      key: "name",
+      label: "Field name",
+      help: "Key of this field in form values and events: lowercase words separated by underscores",
+      required: true,
+      minLength: 1,
+      maxLength: 40,
+    },
+    {
+      kind: "text",
+      key: "label",
+      label: "Label",
+      help: "Accessible name and visual field label",
+      required: true,
+      minLength: 1,
+      maxLength: 120,
+    },
+    {
+      kind: "text",
+      key: "placeholder",
+      label: "Placeholder",
+      help: "Placeholder hint text",
+      required: false,
+      minLength: 0,
+      maxLength: 200,
+    },
+    {
+      kind: "text",
+      key: "help_text",
+      label: "Help text",
+      help: "Descriptive help text below the input",
+      required: false,
+      minLength: 0,
+      maxLength: 500,
+    },
+    {
+      kind: "boolean",
+      key: "required",
+      label: "Required",
+      help: "Whether the field is required",
+      required: false,
+    },
+    {
+      kind: "boolean",
+      key: "disabled",
+      label: "Disabled",
+      help: "Whether the field is disabled",
+      required: false,
+    },
+    {
+      kind: "boolean",
+      key: "read_only",
+      label: "Read-only",
+      help: "Whether the field is read-only",
+      required: false,
+    },
+    {
+      kind: "list",
+      key: "record_types",
+      label: "Allowed record types",
+      help: "The record types this link input may reference",
+      required: true,
+      minimumItems: 1,
+      maximumItems: 20,
+      item: {
+        kind: "record_type_reference",
+        key: "record_type",
+        label: "Record type",
+        required: true,
+      },
+    },
+  ],
+  slots: [],
+  capabilities: {
+    responsiveVisibility: true,
+    responsiveOrder: true,
+    gridWidth: true,
+    height: "content",
+    publicSurface: "allowed",
+    accessibleName: "required",
+    accessibleNamePropertyPath: ["label"],
+  },
+  supportedEvents: ["field_changed"],
+  supportedStateOperations: [],
+});
+
+/** Exact immutable metadata release for the structured rich text input block. */
+export const RICH_TEXT_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
+  blockId: "6f2c8d94-1a7b-4e53-8d90-3c5e7b1a4f28",
+  key: "platform.form.rich_text_input",
+  releaseVersion: "1.0.0",
+  contentFingerprint: "sha256:1fee85750dd6df78c38c42bac5197829e0d86dd1e33e6bbc6379ec2350d9e55f",
+  catalogueFingerprint: "sha256:8dcdd848b984711b1cdc638c3a6174f3b388d02dbe692e7cd02d85377df593c4",
+  name: "Rich text input",
+  icon: "file-text",
+  paletteGroup: "input",
+  rendererKey: "platform.renderer.rich_text_input",
+  properties: [
+    {
+      kind: "text",
+      key: "name",
+      label: "Field name",
+      help: "Key of this field in form values and events: lowercase words separated by underscores",
+      required: true,
+      minLength: 1,
+      maxLength: 40,
+    },
+    {
+      kind: "text",
+      key: "label",
+      label: "Label",
+      help: "Accessible name and visual field label",
+      required: true,
+      minLength: 1,
+      maxLength: 120,
+    },
+    {
+      kind: "text",
+      key: "help_text",
+      label: "Help text",
+      help: "Descriptive help text below the input",
+      required: false,
+      minLength: 0,
+      maxLength: 500,
+    },
+    {
+      kind: "boolean",
+      key: "required",
+      label: "Required",
+      help: "Whether the field is required",
+      required: false,
+    },
+    {
+      kind: "boolean",
+      key: "disabled",
+      label: "Disabled",
+      help: "Whether the field is disabled",
+      required: false,
+    },
+    {
+      kind: "boolean",
+      key: "read_only",
+      label: "Read-only",
+      help: "Whether the field is read-only",
+      required: false,
+    },
+    {
+      kind: "rich_text",
+      key: "default_value",
+      label: "Default value",
+      help: "Structured content shown when the field has no value",
+      required: false,
+      allowedElements: [
+        "paragraph",
+        "heading",
+        "bulleted_list",
+        "numbered_list",
+        "emphasis",
+        "link",
+      ],
+    },
+  ],
+  slots: [],
+  capabilities: {
+    responsiveVisibility: true,
+    responsiveOrder: true,
+    gridWidth: true,
+    height: "content_or_bounded",
+    publicSurface: "allowed",
+    accessibleName: "required",
+    accessibleNamePropertyPath: ["label"],
+  },
+  supportedEvents: ["field_changed"],
+  supportedStateOperations: [],
+});
+
 /** All seven immutable display block releases. */
 export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   TEXT_BLOCK_RELEASE,
@@ -1332,9 +1521,11 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   SUMMARY_VALUES_BLOCK_RELEASE,
 ]);
 
-/** All eleven immutable form, layout and action block releases. */
+/** All thirteen immutable form, layout and action block releases. */
 export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   TEXT_INPUT_BLOCK_RELEASE,
+  LINK_INPUT_BLOCK_RELEASE,
+  RICH_TEXT_INPUT_BLOCK_RELEASE,
   NUMBER_INPUT_BLOCK_RELEASE,
   BOOLEAN_INPUT_BLOCK_RELEASE,
   DATE_INPUT_BLOCK_RELEASE,
@@ -1347,7 +1538,7 @@ export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   FORM_CONTAINER_BLOCK_RELEASE,
 ]);
 
-/** All eighteen immutable platform block releases registered for the page builder. */
+/** All twenty immutable platform block releases registered for the page builder. */
 export const PLATFORM_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   ...DISPLAY_BLOCK_RELEASES,
   ...CONTROL_BLOCK_RELEASES,

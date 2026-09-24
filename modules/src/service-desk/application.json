@@ -2224,201 +2224,213 @@
 
                             ],
                  "flows":  [
-                               {
-                                   "id":  "sd_form_flow_0",
-                                   "key":  "sd_form_flow_0",
-                                   "name":  "Continue New case",
-                                   "description":  "Continue the declared form submission using its current Application action.",
-                                   "run_as":  "current_user",
-                                   "inputs":  {
-
-                                              },
-                                   "outputs":  {
-
-                                               },
-                                   "variables":  {
-
-                                                 },
-                                   "nodes":  [
-                                                 {
-                                                     "id":  "start_0",
-                                                     "key":  "start",
-                                                     "kind":  "start",
-                                                     "outputs":  {
-
-                                                                 }
-                                                 },
-                                                 {
-                                                     "id":  "continue_0",
-                                                     "key":  "continue_form",
-                                                     "kind":  "action",
-                                                     "target":  {
-                                                                    "kind":  "form_continuation",
-                                                                    "form":  "form_3",
-                                                                    "continuation_event":  "form_submit_0"
-                                                                },
-                                                     "inputs":  {
-
-                                                                },
-                                                     "outputs":  {
-
-                                                                 },
-                                                     "results":  {
-
-                                                                 }
-                                                 },
-                                                 {
-                                                     "id":  "return_0_0",
-                                                     "key":  "return_0",
-                                                     "kind":  "return",
-                                                     "results":  {
-
-                                                                 },
-                                                     "outcome":  "completed"
-                                                 },
-                                                 {
-                                                     "id":  "return_0_1",
-                                                     "key":  "return_1",
-                                                     "kind":  "return",
-                                                     "results":  {
-
-                                                                 },
-                                                     "outcome":  "validation"
-                                                 },
-                                                 {
-                                                     "id":  "return_0_2",
-                                                     "key":  "return_2",
-                                                     "kind":  "return",
-                                                     "results":  {
-
-                                                                 },
-                                                     "outcome":  "refused"
-                                                 }
-                                             ],
-                                   "edges":  [
-                                                 {
-                                                     "id":  "begin_0",
-                                                     "from_node":  "start_0",
-                                                     "to_node":  "continue_0"
-                                                 },
-                                                 {
-                                                     "id":  "route_0_0",
-                                                     "from_node":  "continue_0",
-                                                     "to_node":  "return_0_0",
-                                                     "outcome":  "completed"
-                                                 },
-                                                 {
-                                                     "id":  "route_0_1",
-                                                     "from_node":  "continue_0",
-                                                     "to_node":  "return_0_1",
-                                                     "outcome":  "validation"
-                                                 },
-                                                 {
-                                                     "id":  "route_0_2",
-                                                     "from_node":  "continue_0",
-                                                     "to_node":  "return_0_2",
-                                                     "outcome":  "refused"
-                                                 }
-                                             ]
-                               },
-                               {
-                                   "id":  "sd_form_flow_1",
-                                   "key":  "sd_form_flow_1",
-                                   "name":  "Continue Edit case",
-                                   "description":  "Continue the declared form submission using its current Application action.",
-                                   "run_as":  "current_user",
-                                   "inputs":  {
-
-                                              },
-                                   "outputs":  {
-
-                                               },
-                                   "variables":  {
-
-                                                 },
-                                   "nodes":  [
-                                                 {
-                                                     "id":  "start_1",
-                                                     "key":  "start",
-                                                     "kind":  "start",
-                                                     "outputs":  {
-
-                                                                 }
-                                                 },
-                                                 {
-                                                     "id":  "continue_1",
-                                                     "key":  "continue_form",
-                                                     "kind":  "action",
-                                                     "target":  {
-                                                                    "kind":  "form_continuation",
-                                                                    "form":  "form_service_desk_case_edit",
-                                                                    "continuation_event":  "form_submit_1"
-                                                                },
-                                                     "inputs":  {
-
-                                                                },
-                                                     "outputs":  {
-
-                                                                 },
-                                                     "results":  {
-
-                                                                 }
-                                                 },
-                                                 {
-                                                     "id":  "return_1_0",
-                                                     "key":  "return_0",
-                                                     "kind":  "return",
-                                                     "results":  {
-
-                                                                 },
-                                                     "outcome":  "completed"
-                                                 },
-                                                 {
-                                                     "id":  "return_1_1",
-                                                     "key":  "return_1",
-                                                     "kind":  "return",
-                                                     "results":  {
-
-                                                                 },
-                                                     "outcome":  "validation"
-                                                 },
-                                                 {
-                                                     "id":  "return_1_2",
-                                                     "key":  "return_2",
-                                                     "kind":  "return",
-                                                     "results":  {
-
-                                                                 },
-                                                     "outcome":  "refused"
-                                                 }
-                                             ],
-                                   "edges":  [
-                                                 {
-                                                     "id":  "begin_1",
-                                                     "from_node":  "start_1",
-                                                     "to_node":  "continue_1"
-                                                 },
-                                                 {
-                                                     "id":  "route_1_0",
-                                                     "from_node":  "continue_1",
-                                                     "to_node":  "return_1_0",
-                                                     "outcome":  "completed"
-                                                 },
-                                                 {
-                                                     "id":  "route_1_1",
-                                                     "from_node":  "continue_1",
-                                                     "to_node":  "return_1_1",
-                                                     "outcome":  "validation"
-                                                 },
-                                                 {
-                                                     "id":  "route_1_2",
-                                                     "from_node":  "continue_1",
-                                                     "to_node":  "return_1_2",
-                                                     "outcome":  "refused"
-                                                 }
-                                             ]
-                               }
-                           ],
+    {
+        "id": "sd_form_flow_0",
+        "key": "sd_form_flow_0",
+        "name": "Continue New case",
+        "description": "Continue the declared form submission using its current Application action.",
+        "run_as": "current_user",
+        "inputs": {},
+        "outputs": {},
+        "variables": {},
+        "nodes": [
+            {
+                "id": "start_0",
+                "key": "start",
+                "kind": "start",
+                "outputs": {}
+            },
+            {
+                "id": "continue_0",
+                "key": "continue_form",
+                "kind": "action",
+                "target": {
+                    "kind": "record_save",
+                    "record_type": "vortex.service_desk.cases:case",
+                    "mode": "create"
+                },
+                "inputs": {},
+                "outputs": {},
+                "results": {}
+            },
+            {
+                "id": "return_0_0",
+                "key": "return_0",
+                "kind": "return",
+                "results": {},
+                "outcome": "committed"
+            },
+            {
+                "id": "return_0_1",
+                "key": "return_1",
+                "kind": "return",
+                "results": {},
+                "outcome": "validation"
+            },
+            {
+                "id": "return_0_2",
+                "key": "return_2",
+                "kind": "return",
+                "results": {},
+                "outcome": "refused"
+            },
+            {
+                "id": "return_0_3",
+                "key": "return_3",
+                "kind": "return",
+                "results": {},
+                "outcome": "conflict"
+            },
+            {
+                "id": "return_0_4",
+                "key": "return_4",
+                "kind": "return",
+                "results": {},
+                "outcome": "uncertain"
+            }
+        ],
+        "edges": [
+            {
+                "id": "begin_0",
+                "from_node": "start_0",
+                "to_node": "continue_0"
+            },
+            {
+                "id": "route_0_0",
+                "from_node": "continue_0",
+                "to_node": "return_0_0",
+                "outcome": "committed"
+            },
+            {
+                "id": "route_0_1",
+                "from_node": "continue_0",
+                "to_node": "return_0_1",
+                "outcome": "validation"
+            },
+            {
+                "id": "route_0_2",
+                "from_node": "continue_0",
+                "to_node": "return_0_2",
+                "outcome": "refused"
+            },
+            {
+                "id": "route_0_3",
+                "from_node": "continue_0",
+                "to_node": "return_0_3",
+                "outcome": "conflict"
+            },
+            {
+                "id": "route_0_4",
+                "from_node": "continue_0",
+                "to_node": "return_0_4",
+                "outcome": "uncertain"
+            }
+        ]
+    },
+    {
+        "id": "sd_form_flow_1",
+        "key": "sd_form_flow_1",
+        "name": "Continue Edit case",
+        "description": "Continue the declared form submission using its current Application action.",
+        "run_as": "current_user",
+        "inputs": {},
+        "outputs": {},
+        "variables": {},
+        "nodes": [
+            {
+                "id": "start_1",
+                "key": "start",
+                "kind": "start",
+                "outputs": {}
+            },
+            {
+                "id": "continue_1",
+                "key": "continue_form",
+                "kind": "action",
+                "target": {
+                    "kind": "record_save",
+                    "record_type": "vortex.service_desk.cases:case",
+                    "mode": "update"
+                },
+                "inputs": {},
+                "outputs": {},
+                "results": {}
+            },
+            {
+                "id": "return_1_0",
+                "key": "return_0",
+                "kind": "return",
+                "results": {},
+                "outcome": "committed"
+            },
+            {
+                "id": "return_1_1",
+                "key": "return_1",
+                "kind": "return",
+                "results": {},
+                "outcome": "validation"
+            },
+            {
+                "id": "return_1_2",
+                "key": "return_2",
+                "kind": "return",
+                "results": {},
+                "outcome": "refused"
+            },
+            {
+                "id": "return_1_3",
+                "key": "return_3",
+                "kind": "return",
+                "results": {},
+                "outcome": "conflict"
+            },
+            {
+                "id": "return_1_4",
+                "key": "return_4",
+                "kind": "return",
+                "results": {},
+                "outcome": "uncertain"
+            }
+        ],
+        "edges": [
+            {
+                "id": "begin_1",
+                "from_node": "start_1",
+                "to_node": "continue_1"
+            },
+            {
+                "id": "route_1_0",
+                "from_node": "continue_1",
+                "to_node": "return_1_0",
+                "outcome": "committed"
+            },
+            {
+                "id": "route_1_1",
+                "from_node": "continue_1",
+                "to_node": "return_1_1",
+                "outcome": "validation"
+            },
+            {
+                "id": "route_1_2",
+                "from_node": "continue_1",
+                "to_node": "return_1_2",
+                "outcome": "refused"
+            },
+            {
+                "id": "route_1_3",
+                "from_node": "continue_1",
+                "to_node": "return_1_3",
+                "outcome": "conflict"
+            },
+            {
+                "id": "route_1_4",
+                "from_node": "continue_1",
+                "to_node": "return_1_4",
+                "outcome": "uncertain"
+            }
+        ]
+    }
+],
                  "flow_bindings":  [
                                        {
                                            "id":  "form_binding_0",
@@ -2436,7 +2448,8 @@
 
                                                        },
                                            "declared_effects":  [
-                                                                    "form_interaction"
+                                                                    "form_interaction",
+                                                                    "change"
                                                                 ]
                                        },
                                        {
@@ -2455,7 +2468,8 @@
 
                                                        },
                                            "declared_effects":  [
-                                                                    "form_interaction"
+                                                                    "form_interaction",
+                                                                    "change"
                                                                 ]
                                        }
                                    ]

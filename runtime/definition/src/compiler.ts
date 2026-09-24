@@ -4919,6 +4919,57 @@ function compileApplicationFlows(
             contentFingerprint: targetContentFingerprint("application_workflow", workflow),
             resolutionFingerprint,
           };
+        } else if (target.kind === "record_save") {
+          const qualified = String(target.record_type);
+          const split = qualified.lastIndexOf(":");
+          if (split < 1) fail("vortex.definition.missing_identity", "unresolved_reference");
+          const moduleKey = qualified.slice(0, split);
+          const record = resolution.recordType(qualified);
+          const moduleOutput = dependencyOutputs.find(
+            (candidate) =>
+              candidate.kind === "module" &&
+              String(candidate.artifact.rootId) === String(record.moduleRootId),
+          );
+          compiledTarget = {
+            kind: "record_save",
+            applicationRootId: appRoot.rootId,
+            moduleRootId: record.moduleRootId,
+            recordTypeId: record.recordTypeId,
+            mode: target.mode,
+            releaseVersion: resolution.definition(moduleKey, "module").exactVersion,
+            contentFingerprint: targetContentFingerprint("record_save", {
+              recordTypeId: record.recordTypeId,
+              mode: target.mode,
+            }),
+            resolutionFingerprint: moduleOutput?.resolutionFingerprint ?? resolutionFingerprint,
+          };
+        } else if (target.kind === "named_action") {
+          // A named action is authored by its bound Module action's published key and resolves to
+          // that Module's protected operation, so it carries exactly the same permanent identity,
+          // release evidence and manifest entry as an authored protected operation.
+          const moduleAction = valueIndex.action(String(target.action));
+          if (moduleAction === undefined)
+            fail("vortex.definition.missing_identity", "unresolved_reference");
+          const actionId = String(moduleAction.action.actionId);
+          const owners = dependencyOutputs.filter(
+            (candidate) =>
+              candidate.kind === "module" &&
+              ((asObject(candidate.canonical.content).actions as JsonObject[] | undefined) ?? []).some(
+                (candidateAction) => String(candidateAction.actionId) === actionId,
+              ),
+          );
+          if (owners.length !== 1)
+            fail("vortex.definition.missing_identity", "unresolved_reference");
+          compiledTarget = {
+            kind: "protected_operation",
+            ...compileProtectedOperation(
+              {
+                owner: { kind: "module", moduleRootId: String(owners[0]!.artifact.rootId) },
+                operationId: actionId,
+              },
+              undefined,
+            ),
+          };
         } else {
           const action = sourceByKey(body.actions as JsonObject[], String(target.action));
           if (action === undefined)
