@@ -1144,7 +1144,9 @@ const compareExtensionPoint = (
 /**
  * One contribution declares that a Module-owned field or action joins a dependency's extension
  * point. Adding a contribution is additive, while retargeting an installed one changes what a
- * consumer receives, so every changed declared part is a major change.
+ * consumer receives, so every changed declared part is a major change. The target is compared by
+ * its module identity only: a changed version requirement on the same dependency entry is already
+ * classified once as a dependency change.
  */
 const compareContribution = (
   reasons: VersionImpactReason[],
@@ -1152,14 +1154,17 @@ const compareContribution = (
   candidate: RecordValue,
 ): void => {
   const id = candidate.contributionId;
-  for (const key of [
-    "targetModule",
-    "targetExtensionPointId",
-    "kind",
-    "recordTypeId",
-    "fieldId",
-    "actionId",
-  ])
+  pushChange(
+    reasons,
+    asRecord(previous.targetModule).moduleRootId,
+    asRecord(candidate.targetModule).moduleRootId,
+    "major",
+    "public_contract_changed",
+    "extension_point",
+    "behavior",
+    id,
+  );
+  for (const key of ["targetExtensionPointId", "kind", "recordTypeId", "fieldId", "actionId"])
     pushChange(
       reasons,
       previous[key],

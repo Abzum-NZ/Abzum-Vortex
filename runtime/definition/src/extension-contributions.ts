@@ -4,7 +4,11 @@ import type {
   ModuleContentV3,
   ModuleContributionV3,
 } from "@vortex/contracts";
-import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
+import {
+  canonicalJson,
+  compareCanonicalStrings,
+  fingerprintCanonicalValue,
+} from "./canonical-json";
 
 /**
  * One exact installed module release, as the definition tier already reads it. The release is
@@ -54,12 +58,13 @@ export const moduleContributionConflictCodes = [
 export type ModuleContributionConflictCode = (typeof moduleContributionConflictCodes)[number];
 
 /**
- * A deterministic refusal for one contribution. `namespace_collision` means two claims landed on
- * the same identity; `target_removed` means the target module release or its extension point is no
- * longer installed; `target_retyped` means the extension point's target changed identity;
- * `contributed_component_removed`/`contributed_component_retyped` mean the contributor no longer
- * owns the declared component as declared; `unaccepted_contribution_kind` means the extension
- * point does not accept the contribution kind.
+ * A deterministic refusal for one contribution. `namespace_collision` means the contributed
+ * identity is claimed more than once across the installed set or already belongs to the target;
+ * `target_removed` means the target is no longer an installed declared dependency or no longer
+ * declares the extension point; `target_retyped` means the installed target module's key changed
+ * or the extension point's record no longer exists; `contributed_component_removed` and
+ * `contributed_component_retyped` mean the contributor no longer owns the declared component as
+ * declared; `unaccepted_contribution_kind` means the extension point does not accept the kind.
  */
 export type ModuleContributionConflict = Readonly<{
   code: ModuleContributionConflictCode;
@@ -85,7 +90,7 @@ type AnyModuleContent = ModuleContent | ModuleContentV2 | ModuleContentV3;
 
 /** Only the exact fields the resolver reads; the contract schema already guarantees their shapes. */
 type ModuleContentView = Readonly<{
-  dependencies: readonly Readonly<{ moduleRootId: string }>[];
+  dependencies: readonly unknown[];
   recordTypes: readonly Readonly<{
     recordTypeId: string;
     fields: readonly Readonly<{ fieldId: string }>[];
@@ -167,8 +172,9 @@ const conflicted = (
 /**
  * Compiles contributor identities and target extension-point declarations from exact installed
  * module releases into one deterministic binding/conflict set. A contribution binds only when its
- * target release is installed, its extension point still targets the same record, the point accepts
- * the kind, the contributor still owns the component and no two claims collide.
+ * target is the contributor's exact declared dependency and is installed, its extension point still
+ * targets an existing record, the point accepts the kind, the contributor still owns the component
+ * and its identity is claimed once and is not already the target's own component.
  */
 export const resolveModuleContributions = (
   releases: readonly InstalledModuleContributionRelease[],
@@ -189,19 +195,12 @@ export const resolveModuleContributions = (
     compareCanonicalStrings(contributionOrder(left), contributionOrder(right)),
   );
 
-  // Two claims on the same contributed identity for the same target point, or the same identity
-  // declared twice by one contributor, is a namespace collision on that identity.
-  const claimCounts = new Map<string, number>();
+  // A contribution identity is the contributed component's own permanent identity, so it can be
+  // attached once across the whole installed set; every repeated claim is a namespace collision.
   const identityCounts = new Map<string, number>();
   for (const source of sources) {
-    const claimKey = `${source.contribution.targetModule.moduleRootId}:${String(
-      source.contribution.targetExtensionPointId,
-    )}:${String(source.contribution.contributionId)}`;
-    claimCounts.set(claimKey, (claimCounts.get(claimKey) ?? 0) + 1);
-    const identityKey = `${source.release.moduleRootId}:${String(
-      source.contribution.contributionId,
-    )}`;
-    identityCounts.set(identityKey, (identityCounts.get(identityKey) ?? 0) + 1);
+    const identity = String(source.contribution.contributionId);
+    identityCounts.set(identity, (identityCounts.get(identity) ?? 0) + 1);
   }
 
   const bindings: ResolvedAdditiveContribution[] = [];
@@ -214,19 +213,19 @@ export const resolveModuleContributions = (
     const targetModuleRootId = contribution.targetModule.moduleRootId;
     const targetExtensionPointId = String(contribution.targetExtensionPointId);
 
-    const claimKey = `${targetModuleRootId}:${targetExtensionPointId}:${contributionId}`;
-    const identityKey = `${release.moduleRootId}:${contributionId}`;
-    if ((claimCounts.get(claimKey) ?? 0) > 1 || (identityCounts.get(identityKey) ?? 0) > 1) {
+    if ((identityCounts.get(contributionId) ?? 0) > 1) {
       conflicts.push(conflicted(source, "namespace_collision"));
       continue;
     }
 
+    // The target is the contributor's exact declared dependency entry, never the contributor
+    // itself, and that module must still be installed.
+    const targetEntry = canonicalJson(contribution.targetModule);
     const targetRelease = releaseByRootId.get(targetModuleRootId);
     if (
       targetRelease === undefined ||
-      !contributor.dependencies.some(
-        (dependency) => String(dependency.moduleRootId) === targetModuleRootId,
-      )
+      targetModuleRootId === release.moduleRootId ||
+      !contributor.dependencies.some((dependency) => canonicalJson(dependency) === targetEntry)
     ) {
       conflicts.push(conflicted(source, "target_removed"));
       continue;
@@ -326,7 +325,8 @@ export const resolveModuleContributions = (
   conflicts.sort((left, right) =>
     compareCanonicalStrings(conflictOrder(left), conflictOrder(right)),
   );
-  const outcome = conflicts.length === 0 ? "resolved" : "conflicted";
+  const outcome: ModuleContributionResolution["outcome"] =
+    conflicts.length === 0 ? "resolved" : "conflicted";
   const resultWithoutFingerprint = { outcome, bindings, conflicts };
   return {
     ...resultWithoutFingerprint,
