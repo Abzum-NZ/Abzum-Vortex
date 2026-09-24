@@ -9,8 +9,9 @@
 -- composition, derived entirely from the validated human request context:
 --
 -- 1. vortex_module.read_application_installation_bindings: the installer's
---    view of one Application's current binding revisions, so the App
---    coordinator can build exact revision-checked lifecycle commands.
+--    view of one Application's current binding revisions and the release its
+--    active permission registration names, so the App coordinator can build
+--    exact revision-checked lifecycle commands and keep Access aligned.
 -- 2. vortex_access.change_application_installation_access: registers, updates,
 --    reactivates or withdraws the Application permission registration through
 --    the existing coordinator, then appends content-free Activity.
@@ -38,6 +39,7 @@ as $function$
 declare
   authority record;
   binding_evidence jsonb;
+  registered_release_revision bigint;
 begin
   if p_application_root_id is null
     or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid then
@@ -73,9 +75,18 @@ begin
   where binding.organization_id = authority.organization_id
     and binding.application_root_id = p_application_root_id;
 
+  -- The exact release the active permission registration was prepared from,
+  -- or null when it is absent or withdrawn. The fixed activation requires it
+  -- to name the release being activated.
+  select snapshot.release_revision into registered_release_revision
+  from vortex_access.read_application_permission_snapshot(
+    authority.organization_id, p_application_root_id
+  ) as snapshot;
+
   return pg_catalog.jsonb_build_object(
     'organizationId', authority.organization_id,
     'applicationRootId', p_application_root_id,
+    'registeredReleaseRevision', registered_release_revision,
     'moduleBindings', binding_evidence
   );
 exception
@@ -94,7 +105,7 @@ revoke all on function vortex_module.read_application_installation_bindings(uuid
 grant execute on function vortex_module.read_application_installation_bindings(uuid)
   to vortex_request;
 comment on function vortex_module.read_application_installation_bindings(uuid) is
-  'Installer-only read of one Application''s current Module binding revisions under application-management authority.';
+  'Installer-only read of one Application''s current Module binding revisions and registered release under application-management authority.';
 
 reset role;
 
