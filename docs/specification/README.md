@@ -17,6 +17,15 @@ This document is the approved product contract for the current build scope. The 
 
 ## Architecture review additions
 
+- [Architecture decisions of 25 September 2026](../build-plan/architecture-decisions-2026-09-25.md) (authoritative where earlier text conflicts, until the named sections are rewritten):
+  - one stored flow definition shaped like a Kestra flow, run first by the in-house Vortex flow engine, with durable work handed to Kestra;
+  - saving as a flow around one atomic apply-record-changes operation;
+  - save rules enforced inside the save transaction;
+  - read-time computed fields for time-dependent values;
+  - one configurable Records table component;
+  - [application packages](appendices/application-packages.md) with sandboxed custom components and isolated Kestra custom scripts, clean install and uninstall, and an immutable runtime-bundle cache;
+  - agent building through the same permission-checked operations.
+
 - [12 September findings and resolutions](../build-plan/spec-task-review-2026-09-12.md): specification/task reconciliation; implementation stays with the named delivery owners.
 
 - [Frontend Rule Designer](appendices/frontend-rule-designer.md): every configurable application action is flow-linked; App Builder supplies editable one-node defaults and custom flows. Includes triggers, shared conditions, typed variables, Page Designer forms, optional collect-first atomic submission, MCP app authoring, packaged registration and Kestra handoff. [Delivery ownership and dependencies](../build-plan/frontend-rule-designer.md).
@@ -96,6 +105,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 - [Data contracts](appendices/data-contracts.md)
 - [Module and application version-impact policy](appendices/version-impact-policy.md)
 - [Core contract boundary](appendices/core-contract-boundary.md)
+- [Application packages, custom components and the installation lifecycle](appendices/application-packages.md)
 - [Worked examples](appendices/worked-examples.md)
 - [Coverage and traceability map](appendices/traceability.md)
 - [GitHub delivery coverage](appendices/github-delivery-map.md)
@@ -114,6 +124,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 | Version | Status   | Date             | Summary                                                                                                                                                                                                                    |
 | ------- | -------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2.25    | Approved | 25 September 2026 | Architecture decisions: one Kestra-shaped flow definition run first by the Vortex flow engine; saving as a flow around one atomic operation; save rules inside the transaction; read-time computed fields; one Records table component; application packages with sandboxed custom components and isolated custom scripts; clean install and uninstall; runtime-bundle cache; agent building through the same operations. |
 | 2.24    | Approved | 12 September 2026 | Review correction: localise business-decision holds, distinguish engineering findings from product choices, and require impact-based documentation updates rather than duplicated change records. |
 | 2.23    | Approved | 11 September 2026 | Bound the request context to an owner-only row keyed to the establishing transaction (#386): session settings no longer carry identity, re-establishment is refused after a role reset, the two-role split is grant hygiene not an injection boundary, and the application-server trust ceiling is stated. |
 | 2.22    | Approved | 10 September 2026 | Defined links to applications, pages, records and external addresses with server-resolved availability and open behaviour; the organisation default application and permitted-applications read; and the Landing Zone as an ordinary application with organisation-account-owned tiles and a shell-slot rail. |
