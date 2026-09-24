@@ -17,6 +17,15 @@ export {
   type AppTelemetryCollectorDependencies,
 } from "./telemetry";
 export {
+  isReservedTenantSegment,
+  permittedApplicationSchema,
+  permittedApplicationsReadSchema,
+  readPermittedApplicationsAtAddress,
+  resolvePermittedApplicationAddress,
+  type PermittedApplication,
+  type PermittedApplicationsRead,
+} from "./application-address";
+export {
   flowResultDeclarationSchema,
   flowResultHandoffContractVersion,
   flowResultHandoffRefusalReasonSchema,
