@@ -11,7 +11,9 @@
 -- 2. Ownership transfer and its offboarding bridge bumped the record revision
 --    without updating its due row, manufacturing exactly that stale mismatch.
 --
--- The claim now selects only active bindings, reselects a due row whose stored
+-- The batch claim now selects only rows whose System context can be
+-- established (an active binding with its current, unrevoked actor, in an
+-- active organisation and tenant), reselects a due row whose stored
 -- revision is behind the locked record (so the worker recomputes and moves on),
 -- and retires a due row whose storage or record can no longer serve it. Both
 -- transfer paths keep their record's due row at the revision they actually
@@ -41,8 +43,13 @@ reset role;
 -- `20260923180000_protected_record_delete_and_recovery.sql` does.
 do $migration$
 declare
-  -- The batch claim must consider only an active binding; an inactive binding's
-  -- due rows are no longer offered.
+  -- The batch claim considers only a row whose System context can actually be
+  -- established: an active binding with its current, unrevoked actor, in an
+  -- active organisation and tenant with runtime settings, exactly as
+  -- `resolve_configured_deadline_actor_internal` and
+  -- `establish_deadline_system_context_internal` require. Any other row would
+  -- be refused on every call and starve every later due row of every tenant;
+  -- it stays in place and is offered again once its configuration recovers.
   claim_due_row_active_binding_old constant text := $patch$    join vortex_record.deadline_actor_bindings as binding
       on binding.organization_id = metadata.organization_id
       and binding.application_root_id is not distinct from metadata.application_root_id
@@ -55,6 +62,31 @@ declare
       and binding.operation = 'refresh_record_deadline'
       and binding.state = 'active'
       and binding.execution_session_role_oid = pg_catalog.to_regrole(session_user)::oid
+      and exists (
+        select 1
+        from vortex_record.deadline_actors as actor
+        where actor.actor_id = binding.current_actor_id
+          and actor.binding_id = binding.binding_id
+          and actor.organization_id = binding.organization_id
+          and actor.application_root_id is not distinct from binding.application_root_id
+          and actor.operation = 'refresh_record_deadline'
+          and actor.generation = binding.generation
+          and actor.revoked_at is null
+      )
+      and exists (
+        select 1
+        from vortex_identity.organizations as org
+        join vortex_identity.tenants as tenant on tenant.tenant_id = org.tenant_id
+        join vortex_access.organization_access_versions as version
+          on version.organization_id = org.organization_id
+        join vortex_identity.organization_runtime_settings as settings
+          on settings.organization_id = org.organization_id
+        where org.organization_id = metadata.organization_id
+          and org.state = 'active'
+          and tenant.state = 'active'
+          and version.current_version is not null
+          and settings.time_zone is not null
+      )
     where metadata.transition_at <= pg_catalog.coalesce($patch$;
 
   -- A due row whose storage contract can no longer serve it is retired rather
@@ -255,7 +287,7 @@ reset role;
 
 set local role vortex_record_adapter;
 comment on function vortex_record.claim_record_deadline_refresh(uuid, uuid, uuid, timestamptz) is
-  'Private atomic due-row claim returning locked root, attribution, effect identity and calculation inputs; patches in #857 select only active bindings, reselect a stale revision in place and retire a due row whose storage or record can no longer serve it.';
+  'Private atomic due-row claim returning locked root, attribution, effect identity and calculation inputs; patches in #857 offer only rows whose configured actor and organisation can establish context, reselect a stale revision in place and retire a due row whose storage or record can no longer serve it.';
 reset role;
 
 commit;
