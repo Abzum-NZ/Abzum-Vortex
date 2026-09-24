@@ -7,6 +7,7 @@ import {
   connectionTypeSourceDocumentSchema,
   platformBlockReferenceV2Schema,
   platformBlockReleaseV2Schema,
+  platformThemeTokenRolesV2,
   PLATFORM_SERVICE_OPERATION_RELEASES,
   PLATFORM_SERVICE_OPERATIONS,
   platformIdSchema,
@@ -22,6 +23,7 @@ import {
   type PlatformId,
   type PlatformBlockReleaseV2,
   type PlatformThemeReleaseV2,
+  type PlatformThemeTokenRoleV2,
   type PlatformManagedFlowDependency,
   type PlatformServiceOperationRelease,
   type SemanticVersion,
@@ -198,6 +200,31 @@ const ensureUniqueApplicationCompositionReleases = (
 };
 
 /**
+ * A platform theme release is complete only when it maps every role in the shared
+ * token-role vocabulary with the kind that vocabulary requires, and marks each colour pair
+ * with exactly the declared colour role (none where the vocabulary declares none). An
+ * incomplete or mismarked release refuses here instead of publishing a theme that would
+ * leave the renderer or the readability checks on another convention.
+ */
+const ensurePlatformThemeReleasesCoverEveryRole = (
+  definition: ApplicationCompositionCatalogueDefinitionV2 | undefined,
+): void => {
+  if (definition === undefined) return;
+  const roles: readonly PlatformThemeTokenRoleV2[] = platformThemeTokenRolesV2;
+  for (const release of definition.platformThemeReleases) {
+    for (const role of roles) {
+      const token = release.tokens[role.key];
+      if (
+        token === undefined ||
+        token.kind !== role.kind ||
+        (token.kind === "color_pair" && token.role !== role.colorRole)
+      )
+        duplicate();
+    }
+  }
+};
+
+/**
  * The registered platform-service operations are published exactly as registered: each release's
  * content fingerprint must be the canonical-JSON SHA-256 of its descriptor and its catalogue
  * fingerprint that of its identity and content, so a descriptor edited without a new release
@@ -333,6 +360,7 @@ export const createImmutableDefinitionPublicationCatalogue = (
   const definition = parsed.success ? parsed.data : duplicate();
   ensureUniqueConnectionTypeReleases(definition.connectionTypeReleases);
   ensureUniqueApplicationCompositionReleases(definition.applicationCompositionV2);
+  ensurePlatformThemeReleasesCoverEveryRole(definition.applicationCompositionV2);
   const managedFlowReleases = definition.platformManagedFlowReleases ?? [];
   const managedFlowIdentities = new Set(
     managedFlowReleases.map((release) => `${release.flowId}:${release.releaseVersion}`),
