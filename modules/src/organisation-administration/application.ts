@@ -415,7 +415,6 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
       connection_bindings: [],
       interfaces: [],
       actions: [],
-      rules: [],
       events: [
         {
           id: settingsEventId,

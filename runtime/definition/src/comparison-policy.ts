@@ -1353,15 +1353,6 @@ const compareApplicationSharedContent = (
   );
   compareKeyed(
     reasons,
-    previous.rules as RecordValue[],
-    candidate.rules as RecordValue[],
-    "ruleId",
-    "rule",
-    (left, right) => compareSimpleComponent(reasons, "rule", right.ruleId, left, right),
-    () => "major",
-  );
-  compareKeyed(
-    reasons,
     previous.events as RecordValue[],
     candidate.events as RecordValue[],
     "eventId",
@@ -2055,7 +2046,6 @@ const normaliseApplicationSharedContent = (content: ApplicationContentV2): Recor
     permissions: sorted(value.permissions as unknown[], "permissionId"),
     pipelines: sorted(value.pipelines as unknown[], "pipelineId"),
     actions: sorted((value.actions as RecordValue[]).map(normaliseAction), "actionId"),
-    rules: sorted(value.rules as unknown[], "ruleId"),
     events: sorted(
       (value.events as RecordValue[]).map((event) => ({
         ...event,
@@ -2217,7 +2207,6 @@ const assertUnambiguousApplicationSharedContent = (content: unknown): void => {
     ["permissions", "permissionId"],
     ["pipelines", "pipelineId"],
     ["actions", "actionId"],
-    ["rules", "ruleId"],
     ["events", "eventId"],
     ["workflows", "workflowId"],
     ["connectionBindings", "bindingId"],
@@ -2846,7 +2835,6 @@ export const normaliseApplicationContentV2 = (
     pipelines: common.pipelines,
     permissions: common.permissions,
     actions: common.actions,
-    rules: common.rules,
     events: common.events,
     workflows: common.workflows,
     connectionBindings: common.connectionBindings,
