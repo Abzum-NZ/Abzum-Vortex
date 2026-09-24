@@ -52,10 +52,7 @@ set local role postgres;
 -- immutable history and publish one additive successor. These fingerprints are
 -- SHA-256 of the documented connection permission meaning and of the prior
 -- catalogue fingerprint plus the new permission identity and meaning.
-alter function vortex_access.platform_permission_catalogue_revision_is_exact(uuid, bigint)
-  rename to platform_permission_catalogue_revision_is_exact_v1_1_0;
-
-create function vortex_access.platform_permission_catalogue_revision_is_exact(
+create function vortex_access.platform_permission_catalogue_revision_is_exact_v1_2_0(
   p_organization_id uuid,
   p_registration_revision bigint
 )
@@ -76,9 +73,7 @@ declare
     'Register, grant, check, revoke and reauthorise connection instances in the selected organisation without application-installation or access-assignment authority.';
 begin
   if p_registration_revision is distinct from 4 then
-    return vortex_access.platform_permission_catalogue_revision_is_exact_v1_1_0(
-      p_organization_id, p_registration_revision
-    );
+    return false;
   end if;
 
   return
@@ -172,6 +167,8 @@ begin
            and entry.label = 'Manage connections'
            and entry.description = description_value
            and entry.record_type_id is null
+           and entry.record_scope is null
+           and entry.field_policy is null
            and entry.action_kind = 'manage'
            and entry.named_action is null
            and entry.administrative
@@ -215,6 +212,36 @@ begin
     );
 end
 $function$;
+
+-- Keep the current checker OID and its callers. The older revisions retain
+-- their live bodies; revision 4 delegates to the additive exact checker.
+do $patch_catalogue_checker$
+declare
+  definition text := pg_catalog.replace(
+    pg_catalog.pg_get_functiondef(
+      'vortex_access.platform_permission_catalogue_revision_is_exact(uuid,bigint)'::pg_catalog.regprocedure
+    ), E'\r\n', E'\n'
+  );
+  old_text constant text := $old$begin
+  if p_registration_revision in (1, 2) then$old$;
+  new_text constant text := $new$begin
+  if p_registration_revision = 4 then
+    return vortex_access.platform_permission_catalogue_revision_is_exact_v1_2_0(
+      p_organization_id, p_registration_revision
+    );
+  end if;
+  if p_registration_revision in (1, 2) then$new$;
+begin
+  if definition is null
+    or (pg_catalog.length(definition)
+      - pg_catalog.length(pg_catalog.replace(definition, old_text, '')))
+      / pg_catalog.length(old_text) <> 1 then
+    raise exception using errcode = '55000',
+      message = 'Platform catalogue checker patch does not match exactly once';
+  end if;
+  execute pg_catalog.replace(definition, old_text, new_text);
+end
+$patch_catalogue_checker$;
 
 -- Publish revision 4 without changing the meaning or continuity of the
 -- original 14 permissions. Existing privileged custom administrator roles
@@ -298,7 +325,7 @@ begin
   end if;
 
   if current_registration.revision <> 3
-    or not vortex_access.platform_permission_catalogue_revision_is_exact_v1_1_0(
+    or not vortex_access.platform_permission_catalogue_revision_is_exact(
       p_organization_id, 3
     ) then
     raise exception using errcode = '55000',
@@ -611,10 +638,7 @@ $function$;
 -- Provisioning calls this entry point for every new organisation. Advance
 -- through the actual immutable catalogue history before publishing revision 4,
 -- so future stewards adopt the dedicated permission with the platform set.
-alter function vortex_access.initialize_platform_permission_catalogue(uuid, uuid, uuid)
-  rename to initialize_platform_permission_catalogue_v1_1_0;
-
-create function vortex_access.initialize_platform_permission_catalogue(
+create function vortex_access.initialize_platform_permission_catalogue_v1_2_0(
   p_organization_id uuid,
   p_changed_by uuid,
   p_correlation_id uuid
@@ -650,18 +674,8 @@ begin
       'cabe121e-0baf-4084-9471-cce915d460a8'::uuid;
 
   if not found then
-    perform 1
-    from vortex_access.initialize_platform_permission_catalogue_v1_1_0(
-      p_organization_id, p_changed_by, p_correlation_id
-    );
-    -- Provisioning adopts the original steward after initial publication;
-    -- that adoption consumes revision 1. The steward operation below advances
-    -- to revision 4 after the role exists.
-    return query
-    select p_organization_id, 1::bigint, version.current_version
-    from vortex_access.organization_access_versions as version
-    where version.organization_id = p_organization_id;
-    return;
+    raise exception using errcode = '55000',
+      message = 'Platform permission registration evidence is invalid';
   end if;
 
   if current_revision = 1 then
@@ -705,10 +719,54 @@ begin
 end
 $function$;
 
+-- Keep the provisioning function's identity and existing caller dependencies.
+-- Its original first-publication path still creates revision 1 before the
+-- steward exists. Once a registration exists, advance it to revision 4.
+do $patch_platform_initializer$
+declare
+  definition text := pg_catalog.replace(
+    pg_catalog.pg_get_functiondef(
+      'vortex_access.initialize_platform_permission_catalogue(uuid,uuid,uuid)'::pg_catalog.regprocedure
+    ), E'\r\n', E'\n'
+  );
+  old_text constant text := $old$begin
+  if p_organization_id is null$old$;
+  new_text constant text := $new$begin
+  if exists (
+    select 1
+    from vortex_access.permission_registrations as registration
+    where registration.organization_id = p_organization_id
+      and registration.registration_kind = 'platform'
+      and registration.registration_owner_id =
+        'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
+  ) then
+    return query
+    select initialized.organization_id,
+      initialized.registration_revision, initialized.access_version
+    from vortex_access.initialize_platform_permission_catalogue_v1_2_0(
+      p_organization_id, p_changed_by, p_correlation_id
+    ) as initialized;
+    return;
+  end if;
+  if p_organization_id is null$new$;
+begin
+  if definition is null
+    or (pg_catalog.length(definition)
+      - pg_catalog.length(pg_catalog.replace(definition, old_text, '')))
+      / pg_catalog.length(old_text) <> 1 then
+    raise exception using errcode = '55000',
+      message = 'Platform catalogue initializer patch does not match exactly once';
+  end if;
+  execute pg_catalog.replace(definition, old_text, new_text);
+end
+$patch_platform_initializer$;
+
 revoke all on function
   vortex_access.platform_permission_catalogue_revision_is_exact(uuid, bigint),
+  vortex_access.platform_permission_catalogue_revision_is_exact_v1_2_0(uuid, bigint),
   vortex_access.adopt_connection_administration_permission_catalogue(uuid, uuid, uuid),
-  vortex_access.initialize_platform_permission_catalogue(uuid, uuid, uuid)
+  vortex_access.initialize_platform_permission_catalogue(uuid, uuid, uuid),
+  vortex_access.initialize_platform_permission_catalogue_v1_2_0(uuid, uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 -- A migration is the publisher of this additive platform catalogue revision.
