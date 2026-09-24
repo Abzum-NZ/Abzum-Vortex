@@ -15,7 +15,7 @@ import {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
-import type { InstalledRuntimeContext } from "@vortex/app";
+import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "@vortex/app";
 import {
   createAuthenticatedPageCapabilityService,
   type FixedAuthenticatedPageCapability,
@@ -75,24 +75,25 @@ const v2Placements = (slot: unknown): Record<string, unknown>[] => {
 export const createStoredPageCapabilityService = (
   dependencies: StoredPageCapabilityDependencies,
 ) => {
-  const context = dependencies.context;
+  // Only a context App assembled is accepted; a missing or look-alike object fails closed here.
+  const context = requireInstalledRuntimeContext(dependencies.context);
   const applicationRootId = applicationRootIdSchema.parse(context.applicationRootId);
   const releaseRevision = revisionSchema
     .max(Number.MAX_SAFE_INTEGER)
     .parse(context.applicationReleaseRevision);
   const selectedPageId = pageIdSchema.parse(dependencies.selection.pageId);
 
-  // The loader has already verified this, but Page depends only on evidence it can see, so a
-  // context whose exact release, registration and scope disagree is refused rather than projected.
+  // The loader has already verified this; Page still refuses, rather than projects, a context
+  // whose exact release, registration and scope disagree.
   const applicationRelease = context.releaseSet.application;
   const registration = context.permissionRegistration;
   if (
     applicationRelease.organizationId !== context.organizationId ||
     applicationRelease.rootId !== context.applicationRootId ||
-    applicationRelease.releaseRevision !== context.applicationReleaseRevision ||
+    applicationRelease.releaseRevision !== releaseRevision ||
     registration.organizationId !== context.organizationId ||
     registration.applicationRootId !== context.applicationRootId ||
-    registration.applicationRelease.releaseRevision !== context.applicationReleaseRevision
+    registration.applicationRelease.releaseRevision !== releaseRevision
   )
     throw new Error("STORED_PAGE_TRUSTED_CONTEXT_UNAVAILABLE");
 

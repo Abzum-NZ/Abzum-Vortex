@@ -3,6 +3,7 @@ import "server-only";
 import {
   activeApplicationInstallationEvidenceSchema,
   sessionContextSchema,
+  systemApplicationBoundReleaseSetResultSchema,
   type ActiveApplicationInstallationEvidence,
   type ApplicationRootId,
   type OrganizationId,
@@ -16,7 +17,6 @@ import {
 } from "@vortex/access";
 
 export const installedRuntimeContextErrorCodes = [
-  "INVALID_INSTALLED_RUNTIME_CONTEXT_COMMAND",
   "INSTALLED_RUNTIME_CONTEXT_REFUSED",
   "INSTALLED_RUNTIME_CONTEXT_UNAVAILABLE",
   "INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED",
@@ -40,9 +40,10 @@ export class InstalledRuntimeContextError extends Error {
  * Application/Module release set that every installed-application consumer (Page projection,
  * Query and current-person operation adapters) shares.
  *
- * It is assembled only by this loader from a server-minted live system context and the exact
- * protected Definition read. No field is ever taken from client JSON, so a browser cannot supply
- * its own organisation, account, permission, release or binding evidence.
+ * It is assembled only by this loader from the protected active-installation read, a server-minted
+ * live system context and the exact protected Definition read. No field is ever taken from client
+ * JSON, so a browser cannot supply its own organisation, account, permission, release or binding
+ * evidence. Consumers accept it only through {@link requireInstalledRuntimeContext}.
  */
 export type InstalledRuntimeContext = Readonly<{
   organizationId: OrganizationId;
@@ -57,7 +58,17 @@ export type InstalledRuntimeContext = Readonly<{
   installation: ActiveApplicationInstallationEvidence;
 }>;
 
+/**
+ * Protected Module read of the active installation selected by the trusted human application
+ * context, such as `createActiveApplicationInstallationRepository` bound to the resolved request.
+ */
+export type InstalledRuntimeActiveInstallationReader = Readonly<{
+  readCurrent(): Promise<ActiveApplicationInstallationEvidence>;
+}>;
+
 export type InstalledRuntimeContextDependencies = Readonly<{
+  /** The resolved installation; never caller-authored, so its bindings are persisted evidence. */
+  activeInstallationReader: InstalledRuntimeActiveInstallationReader;
   /**
    * Protected Definition read for one exact system-context-bound release set. The concrete
    * implementation is composed outside App, so App never holds database authority itself.
@@ -66,6 +77,16 @@ export type InstalledRuntimeContextDependencies = Readonly<{
   /** Server-minted live system context; the target organisation is proved against it, never assumed. */
   systemContext: () => SessionContext;
 }>;
+
+/** Contexts this loader assembled; a structurally identical object from anywhere else is refused. */
+const assembledContexts = new WeakSet<object>();
+
+/** Returns the context only when this loader assembled it, so a consumer cannot be handed a forgery. */
+export const requireInstalledRuntimeContext = (candidate: unknown): InstalledRuntimeContext => {
+  if (typeof candidate !== "object" || candidate === null || !assembledContexts.has(candidate))
+    throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
+  return candidate as InstalledRuntimeContext;
+};
 
 const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
@@ -83,31 +104,66 @@ const isLiveSystemContext = (context: SessionContext): boolean => {
   );
 };
 
-const definitionErrorCode = (error: unknown): string | undefined =>
+const errorCode = (error: unknown): string | undefined =>
   typeof error === "object" && error !== null && "code" in error
     ? String((error as { readonly code?: unknown }).code)
     : undefined;
 
+const failure = (code: InstalledRuntimeContextErrorCode, cause: unknown) =>
+  new InstalledRuntimeContextError(code, { cause });
+
+const installationFailure = (error: unknown): InstalledRuntimeContextError => {
+  switch (errorCode(error)) {
+    case "ACTIVE_APPLICATION_CONTEXT_REFUSED":
+      return failure("INSTALLED_RUNTIME_CONTEXT_REFUSED", error);
+    case "ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE":
+      return failure("INSTALLED_RUNTIME_CONTEXT_UNAVAILABLE", error);
+    case "ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE":
+      return failure("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED", error);
+    default:
+      return failure("INSTALLED_RUNTIME_CONTEXT_TEMPORARILY_UNAVAILABLE", error);
+  }
+};
+
+const definitionFailure = (error: unknown): InstalledRuntimeContextError => {
+  switch (errorCode(error)) {
+    case "DEFINITION_RELEASE_NOT_FOUND":
+      return failure("INSTALLED_RUNTIME_CONTEXT_UNAVAILABLE", error);
+    case "DEFINITION_CONTEXT_REFUSED":
+      return failure("INSTALLED_RUNTIME_CONTEXT_REFUSED", error);
+    case "DEFINITION_RELEASE_INTEGRITY_FAILED":
+      return failure("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED", error);
+    default:
+      return failure("INSTALLED_RUNTIME_CONTEXT_TEMPORARILY_UNAVAILABLE", error);
+  }
+};
+
 /**
- * Assembles the installed runtime context from the resolved organisation and active installation.
+ * Assembles the installed runtime context for the resolved organisation and active installation.
  *
- * The loader accepts only exact persisted installation evidence, then reads the exact bound
- * Application/Module releases under a live system context and rejects any inconsistency between
- * the two: a mismatched organisation, Application root or revision, a missing or extra Module
- * release, a duplicate root, or a correlation that does not match the system context. Callers
- * that resolve the installation from a trusted human request pass its evidence here; browser
- * input may select only an address.
+ * The installation comes only from the protected active-installation read, never from the caller.
+ * The loader then reads the exact bound Application/Module releases under a live system context and
+ * rejects any inconsistency between the two: a mismatched organisation, Application root or
+ * revision, a missing, extra or different Module release, a duplicate root, or a correlation that
+ * does not match the system context. Browser input may select only an address; the route resolves
+ * the human request from it before composing these readers.
  */
 export const createInstalledRuntimeContextLoader = (
   dependencies: InstalledRuntimeContextDependencies,
 ) =>
   Object.freeze({
-    async load(installationCandidate: unknown): Promise<InstalledRuntimeContext> {
+    async load(): Promise<InstalledRuntimeContext> {
+      let installationCandidate: unknown;
+      try {
+        installationCandidate = await dependencies.activeInstallationReader.readCurrent();
+      } catch (error) {
+        throw installationFailure(error);
+      }
       const installation = activeApplicationInstallationEvidenceSchema.safeParse(
         installationCandidate,
       );
       if (!installation.success)
-        throw new InstalledRuntimeContextError("INVALID_INSTALLED_RUNTIME_CONTEXT_COMMAND");
+        throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
 
       const contextCandidate = sessionContextSchema.safeParse(dependencies.systemContext());
       if (!contextCandidate.success || !isLiveSystemContext(contextCandidate.data))
@@ -120,27 +176,21 @@ export const createInstalledRuntimeContextLoader = (
       )
         throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
 
-      let releaseSet: SystemApplicationBoundReleaseSetResult;
+      let releaseSetCandidate: unknown;
       try {
-        releaseSet = await dependencies.definitionReader.read(systemContext, {
+        releaseSetCandidate = await dependencies.definitionReader.read(systemContext, {
           applicationRootId: installation.data.applicationRootId,
           applicationReleaseRevision: installation.data.applicationReleaseRevision,
         });
       } catch (error) {
-        const code = definitionErrorCode(error);
-        if (code === "DEFINITION_RELEASE_NOT_FOUND")
-          throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_UNAVAILABLE", {
-            cause: error,
-          });
-        if (code === "DEFINITION_CONTEXT_REFUSED")
-          throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_REFUSED", {
-            cause: error,
-          });
-        throw new InstalledRuntimeContextError(
-          "INSTALLED_RUNTIME_CONTEXT_TEMPORARILY_UNAVAILABLE",
-          { cause: error },
-        );
+        throw definitionFailure(error);
       }
+      // Parsed into a fresh value so the context never aliases the reader's own result.
+      const parsedReleaseSet =
+        systemApplicationBoundReleaseSetResultSchema.safeParse(releaseSetCandidate);
+      if (!parsedReleaseSet.success)
+        throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
+      const releaseSet = parsedReleaseSet.data;
 
       const application = releaseSet.application;
       if (
@@ -184,12 +234,10 @@ export const createInstalledRuntimeContextLoader = (
           releaseSet,
         );
       } catch (error) {
-        throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED", {
-          cause: error,
-        });
+        throw failure("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED", error);
       }
 
-      return Object.freeze({
+      const context: InstalledRuntimeContext = Object.freeze({
         organizationId: application.organizationId,
         applicationRootId: application.rootId,
         applicationReleaseRevision: application.releaseRevision,
@@ -198,6 +246,8 @@ export const createInstalledRuntimeContextLoader = (
         permissionRegistration,
         installation: installation.data,
       });
+      assembledContexts.add(context);
+      return context;
     },
   });
 

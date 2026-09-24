@@ -52,6 +52,8 @@ export {
   createInstalledRuntimeContextLoader,
   InstalledRuntimeContextError,
   installedRuntimeContextErrorCodes,
+  requireInstalledRuntimeContext,
+  type InstalledRuntimeActiveInstallationReader,
   type InstalledRuntimeContext,
   type InstalledRuntimeContextDependencies,
   type InstalledRuntimeContextErrorCode,
