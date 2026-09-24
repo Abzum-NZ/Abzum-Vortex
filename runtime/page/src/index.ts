@@ -1,10 +1,5 @@
 import "server-only";
 
-import {
-  resolvePageTheme,
-  resolvePlacementThemeTokens,
-} from "./page-theme-resolution";
-
 export {
   createAuthenticatedPageCapabilityService,
   type AuthenticatedPageCapabilityDependencies,
@@ -97,15 +92,7 @@ export {
   type PrivateFormDraftAuthorityAdapter,
   type PrivateFormDraftServiceDependencies,
 } from "./form-drafts-repository";
-export {
-  resolvePageTheme,
-  resolvePlacementThemeTokens,
-  type PlacementThemeResolutionContext,
-} from "./page-theme-resolution";
-
 export const PageService = Object.freeze({
   key: "page",
   boundary: "@vortex/page",
-  resolvePageTheme,
-  resolvePlacementThemeTokens,
 });

@@ -111,23 +111,24 @@ export function resolveControlContext<Kind extends ProjectedControlValueKind>(
   };
 }
 
-/** Typed, fail-closed reads of a placement's settings against its declared properties. */
-export type ControlSettings = Readonly<{
+/**
+ * Fail-closed reads of one placement's authored settings against the properties its release
+ * declares. The control and launcher settings readers build on this one implementation instead of
+ * each carrying a near-identical copy.
+ */
+export type DeclaredSettingsReader = Readonly<{
+  read: (
+    key: string,
+    kind: BlockPropertyValueV2Contract["kind"],
+  ) => BlockPropertyValueV2Contract | undefined;
   text: (key: string) => string | undefined;
   boolean: (key: string) => boolean;
-  number: (key: string) => number | undefined;
-  choice: <Option extends string>(key: string, fallback: Option) => Option;
-  options: (key: string) => readonly ChoiceOption[];
-  /** The resolved record-type identifiers declared by a list of record_type_reference settings. */
-  recordTypeIds: (key: string) => readonly string[];
-  /** The required authored field key, validated as a builder key. */
-  fieldKey: () => string;
 }>;
 
-export function readControlSettings(
+export function createDeclaredSettingsReader(
   props: PlatformBlockRenderProps,
   location: DefinitionRenderErrorLocation,
-): ControlSettings {
+): DeclaredSettingsReader {
   const { settings, metadata } = props;
   const read = (
     key: string,
@@ -148,11 +149,38 @@ export function readControlSettings(
   };
 
   return {
+    read,
     text,
     boolean: (key) => {
       const value = read(key, "boolean");
       return value?.kind === "boolean" ? value.value : false;
     },
+  };
+}
+
+/** Typed, fail-closed reads of a placement's settings against its declared properties. */
+export type ControlSettings = Readonly<{
+  text: (key: string) => string | undefined;
+  boolean: (key: string) => boolean;
+  number: (key: string) => number | undefined;
+  choice: <Option extends string>(key: string, fallback: Option) => Option;
+  options: (key: string) => readonly ChoiceOption[];
+  /** The resolved record-type identifiers declared by a list of record_type_reference settings. */
+  recordTypeIds: (key: string) => readonly string[];
+  /** The required authored field key, validated as a builder key. */
+  fieldKey: () => string;
+}>;
+
+export function readControlSettings(
+  props: PlatformBlockRenderProps,
+  location: DefinitionRenderErrorLocation,
+): ControlSettings {
+  const { metadata } = props;
+  const { read, text, boolean } = createDeclaredSettingsReader(props, location);
+
+  return {
+    text,
+    boolean,
     number: (key) => {
       const value = read(key, "number");
       return value?.kind === "number" ? value.value : undefined;
