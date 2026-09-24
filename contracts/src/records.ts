@@ -218,7 +218,9 @@ const createRecordChangeFields = {
  * `create_related` creates one dependent record, `copy_relationships` copies
  * the subject's named edges to another record of the same type, and
  * `delete_subject` and `restore_subject` reuse the protected lifecycle
- * primitives.  Mutations apply in list order inside one transaction.
+ * primitives.  Mutations apply in list order inside one transaction.  A
+ * mutation is a statement of intent, never authority: the engine decides each
+ * one against the invoking published definition and current access.
  */
 export const recordChangeMutationV2Schema = z.discriminatedUnion("kind", [
   z
@@ -285,10 +287,10 @@ const subjectWritingMutationKinds: ReadonlySet<string> = new Set([
 
 /**
  * The one command that describes every record write.  It carries no actor,
- * organisation, Application, installed binding, row scope or authority
- * declaration: the trusted request boundary derives all of those from the
- * session and the transaction context.  The mutation list is applied in order
- * and the whole command commits or is refused as one unit.
+ * organisation, Application, installed binding, invoking flow or action, row
+ * scope or authority declaration: the trusted caller derives all of those from
+ * the session and the transaction context.  The mutation list is applied in
+ * order and the whole command commits or is refused as one unit.
  */
 export const recordChangeCommandV2Schema = z
   .object({
@@ -303,14 +305,19 @@ export const recordChangeCommandV2Schema = z
   .strict()
   .superRefine((value, context) => {
     const kinds = value.mutations.map((mutation) => mutation.kind);
-    const count = (kind: string): number =>
-      kinds.filter((candidate) => candidate === kind).length;
+    const count = (kind: string): number => kinds.filter((candidate) => candidate === kind).length;
     if (value.recordId === undefined) {
       if (kinds[0] !== "create_subject" || count("create_subject") !== 1)
         context.addIssue({
           code: "custom",
           path: ["mutations"],
           message: "A new record starts with exactly one create_subject mutation",
+        });
+      if (value.expectedConcurrencyNumber !== undefined)
+        context.addIssue({
+          code: "custom",
+          path: ["expectedConcurrencyNumber"],
+          message: "A new record has no expected concurrency number",
         });
     } else {
       if (value.expectedConcurrencyNumber === undefined)
@@ -332,7 +339,10 @@ export const recordChangeCommandV2Schema = z
         path: ["mutations"],
         message: "A record is restored at most once per command",
       });
-    if (count("restore_subject") > 0 && (count("create_subject") > 0 || count("delete_subject") > 0))
+    if (
+      count("restore_subject") > 0 &&
+      (count("create_subject") > 0 || count("delete_subject") > 0)
+    )
       context.addIssue({
         code: "custom",
         path: ["mutations"],
@@ -365,7 +375,40 @@ export const recordChangeCommandV2Schema = z
         path: ["mutations"],
         message: "Restore and ownership transfer each run alone in one command",
       });
+    for (const [index, mutation] of value.mutations.entries()) {
+      if (mutation.kind !== "copy_relationships") continue;
+      if (
+        mutation.targetRecordTypeId.toLowerCase() !== value.recordTypeId.toLowerCase() ||
+        mutation.targetRecordId.toLowerCase() === value.recordId?.toLowerCase()
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["mutations", index],
+          message: "Relationships are copied to another record of the subject's type",
+        });
+      if (
+        new Set(mutation.relationshipIds.map((id) => id.toLowerCase())).size !==
+        mutation.relationshipIds.length
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["mutations", index, "relationshipIds"],
+          message: "Each copied relationship is named once",
+        });
+    }
   });
+
+/**
+ * One correction a record-change command needs before it can commit.
+ * `mutationIndex` names the mutation whose submitted value needs correcting, so
+ * a value for a related record is never mistaken for a subject field.
+ */
+export const recordChangeFieldCorrectionSchema = z
+  .object({
+    ...recordSaveFieldCorrectionSchema.shape,
+    mutationIndex: z.number().int().nonnegative(),
+  })
+  .strict();
 
 /** The one receipt a committed record-change command returns. */
 export const recordChangeReceiptSchema = z
@@ -391,13 +434,24 @@ export const recordChangeResultV2Schema = z.discriminatedUnion("outcome", [
       receipt: recordChangeReceiptSchema,
       backgroundDelivery: z.enum(["none", "pending"]),
     })
-    .strict(),
+    .strict()
+    .superRefine((value, context) => {
+      if (
+        value.receipt.recordId.toLowerCase() !== value.recordId.toLowerCase() ||
+        value.receipt.concurrencyNumber !== value.concurrencyNumber
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["receipt"],
+          message: "The receipt names the committed record and concurrency number",
+        });
+    }),
   z
     .object({
       contractVersion: saveRecordContractVersionSchema,
       outcome: z.literal("correction_required"),
       correlationId: correlationIdSchema,
-      corrections: z.array(recordSaveFieldCorrectionSchema).min(1),
+      corrections: z.array(recordChangeFieldCorrectionSchema).min(1),
     })
     .strict(),
   refusedSaveRecordResultV2Schema,
@@ -406,6 +460,7 @@ export const recordChangeResultV2Schema = z.discriminatedUnion("outcome", [
 export type RecordChangeMutationKind = z.infer<typeof recordChangeMutationKindSchema>;
 export type RecordChangeMutationV2 = z.infer<typeof recordChangeMutationV2Schema>;
 export type RecordChangeCommandV2 = z.infer<typeof recordChangeCommandV2Schema>;
+export type RecordChangeFieldCorrection = z.infer<typeof recordChangeFieldCorrectionSchema>;
 export type RecordChangeReceipt = z.infer<typeof recordChangeReceiptSchema>;
 export type RecordChangeResultV2 = z.infer<typeof recordChangeResultV2Schema>;
 export type RecordScope = z.infer<typeof recordScopeSchema>;
