@@ -2,11 +2,15 @@ import { z } from "zod";
 import { correlationIdSchema } from "./common";
 import {
   actorIdSchema,
+  administrationReceiptIdSchema,
   applicationRootIdSchema,
+  organizationAccountIdSchema,
   organizationIdSchema,
   revisionSchema,
+  roleAssignmentIdSchema,
   roleIdSchema,
 } from "./identifiers";
+import { preparedOrganizationRoleChangeSchema } from "./organization-role-changes";
 import { organizationStewardshipRequirementSchema } from "./organization-stewardship";
 
 const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
@@ -96,4 +100,103 @@ export type OrganizationManagementApplicationRequirementChangeCommand = z.infer<
 >;
 export type OrganizationManagementApplicationRequirementChangeResult = z.infer<
   typeof organizationManagementApplicationRequirementChangeResultSchema
+>;
+
+/**
+ * The frozen server-owned manifest for one bounded first-owner setup. App
+ * composes it from the exact installed management-application release and the
+ * nominated steward; Access owns applying it. It names no raw authority: the
+ * operating-role evidence is the same prepared application-role acceptance the
+ * protected role-change composition already validates. `provisioningReceiptId`
+ * is the original tenant or organisation provisioning receipt, and
+ * `setupRevision` is the expected stewardship requirement revision.
+ */
+export const initialOperatingRoleGrantManifestSchema = z
+  .object({
+    manifestVersion: z.literal("1.0.0"),
+    organizationId: organizationIdSchema,
+    stewardOrganizationAccountId: organizationAccountIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: javascriptSafeRevisionSchema,
+    provisioningReceiptId: administrationReceiptIdSchema,
+    setupRevision: javascriptSafeRevisionSchema,
+    setupActorId: actorIdSchema,
+    correlationId: correlationIdSchema,
+    roleAssignmentId: roleAssignmentIdSchema,
+    operatingRoleChangeEvidence: preparedOrganizationRoleChangeSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const candidate = value.operatingRoleChangeEvidence.candidate;
+    if (candidate.operation !== "accept_new_application_role") {
+      context.addIssue({
+        code: "custom",
+        path: ["operatingRoleChangeEvidence", "candidate"],
+        message: "The operating role must be a first application-role acceptance",
+      });
+      return;
+    }
+    if (candidate.assignmentPolicy.kind !== "standing")
+      context.addIssue({
+        code: "custom",
+        path: ["operatingRoleChangeEvidence", "candidate", "assignmentPolicy"],
+        message: "The management operating role must permit a standing steward assignment",
+      });
+    if (!representsSameUuid(candidate.organizationId, value.organizationId))
+      context.addIssue({
+        code: "custom",
+        path: ["operatingRoleChangeEvidence", "candidate", "organizationId"],
+        message: "The operating role must be accepted in the manifest organisation",
+      });
+    const registration = candidate.preparedTemplates.permissionRegistration;
+    const basis = candidate.preparedTemplates.preparationBasis;
+    if (
+      basis.kind !== "current_active_registration" ||
+      !representsSameUuid(registration.organizationId, value.organizationId) ||
+      !representsSameUuid(registration.applicationRootId, value.applicationRootId) ||
+      registration.applicationRelease.releaseRevision !== value.applicationReleaseRevision
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["operatingRoleChangeEvidence", "candidate", "preparedTemplates"],
+        message: "The operating role must derive from the named installed management-application release",
+      });
+    if (
+      candidate.permissions.some(
+        (permission) =>
+          permission.ownerKind !== "application" ||
+          permission.applicationRootId === undefined ||
+          !representsSameUuid(permission.applicationRootId, value.applicationRootId) ||
+          !representsSameUuid(permission.ownerId, value.applicationRootId),
+      )
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["operatingRoleChangeEvidence", "candidate", "permissions"],
+        message: "An initial operating role may hold only permissions of its management application",
+      });
+  });
+
+export const initialOperatingRoleGrantResultSchema = z
+  .object({
+    outcome: z.enum(["established", "replayed"]),
+    organizationId: organizationIdSchema,
+    operatingRoleId: roleIdSchema,
+    operatingRoleRevision: javascriptSafeRevisionSchema,
+    roleAssignmentId: roleAssignmentIdSchema,
+    roleAssignmentRevision: javascriptSafeRevisionSchema,
+    managementApplicationRootId: applicationRootIdSchema,
+    managementApplicationReleaseRevision: javascriptSafeRevisionSchema,
+    managementRequiredRoleRevision: javascriptSafeRevisionSchema,
+    setupRevision: javascriptSafeRevisionSchema,
+    accessVersion: javascriptSafeRevisionSchema,
+    correlationId: correlationIdSchema,
+  })
+  .strict();
+
+export type InitialOperatingRoleGrantManifest = z.infer<
+  typeof initialOperatingRoleGrantManifestSchema
+>;
+export type InitialOperatingRoleGrantResult = z.infer<
+  typeof initialOperatingRoleGrantResultSchema
 >;
