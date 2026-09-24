@@ -7,7 +7,9 @@ import {
   DIALOG_BLOCK_RELEASE,
   DRAWER_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
+  LINK_INPUT_BLOCK_RELEASE,
   NUMBER_INPUT_BLOCK_RELEASE,
+  RICH_TEXT_INPUT_BLOCK_RELEASE,
   TABS_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
   VALIDATION_MESSAGE_BLOCK_RELEASE,
@@ -18,6 +20,8 @@ import {
   type PlatformComponentRegistry,
 } from "../registry";
 import { TextInput } from "./text-input";
+import { LinkInput } from "./link-input";
+import { RichTextInput } from "./rich-text-input";
 import { NumberInput } from "./number-input";
 import { BooleanInput } from "./boolean-input";
 import { DateInput } from "./date-input";
@@ -43,7 +47,9 @@ export {
   DIALOG_BLOCK_RELEASE,
   DRAWER_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
+  LINK_INPUT_BLOCK_RELEASE,
   NUMBER_INPUT_BLOCK_RELEASE,
+  RICH_TEXT_INPUT_BLOCK_RELEASE,
   TABS_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
   VALIDATION_MESSAGE_BLOCK_RELEASE,
@@ -53,6 +59,8 @@ export {
 export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistration[] =
   Object.freeze([
     Object.freeze({ metadata: TEXT_INPUT_BLOCK_RELEASE, render: TextInput }),
+    Object.freeze({ metadata: LINK_INPUT_BLOCK_RELEASE, render: LinkInput }),
+    Object.freeze({ metadata: RICH_TEXT_INPUT_BLOCK_RELEASE, render: RichTextInput }),
     Object.freeze({ metadata: NUMBER_INPUT_BLOCK_RELEASE, render: NumberInput }),
     Object.freeze({ metadata: BOOLEAN_INPUT_BLOCK_RELEASE, render: BooleanInput }),
     Object.freeze({ metadata: DATE_INPUT_BLOCK_RELEASE, render: DateInput }),

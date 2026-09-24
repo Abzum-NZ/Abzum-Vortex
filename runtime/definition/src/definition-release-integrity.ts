@@ -289,6 +289,19 @@ const exactApplicationFlowTargetsMatch = (
             return false;
           add({ kind: "application_action", applicationRootId, actionId: String(target.actionId), ...common });
           break;
+        case "record_save":
+          // A generic record save is pinned by its owning Module binding's release; it adds no
+          // separate entry, but it must belong to this Application and match that Module evidence.
+          if (
+            String(target.applicationRootId) !== String(applicationRootId) ||
+            !moduleEvidenceMatches(
+              target.moduleRootId,
+              target.releaseVersion,
+              target.resolutionFingerprint,
+            )
+          )
+            return false;
+          break;
       }
     }
   }
