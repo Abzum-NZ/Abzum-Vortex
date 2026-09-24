@@ -4,14 +4,16 @@ import {
   applicationRootIdSchema,
   organizationIdSchema,
   revisionSchema,
-  semanticVersionSchema,
+  stableDefinitionReleaseVersionSchema,
   workflowDefinitionSchema,
   workflowNodeTypeKeys,
   type ApplicationRootId,
   type BuilderKey,
   type OrganizationId,
+  type ProtectedOperationRequest,
   type SemanticVersion,
   type WorkflowDefinition,
+  type WorkflowEdge,
   type WorkflowNode,
   type WorkflowTrigger,
 } from "@vortex/contracts";
@@ -27,9 +29,11 @@ export type KestraFlowCompilerEnvironment = (typeof kestraFlowCompilerEnvironmen
 
 /**
  * The exact identities one published workflow candidate is generated from.
- * `installationRevision` is the active installation's Application release
- * revision; `workflowRevision` is the exact published workflow revision. Every
- * value is permanent Vortex identity, never a mutable label or provider key.
+ * An installation is identified by its organisation and application root;
+ * `installationRevision` is that installation's Application release revision
+ * and `applicationVersion` its stable published version. `workflowRevision` is
+ * the exact published workflow revision. Every value is permanent Vortex
+ * identity, never a mutable label or provider key.
  */
 export type KestraFlowIdentity = Readonly<{
   environment: KestraFlowCompilerEnvironment;
@@ -46,25 +50,71 @@ export type KestraFlowCompilerInput = Readonly<{
   identity: KestraFlowIdentity;
 }>;
 
+/** The protected-operation envelope version every compiled callback task sends. */
+export const kestraProtectedOperationContractVersion = "1.0.0";
+
+/**
+ * The signed protected-operation envelope fields fixed at compile time. They
+ * come only from the validated identity and the published node, so a callback
+ * can never name another organisation, application, revision or node.
+ */
+export type KestraProtectedOperationBinding = Readonly<
+  Pick<
+    ProtectedOperationRequest,
+    | "contractVersion"
+    | "organizationId"
+    | "applicationRootId"
+    | "workflowRevision"
+    | "nodeId"
+    | "operationKey"
+  >
+>;
+
+/**
+ * The envelope fields Vortex binds and signs per execution attempt. The
+ * compiler never supplies them: no run, attempt, input, time, duplicate key or
+ * caller proof exists at compile time.
+ */
+export const kestraProtectedOperationRuntimeFields = [
+  "runId",
+  "attempt",
+  "inputs",
+  "issuedAt",
+  "expiresAt",
+  "duplicateProtectionKey",
+  "signedCallerProof",
+] as const satisfies readonly Exclude<
+  keyof ProtectedOperationRequest,
+  keyof KestraProtectedOperationBinding
+>[];
+
 /**
  * One generic Kestra callback task. Every published node compiles to the same
- * callback shape and the exact published node is retained for the later
- * per-node provider mapping; no per-application behaviour lives here.
- * `dependsOn` is the deterministic set of predecessor task ids, so the task
- * graph sequences exactly as the published edges require.
+ * callback shape: it calls the protected-operation endpoint with the signed
+ * envelope bound in `operation`. The exact published node is retained for the
+ * later per-node provider mapping; no per-application behaviour lives here.
+ * `dependsOn` is the sorted set of forward predecessor task ids, so the task
+ * graph sequences exactly as the published edges require; bounded-loop
+ * back-edges are routing, never dependencies.
  */
 export type KestraFlowTask = Readonly<{
   id: string;
   kind: "protected_operation_callback";
+  operation: KestraProtectedOperationBinding;
   node: WorkflowNode;
   dependsOn: readonly string[];
 }>;
 
-/** One published edge, resolved to the task ids it sequences. */
+/**
+ * One published edge, resolved to the task ids it routes between, in
+ * published order. `loopBack` marks the edge that returns a bounded loop's
+ * body to its loop node.
+ */
 export type KestraFlowSequencedEdge = Readonly<{
   fromTaskId: string;
   toTaskId: string;
   outcome?: BuilderKey;
+  loopBack: boolean;
 }>;
 
 /**
@@ -87,7 +137,7 @@ export type KestraFlowCandidate = Readonly<{
   namespace: string;
   id: string;
   /** The exact published workflow revision compiled into this candidate. */
-  revision: number;
+  workflowRevision: number;
   /** Always false: a compiled candidate is prepared, never active. */
   active: false;
   trigger: KestraFlowTrigger;
@@ -111,6 +161,8 @@ export const kestraFlowCompilerRefusalReasons = [
   "multiple_start_nodes",
   "unknown_edge_node",
   "self_edge",
+  "duplicate_edge",
+  "invalid_outcome_routing",
   "graph_cycle",
   "unreachable_node",
   "unsupported_node",
@@ -124,13 +176,9 @@ export type KestraFlowCompilation =
   | Readonly<{ outcome: "compiled"; flow: KestraFlowCandidate }>
   | Readonly<{ outcome: "refused"; reason: KestraFlowCompilerRefusalReason }>;
 
-/** Node kinds whose nesting is measured against the published depth ceiling. */
-const nestingNodeTypes: ReadonlySet<WorkflowNode["type"]> = new Set([
-  "condition",
-  "decision_table",
-  "bounded_loop",
-  "start_workflow",
-]);
+/** Kestra's identifier ceilings; a longer derived identifier is refused, never truncated. */
+const maximumNamespaceLength = 150;
+const maximumFlowIdLength = 100;
 
 const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -145,18 +193,15 @@ const refused = (reason: KestraFlowCompilerRefusalReason): KestraFlowCompilation
   reason,
 });
 
-/** One namespace segment other than the environment and revision counters. */
-const namespaceSegment = (value: string): string =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
 const isEnvironment = (value: unknown): value is KestraFlowCompilerEnvironment =>
   typeof value === "string" &&
   (kestraFlowCompilerEnvironments as readonly string[]).includes(value);
 
-/** Validates exactly the six identity fields; every missing or added field is refused. */
+/**
+ * Validates exactly the six identity fields; every missing or added field is
+ * refused. UUIDs are canonicalised to lower case so one identity always
+ * derives one namespace, flow id and label set.
+ */
 const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
   if (
     !isObject(candidate) ||
@@ -174,7 +219,9 @@ const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
 
   const organizationId = organizationIdSchema.safeParse(candidate.organizationId);
   const applicationRootId = applicationRootIdSchema.safeParse(candidate.applicationRootId);
-  const applicationVersion = semanticVersionSchema.safeParse(candidate.applicationVersion);
+  const applicationVersion = stableDefinitionReleaseVersionSchema.safeParse(
+    candidate.applicationVersion,
+  );
   const installationRevision = revisionSchema.safeParse(candidate.installationRevision);
   const workflowRevision = revisionSchema.safeParse(candidate.workflowRevision);
   if (
@@ -188,8 +235,8 @@ const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
 
   return {
     environment: candidate.environment,
-    organizationId: organizationId.data,
-    applicationRootId: applicationRootId.data,
+    organizationId: organizationId.data.toLowerCase() as OrganizationId,
+    applicationRootId: applicationRootId.data.toLowerCase() as ApplicationRootId,
     applicationVersion: applicationVersion.data,
     installationRevision: installationRevision.data,
     workflowRevision: workflowRevision.data,
@@ -197,22 +244,53 @@ const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
 };
 
 /**
- * Rejects a graph that cannot compile to one exact Kestra candidate: duplicate
- * ids, a missing or repeated start, edges naming unknown nodes, self-edges, a
- * cycle, an unreachable node, or nesting deeper than the published ceiling.
- * Returns the resolved task ids when the graph is valid.
+ * The parsed schema pairs each node type with its own config at runtime, but
+ * the inferred WorkflowNode type does not narrow config by type, so the few
+ * config fields read here are typed through these views.
  */
-const validateGraph = (
-  definition: WorkflowDefinition,
-): Readonly<{ taskIdByNodeId: Map<string, string>; startNodeId: string }> | KestraFlowCompilation => {
-  const taskIdByNodeId = new Map<string, string>();
+type DecisionTableConfig = Readonly<{ decisions: readonly Readonly<{ output: string }>[] }>;
+type RequestFormConfig = Readonly<{ timeoutOutcome: string }>;
+type StartWorkflowConfig = Readonly<{ workflowId: string }>;
+
+/** The outcomes each routing node must publish exactly once, as publication requires. */
+const requiredOutcomes = (node: WorkflowNode): readonly string[] | undefined => {
+  switch (node.type) {
+    case "condition":
+      return ["matched", "not_matched"];
+    case "decision_table":
+      return (node.config as DecisionTableConfig).decisions.map((decision) => decision.output);
+    case "bounded_loop":
+      return ["record", "completed"];
+    case "request_form":
+      return ["submitted", (node.config as RequestFormConfig).timeoutOutcome];
+    default:
+      return undefined;
+  }
+};
+
+type ValidatedGraph = Readonly<{
+  taskIdByNodeId: ReadonlyMap<string, string>;
+  loopBackEdges: ReadonlySet<WorkflowEdge>;
+}>;
+
+/**
+ * Rejects a graph that cannot compile to one exact Kestra candidate, applying
+ * the same structural rules publication does: one start, known and unique
+ * edges, complete outcome routing, full reachability, and only bounded-loop
+ * cycles. Returns the resolved task ids and the loop-back edges when valid.
+ */
+const validateGraph = (definition: WorkflowDefinition): ValidatedGraph | KestraFlowCompilation => {
   const nodeById = new Map<string, WorkflowNode>();
+  const taskIdByNodeId = new Map<string, string>();
+  const taskIds = new Set<string>();
   for (const node of definition.nodes) {
-    if (nodeById.has(node.nodeId)) return refused("duplicate_node_id");
+    const taskId = `t_${node.nodeId.toLowerCase()}`;
+    if (nodeById.has(node.nodeId) || taskIds.has(taskId)) return refused("duplicate_node_id");
     if (!(workflowNodeTypeKeys as readonly string[]).includes(node.type))
       return refused("unsupported_node");
     nodeById.set(node.nodeId, node);
-    taskIdByNodeId.set(node.nodeId, `t_${node.nodeId}`);
+    taskIdByNodeId.set(node.nodeId, taskId);
+    taskIds.add(taskId);
   }
 
   const starts = definition.nodes.filter((node) => node.type === "start");
@@ -220,76 +298,137 @@ const validateGraph = (
   if (starts.length > 1) return refused("multiple_start_nodes");
   const startNodeId = starts[0]!.nodeId;
 
-  const successors = new Map<string, string[]>(
+  const outgoing = new Map<string, WorkflowEdge[]>(
     definition.nodes.map((node) => [node.nodeId, []]),
   );
-  const predecessors = new Map<string, string[]>(
-    definition.nodes.map((node) => [node.nodeId, []]),
-  );
+  const edgeKeys = new Set<string>();
   for (const edge of definition.edges) {
     if (!nodeById.has(edge.fromNodeId) || !nodeById.has(edge.toNodeId))
       return refused("unknown_edge_node");
-    if (edge.fromNodeId === edge.toNodeId) return refused("self_edge");
-    successors.get(edge.fromNodeId)!.push(edge.toNodeId);
-    predecessors.get(edge.toNodeId)!.push(edge.fromNodeId);
+    const edgeKey = `${edge.fromNodeId}\0${edge.toNodeId}\0${edge.outcome ?? ""}`;
+    if (edgeKeys.has(edgeKey)) return refused("duplicate_edge");
+    edgeKeys.add(edgeKey);
+    outgoing.get(edge.fromNodeId)!.push(edge);
   }
 
-  const colours = new Map<string, "white" | "grey" | "black">(
-    definition.nodes.map((node) => [node.nodeId, "white" as const]),
-  );
-  const visit = (nodeId: string): boolean => {
-    colours.set(nodeId, "grey");
-    for (const next of successors.get(nodeId)!) {
-      const colour = colours.get(next);
-      if (colour === "grey") return true;
-      if (colour === "white" && visit(next)) return true;
-    }
-    colours.set(nodeId, "black");
-    return false;
-  };
-  for (const node of definition.nodes)
-    if (colours.get(node.nodeId) === "white" && visit(node.nodeId))
-      return refused("graph_cycle");
+  for (const node of definition.nodes) {
+    const nodeEdges = outgoing.get(node.nodeId)!;
+    if (node.type === "stop" && nodeEdges.length > 0) return refused("invalid_outcome_routing");
+    const expected = requiredOutcomes(node);
+    if (expected === undefined) continue;
+    const actual = nodeEdges.map((edge) => edge.outcome);
+    if (
+      new Set(actual).size !== actual.length ||
+      actual.length !== expected.length ||
+      expected.some((outcome) => !actual.includes(outcome))
+    )
+      return refused("invalid_outcome_routing");
+  }
+
+  // Only a bounded loop's `record` edge may return to the node it leaves.
+  for (const edge of definition.edges)
+    if (
+      edge.fromNodeId === edge.toNodeId &&
+      !(nodeById.get(edge.fromNodeId)!.type === "bounded_loop" && edge.outcome === "record")
+    )
+      return refused("self_edge");
 
   const reachable = new Set<string>([startNodeId]);
   const queue = [startNodeId];
-  while (queue.length > 0) {
-    const nodeId = queue.shift()!;
-    for (const next of successors.get(nodeId)!)
-      if (!reachable.has(next)) {
-        reachable.add(next);
-        queue.push(next);
+  while (queue.length > 0)
+    for (const edge of outgoing.get(queue.shift()!)!)
+      if (!reachable.has(edge.toNodeId)) {
+        reachable.add(edge.toNodeId);
+        queue.push(edge.toNodeId);
       }
-  }
   if (reachable.size !== definition.nodes.length) return refused("unreachable_node");
 
-  // Depth is the count of decision, loop and child-workflow nodes on the
-  // longest path. Cross-definition child chains are checked at registration.
-  const indegree = new Map<string, number>(
-    definition.nodes.map((node) => [node.nodeId, predecessors.get(node.nodeId)!.length]),
-  );
-  const depth = new Map<string, number>();
+  // Publication's cycle rule: every cycle holds exactly one bounded loop whose
+  // `record` edge stays inside the cycle and whose `completed` edge leaves it.
+  let unboundedCycle = false;
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visitCycle = (nodeId: string, path: readonly string[]): void => {
+    if (unboundedCycle) return;
+    if (visiting.has(nodeId)) {
+      const cycleIds = new Set(path.slice(path.indexOf(nodeId)));
+      const loops = [...cycleIds].filter((id) => nodeById.get(id)!.type === "bounded_loop");
+      const loopEdges = loops.length === 1 ? outgoing.get(loops[0]!)! : [];
+      unboundedCycle = !(
+        loops.length === 1 &&
+        loopEdges.some((edge) => edge.outcome === "record" && cycleIds.has(edge.toNodeId)) &&
+        loopEdges.some((edge) => edge.outcome === "completed" && !cycleIds.has(edge.toNodeId))
+      );
+      return;
+    }
+    if (visited.has(nodeId)) return;
+    visiting.add(nodeId);
+    for (const edge of outgoing.get(nodeId)!) visitCycle(edge.toNodeId, [...path, nodeId]);
+    visiting.delete(nodeId);
+    visited.add(nodeId);
+  };
+  for (const node of definition.nodes) visitCycle(node.nodeId, []);
+  if (unboundedCycle) return refused("graph_cycle");
+
+  // A loop-back edge enters a bounded loop from its own body: a node reached
+  // from the loop's `record` edge without passing back through the loop.
+  const loopBackEdges = new Set<WorkflowEdge>();
+  for (const node of definition.nodes) {
+    if (node.type !== "bounded_loop") continue;
+    const recordEdge = outgoing.get(node.nodeId)!.find((edge) => edge.outcome === "record")!;
+    const body = new Set<string>();
+    const pending: string[] = recordEdge.toNodeId === node.nodeId ? [] : [recordEdge.toNodeId];
+    while (pending.length > 0) {
+      const current = pending.shift()!;
+      if (body.has(current)) continue;
+      body.add(current);
+      for (const edge of outgoing.get(current)!)
+        if (edge.toNodeId !== node.nodeId) pending.push(edge.toNodeId);
+    }
+    for (const edge of definition.edges)
+      if (
+        edge.toNodeId === node.nodeId &&
+        (body.has(edge.fromNodeId) || edge === recordEdge)
+      )
+        loopBackEdges.add(edge);
+  }
+
+  // Without loop-back edges the sequencing graph must be acyclic.
+  const indegree = new Map<string, number>(definition.nodes.map((node) => [node.nodeId, 0]));
+  for (const edge of definition.edges)
+    if (!loopBackEdges.has(edge)) indegree.set(edge.toNodeId, indegree.get(edge.toNodeId)! + 1);
   const ready = definition.nodes
     .filter((node) => indegree.get(node.nodeId) === 0)
     .map((node) => node.nodeId);
+  let ordered = 0;
   while (ready.length > 0) {
     const nodeId = ready.shift()!;
-    const node = nodeById.get(nodeId)!;
-    const predecessorDepth = predecessors.get(nodeId)!.reduce(
-      (highest, predecessor) => Math.max(highest, depth.get(predecessor) ?? 0),
-      0,
-    );
-    const currentDepth = predecessorDepth + (nestingNodeTypes.has(node.type) ? 1 : 0);
-    if (currentDepth > definition.maximumNestingDepth) return refused("depth_exceeded");
-    depth.set(nodeId, currentDepth);
-    for (const next of successors.get(nodeId)!) {
-      const remaining = indegree.get(next)! - 1;
-      indegree.set(next, remaining);
-      if (remaining === 0) ready.push(next);
+    ordered += 1;
+    for (const edge of outgoing.get(nodeId)!) {
+      if (loopBackEdges.has(edge)) continue;
+      const remaining = indegree.get(edge.toNodeId)! - 1;
+      indegree.set(edge.toNodeId, remaining);
+      if (remaining === 0) ready.push(edge.toNodeId);
     }
   }
+  if (ordered !== definition.nodes.length) return refused("graph_cycle");
 
-  return { taskIdByNodeId, startNodeId };
+  // Nesting depth counts child-workflow levels from this workflow at depth 1,
+  // as publication does. A child naming this workflow never terminates; deeper
+  // chains through other definitions were checked when the release published.
+  const children = definition.nodes.filter((node) => node.type === "start_workflow");
+  if (
+    children.some(
+      (node) =>
+        (node.config as StartWorkflowConfig).workflowId.toLowerCase() ===
+        definition.workflowId.toLowerCase(),
+    )
+  )
+    return refused("graph_cycle");
+  if ((children.length > 0 ? 2 : 1) > definition.maximumNestingDepth)
+    return refused("depth_exceeded");
+
+  return { taskIdByNodeId, loopBackEdges };
 };
 
 const compileTrigger = (trigger: WorkflowTrigger): KestraFlowTrigger => ({
@@ -305,7 +444,8 @@ const compileTrigger = (trigger: WorkflowTrigger): KestraFlowTrigger => ({
  * reason. The same definition and identity always yield the same candidate:
  * the namespace and flow id are derived only from the environment,
  * organisation, installation, application, workflow and revision identity, and
- * the tasks, edges and trigger come only from the published definition.
+ * the tasks, edges and trigger come only from the published definition, in
+ * published order.
  *
  * This function is pure. It performs no I/O, signs nothing, registers nothing
  * and enables nothing, and it never invents an identity from its inputs.
@@ -338,47 +478,67 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
       return refused("unsupported_trigger");
   }
 
-  const predecessors = new Map<string, Set<string>>(
-    definition.nodes.map((node) => [node.nodeId, new Set<string>()]),
-  );
-  for (const edge of definition.edges) predecessors.get(edge.toNodeId)!.add(edge.fromNodeId);
-
-  const tasks: KestraFlowTask[] = definition.nodes.map((node) => ({
-    id: graph.taskIdByNodeId.get(node.nodeId)!,
-    kind: "protected_operation_callback",
-    node,
-    dependsOn: [...predecessors.get(node.nodeId)!]
-      .map((predecessor) => graph.taskIdByNodeId.get(predecessor)!)
-      .sort(),
-  }));
-
-  const edges: KestraFlowSequencedEdge[] = definition.edges.map((edge) => ({
-    fromTaskId: graph.taskIdByNodeId.get(edge.fromNodeId)!,
-    toTaskId: graph.taskIdByNodeId.get(edge.toNodeId)!,
-    ...(edge.outcome === undefined ? {} : { outcome: edge.outcome }),
-  }));
-
+  const workflowId = definition.workflowId.toLowerCase();
   const namespace = [
     "vortex",
     "application",
     identity.environment,
-    namespaceSegment(identity.organizationId),
-    namespaceSegment(identity.applicationRootId),
+    identity.organizationId,
+    identity.applicationRootId,
     `i${identity.installationRevision}`,
   ].join(".");
   const id = [
     "w",
-    namespaceSegment(definition.workflowId),
-    namespaceSegment(identity.applicationVersion),
+    workflowId,
+    identity.applicationVersion.replaceAll(".", "-"),
     `r${identity.workflowRevision}`,
   ].join("_");
+  if (namespace.length > maximumNamespaceLength || id.length > maximumFlowIdLength)
+    return refused("invalid_identity");
+
+  const predecessors = new Map<string, Set<string>>(
+    definition.nodes.map((node) => [node.nodeId, new Set<string>()]),
+  );
+  for (const edge of definition.edges)
+    if (!graph.loopBackEdges.has(edge))
+      predecessors.get(edge.toNodeId)!.add(graph.taskIdByNodeId.get(edge.fromNodeId)!);
+
+  const tasks: readonly KestraFlowTask[] = Object.freeze(
+    definition.nodes.map((node) =>
+      Object.freeze({
+        id: graph.taskIdByNodeId.get(node.nodeId)!,
+        kind: "protected_operation_callback" as const,
+        operation: Object.freeze({
+          contractVersion: kestraProtectedOperationContractVersion,
+          organizationId: identity.organizationId,
+          applicationRootId: identity.applicationRootId,
+          workflowRevision: identity.workflowRevision,
+          nodeId: node.nodeId,
+          operationKey: `workflow.node.${node.type}`,
+        }),
+        node,
+        dependsOn: Object.freeze([...predecessors.get(node.nodeId)!].sort()),
+      }),
+    ),
+  );
+
+  const edges: readonly KestraFlowSequencedEdge[] = Object.freeze(
+    definition.edges.map((edge) =>
+      Object.freeze({
+        fromTaskId: graph.taskIdByNodeId.get(edge.fromNodeId)!,
+        toTaskId: graph.taskIdByNodeId.get(edge.toNodeId)!,
+        ...(edge.outcome === undefined ? {} : { outcome: edge.outcome }),
+        loopBack: graph.loopBackEdges.has(edge),
+      }),
+    ),
+  );
 
   const flow: KestraFlowCandidate = Object.freeze({
     namespace,
     id,
-    revision: identity.workflowRevision,
+    workflowRevision: identity.workflowRevision,
     active: false,
-    trigger,
+    trigger: Object.freeze(trigger),
     tasks,
     edges,
     maximumNestingDepth: definition.maximumNestingDepth,
@@ -388,7 +548,7 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
       vortex_application_root_id: identity.applicationRootId,
       vortex_application_version: identity.applicationVersion,
       vortex_installation_revision: String(identity.installationRevision),
-      vortex_workflow_id: definition.workflowId,
+      vortex_workflow_id: workflowId,
       vortex_workflow_key: definition.key,
       vortex_workflow_revision: String(identity.workflowRevision),
     }),

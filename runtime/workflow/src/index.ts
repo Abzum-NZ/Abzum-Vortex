@@ -42,6 +42,8 @@ export {
   compileKestraFlow,
   kestraFlowCompilerEnvironments,
   kestraFlowCompilerRefusalReasons,
+  kestraProtectedOperationContractVersion,
+  kestraProtectedOperationRuntimeFields,
   type KestraFlowCandidate,
   type KestraFlowCompilation,
   type KestraFlowCompilerEnvironment,
@@ -51,6 +53,7 @@ export {
   type KestraFlowSequencedEdge,
   type KestraFlowTask,
   type KestraFlowTrigger,
+  type KestraProtectedOperationBinding,
 } from "./kestra-compiler";
 
 export const WorkflowService = Object.freeze({
