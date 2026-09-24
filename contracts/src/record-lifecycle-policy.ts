@@ -976,14 +976,16 @@ export const validateRecordTypeLifecyclePolicy = (
 /**
  * Candidate record input schema for evaluating lifecycle selection.
  * Requires expectedRecordRevision to ensure retries do not delete a newer record.
+ * Requires isHeld and isProtected so a candidate with missing hold evidence is refused
+ * instead of silently treated as unprotected.
  */
 export const lifecycleCandidateRecordSchema = z
   .object({
     recordId: recordIdSchema,
     expectedRecordRevision: jsonSafeRevisionSchema,
     createdAt: timestampSchema,
-    isHeld: z.boolean().default(false),
-    isProtected: z.boolean().default(false),
+    isHeld: z.boolean(),
+    isProtected: z.boolean(),
   })
   .strict();
 export type LifecycleCandidateRecord = z.infer<typeof lifecycleCandidateRecordSchema>;
