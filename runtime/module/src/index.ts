@@ -5,6 +5,7 @@ export * from "./storage-conversion";
 export * from "./installation-binding-reader";
 export * from "./installation-lifecycle";
 export * from "./index-build-runner";
+export * from "./index-status";
 
 export const ModuleService = Object.freeze({
   key: "module",
