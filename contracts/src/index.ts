@@ -3,6 +3,7 @@ export * from "./application-contract-versions";
 export * from "./application-composition-v2";
 export * from "./application-composition-catalogue";
 export * from "./platform-theme-catalogue";
+export * from "./platform-service-operation-catalogue";
 export * from "./application-flow-bindings";
 export * from "./application-access-coordination";
 export * from "./automation-contracts";
