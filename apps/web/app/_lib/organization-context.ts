@@ -25,12 +25,21 @@ export const loadOrganizationLauncher = async (
   session: IdentitySession,
 ): Promise<OrganizationLauncherResolution> => listOrganizationLauncher(session);
 
-export const loadPermittedApplicationsAtAddress = (
+export const loadPermittedApplicationsAtAddress = async (
   session: IdentitySession,
   tenantShortName: string,
   organizationShortName: string,
-): Promise<PermittedApplicationsRead> =>
-  readPermittedApplicationsAtAddress(session, tenantShortName, organizationShortName);
+): Promise<PermittedApplicationsRead> => {
+  let authorityId;
+  try {
+    authorityId = getIdentityAuthorityConfiguration().authorityId;
+  } catch {
+    return { kind: "temporarily_unavailable" };
+  }
+  return readPermittedApplicationsAtAddress(
+    session, tenantShortName, organizationShortName, authorityId,
+  );
+};
 
 export type SelectedOrganizationResult =
   | Readonly<{ kind: "available"; entry: OrganizationLauncherEntry }>

@@ -1,21 +1,13 @@
 import "server-only";
 
 import {
+  isReservedTenantSegment,
   resolvePermittedApplicationAddress,
   type PermittedApplication,
   type PermittedApplicationsRead,
 } from "@vortex/app";
 import { loadPermittedApplicationsAtAddress } from "./organization-context";
 import type { IdentitySession } from "@vortex/contracts";
-
-const reservedTenantSegments = new Set([
-  "auth",
-  "health",
-  "organizations",
-  "signed-in",
-  "signin",
-  "api",
-]);
 
 export type ApplicationAddressResult =
   | Readonly<{ kind: "unavailable" }>
@@ -38,7 +30,7 @@ export const resolveApplicationAddress = async (
   applicationKey?: string,
   pageKey?: string,
 ): Promise<ApplicationAddressResult> => {
-  if (reservedTenantSegments.has(tenantShortName.toLowerCase())) return { kind: "unavailable" };
+  if (isReservedTenantSegment(tenantShortName)) return { kind: "unavailable" };
 
   const read = await loadPermittedApplicationsAtAddress(
     session,
