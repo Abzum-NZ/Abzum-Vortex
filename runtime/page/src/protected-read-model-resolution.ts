@@ -180,17 +180,19 @@ export const createProtectedReadModelResolver = (readers: ProtectedReadModelRead
               ...(page.after === undefined ? {} : { afterInvitationId: page.after }),
             } as ListOrganizationInvitationsCommand),
           );
-        case "organization_runtime_settings":
+        case "organization_runtime_settings": {
           // One settings document: no cursor, so a continuation cursor is never meaningful here.
           if (page.after !== undefined) return refused;
-          return fromOwner(
-            model,
-            await readers.access.readOrganizationRuntimeSettings(
-              context.session,
-              context.selection,
-              {} as ReadOrganizationRuntimeSettingsCommand,
-            ),
+          const result = await readers.access.readOrganizationRuntimeSettings(
+            context.session,
+            context.selection,
+            {} as ReadOrganizationRuntimeSettingsCommand,
           );
+          // Absent settings are the same neutral refusal, never an available-but-empty document.
+          return result.kind === "available" && result.value.outcome !== "available"
+            ? refused
+            : fromOwner(model, result);
+        }
         case "tenant_structure": {
           const result = await readers.identity.listTenantHierarchy(context.session, {
             tenantId: context.tenantId,
