@@ -436,6 +436,27 @@ export const createStoredPageCapabilityService = (
     };
   };
 
+  // Projects one loaded page for the viewer's current authority over this exact scope only.
+  const projectStored = (
+    session: IdentitySession,
+    candidate: OrganizationSelectionCandidate,
+    stored: FixedAuthenticatedPageCapability,
+  ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> =>
+    createAuthenticatedPageCapabilityService({
+      ...requestDependencies,
+      adapter: {
+        load: async (_transaction, scope) => {
+          if (
+            scope.applicationRootId === undefined ||
+            !sameUuid(scope.organizationId, context.organizationId) ||
+            !sameUuid(scope.applicationRootId, applicationRootId)
+          )
+            throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
+          return stored;
+        },
+      },
+    }).project(session, candidate, undefined);
+
   const project = async (
     session: IdentitySession,
     candidate: OrganizationSelectionCandidate,
@@ -458,21 +479,28 @@ export const createStoredPageCapabilityService = (
       return { kind: "temporarily_unavailable" };
     }
     if (fixed === undefined) return { kind: "unavailable" };
-    const stored = fixed;
-    return createAuthenticatedPageCapabilityService({
-      ...requestDependencies,
-      adapter: {
-        load: async (_transaction, scope) => {
-          if (
-            scope.applicationRootId === undefined ||
-            !sameUuid(scope.organizationId, context.organizationId) ||
-            !sameUuid(scope.applicationRootId, applicationRootId)
-          )
-            throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
-          return stored;
-        },
-      },
-    }).project(session, candidate, undefined);
+    return projectStored(session, candidate, fixed);
+  };
+
+  /**
+   * True only when the viewer can currently open this page of the exact installed release, proved
+   * through the same page/access projection as `project`. Missing, refused, withdrawn and
+   * unprovable pages are all simply false, so no caller can tell them apart.
+   */
+  const pageOpens = async (
+    session: IdentitySession,
+    candidate: OrganizationSelectionCandidate,
+    pageId: string,
+  ): Promise<boolean> => {
+    let fixed: FixedAuthenticatedPageCapability | undefined;
+    try {
+      fixed = await load(pageId);
+    } catch {
+      return false;
+    }
+    if (fixed === undefined) return false;
+    const projected = await projectStored(session, candidate, fixed);
+    return projected.kind === "available" && projected.value !== undefined;
   };
 
   const readModels =
@@ -519,18 +547,32 @@ export const createStoredPageCapabilityService = (
     },
     /**
      * Re-checks one declared link target against the viewer's current access at navigation time.
-     * An external address is always available once it satisfies the bounded HTTPS contract and is
-     * never fetched. An internal application or page is proven only through this exact installed
-     * release and the viewer's current authority; a target that is missing, refused, withdrawn or
-     * outside the installed release collapses to the same opaque unavailable state, which carries
-     * no name, icon, address or reason. A caller without authority over this scope gets the same
-     * neutral refusal as the page itself.
+     * The target is definition or record data and grants nothing. An external address is available
+     * once it satisfies the bounded HTTPS contract and is never fetched. An application is
+     * available only when the viewer can currently open its release home page or a role home page
+     * of this installed release (the homes the #599 launcher opens at; the destination still
+     * chooses its own home when opened); a page only when the viewer can currently open that page.
+     * A target in another application is resolved by that application's own installed service.
+     * Missing, refused, withdrawn and out-of-release targets, and a viewer whose current authority
+     * fails, all collapse to the same opaque unavailable state with no name, icon, address or
+     * reason. A selection outside this installed scope gets the same neutral refusal as the page.
      */
     async resolveLinkTarget(
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
       target: StoredLinkTargetDeclaration,
     ): Promise<HumanOrganizationRequestResult<ProjectedLinkDestination>> {
+      if (
+        !sameUuid(candidate.organizationId, context.organizationId) ||
+        candidate.applicationRootId === undefined ||
+        !sameUuid(candidate.applicationRootId, applicationRootId)
+      )
+        return { kind: "unavailable" };
+      const unavailable = {
+        kind: "available",
+        value: projectUnavailableLinkDestination(),
+      } as const;
+
       if (target.kind === "external") {
         const address = safeHttpsUrlSchema.safeParse(target.address);
         return address.success
@@ -538,59 +580,34 @@ export const createStoredPageCapabilityService = (
               kind: "available",
               value: { availability: "available", kind: "external", address: address.data },
             }
-          : { kind: "available", value: projectUnavailableLinkDestination() };
+          : unavailable;
       }
-      if (
-        !sameUuid(candidate.organizationId, context.organizationId) ||
-        candidate.applicationRootId === undefined ||
-        !sameUuid(candidate.applicationRootId, applicationRootId)
-      )
-        return { kind: "unavailable" };
 
       if (target.kind === "application") {
         const parsed = applicationRootIdSchema.safeParse(target.applicationRootId);
-        if (!parsed.success || !sameUuid(parsed.data, applicationRootId))
-          return { kind: "available", value: projectUnavailableLinkDestination() };
-        const verified = await requests.run(session, candidate, async () => undefined);
-        return verified.kind === "available"
-          ? {
+        if (!parsed.success || !sameUuid(parsed.data, applicationRootId)) return unavailable;
+        const homes = [
+          applicationRelease.content.homePageId,
+          ...applicationRelease.content.roles.map((role) => role.homePageId),
+        ].filter(
+          (pageId, index, all) => all.findIndex((other) => sameUuid(other, pageId)) === index,
+        );
+        for (const pageId of homes)
+          if (await pageOpens(session, candidate, pageId))
+            return {
               kind: "available",
               value: { availability: "available", kind: "application", applicationRootId },
-            }
-          : { kind: "available", value: projectUnavailableLinkDestination() };
+            };
+        return unavailable;
       }
 
       const parsed = pageIdSchema.safeParse(target.pageId);
-      if (!parsed.success) return { kind: "available", value: projectUnavailableLinkDestination() };
-      let fixed: FixedAuthenticatedPageCapability | undefined;
-      try {
-        fixed = await load(parsed.data);
-      } catch {
-        return { kind: "available", value: projectUnavailableLinkDestination() };
-      }
-      if (fixed === undefined)
-        return { kind: "available", value: projectUnavailableLinkDestination() };
-      const stored = fixed;
-      const projected = await createAuthenticatedPageCapabilityService({
-        ...requestDependencies,
-        adapter: {
-          load: async (_transaction, scope) => {
-            if (
-              scope.applicationRootId === undefined ||
-              !sameUuid(scope.organizationId, context.organizationId) ||
-              !sameUuid(scope.applicationRootId, applicationRootId)
-            )
-              throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
-            return stored;
-          },
-        },
-      }).project(session, candidate, undefined);
-      return projected.kind === "available" && projected.value !== undefined
+      return parsed.success && (await pageOpens(session, candidate, parsed.data))
         ? {
             kind: "available",
             value: { availability: "available", kind: "page", pageId: parsed.data },
           }
-        : { kind: "available", value: projectUnavailableLinkDestination() };
+        : unavailable;
     },
   });
 };

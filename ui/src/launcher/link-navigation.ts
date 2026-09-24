@@ -45,32 +45,22 @@ export type LinkNavigationEnvironment = Readonly<{
   recheckInternalTarget: (target: LinkTarget) => Promise<boolean> | boolean;
   /** Performs the client-side transition for an internal target; the shell stays mounted. */
   navigateInternal: (target: LinkTarget) => void;
-  /** The address a new browsing context opens for an internal target. */
+  /** The same-origin address a new browsing context opens for an internal target. */
   resolveInternalAddress: (target: LinkTarget) => string;
 }>;
 
-/** One external anchor's activation: a validated address plus its fail-closed click guard. */
+/** One external anchor's attributes: a validated address opened in a new browsing context. */
 export type ExternalLinkActivation = Readonly<{
   href: string;
   target: "_blank";
   rel: "noopener noreferrer";
-  onClick: (event: { preventDefault: () => void }) => void;
 }>;
 
-/**
- * Validates one external address against the shared bounded HTTPS contract: HTTPS only, no embedded
- * credentials and at most the shared length limit. An invalid address fails the render closed
- * rather than being silently opened.
- */
-const requireSafeExternalAddress = (address: unknown): string => {
-  const parsed = safeHttpsUrlSchema.safeParse(address);
-  if (!parsed.success)
-    throw new DefinitionRenderError(
-      "INVALID_COMPOSITION",
-      "An external link requires an HTTPS address without credentials, at most 2048 characters",
-    );
-  return parsed.data;
-};
+const refusedExternalAddress = (): DefinitionRenderError =>
+  new DefinitionRenderError(
+    "INVALID_COMPOSITION",
+    "An external link requires an HTTPS address without credentials, at most 2048 characters",
+  );
 
 /** True when leaving the current surface may proceed; absent guard means nothing to protect. */
 const mayDiscardUnsavedWork = (guard: UnsavedWorkGuard | undefined): boolean =>
@@ -78,60 +68,73 @@ const mayDiscardUnsavedWork = (guard: UnsavedWorkGuard | undefined): boolean =>
 
 /** Opens a new browsing context with no opener access and no referrer; never a server fetch. */
 const openNewContext = (address: string): void => {
-  if (typeof window === "undefined") return;
   window.open(address, "_blank", "noopener,noreferrer");
 };
 
-/** Navigates the current document to an external address after unsaved-work protection. */
-const assignFullDocument = (address: string): void => {
-  if (typeof window === "undefined") return;
-  window.location.assign(address);
+/**
+ * Resolves the shell's address for an internal target against this document and accepts it only
+ * when it stays on this origin, so an internal link can never be turned into an external one.
+ */
+const sameOriginAddress = (address: string): string | undefined => {
+  try {
+    const resolved = new URL(address, window.location.origin);
+    return resolved.origin === window.location.origin ? resolved.href : undefined;
+  } catch {
+    return undefined;
+  }
 };
 
 /**
- * The activation props for one external link tile. The address is validated once; the anchor opens
- * a new browsing context with no opener access or referrer, and the click handler only enforces the
- * unsaved-work guard, so a refused activation never navigates. The platform never fetches the
- * address on the person's behalf.
+ * The anchor attributes for one external link tile. The address is validated against the shared
+ * bounded HTTPS contract (HTTPS only, no embedded credentials, at most the shared length limit)
+ * before render, and an invalid address fails the render closed rather than being shown. The anchor
+ * opens a new browsing context with no opener access or referrer, so the current surface and its
+ * unsaved work stay in place. The platform never fetches the address on the person's behalf.
  */
-export function externalLinkActivation(
-  address: unknown,
-  unsavedWork?: UnsavedWorkGuard,
-): ExternalLinkActivation {
-  const href = requireSafeExternalAddress(address);
+export function externalLinkActivation(address: unknown): ExternalLinkActivation {
+  const parsed = safeHttpsUrlSchema.safeParse(address);
+  if (!parsed.success) throw refusedExternalAddress();
   return Object.freeze({
-    href,
+    href: parsed.data,
     target: "_blank" as const,
     rel: "noopener noreferrer" as const,
-    onClick: (event: { preventDefault: () => void }): void => {
-      if (!mayDiscardUnsavedWork(unsavedWork)) event.preventDefault();
-    },
   });
 }
 
 /**
  * Activates one declared link target under its declared open behaviour. An external address is
- * validated, protected for unsaved work, then opened by full document navigation (`replace`) or in
- * a new browsing context without opener access or referrer (`new_page`); it is never fetched. An
- * internal target is re-checked on the server first, and a target that is no longer available is
- * refused so the surface stays unchanged. Returns true when navigation was started or allowed.
+ * validated, then opened by full document navigation after unsaved-work protection (`replace`) or
+ * in a new browsing context without opener access or referrer (`new_page`); it is never fetched.
+ * An internal target is re-checked on the server first and refused when it is no longer available;
+ * `replace` then transitions client-side after unsaved-work protection, and `new_page` opens its
+ * same-origin address in a new browsing context. A new browsing context never leaves the current
+ * surface, so it needs no unsaved-work prompt. Returns true only when navigation was started.
  */
 export async function activateLinkTarget(
   target: LinkTarget,
   behavior: LinkOpenBehavior,
   environment: LinkNavigationEnvironment,
 ): Promise<boolean> {
+  if (typeof window === "undefined") return false;
   if (target.kind === "external") {
-    const address = requireSafeExternalAddress(target.address);
+    const address = safeHttpsUrlSchema.safeParse(target.address);
+    if (!address.success) return false;
+    if (behavior === "new_page") {
+      openNewContext(address.data);
+      return true;
+    }
     if (!mayDiscardUnsavedWork(environment.unsavedWork)) return false;
-    if (behavior === "new_page") openNewContext(address);
-    else assignFullDocument(address);
+    window.location.assign(address.data);
     return true;
   }
   if (!(await environment.recheckInternalTarget(target))) return false;
+  if (behavior === "new_page") {
+    const address = sameOriginAddress(environment.resolveInternalAddress(target));
+    if (address === undefined) return false;
+    openNewContext(address);
+    return true;
+  }
   if (!mayDiscardUnsavedWork(environment.unsavedWork)) return false;
-  if (behavior === "new_page")
-    openNewContext(requireSafeExternalAddress(environment.resolveInternalAddress(target)));
-  else environment.navigateInternal(target);
+  environment.navigateInternal(target);
   return true;
 }

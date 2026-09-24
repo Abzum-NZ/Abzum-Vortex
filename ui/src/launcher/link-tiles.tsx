@@ -75,7 +75,10 @@ export function LinkTiles(props: PlatformBlockRenderProps): ReactElement {
                       <span className="vortex-link-tile-label">{label}</span>
                       {address === undefined || address.kind !== "link" ? null : (
                         <span className="vortex-link-tile-address">
-                          <a className="vortex-cell-link" {...externalLinkActivation(address.address)}>
+                          <a
+                            className="vortex-cell-link"
+                            {...externalLinkActivation(address.address)}
+                          >
                             {address.label}
                             <span aria-hidden="true"> ↗</span>
                             <span className="vortex-sr-only">

@@ -22,7 +22,14 @@ export const safeHttpsUrlSchema = z
   .max(safeHttpsUrlMaximumLength)
   .refine(
     (value) => {
-      const address = new URL(value);
+      // A failed format check does not stop this refinement, so an unparseable value must yield
+      // a validation failure (already reported above) rather than throw out of `safeParse`.
+      let address: URL;
+      try {
+        address = new URL(value);
+      } catch {
+        return true;
+      }
       return address.username.length === 0 && address.password.length === 0;
     },
     { message: "HTTPS addresses must not carry embedded credentials" },
