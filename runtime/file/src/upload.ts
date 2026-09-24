@@ -93,11 +93,16 @@ type AttachmentOwner = Readonly<{
 
 /**
  * The current record and field authority of this request, resolved by the
- * ordinary Access operation for the effective actor. Every upload step takes it
- * afresh; none reuses an earlier step's authority.
+ * ordinary Access operation for the effective actor on one record. Every upload
+ * step takes it afresh; none reuses an earlier step's authority. The field
+ * permissions apply only to the record named here, so continuing an upload
+ * requires that record to be the file's own owning record.
  */
 type CurrentUploadAuthority = Readonly<{
   sessionContext: SessionContext;
+  /** The record the field permissions below were resolved for. */
+  recordTypeId: RecordTypeId;
+  recordId: RecordId;
   readableFieldIds: readonly FieldId[];
   changeableFieldIds: readonly FieldId[];
 }>;
@@ -244,8 +249,6 @@ export type FileUploadAdmissionInput = CurrentUploadAuthority &
   Readonly<{
     organizationId: OrganizationId;
     applicationRootId?: ApplicationRootId;
-    recordTypeId: RecordTypeId;
-    recordId: RecordId;
     fieldId: FieldId;
     attachmentSettings: UploadAttachmentSettings;
     /** Files the saved record currently holds in this field, from the Record service. */
@@ -466,7 +469,8 @@ const sameUploadGrant = (left: UploadGrant, right: UploadGrant): boolean =>
 /**
  * Current authority to continue an admitted upload: the request actor must be
  * the file's own organisation's verified uploader, and the owning attachment
- * field must still be changeable under the request's current Access resolution.
+ * field must still be changeable on the file's own record under the request's
+ * current Access resolution.
  */
 const authorizeUploader = (
   state: PendingUploadState,
@@ -485,9 +489,12 @@ const authorizeUploader = (
   ) {
     return { authorized: false, reason: "caller_not_authorized" };
   }
+  // Field permissions granted on some other record say nothing about this file.
   const fieldId = state.fileRecord.ownerFieldId;
   if (
     fieldId === undefined ||
+    !sameId(state.fileRecord.ownerRecordTypeId, authority.recordTypeId) ||
+    !sameId(state.fileRecord.ownerRecordId, authority.recordId) ||
     !verifyAttachmentFieldAuthority({
       fieldId,
       readableFieldIds: authority.readableFieldIds,
