@@ -989,16 +989,11 @@ const flowTargetManifestFor = (
           contentFingerprint: String(target.contentFingerprint),
           resolutionFingerprint: String(target.resolutionFingerprint),
         });
-      else if (targetKind === "record_save")
-        add({
-          kind: "module_record_type",
-          moduleRootId: String(target.moduleRootId),
-          recordTypeId: String(target.recordTypeId),
-          releaseVersion: String(target.releaseVersion),
-          contentFingerprint: String(target.contentFingerprint),
-          resolutionFingerprint: String(target.resolutionFingerprint),
-        });
       else if (targetKind === "named_action") {
+        // A named-action flow node pins the exact action release: an application-owned action is
+        // pinned as an application action, and a module-owned action as a protected operation on
+        // its owning module. A generic record save adds no flow-target entry of its own because
+        // its record type belongs to a module release already pinned by the module binding.
         const owner = target.owner as { kind?: unknown; moduleRootId?: unknown };
         if (String(owner.kind) === "application")
           add({
@@ -1011,9 +1006,11 @@ const flowTargetManifestFor = (
           });
         else
           add({
-            kind: "module_action",
-            moduleRootId: String(owner.moduleRootId),
-            actionId: String(target.actionId),
+            kind: "protected_operation",
+            operation: {
+              owner: { kind: "module", moduleRootId: String(owner.moduleRootId) },
+              operationId: String(target.actionId),
+            },
             releaseVersion: String(target.releaseVersion),
             contentFingerprint: String(target.contentFingerprint),
             resolutionFingerprint: String(target.resolutionFingerprint),

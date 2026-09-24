@@ -298,6 +298,8 @@ const exactApplicationFlowTargetsMatch = (
           add({ kind: "application_action", applicationRootId, actionId: String(target.actionId), ...common });
           break;
         case "record_save":
+          // A generic record save is pinned by its owning module's binding release; it adds no
+          // separate flow-target entry, but its module evidence must still match the manifest.
           if (
             !moduleEvidenceMatches(
               target.moduleRootId,
@@ -306,12 +308,6 @@ const exactApplicationFlowTargetsMatch = (
             )
           )
             return false;
-          add({
-            kind: "module_record_type",
-            moduleRootId: String(target.moduleRootId),
-            recordTypeId: String(target.recordTypeId),
-            ...common,
-          });
           break;
         case "named_action": {
           const owner = target.owner as {
@@ -344,9 +340,11 @@ const exactApplicationFlowTargetsMatch = (
             )
               return false;
             add({
-              kind: "module_action",
-              moduleRootId: String(owner.moduleRootId),
-              actionId: String(target.actionId),
+              kind: "protected_operation",
+              operation: {
+                owner: { kind: "module", moduleRootId: String(owner.moduleRootId) },
+                operationId: String(target.actionId),
+              },
               ...common,
             });
           }
