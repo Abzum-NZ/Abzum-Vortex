@@ -239,6 +239,8 @@ export const verifyDefinitionCatalogueDependencies = async (
       dependency.kind === "application_form" ||
       dependency.kind === "application_workflow" ||
       dependency.kind === "application_action" ||
+      dependency.kind === "module_record_type" ||
+      dependency.kind === "module_action" ||
       (dependency.kind === "protected_operation" && dependency.operation.owner.kind !== "platform_service")
     )
       continue;

@@ -64,6 +64,10 @@ const manifestSubject = (dependency: ExactDefinitionDependency): string =>
                       ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.workflowId}`
                       : dependency.kind === "application_action"
                         ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.actionId}`
+                      : dependency.kind === "module_record_type"
+                        ? `${dependency.kind}:${dependency.moduleRootId}:${dependency.recordTypeId}`
+                        : dependency.kind === "module_action"
+                          ? `${dependency.kind}:${dependency.moduleRootId}:${dependency.actionId}`
                     : dependency.kind === "protected_operation"
                       ? `${dependency.kind}:${dependency.operation.owner.kind}:${
                           dependency.operation.owner.kind === "application"
@@ -103,6 +107,10 @@ const flowManifestSubject = (dependency: ExactDefinitionDependency): string => {
       return `${dependency.kind}:${dependency.applicationRootId}:${dependency.workflowId}`;
     case "application_action":
       return `${dependency.kind}:${dependency.applicationRootId}:${dependency.actionId}`;
+    case "module_record_type":
+      return `${dependency.kind}:${dependency.moduleRootId}:${dependency.recordTypeId}`;
+    case "module_action":
+      return `${dependency.kind}:${dependency.moduleRootId}:${dependency.actionId}`;
     case "protected_operation":
       return `${dependency.kind}:${dependency.operation.owner.kind}:${
         dependency.operation.owner.kind === "application"
@@ -289,6 +297,61 @@ const exactApplicationFlowTargetsMatch = (
             return false;
           add({ kind: "application_action", applicationRootId, actionId: String(target.actionId), ...common });
           break;
+        case "record_save":
+          if (
+            !moduleEvidenceMatches(
+              target.moduleRootId,
+              target.releaseVersion,
+              target.resolutionFingerprint,
+            )
+          )
+            return false;
+          add({
+            kind: "module_record_type",
+            moduleRootId: String(target.moduleRootId),
+            recordTypeId: String(target.recordTypeId),
+            ...common,
+          });
+          break;
+        case "named_action": {
+          const owner = target.owner as {
+            kind?: unknown;
+            moduleRootId?: unknown;
+            applicationRootId?: unknown;
+          };
+          if (String(owner.kind) === "application") {
+            if (
+              !applicationEvidenceMatches(
+                owner.applicationRootId,
+                target.releaseVersion,
+                target.resolutionFingerprint,
+              )
+            )
+              return false;
+            add({
+              kind: "application_action",
+              applicationRootId,
+              actionId: String(target.actionId),
+              ...common,
+            });
+          } else {
+            if (
+              !moduleEvidenceMatches(
+                owner.moduleRootId,
+                target.releaseVersion,
+                target.resolutionFingerprint,
+              )
+            )
+              return false;
+            add({
+              kind: "module_action",
+              moduleRootId: String(owner.moduleRootId),
+              actionId: String(target.actionId),
+              ...common,
+            });
+          }
+          break;
+        }
       }
     }
   }

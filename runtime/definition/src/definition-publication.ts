@@ -374,6 +374,10 @@ const subjectOf = (dependency: ExactDefinitionDependency): string =>
                       ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.workflowId}`
                       : dependency.kind === "application_action"
                         ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.actionId}`
+                      : dependency.kind === "module_record_type"
+                        ? `${dependency.kind}:${dependency.moduleRootId}:${dependency.recordTypeId}`
+                        : dependency.kind === "module_action"
+                          ? `${dependency.kind}:${dependency.moduleRootId}:${dependency.actionId}`
                     : dependency.kind === "protected_operation"
                       ? `${dependency.kind}:${dependency.operation.owner.kind}:${
                           dependency.operation.owner.kind === "application"
@@ -583,6 +587,10 @@ const findPinned = <Kind extends ExactDefinitionDependency["kind"]>(
             ? String(entry.flowId) === subject
             : entry.kind === "protected_operation"
               ? entry.operation.operationId === subject
+              : entry.kind === "module_record_type"
+                ? entry.recordTypeId === subject
+                : entry.kind === "module_action"
+                  ? entry.actionId === subject
           : entry.key === subject),
   );
   if (matches.length !== 1) return refuse("DEFINITION_CONFIRMATION_MISMATCH");
@@ -981,6 +989,36 @@ const flowTargetManifestFor = (
           contentFingerprint: String(target.contentFingerprint),
           resolutionFingerprint: String(target.resolutionFingerprint),
         });
+      else if (targetKind === "record_save")
+        add({
+          kind: "module_record_type",
+          moduleRootId: String(target.moduleRootId),
+          recordTypeId: String(target.recordTypeId),
+          releaseVersion: String(target.releaseVersion),
+          contentFingerprint: String(target.contentFingerprint),
+          resolutionFingerprint: String(target.resolutionFingerprint),
+        });
+      else if (targetKind === "named_action") {
+        const owner = target.owner as { kind?: unknown; moduleRootId?: unknown };
+        if (String(owner.kind) === "application")
+          add({
+            kind: "application_action",
+            applicationRootId,
+            actionId: String(target.actionId),
+            releaseVersion: String(target.releaseVersion),
+            contentFingerprint: String(target.contentFingerprint),
+            resolutionFingerprint: String(target.resolutionFingerprint),
+          });
+        else
+          add({
+            kind: "module_action",
+            moduleRootId: String(owner.moduleRootId),
+            actionId: String(target.actionId),
+            releaseVersion: String(target.releaseVersion),
+            contentFingerprint: String(target.contentFingerprint),
+            resolutionFingerprint: String(target.resolutionFingerprint),
+          });
+      }
     }
   }
   for (const binding of content.flowBindings) {

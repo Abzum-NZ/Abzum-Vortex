@@ -339,6 +339,22 @@ export const flowTargetDependencySchema = z.discriminatedUnion("kind", [
       ...flowTargetDependencyCommon,
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal("module_record_type"),
+      moduleRootId: moduleRootIdSchema,
+      recordTypeId: recordTypeIdSchema,
+      ...flowTargetDependencyCommon,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("module_action"),
+      moduleRootId: moduleRootIdSchema,
+      actionId: containedComponentIdSchema,
+      ...flowTargetDependencyCommon,
+    })
+    .strict(),
 ]);
 
 /** Exact immutable authority for a platform-managed flow catalogue release. */
@@ -871,6 +887,30 @@ export const currentUserFlowActionTargetSchema = z.discriminatedUnion("kind", [
       ...resolvedFlowTargetEvidenceSchema.shape,
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal("record_save"),
+      applicationRootId: applicationRootIdSchema,
+      moduleRootId: moduleRootIdSchema,
+      recordTypeId: recordTypeIdSchema,
+      mode: z.enum(["create", "update"]),
+      ...resolvedFlowTargetEvidenceSchema.shape,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("named_action"),
+      actionKey: namespacedKeySchema,
+      owner: z.discriminatedUnion("kind", [
+        z
+          .object({ kind: z.literal("application"), applicationRootId: applicationRootIdSchema })
+          .strict(),
+        z.object({ kind: z.literal("module"), moduleRootId: moduleRootIdSchema }).strict(),
+      ]),
+      actionId: containedComponentIdSchema,
+      ...resolvedFlowTargetEvidenceSchema.shape,
+    })
+    .strict(),
 ]);
 
 /**
@@ -881,6 +921,8 @@ export const currentUserFlowActionResults = {
   form_continuation: ["completed", "validation", "refused"],
   durable_workflow_start: ["background_pending", "validation", "refused", "uncertain"],
   application_action: ["committed", "validation", "refused", "conflict", "uncertain"],
+  record_save: ["committed", "validation", "refused", "conflict", "uncertain"],
+  named_action: ["committed", "validation", "refused", "conflict", "uncertain"],
 } as const satisfies Readonly<
   Record<
     Exclude<CurrentUserFlowActionTarget["kind"], "protected_operation">,
@@ -1905,6 +1947,24 @@ export const sourceCurrentUserFlowActionTargetSchema = z.discriminatedUnion("kin
   z
     .object({
       kind: z.literal("application_action"),
+      action: namespacedKeySchema,
+    })
+    .strict(),
+  // A generic record commit binds one module record type by its published permanent identity and
+  // commits the bound form draft through the ordinary create/update Record operation. It carries
+  // no application-specific action identity.
+  z
+    .object({
+      kind: z.literal("record_save"),
+      record_type: sourceQualifiedRecordTypeSchema,
+      mode: z.enum(["create", "update"]),
+    })
+    .strict(),
+  // A named action binds one module- or application-owned action by its published namespaced key;
+  // the compiler resolves the key to the action's permanent contained identity.
+  z
+    .object({
+      kind: z.literal("named_action"),
       action: namespacedKeySchema,
     })
     .strict(),

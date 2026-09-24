@@ -69,6 +69,10 @@ const dependencySubject = (entry: z.infer<typeof exactDefinitionDependencySchema
                         ? `${entry.kind}:${entry.applicationRootId}:${entry.workflowId}`
                         : entry.kind === "application_action"
                           ? `${entry.kind}:${entry.applicationRootId}:${entry.actionId}`
+                          : entry.kind === "module_record_type"
+                            ? `${entry.kind}:${entry.moduleRootId}:${entry.recordTypeId}`
+                            : entry.kind === "module_action"
+                              ? `${entry.kind}:${entry.moduleRootId}:${entry.actionId}`
                       : entry.kind === "protected_operation"
                         ? `${entry.kind}:${entry.operation.owner.kind}:${
                             entry.operation.owner.kind === "application"

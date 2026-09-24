@@ -2903,6 +2903,7 @@ function validateCurrentUserFlow(
   placementIds: ReadonlySet<string>,
   eventIds: ReadonlySet<string>,
   fields: ReadonlyMap<string, JsonObject>,
+  records: ReadonlyMap<string, JsonObject>,
 ): DefinitionRuleFailure[] {
   const failures: DefinitionRuleFailure[] = [];
   const flowFailure = (ruleCode: string, family: DefinitionRuleFailure["family"]) =>
@@ -3204,6 +3205,59 @@ function validateCurrentUserFlow(
               ),
             );
         }
+      } else if (target.kind === "record_save") {
+        const moduleRootId = String(target.moduleRootId);
+        const moduleEvidence = definitionEvidenceByRoot.get(moduleRootId);
+        if (
+          target.applicationRootId !== applicationRootId ||
+          !boundModuleRootIds.has(moduleRootId) ||
+          moduleEvidence === undefined ||
+          target.releaseVersion !== moduleEvidence.releaseVersion ||
+          target.resolutionFingerprint !== moduleEvidence.resolutionFingerprint ||
+          !records.has(String(target.recordTypeId))
+        )
+          failures.push(
+            flowFailure(
+              "vortex.definition.application_flow_node_references",
+              "broken_reference",
+            ),
+          );
+      } else if (target.kind === "named_action") {
+        const owner = object(target.owner);
+        if (owner.kind === "application") {
+          const action = actions.get(String(target.actionKey));
+          if (
+            String(owner.applicationRootId) !== applicationRootId ||
+            target.releaseVersion !== flow.releaseVersion ||
+            target.resolutionFingerprint !== flow.resolutionFingerprint ||
+            action === undefined ||
+            String(action.actionId) !== String(target.actionId)
+          )
+            failures.push(
+              flowFailure(
+                "vortex.definition.application_flow_node_references",
+                "broken_reference",
+              ),
+            );
+        } else {
+          const moduleRootId = String(owner.moduleRootId);
+          const moduleEvidence = definitionEvidenceByRoot.get(moduleRootId);
+          const action = protectedOperations.get(`${moduleRootId}:${String(target.actionId)}`);
+          if (
+            !boundModuleRootIds.has(moduleRootId) ||
+            moduleEvidence === undefined ||
+            target.releaseVersion !== moduleEvidence.releaseVersion ||
+            target.resolutionFingerprint !== moduleEvidence.resolutionFingerprint ||
+            action === undefined ||
+            String(action.key) !== String(target.actionKey)
+          )
+            failures.push(
+              flowFailure(
+                "vortex.definition.application_flow_node_references",
+                "broken_reference",
+              ),
+            );
+        }
       }
     }
 
@@ -3238,6 +3292,19 @@ function validateCurrentUserFlow(
             required: true,
           }))
         : undefined;
+    }
+    if (node.kind === "action" && object(node.target).kind === "named_action") {
+      const target = object(node.target);
+      const owner = object(target.owner);
+      if (owner.kind === "application") {
+        const action = actions.get(String(target.actionKey));
+        targetInputs = action ? array(action.inputs) : undefined;
+      } else {
+        const action = protectedOperations.get(
+          `${String(owner.moduleRootId)}:${String(target.actionId)}`,
+        );
+        targetInputs = action ? array(action.inputs) : undefined;
+      }
     }
     if (targetInputs !== undefined) {
       const provided = object(node.inputs ?? {});
@@ -5672,6 +5739,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           applicationPlacementIds,
           eventIds,
           allFields,
+          records,
         ),
       );
     }
