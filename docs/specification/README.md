@@ -4,8 +4,8 @@
 
 The [7 September whole-platform architecture review](../build-plan/architecture-review-2026-09-07.md) describes configurable data flows, managed behavior, per-node identity and truthful partial outcomes. Current-person flow execution supports the Phase 6 application before the later [scoped execution-identity task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322). That task is a prerequisite only for specified-account and System execution. [Delivery ownership](../build-plan/frontend-rule-designer.md) assigns the corresponding early and later implementation work; specification text does not itself establish delivered runtime functionality.
 
-**Status:** Development specification; roadmap and completion policy revised 21 September 2026
-**Date:** 21 September 2026
+**Status:** Development specification; architecture decisions added 25 September 2026
+**Date:** 25 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 
 **Source repository:** [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex)
@@ -23,7 +23,7 @@ This document is the approved product contract for the current build scope. The 
   - save rules enforced inside the save transaction;
   - read-time computed fields for time-dependent values;
   - one configurable Records table component;
-  - [application packages](appendices/application-packages.md) with sandboxed custom components and isolated Kestra custom scripts, clean install and uninstall, and an immutable runtime-bundle cache;
+  - [application packages](appendices/application-packages.md) derived from published applications, with sandboxed custom components (custom scripts deferred until a dedicated sandbox exists), clean install and uninstall through a registration ledger, and an immutable runtime bundle per installation revision;
   - agent building through the same permission-checked operations.
 
 - [12 September findings and resolutions](../build-plan/spec-task-review-2026-09-12.md): specification/task reconciliation; implementation stays with the named delivery owners.
@@ -124,7 +124,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 | Version | Status   | Date             | Summary                                                                                                                                                                                                                    |
 | ------- | -------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2.25    | Approved | 25 September 2026 | Architecture decisions: one Kestra-shaped flow definition run first by the Vortex flow engine; saving as a flow around one atomic operation; save rules inside the transaction; read-time computed fields; one Records table component; application packages with sandboxed custom components and isolated custom scripts; clean install and uninstall; runtime-bundle cache; agent building through the same operations. |
+| 2.25    | Approved | 25 September 2026 | Architecture decisions: one Kestra-shaped flow definition run first by the Vortex flow engine; saving as a flow around one atomic operation; save rules inside the transaction; read-time computed fields; one Records table component; application packages with sandboxed custom components (scripts deferred); clean install and uninstall; immutable runtime bundles; agent building through the same operations. |
 | 2.24    | Approved | 12 September 2026 | Review correction: localise business-decision holds, distinguish engineering findings from product choices, and require impact-based documentation updates rather than duplicated change records. |
 | 2.23    | Approved | 11 September 2026 | Bound the request context to an owner-only row keyed to the establishing transaction (#386): session settings no longer carry identity, re-establishment is refused after a role reset, the two-role split is grant hygiene not an injection boundary, and the application-server trust ceiling is stated. |
 | 2.22    | Approved | 10 September 2026 | Defined links to applications, pages, records and external addresses with server-resolved availability and open behaviour; the organisation default application and permitted-applications read; and the Landing Zone as an ordinary application with organisation-account-owned tiles and a shell-slot rail. |

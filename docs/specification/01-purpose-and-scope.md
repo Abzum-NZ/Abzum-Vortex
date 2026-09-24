@@ -52,7 +52,7 @@ The first complete release includes:
 
 The first complete release does not include:
 
-- Customer-supplied code running on Vortex servers or in the Vortex browser origin. An [application package](appendices/application-packages.md) may bundle custom browser components, rendered in a sandboxed iframe without Vortex credentials, and custom scripts that run only as isolated Kestra script tasks. Installing such a package requires a dedicated permission.
+- Customer-supplied code running on Vortex servers or in the Vortex browser origin. An [application package](appendices/application-packages.md) may bundle custom browser components, rendered in a sandboxed frame on a dedicated domain without Vortex credentials. Installing such a package requires a dedicated permission. Custom backend scripts are deferred until a dedicated script sandbox exists.
 - A general-purpose website hosting product.
 - Direct customer access to platform databases or infrastructure accounts.
 - Automatic sharing of records, definitions, files, or learned information between organisations.
@@ -70,7 +70,7 @@ The first complete release does not include:
 5. **Unsafe requests fail closed.** When the platform cannot prove an operation is allowed, it refuses the operation and records why.
 6. **Business choices are visible.** An undecided policy is listed in the [decision register](appendices/decisions.md), not embedded as an implementation assumption.
 7. **Core knows primitives, not business domains.** Every privileged contract must pass the [core contract admission test](appendices/core-contract-boundary.md#admission-test).
-8. **Everything is a definition.** Modules, applications, flows, pages, components, roles and packages are stored definitions that generic engines render and execute. A person with the builder permissions, or an agent acting for them, creates, changes, installs and uninstalls applications through the same operations, without code changes or redeployment.
+8. **Everything is a definition.** Modules, applications, flows, pages, components and role templates are stored definitions, and packages are derived from published applications that generic engines render and execute. A person with the builder permissions, or an agent acting for them, creates, changes, installs and uninstalls applications through the same operations, without code changes or redeployment.
 9. **Every authorised interface operation has one behaviour.** The web interface and [MCP](12-connections-and-interfaces.md#governed-mcp-access) expose the same permission-filtered semantic controls and call the same platform services. Neither surface invents a second save, action, validation, or access path.
 
 ## Acceptance examples
