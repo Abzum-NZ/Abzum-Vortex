@@ -117,7 +117,7 @@ const readModelBlock = (key: ProtectedReadModelKey, title: string) => ({
 /**
  * The Tenant Administration application definition. Every visible region is
  * definition-led. Ordinary lifecycle requests come from the bound module; the
- * protected tenant-structure and administrator regions read live protected
+ * protected tenant-structure and role assignment ledger regions read live protected
  * read models. No region offers a parallel access-grant control: grants run in IAM.
  */
 export const tenantAdministrationApplication: ApplicationSourceDocumentV2 =
@@ -266,7 +266,7 @@ export const tenantAdministrationApplication: ApplicationSourceDocumentV2 =
                 "overview_text",
                 textBlock(
                   "Tenant overview",
-                  "Review tenant structure, organisation lifecycle requests and tenant administrators. Protected tenant structure and administrator assignments are read live on their own pages; nothing is copied into application records.",
+                  "Review tenant structure and organisation lifecycle requests. Protected tenant structure and the organisation's role assignment ledger are read live on their own pages; nothing is copied into application records. A tenant administrator listing is not yet available.",
                 ),
               ),
             },
@@ -305,7 +305,7 @@ export const tenantAdministrationApplication: ApplicationSourceDocumentV2 =
                 placements: {
                   administrators_text: textBlock(
                     "Tenant administrators",
-                    "Tenant administrators are not yet available from a protected read model. The Role assignment ledger below is the organisation's assignment history, including ended entries, read live from protected Access. Granting and revoking tenant-administrator access runs through IAM, never from this application.",
+                    "A tenant administrator listing is not yet available: no protected read model provides one. The role assignment ledger below is not that list; it is the organisation's role assignment ledger, including revoked and expired entries, read live from protected Access. Granting and revoking tenant-administrator access runs through IAM, never from this application.",
                   ),
                   administrators_region: readModelBlock(
                     "effective_assignments",
