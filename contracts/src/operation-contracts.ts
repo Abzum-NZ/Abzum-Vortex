@@ -5,20 +5,15 @@ import {
   jsonValueSchema,
   secretReferenceSchema,
 } from "./common";
-import { lifecycleStateSchema } from "./catalogues";
 import {
-  actionIdSchema,
-  activityIdSchema,
   actorIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
-  containedComponentIdSchema,
   eventIdSchema,
   eventOccurrenceIdSchema,
   fieldIdSchema,
   fileIdSchema,
   fingerprintSchema,
-  groupIdSchema,
   identityIdSchema,
   meteringEventIdSchema,
   moduleRootIdSchema,
@@ -28,96 +23,14 @@ import {
   platformIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
-  removalReceiptIdSchema,
   retentionPolicyIdSchema,
   revisionSchema,
   semanticVersionSchema,
-  storageContractIdSchema,
   tenantIdSchema,
   timestampSchema,
-  workflowNodeIdSchema,
-  workflowRunIdSchema,
 } from "./identifiers";
 import { installedEventDescriptorSchema } from "./module-contracts";
 import type { StandardInstalledEventKind } from "./module-contracts";
-
-const businessRecordFields = {
-  organizationId: organizationIdSchema,
-  moduleRootId: moduleRootIdSchema,
-  recordTypeId: recordTypeIdSchema,
-  storageContractId: storageContractIdSchema,
-  recordId: recordIdSchema,
-  definitionRevision: revisionSchema,
-  owner: z
-    .discriminatedUnion("kind", [
-      z
-        .object({
-          kind: z.literal("organization_account"),
-          organizationAccountId: organizationAccountIdSchema,
-        })
-        .strict(),
-      z.object({ kind: z.literal("group"), groupId: groupIdSchema }).strict(),
-    ])
-    .optional(),
-  lifecycleState: lifecycleStateSchema,
-  concurrencyNumber: z.number().int().positive(),
-  values: z.record(fieldIdSchema, jsonValueSchema),
-  createdAt: timestampSchema,
-  createdBy: actorIdSchema,
-  updatedAt: timestampSchema,
-  updatedBy: actorIdSchema,
-  deletedAt: timestampSchema.optional(),
-  deletedBy: actorIdSchema.optional(),
-  removalDueAt: timestampSchema.optional(),
-};
-const organizationSharedBusinessRecordSchema = z
-  .object({ storageScope: z.literal("organization_shared"), ...businessRecordFields })
-  .strict();
-const applicationContainedBusinessRecordSchema = z
-  .object({
-    storageScope: z.literal("application_contained"),
-    ...businessRecordFields,
-    applicationRootId: applicationRootIdSchema,
-  })
-  .strict();
-export const businessRecordSchema = z
-  .discriminatedUnion("storageScope", [
-    organizationSharedBusinessRecordSchema,
-    applicationContainedBusinessRecordSchema,
-  ])
-  .superRefine((value, context) => {
-    const deleted = value.lifecycleState !== "active";
-    if (deleted !== (value.deletedAt !== undefined && value.deletedBy !== undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["deletedAt"],
-        message: "Deletion evidence is present exactly after soft deletion",
-      });
-    if ((value.lifecycleState === "removal_pending") !== (value.removalDueAt !== undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["removalDueAt"],
-        message: "A removal due time is present exactly while removal is pending",
-      });
-  });
-export const eventEnvelopeSchema = z
-  .object({
-    eventId: eventIdSchema,
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema.optional(),
-    moduleRootId: moduleRootIdSchema,
-    recordTypeId: recordTypeIdSchema,
-    recordId: recordIdSchema,
-    eventName: builderKeySchema,
-    occurredAt: timestampSchema,
-    actorId: actorIdSchema,
-    correlationId: correlationIdSchema,
-    causationId: platformIdSchema.optional(),
-    definitionRevisions: z.record(z.string(), revisionSchema),
-    recordSequence: revisionSchema,
-    carriedValues: z.record(fieldIdSchema, jsonValueSchema),
-  })
-  .strict();
 
 const javascriptSafeEventRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 
@@ -262,19 +175,6 @@ export const eventOccurrenceEnvelopeV2Schema = z
         message: "A standard occurrence belongs to its record type's Module release",
       });
   });
-export const eventDispatchSchema = z
-  .object({
-    eventId: eventIdSchema,
-    status: z.enum(["pending", "claimed", "delivered", "failed"]),
-    availableAt: timestampSchema,
-    claimOwner: z.string().min(1).max(200).optional(),
-    claimExpiresAt: timestampSchema.optional(),
-    attempts: z.number().int().min(0).max(100),
-    lastSafeErrorCode: builderKeySchema.optional(),
-    deliveredAt: timestampSchema.optional(),
-    failedSequenceResolution: z.enum(["retry", "skip", "stop"]).optional(),
-  })
-  .strict();
 export const liveInvalidationSchema = z
   .object({
     contractVersion: semanticVersionSchema,
@@ -290,42 +190,6 @@ export const liveInvalidationSchema = z
     correlationId: correlationIdSchema,
   })
   .strict();
-export const cacheInvalidationSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema.optional(),
-    subjectKind: z.enum(["access", "definition", "record_type", "record", "query"]),
-    subjectId: platformIdSchema,
-    version: revisionSchema,
-    occurredAt: timestampSchema,
-    correlationId: correlationIdSchema,
-  })
-  .strict();
-export const operationalStatusSchema = z
-  .object({
-    component: builderKeySchema,
-    environment: z.enum(["local", "testing", "production"]),
-    state: z.enum(["healthy", "degraded", "unavailable", "maintenance"]),
-    observedAt: timestampSchema,
-    safeCode: builderKeySchema,
-    correlationId: correlationIdSchema.optional(),
-  })
-  .strict();
-export const applicationSideEffectReceiptSchema = z
-  .object({
-    runId: workflowRunIdSchema,
-    nodeId: workflowNodeIdSchema,
-    attempt: z.number().int().positive(),
-    duplicateProtectionKey: z.string().min(16).max(200),
-    acceptedAt: timestampSchema,
-    safeInputFingerprint: fingerprintSchema,
-    outcome: z.enum(["completed", "already_completed", "refused", "failed"]),
-    resultingRecordIds: z.array(recordIdSchema),
-    resultingActionIds: z.array(actionIdSchema),
-    resultingEventIds: z.array(eventIdSchema),
-  })
-  .strict();
-
 export const fileLifecycleStateSchema = z.enum([
   "pending",
   "uploaded",
@@ -1016,59 +880,12 @@ export type FileUploadActivationRefusalReason = z.infer<
   typeof fileUploadActivationRefusalReasonSchema
 >;
 
-const canonicalActivitySubjectIdsSchema = z
-  .array(platformIdSchema)
-  .min(1)
-  .superRefine((identifiers, context) => {
-    const canonicalIdentifiers = identifiers.map((identifier) => identifier.toLowerCase());
-    for (let index = 1; index < canonicalIdentifiers.length; index += 1) {
-      if (canonicalIdentifiers[index - 1]! >= canonicalIdentifiers[index]!) {
-        context.addIssue({
-          code: "custom",
-          message: "Activity subject identifiers must be unique and in canonical order",
-        });
-        return;
-      }
-    }
-  });
-
-const canonicalActivityChangedFieldIdsSchema = z
-  .array(fieldIdSchema)
-  .superRefine((identifiers, context) => {
-    const canonicalIdentifiers = identifiers.map((identifier) => identifier.toLowerCase());
-    for (let index = 1; index < canonicalIdentifiers.length; index += 1) {
-      if (canonicalIdentifiers[index - 1]! >= canonicalIdentifiers[index]!) {
-        context.addIssue({
-          code: "custom",
-          message: "Changed field identifiers must be unique and in canonical order",
-        });
-        return;
-      }
-    }
-  });
-
 export const activityActorKindSchema = z.enum([
   "identity",
   "organization_account",
   "system",
   "public_session",
 ]);
-
-export const activityEntrySchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    activityId: activityIdSchema,
-    occurredAt: timestampSchema,
-    actorKind: activityActorKindSchema,
-    actorId: actorIdSchema,
-    action: builderKeySchema,
-    subjectIds: canonicalActivitySubjectIdsSchema,
-    changedFieldIds: canonicalActivityChangedFieldIdsSchema,
-    source: z.enum(["web", "workflow", "interface", "connection", "federation", "system"]),
-    correlationId: correlationIdSchema,
-    outcome: z.enum(["completed", "refused", "failed"]),
-  })
-  .strict();
 
 export const activitySourceSchema = z.enum([
   "web",
@@ -1117,76 +934,6 @@ export const activityAggregateDimensionSchema = z.enum([
   "source",
   "outcome",
 ]);
-export const retentionPolicySchema = z
-  .object({
-    retentionPolicyId: retentionPolicyIdSchema,
-    organizationId: organizationIdSchema,
-    dataCategory: builderKeySchema,
-    savedConditionId: containedComponentIdSchema.optional(),
-    savedConditionRevision: revisionSchema.optional(),
-    savedConditionFingerprint: fingerprintSchema.optional(),
-    activeDays: z.number().int().min(0).max(36_500),
-    recoveryDays: z.number().int().min(0).max(3_650),
-    removalSchedule: z.string().min(1).max(200),
-    legalConstraintKeys: z.array(builderKeySchema),
-    state: z.enum(["draft", "active", "retired"]),
-    createdBy: organizationAccountIdSchema,
-    approvedBy: organizationAccountIdSchema,
-    version: revisionSchema,
-  })
-  .strict()
-  .refine(
-    (value) => {
-      const suppliedReferenceParts = [
-        value.savedConditionId,
-        value.savedConditionRevision,
-        value.savedConditionFingerprint,
-      ].filter((item) => item !== undefined).length;
-      return suppliedReferenceParts === 0 || suppliedReferenceParts === 3;
-    },
-    {
-      path: ["savedConditionId"],
-      message: "A saved condition identifier, revision and fingerprint are supplied together",
-    },
-  );
-export const permanentRemovalReceiptSchema = z
-  .object({
-    removalReceiptId: removalReceiptIdSchema,
-    organizationId: organizationIdSchema,
-    protectedFingerprint: fingerprintSchema,
-    category: builderKeySchema,
-    selectionFingerprint: fingerprintSchema,
-    completedAt: timestampSchema,
-    retentionPolicyId: retentionPolicyIdSchema,
-    jobId: platformIdSchema,
-    outcome: z.enum(["removed", "partially_removed", "lawful_exception"]),
-    lawfulExceptionCode: builderKeySchema.optional(),
-  })
-  .strict();
-export const protectedRemovalCommandSchema = z
-  .object({
-    commandId: platformIdSchema,
-    tenantId: tenantIdSchema,
-    organizationIds: z.array(organizationIdSchema).min(1),
-    dataCategories: z.array(builderKeySchema).min(1),
-    savedConditionId: containedComponentIdSchema.optional(),
-    savedConditionRevision: revisionSchema.optional(),
-    subjectFingerprint: fingerprintSchema.optional(),
-    requestedBy: platformIdSchema,
-    authorizedBy: platformIdSchema,
-    issuedAt: timestampSchema,
-    correlationId: correlationIdSchema,
-  })
-  .strict()
-  .refine(
-    (value) =>
-      (value.savedConditionId === undefined) === (value.savedConditionRevision === undefined),
-    {
-      path: ["savedConditionRevision"],
-      message: "A saved condition identifier and revision are supplied together",
-    },
-  );
-
 export const entitlementCheckRequestSchema = z
   .object({
     tenantId: tenantIdSchema,
@@ -1197,38 +944,6 @@ export const entitlementCheckRequestSchema = z
     correlationId: correlationIdSchema,
   })
   .strict();
-const entitlementDecisionCommon = {
-  decisionId: platformIdSchema,
-  tenantId: tenantIdSchema,
-  organizationId: organizationIdSchema.optional(),
-  capabilityKey: namespacedKeySchema,
-  requestedQuantity: z.number().positive().finite(),
-  unit: builderKeySchema,
-  policyRevision: revisionSchema,
-  decidedAt: timestampSchema,
-  correlationId: correlationIdSchema,
-};
-export const entitlementDecisionSchema = z.discriminatedUnion("outcome", [
-  z
-    .object({
-      ...entitlementDecisionCommon,
-      outcome: z.literal("allowed"),
-      acceptedQuantity: z.number().positive().finite(),
-      remainingQuantity: z.number().nonnegative().finite().optional(),
-    })
-    .strict()
-    .refine((value) => value.acceptedQuantity <= value.requestedQuantity, {
-      path: ["acceptedQuantity"],
-      message: "An entitlement decision cannot accept more than was requested",
-    }),
-  z
-    .object({
-      ...entitlementDecisionCommon,
-      outcome: z.literal("refused"),
-      reasonCode: builderKeySchema,
-    })
-    .strict(),
-]);
 /** Route that produced a metering event; federation is the only cross-cluster route. */
 export const meteringEventSourceSchema = z.enum([
   "web",
@@ -1395,31 +1110,8 @@ export const safeErrorResponseSchema = z.discriminatedUnion("code", [
   safeErrorVariant("temporarily_unavailable"),
   safeErrorVariant("operation_failed"),
 ]);
-export const performanceMeasurementSchema = z
-  .object({
-    operation: builderKeySchema,
-    dataset: builderKeySchema,
-    cacheState: z.enum(["cold", "warm", "bypass"]),
-    region: z.string().min(1).max(100),
-    device: z.string().min(1).max(100),
-    network: z.string().min(1).max(100),
-    percentile: z.enum(["p50", "p75", "p95", "p99"]),
-    clientMilliseconds: z.number().nonnegative(),
-    serverMilliseconds: z.number().nonnegative(),
-    databaseMilliseconds: z.number().nonnegative(),
-    codeRevision: z.string().min(7).max(64),
-    comparisonBaseline: z.string().min(1).max(200),
-  })
-  .strict();
-
-export type BusinessRecord = z.infer<typeof businessRecordSchema>;
-export type EventEnvelope = z.infer<typeof eventEnvelopeSchema>;
 export type EventOccurrenceEnvelopeV2 = z.infer<typeof eventOccurrenceEnvelopeV2Schema>;
-export type EventDispatch = z.infer<typeof eventDispatchSchema>;
 export type LiveInvalidation = z.infer<typeof liveInvalidationSchema>;
-export type CacheInvalidation = z.infer<typeof cacheInvalidationSchema>;
-export type OperationalStatus = z.infer<typeof operationalStatusSchema>;
-export type ApplicationSideEffectReceipt = z.infer<typeof applicationSideEffectReceiptSchema>;
 export type FileLifecycleState = z.infer<typeof fileLifecycleStateSchema>;
 export type VerifiedFileActor = z.infer<typeof verifiedFileActorSchema>;
 export type PrivateFileBucket = z.infer<typeof privateFileBucketSchema>;
@@ -1428,17 +1120,12 @@ export type FileStorageOperationClaims = z.infer<typeof fileStorageOperationClai
 export type FileRecord = z.infer<typeof fileRecordSchema>;
 export type UploadGrant = z.infer<typeof uploadGrantSchema>;
 export type DownloadGrant = z.infer<typeof downloadGrantSchema>;
-export type ActivityEntry = z.infer<typeof activityEntrySchema>;
 export type ActivitySource = z.infer<typeof activitySourceSchema>;
 export type ActivityOutcome = z.infer<typeof activityOutcomeSchema>;
 export type ActivityProjection = z.infer<typeof activityProjectionSchema>;
 export type ActivityHistoryFilter = z.infer<typeof activityHistoryFilterSchema>;
 export type ActivityAggregateDimension = z.infer<typeof activityAggregateDimensionSchema>;
-export type RetentionPolicy = z.infer<typeof retentionPolicySchema>;
-export type PermanentRemovalReceipt = z.infer<typeof permanentRemovalReceiptSchema>;
-export type ProtectedRemovalCommand = z.infer<typeof protectedRemovalCommandSchema>;
 export type EntitlementCheckRequest = z.infer<typeof entitlementCheckRequestSchema>;
-export type EntitlementDecision = z.infer<typeof entitlementDecisionSchema>;
 export type MeteringEvent = z.infer<typeof meteringEventSchema>;
 export type MeteringEventSource = z.infer<typeof meteringEventSourceSchema>;
 export type MeteringAllocationOwner = z.infer<typeof meteringAllocationOwnerSchema>;
@@ -1446,4 +1133,3 @@ export type MeteringCorrectionDirection = z.infer<typeof meteringCorrectionDirec
 export type MeteringEventDimensions = z.infer<typeof meteringEventDimensionsSchema>;
 export type RecordMeteringEventCommand = z.infer<typeof recordMeteringEventCommandSchema>;
 export type SafeErrorResponse = z.infer<typeof safeErrorResponseSchema>;
-export type PerformanceMeasurement = z.infer<typeof performanceMeasurementSchema>;

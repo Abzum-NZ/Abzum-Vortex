@@ -1,26 +1,16 @@
 import { z } from "zod";
 import { workflowNodeTypeKeys, workflowValueTypeSchema } from "./catalogues";
-import { duplicateProtectionKeySchema, jsonValueSchema, retryPolicySchema } from "./common";
+import { jsonValueSchema, retryPolicySchema } from "./common";
 import {
-  activityIdSchema,
-  actorIdSchema,
   builderKeySchema,
   containedComponentIdSchema,
   fieldIdSchema,
   namespacedKeySchema,
-  organizationIdSchema,
-  applicationRootIdSchema,
-  platformIdSchema,
   queryIdSchema,
   recordTypeIdSchema,
   pageIdSchema,
-  revisionSchema,
-  semanticVersionSchema,
-  tenantIdSchema,
-  timestampSchema,
   workflowIdSchema,
   workflowNodeIdSchema,
-  workflowRunIdSchema,
 } from "./identifiers";
 import { conditionNodeSchema } from "./module-contracts";
 
@@ -301,61 +291,8 @@ export const workflowDefinitionSchema = z
   })
   .strict();
 
-export const workflowExecutionReferenceSchema = z
-  .object({
-    runId: workflowRunIdSchema,
-    tenantId: tenantIdSchema,
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema,
-    applicationVersion: semanticVersionSchema,
-    workflowId: workflowIdSchema,
-    workflowRevision: revisionSchema,
-    triggerKind: builderKeySchema,
-    sourceId: platformIdSchema,
-    startedBy: actorIdSchema,
-    duplicateProtectionKey: duplicateProtectionKeySchema,
-    humanInputIds: z.array(platformIdSchema),
-    activityIds: z.array(activityIdSchema),
-    lastRefreshedAt: timestampSchema,
-    lastKnownState: z.enum(["queued", "running", "waiting", "completed", "cancelled", "failed"]),
-  })
-  .strict();
-export const protectedOperationRequestSchema = z
-  .object({
-    contractVersion: semanticVersionSchema,
-    runId: workflowRunIdSchema,
-    nodeId: workflowNodeIdSchema,
-    attempt: z.number().int().positive(),
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema,
-    workflowRevision: revisionSchema,
-    operationKey: namespacedKeySchema,
-    inputs: z.record(builderKeySchema, jsonValueSchema),
-    issuedAt: timestampSchema,
-    expiresAt: timestampSchema,
-    duplicateProtectionKey: duplicateProtectionKeySchema,
-    signedCallerProof: z.string().min(32).max(10_000),
-  })
-  .strict();
-export const protectedOperationResponseSchema = z
-  .object({
-    outcome: z.enum([
-      "completed",
-      "already_completed",
-      "waiting",
-      "retryable_failure",
-      "permanent_refusal",
-    ]),
-    safeCode: builderKeySchema,
-    nextPollAt: timestampSchema.optional(),
-  })
-  .strict();
-
 export type WorkflowNode = z.infer<typeof workflowNodeSchema>;
 export type WorkflowEdge = z.infer<typeof workflowEdgeSchema>;
 export type WorkflowTrigger = z.infer<typeof workflowTriggerSchema>;
 export type WorkflowDefinition = z.infer<typeof workflowDefinitionSchema>;
 export type WorkflowValue = z.infer<typeof workflowValueSchema>;
-export type WorkflowExecutionReference = z.infer<typeof workflowExecutionReferenceSchema>;
-export type ProtectedOperationRequest = z.infer<typeof protectedOperationRequestSchema>;
-export type ProtectedOperationResponse = z.infer<typeof protectedOperationResponseSchema>;

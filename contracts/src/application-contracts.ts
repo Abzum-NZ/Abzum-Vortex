@@ -19,12 +19,10 @@ import { workflowDefinitionSchema } from "./automation-contracts";
 import { interfaceDefinitionSchema } from "./integration-contracts";
 import {
   builderKeySchema,
-  clusterIdSchema,
   connectionTypeIdSchema,
   containedComponentIdSchema,
   fieldIdSchema,
   fingerprintSchema,
-  grantIdSchema,
   lineageIdSchema,
   moduleRootIdSchema,
   namespacedKeySchema,
@@ -38,7 +36,7 @@ import {
   semanticVersionSchema,
   workflowIdSchema,
 } from "./identifiers";
-import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "./common";
+import { labelSchema, safeHttpsUrlSchema } from "./common";
 import { permissionDeclarationSchema } from "./permissions";
 import {
   applicationShellV2Schema,
@@ -661,19 +659,6 @@ export const publishedApplicationDefinitionV2Schema = z
 /** The sole immutable Application release representation Definition consumers decode. */
 export const publishedApplicationDefinitionSchema = publishedApplicationDefinitionV2Schema;
 
-export const sharedRecordProjectionSchema = z
-  .object({
-    sourceClusterId: clusterIdSchema,
-    sourceOrganizationId: organizationIdSchema,
-    grantId: grantIdSchema,
-    recordTypeId: recordTypeIdSchema,
-    recordId: recordIdSchema,
-    concurrencyNumber: z.number().int().positive(),
-    fields: z.record(fieldIdSchema, jsonValueSchema),
-    allowedActionKeys: z.array(namespacedKeySchema),
-  })
-  .strict();
-
 export type QueryDefinition = z.infer<typeof queryDefinitionSchema>;
 export type Sort = z.infer<typeof sortSchema>;
 export type Aggregate = z.infer<typeof aggregateSchema>;
@@ -693,4 +678,3 @@ export type ApplicationRole = z.infer<typeof applicationRoleSchema>;
 export type Pipeline = z.infer<typeof pipelineSchema>;
 export type ApplicationConnectionBinding = z.infer<typeof applicationConnectionBindingSchema>;
 export type PublicAddress = z.infer<typeof publicAddressSchema>;
-export type SharedRecordProjection = z.infer<typeof sharedRecordProjectionSchema>;

@@ -5,17 +5,14 @@ import {
   duplicateProtectionKeySchema,
   jsonValueSchema,
   safeHttpsUrlSchema,
-  secretReferenceSchema,
 } from "./common";
 import { accessGrantSchema, grantConsentDecisionSchema } from "./identity-access";
 import { conditionNodeSchema } from "./module-contracts";
 import { recordScopeSchema } from "./records";
 import {
-  activityIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
   clusterIdSchema,
-  connectionInstanceIdSchema,
   connectionTypeIdSchema,
   fieldIdSchema,
   fileIdSchema,
@@ -35,7 +32,6 @@ import {
   roleIdSchema,
   semanticVersionSchema,
   timestampSchema,
-  workflowRunIdSchema,
 } from "./identifiers";
 
 export const connectionAuthenticationSchema = z.discriminatedUnion("kind", [
@@ -175,36 +171,6 @@ export const connectionTypeSchema = z
           message: "Named lifecycle operation must resolve inside this connection type",
         });
   });
-export const connectionInstanceSchema = z
-  .object({
-    connectionInstanceId: connectionInstanceIdSchema,
-    organizationId: organizationIdSchema,
-    connectionTypeId: connectionTypeIdSchema,
-    connectionTypeVersion: semanticVersionSchema,
-    secretReference: secretReferenceSchema,
-    authorizedApplicationIds: z.array(applicationRootIdSchema).min(1),
-    state: z.enum(["pending", "active", "unhealthy", "revoked"]),
-    grantedScopes: z.array(z.string().min(1).max(200)),
-    tokenExpiresAt: timestampSchema.optional(),
-    lastHealthOutcome: z.enum(["healthy", "unhealthy", "unknown"]),
-    administratorActivityId: activityIdSchema,
-  })
-  .strict();
-export const incomingMessageSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    connectionInstanceId: connectionInstanceIdSchema,
-    messageTypeKey: builderKeySchema,
-    providerMessageId: z.string().min(1).max(500).optional(),
-    payloadFingerprint: fingerprintSchema,
-    verifiedAt: timestampSchema,
-    safePayloadReference: secretReferenceSchema,
-    duplicateState: z.enum(["new", "duplicate"]),
-    workflowRunId: workflowRunIdSchema.optional(),
-    retentionDueAt: timestampSchema,
-  })
-  .strict();
-
 export const interfaceValueTypeSchema = z.enum([
   "text",
   "number",
@@ -330,14 +296,6 @@ export const interfaceDefinitionSchema = z
     operations: z.array(interfaceOperationSchema).min(1),
   })
   .strict();
-export const interfaceDependencySchema = z
-  .object({
-    interfaceId: interfaceIdSchema,
-    minimumVersion: semanticVersionSchema,
-    maximumVersion: semanticVersionSchema.optional(),
-  })
-  .strict();
-
 export const clusterManifestSchema = z
   .object({
     clusterId: clusterIdSchema,
@@ -886,14 +844,11 @@ export type ConnectionType = z.infer<typeof connectionTypeSchema>;
 export type ConnectionAuthentication = z.infer<typeof connectionAuthenticationSchema>;
 export type ConnectionOperation = z.infer<typeof connectionOperationSchema>;
 export type IncomingMessageType = z.infer<typeof incomingMessageTypeSchema>;
-export type ConnectionInstance = z.infer<typeof connectionInstanceSchema>;
-export type IncomingMessage = z.infer<typeof incomingMessageSchema>;
 export type InterfaceValueType = z.infer<typeof interfaceValueTypeSchema>;
 export type InterfaceInputField = z.infer<typeof interfaceInputFieldSchema>;
 export type InterfaceOutputField = z.infer<typeof interfaceOutputFieldSchema>;
 export type InterfaceOperation = z.infer<typeof interfaceOperationSchema>;
 export type InterfaceDefinition = z.infer<typeof interfaceDefinitionSchema>;
-export type InterfaceDependency = z.infer<typeof interfaceDependencySchema>;
 export type ClusterManifest = z.infer<typeof clusterManifestSchema>;
 export type RecipientDiscoveryEntry = z.infer<typeof recipientDiscoveryEntrySchema>;
 export type RecipientAssertion = z.infer<typeof recipientAssertionSchema>;
