@@ -24,6 +24,20 @@ export {
   type StoredPageReadModelValue,
 } from "./stored-page-capability";
 export {
+  collectNavigationPermissionKeys,
+  createAuthenticatedNavigationProjectionService,
+  createStoredNavigationProjectionService,
+  projectNavigation,
+  type AuthenticatedNavigationProjectionDependencies,
+  type FixedAuthenticatedNavigationProjection,
+  type FixedAuthenticatedNavigationProjectionAdapter,
+  type NavigationPermissionBinding,
+  type NavigationPermissionDecisions,
+  type ProjectedNavigation,
+  type ProjectedNavigationItem,
+  type StoredNavigationProjectionDependencies,
+} from "./navigation-projection";
+export {
   createProtectedReadModelResolver,
   type ProtectedReadModelReaders,
   type ProtectedReadModelRequestContext,
