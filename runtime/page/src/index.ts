@@ -19,7 +19,7 @@ export {
 } from "./page-capability-projection";
 export {
   discardAndReprojectPageContent,
-  isStalePageContentRevision,
+  isRefusedPageContentRevision,
   pageContentRevisionRelation,
   projectPageContent,
   readPageContentRevisions,
