@@ -22,6 +22,12 @@ import {
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+import type { BeforeSaveRuleWarning } from "@vortex/rule";
+import {
+  beginBeforeSaveRuleExecution,
+  parseBeforeSaveRuleSet,
+  type BeforeSaveRuleExecution,
+} from "./before-save-rules";
 import {
   performProtectedRecordDelete,
   settleRecordLifecycleError,
@@ -63,7 +69,16 @@ type PreparedAction = PreparedNamedAction &
     changeableFieldIds: ReadonlySet<string>;
     eventDescriptorCount: number;
     correlationId: string;
+    /** The exact release's compiled before-save rules for the subject, unparsed. */
+    beforeSaveRules?: unknown;
   }>;
+
+/**
+ * The named-action result plus any before-save rule warnings of a completed
+ * attempt. The closed result contract has no warning field, so they travel beside it.
+ */
+export type NamedActionServiceResult = HumanOrganizationRequestResult<ExecuteNamedActionResultV2> &
+  Readonly<{ warnings?: readonly BeforeSaveRuleWarning[] }>;
 
 type ActionPreparation =
   | PreparedAction
@@ -191,6 +206,7 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     ),
     eventDescriptorCount: value.eventDescriptors.length,
     correlationId,
+    ...(value.beforeSaveRules === undefined ? {} : { beforeSaveRules: value.beforeSaveRules }),
   };
 };
 
@@ -391,7 +407,7 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
-    ): Promise<HumanOrganizationRequestResult<ExecuteNamedActionResultV2>> {
+    ): Promise<NamedActionServiceResult> {
       const command = executeNamedActionCommandV2Schema.safeParse(commandCandidate);
       if (!command.success || selection.applicationRootId === undefined)
         return { kind: "unavailable" };
@@ -409,6 +425,7 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
       for (let attempt = 0; attempt < 3; attempt += 1) {
         // A failed subject delete discards the whole command, receipt included.
         let deleteSettlement: Settled<unknown> | undefined;
+        const attempted: { rules?: BeforeSaveRuleExecution } = {};
         const result = await requests.runChange(
           session,
           selection,
@@ -491,6 +508,27 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
                 : safeRefusal(prepared.correlationId, "operation_refused");
             }
 
+            // A save that writes subject fields runs the exact release's compiled
+            // before-save rules once. A totals-prepared closure is only reached
+            // when no rule is installed anywhere. Other records the action writes
+            // are not evaluated here: a relationship copy changes another record
+            // of the subject's own type, so a subject rule refuses it rather than
+            // skip it (creations already refuse under any installed rule).
+            if (totalPreparation.outcome !== "prepared") {
+              const ruleSet = parseBeforeSaveRuleSet(
+                prepared.beforeSaveRules,
+                prepared.recordType.recordTypeId,
+              );
+              if (
+                ruleSet === undefined ||
+                (ruleSet.rules.length > 0 &&
+                  (composition.creations.length > 0 || composition.relationshipCopies.length > 0))
+              )
+                return safeRefusal(prepared.correlationId, "operation_refused");
+              if (Object.keys(composition.submittedValues).length > 0)
+                attempted.rules = beginBeforeSaveRuleExecution(ruleSet);
+            }
+
             let finalValues: Record<string, unknown> = {};
             let parentMutations: readonly RelationshipTotalParentMutation[] = [];
             let creations: readonly Readonly<{
@@ -552,6 +590,7 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
                         issuedAt,
                         settings?.currency,
                         settings?.timeZone,
+                        attempted.rules,
                       );
               if (
                 !calculated.success ||
@@ -744,9 +783,13 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
         }
         if (result.kind !== "available") return result;
         if (result.value === restart) continue;
-        return result.value === recordedRefusal
-          ? { kind: "unavailable" }
-          : { kind: "available", value: result.value as ExecuteNamedActionResultV2 };
+        if (result.value === recordedRefusal) return { kind: "unavailable" };
+        const value = result.value as ExecuteNamedActionResultV2;
+        return value.outcome === "completed" &&
+          attempted.rules !== undefined &&
+          attempted.rules.warnings.length > 0
+          ? { kind: "available", value, warnings: [...attempted.rules.warnings] }
+          : { kind: "available", value };
       }
       return { kind: "temporarily_unavailable" };
     },
