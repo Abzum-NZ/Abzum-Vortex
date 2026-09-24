@@ -24,8 +24,13 @@ const object = (value: unknown): JsonObject => value as JsonObject;
 const withoutKeys = (value: JsonObject, keys: readonly string[]): JsonObject =>
   Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)));
 
+/**
+ * A placement with neither a use gate nor an operation binding is plain content. Otherwise it is
+ * available only when the viewer may use it and its operation binding resolves in the release;
+ * an available control carries no marker, so anything else is fixed to the unavailable state.
+ */
 const placementAvailability = (state: PlacementCapabilityState, hasUseGate: boolean): JsonObject =>
-  !hasUseGate && !state.operationBound
+  (!hasUseGate && !state.operationBound) || (state.useAllowed && state.operationBound)
     ? {}
     : { availability: "unavailable", unavailableReason: "operation_unavailable" };
 
