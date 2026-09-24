@@ -1648,6 +1648,27 @@ const recordGrantSchema = z
     recordId: recordIdSchema,
   })
   .strict();
+
+const grantInstantParts = (value: string) => {
+  // Date.parse keeps milliseconds only; grants can name finer ISO timestamp fractions.
+  const match =
+    /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (match === null) return undefined;
+  const wholeSecondMilliseconds = Date.parse(`${match[1]}${match[3]}`);
+  if (!Number.isFinite(wholeSecondMilliseconds)) return undefined;
+  return { wholeSecondMilliseconds, fraction: match[2] ?? "" };
+};
+
+const grantExpiresAfterStart = (startsAt: string, expiresAt: string): boolean => {
+  const start = grantInstantParts(startsAt);
+  const expiry = grantInstantParts(expiresAt);
+  if (start === undefined || expiry === undefined) return false;
+  if (start.wholeSecondMilliseconds !== expiry.wholeSecondMilliseconds)
+    return expiry.wholeSecondMilliseconds > start.wholeSecondMilliseconds;
+  const precision = Math.max(start.fraction.length, expiry.fraction.length);
+  return expiry.fraction.padEnd(precision, "0") > start.fraction.padEnd(precision, "0");
+};
+
 export const accessGrantSchema = z
   .discriminatedUnion("scopeKind", [
     moduleGrantSchema,
@@ -1701,7 +1722,7 @@ export const accessGrantSchema = z
         path: ["revokedAt"],
         message: "Revocation evidence is present exactly when the grant is revoked",
       });
-    if (value.expiresAt !== undefined && Date.parse(value.expiresAt) <= Date.parse(value.startsAt))
+    if (value.expiresAt !== undefined && !grantExpiresAfterStart(value.startsAt, value.expiresAt))
       context.addIssue({
         code: "custom",
         path: ["expiresAt"],
