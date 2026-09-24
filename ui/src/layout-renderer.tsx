@@ -1,3 +1,5 @@
+"use client";
+
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import type {
   ApplicationContentV2,
@@ -27,9 +29,13 @@ import {
 import {
   computePlacementClassName,
   computePlacementStyle,
+  computeResponsivePlacementCss,
   computeSlotContainerStyle,
   LAYOUT_CLASS_NAMES,
+  RESPONSIVE_BREAKPOINT_ORDER,
+  slotDeclaresGridChildren,
 } from "./layout-styles";
+import { LayoutBreakpointProvider, useLayoutBreakpoint } from "./breakpoint";
 import type { PlatformComponentRegistry } from "./registry";
 import { DateFormatProvider } from "./display/date-format-context";
 import {
@@ -375,6 +381,12 @@ export type PlacementRendererProps = Readonly<{
   controlEvents?: ControlEventsByPlacement | undefined;
   /** Theme tokens in force where this placement renders. */
   themeScope?: PlacementThemeScope | undefined;
+  /**
+   * Live-page mode. Per-breakpoint geometry comes from the generated responsive stylesheet and the
+   * current breakpoint only selects child order; preview keeps the explicit single-breakpoint
+   * inline styles instead.
+   */
+  responsive?: boolean | undefined;
 }>;
 
 const EMPTY_THEME_SCOPE: PlacementThemeScope = Object.freeze({ application: {}, inherited: {} });
@@ -412,6 +424,7 @@ function PlacementView({
   controlData,
   controlEvents,
   themeScope = EMPTY_THEME_SCOPE,
+  responsive = false,
 }: PlacementRendererProps): ReactElement {
   const currentLocation: DefinitionRenderErrorLocation = {
     ...location,
@@ -517,15 +530,23 @@ function PlacementView({
     }
   }
 
-  // 7. Apply declared visibility, content/fill/grid placement and content/bounded-height sizing
+  // 7. Apply declared visibility, content/fill/grid placement and content/bounded-height sizing.
+  //    Live pages take all of it from the generated per-breakpoint stylesheet; the current
+  //    breakpoint only labels the element and decides child order. A placement visible at any
+  //    breakpoint must stay in the document so a narrower media rule can reveal it.
   const layout = placement.responsive[breakpoint];
-  const placementStyle = computePlacementStyle(layout, breakpoint);
-  const placementClassName = computePlacementClassName(layout, breakpoint);
+  const placementStyle = responsive ? undefined : computePlacementStyle(layout, breakpoint);
+  const placementClassName = responsive
+    ? LAYOUT_CLASS_NAMES.placementWrapper
+    : computePlacementClassName(layout, breakpoint);
+  const visible = responsive
+    ? RESPONSIVE_BREAKPOINT_ORDER.some((candidate) => placement.responsive[candidate].visible)
+    : layout.visible;
 
   const combinedStyle: CSSProperties = {
     ...style,
     ...placementTheme.style,
-    ...placementStyle,
+    ...(placementStyle === undefined ? {} : placementStyle),
   };
 
   const combinedClassName = className
@@ -543,7 +564,7 @@ function PlacementView({
       className={combinedClassName}
       style={combinedStyle}
     >
-      {layout.visible ? (
+      {visible ? (
         <Component
           placementId={placementId}
           settings={placement.settings}
@@ -586,6 +607,11 @@ export type PlacementSlotRendererProps = Readonly<{
   controlEvents?: ControlEventsByPlacement | undefined;
   /** Theme tokens in force where this slot renders. */
   themeScope?: PlacementThemeScope | undefined;
+  /**
+   * Live-page mode. Children still follow the current breakpoint's declared order, but the slot
+   * container and per-breakpoint geometry come from the generated responsive stylesheet.
+   */
+  responsive?: boolean | undefined;
 }>;
 
 /**
@@ -623,6 +649,7 @@ function PlacementSlotView({
   controlData,
   controlEvents,
   themeScope,
+  responsive = false,
 }: PlacementSlotRendererProps): ReactElement {
   const currentLocation: DefinitionRenderErrorLocation = {
     ...location,
@@ -631,15 +658,19 @@ function PlacementSlotView({
     breakpoint,
   };
 
-  // Validate deterministic child ordering
+  // Validate deterministic child ordering for the current breakpoint. Live pages read the child
+  // order of the visitor's breakpoint, so focus order follows the meaningful reading order.
   const orderedIds = validateSlotOrder(slot, breakpoint, currentLocation);
 
-  // Check if any child placement declares 12-column grid width
-  const hasGridChildren = orderedIds.some((id) => {
-    const child = slot.placements[id];
-    const layout = child?.responsive[breakpoint];
-    return layout?.visible === true && layout.width.kind === "grid";
-  });
+  // Check if any child placement declares 12-column grid width. A live slot keeps one container
+  // mode across breakpoints; the generated rules make each child fill or span per breakpoint.
+  const hasGridChildren = responsive
+    ? slotDeclaresGridChildren(slot)
+    : orderedIds.some((id) => {
+        const child = slot.placements[id];
+        const layout = child?.responsive[breakpoint];
+        return layout?.visible === true && layout.width.kind === "grid";
+      });
 
   const containerStyle: CSSProperties = {
     ...style,
@@ -672,7 +703,7 @@ function PlacementSlotView({
         }
         const childLayout = childPlacement.responsive[breakpoint];
         const gridItemStyle =
-          hasGridChildren && childLayout.width.kind !== "grid"
+          !responsive && hasGridChildren && childLayout.width.kind !== "grid"
             ? ({ gridColumn: "1 / -1" } satisfies CSSProperties)
             : undefined;
         return (
@@ -690,6 +721,7 @@ function PlacementSlotView({
             controlData={controlData}
             controlEvents={controlEvents}
             themeScope={themeScope}
+            responsive={responsive}
           />
         );
       })}
@@ -746,7 +778,7 @@ export type PageLayoutRendererProps = Readonly<{
  */
 export function PageLayoutRenderer({
   composition,
-  breakpoint = "desktop",
+  breakpoint,
   registry,
   shells = [],
   pageId,
@@ -779,7 +811,7 @@ export function PageLayoutRenderer({
   const location: DefinitionRenderErrorLocation = {
     ...(pageId === undefined ? {} : { pageId }),
     ...(activeStepId === undefined ? {} : { stepId: activeStepId }),
-    breakpoint,
+    ...(breakpoint === undefined ? {} : { breakpoint }),
   };
 
   validatePlacementTree(resolved.slot, registry, location, {
@@ -806,6 +838,17 @@ export function PageLayoutRenderer({
   const applicationTheme = theme ?? ("theme" in composition ? composition.theme : undefined);
   const applicationTokens = applicationTheme?.tokens ?? {};
 
+  const sharedProps = {
+    registry,
+    location,
+    allowEmptyRequiredSlots: resolved.permissionProjected,
+    projectedData,
+    displayEvents,
+    controlData,
+    controlEvents,
+    themeScope: { application: applicationTokens, inherited: applicationTokens },
+  };
+
   // The theme root serves runtime pages and preview canvases alike; React hoists and
   // de-duplicates the one shared stylesheet however many layouts render.
   return (
@@ -814,23 +857,67 @@ export function PageLayoutRenderer({
         {ALL_UI_STYLES_CSS}
       </style>
       <DateFormatProvider locale={locale} timeZone={timeZone}>
-        <PlacementSlotView
-          slot={resolved.slot}
-          breakpoint={breakpoint}
-          registry={registry}
-          {...(className === undefined ? {} : { className })}
-          {...(style === undefined ? {} : { style })}
-          location={location}
-          allowEmptyRequiredSlots={resolved.permissionProjected}
-          projectedData={projectedData}
-          displayEvents={displayEvents}
-          controlData={controlData}
-          controlEvents={controlEvents}
-          themeScope={{ application: applicationTokens, inherited: applicationTokens }}
-        />
+        {breakpoint === undefined ? (
+          // Live page: breakpoint-independent HTML plus one responsive stylesheet. The browser
+          // provider adopts the visitor's declared child order after load; geometry is pure CSS.
+          <LayoutBreakpointProvider>
+            <LivePageLayout
+              slot={resolved.slot}
+              {...sharedProps}
+              responsiveStylesheet={collectResponsivePlacementCss(resolved.slot)}
+              {...(className === undefined ? {} : { className })}
+              {...(style === undefined ? {} : { style })}
+            />
+          </LayoutBreakpointProvider>
+        ) : (
+          // Explicit preview breakpoint: one breakpoint rendered with inline geometry.
+          <PlacementSlotView
+            slot={resolved.slot}
+            breakpoint={breakpoint}
+            {...sharedProps}
+            {...(className === undefined ? {} : { className })}
+            {...(style === undefined ? {} : { style })}
+          />
+        )}
       </DateFormatProvider>
     </div>
   );
+}
+
+type LivePageLayoutProps = Omit<PlacementSlotRendererProps, "breakpoint" | "responsive"> &
+  Readonly<{ responsiveStylesheet: string }>;
+
+/** Client subscriber that renders the resolved tree in the visitor's breakpoint order. */
+function LivePageLayout({ responsiveStylesheet, ...slotProps }: LivePageLayoutProps): ReactElement {
+  const breakpoint = useLayoutBreakpoint();
+  return (
+    <>
+      <style>{responsiveStylesheet}</style>
+      <PlacementSlotView {...slotProps} breakpoint={breakpoint} responsive />
+    </>
+  );
+}
+
+/**
+ * Collects per-breakpoint geometry for every placement in the resolved tree as one stylesheet.
+ * It is keyed by stable placement identity, so it is safe when several pages render at once, and
+ * the deterministic placement order keeps server and client markup identical.
+ */
+function collectResponsivePlacementCss(slot: PlacementSlotV2): string {
+  const gridContainer = slotDeclaresGridChildren(slot);
+  let css = "";
+  for (const placementId of Object.keys(slot.placements).sort()) {
+    const placement = slot.placements[placementId];
+    if (placement === undefined) continue;
+    css += computeResponsivePlacementCss(placementId, placement.responsive, {
+      gridItem: gridContainer,
+    });
+    for (const slotKey of Object.keys(placement.slots).sort()) {
+      const childSlot = placement.slots[slotKey];
+      if (childSlot !== undefined) css += collectResponsivePlacementCss(childSlot);
+    }
+  }
+  return css;
 }
 
 /**
