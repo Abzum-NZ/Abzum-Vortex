@@ -73,7 +73,7 @@ const regionComposition = (
       [`${aliasPrefix}_heading`]: placement(TEXT_BLOCK_RELEASE, {
         title: textValue(heading),
         text: textValue(
-          `${heading} is provided from protected Identity and Access sources; this region is bound by a later protected read-model source.`,
+          `${regionTitle} will appear here when the protected Identity and Access view is available.`,
         ),
       }),
       [`${aliasPrefix}_region`]: placement(TABLE_BLOCK_RELEASE, {
@@ -440,7 +440,7 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
                 iam_overview_heading: placement(TEXT_BLOCK_RELEASE, {
                   title: textValue("IAM overview"),
                   text: textValue(
-                    "Manage people, roles and groups, access requests, reviews and current assignments. Request and review records describe intent and decisions only and confer no access.",
+                    "Access requests and reviews describe intent and decisions. Only protected Access determines current roles and assignments; those views appear when their protected source is available.",
                   ),
                 }),
               },
