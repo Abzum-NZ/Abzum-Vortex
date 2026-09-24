@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*",
+    "@vortex/db": "workspace:*",
     "@vortex/event": "workspace:*",
     "@vortex/record": "workspace:*",
     "@vortex/rule": "workspace:*",

@@ -7,6 +7,7 @@ import {
 import { projectFlowResultHandoff } from "./flow-result-handoff";
 import { createApplicationInstallationCoordinator } from "./installation-coordinator";
 import { createInstalledRuntimeContextLoader } from "./installed-runtime-context";
+import { createOperationsAlertSink, readOpenOperationsAlertSignals } from "./operations-alert-sink";
 import { createAppTelemetryCollector } from "./telemetry";
 
 export {
@@ -17,6 +18,15 @@ export {
   createAppTelemetryCollector,
   type AppTelemetryCollectorDependencies,
 } from "./telemetry";
+export {
+  createOperationsAlertSink,
+  operationsAlertSignalReadLimitSchema,
+  operationsAlertSignalSchema,
+  readOpenOperationsAlertSignals,
+  type OpenOperationsAlertSignalsRead,
+  type OperationsAlertSignal,
+  type OperationsAlertSinkDependencies,
+} from "./operations-alert-sink";
 export {
   isReservedTenantSegment,
   permittedApplicationSchema,
@@ -92,13 +102,28 @@ export {
   type FirstOwnerApplicationEntryResult,
 } from "./first-owner-entry";
 
+export {
+  createIdentityDisablementCoordinator,
+  identityDisablementRefusalCodes,
+  identityDisablementRequestSchema,
+  type IdentityAuthorityDisabler,
+  type IdentityDisablementCoordinator,
+  type IdentityDisablementDependencies,
+  type IdentityDisablementOperationResult,
+  type IdentityDisablementRefusalCode,
+  type IdentityDisablementRequest,
+} from "./identity-disablement";
+
 export const AppService = Object.freeze({
   key: "app",
   boundary: "@vortex/app",
   resolveApplicationTheme,
   resolveApplicationThemeTokens,
   createAppTelemetryCollector,
+  createOperationsAlertSink,
+  readOpenOperationsAlertSignals,
   projectFlowResultHandoff,
   createApplicationInstallationCoordinator,
   createInstalledRuntimeContextLoader,
+  createIdentityDisablementCoordinator,
 });
