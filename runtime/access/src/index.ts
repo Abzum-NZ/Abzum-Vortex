@@ -55,6 +55,12 @@ export {
   type OrganizationDirectRecordShareDependencies,
 } from "./organization-direct-record-share";
 export {
+  createRecordShareGrantService,
+  type FixedRecordShareGrantFactsAdapter,
+  type RecordShareGrantDependencies,
+  type RecordShareGrantState,
+} from "./record-share-grants";
+export {
   createOrganizationAccessAdministrationService,
   type OrganizationAccessAdministrationDependencies,
 } from "./organization-access-administration";
