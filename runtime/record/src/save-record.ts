@@ -9,6 +9,7 @@ import {
   saveRecordCommandV2Schema,
   saveRecordResultV2Schema,
   type IdentitySession,
+  type JsonValue,
   type OrganizationSelectionCandidate,
   type RecordSaveFieldCorrection,
   type SaveRecordCommandV2,
@@ -21,6 +22,15 @@ import {
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+import type { BeforeSaveRuleWarning } from "@vortex/rule";
+import {
+  applyBeforeSaveRules,
+  beforeSaveRuleRefusedIssueCode,
+  beforeSaveRuleUnavailableIssueCode,
+  beginBeforeSaveRuleExecution,
+  parseBeforeSaveRuleSet,
+  type BeforeSaveRuleExecution,
+} from "./before-save-rules";
 import { evaluateRecordCalculationsV2 } from "./calculations";
 import {
   deriveEarliestPendingDeadlineTransitionV2,
@@ -32,6 +42,7 @@ import {
   finalizeRecordFieldCandidateV2,
   prepareInitialRecordFieldCandidateV2,
   type PrepareRecordFieldValuesV2Result,
+  type RecordFieldValueRequirementV2,
 } from "./field-values";
 import {
   calculateLockedRelationshipTotalSave,
@@ -49,6 +60,8 @@ export type PreparedSave = Readonly<{
   existingValues: Readonly<Record<string, unknown>>;
   readableFieldIds: ReadonlySet<string>;
   correlationId: string;
+  /** The exact release's compiled before-save rules as the preparation returned them, unparsed. */
+  beforeSaveRules?: unknown;
 }>;
 
 type PreparationOutcome =
@@ -162,12 +175,18 @@ const parsePreparation = (candidate: unknown): PreparationOutcome => {
       readableFieldIds.flatMap((fieldId) => (fieldId.success ? [fieldId.data] : [])),
     ),
     correlationId,
+    ...(value.beforeSaveRules === undefined ? {} : { beforeSaveRules: value.beforeSaveRules }),
   };
 };
 
 const correctionCode = (code: string): RecordSaveFieldCorrection["code"] => {
   if (code.startsWith("required_")) return "required_value";
-  if (code === "unknown_field" || code === "generated_field_input") return "field_refused";
+  if (
+    code === "unknown_field" ||
+    code === "generated_field_input" ||
+    code === beforeSaveRuleRefusedIssueCode
+  )
+    return "field_refused";
   return "invalid_value";
 };
 
@@ -217,6 +236,7 @@ export const calculateAndFinalize = (
   issuedAt: string,
   organizationCurrency: string | undefined,
   timeZone: string | undefined,
+  rules?: BeforeSaveRuleExecution,
 ): CalculatedFieldValues => {
   const initial = prepareInitialRecordFieldCandidateV2({
     operation: command.operation,
@@ -227,6 +247,34 @@ export const calculateAndFinalize = (
   });
   if (!initial.success) return initial;
 
+  // Every applicable compiled rule runs exactly once here, before calculations
+  // and final field policy, so rule effects are revalidated like any other value.
+  let ruleCandidateValues: Readonly<Record<string, JsonValue>> = initial.candidate.candidateValues;
+  let requirements: readonly RecordFieldValueRequirementV2[] = [];
+  if (rules !== undefined) {
+    const applied = applyBeforeSaveRules({
+      execution: rules,
+      recordType: prepared.recordType,
+      initialCandidate: initial.candidate,
+      ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
+    });
+    if (!applied.success)
+      return {
+        success: false,
+        issues: [
+          applied.reason === "refused"
+            ? {
+                code: beforeSaveRuleRefusedIssueCode,
+                ...(applied.fieldId === undefined ? {} : { fieldId: applied.fieldId }),
+                path: ["rules"],
+              }
+            : { code: beforeSaveRuleUnavailableIssueCode, path: ["rules"] },
+        ],
+      };
+    ruleCandidateValues = applied.candidateValues;
+    requirements = applied.requirements;
+  }
+
   const calculationFieldIds = prepared.recordType.fields
     .filter((field) => field.type === "calculation")
     .map((field) => field.fieldId);
@@ -234,7 +282,8 @@ export const calculateAndFinalize = (
     return finalizeRecordFieldCandidateV2({
       recordType: prepared.recordType,
       initialCandidate: initial.candidate,
-      candidateValues: initial.candidate.candidateValues,
+      candidateValues: ruleCandidateValues,
+      requirements,
       requiredGeneratedFieldIds: [],
       ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
     });
@@ -264,13 +313,13 @@ export const calculateAndFinalize = (
 
   const calculations = evaluateRecordCalculationsV2({
     recordType: prepared.recordType,
-    authoritativeFieldValues: initial.candidate.candidateValues,
+    authoritativeFieldValues: ruleCandidateValues,
     clock: { instant: issuedAt, organizationLocalDate },
   });
   if (!calculations.success) return calculations;
 
   const candidateValues: Record<string, unknown> = {
-    ...initial.candidate.candidateValues,
+    ...ruleCandidateValues,
     ...calculations.setValues,
   };
   for (const fieldId of calculations.clearFieldIds) delete candidateValues[fieldId];
@@ -278,6 +327,7 @@ export const calculateAndFinalize = (
     recordType: prepared.recordType,
     initialCandidate: initial.candidate,
     candidateValues,
+    requirements,
     requiredGeneratedFieldIds: calculationFieldIds,
     ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
   });
@@ -540,6 +590,13 @@ export const readOrganizationRuntimeSettings = async (transaction: RequestDataba
   }
 };
 
+/**
+ * The save result plus any before-save rule warnings of a saved attempt. The
+ * closed result contract has no warning field, so they travel beside it.
+ */
+export type RecordSaveServiceResult = HumanOrganizationRequestResult<SaveRecordResultV2> &
+  Readonly<{ warnings?: readonly BeforeSaveRuleWarning[] }>;
+
 export type RecordSaveServiceDependencies = HumanOrganizationRequestDependencies &
   Readonly<{
     activityId?: () => string;
@@ -560,7 +617,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
-    ): Promise<HumanOrganizationRequestResult<SaveRecordResultV2>> {
+    ): Promise<RecordSaveServiceResult> {
       const command = saveRecordCommandV2Schema.safeParse(commandCandidate);
       if (!command.success || selection.applicationRootId === undefined)
         return { kind: "unavailable" };
@@ -573,6 +630,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
         return { kind: "temporarily_unavailable" };
       }
       for (let attempt = 0; attempt < 3; attempt += 1) {
+        const attempted: { rules?: BeforeSaveRuleExecution } = {};
         const result = await requests.runChange(
           session,
           selection,
@@ -617,6 +675,19 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                 ? recordedRefusal
                 : safeRefusal(prepared.correlationId, "operation_refused");
 
+            // A totals-prepared save is only reached when no rule is installed
+            // anywhere; every other save carries the exact release's rules for
+            // its record type, and unreachable rules refuse the save.
+            if (totalPreparation.outcome !== "prepared") {
+              const ruleSet = parseBeforeSaveRuleSet(
+                prepared.beforeSaveRules,
+                prepared.recordType.recordTypeId,
+              );
+              if (ruleSet === undefined)
+                return safeRefusal(prepared.correlationId, "operation_refused");
+              attempted.rules = beginBeforeSaveRuleExecution(ruleSet);
+            }
+
             const settings = await readOrganizationRuntimeSettings(transaction);
             const totalClock =
               totalPreparation.outcome === "prepared"
@@ -647,9 +718,16 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                       issuedAt,
                       settings?.currency,
                       settings?.timeZone,
+                      attempted.rules,
                     );
             if (!values.success) {
-              if (values.issues.some((issue) => issue.code === "organization_currency_required"))
+              if (
+                values.issues.some(
+                  (issue) =>
+                    issue.code === "organization_currency_required" ||
+                    issue.code === beforeSaveRuleUnavailableIssueCode,
+                )
+              )
                 return safeRefusal(prepared.correlationId, "operation_refused");
               const corrections = correctionsFor(
                 values.issues
@@ -747,9 +825,13 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
 
         if (result.kind !== "available") return result;
         if (result.value === restartRelationshipTotalSave) continue;
-        return result.value === recordedRefusal
-          ? { kind: "unavailable" }
-          : { kind: "available", value: result.value as SaveRecordResultV2 };
+        if (result.value === recordedRefusal) return { kind: "unavailable" };
+        const value = result.value as SaveRecordResultV2;
+        return value.outcome === "saved" &&
+          attempted.rules !== undefined &&
+          attempted.rules.warnings.length > 0
+          ? { kind: "available", value, warnings: [...attempted.rules.warnings] }
+          : { kind: "available", value };
       }
       return { kind: "temporarily_unavailable" };
     },
