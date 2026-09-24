@@ -2991,14 +2991,16 @@ function validateCurrentUserFlow(
     failures.push(flowFailure("vortex.definition.application_flow_acyclic", "dependency_cycle"));
   }
 
-  const nodeKeyById = new Map(nodes.map((node) => [String(node.nodeId), String(node.key)]));
+  const routingRefusals = new Set<string>();
   for (const issue of analyzeFlowResultRouting(
     nodes.map((node) => ({
       id: String(node.nodeId),
       kind: String(node.kind),
       ...(node.kind === "action"
         ? {
-            actionTarget: object(node.target).kind as FlowRoutingNode["actionTarget"],
+            actionTarget: String(object(node.target).kind) as NonNullable<
+              FlowRoutingNode["actionTarget"]
+            >,
           }
         : {}),
       ...(node.kind === "return" ? { returnOutcome: String(node.outcome ?? "completed") } : {}),
@@ -3014,16 +3016,18 @@ function validateCurrentUserFlow(
       issue.path[0] === "nodes"
         ? nodes[Number(issue.path[1])]
         : byId.get(String(edges[Number(issue.path[1])]?.fromNodeId));
-    const key = node === undefined ? undefined : nodeKeyById.get(String(node.nodeId));
+    const refusalKey = node === undefined ? "" : String(node.key);
+    if (routingRefusals.has(refusalKey)) continue;
+    routingRefusals.add(refusalKey);
     const located = flowFailure("vortex.definition.application_flow_termination", "invalid_value");
     failures.push(
-      key === undefined
+      node === undefined || located.location === undefined
         ? located
         : {
             ...located,
             location: {
               ...located.location,
-              segments: [...located.location.segments, { kind: "flow_node", key }],
+              segments: [...located.location.segments, { kind: "flow_node", key: String(node.key) }],
             },
           },
     );

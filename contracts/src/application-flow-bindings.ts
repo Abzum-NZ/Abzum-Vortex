@@ -888,18 +888,6 @@ export const currentUserFlowActionResults = {
   >
 >;
 
-/** An action edge may only route a result its target can report. */
-function actionEdgeOutcomeDeclared(
-  targetKind: CurrentUserFlowActionTarget["kind"],
-  outcome: string,
-): boolean {
-  const results: readonly string[] =
-    targetKind === "protected_operation"
-      ? safeFlowResultKindSchema.options
-      : currentUserFlowActionResults[targetKind];
-  return results.includes(outcome);
-}
-
 export const currentUserFlowStartNodeSchema = z
   .object({
     nodeId: containedComponentIdSchema,
@@ -999,18 +987,16 @@ function flowDeclarationsCompatible(
   return actualRecordTypes.every((recordType) => allowed.has(String(recordType)));
 }
 
-/** Results that report a completed (non-failing) outcome; a success return may only follow these. */
-const flowSuccessResultKinds: ReadonlySet<string> = new Set([
-  "completed",
-  "committed",
-  "background_pending",
-]);
-
 /**
  * A protected operation's exact results are resolved from its descriptor after publication, but
- * every operation declares its permission refusal and one confirmed result.
+ * every operation declares its permission refusal and the confirmed result of its effect.
  */
-const protectedOperationConfirmedResults = ["completed", "committed", "background_pending"];
+const protectedOperationConfirmedResults: readonly string[] = Object.values(
+  protectedOperationResultsByEffect,
+).map((results) => results[0]);
+
+const fixedActionTargetResults: Readonly<Partial<Record<string, readonly string[]>>> =
+  currentUserFlowActionResults;
 
 export type FlowRoutingNode = Readonly<{
   id: string;
@@ -1029,9 +1015,10 @@ export type FlowRoutingIssue = Readonly<{
 /**
  * Checks that flow results are routed completely and unambiguously: only action nodes route by
  * outcome, never together with an unconditional edge, every result the target reports has its own
- * route, and a return node only carries an outcome that can actually reach it (a failed, refused
- * or uncertain action can never reach a success return). Issues are located by node or edge
- * index. Structural problems (unknown endpoints, cycles) are reported by the graph validators.
+ * route, and a return node reports exactly the outcome that reaches it, so no result (a failed,
+ * refused or uncertain action above all) is ever reported as success or as another result. Issues
+ * are located by node or edge index. Structural problems (unknown endpoints, cycles, unknown
+ * targets) are reported by the graph and reference validators.
  */
 export function analyzeFlowResultRouting(
   nodes: readonly FlowRoutingNode[],
@@ -1039,14 +1026,28 @@ export function analyzeFlowResultRouting(
 ): FlowRoutingIssue[] {
   const issues: FlowRoutingIssue[] = [];
   const kindById = new Map(nodes.map((node) => [node.id, node.kind]));
+  const targetById = new Map(nodes.map((node) => [node.id, node.actionTarget]));
   const routesByNode = new Map<string, FlowRoutingEdge[]>();
   for (const [index, edge] of edges.entries()) {
     routesByNode.set(edge.from, [...(routesByNode.get(edge.from) ?? []), edge]);
     const fromKind = kindById.get(edge.from);
-    if (fromKind !== undefined && fromKind !== "action" && edge.outcome !== undefined)
+    if (fromKind === undefined || edge.outcome === undefined) continue;
+    const target = targetById.get(edge.from);
+    const reportable: readonly string[] | undefined =
+      target === "protected_operation"
+        ? safeFlowResultKindSchema.options
+        : target === undefined
+          ? undefined
+          : fixedActionTargetResults[target];
+    if (fromKind !== "action")
       issues.push({
         path: ["edges", index, "outcome"],
         message: "Only an action node can route by outcome",
+      });
+    else if (reportable !== undefined && !reportable.includes(edge.outcome))
+      issues.push({
+        path: ["edges", index, "outcome"],
+        message: "An action edge can only route a result its target reports",
       });
   }
 
@@ -1064,6 +1065,7 @@ export function analyzeFlowResultRouting(
             ? "An action node cannot mix an unconditional edge with outcome edges"
             : "An action node must route each result it reports by outcome, not by an unconditional edge",
       });
+    const fixedResults = fixedActionTargetResults[node.actionTarget];
     const missing: string[] =
       node.actionTarget === "protected_operation"
         ? [
@@ -1072,7 +1074,7 @@ export function analyzeFlowResultRouting(
               ? []
               : ["its confirmed result"]),
           ]
-        : currentUserFlowActionResults[node.actionTarget].filter((result) => !routed.has(result));
+        : (fixedResults ?? []).filter((result) => !routed.has(result));
     if (missing.length > 0)
       issues.push({
         path: ["nodes", nodeIndex],
@@ -1104,23 +1106,17 @@ export function analyzeFlowResultRouting(
         }
     }
   }
+  // Each result has its own commit state and recovery, so a return node reports exactly the one
+  // outcome that reaches it: a failed, refused or uncertain result can never be reported as
+  // success, and no result can be reported as another.
   for (const [nodeIndex, node] of nodes.entries()) {
     if (node.kind !== "return") continue;
     const outcome = node.returnOutcome ?? "completed";
-    const arriving = reaching.get(node.id) ?? new Set<string>();
-    if (
-      flowSuccessResultKinds.has(outcome) &&
-      [...arriving].some((arrived) => !flowSuccessResultKinds.has(arrived))
-    )
+    const others = [...(reaching.get(node.id) ?? [])].filter((arrived) => arrived !== outcome);
+    if (others.length > 0)
       issues.push({
         path: ["nodes", nodeIndex, "outcome"],
-        message:
-          "A failed, refused or uncertain result cannot reach a return node that reports success",
-      });
-    else if (!arriving.has(outcome))
-      issues.push({
-        path: ["nodes", nodeIndex, "outcome"],
-        message: `A return node can only report an outcome that reaches it (${[...arriving].sort().join(", ")})`,
+        message: `A return node reporting ${outcome} is reached by ${others.sort().join(", ")}; each result needs a return node that reports it`,
       });
   }
   return issues;
@@ -1198,14 +1194,6 @@ export function validateCurrentUserFlowGraph(
     }
     if (edge.fromNodeId === edge.toNodeId) {
       context.addIssue({ code: "custom", path: ["edges", index], message: "Self-referencing edges are not allowed" });
-    }
-    const fromNode = value.nodes.find((n) => String(n.nodeId) === String(edge.fromNodeId));
-    if (
-      fromNode?.kind === "action" &&
-      edge.outcome !== undefined &&
-      !actionEdgeOutcomeDeclared(fromNode.target.kind, edge.outcome)
-    ) {
-      context.addIssue({ code: "custom", path: ["edges", index, "outcome"], message: "An action edge can only route a result its target reports" });
     }
   }
 
@@ -2074,14 +2062,6 @@ export function validateSourceCurrentUserFlowGraph(
     }
     if (edge.from_node === edge.to_node) {
       context.addIssue({ code: "custom", path: ["edges", index], message: "Self-referencing edges are not allowed" });
-    }
-    const fromNode = value.nodes.find((n) => n.id === edge.from_node);
-    if (
-      fromNode?.kind === "action" &&
-      edge.outcome !== undefined &&
-      !actionEdgeOutcomeDeclared(fromNode.target.kind, edge.outcome)
-    ) {
-      context.addIssue({ code: "custom", path: ["edges", index, "outcome"], message: "An action edge can only route a result its target reports" });
     }
   }
 
