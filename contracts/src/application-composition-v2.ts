@@ -8,6 +8,10 @@ import {
   sourceQualifiedRecordTypeSchema,
   sourceQualifiedRelationshipSchema,
 } from "./definition-source-common";
+import {
+  componentSemanticEventKindSchema,
+  type ComponentSemanticEventKind,
+} from "./application-flow-bindings";
 import { recordTypeReferenceSchema } from "./definitions";
 import { conditionNodeSchema } from "./module-contracts";
 import {
@@ -486,6 +490,18 @@ const blockCapabilitiesV2Schema = z.discriminatedUnion("accessibleName", [
     .strict(),
 ]);
 
+/**
+ * State operations a flow may apply to a placed component. A release lists exactly the
+ * operations it supports; none is implied by its palette group or renderer.
+ */
+export const componentStateOperationKindSchema = z.enum([
+  "set_value",
+  "reset",
+  "select_tab",
+  "open",
+  "close",
+]);
+
 /** One immutable, platform-owned block release used by validation and renderer lookup. */
 export const platformBlockReleaseV2Schema = z
   .object({
@@ -501,9 +517,25 @@ export const platformBlockReleaseV2Schema = z
     properties: z.array(blockPropertySchemaV2Schema),
     slots: z.array(blockSlotDeclarationV2Schema),
     capabilities: blockCapabilitiesV2Schema,
+    /** Semantic events the component emits: the only events a flow binding may name for it. */
+    supportedEvents: z.array(componentSemanticEventKindSchema),
+    /** State operations a flow may apply to the component. */
+    supportedStateOperations: z.array(componentStateOperationKindSchema),
   })
   .strict()
   .superRefine((value, context) => {
+    if (new Set(value.supportedEvents).size !== value.supportedEvents.length)
+      context.addIssue({
+        code: "custom",
+        path: ["supportedEvents"],
+        message: "Supported events must be unique",
+      });
+    if (new Set(value.supportedStateOperations).size !== value.supportedStateOperations.length)
+      context.addIssue({
+        code: "custom",
+        path: ["supportedStateOperations"],
+        message: "Supported state operations must be unique",
+      });
     if (new Set(value.properties.map((property) => property.key)).size !== value.properties.length)
       context.addIssue({
         code: "custom",
@@ -1260,6 +1292,7 @@ export const sourceGuidedFormPageCompositionV2Schema = z.discriminatedUnion("she
 ]);
 
 export type PlatformBlockReleaseV2 = z.infer<typeof platformBlockReleaseV2Schema>;
+export type ComponentStateOperationKind = z.infer<typeof componentStateOperationKindSchema>;
 export type PlatformBlockDependencyV2 = z.infer<typeof platformBlockDependencyV2Schema>;
 export type PlatformThemeReleaseV2 = z.infer<typeof platformThemeReleaseV2Schema>;
 export type ApplicationCompositionPolicyV2 = z.infer<typeof applicationCompositionPolicyV2Schema>;
@@ -1358,6 +1391,10 @@ export type ComponentDiscoverySlotV2 = Readonly<{
 
 export type ComponentDiscoveryV2 = Readonly<{
   release: PlatformBlockReleaseSummaryV2;
+  /** Semantic events a flow binding may name for this release, as the catalogue declares them. */
+  supportedEvents: readonly ComponentSemanticEventKind[];
+  /** State operations a flow may apply to this release, as the catalogue declares them. */
+  supportedStateOperations: readonly ComponentStateOperationKind[];
   accessibleName: PlatformBlockReleaseV2["capabilities"]["accessibleName"];
   properties: readonly ComponentPropertyControlV2[];
   /** Distinct reference kinds declared anywhere in the component's properties. */
@@ -1468,6 +1505,8 @@ export const projectPlatformCatalogueDiscoveryV2 = (
       );
       return Object.freeze({
         release: summaries[index]!,
+        supportedEvents: Object.freeze([...release.supportedEvents]),
+        supportedStateOperations: Object.freeze([...release.supportedStateOperations]),
         accessibleName: capabilities.accessibleName,
         properties,
         referenceKinds: Object.freeze([...collectReferenceKindsV2(properties, new Set())]),

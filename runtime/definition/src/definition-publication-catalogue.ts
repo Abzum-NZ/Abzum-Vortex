@@ -254,6 +254,8 @@ const materialisePlatformBlockReleaseV2 = (
     properties: definition.properties,
     slots: definition.slots,
     capabilities: definition.capabilities,
+    supportedEvents: definition.supportedEvents,
+    supportedStateOperations: definition.supportedStateOperations,
   };
   const contentFingerprint = fingerprintCanonicalValue(content);
   return deepFreeze(
