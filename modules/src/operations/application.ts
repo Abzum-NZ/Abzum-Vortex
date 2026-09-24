@@ -439,7 +439,6 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
       connection_bindings: [],
       interfaces: [],
       actions: [],
-      rules: [],
       events: [
         {
           id: "form_submit_operations_new_incident",
