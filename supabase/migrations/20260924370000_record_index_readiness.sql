@@ -43,6 +43,12 @@ create table vortex_record.index_catalogue (
     observed_revision between 1 and 9007199254740991
   ),
   changed_at timestamptz not null default pg_catalog.statement_timestamp(),
+  -- The physical name is the provisioner's exact name for this purpose and
+  -- field, so a row can never describe another field's index.
+  check (
+    physical_index_token = case purpose when 'uniqueness' then 'ux_' else 'ix_' end
+      || pg_catalog.replace(pg_catalog.lower(field_id::text), '-', '')
+  ),
   -- One index per exact field; uniqueness takes precedence over performance
   -- exactly as the provisioner's own branch order does.
   unique (storage_contract_id, field_id),
@@ -75,6 +81,41 @@ as $function$
     when 'application_contained' then 'organisation_id, application_root_id'
     else null
   end
+$function$;
+
+-- The stable identity of the one index of an exact storage contract and field.
+-- It is derived rather than random so readiness can name an index that has no
+-- catalogue row yet, and it carries the RFC 9562 version-8 and variant bits so
+-- it is a valid UUID for every contract that parses platform identifiers.
+create function vortex_record.index_contract_identity(
+  p_storage_contract_id uuid,
+  p_field_id uuid
+)
+returns uuid
+language sql
+immutable
+security invoker
+set search_path = ''
+as $function$
+  select (
+    pg_catalog.substr(source.digest_hex, 1, 12)
+    || '8'
+    || pg_catalog.substr(source.digest_hex, 14, 3)
+    || pg_catalog.substr(
+      '89ab',
+      (pg_catalog.strpos(
+        '0123456789abcdef', pg_catalog.substr(source.digest_hex, 17, 1)
+      ) - 1) % 4 + 1,
+      1
+    )
+    || pg_catalog.substr(source.digest_hex, 18, 15)
+  )::uuid
+  from (
+    select pg_catalog.md5(
+      pg_catalog.lower(p_storage_contract_id::text) || ':'
+        || pg_catalog.lower(p_field_id::text)
+    ) as digest_hex
+  ) as source
 $function$;
 
 create function vortex_record.index_definition(
@@ -145,7 +186,7 @@ declare
   index_relation oid;
   index_row record;
   expected_columns text[];
-  position integer;
+  key_position integer;
 begin
   if p_purpose is null or p_purpose not in ('uniqueness', 'performance')
     or p_table_token is null or p_table_token !~ '^rt_[a-f0-9]{32}$'
@@ -187,10 +228,10 @@ begin
     return 'invalid';
   end if;
 
-  for position in 1 .. index_row.indnkeyatts
+  for key_position in 1 .. index_row.indnkeyatts
   loop
-    if pg_catalog.pg_get_indexdef(index_relation, position, false)
-      is distinct from expected_columns[position] then
+    if pg_catalog.pg_get_indexdef(index_relation, key_position, false)
+      is distinct from expected_columns[key_position] then
       return 'invalid';
     end if;
   end loop;
@@ -278,7 +319,7 @@ begin
     index_contract_id, storage_contract_id, field_id, purpose, physical_index_token,
     desired_definition_fingerprint, observed_state, observed_revision
   ) values (
-    pg_catalog.md5(p_storage_contract_id::text || ':' || p_field_id::text)::uuid,
+    vortex_record.index_contract_identity(p_storage_contract_id, p_field_id),
     p_storage_contract_id, p_field_id, p_purpose, index_token,
     definition_fingerprint, observed, 1
   )
@@ -377,14 +418,14 @@ begin
       where stored.storage_contract_id = target.storage_contract_id
         and stored.state = 'active'
         and (
-          pg_catalog.coalesce((stored.field_definition ->> 'unique')::boolean, false)
-          or pg_catalog.coalesce((stored.field_definition ->> 'filterable')::boolean, false)
-          or pg_catalog.coalesce((stored.field_definition ->> 'sortable')::boolean, false)
+          coalesce((stored.field_definition ->> 'unique')::boolean, false)
+          or coalesce((stored.field_definition ->> 'filterable')::boolean, false)
+          or coalesce((stored.field_definition ->> 'sortable')::boolean, false)
         )
       order by stored.field_id
     loop
       purpose := case
-        when pg_catalog.coalesce((mapping.field_definition ->> 'unique')::boolean, false)
+        when coalesce((mapping.field_definition ->> 'unique')::boolean, false)
           then 'uniqueness'
         else 'performance'
       end;
@@ -419,11 +460,11 @@ begin
       end if;
 
       indexes := indexes || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-        'indexContractId', pg_catalog.coalesce(
+        'indexContractId', coalesce(
           catalogue_id,
-          pg_catalog.md5(
-            target.storage_contract_id::text || ':' || mapping.field_id::text
-          )::uuid
+          vortex_record.index_contract_identity(
+            target.storage_contract_id, mapping.field_id
+          )
         ),
         'storageContractId', target.storage_contract_id,
         'fieldId', mapping.field_id,
@@ -457,6 +498,7 @@ end
 $function$;
 
 revoke all on function vortex_record.index_scope_columns(text),
+  vortex_record.index_contract_identity(uuid, uuid),
   vortex_record.index_definition(text, text, text, text),
   vortex_record.index_definition_fingerprint(text, text, text, text),
   vortex_record.observe_field_index_internal(text, text, text, text),
@@ -574,14 +616,14 @@ begin
     where stored.state = 'active'
       and catalogue.state = 'active'
       and (
-        pg_catalog.coalesce((stored.field_definition ->> 'unique')::boolean, false)
-        or pg_catalog.coalesce((stored.field_definition ->> 'filterable')::boolean, false)
-        or pg_catalog.coalesce((stored.field_definition ->> 'sortable')::boolean, false)
+        coalesce((stored.field_definition ->> 'unique')::boolean, false)
+        or coalesce((stored.field_definition ->> 'filterable')::boolean, false)
+        or coalesce((stored.field_definition ->> 'sortable')::boolean, false)
       )
     order by stored.storage_contract_id, stored.field_id
   loop
     purpose := case
-      when pg_catalog.coalesce((mapping.field_definition ->> 'unique')::boolean, false)
+      when coalesce((mapping.field_definition ->> 'unique')::boolean, false)
         then 'uniqueness'
       else 'performance'
     end;
@@ -599,9 +641,9 @@ begin
       index_contract_id, storage_contract_id, field_id, purpose, physical_index_token,
       desired_definition_fingerprint, observed_state, observed_revision
     ) values (
-      pg_catalog.md5(
-        mapping.storage_contract_id::text || ':' || mapping.field_id::text
-      )::uuid,
+      vortex_record.index_contract_identity(
+        mapping.storage_contract_id, mapping.field_id
+      ),
       mapping.storage_contract_id, mapping.field_id, purpose, index_token,
       definition_fingerprint, observed, 1
     )

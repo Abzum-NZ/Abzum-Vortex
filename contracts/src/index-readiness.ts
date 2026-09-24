@@ -9,7 +9,6 @@ import {
 } from "./identifiers";
 
 const nonNilUuidSchema = z
-  .string()
   .uuid()
   .refine((value) => value !== "00000000-0000-0000-0000-000000000000", {
     message: "An index identity cannot be the nil UUID",
