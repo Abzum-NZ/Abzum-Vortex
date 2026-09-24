@@ -86,18 +86,16 @@ const reviewedRequests = {
   ],
 } as const;
 
+// Ordinary record actions can edit draft content; protected journeys own identity and state.
 const requestChangeable = [
   "title",
   "request_type",
-  "state",
-  "beneficiary",
   "target_role_key",
   "target_group_key",
   "application_context",
   "reason",
   "starts_on",
   "expires_on",
-  "proposal_revision",
 ];
 const requestReadable = [
   "request_number",
@@ -111,12 +109,18 @@ const requestReadable = [
   "reason",
   "starts_on",
   "expires_on",
-  "proposal_revision",
   "submitted_at",
   "decided_at",
 ];
 
-const requestItemChangeable = ["request", "item_type", "target_key", "change", "application_key"];
+const requestItemCreateChangeable = [
+  "request",
+  "item_type",
+  "target_key",
+  "change",
+  "application_key",
+];
+const requestItemUpdateChangeable = ["item_type", "target_key", "change", "application_key"];
 const requestItemReadable = [
   "request",
   "item_type",
@@ -125,14 +129,7 @@ const requestItemReadable = [
   "application_key",
 ];
 
-const reviewChangeable = [
-  "request",
-  "proposal_revision",
-  "decision",
-  "reviewer",
-  "decided_at",
-  "comments",
-];
+const reviewChangeable = ["comments"];
 const reviewReadable = [
   "review_number",
   "request",
@@ -143,19 +140,8 @@ const reviewReadable = [
   "comments",
 ];
 
-const reviewResponseChangeable = ["review", "responder", "outcome", "comment", "responded_at"];
+const reviewResponseChangeable = ["comment"];
 const reviewResponseReadable = ["review", "responder", "outcome", "comment", "responded_at"];
-
-const ownRequestChangeable = [
-  "title",
-  "request_type",
-  "target_role_key",
-  "target_group_key",
-  "application_context",
-  "reason",
-  "starts_on",
-  "expires_on",
-];
 
 const permissions = [
   ...standardActions.flatMap((action) => {
@@ -169,7 +155,11 @@ const permissions = [
     const readable =
       action === "soft_delete" || action === "restore" ? [] : requestItemReadable;
     const changeable =
-      action === "create" || action === "update" ? requestItemChangeable : [];
+      action === "create"
+        ? requestItemCreateChangeable
+        : action === "update"
+          ? requestItemUpdateChangeable
+          : [];
     return [recordPermission("access_request_item", action, readable, changeable)];
   }),
   ...standardActions.flatMap((action) => {
@@ -186,15 +176,20 @@ const permissions = [
     return [recordPermission("access_review_response", action, readable, changeable)];
   }),
   scopedRecordPermission(
-    "access_request", "create", "own", ownRecords, requestReadable, ownRequestChangeable,
+    "access_request", "create", "own", ownRecords, requestReadable, requestChangeable,
   ),
   scopedRecordPermission("access_request", "read", "own", ownRecords, requestReadable, []),
   scopedRecordPermission(
-    "access_request", "update", "own", ownRecords, requestReadable, ownRequestChangeable,
+    "access_request", "update", "own", ownRecords, requestReadable, requestChangeable,
   ),
   scopedRecordPermission("access_request", "soft_delete", "own", ownRecords, [], []),
   scopedRecordPermission(
-    "access_request_item", "create", "own", ownRecords, requestItemReadable, requestItemChangeable,
+    "access_request_item",
+    "create",
+    "own",
+    ownRecords,
+    requestItemReadable,
+    requestItemCreateChangeable,
   ),
   scopedRecordPermission("access_request_item", "read", "own", ownRecords, requestItemReadable, []),
   scopedRecordPermission(
@@ -366,18 +361,6 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
             sortable: true,
             type: "date",
             settings: {},
-          },
-          {
-            ...fieldBase,
-            id: "fld_iam_request_proposal_revision",
-            key: "proposal_revision",
-            label: "Proposal revision",
-            required: true,
-            filterable: true,
-            sortable: true,
-            type: "whole_number",
-            settings: { minimum: 1 },
-            default: 1,
           },
           {
             ...fieldBase,
