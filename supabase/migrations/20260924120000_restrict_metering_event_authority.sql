@@ -79,6 +79,7 @@ begin
   where procedure.oid = procedure_id;
   execute pg_catalog.format('set local role %I', owner_name);
   execute definition;
+  reset role;
 end
 $migration$;
 
