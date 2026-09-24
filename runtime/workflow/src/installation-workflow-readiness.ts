@@ -502,38 +502,34 @@ export const planInstallationWorkflowActivation = (
     if (index < 0) return refusedPlan("missing_registration");
     matched.add(index);
     const registration = present[index]!;
-    flows.push(
-      Object.freeze({
-        workflowRevision: candidate.identity.workflowRevision,
-        flowId: candidate.flowId,
-        namespace: candidate.namespace,
-        candidateFingerprint: registration.candidateFingerprint,
-        status: "inactive" as const,
-        scheduled: candidate.scheduled,
-      }),
-    );
+    flows.push({
+      workflowRevision: candidate.identity.workflowRevision,
+      flowId: candidate.flowId,
+      namespace: candidate.namespace,
+      candidateFingerprint: registration.candidateFingerprint,
+      status: "inactive",
+      scheduled: candidate.scheduled,
+    });
   }
   if (present.length !== matched.size) return refusedPlan("mismatched_registration");
 
-  const evidence: InstallationWorkflowActivationEvidence = Object.freeze({
+  const evidence: InstallationWorkflowActivationEvidence = {
     environment: target.environment,
     organizationId: target.organizationId,
     applicationRootId: target.applicationRootId,
     applicationVersion: target.applicationVersion,
     installationRevision: target.installationRevision,
-    flows: Object.freeze(flows),
-  });
+    flows,
+  };
 
   const scheduleChanges: InstallationWorkflowScheduleChange[] = flows
     .filter((flow) => flow.scheduled)
-    .map((flow) =>
-      Object.freeze({
-        workflowRevision: flow.workflowRevision,
-        flowId: flow.flowId,
-        namespace: flow.namespace,
-        action: "enable" as const,
-      }),
-    );
+    .map((flow) => ({
+      workflowRevision: flow.workflowRevision,
+      flowId: flow.flowId,
+      namespace: flow.namespace,
+      action: "enable" as const,
+    }));
 
   const supersededInput = inputCandidate.supersededFlows;
   if (supersededInput !== undefined) {
@@ -543,7 +539,7 @@ export const planInstallationWorkflowActivation = (
       const reference = parseFlowReference(candidate);
       if (reference === undefined) return refusedPlan("invalid_input");
       if (currentFlows.has(`${reference.namespace}\0${reference.flowId}`)) continue;
-      scheduleChanges.push(Object.freeze({ ...reference, action: "disable" as const }));
+      scheduleChanges.push({ ...reference, action: "disable" });
     }
   }
 
@@ -554,22 +550,15 @@ export const planInstallationWorkflowActivation = (
     for (const candidate of acceptedInput) {
       const start = parseAcceptedStart(candidate);
       if (start === undefined) return refusedPlan("invalid_input");
-      retainedStarts.push(
-        Object.freeze({
-          runId: start.runId,
-          applicationReleaseRevision: start.applicationReleaseRevision,
-          workflowRevision: start.workflowRevision,
-        }),
-      );
+      retainedStarts.push({
+        runId: start.runId,
+        applicationReleaseRevision: start.applicationReleaseRevision,
+        workflowRevision: start.workflowRevision,
+      });
     }
   }
 
-  const plan = Object.freeze({
-    outcome: "ready" as const,
-    evidence,
-    scheduleChanges: Object.freeze(scheduleChanges),
-    retainedStarts: Object.freeze(retainedStarts),
-  });
+  const plan = { outcome: "ready" as const, evidence, scheduleChanges, retainedStarts };
   const validated = installationWorkflowActivationPlanSchema.safeParse(plan);
   if (!validated.success) return refusedPlan("invalid_input");
   return validated.data;
@@ -613,35 +602,27 @@ export const reconcileInstallationWorkflowWithdrawal = (
     acceptedStarts.push(start);
   }
 
-  const reconciliation = Object.freeze({
+  const reconciliation = {
     organizationId: target.organizationId,
     applicationRootId: target.applicationRootId,
     applicationReleaseRevision: target.installationRevision,
     newAcceptance: "blocked" as const,
-    schedulesToDisable: Object.freeze(
-      flows
-        .filter((flow) => flow.scheduled)
-        .map((flow) =>
-          Object.freeze({
-            workflowRevision: flow.workflowRevision,
-            flowId: flow.flowId,
-            namespace: flow.namespace,
-          }),
-        ),
-    ),
-    starts: Object.freeze(
-      acceptedStarts.map((start) =>
-        Object.freeze({
-          runId: start.runId,
-          applicationReleaseRevision: start.applicationReleaseRevision,
-          workflowRevision: start.workflowRevision,
-          decision: start.started
-            ? ("cancellation_requested" as const)
-            : ("refused_before_start" as const),
-        }),
-      ),
-    ),
-  });
+    schedulesToDisable: flows
+      .filter((flow) => flow.scheduled)
+      .map((flow) => ({
+        workflowRevision: flow.workflowRevision,
+        flowId: flow.flowId,
+        namespace: flow.namespace,
+      })),
+    starts: acceptedStarts.map((start) => ({
+      runId: start.runId,
+      applicationReleaseRevision: start.applicationReleaseRevision,
+      workflowRevision: start.workflowRevision,
+      decision: start.started
+        ? ("cancellation_requested" as const)
+        : ("refused_before_start" as const),
+    })),
+  };
   const validated = installationWorkflowWithdrawalReconciliationSchema.safeParse(reconciliation);
   if (!validated.success) throw invalidInput();
   return validated.data;
