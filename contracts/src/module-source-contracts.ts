@@ -12,6 +12,7 @@ import {
   sourceQualifiedRelationshipSchema,
 } from "./definition-source-common";
 import { parseExactDecimal } from "./exact-decimal";
+import { compileTextInputPattern } from "./text-input-pattern";
 import {
   currencyCodeV2Schema,
   exactDecimalFitsDigitsV2,
@@ -131,6 +132,28 @@ export const sourcePermissionFieldPolicySchema = z
 // types Module actions add below, so its shape stays fixed across Modules.
 // ---------------------------------------------------------------------------
 
+// A text pattern must compile under the shared bounded contract and always
+// travels with a maximum length, so runtime matching stays bounded. Module and
+// application action and query inputs share this rule.
+const refineTextInputPattern = (
+  validation: { maximum_length?: number | undefined; pattern?: string | undefined } | undefined,
+  context: z.RefinementCtx,
+): void => {
+  if (validation?.pattern === undefined) return;
+  if (validation.maximum_length === undefined)
+    context.addIssue({
+      code: "custom",
+      path: ["validation", "maximum_length"],
+      message: "Maximum length is required when a pattern is set",
+    });
+  if (compileTextInputPattern(validation.pattern) === undefined)
+    context.addIssue({
+      code: "custom",
+      path: ["validation", "pattern"],
+      message: "Pattern is invalid or uses an unsupported unsafe construct",
+    });
+};
+
 const sourceSharedActionInputBase = {
   key: builderKeySchema,
   label: z.string().min(1).max(60),
@@ -240,6 +263,7 @@ export const actionInputSchema = z
         path: ["validation", "maximum_length"],
         message: "Maximum length cannot be below minimum length",
       });
+    if (value.type === "text") refineTextInputPattern(value.validation, context);
     if (
       value.type === "number" &&
       value.validation?.minimum !== undefined &&
@@ -1038,6 +1062,7 @@ export const moduleSourceActionInputSchema = z
         path: ["validation", "maximum_length"],
         message: "Maximum length cannot be below minimum length",
       });
+    if (value.type === "text") refineTextInputPattern(value.validation, context);
     if (
       value.type === "number" &&
       value.validation?.minimum !== undefined &&
