@@ -226,6 +226,8 @@ const sourceWorkflowValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("current_actor") }).strict(),
   z.object({ source: z.literal("current_time") }).strict(),
 ]);
+const isSourceRecordReferenceType = (type: string) =>
+  type === "record_reference" || type === "record_reference_list";
 const sourceWorkflowDeclaredOutputSchema = z
   .object({
     key: builderKeySchema,
@@ -234,11 +236,11 @@ const sourceWorkflowDeclaredOutputSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if ((value.type === "record_reference") !== (value.record_types !== undefined))
+    if (isSourceRecordReferenceType(value.type) !== (value.record_types !== undefined))
       context.addIssue({
         code: "custom",
         path: ["record_types"],
-        message: "Record-reference outputs require their allowed record types",
+        message: "Record-reference and record-list outputs require their allowed record types",
       });
   });
 const sourceWorkflowConfigByType = {
@@ -388,11 +390,11 @@ const sourceWorkflowTriggerInputSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if ((value.type === "record_reference") !== (value.record_types !== undefined))
+    if (isSourceRecordReferenceType(value.type) !== (value.record_types !== undefined))
       context.addIssue({
         code: "custom",
         path: ["record_types"],
-        message: "Record-reference inputs require their allowed record types",
+        message: "Record-reference and record-list inputs require their allowed record types",
       });
   });
 const sourceWorkflowTriggerCommon = {
