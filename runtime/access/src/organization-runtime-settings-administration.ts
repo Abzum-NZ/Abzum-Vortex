@@ -154,8 +154,10 @@ const parseDefaultApplicationCommand = (
 };
 
 /**
- * The settings object is contract-validated before the protected request-role
- * operation, which takes the values as arguments and re-validates them in SQL.
+ * The settings object is contract-validated here, before the protected
+ * request-role operation, which takes the values as arguments. SQL repeats the
+ * shape, currency and format checks but not exact BCP-47 or pinned IANA zone
+ * validation, so every value must reach it only through this contract check.
  * No separate staging call precedes it.
  */
 export const createOrganizationRuntimeSettingsAdministrationService = (

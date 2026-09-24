@@ -10,9 +10,13 @@
 -- the organisation and account still come only from the validated human
 -- request context, the fixed runtime-settings.manage permission is still
 -- evaluated under the organisation Access-version lock, and the private
--- Identity writer (which re-validates every value through
+-- Identity writer (which checks every value through
 -- assert_organization_runtime_settings_values) still applies the exact
 -- expected-revision check. Access version is still never changed.
+--
+-- SQL repeats the boundary checks only: exact BCP-47 language and pinned IANA
+-- time-zone validation remain the trusted contract's, which the Access
+-- runtime-settings service applies before it calls this operation.
 --
 -- The transaction-bound staging table and its two functions are no longer
 -- reached by this operation; removing them can follow separately.
@@ -120,4 +124,4 @@ grant execute on function vortex_access.update_organization_runtime_settings_for
 
 comment on function vortex_access.update_organization_runtime_settings_for_administration(
   bigint, text, text, text, text, text
-) is 'Fixed protected organisation settings update requiring runtime-settings.manage and an exact current revision. The values are arguments; the private Identity writer re-validates every one. It never changes Access version.';
+) is 'Fixed protected organisation settings update requiring runtime-settings.manage and an exact current revision. The values are arguments, contract-validated by the Access service and boundary-checked by the private Identity writer. It never changes Access version.';

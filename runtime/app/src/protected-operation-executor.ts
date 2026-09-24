@@ -131,9 +131,10 @@ const mapAvailable = <Value>(
   result.kind === "available" ? { kind: "available", value: project(result.value) } : result;
 
 /**
- * Each registered operation, exhaustively keyed by the catalogue so a newly registered operation
- * cannot exist without an executor entry here and no entry can exist for an unregistered one.
- * `outputs` may carry more than the descriptor declares; the executor keeps only declared ones.
+ * Each registered operation, exhaustively keyed by the catalogue (`satisfies` makes a missing or
+ * an unregistered key a compile error), so a newly registered operation cannot exist without an
+ * executor entry here. The mapped outputs may carry more than the descriptor declares; the
+ * executor keeps only declared ones.
  */
 const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Object.freeze({
   create_group: operation({
@@ -351,8 +352,9 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         }),
       ),
   }),
-});
+} satisfies Record<PlatformServiceOperationKey, Operation>);
 
+/** A value of a declared type the executor does not carry yet is refused, never coerced. */
 const valueMatches = (type: string, value: unknown): value is ProtectedOperationValue => {
   if (type === "text" || type === "choice") return typeof value === "string";
   if (type === "whole_number") return typeof value === "number" && Number.isSafeInteger(value);
@@ -411,24 +413,29 @@ export const createProtectedOperationExecutor = (
      * one of the safe results, and only a committed result carries outputs.
      */
     async execute(request: ProtectedOperationExecutionRequest): Promise<ProtectedOperationExecution> {
-      const identity = protectedOperationIdentitySchema.safeParse(request.operation);
-      const session = identitySessionSchema.safeParse(request.session);
-      const selection = organizationSelectionCandidateSchema.safeParse(request.selection);
-      if (!identity.success || !session.success || !selection.success) return { outcome: "refused" };
-      const registered = findPlatformServiceOperation(
-        identity.data.serviceId,
-        identity.data.operationId,
-        identity.data.releaseVersion,
-      );
-      if (registered === undefined) return { outcome: "refused" };
-      const run = operations[registered.key as PlatformServiceOperationKey];
-      if (run === undefined) return { outcome: "refused" };
-      if (typeof request.inputs !== "object" || request.inputs === null)
-        return { outcome: "validation" };
-      const inputs = declaredInputs(registered.descriptor, request.inputs);
-      if (inputs === undefined) return { outcome: "validation" };
-
       try {
+        const identity = protectedOperationIdentitySchema.safeParse(request.operation);
+        const session = identitySessionSchema.safeParse(request.session);
+        const selection = organizationSelectionCandidateSchema.safeParse(request.selection);
+        if (!identity.success || !session.success || !selection.success)
+          return { outcome: "refused" };
+        const registered = findPlatformServiceOperation(
+          identity.data.serviceId,
+          identity.data.operationId,
+          identity.data.releaseVersion,
+        );
+        if (registered === undefined) return { outcome: "refused" };
+        const run = operations[registered.key as PlatformServiceOperationKey];
+        if (run === undefined) return { outcome: "refused" };
+        if (
+          typeof request.inputs !== "object" ||
+          request.inputs === null ||
+          Array.isArray(request.inputs)
+        )
+          return { outcome: "validation" };
+        const inputs = declaredInputs(registered.descriptor, request.inputs);
+        if (inputs === undefined) return { outcome: "validation" };
+
         const result = await run(
           dependencies,
           { session: session.data, selection: selection.data },
