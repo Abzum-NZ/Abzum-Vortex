@@ -17,7 +17,6 @@ import {
   sourceQualifiedRelationshipSchema,
   sourceQualifiedConditionSchema,
   sourceQualifiedRecordTypeSchema,
-  sourceRuleEffectSchema,
 } from "./definition-source-common";
 import {
   actionInputSchema,
@@ -922,19 +921,6 @@ export const sourceApplicationBodyV2Schema = z
               message: "Action permission alternatives must use canonical order",
             });
         }),
-    ).max(100),
-    rules: z.array(
-      z
-        .object({
-          id: sourceAliasSchema,
-          key: builderKeySchema,
-          record_type: sourceQualifiedRecordTypeSchema,
-          trigger: z.enum(["create", "change", "delete", "form_change", "action"]),
-          priority: z.number().int().min(0).max(10_000),
-          condition: sourceConditionSchema,
-          effect: sourceRuleEffectSchema,
-        })
-        .strict(),
     ).max(100),
     events: z.array(
       z

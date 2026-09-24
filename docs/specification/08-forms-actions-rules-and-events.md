@@ -8,64 +8,115 @@ The platform separates work that must finish during a [record save](06-records-a
 
 ```mermaid
 flowchart LR
-    START[Person, MCP client, interface or workflow requests action] --> ACTION[Action prepares record changes]
-    ACTION --> RULE[Rules validate and adjust save]
+    START[Person, MCP client or interface starts a flow through a binding] --> TASK[Record task prepares record changes]
+    TASK --> RULE[BeforeSave flows validate and adjust the save]
     RULE --> WRITE[Write record, activity, outbox and logged queue message in one transaction]
     WRITE --> COMMIT{Transaction commits?}
     COMMIT -- No --> STOP[Roll back changes and event; return refusal]
     COMMIT -- Yes --> DISPATCH[Dispatcher delivers committed event]
-    DISPATCH --> FLOW[Workflow performs background work]
+    DISPATCH --> FLOW[Event-triggered flow performs background work]
 ```
 
-An **action** is a named operation that participates in a save. A **rule** is a typed flow of immediate logic evaluated in its declared context. An **event** is a committed statement that something happened. A [workflow](09-workflows-and-pipelines.md) performs durable work after the save. The [Frontend Rule Designer](appendices/frontend-rule-designer.md) is the one shared rule/action authoring surface, reusing the Conditions Designer and Page Designer forms.
+Every behaviour is a **flow** in the one [flow language](appendices/frontend-rule-designer.md#one-flow-language). An **action** is a flow a person or agent starts through a binding; a **named action** is a `transaction` flow whose record changes compile into one protected apply-record-changes call. A **rule** is a flow with a `BeforeSave` trigger that runs inside the save. An **event** is a committed statement that something happened. Work after a change is a flow with an `Event` trigger, and durable work runs on [Kestra](09-workflows-and-pipelines.md). The [Frontend Rule Designer](appendices/frontend-rule-designer.md) is the one authoring surface for all of them, reusing the Conditions Designer and Page Designer forms.
 
-A user-facing action always enters an application-owned Frontend Flow; the named **action** contract below is its lower-level protected business operation, not a competing click handler. A popup-only or navigation-only flow finishes without a business submission. A one-node Save form flow is sufficient for an ordinary submit button. The [flow-first binding rules](appendices/frontend-rule-designer.md#pages-compose-flows-define-actions) separate page composition from behaviour without replacing the owning services.
+A user-facing action always enters a flow through its binding: the exact flow id plus a typed input map. A popup-only or navigation-only flow finishes without a business submission. The default Save of a form is a generated one-task flow, `record.save`. The [flow-first binding rules](appendices/frontend-rule-designer.md#pages-compose-flows-define-actions) separate page composition from behaviour without replacing the owning services.
 
-An interactive flow may collect forms, query data and execute several changing nodes in its configured order. Each protected operation commits independently; cancellation or later failure does not undo earlier commits. The collect-first pattern remains available: collect all required answers before one supported atomic operation when no business changes should occur until every form passes. Each operation revalidates its required path, inputs, current authority and revisions. No database transaction spans human or network waits. See [execution and custom forms](appendices/frontend-rule-designer.md#custom-forms-and-all-or-nothing-submission).
+An interactive flow may collect forms, query data and execute several changing tasks in its configured order. Any flow that contains a protected task is driven by the server from its first task. Each protected task commits independently; cancellation or later failure does not undo earlier commits. The collect-first pattern remains available: collect all required answers before one record task when no business changes should occur until every form passes. Each protected task revalidates its required path, inputs, current authority and revisions. No database transaction spans human or network waits. See [execution and custom forms](appendices/frontend-rule-designer.md#custom-forms-and-all-or-nothing-submission).
 
 ## Actions
 
-An action belongs to a module when it expresses reusable business meaning, or to an application when it exists only for that application. It records:
+A **named action** is a published `transaction` flow in the one [flow language](appendices/frontend-rule-designer.md#one-flow-language), started through its binding or by a Run flow task in another flow. It belongs to a module when it expresses reusable business meaning, or to an application when it exists only for that application. It declares the same fields as every [flow](appendices/frontend-rule-designer.md#flow-shape); it runs as the actor that starts it (a person, their agent, or the calling flow's run-as), and its invocation permission is checked before it starts.
 
-- Permanent identifier, label, subject record type, and required permission.
-- Inputs with names, labels, types, required flags, and validation that is valid for that type. Plain text accepts length and pattern constraints; formatted text accepts a closed block allowlist and maximum length; numbers accept numeric bounds; dates and date-times accept their own bounds; a record reference names one or more allowed record types; an organisation-account reference selects an account in the current organisation; a Boolean accepts none of those unrelated settings.
-- A precondition.
-- One to ten ordered effects.
-- The events it may announce.
-- A sharing setting of `refused` by default or `allowed`. Only an action explicitly published as shareable may be named by a cross-organisation grant.
+Its inputs use names, labels, types, required flags, and validation valid for that type from the one value-type catalogue. Plain text accepts length and pattern constraints; formatted text accepts a closed block allowlist and maximum length; numbers accept numeric bounds; dates and date-times accept their own bounds; a record reference names one or more allowed record types; an organisation-account reference selects an account in the current organisation; a Boolean accepts none of those unrelated settings. A named action also records a precondition, the events it may announce, and a sharing setting of `refused` by default or `allowed`; only an action explicitly published as shareable may be named by a cross-organisation grant.
 
-Allowed immediate action effects are:
+A named action's ordered task list may contain only transaction-safe tasks: pure tasks (If, Switch, Set variables, Calculate, Require field, Refuse, Warn, Stop), reads under the actor's authority, and record tasks. Its record tasks compile into **one** apply-record-changes call, so they succeed or fail together:
 
-1. Set a field from a literal, action input, subject field, subject record, current actor, or current time.
-2. Create a record using an explicit field-to-value map.
-3. Copy an explicit non-empty list of the subject's published relationships to a record supplied through a declared link input.
-4. Soft-delete the subject record.
-5. Announce a declared business event when the save commits.
+1. `record.setFields` on the subject — each value from a literal, action input, subject field, subject record, `{{ execution.actor }}`, or a formula.
+2. `record.create` — using an explicit field-to-value map.
+3. `record.link` — an explicit non-empty list of the subject's published relationship keys, to a record supplied through a declared input.
+4. `record.delete` — the subject record.
+5. Announce event — a declared business event written when the call commits.
 
-Every field, record type, relationship, input and event named by an effect must resolve during publication. A copy effect never means “all relationships”; the authored definition lists the relationship keys and publication resolves them to permanent relationship identifiers.
+Apply record changes enforces, for every call, the access decision for each touched record, field permissions, pipeline transitions and gates, action-only fields, revision checks, `BeforeSave` flows and computed values. A pipeline stage field changes only through its named transition action. Every field, record type, relationship, input and event named by a task must resolve during publication. A link task never means "all relationships"; the authored task lists the relationship keys and publication resolves them to permanent relationship identifiers.
 
-An action cannot wait, call an external system, send email, send notifications, invoke a model, or read arbitrary records. Those operations belong to a [workflow](09-workflows-and-pipelines.md). A shared action runs wholly in the source organisation and cannot create or link recipient-owned records.
+A named action cannot wait, call an external system, send email, send notifications, invoke a model, run unbounded reads or start background work; follow-up work is a flow with an `Event` trigger, and work that waits is a durable flow. A shared action runs wholly in the source organisation and cannot create or link recipient-owned records.
 
 ## Rules
 
-A rule flow has a trigger, optional condition, priority, declared typed inputs and flow variables, and an ordered graph of registered nodes. Rules for the same trigger run in a stable published order. The [current graph contract](appendices/frontend-rule-designer.md#current-contracts-and-delivery) replaces the obsolete single-effect representation throughout current definitions and consumers; product publication identity and release selection remain explicit.
+A **rule** is a flow with a `BeforeSave` trigger and the `transaction` execution kind. It declares the same fields as every [flow](appendices/frontend-rule-designer.md#flow-shape). Examples: a required value, an allowed status change, "a resolved case needs a resolution time". Rules on the same record type run in a stable published order.
 
-The immediate save-rule effects remain:
+A rule's ordered task list may contain only transaction-safe tasks:
 
-- Refuse the save with a field-level message.
-- Set a field value.
-- Require a field.
-- Show or hide a field in the current form.
+- If, Switch, Set variables and Calculate.
+- Set field on the record being saved.
+- Require field.
 - Warn without refusing.
-- Request background work after a successful commit.
+- Refuse with a field-level message, or Stop.
+- Query records under the saver's authority.
 
-The complete [frontend node catalogue](appendices/frontend-rule-designer.md#initial-frontend-node-catalogue-and-extensibility) additionally provides branching, flow variables, input forms, action preparation and semantic interface controls. Context validation separates pure feedback, interactive collection and authoritative submission; Show form is never a node inside a database transaction. New node kinds are versioned platform registrations, not customer-uploaded code.
+The server runs every applicable rule inside apply record changes for every writer: web, agent, interface, import and Kestra. Its refusals, requirements and warnings are authoritative, and no binding, button or raw call can evade it. A rule cannot show or hide fields, wait for a person, switch identity, start background work or commit independently. Presentation belongs to the interactive flow bound to the form, and work after the change belongs to a flow with an `Event` trigger.
 
-Server validation is authoritative. Client-side rule evaluation may provide immediate feedback, but the server re-evaluates the rule against current data before saving.
+The browser runs the same rule definition while a person edits, to show predicted field changes, requirements, warnings and refusals at once. The browser evaluator is pure: it never writes a record, event, background-start intent or external effect, and its results are never trusted. The server re-evaluates the rule against current data before saving.
 
-The client evaluator is pure: it may show the same predicted field changes, warnings, refusals, and background-work request as the server, but it never writes a record, event, workflow-start intent, or external effect. Only an authoritative protected operation node or save-rule path may accept the request after checking the current organisation, active application installation, permission, exact published action or rule, subject revision, and typed inputs.
+Flows must declare their read fields and write fields. Publication refuses cycles, conflicting writes without a declared order, a task placed outside its declared run locations, and a flow that reads information unavailable to its execution kind.
 
-Rules must declare their read fields and write fields. Publication refuses cycles, conflicting writes without a declared order, and a rule that reads information unavailable to its execution context.
+### One flow language mapping
+
+Every current element is authored as part of the one flow shape. The table maps each existing representation to its replacement:
+
+| Current element | Replacement in the one flow language |
+| --- | --- |
+| Rule-graph `before_save` profile and Start node | A flow with a `BeforeSave` trigger and `transaction` execution; the Start node's inputs and variables become the flow's `inputs` and `variables`. |
+| Rule-graph Condition node with `true`/`false` ports | An **If** control task with its two declared branches. |
+| Rule-graph Set variable node | A **Set variables** task writing a declared `vars` value. |
+| Rule-graph Set field node | A **Set field** task on the record being saved. |
+| Rule-graph Require field node | A **Require field** task. |
+| Rule-graph Warn node | A **Warn** task. |
+| Rule-graph Refuse node | A **Refuse** task, which ends the flow with a refused outcome. |
+| Rule-graph Finish node | The end of the task list, or a **Stop** task, with the flow's typed outputs. |
+| Rule-graph `next`/`true`/`false` ports and edges | The ordered task list with **If** branches; no edge list. |
+| Rule-graph operands (literal, input, variable, current field, previous field) | A typed literal in the formula tree, `{{ inputs.x }}`, `{{ vars.x }}`, `{{ trigger.record.field }}` and `{{ trigger.previous.field }}`. |
+| Rule-graph condition tree | The typed condition tree of the one formula. |
+| Current-user flow and its component binding | A binding (exact flow id plus typed input map) to an `interactive` flow; the component event is a binding, not a trigger. |
+| Current-user flow Start node | The flow declaration: `inputs`, `variables` and `runAs`. |
+| Current-user flow Query node | A **Query records** task. |
+| Current-user flow Action node, `record_save` target | A **`record.save`** task. |
+| Current-user flow Action node, `application_action` target | A **Run flow** task calling the named action's `transaction` flow. |
+| Current-user flow Action node, `protected_operation` target | The registered protected-operation task, run by the one protected-operation executor. |
+| Current-user flow Action node, `form_continuation` target | A **Show form** browser task, resumed by its continuation. |
+| Current-user flow Action node, `durable_workflow_start` target | A **Run background flow** task. |
+| Current-user flow Transform node | A **Transform** task. |
+| Current-user flow Return node | The flow's typed `outputs`; a **Stop** task for an early outcome. |
+| Current-user flow edges and their outcomes | The ordered task list; a task's refused, conflict or invalid outcome goes to the `errors` handler, or, with `allowRefusal: true`, to an **If** or **Switch** on `{{ outputs.task.outcome }}`. |
+| Current-user flow node run-as | The flow's `runAs` (the initiating person); a task never overrides it. |
+| Workflow Start node and trigger | The flow declaration. An event trigger becomes an `Event` trigger, a schedule a `Schedule` trigger and a connection message an `IncomingMessage` trigger; a button, interface or parent-workflow start becomes a binding or a **Run flow** or **Run background flow** task. |
+| Workflow run-as (`initiating_person`, `system_with_source_authority`) | The flow's `runAs`: the initiating person when started through Run background flow from an interactive flow, otherwise a declared specified account or System. |
+| Workflow `condition` node | An **If** control task. |
+| Workflow `decision_table` node | A **Switch** control task. |
+| Workflow `bounded_loop` node | A bounded **For each** control task. |
+| Workflow `delay` and `wait_until` nodes | A durable **Wait until** control task. |
+| Workflow `start_workflow` node | A **Run flow** control task. |
+| Workflow `stop` node | A **Stop** control task. |
+| Workflow `create_record` node | A **`record.create`** task. |
+| Workflow `change_record` node | A **`record.setFields`** task. |
+| Workflow `soft_delete_record` node | A **`record.delete`** task. |
+| Workflow `duplicate_record` node | A **Query records** task followed by **`record.create`** with an explicit field-to-value map. |
+| Workflow `run_action` node | A **Run flow** task calling the named action's `transaction` flow. |
+| Workflow `add_relationship` and `copy_relationships` nodes | A **`record.link`** task with explicit relationship keys. |
+| Workflow `request_form` node | A durable **Wait for a person** control task. |
+| Workflow `query_records` node | A **Query records** task. |
+| Workflow `set_values` node | A **Set variables** task. |
+| Workflow `format_value` node | A **Calculate** task using the one formula. |
+| Workflow `generate_export` node | A **Generate export** task. |
+| Workflow `attach_file` and `move_file` nodes | **Attach file** and **Move file** tasks. |
+| Workflow `call_connection` and `acknowledge_message` nodes | **Call connection** and **Acknowledge message** tasks. |
+| Workflow edges and their outcomes | The ordered task list; edges become declared order and named branches. |
+| Named-action effects (`set_field`, `create_record`, `copy_relationships`, `soft_delete_subject`, `announce_event`) | **`record.setFields`**, **`record.create`**, **`record.link`**, **`record.delete`** and **Announce event** tasks in the named action's `transaction` flow, compiled into one apply-record-changes call. |
+| Legacy single-effect application rules | Removed ([#987](https://github.com/Abzum-NZ/Abzum-Vortex/issues/987)); any remaining behaviour is a `BeforeSave` flow. |
+| Pipeline stage transition | A named transition action: a `transaction` flow whose invocation permission and typed gate guard the stage change. |
+| Pipeline stage entry and exit actions | Tasks in the transition action's flow. |
+| Pipeline stage entry and exit workflows | Flows with an `Event` trigger on the record's State changed event. |
+| Pipeline time target and escalation | A read-time computed field for the deadline, and a durable flow with a `Schedule` trigger for the escalation. |
 
 ## Conditions
 
@@ -104,7 +155,7 @@ and validate these consumers with the same owning helpers described in the
 
 A workflow input bound to a record field retains its declared allowed record
 types. The field's possible targets must fit within that declaration; downstream
-nodes use the declaration when checking their own accepted targets. Historical
+tasks use the declaration when checking their own accepted targets. Historical
 canonical inputs that omitted this metadata use the owning field's targets.
 These type declarations never grant access to the referenced records.
 
@@ -188,7 +239,7 @@ values remain omitted while the safe record and field identifiers are retained.
 
 ## Starting durable work
 
-A synchronous action or rule may request a published [workflow](09-workflows-and-pipelines.md), but it never calls Kestra while the record transaction is open. If the operation saves a record, the record changes, declared event, and exact durable workflow-start intent or event are written in the same transaction. A refusal, stale revision, validation failure, or rollback writes none of them. After commit, the dispatcher hands the recorded fact to the private workflow adapter with duplicate protection.
+An interactive flow requests durable [work](09-workflows-and-pipelines.md) only through a Run background flow task, and a committed record change reaches durable work only through an `Event`-triggered flow; neither calls Kestra while a record transaction is open. If the operation saves a record, the record changes, declared event, and exact durable workflow-start intent or event are written in the same transaction. A refusal, stale revision, validation failure, or rollback writes none of them. After commit, the dispatcher hands the recorded fact to the private workflow adapter with duplicate protection.
 
 An authorised button that uses the published button/action trigger but makes no record change still opens a short Vortex transaction and persists its exact start intent before returning success. A browser preview or direct call to Kestra cannot substitute for that transaction. The current first-release trigger contract is action- and subject-record-bound. A future record-free start requires a separately declared protected Workflow operation plus explicit versioned descriptor, trigger, input, and execution-reference contracts; until those exist, it is unavailable rather than represented by a fabricated action, placeholder record, or arbitrary payload.
 
@@ -262,8 +313,8 @@ sequenceDiagram
 
 ## Page binding boundary
 
-[Typed page/form/operation bindings](appendices/page-builder-contracts.md#forms-actions-and-semantic-controls) map each surfaced action to an application-owned flow and typed context. The flow's operation node invokes the protected named action/save, or a closed protected platform operation for an authorised administration form. No component silently saves, and no frontend binding permits arbitrary RPC or bypasses current access, validation, revisions or duplicate protection. Mandatory business rules must also hold for every permitted direct service/interface invocation; hiding or replacing a button never changes them.
+[Typed page/form/operation bindings](appendices/page-builder-contracts.md#forms-actions-and-semantic-controls) map each surfaced action to a binding: the exact flow id plus a typed input map. The flow's record, Run flow or protected-operation task invokes apply record changes, a named action, or a closed protected platform operation for an authorised administration form. No component silently saves, and no frontend binding permits arbitrary RPC or bypasses current access, validation, revisions or duplicate protection. Mandatory business rules must also hold for every permitted direct service/interface invocation; hiding or replacing a button never changes them.
 
 ## Configured effects and execution identity
 
-Component load, refresh and other declared events can invoke read/write node sequences. The pure preview evaluator still has no effects; the orchestrator invokes protected services for effectful nodes. Each node uses its verified [execution identity](appendices/frontend-rule-designer.md#node-execution-identity), with separate initiator and effective actor. Operation atomicity and outbox guarantees apply per committed step, not to all previously completed steps in the flow. A committed background-start intent is not undone because a later form is cancelled.
+Component load, refresh and other declared events can invoke read/write task sequences. The pure preview evaluator still has no effects; the orchestrator invokes protected services for effectful tasks. Each protected task uses the flow's verified [run-as identity](appendices/frontend-rule-designer.md#run-as), with separate initiator and effective actor, and Access is rechecked before every protected task. Operation atomicity and outbox guarantees apply per committed task, not to all previously completed tasks in the flow. A committed background-start intent is not undone because a later form is cancelled.
