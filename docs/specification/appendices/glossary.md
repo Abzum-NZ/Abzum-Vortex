@@ -58,6 +58,7 @@ flowchart TD
 | Page | A published application screen type and block layout under [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md#page-types). |
 | Permission | One permanently named right that a role may grant. |
 | Process pipeline | The ordered business stages of a record under [Workflows and process pipelines](../09-workflows-and-pipelines.md#process-pipelines). |
+| Protected operation | A named platform operation that is the only way to change a protected core fact. It rechecks current authority, target revision and its safeguard, and commits with its Activity evidence in one transaction. A system module's actions bind to it. See [system modules](core-contract-boundary.md#system-modules). |
 | Public operation | A narrowly published page or interface operation that does not require an organisation account. |
 | Published version | An immutable, numbered snapshot used by live requests under [Platform composition and publication](../03-composition-and-publication.md#draft-and-published-versions). |
 | Query | A validated request for bounded rows, groups or totals under [Queries, reports, search and live updates](../10-queries-reports-search.md#query-contract). |
@@ -72,6 +73,8 @@ flowchart TD
 | Saved sharing condition | A published and tested condition that defines which changing source records a grant may cover under [Record sharing](../16-copying-sharing-import-export.md#scope-and-saved-sharing-conditions). |
 | Sensitive field | A field carrying higher-risk personal or confidential data under [Activity history, privacy and retention](../14-activity-privacy-and-retention.md#personal-data-classification). |
 | Soft deletion | Recoverable deletion before permanent removal under [Records and their lifecycle](../06-records-and-lifecycle.md#deletion-and-restoration). |
+| System module | A platform-published, versioned module that lets applications show, link and use protected core concepts, such as people, Groups, roles and settings, through read-only system record types and protected operations. See [system modules](core-contract-boundary.md#system-modules). |
+| System record type | A read-only record type in a system module whose fields project protected core storage. It is read only through the one query path under the viewer's current authority, never shared across organisations or cached across requests, and changed only through protected operations. See [system record type rules](core-contract-boundary.md#system-record-type-rules). |
 | Tenant | The customer-level governance and security boundary that owns one or more hierarchical organisations under [Tenants, organisations, people and sign-in](../02-people-organisations-and-sign-in.md). |
 | Tenant administrator | A tenant-level administrator who can manage organisation structure and explicitly granted protected tenant operations but receives no organisation record access from that role. |
 | Theme | Validated design values contained by an application or supplied by the platform catalogue under [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md#themes). |
