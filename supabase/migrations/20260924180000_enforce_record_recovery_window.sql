@@ -18,6 +18,11 @@
 --   has accepted the restore for this actor, refuses `recovery_window_expired`
 --   when the elapsed time since deletion reaches the window. The window and
 --   the deletion time are both database facts of exactly this record.
+-- * The revision a restore receipt records now comes from the stored policy,
+--   so a record type with no stored policy has none. Its pending receipt still
+--   guards the commit and the restore is refused as `policy_unavailable`; the
+--   receipt check now states that explicitly, and still requires every
+--   completed restore to name its governing revision.
 --
 -- Every function below is patched in place from its current definition (later
 -- migrations rewrite Record functions in place, so no CREATE text is reused):
@@ -159,7 +164,8 @@ begin
       definition := pg_catalog.replace(definition, patch ->> 0, patch ->> 1);
     end loop;
     -- Re-created under the function's own current owner so its grants,
-    -- comment and OID stay put.
+    -- comment and OID stay put. The restore preflight's changed signature
+    -- makes it a new function instead; it is handled after this block.
     select pg_catalog.pg_get_userbyid(procedure.proowner) into strict owner_name
     from pg_catalog.pg_proc as procedure
     where procedure.oid = target.procedure_id;
@@ -181,6 +187,21 @@ grant execute on function vortex_record.prepare_protected_record_restore(uuid, u
 to vortex_runtime;
 comment on function vortex_record.prepare_protected_record_restore(uuid, uuid, uuid, bigint, uuid) is
   'Protected restore preflight: receipt, restore primitive, share-locked recovery-policy check, the recovery window from the record''s own deletion time and the locked dependency-total closure.';
+
+-- A restore preflight for a target with no stored policy records a pending
+-- receipt without a revision and is then refused. Only a pending restore may
+-- lack one; a completed restore always names the revision that governed it.
+alter table vortex_record.record_lifecycle_command_receipts
+  drop constraint record_lifecycle_command_receipts_policy_valid,
+  add constraint record_lifecycle_command_receipts_policy_valid check (
+    (operation = 'delete' and recovery_policy_revision is null)
+    or (operation = 'restore'
+      and recovery_policy_revision is not null
+      and recovery_policy_revision between 1 and 9007199254740991)
+    or (operation = 'restore'
+      and recovery_policy_revision is null
+      and state = 'pending')
+  );
 reset role;
 
 set local role vortex_record_owner;
