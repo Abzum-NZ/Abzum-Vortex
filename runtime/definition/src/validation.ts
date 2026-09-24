@@ -1,4 +1,5 @@
 import {
+  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
   applicationDraftV2Schema,
   applicationSourceDocumentV2Schema,
   applicationCompilationRequestV2Schema,
@@ -46,6 +47,17 @@ import {
   type PublishedDefinitionHistory,
   type VersionRequirement,
 } from "@vortex/contracts";
+
+/** Registered platform block releases by exact identity; the one source of supported events. */
+const registeredBlockReleases: ReadonlyMap<
+  string,
+  (typeof IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2)["releases"][number]
+> = new Map(
+  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.releases.map((release) => [
+    `${release.blockId}:${release.releaseVersion}`,
+    release,
+  ]),
+);
 import type { z } from "zod";
 import {
   evaluateTypedCondition,
@@ -5670,6 +5682,20 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           bindingFailure("vortex.definition.application_flow_binding_target", "broken_reference"),
         );
       }
+      const boundPlacement = applicationPlacements.get(String(binding.controlId));
+      if (boundPlacement !== undefined) {
+        const boundBlock = object(boundPlacement.block);
+        const boundRelease = registeredBlockReleases.get(
+          `${String(boundBlock.blockId)}:${String(boundBlock.releaseVersion)}`,
+        );
+        if (
+          boundRelease === undefined ||
+          !boundRelease.supportedEvents.some((supported) => supported === binding.event)
+        )
+          failures.push(
+            bindingFailure("vortex.definition.application_flow_binding_event", "unsupported_choice"),
+          );
+      }
       const inputs = object(binding.inputs ?? {});
       const boundEvent = eventsById.get(String(binding.eventId));
       if (flow) {
@@ -5934,6 +5960,7 @@ const applicationRuleCodes = [
   "vortex.definition.application_flow_node_references",
   "vortex.definition.application_flow_node_values",
   "vortex.definition.application_flow_binding_target",
+  "vortex.definition.application_flow_binding_event",
   "vortex.definition.application_flow_binding_inputs",
   "vortex.definition.application_flow_binding_context",
 ] as const;
