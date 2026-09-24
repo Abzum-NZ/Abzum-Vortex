@@ -4,8 +4,6 @@ import { jsonValueSchema } from "./common";
 import {
   actorIdSchema,
   applicationRootIdSchema,
-  builderKeySchema,
-  containedComponentIdSchema,
   fingerprintSchema,
   moduleRootIdSchema,
   namespacedKeySchema,
@@ -37,11 +35,6 @@ export const applicationDefinitionEnvelopeSchema = z
   .object({ kind: z.literal("application"), rootId: applicationRootIdSchema, ...draftMetadata })
   .strict();
 
-export const definitionEnvelopeSchema = z.discriminatedUnion("kind", [
-  moduleDefinitionEnvelopeSchema,
-  applicationDefinitionEnvelopeSchema,
-]);
-
 const publishedMetadata = {
   revision: revisionSchema,
   releaseVersion: semanticVersionSchema,
@@ -62,27 +55,6 @@ export const publishedApplicationReferenceSchema = z
 export const publishedDefinitionReferenceSchema = z.discriminatedUnion("kind", [
   publishedModuleReferenceSchema,
   publishedApplicationReferenceSchema,
-]);
-
-export const containedComponentReferenceSchema = z.discriminatedUnion("ownerKind", [
-  z
-    .object({
-      ownerKind: z.literal("module"),
-      ownerRootId: moduleRootIdSchema,
-      componentKind: builderKeySchema,
-      componentId: containedComponentIdSchema,
-      key: builderKeySchema,
-    })
-    .strict(),
-  z
-    .object({
-      ownerKind: z.literal("application"),
-      ownerRootId: applicationRootIdSchema,
-      componentKind: builderKeySchema,
-      componentId: containedComponentIdSchema,
-      key: builderKeySchema,
-    })
-    .strict(),
 ]);
 
 export const versionRequirementSchema = z.discriminatedUnion("selection", [
@@ -317,11 +289,9 @@ export const requireResolvedRecordTypeReferences = (
 export type DefinitionKind = z.infer<typeof definitionKindSchema>;
 export type ModuleDefinitionEnvelope = z.infer<typeof moduleDefinitionEnvelopeSchema>;
 export type ApplicationDefinitionEnvelope = z.infer<typeof applicationDefinitionEnvelopeSchema>;
-export type DefinitionEnvelope = z.infer<typeof definitionEnvelopeSchema>;
 export type PublishedModuleReference = z.infer<typeof publishedModuleReferenceSchema>;
 export type PublishedApplicationReference = z.infer<typeof publishedApplicationReferenceSchema>;
 export type PublishedDefinitionReference = z.infer<typeof publishedDefinitionReferenceSchema>;
-export type ContainedComponentReference = z.infer<typeof containedComponentReferenceSchema>;
 export type VersionRequirement = z.infer<typeof versionRequirementSchema>;
 export type QualifiedRecordTypeKey = z.infer<typeof qualifiedRecordTypeKeySchema>;
 export type UnresolvedRecordTypeReference = z.infer<typeof unresolvedRecordTypeReferenceSchema>;
