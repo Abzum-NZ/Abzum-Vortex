@@ -25,6 +25,7 @@ import { evaluateRecordCalculationsV2 } from "./calculations";
 import {
   deriveEarliestPendingDeadlineTransitionV2,
   deriveParentDeadlineDueTransitions,
+  isDateDeadlineDueFieldV2,
   type ParentDeadlineDueTransition,
 } from "./deadline-transitions";
 import {
@@ -248,10 +249,7 @@ export const calculateAndFinalize = (
     const dueField = prepared.recordType.fields.find(
       (candidate) => candidate.fieldId === expression.dueFieldId,
     );
-    return (
-      dueField?.type === "date" ||
-      (dueField?.type === "calculation" && dueField.settings.resultType === "date")
-    );
+    return dueField !== undefined && isDateDeadlineDueFieldV2(dueField);
   });
   const organizationLocalDate = needsOrganizationLocalDate
     ? timeZone === undefined
@@ -299,10 +297,7 @@ export const operationClock = (
       const dueField = recordType.fields.find(
         (candidate) => candidate.fieldId === expression.dueFieldId,
       );
-      return (
-        dueField?.type === "date" ||
-        (dueField?.type === "calculation" && dueField.settings.resultType === "date")
-      );
+      return dueField !== undefined && isDateDeadlineDueFieldV2(dueField);
     }),
   );
   const organizationLocalDate = needsOrganizationLocalDate
