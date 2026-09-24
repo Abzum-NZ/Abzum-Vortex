@@ -66,8 +66,7 @@ begin
   join vortex_identity.organization_runtime_settings as settings
     on settings.organization_id = org.organization_id
     and settings.time_zone is not null
-  order by metadata.transition_at asc, metadata.organization_id asc,
-    metadata.storage_contract_id asc, metadata.record_id asc
+  order by metadata.transition_at asc
   limit 1;
 
   return earliest_due_at;

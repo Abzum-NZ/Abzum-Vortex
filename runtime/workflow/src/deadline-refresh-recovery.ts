@@ -506,6 +506,11 @@ const readNextDueAt = async (
  * the dispatcher's own claim/closure operations, so recovery advances through
  * due work without per-record work or duplicate effects, and it never derives a
  * deadline or writes a record itself.
+ *
+ * `runWorkerTransaction` must open each transaction on the configured deadline
+ * worker login, never a human request connection. A terminal `nothing_due`
+ * occurrence ends recovery; the scheduled caller starts a fresh occurrence on
+ * its own cadence, which then catches up any work written since.
  */
 export const createDeadlineRefreshRecovery = (
   dependencies: DeadlineRefreshRecoveryDependencies,
@@ -518,7 +523,7 @@ export const createDeadlineRefreshRecovery = (
   if (dependencies.now !== undefined && typeof dependencies.now !== "function")
     throw invalidInput();
   const now = dependencies.now ?? (() => Date.now());
-  const dispatch = createDeadlineRefreshDispatcher(dependencies).dispatch;
+  const dispatcher = createDeadlineRefreshDispatcher(dependencies);
 
   return Object.freeze({
     async recover(stateCandidate: unknown): Promise<DeadlineRefreshOccurrenceDecision> {
@@ -536,7 +541,7 @@ export const createDeadlineRefreshRecovery = (
       const attemptedAt = new Date(nowMs).toISOString();
       let attempt: DeadlineRefreshOccurrenceAttempt;
       try {
-        const result = await dispatch(
+        const result = await dispatcher.dispatch(
           configuration.batchLimit === undefined
             ? {}
             : { dueWindow: { batchLimit: configuration.batchLimit } },
