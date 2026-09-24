@@ -229,7 +229,11 @@ export const platformPermissionCatalogueV1_0_1 = buildCatalogue(
   historicalPermissionsV1_0_1,
 );
 
-/** Current additive catalogue. Historical permission identities and meanings remain unchanged. */
+/**
+ * Current additive catalogue, mirroring platform registration revision 5 (1.3.0): its
+ * fingerprint equals that revision's catalogue fingerprint. Historical permission
+ * identities and meanings remain unchanged.
+ */
 export const platformPermissionCatalogue = buildCatalogue(
   platformPermissionCatalogueVersion,
   currentPermissions,

@@ -19,7 +19,14 @@
 -- their current `pg_get_functiondef` with an exactly-once guard, so their OIDs,
 -- grants, comments and callers are untouched and drift fails the migration.
 -- The revision-5 catalogue fingerprint is the exact canonical fingerprint the
--- TypeScript catalogue computes for version 1.3.0.
+-- TypeScript catalogue computes for version 1.3.0, and the three new meaning
+-- fingerprints are `fingerprintPermissionMeaning` of their declarations. The
+-- revision-4 catalogue fingerprint and the connection permission's meaning
+-- fingerprint were not derived that way, so the canonical functions do not
+-- reproduce them. They stay opaque, immutable evidence: the connection entry's
+-- stored meaning fingerprint is copied unchanged because its continuity and
+-- every existing role grant are bound to it, and authority is evaluated by
+-- permission identity, not by recomputing a platform meaning fingerprint.
 
 begin;
 
