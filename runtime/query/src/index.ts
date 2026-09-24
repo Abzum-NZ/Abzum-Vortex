@@ -100,6 +100,26 @@ export {
   type ReferenceChoiceServiceDependencies,
 } from "./reference-choice-service";
 
+export {
+  decideQueryCache,
+  queryCacheBypassReasons,
+  queryCacheInputSchema,
+  queryCacheKeyVersion,
+  queryCacheMaxRecordDependencies,
+  queryCacheMaxTtlSeconds,
+  type QueryCacheBypassReason,
+  type QueryCacheDecision,
+  type QueryCacheInput,
+} from "./cache-policy";
+
+export {
+  readThroughQueryCache,
+  type QueryCacheAdapterOptions,
+  type QueryCacheReadResult,
+  type QueryCacheState,
+  type SharedCacheStore,
+} from "./shared-cache-adapter";
+
 export const QueryService = Object.freeze({
   key: "query",
   boundary: "@vortex/query",
