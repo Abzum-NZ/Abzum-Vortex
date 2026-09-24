@@ -44,20 +44,10 @@ import {
   type DefinitionValidationLocation,
   type FieldDefinition,
   type FlowRoutingNode,
+  type PlatformBlockReleaseV2,
   type PublishedDefinitionHistory,
   type VersionRequirement,
 } from "@vortex/contracts";
-
-/** Registered platform block releases by exact identity; the one source of supported events. */
-const registeredBlockReleases: ReadonlyMap<
-  string,
-  (typeof IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2)["releases"][number]
-> = new Map(
-  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.releases.map((release) => [
-    `${release.blockId}:${release.releaseVersion}`,
-    release,
-  ]),
-);
 import type { z } from "zod";
 import {
   evaluateTypedCondition,
@@ -90,6 +80,14 @@ type PublicationCompilationRequest =
   | ModuleCompilationRequestV3;
 type DefinitionPath = readonly (string | number)[];
 type EditSaveSource = DefinitionSourceDocument | ApplicationSourceDocumentV2 | ModuleSourceDocument;
+
+/** Registered platform block releases by exact identity; the one source of supported events. */
+const registeredBlockReleases: ReadonlyMap<string, PlatformBlockReleaseV2> = new Map(
+  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.releases.map((release) => [
+    `${release.blockId}:${release.releaseVersion}`,
+    release,
+  ]),
+);
 
 const isV2ApplicationSource = (source: unknown): boolean =>
   source !== null &&
@@ -5682,20 +5680,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           bindingFailure("vortex.definition.application_flow_binding_target", "broken_reference"),
         );
       }
-      const boundPlacement = applicationPlacements.get(String(binding.controlId));
-      if (boundPlacement !== undefined) {
-        const boundBlock = object(boundPlacement.block);
-        const boundRelease = registeredBlockReleases.get(
-          `${String(boundBlock.blockId)}:${String(boundBlock.releaseVersion)}`,
-        );
-        if (
-          boundRelease === undefined ||
-          !boundRelease.supportedEvents.some((supported) => supported === binding.event)
-        )
-          failures.push(
-            bindingFailure("vortex.definition.application_flow_binding_event", "unsupported_choice"),
-          );
-      }
       const inputs = object(binding.inputs ?? {});
       const boundEvent = eventsById.get(String(binding.eventId));
       if (flow) {
@@ -5960,7 +5944,6 @@ const applicationRuleCodes = [
   "vortex.definition.application_flow_node_references",
   "vortex.definition.application_flow_node_values",
   "vortex.definition.application_flow_binding_target",
-  "vortex.definition.application_flow_binding_event",
   "vortex.definition.application_flow_binding_inputs",
   "vortex.definition.application_flow_binding_context",
 ] as const;
@@ -6212,6 +6195,67 @@ function applicationCatalogueRule(context: PreparedValidationContext): Definitio
   });
 }
 
+/**
+ * Refuses, at draft save and again before publication compiles, a flow binding whose event the
+ * bound placement's registered release does not declare. An unknown placement or unregistered
+ * release is refused by the reference and catalogue rules instead.
+ */
+function applicationFlowBindingEventRule(
+  context: PreparedValidationContext,
+): DefinitionRuleFailure[] {
+  return editSaveSources(context).flatMap((raw, index): DefinitionRuleFailure[] => {
+    const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(raw);
+    if (!parsed.success || !isV2ApplicationSource(parsed.data)) return [];
+    const source = parsed.data as ApplicationSourceDocumentV2;
+    const body = object(source.body);
+    const placedBlocks = new Map<string, JsonObject>();
+    const visitSlot = (slotValue: unknown): void => {
+      for (const [alias, placementValue] of Object.entries(object(object(slotValue).placements))) {
+        const placement = object(placementValue);
+        placedBlocks.set(alias, object(placement.block));
+        for (const child of Object.values(object(placement.slots))) visitSlot(child);
+      }
+    };
+    for (const shell of array(body.shells)) visitSlot(shell.layout);
+    for (const page of array(body.pages)) {
+      const composition = object(page.composition);
+      if (composition.step_content !== undefined) {
+        for (const stepValue of Object.values(object(composition.step_content))) {
+          if (composition.shell_kind === "default") visitSlot(stepValue);
+          else for (const slot of Object.values(object(stepValue))) visitSlot(slot);
+        }
+      } else if (composition.shell_kind === "default") {
+        visitSlot(composition.main);
+      } else {
+        for (const slot of Object.values(object(composition.content))) visitSlot(slot);
+      }
+    }
+    const failures: DefinitionRuleFailure[] = [];
+    for (const binding of array(body.flow_bindings)) {
+      const block = placedBlocks.get(String(binding.control));
+      const release = block
+        ? registeredBlockReleases.get(`${String(block.block_id)}:${String(block.release_version)}`)
+        : undefined;
+      if (release === undefined || release.supportedEvents.some((event) => event === binding.event))
+        continue;
+      const bindingKey = builderKeySchema.safeParse(binding.id);
+      const bindingSegment = bindingKey.success
+        ? [{ kind: "flow_binding" as const, key: bindingKey.data }]
+        : [];
+      failures.push({
+        ruleCode: "vortex.definition.application_flow_binding_event",
+        family: "unsupported_choice",
+        location: {
+          documentKind: "application",
+          documentKey: source.key,
+          segments: [{ kind: "application", key: source.key }, ...bindingSegment],
+        },
+      });
+    }
+    return failures;
+  });
+}
+
 export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object.freeze([
   {
     ruleId: "vortex.definition.source_shape",
@@ -6257,6 +6301,15 @@ export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object
     requiredContext: ["source"],
     safeLocationFamily: "application",
     run: applicationCatalogueRule,
+  },
+  {
+    ruleId: "vortex.definition.application_flow_binding_events",
+    emittedCodes: ["vortex.definition.application_flow_binding_event"],
+    stage: "edit_save",
+    definitionKinds: ["application"],
+    requiredContext: ["source"],
+    safeLocationFamily: "flow_binding",
+    run: applicationFlowBindingEventRule,
   },
   {
     ruleId: "vortex.definition.publication_context_required",
