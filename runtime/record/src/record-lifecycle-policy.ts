@@ -6,6 +6,7 @@ import {
   applicationRootIdSchema,
   archiveDestinationReferenceSchema,
   connectionInstanceIdSchema,
+  maximumRecoveryWindowDays,
   organizationIdSchema,
   organizationLifecycleLimitsSchema,
   recordLifecycleActionSchema,
@@ -44,7 +45,12 @@ type RecordTypeLifecyclePolicyCommonFields = Readonly<{
 }>;
 
 export type RecordTypeLifecyclePolicyActionInput =
-  | (RecordTypeLifecyclePolicyCommonFields & Readonly<{ action: "delete" }>)
+  | (RecordTypeLifecyclePolicyCommonFields &
+      Readonly<{
+        action: "delete";
+        /** Absent means no recovery window: restore is refused, never unlimited. */
+        recoveryWindowDays?: number;
+      }>)
   | (RecordTypeLifecyclePolicyCommonFields &
       Readonly<{
         action: "archive_workflow";
@@ -180,8 +186,17 @@ const parseRecordTypeLifecyclePolicyActionInput = (
   if (common === undefined) return undefined;
 
   if (action.data === "delete") {
-    if (!hasOnlyKeys(candidate, deletePolicyKeys)) return undefined;
-    return { action: "delete", ...common };
+    if (!hasOnlyKeys(candidate, [...deletePolicyKeys, "recoveryWindowDays"])) return undefined;
+    if (!("recoveryWindowDays" in candidate)) return { action: "delete", ...common };
+    const recoveryWindowDays = candidate.recoveryWindowDays;
+    if (
+      typeof recoveryWindowDays !== "number" ||
+      !Number.isSafeInteger(recoveryWindowDays) ||
+      recoveryWindowDays < 1 ||
+      recoveryWindowDays > maximumRecoveryWindowDays
+    )
+      return undefined;
+    return { action: "delete", ...common, recoveryWindowDays };
   }
 
   if (!hasOnlyKeys(candidate, archiveWorkflowPolicyKeys)) return undefined;
@@ -411,8 +426,9 @@ const storedPolicyMatchesCommand = (
   stored.maxCount === submitted.maxCount &&
   stored.allowUnlimitedAge === submitted.allowUnlimitedAge &&
   stored.allowUnlimitedCount === submitted.allowUnlimitedCount &&
-  (stored.action === "delete" ||
-    (submitted.action === "archive_workflow" &&
+  (stored.action === "delete"
+    ? submitted.action === "delete" && stored.recoveryWindowDays === submitted.recoveryWindowDays
+    : (submitted.action === "archive_workflow" &&
       sameUuid(stored.archiveWorkflowId, submitted.archiveWorkflowId) &&
       stored.expectedWorkflowRevision === submitted.expectedWorkflowRevision &&
       sameUuid(stored.archiveConnectionInstanceId, submitted.archiveConnectionInstanceId) &&
