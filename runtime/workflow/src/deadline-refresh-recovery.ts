@@ -2,9 +2,11 @@ import "server-only";
 
 import { platformIdSchema, timestampSchema } from "@vortex/contracts";
 import {
+  createDeadlineRefreshDispatcher,
   deadlineRefreshDispatchLimits,
+  type DeadlineRefreshDispatchDependencies,
   type DeadlineRefreshDispatchResult,
-  type DeadlineRefreshDispatcher,
+  type DeadlineRefreshWorkerTransactionRunner,
 } from "./deadline-refresh-dispatch";
 
 export const deadlineRefreshRecoveryLimits = Object.freeze({
@@ -14,7 +16,7 @@ export const deadlineRefreshRecoveryLimits = Object.freeze({
   maximumAttempts: 20,
   minimumRetryBackoffSeconds: 1,
   maximumRetryBackoffSeconds: 86_400,
-  /** Delay before retrying a stopped or interrupted occurrence. */
+  /** Delay before retrying a stopped, interrupted, or locked-due occurrence. */
   defaultRetryBackoffSeconds: 30,
   /** Bounded due records one recovery dispatch refreshes when the caller names no limit. */
   defaultBatchLimit: deadlineRefreshDispatchLimits.defaultBatchLimit,
@@ -24,7 +26,7 @@ export const deadlineRefreshRecoveryLimits = Object.freeze({
 
 export const deadlineRefreshRecoveryErrorCodes = [
   "INVALID_DEADLINE_REFRESH_RECOVERY_INPUT",
-  "DEADLINE_REFRESH_RECOVERY_DISPATCH_REQUIRED",
+  "DEADLINE_REFRESH_RECOVERY_WORKER_TRANSACTION_REQUIRED",
 ] as const;
 
 export type DeadlineRefreshRecoveryErrorCode = (typeof deadlineRefreshRecoveryErrorCodes)[number];
@@ -50,6 +52,7 @@ export const deadlineRefreshRecoveryReasons = [
   "batch_remaining",
   "interrupted_resume",
   "stopped_retry",
+  "due_row_retry",
   "scheduled",
   "overdue_catch_up",
   "nothing_due",
@@ -77,8 +80,10 @@ export type DeadlineRefreshOccurrenceAttempt =
       kind: "settled";
       attemptedAt: string;
       status: DeadlineRefreshDispatchStatus;
-      /** Only ever set on an `idle` result; the next transition Record reported. */
+      /** Set on `idle` or `drained` from the live worker-scoped due lookup. */
       nextDueAt?: string;
+      /** Required on `stopped`: a prior item was successfully closed. */
+      progressed?: boolean;
     }>
   | Readonly<{ kind: "interrupted"; attemptedAt: string }>;
 
@@ -120,15 +125,13 @@ export type DeadlineRefreshOccurrenceDecision =
 export type DeadlineRefreshRecoveryPolicy = Readonly<{
   /** Consecutive non-advancing attempts allowed before the occurrence is terminal. */
   maximumAttempts?: number;
-  /** Delay before retrying a stopped or interrupted occurrence, in seconds. */
+  /** Delay before retrying a stopped, interrupted, or locked-due occurrence. */
   retryBackoffSeconds?: number;
   /** Due records refreshed by one recovery dispatch, within the #659 ceiling. */
   batchLimit?: number;
 }>;
 
-export type DeadlineRefreshRecoveryDependencies = Readonly<{
-  /** The existing bounded #659 dispatcher a due recovery occurrence runs. */
-  dispatcher: DeadlineRefreshDispatcher;
+export type DeadlineRefreshRecoveryDependencies = DeadlineRefreshDispatchDependencies & Readonly<{
   policy?: DeadlineRefreshRecoveryPolicy;
   /** Reads the current instant in epoch milliseconds; defaults to `Date.now`. */
   now?: () => number;
@@ -168,34 +171,50 @@ const boundedInteger = (value: unknown, minimum: number, maximum: number): value
 const instantMilliseconds = (timestamp: string): number =>
   Date.parse(timestamp.replace(/(\.\d{3})\d+/, "$1"));
 
+const parseTimestamp = (candidate: unknown): string => {
+  const parsed = timestampSchema.safeParse(candidate);
+  if (!parsed.success || !Number.isFinite(instantMilliseconds(parsed.data))) throw invalidInput();
+  return parsed.data;
+};
+
+const validClockInstant = (candidate: unknown): candidate is number =>
+  typeof candidate === "number" &&
+  Number.isFinite(candidate) &&
+  Math.abs(candidate) <= 8_640_000_000_000_000;
+
 const isDispatchStatus = (candidate: unknown): candidate is DeadlineRefreshDispatchStatus =>
   typeof candidate === "string" && (dispatchStatuses as readonly string[]).includes(candidate);
 
 const parseAttempt = (candidate: unknown): DeadlineRefreshOccurrenceAttempt => {
   if (!isObject(candidate) || typeof candidate.kind !== "string") throw invalidInput();
-  const attemptedAt = timestampSchema.safeParse(candidate.attemptedAt);
-  if (!attemptedAt.success) throw invalidInput();
+  const attemptedAt = parseTimestamp(candidate.attemptedAt);
 
   if (candidate.kind === "interrupted") {
     if (!hasOnlyKeys(candidate, ["kind", "attemptedAt"])) throw invalidInput();
-    return { kind: "interrupted", attemptedAt: attemptedAt.data };
+    return { kind: "interrupted", attemptedAt };
   }
   if (
     candidate.kind !== "settled" ||
-    !hasOnlyKeys(candidate, ["kind", "attemptedAt", "status", "nextDueAt"])
+    !hasOnlyKeys(candidate, ["kind", "attemptedAt", "status", "nextDueAt", "progressed"])
   )
     throw invalidInput();
   const status = candidate.status;
   if (!isDispatchStatus(status)) throw invalidInput();
 
-  if (candidate.nextDueAt !== undefined) {
-    // A next transition only exists on an idle result; any other status is invalid.
-    if (status !== "idle") throw invalidInput();
-    const nextDueAt = timestampSchema.safeParse(candidate.nextDueAt);
-    if (!nextDueAt.success) throw invalidInput();
-    return { kind: "settled", attemptedAt: attemptedAt.data, status, nextDueAt: nextDueAt.data };
+  if (status === "stopped") {
+    if (candidate.nextDueAt !== undefined || typeof candidate.progressed !== "boolean")
+      throw invalidInput();
+    return { kind: "settled", attemptedAt, status, progressed: candidate.progressed };
   }
-  return { kind: "settled", attemptedAt: attemptedAt.data, status };
+  if (candidate.progressed !== undefined) throw invalidInput();
+
+  if (candidate.nextDueAt !== undefined) {
+    // Only an idle or drained dispatch can leave a known next transition.
+    if (status !== "idle" && status !== "drained") throw invalidInput();
+    const nextDueAt = parseTimestamp(candidate.nextDueAt);
+    return { kind: "settled", attemptedAt, status, nextDueAt };
+  }
+  return { kind: "settled", attemptedAt, status };
 };
 
 /** Validates one occurrence state; every missing or fabricated field is refused. */
@@ -208,11 +227,10 @@ export const parseDeadlineRefreshOccurrenceState = (
   )
     throw invalidInput();
   const occurrenceId = platformIdSchema.safeParse(candidate.occurrenceId);
-  const scheduledAt = timestampSchema.safeParse(candidate.scheduledAt);
+  const scheduledAt = parseTimestamp(candidate.scheduledAt);
   const attemptCount = candidate.attemptCount;
   if (
     !occurrenceId.success ||
-    !scheduledAt.success ||
     !boundedInteger(attemptCount, 0, deadlineRefreshRecoveryLimits.maximumAttempts)
   )
     throw invalidInput();
@@ -220,7 +238,7 @@ export const parseDeadlineRefreshOccurrenceState = (
     candidate.lastAttempt === undefined ? undefined : parseAttempt(candidate.lastAttempt);
   return {
     occurrenceId: occurrenceId.data,
-    scheduledAt: scheduledAt.data,
+    scheduledAt,
     attemptCount,
     ...(lastAttempt === undefined ? {} : { lastAttempt }),
   };
@@ -277,17 +295,21 @@ const nextOccurrence = (
   attemptCount,
 });
 
-const retryAt = (nowMs: number, backoffSeconds: number): string =>
-  new Date(nowMs + backoffSeconds * 1_000).toISOString();
+const retryAt = (nowMs: number, backoffSeconds: number): string => {
+  const nextMs = nowMs + backoffSeconds * 1_000;
+  if (!validClockInstant(nextMs)) throw invalidInput();
+  return new Date(nextMs).toISOString();
+};
 
 /**
  * The one pure recovery decision. It reads only the occurrence state and the
  * current instant: a pending future transition schedules there, overdue work
  * runs now, a reached batch limit continues immediately, and a stopped or
- * interrupted attempt retries after a bounded backoff. Drained work and an
- * exhausted retry budget are terminal. A scheduled retry drops its prior
- * attempt so the retry re-runs, and nothing here derives a deadline, claims a
- * record or repeats a completed refresh.
+ * interrupted attempt retries after a bounded backoff. An idle or drained
+ * attempt uses the live worker-scoped next due time, or becomes terminal when
+ * none remains. An exhausted retry budget is terminal. A scheduled retry drops
+ * its prior attempt so it can re-run, and nothing here derives a deadline,
+ * claims a record or repeats a completed refresh.
  */
 const planOccurrence = (
   state: DeadlineRefreshOccurrenceState,
@@ -298,6 +320,8 @@ const planOccurrence = (
   const nowIso = new Date(nowMs).toISOString();
 
   if (lastAttempt === undefined) {
+    if (attemptCount >= configuration.maximumAttempts)
+      return { outcome: "terminal", reason: "attempts_exhausted", occurrence: state };
     return instantMilliseconds(scheduledAt) > nowMs
       ? { outcome: "rescheduled", reason: "scheduled", occurrence: state }
       : {
@@ -350,6 +374,21 @@ const planOccurrence = (
       reason: "nothing_due",
       occurrence: nextOccurrence(state, scheduledAt, 0),
     };
+  if (lastAttempt.status === "idle" && instantMilliseconds(nextDueAt) <= nowMs) {
+    // Another worker may hold the row that the live lookup sees. Do not turn
+    // an empty claim into an immediate, unbounded series of scheduled calls.
+    if (attemptCount >= configuration.maximumAttempts)
+      return { outcome: "terminal", reason: "attempts_exhausted", occurrence: state };
+    return {
+      outcome: "rescheduled",
+      reason: "due_row_retry",
+      occurrence: nextOccurrence(
+        state,
+        retryAt(nowMs, configuration.retryBackoffSeconds),
+        attemptCount,
+      ),
+    };
+  }
   return instantMilliseconds(nextDueAt) > nowMs
     ? {
         outcome: "rescheduled",
@@ -385,8 +424,9 @@ export const planDeadlineRefreshRecovery = (
   if (options !== undefined && !isObject(options)) throw invalidInput();
   const configuration = resolvePolicy(options?.policy);
   const now = options?.now;
+  if (now !== undefined && typeof now !== "function") throw invalidInput();
   const nowMs = now === undefined ? Date.now() : now();
-  if (!Number.isFinite(nowMs)) throw invalidInput();
+  if (!validClockInstant(nowMs)) throw invalidInput();
   return toDecision(
     planOccurrence(parseDeadlineRefreshOccurrenceState(inputCandidate), configuration, nowMs),
   );
@@ -395,30 +435,68 @@ export const planDeadlineRefreshRecovery = (
 const settledAttempt = (
   result: DeadlineRefreshDispatchResult,
   attemptedAt: string,
+  nextDueAt?: string,
 ): DeadlineRefreshOccurrenceAttempt =>
-  result.status === "idle"
+  result.status === "idle" || result.status === "drained"
     ? {
         kind: "settled",
         attemptedAt,
-        status: "idle",
-        ...(result.nextDueAt === undefined ? {} : { nextDueAt: result.nextDueAt }),
+        status: result.status,
+        ...(nextDueAt === undefined ? {} : { nextDueAt }),
       }
-    : { kind: "settled", attemptedAt, status: result.status };
+    : result.status === "stopped"
+      ? {
+          kind: "settled",
+          attemptedAt,
+          status: "stopped",
+          progressed: result.items.some((item) => item.outcome === "refreshed"),
+        }
+      : { kind: "settled", attemptedAt, status: result.status };
 
 /**
- * A stopped or interrupted attempt consumes one retry; a settled attempt that
- * advanced work (idle, drained or a reached batch limit) resets the budget, so
- * steady progress can never be made terminal by the attempt ceiling.
+ * A stopped or interrupted attempt consumes one retry unless work advanced.
+ * An idle batch with a still-overdue row also consumes one retry, since another
+ * worker may hold that row. Progress resets the budget.
  */
 const nextAttemptCount = (
   attempt: DeadlineRefreshOccurrenceAttempt,
   previousCount: number,
-): number =>
-  attempt.kind === "interrupted"
-    ? previousCount + 1
-    : attempt.status === "stopped"
-      ? previousCount + 1
-      : 0;
+  finishedAtMs: number,
+): number => {
+  if (attempt.kind === "interrupted") return previousCount + 1;
+  if (attempt.status === "stopped" && !attempt.progressed) return previousCount + 1;
+  if (
+    attempt.status === "idle" &&
+    attempt.nextDueAt !== undefined &&
+    instantMilliseconds(attempt.nextDueAt) <= finishedAtMs
+  )
+    return previousCount + 1;
+  return 0;
+};
+
+type NextDueRow = Readonly<{ nextDueAt: unknown }>;
+
+/** Reads only the next timestamp through a fresh deadline-worker transaction. */
+const readNextDueAt = async (
+  runWorkerTransaction: DeadlineRefreshWorkerTransactionRunner,
+): Promise<string | undefined> =>
+  runWorkerTransaction(async (transaction) => {
+    await transaction.query`set local role vortex_runtime`;
+    const rows = await transaction.query<NextDueRow>`
+      select pg_catalog.to_char(
+        pg_catalog.timezone('UTC', vortex_record.next_deadline_refresh_due_at()),
+        'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+      ) as "nextDueAt"
+    `;
+    if (rows.length !== 1 || rows[0] === undefined)
+      throw new Error("DEADLINE_REFRESH_NEXT_DUE_RESULT_INVALID");
+    const value = rows[0].nextDueAt;
+    if (value === null) return undefined;
+    const parsed = timestampSchema.safeParse(value);
+    if (!parsed.success || !Number.isFinite(instantMilliseconds(parsed.data)))
+      throw new Error("DEADLINE_REFRESH_NEXT_DUE_RESULT_INVALID");
+    return parsed.data;
+  });
 
 /**
  * Creates the recovery coordinator over the existing bounded #659 dispatcher.
@@ -432,18 +510,21 @@ const nextAttemptCount = (
 export const createDeadlineRefreshRecovery = (
   dependencies: DeadlineRefreshRecoveryDependencies,
 ): DeadlineRefreshRecovery => {
-  const dispatcher = dependencies?.dispatcher;
-  if (typeof dispatcher?.dispatch !== "function")
-    throw new DeadlineRefreshRecoveryError("DEADLINE_REFRESH_RECOVERY_DISPATCH_REQUIRED");
+  if (typeof dependencies?.runWorkerTransaction !== "function")
+    throw new DeadlineRefreshRecoveryError(
+      "DEADLINE_REFRESH_RECOVERY_WORKER_TRANSACTION_REQUIRED",
+    );
   const configuration = resolvePolicy(dependencies.policy);
+  if (dependencies.now !== undefined && typeof dependencies.now !== "function")
+    throw invalidInput();
   const now = dependencies.now ?? (() => Date.now());
-  const dispatch = dispatcher.dispatch.bind(dispatcher);
+  const dispatch = createDeadlineRefreshDispatcher(dependencies).dispatch;
 
   return Object.freeze({
     async recover(stateCandidate: unknown): Promise<DeadlineRefreshOccurrenceDecision> {
       const state = parseDeadlineRefreshOccurrenceState(stateCandidate);
       const nowMs = now();
-      if (!Number.isFinite(nowMs)) throw invalidInput();
+      if (!validClockInstant(nowMs)) throw invalidInput();
 
       const plan = planOccurrence(state, configuration, nowMs);
       if (
@@ -460,26 +541,32 @@ export const createDeadlineRefreshRecovery = (
             ? {}
             : { dueWindow: { batchLimit: configuration.batchLimit } },
         );
-        attempt = settledAttempt(result, attemptedAt);
+        const nextDueAt =
+          result.status === "idle" || result.status === "drained"
+            ? await readNextDueAt(dependencies.runWorkerTransaction)
+            : undefined;
+        attempt = settledAttempt(result, attemptedAt, nextDueAt);
       } catch {
-        // An unsettled attempt keeps no partial claim: Record commits each
-        // closed record before the next, so the retry resumes from the earliest
-        // remaining due row without repeating a completed refresh.
+        // Dispatch or the following due lookup may fail after some records
+        // committed. Record closes each item before the next claim, so a retry
+        // selects remaining due rows without repeating a completed effect.
         attempt = { kind: "interrupted", attemptedAt };
       }
 
+      const finishedAtMs = now();
+      if (!validClockInstant(finishedAtMs)) throw invalidInput();
       const nextState: DeadlineRefreshOccurrenceState = {
         occurrenceId: state.occurrenceId,
         scheduledAt: state.scheduledAt,
-        attemptCount: nextAttemptCount(attempt, state.attemptCount),
+        attemptCount: nextAttemptCount(attempt, state.attemptCount, finishedAtMs),
         lastAttempt: attempt,
       };
-      return toDecision(planOccurrence(nextState, configuration, nowMs));
+      return toDecision(planOccurrence(nextState, configuration, finishedAtMs));
     },
   });
 };
 
-/** Runs one bounded recovery occurrence over the supplied #659 dispatcher. */
+/** Runs one bounded recovery occurrence on the configured deadline worker. */
 export const recoverDeadlineRefreshOccurrence = async (
   dependencies: DeadlineRefreshRecoveryDependencies,
   stateCandidate: unknown,
