@@ -11,6 +11,7 @@ import {
   TEXT_INPUT_BLOCK_RELEASE,
   type ApplicationSourceDocumentV2,
   type PlatformBlockReleaseV2,
+  type ProtectedReadModelKey,
 } from "@vortex/contracts";
 import { requestTypeOptions } from "./module";
 
@@ -74,7 +75,7 @@ const regionComposition = (
       [`${aliasPrefix}_heading`]: placement(TEXT_BLOCK_RELEASE, {
         title: textValue(heading),
         text: textValue(
-          `${regionTitle} will appear here when the protected Identity and Access view is available.`,
+          `${regionTitle} is not yet available from a protected read model.`,
         ),
       }),
       [`${aliasPrefix}_region`]: placement(TABLE_BLOCK_RELEASE, {
@@ -84,6 +85,34 @@ const regionComposition = (
     [`${aliasPrefix}_heading`, `${aliasPrefix}_region`],
   ),
 });
+
+/**
+ * A region that reads one or more declared protected read models. Each region placement binds one
+ * closed read-model key and carries no query, so live protected data is never copied into records.
+ */
+const readModelComposition = (
+  aliasPrefix: string,
+  heading: string,
+  regions: ReadonlyArray<{ alias: string; key: ProtectedReadModelKey; title: string }>,
+) => {
+  const placements: Record<string, unknown> = {
+    [`${aliasPrefix}_heading`]: placement(TEXT_BLOCK_RELEASE, {
+      title: textValue(heading),
+      text: textValue(
+        "Read live from protected Identity and Access data under your current authority; nothing is copied into application records.",
+      ),
+    }),
+  };
+  const order = [`${aliasPrefix}_heading`];
+  for (const region of regions) {
+    placements[region.alias] = {
+      ...placement(TABLE_BLOCK_RELEASE, { title: textValue(region.title) }),
+      read_model: region.key,
+    };
+    order.push(region.alias);
+  }
+  return { shell_kind: "default" as const, main: slot(placements, order) };
+};
 
 const textInput = (alias: string, name: string, label: string, multiline = false) => ({
   alias,
@@ -457,7 +486,7 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
                 iam_overview_heading: placement(TEXT_BLOCK_RELEASE, {
                   title: textValue("IAM overview"),
                   text: textValue(
-                    "Access requests and reviews describe intent and decisions. Only protected Access determines current roles and assignments; those views appear when their protected source is available.",
+                    "Access requests and reviews describe intent and decisions. Only protected Access determines current people, roles, groups and assignments; those views read live protected Access data and are never copied into records.",
                   ),
                 }),
               },
@@ -472,11 +501,9 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
           type: "dashboard",
           permission: "application.iam.open",
           states: ["normal", "loading", "empty", "refused", "failure", "recovery"],
-          composition: regionComposition(
-            "iam_people",
-            "People",
-            "Organisation accounts and Group membership",
-          ),
+          composition: readModelComposition("iam_people", "People", [
+            { alias: "iam_people_region", key: "people", title: "People (Group membership)" },
+          ]),
         },
         {
           id: "page_iam_roles_groups",
@@ -485,11 +512,10 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
           type: "dashboard",
           permission: "application.iam.open",
           states: ["normal", "loading", "empty", "refused", "failure", "recovery"],
-          composition: regionComposition(
-            "iam_roles_groups",
-            "Roles and Groups",
-            "Organisation roles, permissions and Groups",
-          ),
+          composition: readModelComposition("iam_roles_groups", "Roles and Groups", [
+            { alias: "iam_roles_region", key: "roles", title: "Roles" },
+            { alias: "iam_groups_region", key: "groups", title: "Groups" },
+          ]),
         },
         {
           id: "page_iam_assignments",
@@ -498,11 +524,13 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
           type: "dashboard",
           permission: "application.iam.open",
           states: ["normal", "loading", "empty", "refused", "access_ended", "failure", "recovery"],
-          composition: regionComposition(
-            "iam_assignments",
-            "Assignments",
-            "Current effective assignments",
-          ),
+          composition: readModelComposition("iam_assignments", "Assignments", [
+            {
+              alias: "iam_assignments_region",
+              key: "effective_assignments",
+              title: "Current effective assignments",
+            },
+          ]),
         },
         {
           id: "page_iam_privileged_eligible",

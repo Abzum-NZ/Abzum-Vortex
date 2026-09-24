@@ -8,6 +8,7 @@ import {
   TEXT_INPUT_BLOCK_RELEASE,
   type ApplicationSourceDocumentV2,
   type PlatformBlockReleaseV2,
+  type ProtectedReadModelKey,
   type SourceBlockPropertyValueV2Contract,
 } from "@vortex/contracts";
 
@@ -104,11 +105,20 @@ const textBlock = (title: string, text: string) =>
   });
 
 /**
+ * A protected read-model placement. The closed placement binding names one declared platform read
+ * model and reads it live under the viewer's current authority. It never carries a query, so live
+ * protected data is never copied into an application record.
+ */
+const readModelBlock = (key: ProtectedReadModelKey, title: string) => ({
+  ...placement(TABLE_BLOCK_RELEASE, { title: { kind: "text", value: title } }),
+  read_model: key,
+});
+
+/**
  * The Tenant Administration application definition. Every visible region is
  * definition-led. Ordinary lifecycle requests come from the bound module; the
- * protected tenant structure and administrator regions are intentionally left
- * unbound until the protected read-model sources are published (#908) and bound
- * (#909). No region offers a parallel access-grant control: grants run in IAM.
+ * protected tenant-structure and administrator regions read live protected
+ * read models. No region offers a parallel access-grant control: grants run in IAM.
  */
 export const tenantAdministrationApplication: ApplicationSourceDocumentV2 =
   applicationSourceDocumentV2Schema.parse({
@@ -256,7 +266,7 @@ export const tenantAdministrationApplication: ApplicationSourceDocumentV2 =
                 "overview_text",
                 textBlock(
                   "Tenant overview",
-                  "Review tenant structure, organisation lifecycle requests and tenant administrators. Protected tenant reads appear here once their protected read models are bound.",
+                  "Review tenant structure, organisation lifecycle requests and tenant administrators. Protected tenant structure and administrator assignments are read live on their own pages; nothing is copied into application records.",
                 ),
               ),
             },
@@ -274,11 +284,8 @@ export const tenantAdministrationApplication: ApplicationSourceDocumentV2 =
             shell: "shell_tenant_administration",
             content: {
               slot_primary: slot(
-                "structure_text",
-                textBlock(
-                  "Tenant structure",
-                  "The protected tenant hierarchy appears here once the protected tenant-structure read model is bound.",
-                ),
+                "structure_region",
+                readModelBlock("tenant_structure", "Tenant structure"),
               ),
             },
           },
@@ -295,11 +302,8 @@ export const tenantAdministrationApplication: ApplicationSourceDocumentV2 =
             shell: "shell_tenant_administration",
             content: {
               slot_primary: slot(
-                "administrators_text",
-                textBlock(
-                  "Tenant administrators",
-                  "Current tenant administrator assignments appear here once the protected assignment read model is bound. Granting and revoking tenant-administrator access runs through IAM, never from this application.",
-                ),
+                "administrators_region",
+                readModelBlock("effective_assignments", "Tenant administrators"),
               ),
             },
           },
