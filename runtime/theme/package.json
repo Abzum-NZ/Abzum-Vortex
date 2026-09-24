@@ -15,7 +15,7 @@
     "server-only": "0.0.1"
   },
   "vortex": {
-    "tier": 3,
+    "tier": 1,
     "environment": "server",
     "ships": true,
     "engine": true,

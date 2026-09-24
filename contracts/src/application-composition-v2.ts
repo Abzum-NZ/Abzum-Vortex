@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { blockPaletteGroupSchema } from "./catalogues";
+import { blockPaletteGroupSchema, type BlockPaletteGroup } from "./catalogues";
 import { labelSchema, safeHttpsUrlSchema } from "./common";
 import {
   sourceAliasSchema,
@@ -739,8 +739,24 @@ export const themeTokenKindV2Schema = z.enum([
 ]);
 
 const colorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+
+/**
+ * Declares how a platform theme colour is used, so readability checks follow the
+ * catalogue's declaration rather than token names. Only platform theme releases
+ * declare roles; application and placement overrides inherit them unchanged.
+ */
+export const themeColorRoleSchema = z.enum(["foreground", "background"]);
+export type ThemeColorRole = z.infer<typeof themeColorRoleSchema>;
+
 export const themeTokenValueV2Schema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("color_pair"), light: colorSchema, dark: colorSchema }).strict(),
+  z
+    .object({
+      kind: z.literal("color_pair"),
+      light: colorSchema,
+      dark: colorSchema,
+      role: themeColorRoleSchema.optional(),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal("typography"),
@@ -1257,3 +1273,233 @@ export type BlockPlacementV2Contract = z.infer<typeof blockPlacementV2Schema>;
 export type ApplicationShellV2 = z.infer<typeof applicationShellV2Schema>;
 export type PageCompositionV2 = z.infer<typeof pageCompositionV2Schema>;
 export type GuidedFormPageCompositionV2 = z.infer<typeof guidedFormPageCompositionV2Schema>;
+
+/*
+ * Studio discovery projection. It republishes the declarations of one immutable platform block
+ * catalogue, the same catalogue save and publish validation judge, so Studio offers only what that
+ * catalogue declares and a new catalogue release needs no separate Studio allowlist. The catalogue
+ * declares no per-release semantic events yet; the only operations projected are the placement
+ * layout operations validation enforces from each release's capabilities.
+ */
+
+/** Property kinds whose value names an application-scoped or stored target. */
+export const blockReferencePropertyKindsV2 = [
+  "field_reference",
+  "relationship_reference",
+  "action_reference",
+  "page_reference",
+  "query_reference",
+  "pipeline_reference",
+  "record_type_reference",
+  "record_reference",
+  "asset_reference",
+] as const satisfies readonly BlockPropertySchemaV2Contract["kind"][];
+export type BlockReferencePropertyKindV2 = (typeof blockReferencePropertyKindsV2)[number];
+
+const blockReferencePropertyKinds: ReadonlySet<string> = new Set(blockReferencePropertyKindsV2);
+
+export const isBlockReferencePropertyKindV2 = (
+  kind: BlockPropertySchemaV2Contract["kind"],
+): kind is BlockReferencePropertyKindV2 => blockReferencePropertyKinds.has(kind);
+
+/** A public page admits only releases whose capabilities allow the public surface. */
+export type CompositionSurfaceV2 = "authenticated" | "public";
+
+/** Exact release identity and palette metadata; its fingerprints fill a dependency manifest. */
+export type PlatformBlockReleaseSummaryV2 = Readonly<
+  Pick<
+    PlatformBlockReleaseV2,
+    | "blockId"
+    | "key"
+    | "releaseVersion"
+    | "contentFingerprint"
+    | "catalogueFingerprint"
+    | "name"
+    | "icon"
+    | "paletteGroup"
+    | "rendererKey"
+  > & { publicSurface: PlatformBlockReleaseV2["capabilities"]["publicSurface"] }
+>;
+
+export type ComponentPropertyControlV2 = Readonly<{
+  /** The exact catalogue declaration, including every constraint validation applies to it. */
+  declaration: BlockPropertySchemaV2Contract;
+  /** Validation refuses the placement when the author leaves this value unset. */
+  valueRequired: boolean;
+  /** This text property supplies the component's accessible name. */
+  accessibleName: boolean;
+  referenceKind?: BlockReferencePropertyKindV2;
+  /** Controls of a group declaration, in declaration order. */
+  properties?: readonly ComponentPropertyControlV2[];
+  /** Control for each item of a list declaration. */
+  item?: ComponentPropertyControlV2;
+}>;
+
+/** Placement layout choices; content width, fill width and content height are always available. */
+export type ComponentLayoutOperationsV2 = Readonly<{
+  /** Visibility may differ between desktop, tablet and phone. */
+  responsiveVisibility: boolean;
+  /** Placements inside this component's slots may use a different order per breakpoint. */
+  responsiveChildOrder: boolean;
+  /** Width may use a twelve-column grid span. */
+  gridWidth: boolean;
+  /** Height may be bounded. */
+  boundedHeight: boolean;
+}>;
+
+export type ComponentDiscoverySlotV2 = Readonly<{
+  key: string;
+  label: string;
+  required: boolean;
+  allowedChildCategories: readonly BlockPaletteGroup[];
+  /** Exact releases validation admits in this slot on the projected surface. */
+  allowedChildren: readonly PlatformBlockReleaseSummaryV2[];
+}>;
+
+export type ComponentDiscoveryV2 = Readonly<{
+  release: PlatformBlockReleaseSummaryV2;
+  accessibleName: PlatformBlockReleaseV2["capabilities"]["accessibleName"];
+  properties: readonly ComponentPropertyControlV2[];
+  /** Distinct reference kinds declared anywhere in the component's properties. */
+  referenceKinds: readonly BlockReferencePropertyKindV2[];
+  slots: readonly ComponentDiscoverySlotV2[];
+  layoutOperations: ComponentLayoutOperationsV2;
+}>;
+
+export type PlatformCatalogueDiscoveryV2 = Readonly<{
+  surface: CompositionSurfaceV2;
+  compositionPolicy: ApplicationCompositionPolicyV2;
+  /** Every release offered on the surface, in catalogue order. */
+  components: readonly ComponentDiscoveryV2[];
+  /** Keyed by platformBlockReleaseIdentityV2, the exact identity a placement names. */
+  componentsByRelease: ReadonlyMap<string, ComponentDiscoveryV2>;
+}>;
+
+export const platformBlockReleaseIdentityV2 = (
+  block: Readonly<{ blockId: string; releaseVersion: string }>,
+): string => `${block.blockId}:${block.releaseVersion}`;
+
+const summarisePlatformBlockReleaseV2 = (
+  release: PlatformBlockReleaseV2,
+): PlatformBlockReleaseSummaryV2 =>
+  Object.freeze({
+    blockId: release.blockId,
+    key: release.key,
+    releaseVersion: release.releaseVersion,
+    contentFingerprint: release.contentFingerprint,
+    catalogueFingerprint: release.catalogueFingerprint,
+    name: release.name,
+    icon: release.icon,
+    paletteGroup: release.paletteGroup,
+    rendererKey: release.rendererKey,
+    publicSurface: release.capabilities.publicSurface,
+  });
+
+/**
+ * Mirrors the catalogue validation rules: an unset value is refused when its declaration is
+ * required without a default, and a required accessible name must be reachable after defaults
+ * along its property path.
+ */
+const projectPropertyControlsV2 = (
+  declarations: readonly BlockPropertySchemaV2Contract[],
+  namePath: readonly string[] | undefined,
+  nameRequired: boolean,
+): readonly ComponentPropertyControlV2[] =>
+  Object.freeze(
+    declarations.map((declaration): ComponentPropertyControlV2 => {
+      const rest =
+        namePath !== undefined && namePath[0] === declaration.key ? namePath.slice(1) : undefined;
+      const nameValueRequired =
+        rest !== undefined && nameRequired && declaration.defaultValue === undefined;
+      return Object.freeze({
+        declaration,
+        valueRequired:
+          (declaration.required && declaration.defaultValue === undefined) || nameValueRequired,
+        accessibleName: rest !== undefined && rest.length === 0,
+        ...(isBlockReferencePropertyKindV2(declaration.kind)
+          ? { referenceKind: declaration.kind }
+          : {}),
+        ...(declaration.kind === "group"
+          ? {
+              properties: projectPropertyControlsV2(
+                declaration.properties,
+                rest !== undefined && rest.length > 0 ? rest : undefined,
+                nameValueRequired,
+              ),
+            }
+          : {}),
+        ...(declaration.kind === "list"
+          ? { item: projectPropertyControlsV2([declaration.item], undefined, false)[0]! }
+          : {}),
+      });
+    }),
+  );
+
+const collectReferenceKindsV2 = (
+  controls: readonly ComponentPropertyControlV2[],
+  kinds: Set<BlockReferencePropertyKindV2>,
+): Set<BlockReferencePropertyKindV2> => {
+  for (const control of controls) {
+    if (control.referenceKind !== undefined) kinds.add(control.referenceKind);
+    if (control.properties !== undefined) collectReferenceKindsV2(control.properties, kinds);
+    if (control.item !== undefined) collectReferenceKindsV2([control.item], kinds);
+  }
+  return kinds;
+};
+
+/** Projects the releases, property controls, slot children and layout operations of one surface. */
+export const projectPlatformCatalogueDiscoveryV2 = (
+  catalogue: ImmutablePlatformBlockCatalogueV2,
+  surface: CompositionSurfaceV2 = "authenticated",
+): PlatformCatalogueDiscoveryV2 => {
+  const offered = catalogue.releases.filter(
+    (release) => surface === "authenticated" || release.capabilities.publicSurface === "allowed",
+  );
+  const summaries = offered.map(summarisePlatformBlockReleaseV2);
+  const components = Object.freeze(
+    offered.map((release, index): ComponentDiscoveryV2 => {
+      const capabilities = release.capabilities;
+      const properties = projectPropertyControlsV2(
+        release.properties,
+        capabilities.accessibleName === "not_applicable"
+          ? undefined
+          : capabilities.accessibleNamePropertyPath,
+        capabilities.accessibleName === "required",
+      );
+      return Object.freeze({
+        release: summaries[index]!,
+        accessibleName: capabilities.accessibleName,
+        properties,
+        referenceKinds: Object.freeze([...collectReferenceKindsV2(properties, new Set())]),
+        slots: Object.freeze(
+          release.slots.map((slot): ComponentDiscoverySlotV2 => {
+            const categories = new Set<BlockPaletteGroup>(slot.allowedChildCategories);
+            return Object.freeze({
+              key: slot.key,
+              label: slot.label,
+              required: slot.required,
+              allowedChildCategories: Object.freeze([...slot.allowedChildCategories]),
+              allowedChildren: Object.freeze(
+                summaries.filter((child) => categories.has(child.paletteGroup)),
+              ),
+            });
+          }),
+        ),
+        layoutOperations: Object.freeze({
+          responsiveVisibility: capabilities.responsiveVisibility,
+          responsiveChildOrder: capabilities.responsiveOrder,
+          gridWidth: capabilities.gridWidth,
+          boundedHeight: capabilities.height === "content_or_bounded",
+        }),
+      });
+    }),
+  );
+  return Object.freeze({
+    surface,
+    compositionPolicy: catalogue.compositionPolicy,
+    components,
+    componentsByRelease: new Map(
+      components.map((component) => [platformBlockReleaseIdentityV2(component.release), component]),
+    ),
+  });
+};
