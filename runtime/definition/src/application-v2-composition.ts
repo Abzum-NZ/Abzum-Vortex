@@ -14,6 +14,7 @@ import {
   type DefinitionValidationLocation,
   type PlatformBlockReleaseV2,
   type PlatformId,
+  type ProtectedReadModelKey,
   type SourceBlockPropertyValueV2Contract,
 } from "@vortex/contracts";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
@@ -39,6 +40,7 @@ type SourcePlacement = {
   use_permission?: string;
   visibility_condition?: Parameters<ApplicationCompositionResolutionV2["condition"]>[0];
   query?: string;
+  read_model?: ProtectedReadModelKey;
   settings: Record<string, SourceBlockPropertyValueV2Contract>;
   theme_overrides: Record<string, unknown>;
   responsive: Record<string, unknown>;
@@ -494,6 +496,7 @@ export const materialiseApplicationCompositionV2 = (
     ]),
   );
   const allPlacementIds = new Set<string>();
+  const readModelPlacementIds = new Set<string>();
   let placementCount = 0;
   const shellPlacementTargets = new Map<
     string,
@@ -547,6 +550,14 @@ export const materialiseApplicationCompositionV2 = (
         reject("vortex.definition.application_block_references", "incompatible_version");
       if (options.publicSurface && release.capabilities.publicSurface !== "allowed")
         reject("vortex.definition.application_public_surface");
+      // A protected read model is live viewer-authorised data: never on a public surface, and a
+      // placement reads either it or a query, never both.
+      if (authoredPlacement.read_model !== undefined) {
+        if (options.publicSurface) reject("vortex.definition.application_public_surface");
+        if (authoredPlacement.query !== undefined)
+          reject("vortex.definition.application_block_references", "scope_conflict");
+        readModelPlacementIds.add(canonicalId);
+      }
 
       const declaredSlots = new Map(release.slots.map((slot) => [slot.key, slot]));
       if (Object.keys(authoredPlacement.slots).some((key) => !declaredSlots.has(key)))
@@ -622,6 +633,9 @@ export const materialiseApplicationCompositionV2 = (
         ...(authoredPlacement.query === undefined
           ? {}
           : { queryId: resolution.identity("query", authoredPlacement.query) }),
+        ...(authoredPlacement.read_model === undefined
+          ? {}
+          : { readModel: { key: authoredPlacement.read_model } }),
         settings,
         themeOverrides,
         responsive,
@@ -717,6 +731,7 @@ export const materialiseApplicationCompositionV2 = (
     });
     const shellIds = [...allPlacementIds].filter((id) => !beforeShellIds.has(id));
     const publicSafe = shellIds.every((id) => {
+      if (readModelPlacementIds.has(id)) return false;
       for (const target of shellPlacementTargets.values())
         if (target.canonicalId === id)
           return target.release.capabilities.publicSurface === "allowed";

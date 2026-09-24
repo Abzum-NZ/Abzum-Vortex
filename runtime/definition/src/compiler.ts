@@ -5624,6 +5624,7 @@ function v2SlotSourceTargets(
     if (property === "view_permission") return [[...canonicalRoot, "viewPermissionKey"]];
     if (property === "use_permission") return [[...canonicalRoot, "usePermissionKey"]];
     if (property === "query") return [[...canonicalRoot, "queryId"]];
+    if (property === "read_model") return [[...canonicalRoot, "readModel", "key"]];
     if (property === "visibility_condition")
       return conditionSourceTargets(source as unknown as JsonObject, sourcePath, {
         sourceRoot: [...sourceRoot, "visibility_condition"],

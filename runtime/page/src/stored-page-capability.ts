@@ -9,6 +9,7 @@ import {
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
   type PermissionRegistryEntryCandidate,
+  type ProtectedReadModelKey,
 } from "@vortex/contracts";
 import {
   createHumanOrganizationRequestService,
@@ -22,6 +23,10 @@ import {
 } from "./authenticated-page-capability";
 import type { ProjectedPageCapability } from "./page-capability-projection";
 import { resolvePageComposition } from "./page-composition-resolution";
+import {
+  createProtectedReadModelResolver,
+  type ProtectedReadModelReaders,
+} from "./protected-read-model-resolution";
 
 /** The browser address may select only a page; organisation, installation and release come from context. */
 export type StoredPageCapabilitySelection = Readonly<{
@@ -36,7 +41,18 @@ export type StoredPageCapabilityDependencies = HumanOrganizationRequestDependenc
      */
     context: InstalledRuntimeContext;
     selection: StoredPageCapabilitySelection;
+    /**
+     * The existing protected Access and Identity readers, composed by the server. A read-model
+     * placement is refused while they are not supplied; Page never reads those tables itself.
+     */
+    protectedReadModelReaders?: ProtectedReadModelReaders;
   }>;
+
+/** Live protected data for one visible read-model placement; never stored or copied. */
+export type StoredPageReadModelValue = Readonly<{
+  model: ProtectedReadModelKey;
+  value: unknown;
+}>;
 
 const sameUuid = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
@@ -63,6 +79,31 @@ const declaration = (
   recentAuthentication: { kind: "none" },
   authority: { kind: "permission" },
 });
+
+/** Finds a placement the viewer can see in the already permission-filtered projection. */
+const findProjectedPlacement = (
+  slot: unknown,
+  placementId: string,
+): Record<string, unknown> | undefined => {
+  const placements = (slot as { placements?: Record<string, Record<string, unknown>> } | undefined)
+    ?.placements;
+  if (placements === undefined) return undefined;
+  for (const [candidateId, placement] of Object.entries(placements)) {
+    if (sameUuid(candidateId, placementId)) return placement;
+    for (const child of Object.values((placement.slots ?? {}) as Record<string, unknown>)) {
+      const found = findProjectedPlacement(child, placementId);
+      if (found !== undefined) return found;
+    }
+  }
+  return undefined;
+};
+
+const projectedRoots = (projected: Readonly<Record<string, unknown>>): unknown[] => {
+  const composition = projected.composition as Record<string, unknown> | undefined;
+  if (composition === undefined) return [];
+  if ("main" in composition) return [composition.main];
+  return Object.values((composition.stepContent ?? {}) as Record<string, unknown>);
+};
 
 const v2Placements = (slot: unknown): Record<string, unknown>[] => {
   const candidate = slot as { placements: Record<string, Record<string, unknown>> };
@@ -176,44 +217,86 @@ export const createStoredPageCapabilityService = (
     };
   };
 
+  const project = async (
+    session: IdentitySession,
+    candidate: OrganizationSelectionCandidate,
+  ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
+    if (
+      !sameUuid(candidate.organizationId, context.organizationId) ||
+      candidate.applicationRootId === undefined ||
+      !sameUuid(candidate.applicationRootId, applicationRootId)
+    )
+      return { kind: "unavailable" };
+    // Verify the session and application scope before projecting, so a caller without access
+    // gets the same answer whether or not the page exists. The context read is already done by
+    // App; the human request only proves the person's current authority over this scope.
+    const verified = await requests.run(session, candidate, async () => undefined);
+    if (verified.kind !== "available") return verified;
+    let fixed: FixedAuthenticatedPageCapability | undefined;
+    try {
+      fixed = await load();
+    } catch {
+      return { kind: "temporarily_unavailable" };
+    }
+    if (fixed === undefined) return { kind: "unavailable" };
+    const stored = fixed;
+    return createAuthenticatedPageCapabilityService({
+      ...requestDependencies,
+      adapter: {
+        load: async (_transaction, scope) => {
+          if (
+            scope.applicationRootId === undefined ||
+            !sameUuid(scope.organizationId, context.organizationId) ||
+            !sameUuid(scope.applicationRootId, applicationRootId)
+          )
+            throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
+          return stored;
+        },
+      },
+    }).project(session, candidate, undefined);
+  };
+
+  const readModels =
+    dependencies.protectedReadModelReaders === undefined
+      ? undefined
+      : createProtectedReadModelResolver(dependencies.protectedReadModelReaders);
+
   return Object.freeze({
-    async project(
+    project,
+    /**
+     * Reads one read-model placement of the selected page live, at request time. The binding comes
+     * only from the exact release; the viewer must be able to see the page and that placement, and
+     * the owning reader then applies its own authority to the viewer's current session. Every
+     * refusal is the same neutral answer and is never an empty page.
+     */
+    async readModel(
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
-    ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> {
-      if (
-        !sameUuid(candidate.organizationId, context.organizationId) ||
-        candidate.applicationRootId === undefined ||
-        !sameUuid(candidate.applicationRootId, applicationRootId)
-      )
-        return { kind: "unavailable" };
-      // Verify the session and application scope before projecting, so a caller without access
-      // gets the same answer whether or not the page exists. The context read is already done by
-      // App; the human request only proves the person's current authority over this scope.
-      const verified = await requests.run(session, candidate, async () => undefined);
-      if (verified.kind !== "available") return verified;
-      let fixed: FixedAuthenticatedPageCapability | undefined;
-      try {
-        fixed = await load();
-      } catch {
-        return { kind: "temporarily_unavailable" };
-      }
-      if (fixed === undefined) return { kind: "unavailable" };
-      const stored = fixed;
-      return createAuthenticatedPageCapabilityService({
-        ...requestDependencies,
-        adapter: {
-          load: async (_transaction, scope) => {
-            if (
-              scope.applicationRootId === undefined ||
-              !sameUuid(scope.organizationId, context.organizationId) ||
-              !sameUuid(scope.applicationRootId, applicationRootId)
-            )
-              throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
-            return stored;
-          },
-        },
-      }).project(session, candidate, undefined);
+      placementId: string,
+      requestCandidate: unknown,
+    ): Promise<HumanOrganizationRequestResult<StoredPageReadModelValue>> {
+      const projected = await project(session, candidate);
+      if (projected.kind !== "available") return projected;
+      if (projected.value === undefined || readModels === undefined) return { kind: "unavailable" };
+      const placement = projectedRoots(projected.value)
+        .map((root) => findProjectedPlacement(root, placementId))
+        .find((found) => found !== undefined);
+      if (placement?.readModel === undefined) return { kind: "unavailable" };
+      // The tenant is the verified scope's own tenant, never page or browser input.
+      const scoped = await requests.run(session, candidate, async (_transaction, scope) =>
+        String(scope.tenantId),
+      );
+      if (scoped.kind !== "available") return scoped;
+      const resolved = await readModels.resolve(
+        { session, selection: candidate, tenantId: scoped.value },
+        placement.readModel,
+        requestCandidate,
+      );
+      return resolved.kind === "available"
+        ? { kind: "available", value: { model: resolved.model, value: resolved.value } }
+        : resolved.kind === "unavailable"
+          ? { kind: "temporarily_unavailable" }
+          : { kind: "unavailable" };
     },
   });
 };

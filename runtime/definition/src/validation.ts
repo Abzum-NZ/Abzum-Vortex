@@ -1,6 +1,7 @@
 import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
   applicationDraftV2Schema,
+  protectedReadModelKeys,
   applicationSourceDocumentV2Schema,
   applicationCompilationRequestV2Schema,
   moduleDraftV3Schema,
@@ -4695,6 +4696,20 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         ...pageContentPlacementEntriesV2(page).map(([, placement]) => placement),
         ...pageShellPlacementEntriesV2(page).map(([, placement]) => placement),
       ];
+      // A placement reads one data source: a declared protected read model or a query, never both.
+      if (
+        placements.some(
+          (placement) =>
+            placement.readModel !== undefined &&
+            (placement.queryId !== undefined ||
+              !(protectedReadModelKeys as readonly string[]).includes(
+                String(object(placement.readModel).key),
+              )),
+        )
+      )
+        failures.push(
+          failure(output, "vortex.definition.application_block_references", "broken_reference"),
+        );
       if (page.type === "public") {
         const record = page.recordType
           ? records.get(String(object(page.recordType).recordTypeId))
@@ -4746,6 +4761,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
             }
           };
           walkValues(placement.settings, inspectPublicSetting);
+          if (placement.readModel !== undefined) publicBlockReferencesSafe = false;
           if (placement.queryId) {
             const query = queries.get(String(placement.queryId));
             if (!publicQuerySafe(query, pageRecordId, pagePublicFields))
