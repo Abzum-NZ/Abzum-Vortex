@@ -9,6 +9,7 @@ import {
 import { createHumanOrganizationRequestService } from "@vortex/access";
 import {
   createAppTelemetryCollector,
+  createOperationsAlertSink,
   readPermittedApplicationsAtAddress,
   type PermittedApplicationsRead,
 } from "@vortex/app";
@@ -19,7 +20,9 @@ import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-config
  * The collector is stateless and frozen, so one instance is shared and then injected
  * explicitly into the Access dependencies rather than read as ambient request state.
  */
-const requestTelemetry = createAppTelemetryCollector();
+const requestTelemetry = createAppTelemetryCollector({
+  downstream: createOperationsAlertSink(),
+});
 
 export const loadOrganizationLauncher = async (
   session: IdentitySession,

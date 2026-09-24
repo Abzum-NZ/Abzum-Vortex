@@ -39,6 +39,20 @@ export {
 } from "./deadline-refresh-recovery";
 
 export {
+  registerKestraFlowCandidate,
+  kestraFlowRegistrationErrorCodes,
+  kestraFlowRegistrationRefusalReasons,
+  kestraFlowRegistrationStatuses,
+  KestraFlowRegistrationError,
+  type KestraFlowRegistration,
+  type KestraFlowRegistrationCommand,
+  type KestraFlowRegistrationErrorCode,
+  type KestraFlowRegistrationRefusalReason,
+  type KestraFlowRegistrationResult,
+  type KestraFlowRegistrationStatus,
+} from "./flow-registration-repository";
+
+export {
   compileKestraFlow,
   kestraFlowCompilerEnvironments,
   kestraFlowCompilerRefusalReasons,
