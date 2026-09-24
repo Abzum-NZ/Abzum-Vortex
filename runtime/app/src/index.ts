@@ -7,6 +7,7 @@ import {
 import { projectFlowResultHandoff } from "./flow-result-handoff";
 import { createApplicationInstallationCoordinator } from "./installation-coordinator";
 import { createInstalledRuntimeContextLoader } from "./installed-runtime-context";
+import { createOperationsAlertSink, readOpenOperationsAlertSignals } from "./operations-alert-sink";
 import { createAppTelemetryCollector } from "./telemetry";
 
 export {
@@ -17,6 +18,13 @@ export {
   createAppTelemetryCollector,
   type AppTelemetryCollectorDependencies,
 } from "./telemetry";
+export {
+  createOperationsAlertSink,
+  operationsAlertSignalSchema,
+  readOpenOperationsAlertSignals,
+  type OperationsAlertSignal,
+  type OperationsAlertSinkDependencies,
+} from "./operations-alert-sink";
 export {
   isReservedTenantSegment,
   permittedApplicationSchema,
@@ -98,6 +106,8 @@ export const AppService = Object.freeze({
   resolveApplicationTheme,
   resolveApplicationThemeTokens,
   createAppTelemetryCollector,
+  createOperationsAlertSink,
+  readOpenOperationsAlertSignals,
   projectFlowResultHandoff,
   createApplicationInstallationCoordinator,
   createInstalledRuntimeContextLoader,
