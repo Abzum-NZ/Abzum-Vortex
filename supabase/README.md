@@ -18,8 +18,29 @@ workspace package and not an application data model.
 |---|---|
 | `config.toml` | Local Supabase services and ports. It contains no credential. |
 | `migrations/` | Immutable timestamped changes created with `pnpm db:new <name>`. |
+| `schemas/` | One canonical source file per function, under `<schema>/<function>.sql`. |
 | `seed.sql` | Synthetic Local and Testing data only. Production never applies it. |
 | `tests/` | pgTAP tests run with `pnpm db:test`. |
+
+## Canonical database-function source
+
+A migration is not the only place a live function definition may be found. Every database function
+has one readable canonical source at `supabase/schemas/<schema>/<function>.sql`, holding the complete
+current `create or replace function` statement with its full body, its `comment on function` and its
+exact `grant`/`revoke` on that function. [schemas/README.md](schemas/README.md) describes the layout.
+
+A migration that creates or changes a function carries the complete body, identical to the canonical
+file changed in the same commit. A signature change is an explicit `drop function` followed by a
+`create`. Migrations never read a live definition with `pg_get_functiondef` and never patch one with
+`replace()`; the code a migration installs is stated in full. This is a reviewed source convention:
+correct a drifted function by publishing its complete body, not by editing text that happens to be
+live.
+
+`pnpm boundaries` enforces the rule through `tooling/boundaries/sql-canonical.mjs`. It fails a
+migration timestamped `20260925000000` or later that uses `pg_get_functiondef`, patches a definition
+with `replace()`, defines a function without a canonical file or with a body that differs from it, or
+changes a signature without an explicit drop; it also fails a canonical file that no migration backs.
+Migrations timestamped before `20260925000000` are historical and exempt.
 
 ## Optional local database operations
 
