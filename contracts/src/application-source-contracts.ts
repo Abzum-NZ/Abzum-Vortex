@@ -103,7 +103,14 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
       });
       return z.NEVER;
     }
-    const keys = Array.isArray(entry.value) ? undefined : Object.keys(entry.value);
+    const keys: string[] | undefined = Array.isArray(entry.value) ? undefined : [];
+    if (keys !== undefined) {
+      for (const key in entry.value) {
+        if (!Object.prototype.hasOwnProperty.call(entry.value, key)) continue;
+        keys.push(key);
+        if (keys.length > maximumSourceContainerItems) break;
+      }
+    }
     if (keys !== undefined && keys.length > maximumSourceContainerItems) {
       context.addIssue({
         code: "custom",
@@ -1139,20 +1146,15 @@ export const sourceApplicationBodyV2Schema = z
     }
   });
 
-const applicationSourceDocumentV2BaseSchema = z
+export const applicationSourceDocumentV2Schema = z
   .object({
     source_contract_version: z.literal(applicationSourceContractVersion),
     root_alias: sourceAliasSchema,
     key: namespacedKeySchema,
     kind: z.literal("application"),
-    body: sourceApplicationBodyV2Schema,
+    body: z.preprocess(inspectSourceBounds, sourceApplicationBodyV2Schema),
   })
   .strict();
-
-export const applicationSourceDocumentV2Schema = z.preprocess(
-  inspectSourceBounds,
-  applicationSourceDocumentV2BaseSchema,
-);
 
 export type ApplicationSourceDocumentV2 = z.infer<typeof applicationSourceDocumentV2Schema>;
 export type SourceApplicationBodyV2 = z.infer<typeof sourceApplicationBodyV2Schema>;

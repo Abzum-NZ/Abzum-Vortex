@@ -96,7 +96,14 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
       });
       return z.NEVER;
     }
-    const keys = Array.isArray(entry.value) ? undefined : Object.keys(entry.value);
+    const keys: string[] | undefined = Array.isArray(entry.value) ? undefined : [];
+    if (keys !== undefined) {
+      for (const key in entry.value) {
+        if (!Object.prototype.hasOwnProperty.call(entry.value, key)) continue;
+        keys.push(key);
+        if (keys.length > maximumSourceContainerItems) break;
+      }
+    }
     if (keys !== undefined && keys.length > maximumSourceContainerItems) {
       context.addIssue({
         code: "custom",
@@ -1451,19 +1458,14 @@ const moduleSourceBodySchema = z
   })
   .strict();
 
-const moduleSourceDocumentBaseSchema = z
+export const moduleSourceDocumentSchema = z
   .object({
     ...authoredSourceBase,
     kind: z.literal("module"),
     source_contract_version: z.literal(moduleSourceContractVersion),
-    body: moduleSourceBodySchema,
+    body: z.preprocess(inspectSourceBounds, moduleSourceBodySchema),
   })
   .strict();
-
-export const moduleSourceDocumentSchema = z.preprocess(
-  inspectSourceBounds,
-  moduleSourceDocumentBaseSchema,
-);
 
 export type ModuleSourceField = z.infer<typeof moduleSourceFieldSchema>;
 export type ModuleSourceActionInput = z.infer<typeof moduleSourceActionInputSchema>;
