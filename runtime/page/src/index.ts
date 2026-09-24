@@ -23,6 +23,12 @@ export {
   type StoredPageCapabilitySelection,
 } from "./stored-page-capability";
 export {
+  createProtectedReadModelResolver,
+  type ProtectedReadModelReaders,
+  type ProtectedReadModelRequestContext,
+  type ProtectedReadModelResolution,
+} from "./protected-read-model-resolution";
+export {
   resolvePageTheme,
   resolvePlacementThemeTokens,
   type PlacementThemeResolutionContext,
