@@ -1278,6 +1278,154 @@ export const DRAWER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   supportedStateOperations: [],
 });
 
+/** Exact immutable metadata release for the general container block. */
+export const CONTAINER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
+  blockId: "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+  key: "platform.layout.container",
+  releaseVersion: "1.0.0",
+  contentFingerprint: "sha256:87ad3a9f09aea303fea52278a2b15a2cd94f8fd778ef83ae53ec2b4c8a78fb57",
+  catalogueFingerprint: "sha256:b2dfb51dca9296f53102a251a880a74d3b2c15797a19597b6ee16df5e7c88d0c",
+  name: "Container",
+  icon: "layout",
+  paletteGroup: "layout",
+  rendererKey: "platform.renderer.container",
+  properties: [
+    {
+      kind: "choice",
+      key: "direction",
+      label: "Direction",
+      help: "Arrange child slots stacked in a column or side by side in a row",
+      required: false,
+      options: [
+        {
+          key: "column",
+          label: "Column",
+        },
+        {
+          key: "row",
+          label: "Row",
+        },
+      ],
+    },
+    {
+      kind: "choice",
+      key: "gap",
+      label: "Gap",
+      help: "Space between child slots",
+      required: false,
+      options: [
+        {
+          key: "none",
+          label: "None",
+        },
+        {
+          key: "small",
+          label: "Small",
+        },
+        {
+          key: "medium",
+          label: "Medium",
+        },
+        {
+          key: "large",
+          label: "Large",
+        },
+      ],
+    },
+  ],
+  slots: [
+    {
+      key: "header",
+      label: "Header",
+      required: false,
+      allowedChildCategories: ["data", "figures", "record", "input", "actions", "layout", "content"],
+    },
+    {
+      key: "menu",
+      label: "Menu",
+      required: false,
+      allowedChildCategories: ["data", "figures", "record", "input", "actions", "layout", "content"],
+    },
+    {
+      key: "content",
+      label: "Content",
+      required: false,
+      allowedChildCategories: ["data", "figures", "record", "input", "actions", "layout", "content"],
+    },
+  ],
+  capabilities: {
+    responsiveVisibility: true,
+    responsiveOrder: true,
+    gridWidth: true,
+    height: "content_or_bounded",
+    publicSurface: "allowed",
+    accessibleName: "not_applicable",
+  },
+  supportedEvents: [],
+  supportedStateOperations: [],
+});
+
+/** Exact immutable metadata release for the heading block. */
+export const HEADING_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
+  blockId: "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+  key: "platform.layout.heading",
+  releaseVersion: "1.0.0",
+  contentFingerprint: "sha256:ba087207751d4f15f047d10187585dfaa41a6174b7d5c294a0ef94df3d02e790",
+  catalogueFingerprint: "sha256:ddfccfe68cfce2fa54194a8a467cb2df67b8539554b291cdc37a7e463b50c0a5",
+  name: "Heading",
+  icon: "heading",
+  paletteGroup: "layout",
+  rendererKey: "platform.renderer.heading",
+  properties: [
+    {
+      kind: "text",
+      key: "text",
+      label: "Text",
+      help: "Heading text shown to people",
+      required: true,
+      minLength: 1,
+      maxLength: 200,
+    },
+    {
+      kind: "choice",
+      key: "level",
+      label: "Level",
+      help: "Heading importance: one is the most important, four is the least",
+      required: false,
+      options: [
+        {
+          key: "one",
+          label: "1",
+        },
+        {
+          key: "two",
+          label: "2",
+        },
+        {
+          key: "three",
+          label: "3",
+        },
+        {
+          key: "four",
+          label: "4",
+        },
+      ],
+    },
+  ],
+  slots: [],
+  capabilities: {
+    responsiveVisibility: true,
+    responsiveOrder: true,
+    gridWidth: true,
+    height: "content",
+    publicSurface: "allowed",
+    accessibleName: "required",
+    accessibleNamePropertyPath: ["text"],
+  },
+  supportedEvents: [],
+  supportedStateOperations: [],
+});
+
 /** Exact immutable metadata release for the form container block. */
 export const FORM_CONTAINER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
@@ -1783,11 +1931,18 @@ export const LAUNCHER_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object
   VIEW_FILTER_BLOCK_RELEASE,
 ]);
 
-/** All twenty-three immutable platform block releases registered for the page builder. */
+/** All two immutable general layout block releases. */
+export const LAYOUT_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
+  CONTAINER_BLOCK_RELEASE,
+  HEADING_BLOCK_RELEASE,
+]);
+
+/** All twenty-five immutable platform block releases registered for the page builder. */
 export const PLATFORM_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   ...DISPLAY_BLOCK_RELEASES,
   ...CONTROL_BLOCK_RELEASES,
   ...LAUNCHER_BLOCK_RELEASES,
+  ...LAYOUT_BLOCK_RELEASES,
 ]);
 
 /**
