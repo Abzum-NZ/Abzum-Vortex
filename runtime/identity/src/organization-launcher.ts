@@ -20,7 +20,9 @@ type RuntimeTransactionRunner = <Result>(
 
 type LauncherRow = DatabaseRow & {
   organization_id: unknown;
+  tenant_short_name: unknown;
   tenant_display_name: unknown;
+  organization_short_name: unknown;
   organization_display_name: unknown;
   account_display_name: unknown;
 };
@@ -32,7 +34,9 @@ export type OrganizationLauncherServiceDependencies = Readonly<{
 const entry = (row: LauncherRow): OrganizationLauncherEntry =>
   organizationLauncherEntrySchema.parse({
     organizationId: row.organization_id,
+    tenantShortName: row.tenant_short_name,
     tenantDisplayName: row.tenant_display_name,
+    organizationShortName: row.organization_short_name,
     organizationDisplayName: row.organization_display_name,
     ...(row.account_display_name === null || row.account_display_name === undefined
       ? {}
