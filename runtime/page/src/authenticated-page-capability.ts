@@ -42,6 +42,11 @@ export type FixedAuthenticatedPageCapability = Readonly<{
       Readonly<{
         viewPermission?: PermissionBinding;
         usePermission?: PermissionBinding;
+        /**
+         * The placement's bindings reach an operation or cannot be proved, so even without a use
+         * gate it is available only when `operationBound`. Omitted means it binds no operation.
+         */
+        operationRequired?: boolean;
         operationBound: boolean;
         visibilityConditionAllowed?: boolean;
       }>
@@ -164,6 +169,9 @@ export const createAuthenticatedPageCapabilityService = <Command>(
           states[required.placementId] = {
             viewAllowed: view.allowed,
             useAllowed: use.allowed,
+            ...(binding.operationRequired === undefined
+              ? {}
+              : { operationRequired: binding.operationRequired }),
             operationBound: binding.operationBound,
             ...(binding.visibilityConditionAllowed === undefined
               ? {}
