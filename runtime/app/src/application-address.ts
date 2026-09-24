@@ -190,12 +190,19 @@ const permittedApplication = async (
   return result.value;
 };
 
-/** Resolve an exact tenant and organisation, then project only current page authority. */
+/**
+ * Resolve an exact tenant and organisation, then project only current page authority.
+ * Without an application key this is the launcher read: every permitted application and
+ * the organisation default. With a key it is an addressed page read: only that application
+ * is evaluated, `applications` holds at most that one entry and `defaultApplicationRootId`
+ * is null, so it must only resolve that address and never feed a launcher.
+ */
 export const readPermittedApplicationsAtAddress = async (
   session: IdentitySession,
   tenantShortNameCandidate: string,
   organizationShortNameCandidate: string,
   identityAuthorityIdCandidate: IdentityAuthorityId,
+  applicationKeyCandidate?: string,
 ): Promise<PermittedApplicationsRead> => {
   const parsedSession = identitySessionSchema.safeParse(session);
   const tenantShortName = builderKeySchema.safeParse(tenantShortNameCandidate);
@@ -207,6 +214,13 @@ export const readPermittedApplicationsAtAddress = async (
   if (!authorityId.success) return { kind: "temporarily_unavailable" };
   if (Date.parse(parsedSession.data.accessTokenExpiresAt) <= Date.now())
     return { kind: "unavailable" };
+
+  let addressedApplicationKey: string | undefined;
+  if (applicationKeyCandidate !== undefined) {
+    const parsedApplicationKey = namespacedKeySchema.safeParse(applicationKeyCandidate);
+    if (!parsedApplicationKey.success) return { kind: "unavailable" };
+    addressedApplicationKey = parsedApplicationKey.data;
+  }
 
   try {
     const read = await withRuntimeTransaction(async (transaction) => {
@@ -225,6 +239,29 @@ export const readPermittedApplicationsAtAddress = async (
     const requests = createHumanOrganizationRequestService({
       identityAuthorityId: authorityId.data,
     });
+
+    // An addressed page request resolves only the named application, so the
+    // request transaction and page access decisions cover that application's
+    // pages alone. The launcher still builds the full permitted list below.
+    if (addressedApplicationKey !== undefined) {
+      const candidate = read.applications.find(
+        (entry) => entry.key === addressedApplicationKey,
+      );
+      if (candidate === undefined) return { kind: "unavailable" };
+      const permitted = await permittedApplication(
+        requests, parsedSession.data, read.organizationId, candidate,
+      );
+      if (permitted === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
+      return permittedApplicationsReadSchema.parse({
+        kind: "available",
+        organizationId: read.organizationId,
+        tenantShortName: read.tenantShortName,
+        organizationShortName: read.organizationShortName,
+        defaultApplicationRootId: null,
+        applications: permitted === null ? [] : [permitted],
+      });
+    }
+
     const defaultRead = await requests.run(
       parsedSession.data,
       { organizationId: read.organizationId },
