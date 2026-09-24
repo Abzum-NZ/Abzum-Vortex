@@ -117,6 +117,7 @@ declare
   decision record;
   outcome_row record;
   activity_subject uuid;
+  append_result text;
 begin
   if (p_default_application_root_id is not null
       and p_default_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid)
@@ -151,7 +152,7 @@ begin
   select evaluated.* into strict decision
   from vortex_access.evaluate_organization_permission_eligibility(
     pg_catalog.jsonb_build_object(
-      'operationKey', 'platform.organization.runtime_settings.update',
+      'operationKey', 'platform.organization.default_application.set',
       'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
@@ -165,7 +166,7 @@ begin
   ) as evaluated;
   if decision.outcome is distinct from 'eligible'
     or decision.operation_key is distinct from
-      'platform.organization.runtime_settings.update'
+      'platform.organization.default_application.set'
     or decision.organization_id is distinct from context_organization_id
     or decision.organization_account_id is distinct from context_account_id
     or decision.access_version is distinct from context_access_version
@@ -176,8 +177,10 @@ begin
 
   -- Only an exact active installed application of this same organisation may be
   -- selected: an active application registration whose owner root is an
-  -- application of the context organisation, still bound to its exact release,
-  -- with an active installation binding for that release.
+  -- application of the context organisation, still bound to its exact
+  -- application release, with an active installation binding for that release.
+  -- This is the same installed-application set the organisation address reads
+  -- (20260924250000_application_address_resolution.sql).
   if p_default_application_root_id is not null then
     if not exists (
       select 1
@@ -197,6 +200,7 @@ begin
             and release.release_revision = registration.source_revision
             and release.content_fingerprint = registration.source_content_fingerprint
             and release.resolution_fingerprint = registration.source_resolution_fingerprint
+            and release.compilation_output ->> 'kind' = 'application'
         )
         and exists (
           select 1
@@ -235,7 +239,7 @@ begin
       raise exception using errcode = '55000',
         message = 'Organization default application evidence is inconsistent';
     end if;
-    perform vortex_activity.append_organization_activity_entry(
+    append_result := vortex_activity.append_organization_activity_entry(
       context_organization_id,
       p_activity_id,
       pg_catalog.statement_timestamp(),
@@ -252,17 +256,14 @@ begin
       context_correlation_id,
       'completed'
     );
+    if append_result is distinct from 'inserted' then
+      raise exception using errcode = '40001',
+        message = 'Organization default application Activity is stale';
+    end if;
   end if;
 
   return query select outcome_row.organization_id, outcome_row.default_application_root_id,
     outcome_row.revision, outcome_row.changed;
-exception
-  when no_data_found then
-    raise exception using errcode = 'P0002',
-      message = 'Organization default application evidence is unavailable';
-  when too_many_rows then
-    raise exception using errcode = '55000',
-      message = 'Organization default application evidence is ambiguous';
 end
 $function$;
 
