@@ -21,7 +21,14 @@ export {
   createStoredPageCapabilityService,
   type StoredPageCapabilityDependencies,
   type StoredPageCapabilitySelection,
+  type StoredPageReadModelValue,
 } from "./stored-page-capability";
+export {
+  createProtectedReadModelResolver,
+  type ProtectedReadModelReaders,
+  type ProtectedReadModelRequestContext,
+  type ProtectedReadModelResolution,
+} from "./protected-read-model-resolution";
 export {
   resolvePageTheme,
   resolvePlacementThemeTokens,
