@@ -23,11 +23,25 @@ const actionKinds = {
   export: "export",
 } as const;
 
+type RecordScope = {
+  routes: readonly Record<string, string>[];
+  saved_condition?: {
+    condition: string;
+    parameter_bindings: readonly {
+      key: string;
+      source: "current_organization_account_id";
+    }[];
+  };
+};
+
+const allRecords: RecordScope = { routes: [{ kind: "all_records" }] };
+
 const recordPermission = (
   recordKey: string,
   action: (typeof standardActions)[number],
   readableFields: string[],
   changeableFields: string[],
+  scope: RecordScope = allRecords,
 ) => ({
   id: `perm_${recordKey}_${action}`,
   key: `vortex.iam.core.${recordKey}.${action}`,
@@ -36,7 +50,7 @@ const recordPermission = (
   record_type: recordKey,
   action_kind: actionKinds[action],
   administrative: false,
-  record_scope: { routes: [{ kind: "all_records" }] },
+  record_scope: scope,
   field_policy: {
     readable_fields: readableFields,
     changeable_fields: changeableFields,
@@ -47,36 +61,31 @@ const scopedRecordPermission = (
   recordKey: string,
   action: (typeof standardActions)[number],
   suffix: string,
-  scope: {
-    routes: readonly Record<string, string>[];
-    saved_condition?: {
-      condition: string;
-      parameter_bindings: readonly {
-        key: string;
-        source: "current_organization_account_id";
-      }[];
-    };
-  },
+  scope: RecordScope,
   readableFields: string[],
   changeableFields: string[],
 ) => ({
-  ...recordPermission(recordKey, action, readableFields, changeableFields),
+  ...recordPermission(recordKey, action, readableFields, changeableFields, scope),
   id: `perm_${recordKey}_${action}_${suffix}`,
   key: `vortex.iam.core.${recordKey}.${action}_${suffix}`,
   label: `${recordKey.replace(/_/g, " ")} ${action.replace(/_/g, " ")} ${suffix.replace(/_/g, " ")}`,
   description: `Allows ${action} on ${suffix.replace(/_/g, " ")} ${recordKey.replace(/_/g, " ")} records only.`,
-  record_scope: scope,
 });
 
-const ownRecords = { routes: [{ kind: "ownership" }] } as const;
-const assignedReviews = {
+// Ordinary request edits apply only while the request is a draft; protected journeys move it
+// onwards and bind review to the exact proposal.
+const draftRequestCondition = { condition: "draft_request", parameter_bindings: [] };
+const draftRequests: RecordScope = { ...allRecords, saved_condition: draftRequestCondition };
+const ownRecords: RecordScope = { routes: [{ kind: "ownership" }] };
+const ownDraftRequests: RecordScope = { ...ownRecords, saved_condition: draftRequestCondition };
+const assignedReviews: RecordScope = {
   routes: [{ kind: "all_records" }],
   saved_condition: {
     condition: "assigned_reviewer",
     parameter_bindings: [{ key: "current_account", source: "current_organization_account_id" }],
   },
-} as const;
-const reviewedRequests = {
+};
+const reviewedRequests: RecordScope = {
   routes: [
     {
       kind: "relationship",
@@ -84,7 +93,19 @@ const reviewedRequests = {
       source_permission: "vortex.iam.core.access_review.read_assigned",
     },
   ],
-} as const;
+};
+
+/** Access request kinds; the IAM request forms offer the same choices. */
+export const requestTypeOptions = [
+  { value: "grant_role", label: "Grant role" },
+  { value: "remove_role", label: "Remove role" },
+  { value: "group_membership", label: "Group membership" },
+  { value: "role_activation", label: "Activate privileged role" },
+  { value: "role_deactivation", label: "Deactivate privileged role" },
+  { value: "delegation", label: "Delegated management" },
+  { value: "group_change", label: "Change a group" },
+  { value: "other", label: "Other" },
+] as const;
 
 // Ordinary record actions can edit draft content; protected journeys own identity and state.
 const requestChangeable = [
@@ -149,7 +170,8 @@ const permissions = [
       action === "soft_delete" || action === "restore" ? [] : requestReadable;
     const changeable =
       action === "create" || action === "update" ? requestChangeable : [];
-    return [recordPermission("access_request", action, readable, changeable)];
+    const scope = action === "update" ? draftRequests : allRecords;
+    return [recordPermission("access_request", action, readable, changeable, scope)];
   }),
   ...standardActions.flatMap((action) => {
     const readable =
@@ -180,7 +202,7 @@ const permissions = [
   ),
   scopedRecordPermission("access_request", "read", "own", ownRecords, requestReadable, []),
   scopedRecordPermission(
-    "access_request", "update", "own", ownRecords, requestReadable, requestChangeable,
+    "access_request", "update", "own", ownDraftRequests, requestReadable, requestChangeable,
   ),
   scopedRecordPermission("access_request", "soft_delete", "own", ownRecords, [], []),
   scopedRecordPermission(
@@ -194,6 +216,9 @@ const permissions = [
   scopedRecordPermission("access_request_item", "read", "own", ownRecords, requestItemReadable, []),
   scopedRecordPermission(
     "access_review", "read", "assigned", assignedReviews, reviewReadable, [],
+  ),
+  scopedRecordPermission(
+    "access_review", "update", "assigned", assignedReviews, reviewReadable, reviewChangeable,
   ),
   scopedRecordPermission(
     "access_request", "read", "reviewed", reviewedRequests, requestReadable, [],
@@ -218,7 +243,7 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
         plural_name: "Access requests",
         title_field: "title",
         storage_contract_id: "srt_iam_access_request",
-        storage_scope: "organisation_shared",
+        storage_scope: "application_contained",
         ownership_mode: "organisation_account",
         standard_actions: [...standardActions],
         custom_actions: [],
@@ -257,18 +282,7 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
             filterable: true,
             sortable: true,
             type: "choice",
-            settings: {
-              options: [
-                { value: "grant_role", label: "Grant role" },
-                { value: "remove_role", label: "Remove role" },
-                { value: "group_membership", label: "Group membership" },
-                { value: "role_activation", label: "Activate privileged role" },
-                { value: "role_deactivation", label: "Deactivate privileged role" },
-                { value: "delegation", label: "Delegated management" },
-                { value: "group_change", label: "Change a group" },
-                { value: "other", label: "Other" },
-              ],
-            },
+            settings: { options: [...requestTypeOptions] },
           },
           {
             ...fieldBase,
@@ -392,7 +406,7 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
         plural_name: "Access request items",
         title_field: "target_key",
         storage_contract_id: "srt_iam_access_request_item",
-        storage_scope: "organisation_shared",
+        storage_scope: "application_contained",
         ownership_mode: "inherited",
         ownership_relationship: "request",
         standard_actions: [...standardActions],
@@ -483,7 +497,7 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
         plural_name: "Access reviews",
         title_field: "review_number",
         storage_contract_id: "srt_iam_access_review",
-        storage_scope: "organisation_shared",
+        storage_scope: "application_contained",
         ownership_mode: "none",
         standard_actions: [...standardActions],
         custom_actions: [],
@@ -607,7 +621,7 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
         plural_name: "Access review responses",
         title_field: "outcome",
         storage_contract_id: "srt_iam_access_review_response",
-        storage_scope: "organisation_shared",
+        storage_scope: "application_contained",
         ownership_mode: "none",
         standard_actions: [...standardActions],
         custom_actions: [],
@@ -696,6 +710,28 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
     rules: [],
     extension_points: [],
     sharing_conditions: [
+      {
+        id: "condition_iam_draft_request",
+        source_record_type: "access_request",
+        key: "draft_request",
+        parameters: [],
+        condition: { field: "state", operator: "equals", value: "draft" },
+        declared_fields: ["state"],
+        publication_tests: [
+          {
+            name: "Draft request may be edited",
+            parameters: {},
+            field_values: { state: "draft" },
+            expected: true,
+          },
+          {
+            name: "Submitted request cannot be edited",
+            parameters: {},
+            field_values: { state: "submitted" },
+            expected: false,
+          },
+        ],
+      },
       {
         id: "condition_iam_assigned_review",
         source_record_type: "access_review",

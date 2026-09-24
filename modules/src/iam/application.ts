@@ -12,6 +12,7 @@ import {
   type ApplicationSourceDocumentV2,
   type PlatformBlockReleaseV2,
 } from "@vortex/contracts";
+import { requestTypeOptions } from "./module";
 
 const textValue = (value: string) => ({ kind: "text" as const, value });
 const choiceValue = (value: string) => ({ kind: "choice" as const, value });
@@ -94,10 +95,25 @@ const textInput = (alias: string, name: string, label: string, multiline = false
   },
 });
 
-const choiceInput = (alias: string, name: string, label: string) => ({
+const choiceInput = (
+  alias: string,
+  name: string,
+  label: string,
+  options: ReadonlyArray<{ value: string; label: string }>,
+) => ({
   alias,
   release: CHOICE_INPUT_BLOCK_RELEASE,
-  settings: { name: textValue(name), label: textValue(label) },
+  settings: {
+    name: textValue(name),
+    label: textValue(label),
+    options: {
+      kind: "list" as const,
+      items: options.map((option) => ({
+        kind: "group" as const,
+        properties: { key: textValue(option.value), label: textValue(option.label) },
+      })),
+    },
+  },
 });
 
 const dateInput = (alias: string, name: string, label: string) => ({
@@ -242,6 +258,7 @@ const roles = [
       "application.iam.review",
       "vortex.iam.core.access_request.read_reviewed",
       "vortex.iam.core.access_review.read_assigned",
+      "vortex.iam.core.access_review.update_assigned",
     ],
   },
   {
@@ -563,7 +580,7 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
           ],
           composition: formComposition("iam_access_request_new_form", "New access request", [
             textInput("iam_request_new_title", "title", "Title"),
-            choiceInput("iam_request_new_type", "request_type", "Request type"),
+            choiceInput("iam_request_new_type", "request_type", "Request type", requestTypeOptions),
             textInput("iam_request_new_role", "target_role_key", "Target role"),
             textInput("iam_request_new_group", "target_group_key", "Target group"),
             textInput("iam_request_new_application", "application_context", "Application"),
@@ -592,8 +609,7 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
           ],
           composition: formComposition("iam_access_request_edit_form", "Edit access request", [
             textInput("iam_request_edit_title", "title", "Title"),
-            choiceInput("iam_request_edit_type", "request_type", "Request type"),
-            choiceInput("iam_request_edit_state", "state", "State"),
+            choiceInput("iam_request_edit_type", "request_type", "Request type", requestTypeOptions),
             textInput("iam_request_edit_role", "target_role_key", "Target role"),
             textInput("iam_request_edit_group", "target_group_key", "Target group"),
             textInput("iam_request_edit_application", "application_context", "Application"),
@@ -635,13 +651,13 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
           ),
         },
         {
-          id: "page_iam_review_new",
-          key: "iam_review_new",
-          name: "Record review decision",
+          id: "page_iam_review_comments",
+          key: "iam_review_comments",
+          name: "Review comments",
           type: "form",
           record_type: "vortex.iam.core:access_review",
-          permission: "application.iam.manage",
-          commit_action: "vortex.iam.core.access_review.create",
+          permission: "application.iam.review",
+          commit_action: "vortex.iam.core.access_review.update",
           states: [
             "normal",
             "loading",
@@ -651,10 +667,9 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
             "failure",
             "recovery",
           ],
-          composition: formComposition("iam_review_new_form", "Record review decision", [
-            choiceInput("iam_review_new_decision", "decision", "Decision"),
-            textInput("iam_review_new_comments", "comments", "Comments", true),
-            submitButton("iam_review_new_submit", "Record decision"),
+          composition: formComposition("iam_review_comments_form", "Review comments", [
+            textInput("iam_review_comments_text", "comments", "Comments", true),
+            submitButton("iam_review_comments_submit", "Save comments"),
           ]),
         },
       ],
