@@ -1,7 +1,7 @@
 import {
   type actionDefinitionV2Schema,
-  currencyCodeV2Schema,
   compileTextInputPattern,
+  currencyCodeV2Schema,
   dateValueV2Schema,
   exactDecimalWithinBoundsV2,
   inspectRecordRichTextV2,
