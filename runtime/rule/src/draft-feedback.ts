@@ -1,4 +1,4 @@
-import type { JsonValue } from "@vortex/contracts";
+import type { JsonValue, ModuleFieldV2 } from "@vortex/contracts";
 import {
   evaluateBeforeSaveRuleGraphs,
   type BeforeSaveRuleRefusal,
@@ -32,11 +32,17 @@ export type RuleDraftFeedbackProjectionInput = EvaluateBeforeSaveRuleGraphsInput
   Readonly<{ trustedContext: RuleDraftFeedbackTrustedContext }>;
 
 /**
- * Located presentation state for one draft field. The before-save profile
- * currently declares no visibility or disable nodes, so a field with no rule
- * effect remains visible and not disabled. The projection recomputes every
- * field from the current draft, so a form clears any state that no longer
- * applies.
+ * Located presentation state for one draft field, recomputed in full from the
+ * current draft so a form clears any state that no longer applies.
+ *
+ * - `required`: the published field is required for entry, or a before-save
+ *   rule requires it for this draft. Generated fields are filled by Record, so
+ *   their static requirement is not an entry requirement.
+ * - `disabled`: Record refuses submitted values for generated fields, so they
+ *   are never editable in a draft.
+ * - `visible`: the published before-save rule contract has no visibility
+ *   effect, so rules never hide a field. Page placement visibility and
+ *   permissions are applied by the page runtime, not this projection.
  */
 export type RuleDraftFeedbackFieldState = Readonly<{
   fieldId: string;
@@ -77,6 +83,20 @@ const refuse = (reason: RuleDraftFeedbackProjectionErrorReason): never => {
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
+/** Only plain JSON objects fingerprint; a Map, Date or class instance is refused. */
+const isPlainRecord = (value: unknown): value is Readonly<Record<string, unknown>> => {
+  if (!isRecord(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
+
+/** Field types Record generates itself and refuses as submitted input (`generated_field_input`). */
+const generatedFieldTypes = new Set<ModuleFieldV2["type"]>([
+  "reference_number",
+  "calculation",
+  "total",
+]);
+
 /** Locale-independent canonical JSON with recursively sorted object keys. */
 const canonicalize = (value: unknown): string => {
   if (value === null || typeof value === "boolean" || typeof value === "string")
@@ -86,7 +106,7 @@ const canonicalize = (value: unknown): string => {
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) return `[${value.map(canonicalize).join(",")}]`;
-  if (isRecord(value)) {
+  if (isPlainRecord(value)) {
     const entries = Object.entries(value);
     entries.sort(([left], [right]) => codePointCompare(left, right));
     return `{${entries
@@ -97,12 +117,16 @@ const canonicalize = (value: unknown): string => {
 };
 
 const trustedContext = (value: unknown): RuleDraftFeedbackTrustedContext =>
-  isRecord(value) ? (value as RuleDraftFeedbackTrustedContext) : refuse("context_refused");
+  isPlainRecord(value) ? (value as RuleDraftFeedbackTrustedContext) : refuse("context_refused");
 
 /**
- * Canonical input/context token for one draft evaluation. Two calls with the
- * same draft values, previous values, rule inputs and trusted context always
- * produce the same token; any change produces a different one.
+ * Canonical input/context token for one draft evaluation. It binds the exact
+ * release identity (organisation, Module root, revision, version and content),
+ * so equal values under another organisation or release never match. Two calls
+ * with the same release, draft values, previous values, rule inputs and trusted
+ * context always produce the same token; any change produces a different one.
+ * The token is exact canonical data, not a hash, so it can never collide; it
+ * carries draft values and must not be logged or persisted.
  */
 export const ruleDraftFeedbackFingerprint = (input: RuleDraftFeedbackProjectionInput): string => {
   if (input.operation !== "create" && input.operation !== "update") refuse("input_refused");
@@ -112,8 +136,12 @@ export const ruleDraftFeedbackFingerprint = (input: RuleDraftFeedbackProjectionI
     fingerprintVersion: ruleDraftFeedbackFingerprintVersion,
     subjectRecordTypeId: input.subjectRecordTypeId,
     operation: input.operation,
+    organizationId: input.release.organizationId,
+    moduleRootId: input.release.rootId,
     releaseRevision: input.release.releaseRevision,
+    releaseVersion: input.release.releaseVersion,
     contentFingerprint: input.release.contentFingerprint,
+    resolutionFingerprint: input.release.resolutionFingerprint,
     initialCandidateValues: input.initialCandidateValues,
     previousValues: input.operation === "update" ? input.previousValues : null,
     inputValuesByRuleId: input.inputValuesByRuleId ?? {},
@@ -141,30 +169,25 @@ export const projectRuleDraftFeedback = (
   const fingerprint = ruleDraftFeedbackFingerprint(input);
   const result = evaluateBeforeSaveRuleGraphs(input);
   const requirements = result.success ? result.requirements : [];
+  const ruleRequiredFieldIds = new Set(requirements.map((requirement) => requirement.fieldId));
 
-  const fieldsById = new Map<string, RuleDraftFeedbackFieldState>();
+  // The evaluator has already refused an unknown subject record type.
   const recordType = input.release.content.recordTypes.find(
     (entry) => entry.recordTypeId === input.subjectRecordTypeId,
-  );
-  for (const field of recordType?.fields ?? [])
-    fieldsById.set(field.fieldId, {
-      fieldId: field.fieldId,
-      required: false,
-      visible: true,
-      disabled: false,
-    });
-  for (const requirement of requirements) {
-    const current = fieldsById.get(requirement.fieldId);
-    fieldsById.set(requirement.fieldId, {
-      fieldId: requirement.fieldId,
-      required: true,
-      visible: current?.visible ?? true,
-      disabled: current?.disabled ?? false,
-    });
-  }
-  const fields = [...fieldsById.values()].sort((left, right) =>
-    codePointCompare(left.fieldId, right.fieldId),
-  );
+  )!;
+  // Publication rejects a requirement on a field outside the subject, so every
+  // requirement is located on one of these fields.
+  const fields = recordType.fields
+    .map((field): RuleDraftFeedbackFieldState => {
+      const generated = generatedFieldTypes.has(field.type);
+      return {
+        fieldId: field.fieldId,
+        required: ruleRequiredFieldIds.has(field.fieldId) || (field.required && !generated),
+        visible: true,
+        disabled: generated,
+      };
+    })
+    .sort((left, right) => codePointCompare(left.fieldId, right.fieldId));
 
   return {
     fingerprint,
