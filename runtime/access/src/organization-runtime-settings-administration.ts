@@ -1,10 +1,12 @@
 import "server-only";
 
 import {
+  applicationRootIdSchema,
   identitySessionSchema,
   organizationRuntimeSettingsSchema,
   organizationSelectionCandidateSchema,
   type IdentitySession,
+  type ApplicationRootId,
   type OrganizationRuntimeSettings,
   type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
@@ -31,6 +33,7 @@ type ReadRow = DatabaseRow & {
   number_format: unknown;
   revision: unknown;
 };
+type DefaultApplicationRow = DatabaseRow & { default_application_root_id: unknown };
 
 const sameUuid = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
@@ -68,6 +71,22 @@ export const readCurrentOrganizationRuntimeSettingsAfterAuthorization = async (
   });
   if (!settings.success) throw unavailable();
   return settings.data;
+};
+
+/** The request context fixes the organisation; the application still needs its own Access check. */
+export const readCurrentOrganizationDefaultApplicationAfterAuthorization = async (
+  transaction: RequestDatabaseTransaction,
+): Promise<ApplicationRootId | null> => {
+  const rows = await transaction.query<DefaultApplicationRow>`
+    select vortex_access.read_current_organization_default_application_for_application()
+      as default_application_root_id
+  `;
+  if (rows.length !== 1 || rows[0] === undefined) throw unavailable();
+  const value = rows[0].default_application_root_id;
+  if (value === null) return null;
+  const parsed = applicationRootIdSchema.safeParse(value);
+  if (!parsed.success) throw unavailable();
+  return parsed.data;
 };
 
 const parseCommand = (
