@@ -8,6 +8,7 @@ import {
   FieldLabelText,
   FieldMessages,
   inactiveNote,
+  useFieldFeedback,
   useFieldIds,
   useSeededState,
 } from "./field-parts";
@@ -39,6 +40,7 @@ export function TextInput(props: TextInputProps): ReactElement {
 
   const [value, setValue] = useSeededState(context.values?.value ?? "");
   useFormField(fieldKey, props.placementId, value);
+  const draftFeedback = useFieldFeedback(fieldKey);
 
   const onChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
     if (disabled || readOnly) return;
@@ -57,7 +59,7 @@ export function TextInput(props: TextInputProps): ReactElement {
     required,
     ...(placeholder === undefined ? {} : { placeholder }),
     "aria-invalid": error !== undefined,
-    ...describedBy(ids, help, error, note),
+    ...describedBy(ids, help, error, note, draftFeedback),
   };
 
   return (
@@ -75,7 +77,13 @@ export function TextInput(props: TextInputProps): ReactElement {
       ) : (
         <input {...controlProps} type={inputType} className="vortex-input" />
       )}
-      <FieldMessages ids={ids} help={help} error={error} note={note} />
+      <FieldMessages
+        ids={ids}
+        help={help}
+        error={error}
+        note={note}
+        draftFeedback={draftFeedback}
+      />
     </div>
   );
 }

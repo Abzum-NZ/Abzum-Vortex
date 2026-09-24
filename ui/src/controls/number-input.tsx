@@ -9,6 +9,7 @@ import {
   FieldLabelText,
   FieldMessages,
   inactiveNote,
+  useFieldFeedback,
   useFieldIds,
   useSeededState,
 } from "./field-parts";
@@ -60,6 +61,7 @@ export function NumberInput(props: NumberInputProps): ReactElement {
     return parsed;
   };
   useFormField(fieldKey, props.placementId, toTyped(raw));
+  const draftFeedback = useFieldFeedback(fieldKey);
 
   const onChange = (event: ChangeEvent<HTMLInputElement>): void => {
     if (disabled || readOnly) return;
@@ -93,10 +95,16 @@ export function NumberInput(props: NumberInputProps): ReactElement {
         {...(maximum === undefined ? {} : { max: maximum })}
         step={step ?? (integer ? 1 : "any")}
         aria-invalid={error !== undefined}
-        {...describedBy(ids, help, error, note)}
+        {...describedBy(ids, help, error, note, draftFeedback)}
         className="vortex-input"
       />
-      <FieldMessages ids={ids} help={help} error={error} note={note} />
+      <FieldMessages
+        ids={ids}
+        help={help}
+        error={error}
+        note={note}
+        draftFeedback={draftFeedback}
+      />
     </div>
   );
 }

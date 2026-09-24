@@ -8,6 +8,7 @@ import {
   FieldLabelText,
   FieldMessages,
   inactiveNote,
+  useFieldFeedback,
   useFieldIds,
   useSeededState,
 } from "./field-parts";
@@ -36,6 +37,7 @@ export function DateInput(props: DateInputProps): ReactElement {
   const [raw, setRaw] = useSeededState(context.values?.value ?? "");
   const toTyped = (text: string): string | null => (isIsoCalendarDate(text) ? text : null);
   useFormField(fieldKey, props.placementId, toTyped(raw));
+  const draftFeedback = useFieldFeedback(fieldKey);
 
   const onChange = (event: ChangeEvent<HTMLInputElement>): void => {
     if (disabled || readOnly) return;
@@ -64,10 +66,16 @@ export function DateInput(props: DateInputProps): ReactElement {
         readOnly={readOnly}
         required={required}
         aria-invalid={error !== undefined}
-        {...describedBy(ids, help, error, note)}
+        {...describedBy(ids, help, error, note, draftFeedback)}
         className="vortex-input"
       />
-      <FieldMessages ids={ids} help={help} error={error} note={note} />
+      <FieldMessages
+        ids={ids}
+        help={help}
+        error={error}
+        note={note}
+        draftFeedback={draftFeedback}
+      />
     </div>
   );
 }

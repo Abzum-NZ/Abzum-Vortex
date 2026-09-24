@@ -2,7 +2,10 @@
 
 import { useId, useState, type ReactElement } from "react";
 import type { ControlContext } from "./control-context";
+import { FieldDraftFeedback, type FormFieldDraftFeedback } from "./draft-feedback";
 import type { ProjectedControlValueKind } from "./projected-data";
+
+export { useFieldFeedback } from "./draft-feedback";
 
 /** Element identities for one field and the descriptions its control references. */
 export type FieldIds = Readonly<{
@@ -11,6 +14,7 @@ export type FieldIds = Readonly<{
   help: string;
   error: string;
   note: string;
+  feedback: string;
 }>;
 
 export function useFieldIds(): FieldIds {
@@ -21,6 +25,7 @@ export function useFieldIds(): FieldIds {
     help: `${id}-help`,
     error: `${id}-error`,
     note: `${id}-note`,
+    feedback: `${id}-feedback`,
   };
 }
 
@@ -44,19 +49,34 @@ export const inactiveNote = <Kind extends ProjectedControlValueKind>(
 ): string | undefined =>
   context.unavailable ? "Unavailable" : context.disabledReason;
 
-/** Space-separated description references for the field's control. */
+/**
+ * Space-separated description references for the field's control, plus the
+ * located draft state a supplied projection applies to this control. A required
+ * or disabled draft field is exposed through `aria-required`/`aria-disabled`
+ * while the person's typed value stays untouched.
+ */
 export const describedBy = (
   ids: FieldIds,
   help: string | undefined,
   error: string | undefined,
   note: string | undefined,
-): Readonly<{ "aria-describedby"?: string }> => {
+  draftFeedback: FormFieldDraftFeedback | undefined,
+): Readonly<{
+  "aria-describedby"?: string;
+  "aria-required"?: boolean;
+  "aria-disabled"?: boolean;
+}> => {
   const references = [
     help === undefined ? undefined : ids.help,
     error === undefined ? undefined : ids.error,
     note === undefined ? undefined : ids.note,
+    draftFeedback === undefined ? undefined : ids.feedback,
   ].filter((reference): reference is string => reference !== undefined);
-  return references.length === 0 ? {} : { "aria-describedby": references.join(" ") };
+  return {
+    ...(references.length === 0 ? {} : { "aria-describedby": references.join(" ") }),
+    ...(draftFeedback?.required === true ? { "aria-required": true } : {}),
+    ...(draftFeedback?.disabled === true ? { "aria-disabled": true } : {}),
+  };
 };
 
 /** Visible label text with a required marker hidden from assistive technology. */
@@ -76,17 +96,23 @@ export function FieldLabelText({
   );
 }
 
-/** Help, error and unavailable descriptions referenced by the field's control. */
+/**
+ * Help, error and unavailable descriptions referenced by the field's control,
+ * with the field's located draft feedback kept visually and structurally
+ * separate from the projected operation error.
+ */
 export function FieldMessages({
   ids,
   help,
   error,
   note,
+  draftFeedback,
 }: Readonly<{
   ids: FieldIds;
   help: string | undefined;
   error: string | undefined;
   note: string | undefined;
+  draftFeedback: FormFieldDraftFeedback | undefined;
 }>): ReactElement {
   return (
     <>
@@ -105,6 +131,7 @@ export function FieldMessages({
           {note}
         </span>
       )}
+      <FieldDraftFeedback id={ids.feedback} feedback={draftFeedback} />
     </>
   );
 }

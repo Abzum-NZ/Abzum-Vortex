@@ -8,6 +8,7 @@ import {
   FieldLabelText,
   FieldMessages,
   inactiveNote,
+  useFieldFeedback,
   useFieldIds,
   useSeededState,
 } from "./field-parts";
@@ -66,6 +67,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
 
   const [value, setValue] = useSeededState(referenceKey(context.values?.value));
   useFormField(fieldKey, props.placementId, parseReferenceKey(value, allowedRecordTypeIds));
+  const draftFeedback = useFieldFeedback(fieldKey);
 
   const onChange = (event: ChangeEvent<HTMLInputElement>): void => {
     if (disabled || readOnly) return;
@@ -100,10 +102,16 @@ export function LinkInput(props: LinkInputProps): ReactElement {
         required={required}
         {...(placeholder === undefined ? {} : { placeholder })}
         aria-invalid={error !== undefined}
-        {...describedBy(ids, help, error, note)}
+        {...describedBy(ids, help, error, note, draftFeedback)}
         className="vortex-input"
       />
-      <FieldMessages ids={ids} help={help} error={error} note={note} />
+      <FieldMessages
+        ids={ids}
+        help={help}
+        error={error}
+        note={note}
+        draftFeedback={draftFeedback}
+      />
     </div>
   );
 }

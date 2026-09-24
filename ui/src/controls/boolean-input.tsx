@@ -8,6 +8,7 @@ import {
   FieldLabelText,
   FieldMessages,
   inactiveNote,
+  useFieldFeedback,
   useFieldIds,
   useSeededState,
 } from "./field-parts";
@@ -34,6 +35,7 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
 
   const [checked, setChecked] = useSeededState(context.values?.value ?? false);
   useFormField(fieldKey, props.placementId, checked);
+  const draftFeedback = useFieldFeedback(fieldKey);
 
   const change = (next: boolean): void => {
     if (disabled) return;
@@ -41,7 +43,7 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
     context.events?.field_changed?.({ event: "field_changed", fieldKey, value: next });
   };
 
-  const described = describedBy(ids, help, error, note);
+  const described = describedBy(ids, help, error, note, draftFeedback);
   return (
     <div
       data-vortex-control="boolean-input"
@@ -82,7 +84,13 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
       <label id={ids.label} htmlFor={ids.control} className="vortex-field-label">
         <FieldLabelText label={label} required={required} />
       </label>
-      <FieldMessages ids={ids} help={help} error={error} note={note} />
+      <FieldMessages
+        ids={ids}
+        help={help}
+        error={error}
+        note={note}
+        draftFeedback={draftFeedback}
+      />
     </div>
   );
 }
