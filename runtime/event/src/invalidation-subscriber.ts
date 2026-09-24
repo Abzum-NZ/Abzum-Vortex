@@ -94,9 +94,11 @@ export type PrivateInvalidationSubscriberDependencies = Readonly<{
 
 export interface PrivateInvalidationSubscriber {
   /**
-   * Declares that one placement reads one target identity. The returned
-   * function removes the declaration and forgets its convergence state once no
-   * other declaration of the same placement and record type remains.
+   * Declares that one placement reads one target identity. Registering the
+   * same declaration again is counted, so each returned function removes only
+   * its own registration; the declaration and, once no other declaration of the
+   * same placement and record type remains, its convergence state are forgotten
+   * when the last registration is removed.
    */
   registerWatch(watch: PrivateInvalidationPlacementWatch): () => void;
   /**
@@ -203,7 +205,7 @@ const parseWatch = (candidate: unknown): PrivateInvalidationPlacementWatch => {
  * envelope and the declared scope.
  */
 export const createPrivateInvalidationSubscriber = (
-  dependencies: unknown,
+  dependencies: PrivateInvalidationSubscriberDependencies,
 ): PrivateInvalidationSubscriber => {
   const input = asRecord(dependencies);
   if (input === undefined)
@@ -228,7 +230,10 @@ export const createPrivateInvalidationSubscriber = (
   const onStale = input.onStale as (placementIds: readonly string[]) => void;
   const subscriptionSource = source as unknown as PrivateInvalidationSubscriptionSource;
 
-  const watches = new Map<string, PrivateInvalidationPlacementWatch>();
+  const watches = new Map<
+    string,
+    { readonly watch: PrivateInvalidationPlacementWatch; registrations: number }
+  >();
   const versions = new Map<string, number>();
   let stopSubscription: (() => void) | undefined;
 
@@ -239,7 +244,7 @@ export const createPrivateInvalidationSubscriber = (
     const noticeRecordKey = envelope.recordId?.toLowerCase();
     const stalePlacements = new Set<string>();
     const advanced = new Map<string, number>();
-    for (const watch of watches.values()) {
+    for (const { watch } of watches.values()) {
       if (watch.recordTypeId.toLowerCase() !== recordTypeKey) continue;
       if (
         noticeRecordKey !== undefined &&
@@ -260,19 +265,25 @@ export const createPrivateInvalidationSubscriber = (
   };
 
   return Object.freeze({
-    registerWatch(candidate: unknown): () => void {
+    registerWatch(candidate: PrivateInvalidationPlacementWatch): () => void {
       const watch = parseWatch(candidate);
       const key = watchKey(watch);
-      watches.set(key, watch);
+      const existing = watches.get(key);
+      if (existing === undefined) watches.set(key, { watch, registrations: 1 });
+      else existing.registrations += 1;
       let active = true;
       return () => {
         if (!active) return;
         active = false;
-        if (watches.get(key) === watch) watches.delete(key);
+        const entry = watches.get(key);
+        if (entry === undefined) return;
+        entry.registrations -= 1;
+        if (entry.registrations > 0) return;
+        watches.delete(key);
         const stillWatched = [...watches.values()].some(
-          (entry) =>
-            entry.placementId === watch.placementId &&
-            entry.recordTypeId.toLowerCase() === watch.recordTypeId.toLowerCase(),
+          ({ watch: other }) =>
+            other.placementId === watch.placementId &&
+            other.recordTypeId.toLowerCase() === watch.recordTypeId.toLowerCase(),
         );
         if (!stillWatched) versions.delete(convergenceKey(watch.placementId, watch.recordTypeId));
       };
