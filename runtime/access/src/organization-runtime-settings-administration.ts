@@ -14,7 +14,6 @@ import {
   type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
-import { stageOrganizationRuntimeSettingsUpdate } from "@vortex/identity";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
@@ -155,9 +154,9 @@ const parseDefaultApplicationCommand = (
 };
 
 /**
- * The settings object is contract-validated and transaction-bound while still
- * under vortex_runtime. The later request-role operation receives only the
- * revision; it cannot substitute raw setting values through SQL.
+ * The settings object is contract-validated before the protected request-role
+ * operation, which takes the values as arguments and re-validates them in SQL.
+ * No separate staging call precedes it.
  */
 export const createOrganizationRuntimeSettingsAdministrationService = (
   dependencies: OrganizationRuntimeSettingsAdministrationDependencies,
@@ -177,32 +176,30 @@ export const createOrganizationRuntimeSettingsAdministrationService = (
       if (!session.success || !selection.success || command === undefined)
         return { kind: "unavailable" };
 
-      return requests.runChangePrepared(
-        session.data,
-        selection.data,
-        async (transaction, scope) => {
-          if (!sameUuid(command.settings.organizationId, scope.organizationId)) throw unavailable();
-          await stageOrganizationRuntimeSettingsUpdate(transaction, command.settings);
-        },
-        async (transaction, scope) => {
-          const rows = await transaction.query<UpdateRow>`
-            select organization_id, settings
-            from vortex_access.update_organization_runtime_settings_for_administration(
-              ${command.expectedRevision}::bigint
-            )
-          `;
-          if (
-            rows.length !== 1 ||
-            rows[0] === undefined ||
-            !sameUuid(String(rows[0].organization_id), scope.organizationId)
+      return requests.runChange(session.data, selection.data, async (transaction, scope) => {
+        if (!sameUuid(command.settings.organizationId, scope.organizationId)) throw unavailable();
+        const rows = await transaction.query<UpdateRow>`
+          select organization_id, settings
+          from vortex_access.update_organization_runtime_settings_for_administration(
+            ${command.expectedRevision}::bigint,
+            ${command.settings.language}::text,
+            ${command.settings.timeZone}::text,
+            ${command.settings.currency}::text,
+            ${command.settings.dateFormat}::text,
+            ${command.settings.numberFormat}::text
           )
-            throw unavailable();
-          const settings = organizationRuntimeSettingsSchema.safeParse(rows[0].settings);
-          if (!settings.success || settings.data.revision !== command.expectedRevision + 1)
-            throw unavailable();
-          return settings.data;
-        },
-      );
+        `;
+        if (
+          rows.length !== 1 ||
+          rows[0] === undefined ||
+          !sameUuid(String(rows[0].organization_id), scope.organizationId)
+        )
+          throw unavailable();
+        const settings = organizationRuntimeSettingsSchema.safeParse(rows[0].settings);
+        if (!settings.success || settings.data.revision !== command.expectedRevision + 1)
+          throw unavailable();
+        return settings.data;
+      });
     },
 
     /**
