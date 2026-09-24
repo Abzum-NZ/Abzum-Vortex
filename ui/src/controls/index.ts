@@ -30,6 +30,17 @@ export { BooleanInput, type BooleanInputProps } from "./boolean-input";
 export { DateInput, type DateInputProps } from "./date-input";
 export { ChoiceInput, type ChoiceInputProps } from "./choice-input";
 export { ValidationMessage, type ValidationMessageProps } from "./validation-message";
+export {
+  FieldDraftFeedback,
+  FormDraftFeedbackRegion,
+  useFieldFeedback,
+  type FormDraftFeedback,
+  type FormDraftFeedbackFieldState,
+  type FormDraftFeedbackMessage,
+  type FormDraftFeedbackSummary,
+  type FormDraftFeedbackSupply,
+  type FormFieldDraftFeedback,
+} from "./draft-feedback";
 export { Button, type ButtonProps } from "./button";
 export { Tabs, type TabsProps } from "./tabs";
 export { Dialog, type DialogProps } from "./dialog";

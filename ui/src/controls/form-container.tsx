@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -14,13 +15,26 @@ import { DefinitionRenderError } from "../definition-error";
 import type { PlatformBlockRenderProps } from "../registry";
 import { resolveControlContext } from "./control-context";
 import {
+  applicableDraftFeedback,
+  fieldDraftFeedback,
+  formDraftFeedbackSummary,
+  FormDraftFeedbackRegion,
+  type FormDraftFeedbackSupply,
+} from "./draft-feedback";
+import {
   createFormFieldRegistry,
   FormScopeContext,
   useFormScope,
   type FormScope,
 } from "./form-context";
 
-export type FormContainerProps = PlatformBlockRenderProps;
+/**
+ * A form container accepts one supplied #590 draft-feedback result beside its
+ * projected block props. The page projection supplies it; the control never
+ * computes or reinterprets a rule itself.
+ */
+export type FormContainerProps = PlatformBlockRenderProps &
+  Readonly<{ draftFeedback?: FormDraftFeedbackSupply }>;
 
 /** Input types for which Enter is the form's default submission, as in native implicit submission. */
 const NON_SUBMITTING_INPUT_TYPES = new Set([
@@ -53,12 +67,39 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     );
 
   const titleId = useId();
+  const feedbackId = useId();
   const formRef = useRef<HTMLFormElement>(null);
   const [generation, setGeneration] = useState(0);
   const [registry] = useState(() => createFormFieldRegistry(context.location));
+  const [, setFeedbackTick] = useState(0);
+  const supply = props.draftFeedback;
+  const supplied = supply !== undefined;
+  // Rechecks settled feedback only while a result is supplied; without one a
+  // keystroke must not re-render the whole form.
+  const reportFieldChanged = useCallback(() => {
+    if (supplied) setFeedbackTick((current) => current + 1);
+  }, [supplied]);
+
+  // Applicability is decided once per render from the fields' current typed
+  // values, and the scope changes with it, so every field clears or restores
+  // its feedback together when any field's value changes or a result arrives.
+  const fieldValues = registry.values();
+  const feedback = applicableDraftFeedback(supply, fieldValues);
+  const summary = formDraftFeedbackSummary(feedback, new Set(Object.keys(fieldValues)));
+  const draftFeedbackFor = useCallback(
+    (fieldKey: string) => fieldDraftFeedback(feedback, fieldKey),
+    [feedback],
+  );
+
   const scope: FormScope = useMemo(
-    () => ({ pending: context.pending, inactive: context.inactive, register: registry.register }),
-    [context.pending, context.inactive, registry],
+    () => ({
+      pending: context.pending,
+      inactive: context.inactive,
+      register: registry.register,
+      draftFeedbackFor,
+      reportFieldChanged,
+    }),
+    [context.pending, context.inactive, registry, draftFeedbackFor, reportFieldChanged],
   );
 
   const events = context.events;
@@ -139,6 +180,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
           {props.slots.content ?? null}
         </fieldset>
       </FormScopeContext.Provider>
+      <FormDraftFeedbackRegion id={feedbackId} summary={summary} />
     </form>
   );
 }
