@@ -743,33 +743,6 @@ export const flowNodeInputValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("current_organization_account_id") }).strict(),
 ]);
 
-export const frontendFlowNodeBindingSchema = z
-  .object({
-    contractVersion: z.literal(applicationFlowBindingContractVersion),
-    nodeId: workflowNodeIdSchema,
-    target: frontendFlowNodeTargetSchema,
-    runAs: flowNodeRunAsSchema,
-    inputs: z.record(
-      builderKeySchema,
-      z
-        .object({ type: workflowValueTypeSchema, value: flowNodeInputValueSchema })
-        .strict()
-        .superRefine((value, context) => {
-          if (
-            value.value.source === "current_organization_account_id" &&
-            value.type !== "organization_account_reference"
-          )
-            context.addIssue({
-              code: "custom",
-              path: ["type"],
-              message: "The current organisation account has a fixed reference type",
-            });
-        }),
-    ),
-    results: z.record(builderKeySchema, typedFlowResultMappingSchema),
-  })
-  .strict();
-
 export const flowNodeInputBindingSchema = z
   .object({
     type: workflowValueTypeSchema,
@@ -2379,7 +2352,6 @@ export type FlowExecutionBinding = z.infer<typeof flowExecutionBindingSchema>;
 export type FlowNodeInputValue = z.infer<typeof flowNodeInputValueSchema>;
 export type FlowNodeInputBinding = z.infer<typeof flowNodeInputBindingSchema>;
 export type FlowVariableDeclaration = z.infer<typeof flowVariableDeclarationSchema>;
-export type FrontendFlowNodeBinding = z.infer<typeof frontendFlowNodeBindingSchema>;
 export type CurrentUserFlowQueryTarget = z.infer<typeof currentUserFlowQueryTargetSchema>;
 export type CurrentUserFlowActionTarget = z.infer<typeof currentUserFlowActionTargetSchema>;
 export type CurrentUserFlowStartNode = z.infer<typeof currentUserFlowStartNodeSchema>;
