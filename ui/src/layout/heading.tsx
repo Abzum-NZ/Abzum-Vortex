@@ -10,7 +10,11 @@ export type HeadingProps = PlatformBlockRenderProps;
 
 type HeadingLevel = "one" | "two" | "three" | "four";
 
-/** Heading levels map to the matching semantic element and a relative size against the theme. */
+/** Each declared level renders its matching semantic heading element. */
+const HEADING_LEVEL_ELEMENTS: Readonly<Record<HeadingLevel, "h1" | "h2" | "h3" | "h4">> =
+  Object.freeze({ one: "h1", two: "h2", three: "h3", four: "h4" });
+
+/** Each level's size relative to the theme heading size. */
 const HEADING_LEVEL_SCALES: Readonly<Record<HeadingLevel, string>> = Object.freeze({
   one: "1",
   two: "0.875",
@@ -63,57 +67,16 @@ export function Heading(props: HeadingProps): ReactElement {
     fontWeight: "var(--vortex-heading-font-weight)",
     color: "var(--vortex-text)",
   };
-  const className = `vortex-heading vortex-heading-${level}`;
-
-  switch (level) {
-    case "one":
-      return (
-        <h1
-          data-vortex-control="heading"
-          data-vortex-placement-id={props.placementId}
-          data-vortex-level={level}
-          className={className}
-          style={style}
-        >
-          {text}
-        </h1>
-      );
-    case "three":
-      return (
-        <h3
-          data-vortex-control="heading"
-          data-vortex-placement-id={props.placementId}
-          data-vortex-level={level}
-          className={className}
-          style={style}
-        >
-          {text}
-        </h3>
-      );
-    case "four":
-      return (
-        <h4
-          data-vortex-control="heading"
-          data-vortex-placement-id={props.placementId}
-          data-vortex-level={level}
-          className={className}
-          style={style}
-        >
-          {text}
-        </h4>
-      );
-    case "two":
-    default:
-      return (
-        <h2
-          data-vortex-control="heading"
-          data-vortex-placement-id={props.placementId}
-          data-vortex-level={level}
-          className={className}
-          style={style}
-        >
-          {text}
-        </h2>
-      );
-  }
+  const Element = HEADING_LEVEL_ELEMENTS[level];
+  return (
+    <Element
+      data-vortex-control="heading"
+      data-vortex-placement-id={props.placementId}
+      data-vortex-level={level}
+      className={`vortex-heading vortex-heading-${level}`}
+      style={style}
+    >
+      {text}
+    </Element>
+  );
 }

@@ -17,6 +17,8 @@ const CONTAINER_REGIONS = [
   { key: "content", className: "vortex-container-content" },
 ] as const;
 
+type ContainerRegionKey = (typeof CONTAINER_REGIONS)[number]["key"];
+
 /** Named gaps resolve to the shared spacing tokens, so a container follows the active theme. */
 const CONTAINER_GAPS: Readonly<Record<ContainerGap, string>> = Object.freeze({
   none: "0",
@@ -53,8 +55,12 @@ export function Container(props: ContainerProps): ReactElement {
   const direction = settings.choice<ContainerDirection>("direction", "column");
   const gap = settings.choice<ContainerGap>("gap", "medium");
 
-  const regionStyle: CSSProperties =
-    direction === "row" ? { flex: "1 1 0", minWidth: 0 } : { minWidth: 0 };
+  // In a row, header and menu keep their content width and content fills the remaining space, so
+  // a menu beside page content reads as a sidebar rather than an equal third.
+  const regionStyle = (key: ContainerRegionKey): CSSProperties =>
+    direction === "row"
+      ? { flex: key === "content" ? "1 1 0" : "0 0 auto", minWidth: 0 }
+      : { minWidth: 0 };
 
   const regions: ReactNode[] = [];
   for (const region of CONTAINER_REGIONS) {
@@ -65,7 +71,7 @@ export function Container(props: ContainerProps): ReactElement {
         key={region.key}
         data-vortex-container-region={region.key}
         className={region.className}
-        style={regionStyle}
+        style={regionStyle(region.key)}
       >
         {child}
       </div>,
