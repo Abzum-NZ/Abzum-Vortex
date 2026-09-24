@@ -244,6 +244,13 @@ type PreparedState = Readonly<{
 
 export type PreparedDefinitionPublication = PrepareDefinitionPublicationResult;
 
+/** One current Application draft compiled at its exact revision, for exact-draft preview. */
+export type ApplicationDraftCompilation = Readonly<{
+  compilation: Extract<DefinitionCompilationOutput, { kind: "application" }>;
+  /** The root's current published release revision; preview only labels it and never reads it. */
+  currentReleaseRevision: Revision | null;
+}>;
+
 type Requirement = Readonly<{ key: string; version: VersionRequirement }>;
 
 type ResolvedDependencies = Readonly<{
@@ -1442,6 +1449,48 @@ export const createDefinitionPublicationService = (
         confirmation: state.confirmation,
       });
     });
+  },
+
+  /**
+   * Compiles the caller organisation's current Application draft at the expected revision through
+   * the same candidate validation, exact dependency resolution and compilation as preparation. It
+   * is a read for exact-draft preview (#597): it assigns no version, produces no confirmation and
+   * writes nothing, and a draft identical to its current release still compiles.
+   */
+  compileApplicationDraft: async (
+    context: SessionContext,
+    input: unknown,
+  ): Promise<ApplicationDraftCompilation> => {
+    const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
+    if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
+    const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
+    return safely(async () =>
+      repository.read(context, async (reader) => {
+        const candidate = validateCandidate(
+          context,
+          await reader.readCandidate(parsedCommand.rootId),
+          parsedCommand,
+        );
+        // Another definition kind at this root is refused exactly like a missing draft.
+        if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
+          refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+        const dependencies = await resolveDependencies(reader, catalogue, candidate);
+        await assertNoCycle(reader, candidate, dependencies.modules);
+        const currentVersion =
+          candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0";
+        const compilation = compileCandidate(
+          candidate,
+          dependencies,
+          buildResolution(candidate, dependencies, currentVersion),
+          false,
+        );
+        if (compilation.kind !== "application") return refuse("DEFINITION_COMPILATION_REFUSED");
+        return {
+          compilation,
+          currentReleaseRevision: candidate.draft.publishedRevision ?? null,
+        };
+      }),
+    );
   },
 
   publish: async (context: SessionContext, input: unknown): Promise<PublishDefinitionResult> => {
