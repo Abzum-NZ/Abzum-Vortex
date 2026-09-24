@@ -70,10 +70,6 @@ const singleBlockComposition = (
 });
 
 /**
- * A display with no declared protected read model yet. It stays honest text rather than an unbound
- * table, so it never reads as an empty result or binds an approximate model.
- */
-/**
  * A region that reads one or more declared protected read models. Each region placement binds one
  * closed read-model key and carries no query, so live protected data is never copied into records.
  */

@@ -77,7 +77,11 @@ begin
       and assignment.starts_at <= checked_at
       and (assignment.expires_at is null or assignment.expires_at > checked_at)
       and revision.privilege_classification = 'privileged'
-      and revision.lifecycle = 'active'
+      -- An eligible assignment is dormant while the role accepts standing use,
+      -- and existing eligibility may still request activation of the retained
+      -- remainder while an application role awaits acceptance.
+      and revision.assignment_policy = 'activation_required'
+      and revision.lifecycle in ('active', 'acceptance_required')
       and (
         (
           assignment.assignee_kind = 'organization_account'
@@ -187,11 +191,62 @@ begin
       on revision.organization_id = role.organization_id
       and revision.role_id = role.role_id
       and revision.revision = role.live_revision
+    -- An activation is current only while its exact eligibility source, and for
+    -- a Group source its exact originating membership, remain valid and its
+    -- authority and policy periods still match the live role revision.
+    join vortex_access.organization_role_assignments as assignment
+      on assignment.organization_id = activation.organization_id
+      and assignment.role_assignment_id = activation.role_assignment_id
+      and assignment.role_id = activation.role_id
+      and assignment.revision = activation.role_assignment_revision
+      and assignment.assignment_kind = 'eligible'
+      and assignment.state = 'live'
+      and assignment.starts_at <= checked_at
+      and (assignment.expires_at is null or assignment.expires_at > checked_at)
+    left join vortex_access.organization_groups as organization_group
+      on activation.eligibility_source_kind = 'group'
+      and organization_group.organization_id = assignment.organization_id
+      and organization_group.group_id = assignment.group_id
+      and organization_group.state = 'active'
+    left join vortex_access.organization_group_memberships as membership
+      on activation.eligibility_source_kind = 'group'
+      and membership.organization_id = assignment.organization_id
+      and membership.group_id = assignment.group_id
+      and membership.organization_account_id = context_account_id
+      and membership.membership_id = activation.membership_id
+      and membership.revision = activation.membership_revision
+      and membership.state = 'live'
+      and membership.starts_at <= checked_at
+      and (membership.expires_at is null or membership.expires_at > checked_at)
     where activation.organization_id = context_organization_id
       and activation.organization_account_id = context_account_id
       and activation.state = 'live'
+      and activation.activated_at <= checked_at
       and activation.expires_at > checked_at
       and revision.privilege_classification = 'privileged'
+      and revision.assignment_policy = 'activation_required'
+      and revision.lifecycle in ('active', 'acceptance_required')
+      and activation.authority_continuity_revision =
+        revision.authority_continuity_revision
+      and activation.policy_continuity_revision =
+        revision.policy_continuity_revision
+      and activation.activation_policy_id = revision.activation_policy_id
+      and activation.activation_policy_revision =
+        revision.activation_policy_revision
+      and activation.activation_policy_fingerprint =
+        revision.activation_policy_fingerprint
+      and (
+        (
+          activation.eligibility_source_kind = 'direct'
+          and assignment.assignee_kind = 'organization_account'
+          and assignment.organization_account_id = context_account_id
+        ) or (
+          activation.eligibility_source_kind = 'group'
+          and assignment.assignee_kind = 'group'
+          and organization_group.group_id is not null
+          and membership.membership_id is not null
+        )
+      )
       and (
         p_after_role_activation_id is null
         or activation.role_activation_id > p_after_role_activation_id
@@ -250,4 +305,4 @@ comment on function
   'Bounded page of the verified viewer''s own current privileged eligibility (direct and Group-sourced); organisation and account come from the validated request context.';
 comment on function
   vortex_access.list_own_privileged_active_roles_for_application(uuid, integer) is
-  'Bounded page of the verified viewer''s own unexpired privileged activations; descriptive, not effective permission.';
+  'Bounded page of the verified viewer''s own current privileged activations whose exact eligibility source and policy period remain valid; organisation and account come from the validated request context.';
