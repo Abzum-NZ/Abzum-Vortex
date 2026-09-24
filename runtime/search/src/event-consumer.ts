@@ -2,6 +2,9 @@ import "server-only";
 
 import {
   eventOccurrenceEnvelopeV2Schema,
+  organizationIdSchema,
+  recordIdSchema,
+  recordTypeIdSchema,
   timestampSchema,
   type EventOccurrenceEnvelopeV2,
   type RecordTypeDefinitionV2,
@@ -24,11 +27,14 @@ import {
  * idempotent document upserts and deletion markers through the #643 builder and
  * store command, or into a bounded rebuild checkpoint after a search
  * configuration or privacy-policy change. Delivery always re-reads the current
- * Record snapshot and indexes it under that snapshot's own concurrency version,
- * so a stale occurrence can never seed an older document, and #643 storage
- * additionally ignores an older source version. Documents stay content-only:
- * entries carry field identity, and read-time permission is rechecked by #645,
- * which is why this consumer never records or returns an access decision.
+ * Record snapshot, including a soft-deleted one, and indexes it under that
+ * snapshot's own concurrency version. The occurrence's record sequence is an
+ * Event counter, not a Record version, so it never versions a document; a
+ * stale or duplicate occurrence can therefore only re-store current state, and
+ * #643 storage additionally ignores an older source version. Documents stay
+ * content-only: entries carry field identity, and read-time permission is
+ * rechecked by #645, which is why this consumer never records or returns an
+ * access decision.
  */
 
 /** Consumer identity registered with the #641 dispatcher for organisation search indexing. */
@@ -38,8 +44,8 @@ export const searchEventConsumerKey = "search.documents" as const;
 export const searchIndexFreshnessTargetMs = 10_000;
 
 /**
- * Past this lag an index is `stale` and recovery is required instead of waiting
- * for the next ordinary change to catch it up.
+ * Past this lag a delayed index is reported `stale`: an outage rather than a
+ * transient delay. Both states past the target require recovery.
  */
 export const searchIndexStaleCeilingMs = 300_000;
 
@@ -52,6 +58,7 @@ export const searchEventConsumerLimits = Object.freeze({
 
 export const searchEventConsumerErrorCodes = [
   "INVALID_SEARCH_EVENT_BATCH",
+  "INVALID_SEARCH_REBUILD_INPUT",
   "SEARCH_REBUILD_RECORD_TYPE_UNAVAILABLE",
 ] as const;
 
@@ -79,6 +86,11 @@ export type SearchIndexRecordType = Pick<RecordTypeDefinitionV2, "recordTypeId" 
  * receives a caller-chosen organisation or permission: the occurrence supplies
  * both the organisation and the record, and the store implementation must apply
  * #643's own version ordering rather than trusting the caller.
+ *
+ * `loadRecordSnapshot` returns the Record's current state in the occurrence's
+ * organisation: an active record as `active`, a soft-deleted or removal-pending
+ * record as `deleted`, each at its current concurrency number. It returns
+ * `undefined` only when the record cannot be read at all.
  */
 export type SearchIndexOccurrenceDependencies = Readonly<{
   loadRecordType: (
@@ -94,8 +106,7 @@ export type SearchIndexOccurrenceDependencies = Readonly<{
 export type SearchOccurrenceSkipReason =
   | "not_indexable_event"
   | "record_type_unavailable"
-  | "record_unavailable"
-  | "stale_sequence";
+  | "record_unavailable";
 
 export type SearchIndexOccurrenceOutcome =
   | Readonly<{ kind: "skipped"; reason: SearchOccurrenceSkipReason }>
@@ -123,7 +134,9 @@ export type ConsumeSearchEventsInput = Readonly<{
 
 export type ConsumeSearchEventsResult = Readonly<{
   results: readonly SearchIndexOccurrenceResult[];
+  /** How late this batch was indexed: the lag of its oldest occurrence at observation. */
   freshness: SearchIndexFreshness;
+  /** Latest instant among occurrences whose document was stored. */
   lastIndexedAt: string | undefined;
   indexedCount: number;
   skippedCount: number;
@@ -141,8 +154,12 @@ export type SearchIndexFreshness = Readonly<{
 }>;
 
 export type SearchIndexFreshnessInput = Readonly<{
-  /** Most recent indexed occurrence instant, or undefined when nothing has indexed yet. */
-  lastIndexedAt?: string;
+  /**
+   * Instant of the oldest committed occurrence the index has not yet processed,
+   * or `null` when the index is caught up. Measuring from the last indexed
+   * change instead would report an idle, fully current index as stale.
+   */
+  oldestUnindexedAt: string | null;
   /** Observation instant; defaults to the current time. */
   observedAt?: string;
 }>;
@@ -150,7 +167,7 @@ export type SearchIndexFreshnessInput = Readonly<{
 /**
  * Resumable, content-free cursor for a bounded rebuild over one organisation and
  * record type. `afterRecordId` is exclusive; the caller persists it between
- * pages and passes it back unchanged.
+ * pages and passes it back unchanged, and a complete checkpoint does no more work.
  */
 export type SearchRebuildCheckpoint = Readonly<{
   organizationId: string;
@@ -179,6 +196,12 @@ export type SearchRebuildPageResult = Readonly<{
   refused: readonly SearchRebuildRefusal[];
 }>;
 
+/**
+ * `listRebuildCandidates` returns the organisation's records of one record type
+ * in ascending record identity after `afterRecordId`, at most `limit`, each as
+ * its current snapshot (soft-deleted records as `deleted`, so their markers are
+ * refreshed too), and `complete` once no record follows the page.
+ */
 export type SearchRebuildDependencies = Readonly<{
   loadRecordType: (
     input: Readonly<{ organizationId: string; recordTypeId: string }>,
@@ -236,9 +259,10 @@ export type SearchEventConsumer = Readonly<{
 }>;
 
 /**
- * Event kinds that can change a searchable document. A reassignment can move a
- * record to another application, which the document records as its
- * application scope, so it is refreshed too. Link and declaration events cannot:
+ * Event kinds that can change a searchable document. An ownership reassignment
+ * is a new Record version too, so it is refreshed like any record change; when
+ * no searchable text changed, storage records it as a replay or replacement of
+ * identical content. Link and declaration events cannot change a document:
  * link and person-link fields carry no indexed text, and declared events are not
  * a standard record change.
  */
@@ -264,6 +288,11 @@ const occurredAtMicros = (value: string): bigint | undefined => {
   if (!Number.isFinite(wholeSeconds)) return undefined;
   return BigInt(wholeSeconds) * 1_000n + BigInt((match[2] ?? "").padEnd(6, "0"));
 };
+
+const isIdentifier = (
+  schema: Readonly<{ safeParse: (value: unknown) => Readonly<{ success: boolean }> }>,
+  value: unknown,
+): value is string => typeof value === "string" && schema.safeParse(value).success;
 
 const laterTimestamp = (current: string | undefined, candidate: string): string => {
   if (current === undefined) return candidate;
@@ -303,7 +332,7 @@ const validateOccurrenceBatch = (candidate: unknown): readonly EventOccurrenceEn
         currentMicros === undefined ||
         previousMicros > currentMicros ||
         (previousMicros === currentMicros &&
-          previous.occurrenceId >= occurrence.data.occurrenceId)
+          previous.occurrenceId.toLowerCase() >= occurrence.data.occurrenceId.toLowerCase())
       )
         return batchInvalid();
     }
@@ -333,32 +362,14 @@ const occurrenceResult = (
   });
 
 /**
- * A committed deletion carries neither readable fields nor a surviving snapshot,
- * so its marker is built from the occurrence's own identity and sequence. The
- * organisation is the record's owner: a recipient-copied shared source never
- * emits a standard event in the recipient's outbox.
- */
-const deletionSnapshot = (
-  occurrence: EventOccurrenceEnvelopeV2,
-  recordTypeId: string,
-): SearchRecordSnapshot =>
-  Object.freeze({
-    indexOrganisationId: occurrence.organizationId,
-    ownerOrganisationId: occurrence.organizationId,
-    applicationRootId: occurrence.installation.applicationRootId,
-    recordTypeId,
-    recordId: occurrence.recordId,
-    recordVersion: occurrence.recordSequence,
-    lifecycle: "deleted",
-    fieldValues: Object.freeze({}),
-  });
-
-/**
  * Indexes exactly one occurrence: it re-reads the current record type and
- * snapshot, derives the exact #643 configuration, and returns the idempotent
- * store command for the caller to persist. The store command always carries the
- * snapshot's own concurrency version, so an older occurrence can never seed an
- * older document; #643 storage repeats that ordering check.
+ * snapshot, derives the exact #643 configuration, and stores the idempotent
+ * document or deletion marker. A `deleted` occurrence is handled the same way:
+ * the soft-deleted snapshot yields a content-free marker at the Record's own
+ * deleting version, and a record restored since then is indexed as it now is.
+ * The store command always carries the snapshot's concurrency version, so an
+ * older occurrence can never seed an older document; #643 storage repeats that
+ * ordering check.
  */
 const indexOccurrence = async (
   occurrence: EventOccurrenceEnvelopeV2,
@@ -374,21 +385,15 @@ const indexOccurrence = async (
   const policy = await dependencies.loadPolicy(occurrence);
   const configuration = searchableFieldConfigurationFor(recordType, policy);
 
-  let snapshot: SearchRecordSnapshot;
-  if (occurrence.payload.kind === "deleted") {
-    snapshot = deletionSnapshot(occurrence, recordType.recordTypeId);
-  } else {
-    const loaded = await dependencies.loadRecordSnapshot(occurrence);
-    if (loaded === undefined)
-      return occurrenceResult(occurrence, { kind: "skipped", reason: "record_unavailable" });
-    if (
-      loaded.indexOrganisationId !== occurrence.organizationId ||
-      loaded.recordTypeId !== recordType.recordTypeId ||
-      loaded.recordId !== occurrence.recordId
-    )
-      return occurrenceResult(occurrence, { kind: "refused", code: "invalid_snapshot" });
-    snapshot = loaded;
-  }
+  const snapshot = await dependencies.loadRecordSnapshot(occurrence);
+  if (snapshot === undefined)
+    return occurrenceResult(occurrence, { kind: "skipped", reason: "record_unavailable" });
+  if (
+    snapshot.indexOrganisationId !== occurrence.organizationId ||
+    snapshot.recordTypeId !== recordType.recordTypeId ||
+    snapshot.recordId !== occurrence.recordId
+  )
+    return occurrenceResult(occurrence, { kind: "refused", code: "invalid_snapshot" });
 
   const built = buildSearchDocument(snapshot, configuration, policy);
   if (!built.success) return occurrenceResult(occurrence, { kind: "refused", code: built.code });
@@ -400,9 +405,10 @@ const indexOccurrence = async (
 
 /**
  * Processes one ordered #639 batch and reports both per-occurrence outcomes and
- * the resulting index freshness. Duplicate or out-of-order work is safe: an
- * occurrence at or below the highest sequence already seen for its record is
- * skipped, and #643 storage independently ignores an older stored version.
+ * how late the batch was indexed. A batch out of claim order, or with a
+ * non-increasing sequence for one record, is refused whole. Re-delivery is
+ * safe: every occurrence re-reads current state, and #643 storage replays the
+ * same version and ignores an older one.
  */
 export const consumeSearchEvents = async (
   input: ConsumeSearchEventsInput,
@@ -410,25 +416,18 @@ export const consumeSearchEvents = async (
 ): Promise<ConsumeSearchEventsResult> => {
   const occurrences = validateOccurrenceBatch(input.occurrences);
   const results: SearchIndexOccurrenceResult[] = [];
-  const highestSequence = new Map<string, number>();
   let lastIndexedAt: string | undefined;
 
   for (const occurrence of occurrences) {
-    const recordKey = `${occurrence.organizationId}:${occurrence.recordId}`;
-    const highest = highestSequence.get(recordKey);
-    if (highest !== undefined && occurrence.recordSequence <= highest) {
-      results.push(occurrenceResult(occurrence, { kind: "skipped", reason: "stale_sequence" }));
-      continue;
-    }
-    highestSequence.set(recordKey, occurrence.recordSequence);
     const result = await indexOccurrence(occurrence, dependencies);
     results.push(result);
     if (result.outcome.kind === "indexed")
       lastIndexedAt = laterTimestamp(lastIndexedAt, occurrence.occurredAt);
   }
 
+  // The batch is in claim order, so its first occurrence has waited longest.
   const freshness = searchIndexFreshness({
-    ...(lastIndexedAt === undefined ? {} : { lastIndexedAt }),
+    oldestUnindexedAt: occurrences[0]?.occurredAt ?? null,
     ...(input.observedAt === undefined ? {} : { observedAt: input.observedAt }),
   });
 
@@ -444,15 +443,24 @@ export const consumeSearchEvents = async (
 
 /**
  * Reports whether indexing is within the specification's normal-operation
- * ten-second target. A delayed or stale index is visible as its own state and
- * `requiresRecovery`, never as a broader search that bypasses current access.
+ * ten-second target, measured from the oldest committed occurrence not yet
+ * indexed; a caught-up index is `fresh`. A delayed or stale index is visible as
+ * its own state with `requiresRecovery` (the specification's freshness warning
+ * and recovery trigger), never as a broader search that bypasses current access.
  */
 export const searchIndexFreshness = (input: SearchIndexFreshnessInput): SearchIndexFreshness => {
-  const observedAt = input.observedAt ?? new Date().toISOString();
-  const observed = timestampSchema.safeParse(observedAt);
-  const indexed =
-    input.lastIndexedAt === undefined ? undefined : timestampSchema.safeParse(input.lastIndexedAt);
-  if (!observed.success || indexed === undefined || !indexed.success)
+  const observed = timestampSchema.safeParse(input.observedAt ?? new Date().toISOString());
+  const pending =
+    input.oldestUnindexedAt === null ? null : timestampSchema.safeParse(input.oldestUnindexedAt);
+  if (observed.success && pending === null)
+    return Object.freeze({
+      state: "fresh",
+      targetMs: searchIndexFreshnessTargetMs,
+      staleCeilingMs: searchIndexStaleCeilingMs,
+      lagMs: 0,
+      requiresRecovery: false,
+    });
+  if (!observed.success || pending === null || !pending.success)
     return Object.freeze({
       state: "unknown",
       targetMs: searchIndexFreshnessTargetMs,
@@ -461,7 +469,7 @@ export const searchIndexFreshness = (input: SearchIndexFreshnessInput): SearchIn
       requiresRecovery: false,
     });
 
-  const lagMs = Math.max(0, Date.parse(observedAt) - Date.parse(indexed.data));
+  const lagMs = Math.max(0, Date.parse(observed.data) - Date.parse(pending.data));
   const state: SearchIndexFreshnessState =
     lagMs <= searchIndexFreshnessTargetMs
       ? "fresh"
@@ -482,12 +490,35 @@ export const searchIndexFreshness = (input: SearchIndexFreshnessInput): SearchIn
  * current configuration and privacy policy. Rebuilding reuses each snapshot's
  * existing version, so #643 storage classifies unchanged content as a replay and
  * replaces only documents whose searchable text or permitted fields changed.
- * The returned checkpoint is content-free and resumable across calls.
+ * The returned checkpoint is content-free and resumable across calls. A
+ * checkpoint for another organisation or record type is refused, and every
+ * listed snapshot must belong to the organisation and record type rebuilt.
  */
 export const planSearchRebuildPage = async (
   input: PlanSearchRebuildInput,
   dependencies: SearchRebuildDependencies,
 ): Promise<SearchRebuildPageResult> => {
+  const resumed = input.checkpoint;
+  if (
+    !isIdentifier(organizationIdSchema, input.organizationId) ||
+    !isIdentifier(recordTypeIdSchema, input.recordTypeId) ||
+    (input.pageSize !== undefined && !Number.isFinite(input.pageSize)) ||
+    (resumed !== undefined &&
+      (resumed.organizationId !== input.organizationId ||
+        resumed.recordTypeId !== input.recordTypeId ||
+        (resumed.afterRecordId !== undefined &&
+          !isIdentifier(recordIdSchema, resumed.afterRecordId)) ||
+        !Number.isSafeInteger(resumed.processedCount) ||
+        resumed.processedCount < 0))
+  )
+    throw new SearchEventConsumerError("INVALID_SEARCH_REBUILD_INPUT");
+  if (resumed?.complete === true)
+    return Object.freeze({
+      checkpoint: resumed,
+      stored: Object.freeze([]),
+      refused: Object.freeze([]),
+    });
+
   const pageSize = clampInteger(
     input.pageSize ?? searchEventConsumerLimits.maximumRebuildPage,
     1,
@@ -506,33 +537,44 @@ export const planSearchRebuildPage = async (
   const listed = await dependencies.listRebuildCandidates({
     organizationId: input.organizationId,
     recordTypeId: input.recordTypeId,
-    afterRecordId: input.checkpoint?.afterRecordId,
+    afterRecordId: resumed?.afterRecordId,
     limit: pageSize,
   });
+  // A listing longer than the page is cut to it and resumed after its last record.
+  const candidates = listed.candidates.slice(0, pageSize);
+  const complete = listed.complete && candidates.length === listed.candidates.length;
 
   const stored: SearchRebuildStored[] = [];
   const refused: SearchRebuildRefusal[] = [];
-  let afterRecordId = input.checkpoint?.afterRecordId;
-  for (const candidate of listed.candidates) {
-    const built = buildSearchDocument(candidate.snapshot, configuration, policy);
+  let afterRecordId = resumed?.afterRecordId;
+  for (const { snapshot } of candidates) {
+    // The cursor is only resumable over this organisation's record type in
+    // ascending identity (lower-case text order is storage's UUID order).
+    if (
+      snapshot.indexOrganisationId !== input.organizationId ||
+      snapshot.recordTypeId !== input.recordTypeId ||
+      !isIdentifier(recordIdSchema, snapshot.recordId) ||
+      (afterRecordId !== undefined &&
+        snapshot.recordId.toLowerCase() <= afterRecordId.toLowerCase())
+    )
+      throw new SearchEventConsumerError("INVALID_SEARCH_REBUILD_INPUT");
+    const built = buildSearchDocument(snapshot, configuration, policy);
     if (!built.success) {
-      refused.push(
-        Object.freeze({ recordId: candidate.snapshot.recordId, code: built.code }),
-      );
+      refused.push(Object.freeze({ recordId: snapshot.recordId, code: built.code }));
     } else {
       const command = searchDocumentStoreCommand(built.output);
       const storeOutcome = await dependencies.storeDocument(command);
-      stored.push(Object.freeze({ recordId: candidate.snapshot.recordId, command, storeOutcome }));
+      stored.push(Object.freeze({ recordId: snapshot.recordId, command, storeOutcome }));
     }
-    afterRecordId = candidate.snapshot.recordId;
+    afterRecordId = snapshot.recordId;
   }
 
   const checkpoint: SearchRebuildCheckpoint = Object.freeze({
     organizationId: input.organizationId,
     recordTypeId: input.recordTypeId,
     afterRecordId,
-    processedCount: (input.checkpoint?.processedCount ?? 0) + listed.candidates.length,
-    complete: listed.complete,
+    processedCount: (resumed?.processedCount ?? 0) + candidates.length,
+    complete,
   });
   return Object.freeze({
     checkpoint,
