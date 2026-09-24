@@ -19,6 +19,35 @@ export type PageCapabilityState = Readonly<{
 
 export type ProjectedPageCapability = Readonly<Record<string, unknown>> | undefined;
 
+/**
+ * The one fixed neutral state of a link destination the current viewer may not open. Missing,
+ * refused, withdrawn, not-installed and unknown targets all collapse to this exact frozen value,
+ * which carries no name, icon, address or reason, so nothing can distinguish why it is
+ * unavailable and a tile rendered in this state can only be removed.
+ */
+export const unavailableLinkDestination = Object.freeze({
+  availability: "unavailable" as const,
+});
+
+export type UnavailableLinkDestination = typeof unavailableLinkDestination;
+
+/** A link destination already proven openable for the current viewer from trusted evidence only. */
+export type AvailableLinkDestination =
+  | Readonly<{ availability: "available"; kind: "page"; pageId: string }>
+  | Readonly<{ availability: "available"; kind: "application"; applicationRootId: string }>
+  | Readonly<{ availability: "available"; kind: "external"; address: string }>;
+
+/**
+ * Resolution of one declared link target at navigation time. An available variant names only what
+ * the server proved; the unavailable variant is opaque. Callers render the opaque variant with no
+ * name, icon, address or reason and never activate it.
+ */
+export type ProjectedLinkDestination = AvailableLinkDestination | UnavailableLinkDestination;
+
+/** The shared opaque unavailable destination; callers never build a different one from input. */
+export const projectUnavailableLinkDestination = (): UnavailableLinkDestination =>
+  unavailableLinkDestination;
+
 type JsonObject = Record<string, unknown>;
 
 const object = (value: unknown): JsonObject => value as JsonObject;
