@@ -101,6 +101,29 @@ export {
 } from "./reference-choice-service";
 
 export {
+  createActivityHistoryService,
+  activityHistoryCommandSchema,
+  activityHistoryPageCommandSchema,
+  activityHistoryAggregateCommandSchema,
+  activityHistoryEntrySchema,
+  activityHistoryRefusalReasonCodes,
+  activityHistoryRefusalSchema,
+  activityHistoryPageSchema,
+  activityHistoryAggregateSchema,
+  activityHistoryResultSchema,
+  activityAggregateGroupSchema,
+  type ActivityHistoryCommand,
+  type ActivityHistoryEntry,
+  type ActivityHistoryRefusalReasonCode,
+  type ActivityHistoryRefusal,
+  type ActivityHistoryPage,
+  type ActivityHistoryAggregate,
+  type ActivityHistoryResult,
+  type ActivityAggregateGroup,
+  type ActivityHistoryServiceDependencies,
+} from "./activity-history";
+
+export {
   decideQueryCache,
   queryCacheBypassReasons,
   queryCacheInputSchema,
