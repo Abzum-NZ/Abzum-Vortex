@@ -23,6 +23,12 @@ import {
 } from "@vortex/access";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
+  performProtectedRecordDelete,
+  settleRecordLifecycleError,
+  type RecordDeleteResult,
+  type Settled,
+} from "./delete-record";
+import {
   deriveEarliestPendingDeadlineTransitionV2,
   deriveParentDeadlineDueTransitions,
   type ParentDeadlineDueTransition,
@@ -398,7 +404,11 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
       let standardOccurrenceId: string | undefined;
       let declaredOccurrenceIds: readonly string[] | undefined;
       let creationOccurrenceIds: readonly string[] | undefined;
+      let deleteActivityId: string | undefined;
+      let deleteOccurrenceId: string | undefined;
       for (let attempt = 0; attempt < 3; attempt += 1) {
+        // A failed subject delete discards the whole command, receipt included.
+        let deleteSettlement: Settled<unknown> | undefined;
         const result = await requests.runChange(
           session,
           selection,
@@ -469,6 +479,7 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
                 JSON.stringify(previewComposition.creations) ||
               JSON.stringify(composition.relationshipCopies) !==
                 JSON.stringify(previewComposition.relationshipCopies) ||
+              composition.softDeletesSubject !== previewComposition.softDeletesSubject ||
               JSON.stringify(composition.announcedEventKeys) !==
                 JSON.stringify(previewComposition.announcedEventKeys)
             )
@@ -670,9 +681,67 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
                 prepared.correlationId,
                 stored.reasonCode === "command_invalid" ? "invalid_request" : "operation_refused",
               );
-            return completedResult(stored) ?? recordedRefusal;
+            const storedResult = completedResult(stored);
+            // A writer replay means this command already completed, its delete
+            // included, so the subject is never deleted a second time.
+            if (
+              storedResult === undefined ||
+              !composition.softDeletesSubject ||
+              stored.replayed === true
+            )
+              return storedResult ?? recordedRefusal;
+
+            // The subject delete is the shared protected lifecycle delete, run
+            // last in this same transaction against the revision the action
+            // left the subject at: the action's own effects write nothing to a
+            // subject it deletes. It carries the action's command identity and
+            // its own Activity and `deleted` Event identities, and any refusal
+            // throws so the receipt, Activity and Events roll back with it.
+            try {
+              deleteActivityId ??= activityIdSchema.parse(newActivityId());
+              deleteOccurrenceId ??= eventOccurrenceIdSchema.parse(newOccurrenceId());
+            } catch {
+              throw new Error("NAMED_ACTION_OCCURRENCE_ID_INVALID");
+            }
+            try {
+              const deleted = await performProtectedRecordDelete(transaction, issuedAt, {
+                commandId: command.data.commandId,
+                recordTypeId: command.data.recordTypeId,
+                recordId: command.data.recordId,
+                expectedConcurrencyNumber: command.data.expectedConcurrencyNumber,
+                activityId: deleteActivityId,
+                occurrenceId: deleteOccurrenceId,
+              });
+              const deletedResult =
+                deleted.outcome === "deleted" && !deleted.replayed
+                  ? completedResult({
+                      recordId: deleted.recordId,
+                      concurrencyNumber: deleted.concurrencyNumber,
+                      // A deleted subject exposes no values.
+                      values: {},
+                      correlationId: deleted.correlationId,
+                      backgroundDelivery: "pending",
+                    })
+                  : undefined;
+              if (deletedResult === undefined) throw new Error("NAMED_ACTION_DELETE_RESULT_INVALID");
+              return deletedResult;
+            } catch (error) {
+              deleteSettlement = settleRecordLifecycleError(error);
+              throw error;
+            }
           },
         );
+        if (deleteSettlement?.kind === "restart") continue;
+        if (deleteSettlement?.kind === "result") {
+          const refused = deleteSettlement.value as RecordDeleteResult;
+          return {
+            kind: "available",
+            value: safeRefusal(
+              refused.correlationId,
+              refused.outcome === "conflict" ? "conflict" : "operation_refused",
+            ),
+          };
+        }
         if (result.kind !== "available") return result;
         if (result.value === restart) continue;
         return result.value === recordedRefusal
