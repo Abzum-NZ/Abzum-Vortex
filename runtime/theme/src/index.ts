@@ -68,6 +68,7 @@ export type {
   PlatformThemeReleaseV2,
   ResolvedTheme,
   SpacingToken,
+  ThemeColorRole,
   ThemeResolutionInput,
   ThemeResolutionOptions,
   ThemeTokenKindV2,
