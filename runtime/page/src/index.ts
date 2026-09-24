@@ -18,6 +18,18 @@ export {
   type ProjectedPageCapability,
 } from "./page-capability-projection";
 export {
+  discardAndReprojectPageContent,
+  isStalePageContentRevision,
+  pageContentRevisionRelation,
+  projectPageContent,
+  readPageContentRevisions,
+  type PageContentDiscardOutcome,
+  type PageContentProjection,
+  type PageContentReprojection,
+  type PageContentRevisionRelation,
+  type PageContentRevisions,
+} from "./page-content-discard";
+export {
   createStoredPageCapabilityService,
   type StoredPageCapabilityDependencies,
   type StoredPageCapabilitySelection,
