@@ -1510,6 +1510,244 @@ export const RICH_TEXT_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   supportedStateOperations: [],
 });
 
+/** Exact immutable metadata release for the application launcher block. */
+export const APPLICATION_LAUNCHER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
+  blockId: "b1a7c2e4-5d3f-4a91-8c26-0e7f4b9a1d33",
+  key: "platform.launcher.application_launcher",
+  releaseVersion: "1.0.0",
+  contentFingerprint: "sha256:afa425183d7aa962b73435512e36c2d90ba8b542abecd81208cc50f64a63c526",
+  catalogueFingerprint: "sha256:cd05a4e18beefa0140ba8b4435bb39070f326d5a6f697024bdcc4114356d896e",
+  name: "Application launcher",
+  icon: "grid",
+  paletteGroup: "content",
+  rendererKey: "platform.renderer.application_launcher",
+  properties: [
+    {
+      kind: "text",
+      key: "title",
+      label: "Title",
+      help: "Accessible name shown as the block heading",
+      required: false,
+      minLength: 1,
+      maxLength: 120,
+    },
+    {
+      kind: "text",
+      key: "name_key",
+      label: "Name cell key",
+      help: "Projected cell key whose text names each application",
+      required: false,
+      minLength: 1,
+      maxLength: 40,
+    },
+    {
+      kind: "text",
+      key: "icon_key",
+      label: "Icon cell key",
+      help: "Projected cell key whose text is the application icon key",
+      required: false,
+      minLength: 1,
+      maxLength: 40,
+    },
+  ],
+  slots: [
+    {
+      key: "side_panel",
+      label: "Side panel",
+      required: false,
+      allowedChildCategories: ["data", "figures", "record", "input", "actions", "layout", "content"],
+    },
+  ],
+  capabilities: {
+    responsiveVisibility: true,
+    responsiveOrder: true,
+    gridWidth: true,
+    height: "content_or_bounded",
+    publicSurface: "allowed",
+    accessibleName: "optional",
+    accessibleNamePropertyPath: ["title"],
+  },
+  supportedEvents: ["refresh", "row_action"],
+  supportedStateOperations: [],
+});
+
+/** Exact immutable metadata release for the link tiles block. */
+export const LINK_TILES_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
+  blockId: "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47",
+  key: "platform.launcher.link_tiles",
+  releaseVersion: "1.0.0",
+  contentFingerprint: "sha256:004acb0bfb792a33c51722b8da3d079f047bf6f1c7e098b5be326fabfacaf8b2",
+  catalogueFingerprint: "sha256:6ca9f0b784b4345e3e5598e30ea2f23f6c16113a714c1ca4f8800f5785029a06",
+  name: "Link tiles",
+  icon: "link",
+  paletteGroup: "content",
+  rendererKey: "platform.renderer.link_tiles",
+  properties: [
+    {
+      kind: "text",
+      key: "title",
+      label: "Title",
+      help: "Accessible name shown as the block heading",
+      required: false,
+      minLength: 1,
+      maxLength: 120,
+    },
+    {
+      kind: "text",
+      key: "label_key",
+      label: "Label cell key",
+      help: "Projected cell key whose text labels each tile",
+      required: false,
+      minLength: 1,
+      maxLength: 40,
+    },
+    {
+      kind: "text",
+      key: "address_key",
+      label: "Address cell key",
+      help: "Projected cell key carrying each tile's safe HTTPS address",
+      required: false,
+      minLength: 1,
+      maxLength: 40,
+    },
+    {
+      kind: "text",
+      key: "description_key",
+      label: "Description cell key",
+      help: "Projected cell key whose text describes each tile",
+      required: false,
+      minLength: 1,
+      maxLength: 40,
+    },
+  ],
+  slots: [
+    {
+      key: "actions",
+      label: "Tile actions",
+      required: false,
+      allowedChildCategories: ["actions"],
+    },
+  ],
+  capabilities: {
+    responsiveVisibility: true,
+    responsiveOrder: true,
+    gridWidth: true,
+    height: "content_or_bounded",
+    publicSurface: "allowed",
+    accessibleName: "optional",
+    accessibleNamePropertyPath: ["title"],
+  },
+  supportedEvents: ["refresh", "row_action"],
+  supportedStateOperations: [],
+});
+
+/** Exact immutable metadata release for the view filter block. */
+export const VIEW_FILTER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
+  blockId: "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15",
+  key: "platform.launcher.view_filter",
+  releaseVersion: "1.0.0",
+  contentFingerprint: "sha256:4c981d2438439ce394f676e7b1260673155c14cabd100d613f1ae0bd7c795251",
+  catalogueFingerprint: "sha256:d1cc11fe2423bec93eeffd6b603065358374bbb4d9e4b6d6f6fe0d1eac4e59a8",
+  name: "View filter",
+  icon: "filter",
+  paletteGroup: "input",
+  rendererKey: "platform.renderer.view_filter",
+  properties: [
+    {
+      kind: "text",
+      key: "label",
+      label: "Label",
+      help: "Accessible name and visual label for the filter",
+      required: true,
+      minLength: 1,
+      maxLength: 120,
+    },
+    {
+      kind: "text",
+      key: "placeholder",
+      label: "Placeholder",
+      help: "Placeholder hint text",
+      required: false,
+      minLength: 0,
+      maxLength: 200,
+    },
+    {
+      kind: "text",
+      key: "help_text",
+      label: "Help text",
+      help: "Descriptive help text below the filter",
+      required: false,
+      minLength: 0,
+      maxLength: 500,
+    },
+    {
+      kind: "text",
+      key: "match_key",
+      label: "Match cell key",
+      help: "Projected cell key of each filtered tile matched by the entered text; defaults to its name",
+      required: false,
+      minLength: 1,
+      maxLength: 40,
+    },
+    {
+      kind: "choice",
+      key: "match_mode",
+      label: "Match mode",
+      help: "How entered text is matched against the projected cell",
+      required: false,
+      options: [
+        {
+          key: "contains",
+          label: "Contains",
+        },
+        {
+          key: "starts_with",
+          label: "Starts with",
+        },
+        {
+          key: "exact",
+          label: "Exact",
+        },
+      ],
+    },
+    {
+      kind: "boolean",
+      key: "case_sensitive",
+      label: "Case sensitive",
+      help: "Match the entered text case-sensitively",
+      required: false,
+    },
+    {
+      kind: "text",
+      key: "empty_message",
+      label: "Empty message",
+      help: "Text shown when no already-returned row matches the filter",
+      required: false,
+      minLength: 0,
+      maxLength: 200,
+    },
+  ],
+  slots: [
+    {
+      key: "content",
+      label: "Filtered content",
+      required: true,
+      allowedChildCategories: ["content", "layout"],
+    },
+  ],
+  capabilities: {
+    responsiveVisibility: true,
+    responsiveOrder: true,
+    gridWidth: true,
+    height: "content_or_bounded",
+    publicSurface: "allowed",
+    accessibleName: "required",
+    accessibleNamePropertyPath: ["label"],
+  },
+  supportedEvents: [],
+  supportedStateOperations: [],
+});
+
 /** All seven immutable display block releases. */
 export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   TEXT_BLOCK_RELEASE,
@@ -1538,10 +1776,18 @@ export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   FORM_CONTAINER_BLOCK_RELEASE,
 ]);
 
-/** All twenty immutable platform block releases registered for the page builder. */
+/** All three immutable launcher, tile and view-filter block releases. */
+export const LAUNCHER_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
+  APPLICATION_LAUNCHER_BLOCK_RELEASE,
+  LINK_TILES_BLOCK_RELEASE,
+  VIEW_FILTER_BLOCK_RELEASE,
+]);
+
+/** All twenty-three immutable platform block releases registered for the page builder. */
 export const PLATFORM_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   ...DISPLAY_BLOCK_RELEASES,
   ...CONTROL_BLOCK_RELEASES,
+  ...LAUNCHER_BLOCK_RELEASES,
 ]);
 
 /**

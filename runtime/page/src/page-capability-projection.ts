@@ -6,6 +6,8 @@ import type { ResolvedPageComposition } from "./page-composition-resolution";
 export type PlacementCapabilityState = Readonly<{
   viewAllowed: boolean;
   useAllowed: boolean;
+  /** The placement binds an operation, or a binding it cannot prove; it then needs `operationBound`. */
+  operationRequired?: boolean;
   operationBound: boolean;
   conditionAllowed?: boolean;
 }>;
@@ -24,8 +26,15 @@ const object = (value: unknown): JsonObject => value as JsonObject;
 const withoutKeys = (value: JsonObject, keys: readonly string[]): JsonObject =>
   Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)));
 
+/**
+ * A placement with neither a use gate nor an operation binding is plain content. Otherwise it is
+ * available only when the viewer may use it and its operation binding resolves in the release, so
+ * an omitted use gate never makes an unresolved binding invocable. An available control carries no
+ * marker; anything else is fixed to the unavailable state, which the renderer sends unbound.
+ */
 const placementAvailability = (state: PlacementCapabilityState, hasUseGate: boolean): JsonObject =>
-  !hasUseGate && !state.operationBound
+  (!hasUseGate && state.operationRequired !== true && !state.operationBound) ||
+  (state.useAllowed && state.operationBound)
     ? {}
     : { availability: "unavailable", unavailableReason: "operation_unavailable" };
 
@@ -47,6 +56,7 @@ const projectV2Slot = (
       const effectiveState: PlacementCapabilityState = {
         viewAllowed: true,
         useAllowed: placement.usePermissionKey === undefined || state?.useAllowed === true,
+        operationRequired: state?.operationRequired === true,
         operationBound: state?.operationBound === true,
       };
       const slots = Object.fromEntries(
