@@ -176,6 +176,10 @@ export const flowReferenceSchema = z.union([referenceTextSchema, flowReferenceOb
 
 // ─── Typed literals ────────────────────────────────────────────────────────────────────────
 
+const isoDateSchema = z.iso.date();
+const isoDateTimeSchema = z.iso.datetime({ offset: true });
+const isNonEmptyText = (value: JsonValue) => typeof value === "string" && value.length > 0;
+
 const literalMatchesType = (type: string, value: JsonValue): boolean => {
   switch (type) {
     case "yes_no":
@@ -183,20 +187,30 @@ const literalMatchesType = (type: string, value: JsonValue): boolean => {
     case "whole_number":
       return typeof value === "number" && Number.isSafeInteger(value);
     case "decimal_number":
+    case "money":
       return parseExactDecimal(value) !== undefined;
+    case "date":
+      return isoDateSchema.safeParse(value).success;
+    case "date_time":
+      return isoDateTimeSchema.safeParse(value).success;
     case "text":
     case "formatted_text":
+      return typeof value === "string";
     case "choice":
-    case "date":
-    case "date_time":
     case "record_reference":
     case "organization_account_reference":
-      return typeof value === "string";
+    case "workflow_run_reference":
+    case "relationship_reference":
+    case "file_reference":
+      return isNonEmptyText(value);
     case "several_choices":
     case "record_reference_list":
-      return Array.isArray(value);
-    default:
+    case "relationship_reference_list":
+      return Array.isArray(value) && value.every(isNonEmptyText);
+    case "json":
       return true;
+    default:
+      return false;
   }
 };
 
@@ -677,8 +691,14 @@ export const flowTriggerExecutionKinds = Object.freeze({
 // ─── Run as ───────────────────────────────────────────────────────────────────────────────────
 
 /**
- * Whose authority protected tasks use. Execution bindings are Access-owned grants; naming one here
- * grants nothing by itself.
+ * Whose authority protected tasks use. It follows from the execution kind and how the flow starts:
+ * - `initiator`: the actor who started the run. For an interactive flow that is the initiating
+ *   person (an agent acts as its person); for a durable flow started through Run background flow
+ *   it is the run-as of the flow that started it, so a start can never gain another authority.
+ * - `saver`: the actor of the save or named action that owns the transaction.
+ * - `specified_account` or `system`: required by background flows and by durable flows started by
+ *   a Schedule or IncomingMessage trigger; a Run background flow start still uses its starter's
+ *   run-as. Execution bindings are Access-owned grants; naming one here grants nothing by itself.
  */
 export const flowRunAsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("initiator") }).strict(),
@@ -787,7 +807,28 @@ const flowTaskTreeSchema: z.ZodType<FlowTask> = z.lazy(() => {
           .max(20),
         default: list.optional(),
       })
-      .strict(),
+      .strict()
+      .superRefine((task, context) => {
+        const keys = new Set<string>();
+        const values = new Set<string>();
+        task.cases.forEach((entry, index) => {
+          if (keys.has(entry.key))
+            context.addIssue({
+              code: "custom",
+              path: ["cases", index, "key"],
+              message: "Switch case keys must be unique",
+            });
+          keys.add(entry.key);
+          const value = JSON.stringify(entry.when);
+          if (values.has(value))
+            context.addIssue({
+              code: "custom",
+              path: ["cases", index, "when"],
+              message: "Switch case values must be unique",
+            });
+          values.add(value);
+        });
+      }),
     z
       .object({
         ...taskCommonShape,
@@ -970,7 +1011,9 @@ const refineFlow = (flow: FlowShape, context: z.RefinementCtx) => {
       issue(["triggers", index, "condition"], "The now operator is not allowed in a trigger");
   });
 
-  // Run as follows from the execution kind and how the flow starts.
+  // Run as follows from the execution kind and how the flow starts. A durable flow without a
+  // system trigger starts only through Run background flow, so it keeps its starter's run-as and
+  // cannot declare a specified account or System that a person could borrow by starting it.
   const systemStarted = flow.triggers.some(
     (trigger) => trigger.type === "Schedule" || trigger.type === "IncomingMessage",
   );
@@ -981,7 +1024,7 @@ const refineFlow = (flow: FlowShape, context: z.RefinementCtx) => {
         ? ["saver"]
         : flow.execution === "background" || systemStarted
           ? ["specified_account", "system"]
-          : ["initiator", "specified_account", "system"];
+          : ["initiator"];
   if (!allowedRunAs.includes(flow.runAs.kind))
     issue(
       ["runAs", "kind"],
@@ -1128,13 +1171,19 @@ export const validateFlowCallGraph = (
         });
     }
   }
+  // One depth-first walk with memoised chain lengths, so shared callees are measured once.
   const reportedCycles = new Set<FlowId>();
-  const longestChain = (flow: FlowDefinition | FlowSource, stack: FlowId[]): number => {
+  const visiting = new Set<FlowId>();
+  const chainLengths = new Map<FlowId, number>();
+  const longestChain = (flow: FlowDefinition | FlowSource): number => {
+    const known = chainLengths.get(flow.id);
+    if (known !== undefined) return known;
+    visiting.add(flow.id);
     let longest = 0;
     for (const targetId of new Set(collectRunFlowTargets(flow))) {
       const target = byId.get(targetId);
       if (!target) continue;
-      if (stack.includes(targetId)) {
+      if (visiting.has(targetId)) {
         if (!reportedCycles.has(targetId)) {
           reportedCycles.add(targetId);
           issues.push({
@@ -1145,12 +1194,14 @@ export const validateFlowCallGraph = (
         }
         continue;
       }
-      longest = Math.max(longest, 1 + longestChain(target, [...stack, targetId]));
+      longest = Math.max(longest, 1 + longestChain(target));
     }
+    visiting.delete(flow.id);
+    chainLengths.set(flow.id, longest);
     return longest;
   };
   for (const flow of flows) {
-    if (longestChain(flow, [flow.id]) > flowMaximumRunFlowDepth)
+    if (longestChain(flow) > flowMaximumRunFlowDepth)
       issues.push({
         flowId: flow.id,
         code: "depth_exceeded",
