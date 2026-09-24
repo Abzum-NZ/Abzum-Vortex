@@ -35,6 +35,7 @@ export {
 } from "./definition-consumer-read";
 export { createDatabaseDefinitionConsumerReadService } from "./definition-consumer-read-composition";
 export * from "./application-bound-release-set";
+export * from "./application-lifecycle";
 export {
   createDefinitionHistoryService,
   DefinitionHistoryError,
