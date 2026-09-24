@@ -50,6 +50,24 @@ export const operationsAlertSignalSchema = z
 
 export type OperationsAlertSignal = z.infer<typeof operationsAlertSignalSchema>;
 
+/** The narrow read's page bound, identical to `read_open_alert_signals`. */
+export const operationsAlertSignalReadLimitSchema = z.number().int().min(1).max(500);
+
+export type OpenOperationsAlertSignalsRead =
+  | Readonly<{ kind: "available"; signals: readonly OperationsAlertSignal[] }>
+  | Readonly<{ kind: "invalid" }>
+  | Readonly<{ kind: "temporarily_unavailable" }>;
+
+/**
+ * At most this many signal writes are in flight across every sink in the
+ * process. An alert storm then holds a small, fixed share of the runtime
+ * connection pool instead of competing with the measured operations for every
+ * connection; alerts beyond the bound are dropped, so occurrence counts are a
+ * lower bound.
+ */
+const maximumInFlightSignalWrites = 2;
+let inFlightSignalWrites = 0;
+
 const persistAlertSignal = async (
   runtimeTransaction: RuntimeTransactionRunner,
   record: AlertRecord,
@@ -78,7 +96,7 @@ const persistAlertSignal = async (
  * downstream throw, and persistence here is fire-and-forget with its own
  * containment, so a database failure can never change the measured operation's
  * outcome. `appendAlert` is synchronous by contract and schedules the write
- * without awaiting it.
+ * without awaiting it, within the process-wide in-flight bound.
  */
 export const createOperationsAlertSink = (
   dependencies: OperationsAlertSinkDependencies = {},
@@ -92,8 +110,13 @@ export const createOperationsAlertSink = (
     },
     appendAlert(record: AlertRecord): void {
       const parsed = alertRecordSchema.safeParse(record);
-      if (!parsed.success) return;
-      void persistAlertSignal(runtimeTransaction, parsed.data).catch(() => undefined);
+      if (!parsed.success || inFlightSignalWrites >= maximumInFlightSignalWrites) return;
+      inFlightSignalWrites += 1;
+      void persistAlertSignal(runtimeTransaction, parsed.data)
+        .catch(() => undefined)
+        .finally(() => {
+          inFlightSignalWrites -= 1;
+        });
     },
   });
 };
@@ -123,39 +146,50 @@ const isoInstant = (value: unknown): unknown => {
   return value;
 };
 
+const projectAlertSignal = (row: AlertSignalRow): OperationsAlertSignal =>
+  operationsAlertSignalSchema.parse({
+    signalId: row.signal_id,
+    code: row.code,
+    severity: row.severity,
+    affectedService: row.affected_service,
+    deduplicationKey: row.deduplication_key,
+    owningRole: row.owning_role,
+    runbookReference: row.runbook_reference,
+    occurrenceCount: safeInteger(row.occurrence_count),
+    firstSeenAt: isoInstant(row.first_seen_at),
+    lastSeenAt: isoInstant(row.last_seen_at),
+    state: row.state,
+  });
+
 /**
  * The narrow Operations read: one bounded page of open signals, most recently
  * seen first. Resolved signals are never returned. The caller supplies only a
  * page bound; the database decides ordering, and malformed rows fail closed
- * rather than being projected.
+ * rather than being projected. Database and projection failures settle as
+ * `temporarily_unavailable`, never as a raw error.
+ *
+ * This runs as the runtime role with no operator authority of its own: a
+ * caller must authorise the Operations operator before invoking it.
  */
 export const readOpenOperationsAlertSignals = async (
   limit = 100,
   dependencies: OperationsAlertSinkDependencies = {},
-): Promise<readonly OperationsAlertSignal[]> => {
+): Promise<OpenOperationsAlertSignalsRead> => {
+  const bound = operationsAlertSignalReadLimitSchema.safeParse(limit);
+  if (!bound.success) return { kind: "invalid" };
   const runtimeTransaction = dependencies.runtimeTransaction ?? withRuntimeTransaction;
-  const rows = await runtimeTransaction(async (transaction) =>
-    transaction.query<AlertSignalRow>`
-      select signal_id, code, severity, affected_service, deduplication_key,
-        owning_role, runbook_reference, occurrence_count, first_seen_at,
-        last_seen_at, state
-      from vortex_operations.read_open_alert_signals(${limit}::integer)
-    `,
-  );
 
-  return rows.map((row) =>
-    operationsAlertSignalSchema.parse({
-      signalId: row.signal_id,
-      code: row.code,
-      severity: row.severity,
-      affectedService: row.affected_service,
-      deduplicationKey: row.deduplication_key,
-      owningRole: row.owning_role,
-      runbookReference: row.runbook_reference,
-      occurrenceCount: safeInteger(row.occurrence_count),
-      firstSeenAt: isoInstant(row.first_seen_at),
-      lastSeenAt: isoInstant(row.last_seen_at),
-      state: row.state,
-    }),
-  );
+  try {
+    const rows = await runtimeTransaction(async (transaction) =>
+      transaction.query<AlertSignalRow>`
+        select signal_id, code, severity, affected_service, deduplication_key,
+          owning_role, runbook_reference, occurrence_count, first_seen_at,
+          last_seen_at, state
+        from vortex_operations.read_open_alert_signals(${bound.data}::integer)
+      `,
+    );
+    return { kind: "available", signals: rows.map(projectAlertSignal) };
+  } catch {
+    return { kind: "temporarily_unavailable" };
+  }
 };

@@ -20,8 +20,10 @@ export {
 } from "./telemetry";
 export {
   createOperationsAlertSink,
+  operationsAlertSignalReadLimitSchema,
   operationsAlertSignalSchema,
   readOpenOperationsAlertSignals,
+  type OpenOperationsAlertSignalsRead,
   type OperationsAlertSignal,
   type OperationsAlertSinkDependencies,
 } from "./operations-alert-sink";

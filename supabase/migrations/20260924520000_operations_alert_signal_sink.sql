@@ -17,9 +17,10 @@
 -- The signal feed is content-free operational data: it carries no customer
 -- content and no request identity, so the write never depends on a request
 -- context and can never change the measured operation's outcome. The runtime
--- half is `runtime/app/src/operations-alert-sink.ts`, which formats exactly the
--- same validation and is granted execute below. Incidents, operator actions and
--- runbook content belong to #960/#961 and are not created here.
+-- half is `runtime/app/src/operations-alert-sink.ts`, which applies the same
+-- contract validation before calling the writer granted below. Incidents,
+-- operator actions and runbook content belong to #960/#961 and are not created
+-- here.
 
 begin;
 
@@ -133,7 +134,7 @@ comment on column vortex_operations.alert_signals.first_seen_at is
 comment on column vortex_operations.alert_signals.last_seen_at is
   'When the deduplication key was most recently observed; drives open-signal recency ordering.';
 comment on column vortex_operations.alert_signals.state is
-  'Open signals are listed by the narrow read; resolution belongs to the later Operations incident actions.';
+  'Open signals are listed by the narrow read; resolution belongs to the later Operations incident actions, and a recurrence reopens a resolved signal.';
 
 -- The narrow read always filters on `state = 'open'` and orders by recency, so
 -- one partial index serves it without indexing resolved history.
@@ -149,10 +150,13 @@ revoke all on table vortex_operations.alert_signals
     vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
 -- Records one alert signal for a validated contract shape. A first occurrence
--- creates the row; a repeated deduplication key refreshes the bounded identity
--- and increments the occurrence count while preserving the original
--- `first_seen_at`. The caller never supplies the signal identity, the times or
--- the count, so one producer cannot forge another producer's cadence.
+-- creates the row; a repeated deduplication key refreshes the bounded identity,
+-- increments the occurrence count (saturating at the contract's safe-integer
+-- bound), advances `last_seen_at` monotonically and reopens a resolved signal,
+-- so a recurrence is never hidden from the open-signal read. The original
+-- `first_seen_at` is preserved. The caller never supplies the signal identity,
+-- the times, the count or the state, so one producer cannot forge another
+-- producer's cadence.
 create function vortex_operations.record_alert_signal(
   p_code text,
   p_severity text,
@@ -201,8 +205,13 @@ begin
     affected_service = excluded.affected_service,
     owning_role = excluded.owning_role,
     runbook_reference = excluded.runbook_reference,
-    occurrence_count = vortex_operations.alert_signals.occurrence_count + 1,
-    last_seen_at = excluded.last_seen_at
+    occurrence_count = least(
+      vortex_operations.alert_signals.occurrence_count + 1, 9007199254740991
+    ),
+    last_seen_at = greatest(
+      vortex_operations.alert_signals.last_seen_at, excluded.last_seen_at
+    ),
+    state = 'open'
   returning * into stored;
 
   return pg_catalog.jsonb_build_object(
@@ -303,7 +312,7 @@ comment on function vortex_operations.alert_signal_namespaced_key_is_valid(text)
 comment on function vortex_operations.record_alert_signal(
   text, text, text, text, text, text
 ) is
-  'Validates one contract alert record and upserts it by deduplication key, incrementing the occurrence count and refreshing last-seen.';
+  'Validates one contract alert record and upserts it by deduplication key, incrementing the occurrence count, refreshing last-seen and reopening a resolved signal.';
 comment on function vortex_operations.read_open_alert_signals(integer) is
   'Returns one bounded page of open Operations alert signals, most recently seen first.';
 
