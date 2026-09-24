@@ -38,6 +38,24 @@ export {
   type DeadlineRefreshRecoveryReason,
 } from "./deadline-refresh-recovery";
 
+export {
+  compileKestraFlow,
+  kestraFlowCompilerEnvironments,
+  kestraFlowCompilerRefusalReasons,
+  kestraProtectedOperationContractVersion,
+  kestraProtectedOperationRuntimeFields,
+  type KestraFlowCandidate,
+  type KestraFlowCompilation,
+  type KestraFlowCompilerEnvironment,
+  type KestraFlowCompilerInput,
+  type KestraFlowCompilerRefusalReason,
+  type KestraFlowIdentity,
+  type KestraFlowSequencedEdge,
+  type KestraFlowTask,
+  type KestraFlowTrigger,
+  type KestraProtectedOperationBinding,
+} from "./kestra-compiler";
+
 export const WorkflowService = Object.freeze({
   key: "workflow",
   boundary: "@vortex/workflow",
