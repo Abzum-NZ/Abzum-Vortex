@@ -59,6 +59,10 @@ export type StoredPageCapabilityDependencies = HumanOrganizationRequestDependenc
 export type StoredPageReadModelValue = Readonly<{
   model: ProtectedReadModelKey;
   value: unknown;
+  /** Current organisation Access version this value was read under. */
+  accessVersion: number;
+  /** Exact installed application release revision this value was read under. */
+  applicationReleaseRevision: number;
 }>;
 
 /**
@@ -386,6 +390,7 @@ export const createStoredPageCapabilityService = (
       page,
       applicationShells: applicationRelease.content.shells,
       sourceCorrelationId: applicationRelease.correlationId,
+      applicationReleaseRevision: releaseRevision,
       pagePermission: {
         permissionKey: page.accessPermissionKey,
         declaration: declaration("application.page.discover", applicationRootId, pageEntry),
@@ -529,18 +534,27 @@ export const createStoredPageCapabilityService = (
         .map((root) => findProjectedPlacement(root, placementId))
         .find((found) => found !== undefined);
       if (placement?.readModel === undefined) return { kind: "unavailable" };
-      // The tenant is the verified scope's own tenant, never page or browser input.
+      // The tenant is the verified scope's own tenant, never page or browser input. The verified
+      // scope also fixes the Access version the read is answered under.
       const scoped = await requests.run(session, candidate, async (_transaction, scope) =>
-        String(scope.tenantId),
+        Object.freeze({ tenantId: String(scope.tenantId), accessVersion: scope.accessVersion }),
       );
       if (scoped.kind !== "available") return scoped;
       const resolved = await readModels.resolve(
-        { session, selection: candidate, tenantId: scoped.value },
+        { session, selection: candidate, tenantId: scoped.value.tenantId },
         placement.readModel,
         requestCandidate,
       );
       return resolved.kind === "available"
-        ? { kind: "available", value: { model: resolved.model, value: resolved.value } }
+        ? {
+            kind: "available",
+            value: {
+              model: resolved.model,
+              value: resolved.value,
+              accessVersion: scoped.value.accessVersion,
+              applicationReleaseRevision: releaseRevision,
+            },
+          }
         : resolved.kind === "unavailable"
           ? { kind: "temporarily_unavailable" }
           : { kind: "unavailable" };
