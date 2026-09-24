@@ -15,13 +15,18 @@
 -- organisation-catalogue authority exactly as assignment revocation already
 -- treated an `unavailable` zero-entry role, so a Group holding one can be
 -- retired or have a member removed, that role's assignment can be revoked and
--- the role itself can be retired. Delegated-authority rules for roles that still
--- grant permissions are unchanged.
+-- the role itself can be retired. Retiring such a role keeps its live
+-- assignments and zero entries, so a zero-permission `retired` role is treated
+-- the same way by Group reduction and assignment revocation; otherwise the
+-- retirement would recreate the deadlock it resolves. Custom and `active` roles
+-- always have accepted permissions, so a zero-entry `active` role or a missing
+-- live revision still fails closed. Delegated-authority rules for roles that
+-- still grant permissions are unchanged.
 --
 -- The three live function bodies are patched in place from their current
--- definitions with an exactly-once guard, so ownership, grants and comments are
--- untouched and drift fails the migration instead of silently editing an
--- unexpected body.
+-- definitions with an exactly-once guard, so ownership, grants and dependencies
+-- are untouched and drift fails the migration instead of silently editing an
+-- unexpected body. The function comments are replaced below.
 do $migration$
 declare
   group_guard_old constant text := $q$  if exists (
@@ -60,7 +65,7 @@ declare
       and assignment.group_id = p_group_id
       and assignment.state = 'live'
       and (role_revision.lifecycle is null
-        or role_revision.lifecycle not in ('unavailable', 'acceptance_required'))
+        or role_revision.lifecycle not in ('unavailable', 'acceptance_required', 'retired'))
       and not exists (
         select 1
         from vortex_access.organization_role_permission_entries as permission
@@ -87,7 +92,7 @@ declare
       and assignment.assignee_kind = 'group'
       and assignment.group_id = p_group_id
       and assignment.state = 'live'
-      and role_revision.lifecycle in ('unavailable', 'acceptance_required')
+      and role_revision.lifecycle in ('unavailable', 'acceptance_required', 'retired')
       and not exists (
         select 1
         from vortex_access.organization_role_permission_entries as permission
@@ -102,7 +107,7 @@ declare
   assignment_lifecycle_old constant text :=
     $q$  elsif current_role_lifecycle = 'unavailable' then$q$;
   assignment_lifecycle_new constant text :=
-    $q$  elsif current_role_lifecycle in ('unavailable', 'acceptance_required') then$q$;
+    $q$  elsif current_role_lifecycle in ('unavailable', 'acceptance_required', 'retired') then$q$;
 
   retirement_guard_old constant text := $q$  if affected_permissions is null and exists (
     select 1
@@ -210,10 +215,10 @@ $migration$;
 
 comment on function
   vortex_access.organization_group_reduction_authority(uuid, uuid) is
-  'Private complete retained Group assignment/delegation scope derivation for protected reductions; a zero-permission unavailable or acceptance_required role contributes organisation-catalogue authority.';
+  'Private complete retained Group assignment/delegation scope derivation for protected reductions; a zero-permission unavailable, acceptance_required or retired role contributes organisation-catalogue authority.';
 comment on function
   vortex_access.revoke_organization_role_assignment_for_administration(uuid, bigint, uuid) is
-  'Standalone request entry: performs revoke_role_assignment after fixed protected checks; a current zero-entry unavailable or acceptance_required role uses catalogue delegation, with one atomic completed Activity or one content-free refused Activity row; no SQL function composes this result.';
+  'Standalone request entry: performs revoke_role_assignment after fixed protected checks; a current zero-entry unavailable, acceptance_required or retired role uses catalogue delegation, with one atomic completed Activity or one content-free refused Activity row; no SQL function composes this result.';
 comment on function
   vortex_access.retire_organization_role_for_administration(uuid, bigint, jsonb, uuid) is
   'Standalone request entry: performs retire_role after fixed protected checks; a zero-entry unavailable or acceptance_required role with live assignments uses catalogue delegation, with one atomic completed Activity or one content-free refused Activity row; no SQL function composes this result.';
