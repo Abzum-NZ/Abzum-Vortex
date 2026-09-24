@@ -11,6 +11,7 @@ import {
   timestampSchema,
 } from "./identifiers";
 import {
+  organizationAccountLanguageSchema,
   organizationRuntimeSettingsSchema,
   tenantStructuralCapabilitySetSchema,
 } from "./identity-access";
@@ -202,7 +203,7 @@ export const createTenantOrganizationCommandSchema = z
       .object({
         identityId: identityIdSchema,
         accountDisplayName: tenantOrganizationDisplayNameSchema,
-        accountLanguage: organizationRuntimeSettingsSchema.shape.language,
+        accountLanguage: organizationAccountLanguageSchema,
         accountTimeZone: organizationRuntimeSettingsSchema.shape.timeZone,
       })
       .strict(),
