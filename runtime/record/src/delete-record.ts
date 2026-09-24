@@ -298,7 +298,7 @@ const one = <Value>(rows: readonly Value[]): Value => {
   return rows[0];
 };
 
-type Settled<Result> =
+export type Settled<Result> =
   | Readonly<{ kind: "restart" }>
   | Readonly<{ kind: "result"; value: Result }>;
 
@@ -307,7 +307,7 @@ type Settled<Result> =
  * back: a preflight has already deleted or restored rows behind a pending
  * receipt, so every non-final outcome discards the whole transaction.
  */
-class RecordLifecycleRollback extends Error {
+export class RecordLifecycleRollback extends Error {
   constructor(readonly settled: Settled<unknown>) {
     super("RECORD_LIFECYCLE_ROLLBACK");
   }
@@ -317,6 +317,16 @@ const databaseCode = (error: unknown): string | undefined =>
   typeof error === "object" && error !== null && "code" in error
     ? String((error as { readonly code?: unknown }).code)
     : undefined;
+
+/**
+ * How a failed lifecycle step settles its request transaction: a carried
+ * outcome, or a restart for a serialization failure or deadlock. Any other
+ * error settles nothing and stays unexpected.
+ */
+export const settleRecordLifecycleError = (error: unknown): Settled<unknown> | undefined => {
+  if (error instanceof RecordLifecycleRollback) return error.settled;
+  return ["40001", "40P01"].includes(databaseCode(error) ?? "") ? { kind: "restart" } : undefined;
+};
 
 /** Rolls back a non-final preflight outcome as its bounded public result. */
 const rollBack = (
@@ -459,6 +469,76 @@ const restoredRootMutation = (
   };
 };
 
+/**
+ * The protected recoverable delete inside a request transaction the caller
+ * already owns: database preflight, runtime total recalculation and terminal
+ * writer. Every non-final outcome throws `RecordLifecycleRollback` so the whole
+ * transaction is discarded, because the preflight has already deleted rows
+ * behind a pending receipt. The named-action `soft_delete_subject` effect runs
+ * this same function, so there is no second delete path.
+ */
+export const performProtectedRecordDelete = async (
+  transaction: RequestDatabaseTransaction,
+  issuedAt: string,
+  command: Required<RecordDeleteCommand>,
+): Promise<RecordDeleteResult> => {
+  const { activityId, occurrenceId } = command;
+  await transaction.query`set local role vortex_runtime`;
+  const prepared = parseDatabaseOutcome(
+    one(
+      await transaction.query<Row>`
+        select vortex_record.prepare_protected_record_delete(
+          ${command.commandId}::uuid,
+          ${command.recordTypeId}::uuid,
+          ${command.recordId}::uuid,
+          ${command.expectedConcurrencyNumber}::bigint,
+          ${activityId}::uuid,
+          ${occurrenceId}::uuid
+        ) as result
+      `,
+    ).result,
+    "deleted",
+  );
+  if (prepared.outcome === "completed") {
+    if (!prepared.value.replayed) throw new Error("RECORD_LIFECYCLE_RESULT_INVALID");
+    return { ...prepared.value, outcome: "deleted" };
+  }
+  if (prepared.outcome !== "prepared") return rollBack(prepared, command.recordId);
+
+  const { preparation } = prepared;
+  let parentMutations: readonly RelationshipTotalParentMutation[] = [];
+  let dueTransitions: ReturnType<typeof dueTransitionsFor> = [];
+  // The deleted root is only the evaluator's required anchor; it is never
+  // written, so a delete without affected parents needs no calculation.
+  if (preparation.records.some((record) => record.recordKey !== "root")) {
+    const settings = await readOrganizationRuntimeSettings(transaction);
+    const calculated = calculateGeneratedValues(preparation, issuedAt, settings);
+    if (calculated === undefined)
+      return refuseCalculation(command.recordId, preparation.correlationId);
+    parentMutations = calculated.parentMutations;
+    dueTransitions = dueTransitionsFor(preparation, parentMutations, settings);
+  }
+
+  const finalized = parseDatabaseOutcome(
+    one(
+      await transaction.query<Row>`
+        select vortex_record.finalize_protected_record_delete(
+          ${command.commandId}::uuid,
+          ${command.recordTypeId}::uuid,
+          ${command.recordId}::uuid,
+          ${command.expectedConcurrencyNumber}::bigint,
+          ${JSON.stringify(parentMutations)}::text::jsonb,
+          ${JSON.stringify(dueTransitions)}::text::jsonb
+        ) as result
+      `,
+    ).result,
+    "deleted",
+  );
+  if (finalized.outcome !== "completed" || finalized.value.replayed)
+    throw new Error("RECORD_LIFECYCLE_RESULT_INVALID");
+  return { ...finalized.value, outcome: "deleted" };
+};
+
 export type RecordDeleteServiceDependencies = HumanOrganizationRequestDependencies &
   Readonly<{
     activityId?: () => string;
@@ -491,10 +571,7 @@ export const createRecordDeleteService = (dependencies: RecordDeleteServiceDepen
           try {
             return await operation(transaction, issuedAt);
           } catch (error) {
-            if (error instanceof RecordLifecycleRollback)
-              settled = error.settled as Settled<Result>;
-            else if (["40001", "40P01"].includes(databaseCode(error) ?? ""))
-              settled = { kind: "restart" };
+            settled = settleRecordLifecycleError(error) as Settled<Result> | undefined;
             throw error;
           }
         },
@@ -523,62 +600,9 @@ export const createRecordDeleteService = (dependencies: RecordDeleteServiceDepen
       return { kind: "temporarily_unavailable" };
     }
 
-    return runCommand<RecordDeleteResult>(session, selection, async (transaction, issuedAt) => {
-      await transaction.query`set local role vortex_runtime`;
-      const prepared = parseDatabaseOutcome(
-        one(
-          await transaction.query<Row>`
-            select vortex_record.prepare_protected_record_delete(
-              ${command.commandId}::uuid,
-              ${command.recordTypeId}::uuid,
-              ${command.recordId}::uuid,
-              ${command.expectedConcurrencyNumber}::bigint,
-              ${activityId}::uuid,
-              ${occurrenceId}::uuid
-            ) as result
-          `,
-        ).result,
-        "deleted",
-      );
-      if (prepared.outcome === "completed") {
-        if (!prepared.value.replayed) throw new Error("RECORD_LIFECYCLE_RESULT_INVALID");
-        return { ...prepared.value, outcome: "deleted" };
-      }
-      if (prepared.outcome !== "prepared") return rollBack(prepared, command.recordId);
-
-      const { preparation } = prepared;
-      let parentMutations: readonly RelationshipTotalParentMutation[] = [];
-      let dueTransitions: ReturnType<typeof dueTransitionsFor> = [];
-      // The deleted root is only the evaluator's required anchor; it is never
-      // written, so a delete without affected parents needs no calculation.
-      if (preparation.records.some((record) => record.recordKey !== "root")) {
-        const settings = await readOrganizationRuntimeSettings(transaction);
-        const calculated = calculateGeneratedValues(preparation, issuedAt, settings);
-        if (calculated === undefined)
-          return refuseCalculation(command.recordId, preparation.correlationId);
-        parentMutations = calculated.parentMutations;
-        dueTransitions = dueTransitionsFor(preparation, parentMutations, settings);
-      }
-
-      const finalized = parseDatabaseOutcome(
-        one(
-          await transaction.query<Row>`
-            select vortex_record.finalize_protected_record_delete(
-              ${command.commandId}::uuid,
-              ${command.recordTypeId}::uuid,
-              ${command.recordId}::uuid,
-              ${command.expectedConcurrencyNumber}::bigint,
-              ${JSON.stringify(parentMutations)}::text::jsonb,
-              ${JSON.stringify(dueTransitions)}::text::jsonb
-            ) as result
-          `,
-        ).result,
-        "deleted",
-      );
-      if (finalized.outcome !== "completed" || finalized.value.replayed)
-        throw new Error("RECORD_LIFECYCLE_RESULT_INVALID");
-      return { ...finalized.value, outcome: "deleted" };
-    });
+    return runCommand<RecordDeleteResult>(session, selection, (transaction, issuedAt) =>
+      performProtectedRecordDelete(transaction, issuedAt, { ...command, activityId, occurrenceId }),
+    );
   };
 
   /**
