@@ -52,7 +52,7 @@ The first complete release includes:
 
 The first complete release does not include:
 
-- Customer-supplied code running on Vortex servers or in the Vortex browser origin. An [application package](appendices/application-packages.md) may bundle custom browser components, rendered in a sandboxed frame on a dedicated domain without Vortex credentials. Installing such a package requires a dedicated permission. Custom backend scripts are deferred until a dedicated script sandbox exists.
+- Customer-supplied code running on Vortex servers or in the Vortex browser origin. An [application package](appendices/application-packages.md) may bundle custom browser components, rendered in a sandboxed frame on a dedicated domain without Vortex credentials. Installing such a package requires a dedicated permission. Custom backend scripts are platform-reviewed code that only Vortex super administrators install, and they run as isolated Kestra script tasks.
 - A general-purpose website hosting product.
 - Direct customer access to platform databases or infrastructure accounts.
 - Automatic sharing of records, definitions, files, or learned information between organisations.

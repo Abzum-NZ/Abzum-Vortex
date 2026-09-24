@@ -23,6 +23,9 @@ Where these sections conflict with this document, this document wins until each 
 | [Version-impact policy](../specification/appendices/version-impact-policy.md) §Workflow-node policy (reordering tasks and changing a bundle are major changes) | Decisions 1 and 7 | #978 |
 | [Core contract boundary](../specification/appendices/core-contract-boundary.md) §Core inventory (adds the flow engine, the component sandbox, the script sandbox and the runtime bundle) | Decisions 1, 7 and 8 | #1026 |
 | [07](../specification/07-applications-pages-and-themes.md) and the [IAM appendix](../specification/appendices/iam-application.md) wording that system applications are "locked" | Decision 11 | #1027 |
+| [16](../specification/16-copying-sharing-import-export.md) §Definition packages (packages are derived; version ranges apply only across clusters) | Decision 7 | #722 |
+| Rule designer §Kestra integration decision (run-as for durable flows started by a person) | Decision 1 | #977 |
+| [Platform permission catalogue](../specification/appendices/platform-permission-catalogue.md) (adds the builder permissions in 1.2.0) | Decision 11 | builder permissions issue |
 
 ## Summary
 
@@ -34,7 +37,7 @@ Where these sections conflict with this document, this document wins until each 
 | 4 | Formulas and read-time computed fields | Calculations use one typed formula tree. Values that depend on the current time are computed whenever they are read and are never stored. |
 | 5 | One configurable Records table component | Lists are one component whose data, columns, sorting, filters, actions and states are all configured inputs. |
 | 6 | The theme engine exists | The delivered theme engine has a naming defect to fix. No second theme engine is built. |
-| 7 | Applications are delivered as packages, and custom logic follows a ladder | Configuration comes first. Custom UI components run in a sandbox in the browser. Custom backend scripts wait for a dedicated sandbox. |
+| 7 | Applications are delivered as packages, and custom logic follows a ladder | Configuration comes first. Custom UI components run in a sandbox in the browser. Custom backend scripts are reviewed, tested and installed only by Vortex super administrators. |
 | 8 | Clean install, upgrade and uninstall | Each service records what it registers for an installation, uninstall removes everything recorded, and the report proves it. |
 | 9 | An immutable runtime bundle per installation revision | Compiled installations are cached by an immutable key, so opening a page reads no definition. |
 | 10 | Agents build applications through the same operations | Every builder operation is one typed, permission-checked operation used by the designer, the API and MCP, including preview installation. |
@@ -52,7 +55,7 @@ A flow is stored data inside the release of the module or application that owns 
 | `namespace` | Derived from the owning module or application; never authored. The Kestra namespace and flow id are generated per installation (09) and are never this value. |
 | `description`, `labels` | Text for builders. Labels are for search and diagnostics only. |
 | `execution` | One of: `interactive`, started by a person or an agent through a binding and answered within the request; `transaction`, which runs inside one record-save transaction; `background`, a server run after a commit, started by the event dispatcher or a verified incoming message; `durable`, which runs on Kestra and is required for schedules, waits and human tasks. |
-| `runAs` | Whose authority each protected task uses. Interactive flows run as the initiating person or agent. Background and durable flows must declare a specified account or System, both only through the scoped execution grants (#322, #541). |
+| `runAs` | Whose authority each protected task uses. Interactive flows, and durable flows started through Run background flow, run as the initiating person; an agent acts as its person. Access is rechecked before every protected task. Background flows, and durable flows started by Schedule or IncomingMessage, declare a specified account or System through the scoped execution grants (#322, #541). |
 | `inputs`, `variables` | Typed with the one Vortex value-type catalogue (#982). |
 | `triggers[]` | Only the automatic starts: `BeforeSave`, `Event` (after a committed record change), `Schedule` and `IncomingMessage`. |
 | `tasks[]` | An ordered, nested list. Control tasks: If, Switch, ForEach, Sequential, Run flow, Stop. Durable-only control tasks: Parallel, Wait until, Wait for a person. Every other task comes from the task registry. |
@@ -118,12 +121,17 @@ The flow engine is built in-house and is part of the application. It has three p
 | Conductor OSS JavaScript SDK | It is a client for a separately run Conductor server. It duplicates Kestra and does not run inside the application. |
 | Hand-built drag-and-drop graph builders (React Flow with free node-and-edge JSON) | The canvas library is right, and the designer uses xyflow/React Flow (#633). Free node-and-edge graphs are what this decision replaces: the canvas edits the structured task list, like Kestra's topology view. |
 
-### Kestra compilation safety
+### Keeping customer text out of Kestra's template engine
 
-Kestra's template engine (Pebble) uses the same `{{ }}` delimiters, and the open-source Kestra instance can read every instance secret from any namespace. So the Kestra compiler (#1087) must follow three rules:
-- It emits builder text only as typed Kestra inputs, or as JSON inside `{% raw %}` blocks, never as template text.
-- Generated flows reference no secret except the fixed callback key.
-- Durable conditions and calculations are evaluated by the Vortex evaluator through the protected callback, and Kestra's native control tasks branch only on that result. This keeps Vortex's typed semantics (nulls, exact decimals) and prevents template injection.
+**Who can reach Kestra.** Kestra is core platform infrastructure. Only Vortex super administrators reach it. Customer builders and administrators never do.
+
+**Why the compiler still matters.** Customer builders do write flow definitions, and those definitions are compiled into Kestra flows. Kestra's template engine (Pebble) uses the same `{{ }}` delimiters as Vortex references. Any text Kestra treats as a template is evaluated with Kestra's own functions, including its secret lookup, which on the open-source edition can read every instance secret from any namespace. So the protection must sit in the compiler and in what the instance holds, not in who can open Kestra.
+
+**The Kestra compiler (#1087) and the Kestra setup follow four rules:**
+1. **No customer text as template text.** The compiler emits customer text (labels, values, conditions) only as typed Kestra inputs or as JSON inside `{% raw %}` blocks.
+2. **Automatic check.** After compilation, a check refuses the flow if any `{{` or `{%` appears outside the references the compiler generated itself. A flow that fails the check is never registered.
+3. **Only the callback key.** Customer flows run on an application Kestra instance whose environment holds only the callback signing key. Operational secrets, such as delivery and database tokens, live only in a separate operations Kestra instance, which runs Vortex's own delivery flows.
+4. **Vortex evaluates conditions and formulas.** Durable conditions and calculations are evaluated by the Vortex evaluator through the protected callback, and Kestra's native control tasks branch only on that result. This keeps Vortex's typed semantics, such as nulls and exact decimals.
 
 ### One start path
 
@@ -201,7 +209,7 @@ Publishing an application derives its package: that application release plus its
 A package never contains records, accounts, secrets, sessions, drafts or live grants. Signatures are added only when a package crosses clusters (16). Inside one cluster the immutable release fingerprints are enough.
 
 Every package also carries:
-- **reference data:** a package may declare seed reference data (for example a price list), imported once at activation as ordinary records;
+- **reference data:** a package may declare seed reference data (for example a price list). It is imported once, at first activation, as ordinary records. The import runs under a System actor scoped to the package's seed record types. The records pass normal validation and BeforeSave rules, and the import is recorded in Activity;
 - **component ownership:** a custom component belongs to the application or module release that bundles it. Only that application, or applications that depend on that module, may place it. Any change to a bundle is a major version change.
 
 ### The custom-logic ladder
@@ -216,9 +224,14 @@ Use the first level that meets the need.
    - talks only through one message channel.
 
    Its events are untrusted input. They start flows only through bindings, and a flow that changes data after such an event shows a host-rendered confirmation first.
-3. **Custom backend scripts.** These are not available until a dedicated script sandbox exists. The sandbox must be a separate host or microVM pool that holds no platform secrets, denies network access by default, limits resources and output, and uses a pinned image. The open-source Kestra instance cannot be used for this: it holds instance-wide secrets, and its process runner inherits them. Until the sandbox exists, installation refuses packages that contain scripts. Scripts only ever run asynchronously; values that must be authoritative at save time use formulas.
+3. **Custom backend scripts.** These are platform-reviewed code:
+   - Only a Vortex super administrator can add a script to a package and install that package, after reviewing and testing it. Customer builders and administrators cannot author or install scripts.
+   - A script runs as a Kestra script task inside a durable flow, on the application Kestra instance, which holds only the callback key.
+   - A script receives only its declared inputs, with time and memory limits.
+   - Its results reach Vortex only through a following protected task.
+   - Scripts run asynchronously. Values that must be authoritative at save time use formulas.
 
-No customer code runs on Vortex servers, on the Kestra host or in the Vortex browser origin.
+Customer-authored code never runs on Vortex servers, in Kestra or in the Vortex browser origin.
 
 ### Example: a canopy quote page
 
@@ -251,7 +264,7 @@ Abandoned prepared candidates are cleaned up.
 
 **Upgrade** prepares the new release set and activates it the same way. The previous release set stays active if anything fails (#598).
 
-**Uninstall** moves an installation through three states: from active to draining, where callbacks for work already running are still honoured, and then to removed.
+**Uninstall** moves an installation through three states: from active to draining, where callbacks for work already running are still honoured, and then to removed. The uninstaller either lets running work finish or cancels it under 09's cancellation policy. Draining ends when no run remains.
 
 Each owning service records the registrations it creates for an installation, and can list and remove them. The uninstall report is the union of those lists. Uninstall is complete when nothing remains except items the uninstaller chose to keep. The registrations covered are:
 - Kestra flows, triggers, namespace files, key-value entries and execution storage, purged according to retention and legal hold;
@@ -300,7 +313,12 @@ Every builder operation is one typed operation, shared by the App Designer, the 
 - uploading component bundles;
 - validating, and running a flow in test mode;
 - previewing;
-- installing into a **preview installation**, which belongs to the draft, has no triggers or outgoing calls, and expires automatically;
+- installing into a **preview installation**:
+  - it compiles the draft into an ephemeral candidate, never a release;
+  - its record types get fresh preview storage identities;
+  - durable tasks are simulated, and nothing is registered in Kestra;
+  - only the previewing person and their agent can use it;
+  - expiry removes its storage, records and registrations;
 - publishing, installing, upgrading and uninstalling.
 
 Each operation is permission-checked (Decision 11) and revision-checked. It returns located validation errors, so an agent can iterate: change, validate, preview, publish, install.
@@ -319,7 +337,11 @@ There is no agent-only path. Every definition an agent produces follows the same
 
 The existing `platform.organization.applications.manage` covers install, upgrade and uninstall.
 
-**Role templates cannot escalate.** Accepting or assigning a role template requires assignment authority whose delegated scope covers every permission in the template (04).
+**Approvals and the one fixed rule.** Who must approve a grant is decided by the organisation's approval workflow in Kestra (Decision 7, #1051). The organisation configures that workflow, and makes it mandatory with the required-caller policy (#1053).
+
+One rule is not configurable: the grant operation itself refuses any role or role template that contains a permission outside the actor's own delegated scope (04). This holds whatever the workflow says, because workflows are editable definitions. Without it, a person who can edit a workflow could remove its approval step and grant themselves anything.
+
+Changing an operation's required-caller policy is itself a protected access-administration operation.
 
 **Who holds them.** Ordinary organisation administrators do not hold these permissions unless a role grants them.
 
@@ -327,7 +349,7 @@ The existing `platform.organization.applications.manage` covers install, upgrade
 - They are platform packages, installed when an organisation is created.
 - They cannot be uninstalled.
 - Their protected operations and operation bindings stay platform-owned.
-- People holding `system_applications.manage` customise them through extension fields, theme, navigation and their own dependent applications, or through an organisation-owned customised copy (#1058).
+- People holding `system_applications.manage` customise them through extension fields, theme, navigation and their own dependent applications, or through an organisation-owned customised copy (#1058). A customised copy replaces the system application's installation and never exists alongside it. It cannot add, remove or retarget protected-operation bindings, and it receives platform fixes through compare-and-merge (#721).
 - Platform upgrades never overwrite customisations.
 - The organisation always keeps a working way for its steward to manage access.
 
@@ -335,4 +357,4 @@ The existing `platform.organization.applications.manage` covers install, upgrade
 
 | Before the Phase 6 milestone | After Phase 6 |
 | --- | --- |
-| Flow contract, registry, compiler, validator and conversions (#976). Protected-operation executor (#989). Server and browser flow runners (#579, #1013, #1014). Read-time computed fields (#994, #995). Records table (#1002–#1005). Theme fix (#1000, #1001). | System modules (#1025). Access operations and approvals as Kestra flows (#1051). One record-change path (#1059). Scalable lists (#1079). Runnable Kestra flows with safe compilation (#1085). Packages, custom components, clean uninstall, runtime bundle and agent building (package issues). The script sandbox is deferred until a dedicated sandbox exists. |
+| Flow contract, registry, compiler, validator and conversions (#976). Protected-operation executor (#989). Server and browser flow runners (#579, #1013, #1014). Read-time computed fields (#994, #995). Records table (#1002–#1005). Theme fix (#1000, #1001). | System modules (#1025). Access operations and approvals as Kestra flows (#1051). One record-change path (#1059). Scalable lists (#1079). Runnable Kestra flows with safe compilation (#1085). Packages, custom components, clean uninstall, runtime bundle and agent building (package issues). The application Kestra instance holds only the callback key, and scripts install only through Vortex super administrators. |

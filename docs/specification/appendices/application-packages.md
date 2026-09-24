@@ -5,7 +5,7 @@
 An application package is what people install, upgrade, uninstall and share. This appendix defines:
 - what a package contains;
 - how custom components are bundled and isolated;
-- why custom scripts are deferred;
+- how platform-reviewed custom scripts are installed;
 - what installation and uninstallation must do;
 - how installed applications are cached;
 - how agents build applications.
@@ -21,6 +21,7 @@ Publishing an application derives its package. The package is that application r
 | Access declarations | Permission declarations and role templates. |
 | Tool bundle | The agent tools derived at publication. |
 | Custom components | Browser component bundles with their component contracts. |
+| Custom scripts | Platform-reviewed Kestra script-task sources, present only in packages installed by a Vortex super administrator. |
 | Seed reference data | Optional records, such as a price list, imported once at activation as ordinary organisation records. |
 | Assets | Images, icons and fonts referenced by the definitions. |
 
@@ -43,9 +44,9 @@ Builders use the first level that meets the need:
 
 1. **Configuration.** Flows, registered tasks, formulas and reference data held in ordinary records.
 2. **Custom components.** Browser components bundled with an application or module release.
-3. **Custom scripts.** Deferred until the dedicated script sandbox exists (see below).
+3. **Custom scripts.** Platform-reviewed code, installed only by Vortex super administrators (see below).
 
-No customer code runs on a Vortex server, on the Kestra host or in the Vortex browser origin.
+Customer-authored code never runs on a Vortex server, in Kestra or in the Vortex browser origin.
 
 ### Custom components
 
@@ -62,7 +63,9 @@ A custom component belongs to the application or module release that bundles it.
 
 - **Bootstrap document.** The renderer loads each custom component through a Vortex-owned bootstrap document. That document is served from a dedicated registrable domain that is never a Vortex application origin. The bootstrap document is served with this header:
 
-  `Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src <bundle host> 'wasm-unsafe-eval'; style-src <bundle host> 'unsafe-inline'; worker-src blob:; connect-src <declared hosts>; img-src <declared hosts> <bundle host>; font-src <declared hosts> <bundle host>; frame-ancestors <Vortex origins>`
+  `Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src <bundle host> 'wasm-unsafe-eval'; style-src <bundle host> 'unsafe-inline'; worker-src blob:; connect-src <bundle host> <declared hosts>; img-src <bundle host> <declared hosts> blob: data:; media-src <bundle host> <declared hosts> blob:; font-src <bundle host> <declared hosts>; frame-ancestors <Vortex origins>`
+
+  The bundle host sends `Access-Control-Allow-Origin: *`, because module scripts and model files load into an opaque-origin frame.
 - **Loading.**
   - The bootstrap document loads the bundle with Subresource Integrity, using the digest recorded in the release.
   - Its URL carries no organisation, record or person identifier.
@@ -84,18 +87,14 @@ A custom component belongs to the application or module release that bundles it.
   - The host passes the application's theme tokens as properties.
 - **Designer.** The App Designer lists a custom component in the palette only where it may be placed, and configures it with the ordinary property inspector.
 
-### Custom scripts (deferred)
+### Custom scripts
 
-Custom backend scripts are not available until a dedicated script sandbox exists. The Kestra instance cannot be the sandbox: the open-source edition holds instance-wide secrets, and its process runner inherits them. The sandbox must:
-- run on a separate host or microVM pool that holds no platform secrets;
-- deny network access by default, allowing only declared public hosts;
-- limit CPU time, memory and output size;
-- use a pinned image with vendored dependencies;
-- mount script source read-only, never placing it in a rendered template property.
-
-Until the sandbox exists, installation refuses packages that contain scripts.
-
-Once it exists, a script runs only inside a durable flow, asynchronously, with declared inputs and outputs. Its results reach Vortex only through a following protected task. Values that must be authoritative at save time use formulas, not scripts.
+Custom backend scripts are platform-reviewed code, not customer code:
+- **Who installs them.** Only a Vortex super administrator can add a script to a package and install a package that contains scripts. They do so after reviewing and testing it. Installation by anyone else is refused.
+- **Where they run.** A script runs as a Kestra script task inside a durable flow, on the application Kestra instance. That instance's environment holds only the callback signing key.
+- **What they can use.** The script source is passed as a file, never as a rendered template property. A script receives only its declared inputs and has time and memory limits.
+- **How results return.** Results reach Vortex only through the flow's next protected task, which runs under the flow's run-as identity.
+- **When they run.** Scripts run asynchronously. Values that must be authoritative at save time use formulas.
 
 ## Permissions
 
@@ -106,9 +105,10 @@ Once it exists, a script runs only inside a durable flow, asynchronously, with d
 | `platform.organization.applications.manage` | Install, upgrade and uninstall packages. This permission already exists. |
 | `platform.organization.custom_code.manage` | Required in addition to `applications.manage` when a package contains custom components. |
 | `platform.organization.system_applications.manage` | Change system applications. |
+| Vortex super administrator (platform operator, never a customer role) | Install packages that contain custom scripts, and operate Kestra. |
 
 These permissions have further rules:
-- **Role templates.** Accepting or assigning a role template requires assignment authority whose delegated scope covers every permission in the template ([04](../04-access-and-permissions.md)), so a builder cannot grant themselves more than they hold.
+- **Approvals and the one fixed rule.** The organisation's approval workflow decides who must approve a grant, and the required-caller policy can make that workflow mandatory. Independently of any workflow, the grant operation refuses any role or role template that contains a permission outside the actor's own delegated scope ([04](../04-access-and-permissions.md)). Workflows are editable definitions, so this rule is what stops anyone granting themselves more than they hold.
 - **Recent authentication.** Installing custom components, or accepting role templates, requires the person's recent authentication.
 - **Who holds them.** Ordinary organisation administrators do not hold these permissions unless a role grants them.
 
@@ -125,7 +125,7 @@ Installation is one command. Its inputs are the package, the installer's confirm
 
 **Activate.** This is one transaction:
 - move the installation's active revision;
-- import seed reference data the first time only;
+- import seed reference data the first time only. The import runs under a System actor scoped to the package's seed record types, and the records pass normal validation and BeforeSave rules;
 - increment the Access version;
 - record the activation in Activity.
 
@@ -140,7 +140,7 @@ Prepared candidates that are never activated are cleaned up.
 
 ## Uninstallation
 
-**States.** An installation moves from active, to draining, to removed. While draining, callbacks for work already running are honoured, and no new work starts.
+**States.** An installation moves from active, to draining, to removed. While draining, callbacks for work already running are honoured, and no new work starts. The uninstaller either lets running work finish or cancels it under the cancellation policy in [09](../09-workflows-and-pipelines.md). Draining ends when no run remains.
 
 **Registration ledger.** Each owning service records the registrations it creates for an installation, and can list and remove them. The uninstall report is the union of those lists. Uninstallation is complete when nothing remains except the items the uninstaller chose to keep.
 
@@ -204,7 +204,12 @@ Every builder operation is one typed, revision-checked operation, shared by the 
 - creating and changing modules, fields, relationships, pages, placements, flows and role templates;
 - uploading component bundles;
 - validating, and running a flow in test mode;
-- previewing, including a **preview installation**, which is tied to the draft, has no triggers or outgoing calls, and expires automatically;
+- previewing, including a **preview installation**:
+  - it compiles the draft into an ephemeral candidate, never a release;
+  - its record types get fresh preview storage identities;
+  - durable tasks are simulated, and nothing is registered in Kestra;
+  - only the previewing person and their agent can use it;
+  - expiry removes its storage, records and registrations;
 - publishing, installing, upgrading and uninstalling.
 
 Validation returns located errors, so an agent can correct its draft and try again. An agent holds only the permissions of the person it acts for. Its MCP grant must include explicit build and install scopes.
@@ -213,7 +218,7 @@ Validation returns located errors, so an agent can correct its draft and try aga
 
 - **Custom component.** A package with a custom 3D component installs only for an installer holding `applications.manage` and `custom_code.manage`, with recent authentication.
   - The component renders through the bootstrap document, receives only the mapped fields, and has no session.
-  - Its "shape changed" event runs the bound preview flow once, however many events arrive.
+  - Its "shape changed" event runs at most one preview flow at a time; the last run uses the latest event.
 - **Uninstall.** Uninstalling that package:
   - drains running work, then removes every registration in the ledger;
   - keeps or deletes records as chosen, never deleting a record type another installation binds;
@@ -224,4 +229,4 @@ Validation returns located errors, so an agent can correct its draft and try aga
   - tests the page in a preview installation;
   - publishes, installs and opens it, without any code change.
 - **Caching.** Opening an installed page reads no definition from the database once its bundle parts are in the server's memory cache.
-- **Scripts.** A package that contains a script is refused at installation until the dedicated script sandbox exists.
+- **Scripts.** A package that contains a script installs only for a Vortex super administrator. Its script runs as a Kestra script task that sees only its declared inputs and the callback key.
