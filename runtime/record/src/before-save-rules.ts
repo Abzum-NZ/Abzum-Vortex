@@ -62,8 +62,10 @@ const generatedFieldTypes = new Set<string>(["reference_number", "calculation", 
 
 /**
  * Parses the `beforeSaveRules` a preparation returned. Anything that is not the
- * exact closed shape for this record type is unreachable and yields `undefined`;
- * the caller must then refuse the save rather than run it without its rules.
+ * exact closed shape for this record type — including a rule that is not a
+ * compiled graph, such as a legacy rule definition — is unreachable and yields
+ * `undefined`; the caller must then refuse the save rather than run it without
+ * its rules.
  */
 export const parseBeforeSaveRuleSet = (
   candidate: unknown,

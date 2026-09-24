@@ -510,22 +510,23 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
 
             // A save that writes subject fields runs the exact release's compiled
             // before-save rules once. A totals-prepared closure is only reached
-            // when no rule is installed anywhere. Creations beside a subject
-            // rule are not evaluated here, so they refuse rather than skip.
-            if (
-              totalPreparation.outcome !== "prepared" &&
-              Object.keys(composition.submittedValues).length > 0
-            ) {
+            // when no rule is installed anywhere. Other records the action writes
+            // are not evaluated here: a relationship copy changes another record
+            // of the subject's own type, so a subject rule refuses it rather than
+            // skip it (creations already refuse under any installed rule).
+            if (totalPreparation.outcome !== "prepared") {
               const ruleSet = parseBeforeSaveRuleSet(
                 prepared.beforeSaveRules,
                 prepared.recordType.recordTypeId,
               );
               if (
                 ruleSet === undefined ||
-                (ruleSet.rules.length > 0 && composition.creations.length > 0)
+                (ruleSet.rules.length > 0 &&
+                  (composition.creations.length > 0 || composition.relationshipCopies.length > 0))
               )
                 return safeRefusal(prepared.correlationId, "operation_refused");
-              attempted.rules = beginBeforeSaveRuleExecution(ruleSet);
+              if (Object.keys(composition.submittedValues).length > 0)
+                attempted.rules = beginBeforeSaveRuleExecution(ruleSet);
             }
 
             let finalValues: Record<string, unknown> = {};
