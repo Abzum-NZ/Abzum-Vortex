@@ -523,11 +523,6 @@ function conditionRootPaths(
       sourceRoot: ["body", "actions", first, "precondition"],
       canonicalRoot: ["content", "actions", first, "precondition"],
     });
-  if (collection === "rules")
-    fixedRoots.push({
-      sourceRoot: ["body", "rules", first, "condition"],
-      canonicalRoot: ["content", "rules", first, "condition"],
-    });
   if (collection === "sharing_conditions")
     fixedRoots.push({
       sourceRoot: ["body", "sharing_conditions", first, "condition"],
