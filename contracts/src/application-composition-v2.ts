@@ -940,6 +940,8 @@ export const protectedReadModelKeys = [
   "groups",
   "effective_assignments",
   "tenant_structure",
+  "organization_invitations",
+  "organization_runtime_settings",
 ] as const;
 export const protectedReadModelKeySchema = z.enum(protectedReadModelKeys);
 export type ProtectedReadModelKey = z.infer<typeof protectedReadModelKeySchema>;
@@ -980,6 +982,18 @@ export const protectedReadModelDeclarations = Object.freeze({
     ownerReader: "identity.listTenantHierarchy",
     filters: Object.freeze([] as const),
     resultContract: "TenantHierarchyResult",
+  }),
+  organization_invitations: Object.freeze({
+    label: "Organisation invitations",
+    ownerReader: "access.listOrganizationInvitations",
+    filters: Object.freeze([] as const),
+    resultContract: "ListOrganizationInvitationsResult",
+  }),
+  organization_runtime_settings: Object.freeze({
+    label: "Organisation runtime settings",
+    ownerReader: "access.readOrganizationRuntimeSettings",
+    filters: Object.freeze([] as const),
+    resultContract: "ReadOrganizationRuntimeSettingsResult",
   }),
 } satisfies Record<
   ProtectedReadModelKey,
