@@ -183,7 +183,38 @@ export {
   VALIDATION_MESSAGE_BLOCK_RELEASE,
 } from "./controls";
 
-// Full Platform Component Registry (Display + Controls)
+// Launcher Projected Data & Binding Contracts
+export {
+  linkTilesToListValues,
+  parsePermittedApplicationsLauncherProjection,
+  permittedApplicationsToListValues,
+  readLauncherSettings,
+  resolveLauncherListContext,
+  type LauncherListContext,
+  type LauncherSettings,
+  type LinkTileRow,
+  type LinkTilesQueryBinding,
+  type PermittedApplicationMetadata,
+  type PermittedApplicationsLauncherProjection,
+} from "./launcher";
+
+// Launcher, Link-Tile & View-Filter Components
+export {
+  ApplicationLauncher,
+  LinkTiles,
+  ViewFilter,
+} from "./launcher";
+
+// Launcher Registrations & Registry
+export {
+  APPLICATION_LAUNCHER_BLOCK_RELEASE,
+  LAUNCHER_COMPONENT_REGISTRATIONS,
+  LINK_TILES_BLOCK_RELEASE,
+  VIEW_FILTER_BLOCK_RELEASE,
+  createLauncherComponentRegistry,
+} from "./launcher";
+
+// Full Platform Component Registry (Display + Controls + Launcher)
 export {
   ALL_PLATFORM_COMPONENT_REGISTRATIONS,
   createFullPlatformComponentRegistry,
