@@ -25,13 +25,23 @@ const referenceKey = (reference: TypedRecordReference | null | undefined): strin
     ? ""
     : `${reference.recordTypeId}:${reference.recordId}`;
 
-const parseReferenceKey = (text: string): TypedRecordReference | null => {
+/**
+ * Parses an entered reference key, admitting only a complete pair whose record type is one the
+ * block's authored allowed record types names. Anything else is no reference at all, so the form
+ * and its events never carry a reference of an undeclared record type.
+ */
+const parseReferenceKey = (
+  text: string,
+  allowedRecordTypeIds: readonly string[],
+): TypedRecordReference | null => {
   const separator = text.indexOf(":");
-  if (separator < 1 || separator === text.length - 1) return null;
-  return {
-    recordTypeId: text.slice(0, separator).trim(),
-    recordId: text.slice(separator + 1).trim(),
-  };
+  if (separator < 0) return null;
+  const recordTypeId = text.slice(0, separator).trim();
+  const recordId = text.slice(separator + 1).trim();
+  if (recordTypeId.length === 0 || recordId.length === 0) return null;
+  return allowedRecordTypeIds.includes(recordTypeId)
+    ? Object.freeze({ recordTypeId, recordId })
+    : null;
 };
 
 /**
@@ -55,15 +65,18 @@ export function LinkInput(props: LinkInputProps): ReactElement {
   const note = inactiveNote(context);
 
   const [value, setValue] = useSeededState(referenceKey(context.values?.value));
-  useFormField(fieldKey, props.placementId, parseReferenceKey(value));
+  useFormField(fieldKey, props.placementId, parseReferenceKey(value, allowedRecordTypeIds));
 
   const onChange = (event: ChangeEvent<HTMLInputElement>): void => {
     if (disabled || readOnly) return;
     const next = event.target.value;
     setValue(next);
-    const reference = parseReferenceKey(next);
-    if (reference === null || !allowedRecordTypeIds.includes(reference.recordTypeId)) return;
-    context.events?.field_changed?.({ event: "field_changed", fieldKey, value: reference });
+    // A cleared or not-yet-valid entry reports no reference, so listeners never keep a stale one.
+    context.events?.field_changed?.({
+      event: "field_changed",
+      fieldKey,
+      value: parseReferenceKey(next, allowedRecordTypeIds),
+    });
   };
 
   return (

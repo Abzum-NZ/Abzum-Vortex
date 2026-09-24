@@ -381,10 +381,6 @@ const subjectOf = (dependency: ExactDefinitionDependency): string =>
                       ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.workflowId}`
                       : dependency.kind === "application_action"
                         ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.actionId}`
-                      : dependency.kind === "module_record_type"
-                        ? `${dependency.kind}:${dependency.moduleRootId}:${dependency.recordTypeId}`
-                        : dependency.kind === "module_action"
-                          ? `${dependency.kind}:${dependency.moduleRootId}:${dependency.actionId}`
                     : dependency.kind === "protected_operation"
                       ? `${dependency.kind}:${dependency.operation.owner.kind}:${
                           dependency.operation.owner.kind === "application"
@@ -594,10 +590,6 @@ const findPinned = <Kind extends ExactDefinitionDependency["kind"]>(
             ? String(entry.flowId) === subject
             : entry.kind === "protected_operation"
               ? entry.operation.operationId === subject
-              : entry.kind === "module_record_type"
-                ? entry.recordTypeId === subject
-                : entry.kind === "module_action"
-                  ? entry.actionId === subject
           : entry.key === subject),
   );
   if (matches.length !== 1) return refuse("DEFINITION_CONFIRMATION_MISMATCH");
@@ -996,33 +988,8 @@ const flowTargetManifestFor = (
           contentFingerprint: String(target.contentFingerprint),
           resolutionFingerprint: String(target.resolutionFingerprint),
         });
-      else if (targetKind === "named_action") {
-        // A named-action flow node pins the exact action release: an application-owned action is
-        // pinned as an application action, and a module-owned action as a protected operation on
-        // its owning module. A generic record save adds no flow-target entry of its own because
-        // its record type belongs to a module release already pinned by the module binding.
-        const owner = target.owner as { kind?: unknown; moduleRootId?: unknown };
-        if (String(owner.kind) === "application")
-          add({
-            kind: "application_action",
-            applicationRootId,
-            actionId: String(target.actionId),
-            releaseVersion: String(target.releaseVersion),
-            contentFingerprint: String(target.contentFingerprint),
-            resolutionFingerprint: String(target.resolutionFingerprint),
-          });
-        else
-          add({
-            kind: "protected_operation",
-            operation: {
-              owner: { kind: "module", moduleRootId: String(owner.moduleRootId) },
-              operationId: String(target.actionId),
-            },
-            releaseVersion: String(target.releaseVersion),
-            contentFingerprint: String(target.contentFingerprint),
-            resolutionFingerprint: String(target.resolutionFingerprint),
-          });
-      }
+      // A record save adds no entry of its own: its record type belongs to a Module release the
+      // Module binding already pins exactly.
     }
   }
   for (const binding of content.flowBindings) {

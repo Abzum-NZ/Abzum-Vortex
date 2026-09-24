@@ -31,13 +31,27 @@ const blockText = (block: RichTextBlock): string => {
 const documentText = (document: TypedRichTextDocument | null | undefined): string =>
   document === null || document === undefined ? "" : document.blocks.map(blockText).join("\n");
 
-const toDocument = (text: string): TypedRichTextDocument => ({
-  blocks: [{ kind: "paragraph", children: [{ kind: "text", text }] }],
-});
+/** Edited plain text becomes one paragraph per non-blank line; blank text is no document. */
+const toDocument = (text: string): TypedRichTextDocument | null => {
+  const paragraphs = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  return paragraphs.length === 0
+    ? null
+    : Object.freeze({
+        blocks: paragraphs.map((line) => ({
+          kind: "paragraph" as const,
+          children: [{ kind: "text" as const, text: line }],
+        })),
+      });
+};
 
 /**
  * Structured rich text field. It renders the projected document's text and emits only its declared
- * `field_changed` event with a validated single-paragraph document; it never interprets markup as
+ * `field_changed` event. Until the person edits the text it publishes the projected (or authored
+ * default) document unchanged, so submitting never flattens existing headings, lists, emphasis or
+ * links; an edit publishes a validated paragraph document. It never interprets markup as
  * executable content.
  */
 export function RichTextInput(props: RichTextInputProps): ReactElement {
@@ -53,14 +67,27 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
   const error = context.values?.error;
   const note = inactiveNote(context);
 
-  const [value, setValue] = useSeededState(documentText(context.values?.value));
-  useFormField(fieldKey, props.placementId, toDocument(value));
+  const projected = context.values?.value;
+  const authoredDefault = props.settings.default_value;
+  const seeded: TypedRichTextDocument | null =
+    projected !== undefined
+      ? projected
+      : authoredDefault?.kind === "rich_text"
+        ? authoredDefault.value
+        : null;
+  const seededText = documentText(seeded);
+  const [value, setValue] = useSeededState(seededText);
+  useFormField(fieldKey, props.placementId, value === seededText ? seeded : toDocument(value));
 
   const onChange = (event: ChangeEvent<HTMLTextAreaElement>): void => {
     if (disabled || readOnly) return;
     const next = event.target.value;
     setValue(next);
-    context.events?.field_changed?.({ event: "field_changed", fieldKey, value: toDocument(next) });
+    context.events?.field_changed?.({
+      event: "field_changed",
+      fieldKey,
+      value: next === seededText ? seeded : toDocument(next),
+    });
   };
 
   return (

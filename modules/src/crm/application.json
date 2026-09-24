@@ -1318,6 +1318,80 @@
 
                                                                                                                                                                                                                                    }
                                                                                                                                                                                                                      },
+                                                                                                                                                                                                  "form_field_6_3_first_name":  {
+                                                                                                                                                                                                                         "block":  {
+                                                                                                                                                                                                                                       "block_id":  "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                                                                                                                                                                                                                                       "release_version":  "1.0.0"
+                                                                                                                                                                                                                                   },
+                                                                                                                                                                                                                         "settings":  {
+                                                                                                                                                                                                                                          "name":  {
+                                                                                                                                                                                                                                                       "kind":  "text",
+                                                                                                                                                                                                                                                       "value":  "first_name"
+                                                                                                                                                                                                                                                   },
+                                                                                                                                                                                                                                          "label":  {
+                                                                                                                                                                                                                                                        "kind":  "text",
+                                                                                                                                                                                                                                                        "value":  "First name"
+                                                                                                                                                                                                                                                    },
+                                                                                                                                                                                                                                          "required":  {
+                                                                                                                                                                                                                                                           "kind":  "boolean",
+                                                                                                                                                                                                                                                           "value":  true
+                                                                                                                                                                                                                                                       }
+                                                                                                                                                                                                                                      },
+                                                                                                                                                                                                                         "theme_overrides":  {
+
+                                                                                                                                                                                                                                             },
+                                                                                                                                                                                                                         "responsive":  {
+                                                                                                                                                                                                                                            "desktop":  {
+                                                                                                                                                                                                                                                            "visible":  true,
+                                                                                                                                                                                                                                                            "width":  {
+                                                                                                                                                                                                                                                                          "kind":  "fill"
+                                                                                                                                                                                                                                                                      },
+                                                                                                                                                                                                                                                            "height":  {
+                                                                                                                                                                                                                                                                           "kind":  "content"
+                                                                                                                                                                                                                                                                       }
+                                                                                                                                                                                                                                                        }
+                                                                                                                                                                                                                                        },
+                                                                                                                                                                                                                         "slots":  {
+
+                                                                                                                                                                                                                                   }
+                                                                                                                                                                                                                     },
+                                                                                                                                                                                                  "form_field_6_3_last_name":  {
+                                                                                                                                                                                                                         "block":  {
+                                                                                                                                                                                                                                       "block_id":  "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                                                                                                                                                                                                                                       "release_version":  "1.0.0"
+                                                                                                                                                                                                                                   },
+                                                                                                                                                                                                                         "settings":  {
+                                                                                                                                                                                                                                          "name":  {
+                                                                                                                                                                                                                                                       "kind":  "text",
+                                                                                                                                                                                                                                                       "value":  "last_name"
+                                                                                                                                                                                                                                                   },
+                                                                                                                                                                                                                                          "label":  {
+                                                                                                                                                                                                                                                        "kind":  "text",
+                                                                                                                                                                                                                                                        "value":  "Last name"
+                                                                                                                                                                                                                                                    },
+                                                                                                                                                                                                                                          "required":  {
+                                                                                                                                                                                                                                                           "kind":  "boolean",
+                                                                                                                                                                                                                                                           "value":  true
+                                                                                                                                                                                                                                                       }
+                                                                                                                                                                                                                                      },
+                                                                                                                                                                                                                         "theme_overrides":  {
+
+                                                                                                                                                                                                                                             },
+                                                                                                                                                                                                                         "responsive":  {
+                                                                                                                                                                                                                                            "desktop":  {
+                                                                                                                                                                                                                                                            "visible":  true,
+                                                                                                                                                                                                                                                            "width":  {
+                                                                                                                                                                                                                                                                          "kind":  "fill"
+                                                                                                                                                                                                                                                                      },
+                                                                                                                                                                                                                                                            "height":  {
+                                                                                                                                                                                                                                                                           "kind":  "content"
+                                                                                                                                                                                                                                                                       }
+                                                                                                                                                                                                                                                        }
+                                                                                                                                                                                                                                        },
+                                                                                                                                                                                                                         "slots":  {
+
+                                                                                                                                                                                                                                   }
+                                                                                                                                                                                                                     },
                                                                                                                                                                                                   "form_submit_6_3":  {
                                                                                                                                                                                                                           "block":  {
                                                                                                                                                                                                                                         "block_id":  "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -1355,6 +1429,8 @@
                                                                                                                                                                                "order":  {
                                                                                                                                                                                              "desktop":  [
                                                                                                                                                                                                              "form_field_6_3",
+                                                                                                                                                                                                             "form_field_6_3_first_name",
+                                                                                                                                                                                                             "form_field_6_3_last_name",
                                                                                                                                                                                                              "form_submit_6_3"
                                                                                                                                                                                                          ]
                                                                                                                                                                                          }
@@ -4664,7 +4740,8 @@
 
                                                        },
                                            "declared_effects":  [
-                                                                    "form_interaction"
+                                                                    "form_interaction",
+                                                                    "change"
                                                                 ]
                                        },
                                        {
@@ -4683,7 +4760,8 @@
 
                                                        },
                                            "declared_effects":  [
-                                                                    "form_interaction"
+                                                                    "form_interaction",
+                                                                    "change"
                                                                 ]
                                        },
                                        {
@@ -4702,7 +4780,8 @@
 
                                                        },
                                            "declared_effects":  [
-                                                                    "form_interaction"
+                                                                    "form_interaction",
+                                                                    "change"
                                                                 ]
                                        },
                                        {
@@ -4721,7 +4800,8 @@
 
                                                        },
                                            "declared_effects":  [
-                                                                    "form_interaction"
+                                                                    "form_interaction",
+                                                                    "change"
                                                                 ]
                                        },
                                        {
@@ -4740,7 +4820,8 @@
 
                                                        },
                                            "declared_effects":  [
-                                                                    "form_interaction"
+                                                                    "form_interaction",
+                                                                    "change"
                                                                 ]
                                        },
                                        {
@@ -4759,7 +4840,8 @@
 
                                                        },
                                            "declared_effects":  [
-                                                                    "form_interaction"
+                                                                    "form_interaction",
+                                                                    "change"
                                                                 ]
                                        },
                                        {
@@ -4778,7 +4860,8 @@
 
                                                        },
                                            "declared_effects":  [
-                                                                    "form_interaction"
+                                                                    "form_interaction",
+                                                                    "change"
                                                                 ]
                                        }
                                    ]

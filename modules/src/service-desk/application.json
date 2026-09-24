@@ -2448,7 +2448,8 @@
 
                                                        },
                                            "declared_effects":  [
-                                                                    "form_interaction"
+                                                                    "form_interaction",
+                                                                    "change"
                                                                 ]
                                        },
                                        {
@@ -2467,7 +2468,8 @@
 
                                                        },
                                            "declared_effects":  [
-                                                                    "form_interaction"
+                                                                    "form_interaction",
+                                                                    "change"
                                                                 ]
                                        }
                                    ]

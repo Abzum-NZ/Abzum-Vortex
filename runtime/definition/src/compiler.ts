@@ -4937,52 +4937,39 @@ function compileApplicationFlows(
             recordTypeId: record.recordTypeId,
             mode: target.mode,
             releaseVersion: resolution.definition(moduleKey, "module").exactVersion,
-            contentFingerprint: targetContentFingerprint("module_record_type", {
+            contentFingerprint: targetContentFingerprint("record_save", {
               recordTypeId: record.recordTypeId,
               mode: target.mode,
             }),
             resolutionFingerprint: moduleOutput?.resolutionFingerprint ?? resolutionFingerprint,
           };
         } else if (target.kind === "named_action") {
-          const actionKey = String(target.action);
-          const moduleAction = valueIndex.action(actionKey);
-          const applicationAction = sourceByKey(body.actions as JsonObject[], actionKey);
-          if (moduleAction !== undefined) {
-            const actionId = String(moduleAction.action.actionId);
-            const owner = dependencyOutputs.filter(
-              (candidate) =>
-                candidate.kind === "module" &&
-                ((asObject(asObject(candidate.canonical).content).actions as JsonObject[]) ?? []).some(
-                  (candidateAction) => String(candidateAction.actionId) === actionId,
-                ),
-            );
-            if (owner.length !== 1)
-              fail("vortex.definition.missing_identity", "unresolved_reference");
-            compiledTarget = {
-              kind: "named_action",
-              actionKey,
-              owner: { kind: "module", moduleRootId: String(owner[0]!.artifact.rootId) },
-              actionId,
-              releaseVersion: owner[0]!.artifact.exactVersion,
-              contentFingerprint: targetContentFingerprint("module_action", moduleAction.action),
-              resolutionFingerprint: owner[0]!.resolutionFingerprint,
-            };
-          } else if (applicationAction !== undefined) {
-            compiledTarget = {
-              kind: "named_action",
-              actionKey,
-              owner: { kind: "application", applicationRootId: appRoot.rootId },
-              actionId: resolution.id(definitionKey, "action", actionKey, "content"),
-              releaseVersion: appVersion,
-              contentFingerprint: targetContentFingerprint(
-                "application_action",
-                applicationAction,
-              ),
-              resolutionFingerprint,
-            };
-          } else {
+          // A named action is authored by its bound Module action's published key and resolves to
+          // that Module's protected operation, so it carries exactly the same permanent identity,
+          // release evidence and manifest entry as an authored protected operation.
+          const moduleAction = valueIndex.action(String(target.action));
+          if (moduleAction === undefined)
             fail("vortex.definition.missing_identity", "unresolved_reference");
-          }
+          const actionId = String(moduleAction.action.actionId);
+          const owners = dependencyOutputs.filter(
+            (candidate) =>
+              candidate.kind === "module" &&
+              ((asObject(candidate.canonical.content).actions as JsonObject[] | undefined) ?? []).some(
+                (candidateAction) => String(candidateAction.actionId) === actionId,
+              ),
+          );
+          if (owners.length !== 1)
+            fail("vortex.definition.missing_identity", "unresolved_reference");
+          compiledTarget = {
+            kind: "protected_operation",
+            ...compileProtectedOperation(
+              {
+                owner: { kind: "module", moduleRootId: String(owners[0]!.artifact.rootId) },
+                operationId: actionId,
+              },
+              undefined,
+            ),
+          };
         } else {
           const action = sourceByKey(body.actions as JsonObject[], String(target.action));
           if (action === undefined)
