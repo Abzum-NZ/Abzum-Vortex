@@ -546,6 +546,9 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
       const dependencies = new Set(
         array(body.dependencies).map((dependency) => String(dependency.module)),
       );
+      const dependencyKeys = new Set(
+        array(body.dependencies).map((dependency) => String(dependency.dependency_key)),
+      );
       const actions = array(body.actions);
       const actionIds = new Set(actions.map((action) => String(action.id)));
       const permissions = new Set(
@@ -747,6 +750,16 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
       }
       for (const point of array(body.extension_points))
         if (!records.has(String(point.record_type))) valid = false;
+      for (const contribution of array(body.contributions ?? [])) {
+        if (!dependencyKeys.has(String(contribution.dependency))) valid = false;
+        if (contribution.kind === "field") {
+          const record = records.get(String(contribution.record_type));
+          const fields = new Set(
+            record ? array(record.fields).map((field) => String(field.key)) : [],
+          );
+          if (!record || !fields.has(String(contribution.field))) valid = false;
+        } else if (!actionIds.has(String(contribution.contributed_action))) valid = false;
+      }
       for (const condition of array(body.sharing_conditions)) {
         const record = records.get(String(condition.source_record_type));
         const fields = new Set(
@@ -2076,10 +2089,12 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
     string,
     { record: JsonObject; moduleRootId: string; allowedModuleRoots: ReadonlySet<string> }
   >();
+  const moduleContentByRootId = new Map<string, JsonObject>();
   for (const output of availableModuleOutputs) {
     const canonical = object(output.canonical);
     const content = object(canonical.content);
     const moduleRootId = String(object(canonical.envelope).rootId);
+    moduleContentByRootId.set(moduleRootId, content);
     const allowedModuleRoots = new Set([
       moduleRootId,
       ...array(content.dependencies).map((dependency) => String(dependency.moduleRootId)),
@@ -2170,6 +2185,9 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       moduleRootId,
       ...array(content.dependencies).map((dependency) => String(dependency.moduleRootId)),
     ]);
+    const declaredDependencyRoots = new Set(
+      array(content.dependencies).map((dependency) => String(dependency.moduleRootId)),
+    );
     const choicePermissionValid = (permissionId: unknown): boolean => {
       const owners = permissionOwnersById.get(String(permissionId));
       return owners !== undefined && owners.size === 1 && allowedModuleRoots.has([...owners][0]!);
@@ -2681,6 +2699,89 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
             location,
           ),
         );
+    }
+    const contributionIds = new Set<string>();
+    for (const contribution of array(content.contributions ?? [])) {
+      const targetModule = object(contribution.targetModule);
+      const targetRootId = String(targetModule.moduleRootId);
+      const targetContent = moduleContentByRootId.get(targetRootId);
+      const location = {
+        kind: "extension_point" as const,
+        key: String(targetModule.moduleKey),
+      };
+      // A contribution must target a declared dependency other than the contributing module,
+      // and that release must declare the exact extension point it claims.
+      if (
+        targetRootId === moduleRootId ||
+        !declaredDependencyRoots.has(targetRootId) ||
+        targetContent === undefined
+      ) {
+        failures.push(
+          failure(
+            output,
+            "vortex.definition.module_extension_references",
+            "broken_reference",
+            location,
+          ),
+        );
+        continue;
+      }
+      const point = array(targetContent.extensionPoints).find(
+        (candidate) =>
+          String(candidate.extensionPointId) === String(contribution.targetExtensionPointId),
+      );
+      if (point === undefined) {
+        failures.push(
+          failure(
+            output,
+            "vortex.definition.module_extension_references",
+            "broken_reference",
+            location,
+          ),
+        );
+        continue;
+      }
+      if (!(point.accepts as string[]).includes(String(contribution.kind)))
+        failures.push(
+          failure(
+            output,
+            "vortex.definition.module_extension_capabilities",
+            "unsupported_choice",
+            location,
+          ),
+        );
+      const contributedValid =
+        contribution.kind === "field"
+          ? (() => {
+              const record = moduleRecords.get(String(contribution.recordTypeId));
+              return (
+                record !== undefined &&
+                array(record.fields).some(
+                  (field) => String(field.fieldId) === String(contribution.fieldId),
+                )
+              );
+            })()
+          : actionsById.has(String(contribution.actionId));
+      if (!contributedValid)
+        failures.push(
+          failure(
+            output,
+            "vortex.definition.module_extension_references",
+            "broken_reference",
+            location,
+          ),
+        );
+      const contributionId = String(contribution.contributionId);
+      if (contributionIds.has(contributionId))
+        failures.push(
+          failure(
+            output,
+            "vortex.definition.module_extension_references",
+            "duplicate_key",
+            location,
+          ),
+        );
+      contributionIds.add(contributionId);
     }
     for (const condition of array(content.sharingConditions)) {
       const record = moduleRecords.get(String(condition.sourceRecordTypeId));
