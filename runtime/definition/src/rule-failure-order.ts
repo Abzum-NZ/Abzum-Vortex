@@ -25,6 +25,7 @@ const familyOrder: readonly DefinitionRuleFailure["family"][] = [
   "dependency_cycle",
   "unsafe_content",
   "incompatible_change",
+  "more_errors",
 ];
 
 /**
@@ -42,6 +43,10 @@ export const settleDefinitionRuleFailures = (
     ]),
   );
   return [...unique.values()].sort((left, right) => {
+    if (left.family !== right.family) {
+      if (left.family === "more_errors") return 1;
+      if (right.family === "more_errors") return -1;
+    }
     const locationComparison = compareCanonicalStrings(
       safeLocationKey(left.location),
       safeLocationKey(right.location),
