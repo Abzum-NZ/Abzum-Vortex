@@ -148,10 +148,12 @@ export type ClaimedUploadGrant = Readonly<{
 export type FileUploadRepository = Readonly<{
   /**
    * Under a lock on the owning record field: refuses a capability reservation
-   * already used by another upload, a replacement target that is not an active
-   * file of the same field, and a field whose attachments plus unexpired
-   * in-flight uploads already reach `maxFiles`; otherwise inserts the pending
-   * file, its reservation and its first grant together.
+   * that is not a live, unconsumed reservation of this request or is already
+   * used by another upload, a replacement target that is not an active file of
+   * the same field, and a field whose active attachments (counted by the store,
+   * not taken from `existingAttachmentCount`) plus unexpired in-flight uploads
+   * already reach `maxFiles`; otherwise inserts the pending file, its
+   * reservation and its first grant together.
    */
   reservePendingUpload(reservation: PendingUploadReservation): Promise<
     | Readonly<{ outcome: "reserved"; fileRecord: FileRecord }>
@@ -251,7 +253,10 @@ export type FileUploadAdmissionInput = CurrentUploadAuthority &
     applicationRootId?: ApplicationRootId;
     fieldId: FieldId;
     attachmentSettings: UploadAttachmentSettings;
-    /** Files the saved record currently holds in this field, from the Record service. */
+    /**
+     * Files the saved record currently holds in this field, from the Record
+     * service. Used only to refuse early; the store counts the field itself.
+     */
     existingAttachmentCount: number;
     replacingFileId?: FileId;
     /** Browser-supplied values: used only to refuse early, never to accept content. */

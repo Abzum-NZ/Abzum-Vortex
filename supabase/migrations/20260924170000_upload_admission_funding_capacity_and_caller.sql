@@ -248,7 +248,8 @@ begin
   if p_attachment_reference_id is null$new$);
 
     -- The same field lock admission takes, before any row lock, so admission and
-    -- activation on one field serialise in one order.
+    -- activation on one field serialise in one order. The organisation is cast
+    -- through uuid so its key text is canonical, exactly as admission's.
     definition := pg_temp.upload_patch(definition,
       $old$    raise exception using errcode = '22023', message = 'File activation is invalid';
   end if;
@@ -258,7 +259,7 @@ $old$,
 
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(pg_catalog.concat_ws(E'\x1f',
-      'vortex_file.upload_field', (established ->> 'organizationId'),
+      'vortex_file.upload_field', (established ->> 'organizationId')::uuid::text,
       p_owner_record_type_id::text, p_owner_record_id::text, p_owner_field_id::text), 652)
   );
 $new$);
