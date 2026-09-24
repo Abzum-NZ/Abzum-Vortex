@@ -18,6 +18,7 @@ import {
   workflowDefinitionSchema,
   jsonValueSchema,
   walkDefinitionContract,
+  analyzeFlowResultRouting,
   definitionSourceDocumentSchema,
   definitionCompilationRequestSchema,
   definitionPublicationContextSchema,
@@ -41,6 +42,7 @@ import {
   type DefinitionRuleFailure,
   type DefinitionValidationLocation,
   type FieldDefinition,
+  type FlowRoutingNode,
   type PublishedDefinitionHistory,
   type VersionRequirement,
 } from "@vortex/contracts";
@@ -2987,6 +2989,48 @@ function validateCurrentUserFlow(
   }
   if (processedCount !== nodes.length) {
     failures.push(flowFailure("vortex.definition.application_flow_acyclic", "dependency_cycle"));
+  }
+
+  const routingRefusals = new Set<string>();
+  for (const issue of analyzeFlowResultRouting(
+    nodes.map((node) => ({
+      id: String(node.nodeId),
+      kind: String(node.kind),
+      ...(node.kind === "action"
+        ? {
+            actionTarget: String(object(node.target).kind) as NonNullable<
+              FlowRoutingNode["actionTarget"]
+            >,
+          }
+        : {}),
+      ...(node.kind === "return" ? { returnOutcome: String(node.outcome ?? "completed") } : {}),
+    })),
+    edges.map((edge) => ({
+      from: String(edge.fromNodeId),
+      to: String(edge.toNodeId),
+      ...(edge.outcome === undefined ? {} : { outcome: String(edge.outcome) }),
+    })),
+  )) {
+    // A routing refusal is located at the offending node, or at the source node of an edge.
+    const node =
+      issue.path[0] === "nodes"
+        ? nodes[Number(issue.path[1])]
+        : byId.get(String(edges[Number(issue.path[1])]?.fromNodeId));
+    const refusalKey = node === undefined ? "" : String(node.key);
+    if (routingRefusals.has(refusalKey)) continue;
+    routingRefusals.add(refusalKey);
+    const located = flowFailure("vortex.definition.application_flow_termination", "invalid_value");
+    failures.push(
+      node === undefined || located.location === undefined
+        ? located
+        : {
+            ...located,
+            location: {
+              ...located.location,
+              segments: [...located.location.segments, { kind: "flow_node", key: String(node.key) }],
+            },
+          },
+    );
   }
 
   const dominators = new Map<string, Set<string>>();
