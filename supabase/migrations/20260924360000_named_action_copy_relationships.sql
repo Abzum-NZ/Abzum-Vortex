@@ -14,11 +14,13 @@
 -- database re-derives, from the installed action and the supplied inputs and
 -- never from anything the runtime asserts:
 --
--- * the target: the input's record, of the subject's record type and not the
---   subject itself;
+-- * the target: the input's record link, of the subject's record type and not
+--   the subject itself;
 -- * the relationships: each must be declared by the subject's record type as a
---   single-link kind, and its link field must currently be readable by the
---   actor under the named action;
+--   `many_to_one` link (a `one_to_one` link cannot be held by a second record)
+--   whose link field the actor can currently read under the named action, and
+--   no earlier `set_field` effect of the same action may change that link, so
+--   the copied edge is the one the authored effect order implies;
 -- * the edge: the subject's current edge for that relationship, whose concrete
 --   target type must be a member of the relationship's declared targets
 --   (`relationship_declares_target_internal`, #562);
@@ -26,24 +28,32 @@
 --   same edge is left as is, and a target holding a different edge refuses the
 --   whole command instead of re-pointing it. No existing edge is ever deleted
 --   or re-pointed, and unselected or undeclared relationships are untouched;
--- * a relationship that feeds a relationship total refuses, because moving the
---   copy's link would change a parent's total outside the merged totals closure
---   this command prepared.
+-- * a relationship that feeds a relationship total refuses: the copy would move
+--   a parent's total outside the merged totals closure this command prepared,
+--   and that closure has no second root for the target. Refusing keeps every
+--   stored total exact.
 --
--- Lock order follows #561 and #858: the target row is locked first (exclusively,
--- as it is about to change), then every linked row's share lock in one
--- canonical order, and only then the counters, data versions and relationship
--- edge identities that the reservation, the subject writer and the edge writer
--- take. The whole plan is taken before the reservation `#569` added, so the
--- lock classes never invert.
+-- A refusal decided before anything is written is returned as a `refused`
+-- outcome, which the runtime reports as a safe refusal rather than a
+-- retryable failure.
+--
+-- Lock order follows #561 and #858: every target row is locked first
+-- (exclusively, as it is about to change), then every linked row's share lock
+-- in one canonical order, and only then the counters, data versions and
+-- relationship edge identities that the reservation, the subject writer and the
+-- edge writers take. The whole plan is taken before the reservation `#569`
+-- added, so the lock classes never invert.
 --
 -- The copies are written by `change_record_relationship_internal`, the ordinary
--- relationship writer: it re-decides update authority over the target and its
--- changeable field bound, keeps the edge, the stored link value, the target's
--- revision and its data version consistent, and refuses a relationship the
--- target's type does not declare. Any refusal raises so the receipt, the
--- subject write, the creations and the copies commit or roll back together.
--- The target then gets its own Activity entry and `changed` Event.
+-- relationship writer, in ascending relationship edge identity order: it
+-- re-decides update authority over the target and its changeable field bound,
+-- re-checks the linked record's read access, keeps the edge, the stored link
+-- value, the target's revision and its data version consistent, and refuses a
+-- relationship the target's type does not declare. By then the receipt and the
+-- subject are written, so a refusal raises (`42501`, as a created record's
+-- authorization does) and the receipt, the subject write, the creations and
+-- the copies commit or roll back together. Each changed target then gets its
+-- own Activity entry and `changed` Event.
 --
 -- The three existing functions are patched in place from their current live
 -- definitions, as `20260924310000` does: each reviewed fragment must occur
@@ -59,9 +69,10 @@ set local role vortex_record_adapter;
 
 -- ---------------------------------------------------------------------------
 -- Plan and lock. Validates every `copy_relationships` effect against the
--- installed action and the supplied inputs, takes the target row lock and then
--- every linked row's share lock, and returns the edges to copy. Returns null
--- when the action has no such effect. Every defect raises.
+-- installed action and the supplied inputs, takes every target row lock and
+-- then every linked row's share lock, and returns the edges to copy. Returns
+-- null when the action has no such effect and a `refused` outcome for any
+-- request it cannot honour; only a broken invariant raises.
 -- ---------------------------------------------------------------------------
 create function vortex_record.prepare_named_action_relationship_copies_internal(
   p_action_owner_kind text,
@@ -88,21 +99,19 @@ declare
   readable_field_ids jsonb;
   catalogue jsonb;
   effect_value jsonb;
-  input_definition jsonb;
+  effect_ordinal bigint;
   input_candidate jsonb;
   target_type_id uuid;
   target_record_id uuid;
-  resolved_target_count integer;
   target_concurrency bigint;
   relationship_text text;
   relationship_value jsonb;
   edge_row record;
   existing_row record;
   edge_type_id uuid;
-  copies jsonb;
-  effects_plan jsonb := '[]'::jsonb;
+  planned_keys text[] := array[]::text[];
+  copies jsonb := '[]'::jsonb;
   lock_row record;
-  seen_effect boolean := false;
 begin
   if p_subject_record_type_id is null or p_subject_record_id is null
     or pg_catalog.jsonb_typeof(p_inputs) is distinct from 'object' then
@@ -133,14 +142,14 @@ begin
     p_action_owner_kind, p_action_owner_id, p_action_release_revision,
     p_action_id, p_subject_record_type_id, p_subject_record_id, null
   );
-  if loaded ->> 'outcome' <> 'loaded' then
-    raise exception using errcode = 'P0002', message = 'Relationship copy subject is unavailable';
+  if loaded ->> 'outcome' is distinct from 'loaded' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_unavailable');
   end if;
   decision := vortex_access.evaluate_organization_record_access_internal(
     loaded -> 'declaration', p_subject_record_id, loaded -> 'facts'
   );
-  if decision ->> 'outcome' <> 'allowed' then
-    raise exception using errcode = 'P0002', message = 'Relationship copy subject is unavailable';
+  if decision ->> 'outcome' is distinct from 'allowed' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_unavailable');
   end if;
   readable_field_ids := vortex_access.resolve_record_field_bounds_internal(decision)
     -> 'readableFieldIds';
@@ -150,52 +159,42 @@ begin
 
   -- Discover every target and copy first, then lock: a target row lock is the
   -- first lock class, so it is taken as soon as the target is known.
-  for effect_value in
-    select item.value
+  for effect_value, effect_ordinal in
+    select item.value, item.ordinality
     from pg_catalog.jsonb_array_elements(action_context -> 'action' -> 'effects')
       with ordinality as item(value, ordinality)
     where item.value ->> 'kind' = 'copy_relationships'
     order by item.ordinality
   loop
-    seen_effect := true;
-    select item.value into input_definition
-    from pg_catalog.jsonb_array_elements(action_context -> 'action' -> 'inputs') item(value)
-    where item.value ->> 'key' = effect_value ->> 'targetInputKey'
-      and item.value ->> 'type' = 'record_reference';
+    -- The target is the declared `record_reference` input's record link, the
+    -- one value shape that input accepts.
     input_candidate := p_inputs -> (effect_value ->> 'targetInputKey');
-    if input_definition is null or input_candidate is null then
-      raise exception using errcode = '22023', message = 'Relationship copy target is invalid';
+    if not exists (
+      select 1 from pg_catalog.jsonb_array_elements(action_context -> 'action' -> 'inputs') item(value)
+      where item.value ->> 'key' = effect_value ->> 'targetInputKey'
+        and item.value ->> 'type' = 'record_reference'
+    ) or pg_catalog.jsonb_typeof(input_candidate) is distinct from 'object' then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
     end if;
-    if pg_catalog.jsonb_typeof(input_candidate) = 'object'
-      and input_candidate ?& array['recordTypeId', 'recordId']
-      and input_candidate - array['recordTypeId', 'recordId'] = '{}'::jsonb
-      and pg_catalog.pg_input_is_valid(input_candidate ->> 'recordTypeId', 'uuid')
-      and pg_catalog.pg_input_is_valid(input_candidate ->> 'recordId', 'uuid') then
-      target_type_id := (input_candidate ->> 'recordTypeId')::uuid;
-      target_record_id := (input_candidate ->> 'recordId')::uuid;
-    elsif pg_catalog.jsonb_typeof(input_candidate) = 'string'
-      and pg_catalog.pg_input_is_valid(input_candidate #>> '{}', 'uuid') then
-      select pg_catalog.count(*),
-        (pg_catalog.array_agg((target.value ->> 'recordTypeId')::uuid))[1]
-      into resolved_target_count, target_type_id
-      from pg_catalog.jsonb_array_elements(input_definition -> 'recordTypes') target(value)
-      where target.value ->> 'state' = 'resolved';
-      if resolved_target_count <> 1 then
-        raise exception using errcode = '22023', message = 'Relationship copy target is invalid';
-      end if;
-      target_record_id := (input_candidate #>> '{}')::uuid;
-    else
-      raise exception using errcode = '22023', message = 'Relationship copy target is invalid';
+    if not (input_candidate ?& array['recordTypeId', 'recordId'])
+      or input_candidate - array['recordTypeId', 'recordId']::text[] <> '{}'::jsonb
+      or not coalesce(pg_catalog.pg_input_is_valid(input_candidate ->> 'recordTypeId', 'uuid'), false)
+      or not coalesce(pg_catalog.pg_input_is_valid(input_candidate ->> 'recordId', 'uuid'), false) then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
     end if;
+    target_type_id := (input_candidate ->> 'recordTypeId')::uuid;
+    target_record_id := (input_candidate ->> 'recordId')::uuid;
     -- The copied relationships are the subject's own, so only another record of
     -- the subject's record type can hold them.
-    if target_type_id is distinct from p_subject_record_type_id
-      or target_record_id is null
+    if target_type_id <> p_subject_record_type_id
       or target_record_id = p_subject_record_id then
-      raise exception using errcode = '23514', message = 'Relationship copy target is unavailable';
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'relationship_copy_target_unavailable'
+      );
     end if;
 
     -- L1: the target row, exclusively, before any linked row or edge identity.
+    target_concurrency := null;
     execute pg_catalog.format(
       'select stored.concurrency_number from record_data.%I as stored
        where stored.organisation_id = $1 and stored.record_id = $2
@@ -203,12 +202,13 @@ begin
       subject_meta ->> 'table'
     ) into target_concurrency using organization_id_value, target_record_id;
     if target_concurrency is null then
-      raise exception using errcode = 'P0002', message = 'Relationship copy target is unavailable';
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'relationship_copy_target_unavailable'
+      );
     end if;
 
-    copies := '[]'::jsonb;
     for relationship_text in
-      select pg_catalog.lower(item.value #>> '{}')
+      select distinct pg_catalog.lower(item.value #>> '{}')
       from pg_catalog.jsonb_array_elements(effect_value -> 'relationshipIds') item(value)
       order by 1
     loop
@@ -220,14 +220,27 @@ begin
         and pg_catalog.lower(item.value ->> 'fromRecordTypeId') =
           pg_catalog.lower(p_subject_record_type_id::text);
       if relationship_value is null
-        or relationship_value ->> 'cardinality' not in ('one_to_one', 'many_to_one')
+        or relationship_value ->> 'cardinality' is distinct from 'many_to_one'
         or not exists (
           select 1 from pg_catalog.jsonb_array_elements_text(readable_field_ids) readable(value)
           where pg_catalog.lower(readable.value) =
             pg_catalog.lower(relationship_value ->> 'fromFieldId')
+        )
+        -- The plan copies the subject's edge as it stands before this command
+        -- writes the subject, which is only the authored order's edge when no
+        -- earlier effect sets that same link.
+        or exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(action_context -> 'action' -> 'effects')
+            with ordinality as earlier(value, ordinality)
+          where earlier.ordinality < effect_ordinal
+            and earlier.value ->> 'kind' = 'set_field'
+            and pg_catalog.lower(earlier.value ->> 'fieldId') =
+              pg_catalog.lower(relationship_value ->> 'fromFieldId')
         ) then
-        raise exception using errcode = '23514',
-          message = 'Relationship copy relationship is unavailable';
+        return pg_catalog.jsonb_build_object(
+          'outcome', 'refused', 'reasonCode', 'relationship_copy_unavailable'
+        );
       end if;
 
       catalogue := coalesce(catalogue, vortex_record.relationship_total_catalogue_internal());
@@ -238,9 +251,18 @@ begin
         where field_item.value ->> 'type' = 'total'
           and pg_catalog.lower(field_item.value #>> '{settings,relationshipId}') = relationship_text
       ) then
-        raise exception using errcode = '55000',
-          message = 'Relationship copy would change a relationship total';
+        return pg_catalog.jsonb_build_object(
+          'outcome', 'refused', 'reasonCode', 'unsupported_relationship_total_save'
+        );
       end if;
+
+      -- Two effects may name the same target and relationship; it is copied once.
+      if (target_record_id::text || ':' || relationship_text) = any (planned_keys) then
+        continue;
+      end if;
+      planned_keys := pg_catalog.array_append(
+        planned_keys, target_record_id::text || ':' || relationship_text
+      );
 
       select edge.to_storage_contract_id, edge.to_record_id into edge_row
       from vortex_record.relationship_edges as edge
@@ -257,8 +279,9 @@ begin
         or not vortex_record.relationship_declares_target_internal(
           relationship_value, edge_type_id
         ) then
-        raise exception using errcode = '23514',
-          message = 'Relationship copy target type is not declared';
+        return pg_catalog.jsonb_build_object(
+          'outcome', 'refused', 'reasonCode', 'relationship_copy_unavailable'
+        );
       end if;
 
       select edge.to_storage_contract_id, edge.to_record_id into existing_row
@@ -274,11 +297,14 @@ begin
           and existing_row.to_record_id = edge_row.to_record_id then
           continue;
         end if;
-        raise exception using errcode = '23514',
-          message = 'Relationship copy would replace an existing relationship';
+        return pg_catalog.jsonb_build_object(
+          'outcome', 'refused', 'reasonCode', 'relationship_copy_would_replace'
+        );
       end if;
 
       copies := copies || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'targetRecordTypeId', target_type_id,
+        'targetRecordId', target_record_id,
         'relationshipId', (relationship_value ->> 'relationshipId')::uuid,
         'fromFieldId', (relationship_value ->> 'fromFieldId')::uuid,
         'value', pg_catalog.jsonb_build_object(
@@ -286,23 +312,15 @@ begin
         )
       ));
     end loop;
-
-    effects_plan := effects_plan || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-      'targetRecordTypeId', target_type_id,
-      'targetRecordId', target_record_id,
-      'copies', copies
-    ));
   end loop;
-  if not seen_effect then return null; end if;
 
-  -- L4-before: every linked row's share lock, in one canonical order, still
-  -- ahead of every counter, data version and edge identity (#858).
+  -- Every linked row's share lock, in one canonical order, still ahead of
+  -- every counter, data version and edge identity (#858).
   for lock_row in
     select distinct
       (copy.value #>> '{value,recordTypeId}')::uuid as record_type_id,
       (copy.value #>> '{value,recordId}')::uuid as record_id
-    from pg_catalog.jsonb_array_elements(effects_plan) effect(value)
-    cross join pg_catalog.jsonb_array_elements(effect.value -> 'copies') copy(value)
+    from pg_catalog.jsonb_array_elements(copies) copy(value)
     order by 1, 2
   loop
     perform vortex_record.lock_relationship_target_row_internal(
@@ -310,14 +328,15 @@ begin
     );
   end loop;
 
-  return pg_catalog.jsonb_build_object('effects', effects_plan);
+  return pg_catalog.jsonb_build_object('outcome', 'planned', 'copies', copies);
 end
 $function$;
 
 -- ---------------------------------------------------------------------------
--- Apply. Writes each planned copy through the ordinary relationship writer
--- against the target's current revision, then records the target's Activity and
--- `changed` Event. Every refusal raises, rolling the whole command back.
+-- Apply. Writes every planned copy through the ordinary relationship writer
+-- against its target's current revision, in ascending relationship edge
+-- identity order, then records each changed target's Activity and `changed`
+-- Event. Every refusal raises, rolling the whole command back.
 -- ---------------------------------------------------------------------------
 create function vortex_record.apply_named_action_relationship_copies_internal(
   p_plan jsonb
@@ -329,76 +348,83 @@ security invoker
 set search_path = ''
 as $function$
 declare
-  effect_value jsonb;
   copy_value jsonb;
-  target_type_id uuid;
-  target_record_id uuid;
+  target_row record;
   meta jsonb;
-  organization_id_value uuid;
   target_concurrency bigint;
   changed_result jsonb;
-  changed_field_ids uuid[];
   event_result jsonb;
 begin
-  if pg_catalog.jsonb_typeof(p_plan -> 'effects') is distinct from 'array' then
+  if p_plan ->> 'outcome' is distinct from 'planned'
+    or pg_catalog.jsonb_typeof(p_plan -> 'copies') is distinct from 'array' then
     raise exception using errcode = '22023', message = 'Relationship copy plan is invalid';
   end if;
-  for effect_value in
+  for copy_value in
     select item.value
-    from pg_catalog.jsonb_array_elements(p_plan -> 'effects') with ordinality item(value, ordinality)
-    order by item.ordinality
+    from pg_catalog.jsonb_array_elements(p_plan -> 'copies') item(value)
+    order by (item.value ->> 'relationshipId')::uuid,
+      (item.value #>> '{value,recordId}')::uuid,
+      (item.value ->> 'targetRecordId')::uuid
   loop
-    target_type_id := (effect_value ->> 'targetRecordTypeId')::uuid;
-    target_record_id := (effect_value ->> 'targetRecordId')::uuid;
-    meta := vortex_record.resolve_record_action_context_internal(target_type_id, 'update');
-    organization_id_value := (meta -> 'context' ->> 'organizationId')::uuid;
-    changed_field_ids := array[]::uuid[];
-    for copy_value in
-      select item.value
-      from pg_catalog.jsonb_array_elements(effect_value -> 'copies')
-        with ordinality item(value, ordinality)
-      order by item.ordinality
-    loop
-      -- The target row is already locked by the plan; each write bumps its
-      -- revision, so the next write is against the revision just reached.
-      execute pg_catalog.format(
-        'select stored.concurrency_number from record_data.%I as stored
-         where stored.organisation_id = $1 and stored.record_id = $2
-           and stored.lifecycle_state = ''active''',
-        meta ->> 'table'
-      ) into target_concurrency using organization_id_value, target_record_id;
-      if target_concurrency is null then
-        raise exception using errcode = 'P0002', message = 'Relationship copy target is unavailable';
-      end if;
-      changed_result := vortex_record.change_record_relationship_internal(
-        target_type_id, target_record_id, target_concurrency,
-        (copy_value ->> 'relationshipId')::uuid, copy_value -> 'value'
-      );
-      if changed_result ->> 'outcome' is distinct from 'completed' then
-        raise exception using errcode = '23514',
-          message = 'Relationship copy was refused',
-          detail = coalesce(changed_result ->> 'reasonCode', changed_result ->> 'outcome');
-      end if;
-      changed_field_ids := pg_catalog.array_append(
-        changed_field_ids, (copy_value ->> 'fromFieldId')::uuid
-      );
-    end loop;
-    if pg_catalog.cardinality(changed_field_ids) = 0 then continue; end if;
-    select pg_catalog.array_agg(distinct item.value order by item.value)
-    into changed_field_ids
-    from pg_catalog.unnest(changed_field_ids) as item(value);
+    meta := vortex_record.resolve_record_action_context_internal(
+      (copy_value ->> 'targetRecordTypeId')::uuid, 'update'
+    );
+    -- The target row is already locked by the plan; each write bumps its
+    -- revision, so the next write is against the revision just reached.
+    target_concurrency := null;
+    execute pg_catalog.format(
+      'select stored.concurrency_number from record_data.%I as stored
+       where stored.organisation_id = $1 and stored.record_id = $2
+         and stored.lifecycle_state = ''active''',
+      meta ->> 'table'
+    ) into target_concurrency
+      using (meta -> 'context' ->> 'organizationId')::uuid,
+        (copy_value ->> 'targetRecordId')::uuid;
+    if target_concurrency is null then
+      raise exception using errcode = '55000', message = 'Relationship copy target lock was lost';
+    end if;
+    changed_result := vortex_record.change_record_relationship_internal(
+      (copy_value ->> 'targetRecordTypeId')::uuid, (copy_value ->> 'targetRecordId')::uuid,
+      target_concurrency, (copy_value ->> 'relationshipId')::uuid, copy_value -> 'value'
+    );
+    if changed_result ->> 'outcome' = 'conflict' then
+      raise exception using errcode = '40001', message = 'Relationship copy conflicted';
+    end if;
+    if changed_result ->> 'outcome' is distinct from 'completed' then
+      raise exception using errcode = '42501',
+        message = 'Relationship copy was refused',
+        detail = coalesce(changed_result ->> 'reasonCode', changed_result ->> 'outcome');
+    end if;
+  end loop;
+
+  for target_row in
+    select (item.value ->> 'targetRecordTypeId')::uuid as record_type_id,
+      (item.value ->> 'targetRecordId')::uuid as record_id,
+      pg_catalog.array_agg(
+        distinct (item.value ->> 'fromFieldId')::uuid
+        order by (item.value ->> 'fromFieldId')::uuid
+      ) as changed_field_ids
+    from pg_catalog.jsonb_array_elements(p_plan -> 'copies') item(value)
+    group by 1, 2
+    order by 1, 2
+  loop
+    meta := vortex_record.resolve_record_action_context_internal(
+      target_row.record_type_id, 'update'
+    );
     perform vortex_record.append_named_action_activity_internal(
-      pg_catalog.gen_random_uuid(), target_record_id, changed_field_ids, 'completed'
+      pg_catalog.gen_random_uuid(), target_row.record_id, target_row.changed_field_ids,
+      'completed'
     );
     event_result := vortex_event.append_record_occurrences(
-      (meta ->> 'storageContractId')::uuid, target_record_id,
+      (meta ->> 'storageContractId')::uuid, target_row.record_id,
       pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
         'occurrenceId', pg_catalog.gen_random_uuid(),
         'descriptor', pg_catalog.jsonb_build_object(
-          'kind', 'standard', 'eventKind', 'changed', 'recordTypeId', target_type_id
+          'kind', 'standard', 'eventKind', 'changed',
+          'recordTypeId', target_row.record_type_id
         ),
         'payload', pg_catalog.jsonb_build_object(
-          'kind', 'changed', 'changedFieldIds', pg_catalog.to_jsonb(changed_field_ids)
+          'kind', 'changed', 'changedFieldIds', pg_catalog.to_jsonb(target_row.changed_field_ids)
         )
       ))
     );
@@ -480,7 +506,8 @@ declare
   -- and ahead of the counters and data versions #569 reserves and every edge
   -- identity: the target row and every linked row, in #858's order. Only the
   -- fresh path plans a copy: a replay finds its claimed receipt and copies
-  -- nothing again.
+  -- nothing again. A refused plan returns before anything is written, like the
+  -- total refusals above.
   plan_old constant text :=
     $q$  -- #569: take every created record's reference-number counter (L4), then the$q$;
   plan_new constant text := $q$  -- #570: copy_relationships. The target row and every linked row are locked
@@ -498,6 +525,11 @@ declare
       p_action_owner_kind, p_action_owner_id, p_action_release_revision,
       p_action_id, p_record_type_id, p_record_id, p_inputs
     );
+    if copy_plan ->> 'outcome' = 'refused' then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', copy_plan -> 'reasonCode'
+      );
+    end if;
   end if;
   -- #569: take every created record's reference-number counter (L4), then the$q$;
 
@@ -573,9 +605,9 @@ to vortex_record_adapter;
 comment on function vortex_record.prepare_named_action_relationship_copies_internal(
   text, uuid, bigint, uuid, uuid, uuid, jsonb
 ) is
-  'Private named-action step: re-derives every copy_relationships effect from the installed action and the supplied inputs, locks the target row and then every linked row in canonical order before any counter, data version or edge identity, and returns only the selected, declared, readable subject edges the target does not already hold. Returns null when the action has no such effect and raises on any defect.';
+  'Private named-action step: re-derives every copy_relationships effect from the installed action and the supplied inputs, locks every target row and then every linked row in canonical order before any counter, data version or edge identity, and plans only the selected, declared, readable many-to-one subject edges the target does not already hold. Returns null when the action has no such effect, a refused outcome for a request it cannot honour, and raises only on a broken invariant.';
 comment on function vortex_record.apply_named_action_relationship_copies_internal(jsonb) is
-  'Private named-action step: writes each planned relationship copy through the ordinary relationship writer against the target''s current revision, then records the target''s Activity and changed Event. Any refusal raises so the whole command rolls back.';
+  'Private named-action step: writes each planned relationship copy through the ordinary relationship writer against its target''s current revision in ascending edge identity order, then records each changed target''s Activity and changed Event. Any refusal raises so the whole command rolls back.';
 
 reset role;
 

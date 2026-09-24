@@ -313,15 +313,18 @@ const actionValue = (
  * read through the action's `record_reference` input, which must name another
  * record of the subject's own record type: the copied relationships are the
  * subject's, so only a same-type record can hold them. Every selected id must be
- * a relationship the subject declares, a one-link kind the edge writer supports,
- * and whose link field the actor can currently read. Nothing is copied that the
- * action did not name.
+ * a `many_to_one` relationship the subject declares (a `one_to_one` link cannot
+ * be held by a second record), whose link field the actor can currently read
+ * and that no earlier `set_field` effect changes: the database copies the
+ * subject's edge as it stands before the command writes the subject. Nothing is
+ * copied that the action did not name.
  */
 const relationshipCopy = (
   prepared: PreparedNamedAction,
   normalizedInputs: Readonly<Record<string, JsonValue>>,
   ordinal: number,
   effect: Extract<NamedActionDefinition["effects"][number], { kind: "copy_relationships" }>,
+  earlierSetFieldIds: ReadonlySet<string>,
 ): NamedActionRelationshipCopy | undefined => {
   if (!hasOwn(normalizedInputs, effect.targetInputKey)) return undefined;
   const target = recordLinkValueV2Schema.safeParse(normalizedInputs[effect.targetInputKey]);
@@ -337,17 +340,22 @@ const relationshipCopy = (
       relationship,
     ]),
   );
+  const readable = new Set(
+    [...(prepared.readableFieldIds ?? [])].map((fieldId) => fieldId.toLowerCase()),
+  );
   const selected = new Set<string>();
   for (const relationshipId of effect.relationshipIds) {
     const key = relationshipId.toLowerCase();
+    // A repeated id names the same relationship; the database copies it once.
+    if (selected.has(key)) continue;
     const relationship = relationships.get(key);
     if (
-      selected.has(key) ||
       relationship === undefined ||
       relationship.fromRecordTypeId.toLowerCase() !==
         prepared.recordType.recordTypeId.toLowerCase() ||
-      relationship.cardinality === "many_to_many" ||
-      prepared.readableFieldIds?.has(relationship.fromFieldId) !== true
+      relationship.cardinality !== "many_to_one" ||
+      !readable.has(relationship.fromFieldId.toLowerCase()) ||
+      earlierSetFieldIds.has(relationship.fromFieldId.toLowerCase())
     )
       return undefined;
     selected.add(key);
@@ -378,6 +386,7 @@ export const composeNamedAction = (
   const submittedValues: Record<string, JsonValue | null> = {};
   const creations: NamedActionCreation[] = [];
   const relationshipCopies: NamedActionRelationshipCopy[] = [];
+  const setFieldIds = new Set<string>();
   const announcedEventKeys: string[] = [];
   for (const [ordinal, effect] of prepared.action.effects.entries()) {
     if (effect.kind === "announce_event") {
@@ -407,12 +416,13 @@ export const composeNamedAction = (
       continue;
     }
     if (effect.kind === "copy_relationships") {
-      const copy = relationshipCopy(prepared, normalizedInputs, ordinal, effect);
+      const copy = relationshipCopy(prepared, normalizedInputs, ordinal, effect, setFieldIds);
       if (copy === undefined) return undefined;
       relationshipCopies.push(copy);
       continue;
     }
     if (effect.kind !== "set_field") return undefined;
+    setFieldIds.add(effect.fieldId.toLowerCase());
     const field = fields.get(effect.fieldId);
     if (field === undefined) return undefined;
     const value = actionValue(prepared, normalizedInputs, issuedAt, field, effect.value);
