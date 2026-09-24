@@ -5,6 +5,8 @@ import {
   applicationCompilationOutputV2Schema,
   applicationCompilationRequestV2Schema,
   applicationDraftV2Schema,
+  applicationToolBundleSchema,
+  descriptionSchema,
   conditionNodeSchema,
   jsonValueSchema,
   walkDefinitionContract,
@@ -25,6 +27,11 @@ import {
   readModuleSourceRecordOwnershipMode,
   type ApplicationCompilationOutputV2,
   type ApplicationCompilationRequestV2,
+  type ApplicationDraftV2,
+  type ApplicationToolBundleInput,
+  type ApplicationToolOperationReference,
+  type ApplicationToolBundle,
+  type NavigationItem,
   type ModuleCompilationOutputV3,
   type ModuleCompilationRequestV3,
   type ModuleSourceDocument,
@@ -5978,6 +5985,239 @@ function applicationProvenanceV2(
   return entries;
 }
 
+type ApplicationToolDraft = ApplicationToolBundleInput["tools"][number];
+type ApplicationToolStandardRecordAction = Extract<
+  ApplicationToolOperationReference,
+  { kind: "standard_record_action" }
+>["standardAction"];
+
+const isApplicationToolStandardRecordAction = (
+  value: string | undefined,
+): value is ApplicationToolStandardRecordAction =>
+  value !== undefined && standardRecordActions.has(value);
+
+const applicationToolName = (applicationKey: string, operationKind: string, key: string): string =>
+  `${applicationKey}.${operationKind}.${key}`;
+
+/** The first label or help text that is a valid tool description, or no description. */
+const applicationToolDescription = (
+  ...candidates: readonly (string | undefined)[]
+): { description?: string } => {
+  for (const candidate of candidates) {
+    const parsed = descriptionSchema.safeParse(candidate);
+    if (parsed.success) return { description: parsed.data };
+  }
+  return {};
+};
+
+/**
+ * Derives the one deterministic agent tool bundle an Application release carries. Every tool maps
+ * to exactly one real operation, so repeated buttons, repeated form commits and a declared action
+ * reused by a form share a single tool; names are namespaced by the application key and
+ * canonically ordered, and each input contract and permission meaning is copied from the owning
+ * operation. A bound Module's action or query is described only from that Module's exact bound
+ * release output; publication always supplies it, and without it the operation is left out rather
+ * than described with an invented contract.
+ */
+function compileApplicationToolBundle(
+  canonical: ApplicationDraftV2,
+  source: JsonObject,
+  resolution: Resolution,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): ApplicationToolBundle {
+  const applicationKey = String(canonical.envelope.key);
+  const content = canonical.content;
+  const applicationOwner = {
+    kind: "application" as const,
+    applicationRootId: String(canonical.envelope.rootId),
+  };
+  const boundVersions = new Map(
+    content.moduleBindings.map((binding) => [
+      String(binding.moduleRootId),
+      String(binding.resolvedVersion),
+    ]),
+  );
+  const boundModuleOutputs = dependencyOutputs.filter(
+    (output): output is ModuleCompilationOutputV3 =>
+      output.kind === "module" &&
+      boundVersions.get(String(output.artifact.rootId)) === String(output.artifact.exactVersion),
+  );
+  const moduleActionsByKey = new Map(
+    boundModuleOutputs.flatMap((output) =>
+      output.canonical.content.actions.map(
+        (action) =>
+          [String(action.key), { moduleRootId: String(output.artifact.rootId), action }] as const,
+      ),
+    ),
+  );
+  const moduleQueriesById = new Map(
+    boundModuleOutputs.flatMap((output) =>
+      output.canonical.content.queries.map(
+        (query) =>
+          [
+            `${String(output.artifact.rootId)}:${String(query.queryId)}`,
+            {
+              moduleRootId: String(output.artifact.rootId),
+              moduleKey: String(output.artifact.definitionKey),
+              query,
+            },
+          ] as const,
+      ),
+    ),
+  );
+  const boundModuleKeys = new Set(
+    (asObject(source.body).module_bindings as JsonObject[]).map((binding) =>
+      String(binding.module),
+    ),
+  );
+  const applicationActionKeys = new Set(content.actions.map((action) => String(action.key)));
+  const pagesById = new Map(content.pages.map((page) => [String(page.pageId), page]));
+  const tools = new Map<string, ApplicationToolDraft>();
+  const add = (tool: ApplicationToolDraft): void => {
+    if (!tools.has(tool.name)) tools.set(tool.name, tool);
+  };
+  const actionPermission = { discover: "page_access", use: "operation_permission" } as const;
+
+  for (const action of content.actions)
+    add({
+      name: applicationToolName(applicationKey, "action", String(action.key)),
+      ...applicationToolDescription(action.label),
+      inputSchema: { kind: "action_inputs", inputs: action.inputs },
+      operation: {
+        kind: "action",
+        owner: applicationOwner,
+        key: action.key,
+        actionId: action.actionId,
+      },
+      permission: actionPermission,
+    });
+
+  // Resolved in the same order as the form commit itself: a bound Module's standard record action,
+  // then an Application action (already a tool), then a bound Module's named action.
+  const addCommittedAction = (
+    pageName: string,
+    actionKey: string,
+    allowStandardRecordAction: boolean,
+  ): void => {
+    const name = applicationToolName(applicationKey, "action", actionKey);
+    const standard = /^(.+)\.([^.]+)\.([^.]+)$/.exec(actionKey);
+    const standardAction = standard?.[3];
+    if (
+      allowStandardRecordAction &&
+      standard &&
+      isApplicationToolStandardRecordAction(standardAction) &&
+      boundModuleKeys.has(standard[1]!)
+    ) {
+      const recordType = resolution.recordType(`${standard[1]}:${standard[2]}`);
+      add({
+        name,
+        ...applicationToolDescription(pageName),
+        inputSchema: { kind: "record_type", recordTypeId: recordType.recordTypeId },
+        operation: {
+          kind: "standard_record_action",
+          key: actionKey,
+          moduleRootId: String(recordType.moduleRootId),
+          recordTypeId: recordType.recordTypeId,
+          standardAction,
+        },
+        permission: actionPermission,
+      });
+      return;
+    }
+    if (applicationActionKeys.has(actionKey)) return;
+    const moduleAction = moduleActionsByKey.get(actionKey);
+    if (moduleAction === undefined) return;
+    add({
+      name,
+      ...applicationToolDescription(moduleAction.action.label, pageName),
+      inputSchema: { kind: "module_inputs", inputs: moduleAction.action.inputs },
+      operation: {
+        kind: "action",
+        owner: { kind: "module", moduleRootId: moduleAction.moduleRootId },
+        key: actionKey,
+        actionId: moduleAction.action.actionId,
+      },
+      permission: actionPermission,
+    });
+  };
+
+  for (const page of content.pages) {
+    if (page.type === "form" || page.type === "guided_form")
+      addCommittedAction(page.name, String(page.commitActionKey), true);
+    else if (page.type === "public" && page.publicActionKey !== undefined)
+      addCommittedAction(page.name, String(page.publicActionKey), false);
+  }
+
+  for (const flow of content.flows) {
+    add({
+      name: applicationToolName(applicationKey, "flow", String(flow.key)),
+      ...applicationToolDescription(flow.description, flow.name),
+      inputSchema: { kind: "flow_inputs", inputs: flow.inputs },
+      operation: { kind: "flow", key: flow.key, flowId: flow.flowId },
+      permission: { discover: "page_access", use: "delegated_operations" },
+    });
+    for (const node of flow.nodes) {
+      if (node.kind !== "query" || node.target.kind !== "query") continue;
+      const moduleQuery = moduleQueriesById.get(
+        `${String(node.target.moduleRootId)}:${String(node.target.queryId)}`,
+      );
+      if (moduleQuery === undefined) continue;
+      add({
+        name: applicationToolName(
+          applicationKey,
+          "query",
+          `${moduleQuery.moduleKey}.${String(moduleQuery.query.key)}`,
+        ),
+        ...applicationToolDescription(moduleQuery.query.description, moduleQuery.query.label),
+        inputSchema: { kind: "module_inputs", inputs: moduleQuery.query.inputs },
+        operation: {
+          kind: "query",
+          owner: { kind: "module", moduleRootId: moduleQuery.moduleRootId },
+          key: moduleQuery.query.key,
+          queryId: moduleQuery.query.queryId,
+        },
+        permission: { discover: "page_access", use: "none" },
+      });
+    }
+  }
+
+  for (const query of content.queries)
+    add({
+      name: applicationToolName(applicationKey, "query", String(query.key)),
+      inputSchema: { kind: "none" },
+      operation: { kind: "query", owner: applicationOwner, key: query.key, queryId: query.queryId },
+      permission: { discover: "page_access", use: "none" },
+    });
+
+  const addNavigation = (items: readonly NavigationItem[]): void => {
+    for (const item of items) {
+      if (item.type === "heading") {
+        addNavigation(item.children);
+        continue;
+      }
+      if (item.type !== "page") continue;
+      const page = pagesById.get(String(item.pageId));
+      if (page === undefined) continue;
+      add({
+        name: applicationToolName(applicationKey, "navigation", String(page.key)),
+        ...applicationToolDescription(item.label, page.name),
+        inputSchema: { kind: "none" },
+        operation: { kind: "navigation", key: page.key, pageId: page.pageId },
+        permission: { discover: "application_navigation", use: "none" },
+      });
+    }
+  };
+  addNavigation(content.navigation);
+
+  return applicationToolBundleSchema.parse({
+    contractVersion: "1.0.0",
+    applicationKey,
+    tools: [...tools.values()].sort((left, right) =>
+      compareCanonicalStrings(left.name, right.name),
+    ),
+  });
+}
+
 function compileApplicationV2Internal(
   input: unknown,
   context?: DefinitionCompilationContext,
@@ -6045,6 +6285,12 @@ function compileParsedApplicationV2Request(
       dependencyOrder: dependencyOrder(sourceObject),
       resolvedDependencies: resolvedDependencies(sourceObject, resolution),
       resolutionFingerprint: request.resolution.fingerprint,
+      toolBundle: compileApplicationToolBundle(
+        canonical,
+        sourceObject,
+        resolution,
+        dependencyOutputs,
+      ),
     });
     if (!output.success) fail("vortex.definition.invalid_compilation_output", "invalid_value");
     return output.data;
