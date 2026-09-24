@@ -17,10 +17,14 @@ export {
   type ProjectedControlValueKind,
   type ProjectedControlValues,
   type TypedFieldValue,
+  type TypedRecordReference,
+  type TypedRichTextDocument,
 } from "./projected-data";
 
 // Form & Action Control Components
 export { TextInput, type TextInputProps } from "./text-input";
+export { LinkInput, type LinkInputProps } from "./link-input";
+export { RichTextInput, type RichTextInputProps } from "./rich-text-input";
 export { NumberInput, type NumberInputProps } from "./number-input";
 export { BooleanInput, type BooleanInputProps } from "./boolean-input";
 export { DateInput, type DateInputProps } from "./date-input";
@@ -44,7 +48,9 @@ export {
   DIALOG_BLOCK_RELEASE,
   DRAWER_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
+  LINK_INPUT_BLOCK_RELEASE,
   NUMBER_INPUT_BLOCK_RELEASE,
+  RICH_TEXT_INPUT_BLOCK_RELEASE,
   TABS_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
   VALIDATION_MESSAGE_BLOCK_RELEASE,

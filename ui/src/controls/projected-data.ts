@@ -1,4 +1,9 @@
-import { builderKeySchema, type ComponentSemanticEventKind } from "@vortex/contracts";
+import {
+  builderKeySchema,
+  richTextDocumentV2Schema,
+  type BlockPropertyValueV2Contract,
+  type ComponentSemanticEventKind,
+} from "@vortex/contracts";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 
 /** Declared semantic event names this form and action family can emit. */
@@ -18,7 +23,27 @@ export const CONTROL_EVENT_NAMES: readonly ControlSemanticEventName[] = Object.f
 ]);
 
 /** Closed set of typed values that form field inputs collect and emit. */
-export type TypedFieldValue = string | number | boolean | null;
+export type TypedRichTextDocument = Extract<
+  BlockPropertyValueV2Contract,
+  { kind: "rich_text" }
+>["value"];
+
+/**
+ * A link input's projected value: the stable `recordTypeId:recordId` reference of the linked
+ * record, never the record's values. It grants no access to the referenced record.
+ */
+export type TypedRecordReference = Readonly<{
+  recordTypeId: string;
+  recordId: string;
+}>;
+
+export type TypedFieldValue =
+  | string
+  | number
+  | boolean
+  | null
+  | TypedRecordReference
+  | TypedRichTextDocument;
 
 /**
  * One declared semantic event. Events are emitted only by a real user interaction, except
@@ -46,6 +71,8 @@ export type ChoiceOption = Readonly<{ key: string; label: string }>;
 /** Closed projected payload shapes, one per control block. */
 export type ProjectedControlValues =
   | Readonly<{ kind: "text_input"; value?: string; error?: string }>
+  | Readonly<{ kind: "link_input"; value?: TypedRecordReference | null; error?: string }>
+  | Readonly<{ kind: "rich_text_input"; value?: TypedRichTextDocument | null; error?: string }>
   | Readonly<{ kind: "number_input"; value?: number | null; error?: string }>
   | Readonly<{ kind: "boolean_input"; value?: boolean; error?: string }>
   | Readonly<{ kind: "date_input"; value?: string | null; error?: string }>
@@ -137,6 +164,36 @@ const requireBuilderKey = (
   return parsed.success ? parsed.data : fail(message, location);
 };
 
+const requireRecordReference = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): TypedRecordReference => {
+  const record = requireRecord(value, "A record reference must be an object", location);
+  requireExactKeys(record, ["recordTypeId", "recordId"], location);
+  return Object.freeze({
+    recordTypeId: requireNonEmptyString(
+      record.recordTypeId,
+      "A record reference type identifier must be non-empty text",
+      location,
+    ),
+    recordId: requireNonEmptyString(
+      record.recordId,
+      "A record reference identifier must be non-empty text",
+      location,
+    ),
+  });
+};
+
+const parseRichTextDocument = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): TypedRichTextDocument => {
+  const parsed = richTextDocumentV2Schema.safeParse(value);
+  return parsed.success
+    ? (parsed.data as TypedRichTextDocument)
+    : fail("Rich text content is not a valid structured document", location);
+};
+
 /** True for a real ISO calendar date such as 2026-02-28; 2026-02-30 is refused. */
 export const isIsoCalendarDate = (value: string): boolean => {
   if (!ISO_CALENDAR_DATE.test(value)) return false;
@@ -195,6 +252,28 @@ const parseProjectedControlValues = (
         ...(record.value === undefined
           ? {}
           : { value: requireString(record.value, "A text value must be text", location) }),
+        ...optionalError(record, location),
+      });
+    case "link_input":
+      requireExactKeys(record, ["kind", "value", "error"], location);
+      return Object.freeze({
+        kind: "link_input",
+        ...(record.value === undefined
+          ? {}
+          : record.value === null
+            ? { value: null }
+            : { value: requireRecordReference(record.value, location) }),
+        ...optionalError(record, location),
+      });
+    case "rich_text_input":
+      requireExactKeys(record, ["kind", "value", "error"], location);
+      return Object.freeze({
+        kind: "rich_text_input",
+        ...(record.value === undefined
+          ? {}
+          : record.value === null
+            ? { value: null }
+            : { value: parseRichTextDocument(record.value, location) }),
         ...optionalError(record, location),
       });
     case "number_input": {

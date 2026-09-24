@@ -118,6 +118,8 @@ export type ControlSettings = Readonly<{
   number: (key: string) => number | undefined;
   choice: <Option extends string>(key: string, fallback: Option) => Option;
   options: (key: string) => readonly ChoiceOption[];
+  /** The resolved record-type identifiers declared by a list of record_type_reference settings. */
+  recordTypeIds: (key: string) => readonly string[];
   /** The required authored field key, validated as a builder key. */
   fieldKey: () => string;
 }>;
@@ -191,6 +193,17 @@ export function readControlSettings(
             ...location,
             propertyPath: ["name"],
           });
+    },
+    recordTypeIds: (key) => {
+      const value = read(key, "list");
+      if (value?.kind !== "list") return Object.freeze([]);
+      return Object.freeze(
+        value.items.map((item) => {
+          if (item.kind !== "record_type_reference")
+            return fail(`Setting '${key}' items must be record type references`, location);
+          return item.recordType.recordTypeId;
+        }),
+      );
     },
   };
 }

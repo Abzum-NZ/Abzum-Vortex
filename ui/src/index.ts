@@ -129,6 +129,8 @@ export {
   type ProjectedControlValueKind,
   type ProjectedControlValues,
   type TypedFieldValue,
+  type TypedRecordReference,
+  type TypedRichTextDocument,
 } from "./controls";
 
 // Form & Action Control Components
@@ -140,7 +142,9 @@ export {
   Dialog,
   Drawer,
   FormContainer,
+  LinkInput,
   NumberInput,
+  RichTextInput,
   Tabs,
   TextInput,
   ValidationMessage,
@@ -151,7 +155,9 @@ export {
   type DialogProps,
   type DrawerProps,
   type FormContainerProps,
+  type LinkInputProps,
   type NumberInputProps,
+  type RichTextInputProps,
   type TabsProps,
   type TextInputProps,
   type ValidationMessageProps,
@@ -169,7 +175,9 @@ export {
   DIALOG_BLOCK_RELEASE,
   DRAWER_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
+  LINK_INPUT_BLOCK_RELEASE,
   NUMBER_INPUT_BLOCK_RELEASE,
+  RICH_TEXT_INPUT_BLOCK_RELEASE,
   TABS_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
   VALIDATION_MESSAGE_BLOCK_RELEASE,
