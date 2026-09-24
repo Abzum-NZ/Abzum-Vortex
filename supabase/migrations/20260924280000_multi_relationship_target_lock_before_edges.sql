@@ -1,26 +1,32 @@
 -- #858: in a multi-relationship save, take every target row lock before any
 -- relationship edge identity.
 --
--- `20260923220000` made relationship edge identities the last lock class: one
--- writer takes the source row update, the new target row's share lock and the
--- source data-version bump before the sorted edge identities, so an identity is
--- never requested ahead of the participant row it belongs to. That order holds
--- inside one `write_relationship_value_internal` call, but not across the save
--- loops that call it once per changed relationship: iteration k+1 share-locks a
--- new target row after iteration k already holds its edge identities. Two saves
--- can then wait on each other -- a target row one transaction holds exclusively
--- against an edge identity the other already holds -- which PostgreSQL reports
--- as 40P01.
+-- `20260923220000` made relationship edge identities the last lock class: after
+-- its caller has locked the source row, one writer takes the new target row's
+-- share lock and the source data-version bump before the sorted edge
+-- identities, so an identity is never requested ahead of the participant row it
+-- belongs to. That order holds inside one `write_relationship_value_internal`
+-- call, but not across the save loops that call it once per changed
+-- relationship: iteration k+1 share-locks a new target row after iteration k
+-- already holds its edge identities. Two saves can then wait on each other -- a
+-- target row one transaction holds exclusively against an edge identity the
+-- other already holds -- which PostgreSQL reports as 40P01.
 --
 -- This migration gives the loops the same order the named-action creation path
--- already uses: every target row lock is taken before the first edge identity.
--- `lock_relationship_target_row_internal` is the one target share-lock
--- contract, identical to the lock the writer already takes. The two update
--- loops call it for every changed non-null link once that target has passed the
--- same access decision the writer re-checks, and `create_record_internal` calls
--- it for every created link before its edge pass. Target share locks (and the
--- source update) therefore always precede edge identities, so the identity
--- high-water ordering can never close a cycle against a row lock.
+-- already uses (`20260921100000:24-35`: row, counter, link-target share lock,
+-- edge identity): every target row lock is taken before the first edge
+-- identity. `lock_relationship_target_row_internal` is the one target
+-- share-lock contract, identical to the lock the writer already takes. The two
+-- update loops call it for every changed non-null link once that target has
+-- passed the same access decision the writer re-checks, before `change_record`
+-- or the first writer bumps the source data version. `create_record_internal`
+-- calls it for every created link after its counters and insert and before the
+-- new record's data-version bump, which `20260923220000` moved ahead of the
+-- edge pass. A target share lock therefore never waits behind a data version or
+-- edge identity the same transaction already holds: without that, creating a
+-- record linked to a record of its own type could hold the type's data version
+-- while waiting for the parent row that a concurrent update of that parent holds
+-- exclusively before bumping the same data version.
 --
 -- Relationship semantics, identity keys, `acquire_relationship_edge_locks_internal`
 -- and the writer are unchanged. The three loop bodies are patched in place from
@@ -138,15 +144,15 @@ declare
         proposed_records := proposed_records || (target_loaded -> 'facts' -> 'records');
         proposed_edges := proposed_edges || (target_loaded -> 'facts' -> 'edges');$q$;
 
-  -- create_record_internal: the relationship write pass. Lock every created
-  -- link's target row first, in the same relationship order the writer uses,
-  -- then run the existing edge pass.
-  create_lock_old constant text := $q$    for relationship_value in
-      select item.value from pg_catalog.jsonb_array_elements(record_type_value -> 'relationships') as item(value)
-      order by (item.value ->> 'relationshipId')::uuid
-    loop$q$;
-  create_lock_new constant text := $q$    -- #858: lock every created link's target row before the edge pass below,
-    -- so a multi-link create takes all its row locks before any edge identity.
+  -- create_record_internal: after the counters and the insert, and before the
+  -- new record's data-version bump and edge pass (`20260923220000`), lock every
+  -- created link's target row in the same relationship order the edge pass uses.
+  create_lock_old constant text := $q$    -- The new record's data version is taken before any relationship edge
+    -- identity, as every other relationship writer takes it.
+    perform vortex_record.bump_record_data_version_internal($q$;
+  create_lock_new constant text := $q$    -- #858: lock every created link's target row before the data-version bump
+    -- and edge pass below, so a multi-link create takes all its row locks
+    -- before its data version and any edge identity, as the update writer does.
     -- A malformed or undeclared link is left to the writer's own validation.
     for relationship_value in
       select item.value from pg_catalog.jsonb_array_elements(record_type_value -> 'relationships') as item(value)
@@ -176,34 +182,37 @@ declare
         end if;
       end if;
     end loop;
-    for relationship_value in
-      select item.value from pg_catalog.jsonb_array_elements(record_type_value -> 'relationships') as item(value)
-      order by (item.value ->> 'relationshipId')::uuid
-    loop$q$;
+    -- The new record's data version is taken before any relationship edge
+    -- identity, as every other relationship writer takes it.
+    perform vortex_record.bump_record_data_version_internal($q$;
+
+  target record;
+  owner_name name;
 begin
-  definition := pg_catalog.pg_get_functiondef(
-    'vortex_record.save_base_record(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid)'::pg_catalog.regprocedure
-  );
-  definition := vortex_record.apply_multi_target_lock_patch_internal(
-    definition, update_lock_old, update_lock_new
-  );
-  execute definition;
-
-  definition := pg_catalog.pg_get_functiondef(
-    'vortex_record.save_named_action_set_fields_internal(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid,text,uuid,bigint,uuid,jsonb)'::pg_catalog.regprocedure
-  );
-  definition := vortex_record.apply_multi_target_lock_patch_internal(
-    definition, update_lock_old, update_lock_new
-  );
-  execute definition;
-
-  definition := pg_catalog.pg_get_functiondef(
-    'vortex_record.create_record_internal(uuid,jsonb,uuid[],uuid)'::pg_catalog.regprocedure
-  );
-  definition := vortex_record.apply_multi_target_lock_patch_internal(
-    definition, create_lock_old, create_lock_new
-  );
-  execute definition;
+  for target in
+    select candidate.procedure_id, candidate.old_text, candidate.new_text
+    from (values
+      ('vortex_record.save_base_record(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid)'::pg_catalog.regprocedure,
+        update_lock_old, update_lock_new),
+      ('vortex_record.save_named_action_set_fields_internal(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid,text,uuid,bigint,uuid,jsonb)'::pg_catalog.regprocedure,
+        update_lock_old, update_lock_new),
+      ('vortex_record.create_record_internal(uuid,jsonb,uuid[],uuid)'::pg_catalog.regprocedure,
+        create_lock_old, create_lock_new)
+    ) as candidate(procedure_id, old_text, new_text)
+  loop
+    -- Patched as this migration's adapter role, then re-created under the
+    -- function's own current owner so its grants, comment and OID stay put.
+    definition := vortex_record.apply_multi_target_lock_patch_internal(
+      pg_catalog.pg_get_functiondef(target.procedure_id),
+      target.old_text, target.new_text
+    );
+    select pg_catalog.pg_get_userbyid(procedure.proowner) into strict owner_name
+    from pg_catalog.pg_proc as procedure
+    where procedure.oid = target.procedure_id;
+    execute pg_catalog.format('set local role %I', owner_name);
+    execute definition;
+    set local role vortex_record_adapter;
+  end loop;
 end
 $migration$;
 
