@@ -5,6 +5,7 @@ import {
   resolveApplicationThemeTokens,
 } from "./app-theme";
 import { projectFlowResultHandoff } from "./flow-result-handoff";
+import { createApplicationInstallationCoordinator } from "./installation-coordinator";
 import { createAppTelemetryCollector } from "./telemetry";
 
 export {
@@ -15,6 +16,15 @@ export {
   createAppTelemetryCollector,
   type AppTelemetryCollectorDependencies,
 } from "./telemetry";
+export {
+  isReservedTenantSegment,
+  permittedApplicationSchema,
+  permittedApplicationsReadSchema,
+  readPermittedApplicationsAtAddress,
+  resolvePermittedApplicationAddress,
+  type PermittedApplication,
+  type PermittedApplicationsRead,
+} from "./application-address";
 export {
   flowResultDeclarationSchema,
   flowResultHandoffContractVersion,
@@ -37,6 +47,26 @@ export {
   type FlowResultWithheld,
 } from "./flow-result-handoff";
 
+export {
+  applicationInstallationActivationRequestSchema,
+  ApplicationInstallationCoordinatorError,
+  applicationInstallationCoordinatorErrorCodes,
+  applicationInstallationPreparationRequestSchema,
+  applicationInstallationWithdrawalRequestSchema,
+  createApplicationInstallationCoordinator,
+  type ActiveApplicationInstallationSummary,
+  type ApplicationInstallationActivationRequest,
+  type ApplicationInstallationActivationResult,
+  type ApplicationInstallationCoordinator,
+  type ApplicationInstallationCoordinatorDependencies,
+  type ApplicationInstallationCoordinatorErrorCode,
+  type ApplicationInstallationPreparationRequest,
+  type ApplicationInstallationPreparationResult,
+  type ApplicationInstallationWithdrawalRequest,
+  type ApplicationInstallationWithdrawalResult,
+  type OptionalInstallationReader,
+} from "./installation-coordinator";
+
 export const AppService = Object.freeze({
   key: "app",
   boundary: "@vortex/app",
@@ -44,4 +74,5 @@ export const AppService = Object.freeze({
   resolveApplicationThemeTokens,
   createAppTelemetryCollector,
   projectFlowResultHandoff,
+  createApplicationInstallationCoordinator,
 });

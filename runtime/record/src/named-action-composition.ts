@@ -1,5 +1,6 @@
 import {
   type actionDefinitionV2Schema,
+  compileTextInputPattern,
   currencyCodeV2Schema,
   dateValueV2Schema,
   exactDecimalWithinBoundsV2,
@@ -90,11 +91,8 @@ const inputValue = (
     )
       return undefined;
     if (input.validation?.pattern !== undefined) {
-      try {
-        if (!new RegExp(input.validation.pattern, "u").test(candidate)) return undefined;
-      } catch {
-        return undefined;
-      }
+      const pattern = compileTextInputPattern(input.validation.pattern);
+      if (pattern === undefined || !pattern.test(candidate)) return undefined;
     }
     return candidate;
   }

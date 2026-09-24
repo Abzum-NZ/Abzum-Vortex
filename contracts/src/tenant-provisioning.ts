@@ -13,7 +13,10 @@ import {
   tenantIdSchema,
   timestampSchema,
 } from "./identifiers";
-import { organizationRuntimeSettingsSchema } from "./identity-access";
+import {
+  organizationAccountLanguageSchema,
+  organizationRuntimeSettingsSchema,
+} from "./identity-access";
 
 const displayNameSchema = z.string().trim().min(1).max(120);
 const runtimeSettingsInputSchema = organizationRuntimeSettingsSchema.omit({
@@ -43,7 +46,7 @@ export const provisionTenantCommandSchema = z
       .object({
         identityId: identityIdSchema,
         accountDisplayName: displayNameSchema,
-        accountLanguage: organizationRuntimeSettingsSchema.shape.language,
+        accountLanguage: organizationAccountLanguageSchema,
         accountTimeZone: organizationRuntimeSettingsSchema.shape.timeZone,
       })
       .strict(),

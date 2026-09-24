@@ -7,7 +7,7 @@ import {
 } from "./catalogues";
 import { applicationSourceContractVersion } from "./application-contract-versions";
 import { builderKeySchema, namespacedKeySchema, semanticVersionSchema } from "./identifiers";
-import { jsonValueSchema } from "./common";
+import { jsonValueSchema, labelSchema } from "./common";
 import { versionRequirementSchema } from "./definitions";
 import {
   sourceActionEffectSchema,
@@ -38,6 +38,99 @@ import {
   sourceCurrentUserFlowSchema,
 } from "./application-flow-bindings";
 
+const maximumSourceDocumentNodes = 50_000;
+const maximumSourceNestingDepth = 32;
+const maximumSourceContainerItems = 1_000;
+const maximumSourceStringLength = 1_000_000;
+
+const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
+  const pending: {
+    value: unknown;
+    path: (string | number)[];
+    depth: number;
+    exit?: object;
+  }[] = [{ value, path: [], depth: 0 }];
+  const ancestors = new Set<object>();
+  let visited = 0;
+  while (pending.length > 0) {
+    const entry = pending.pop()!;
+    if (entry.exit !== undefined) {
+      ancestors.delete(entry.exit);
+      continue;
+    }
+    visited += 1;
+    if (visited > maximumSourceDocumentNodes) {
+      context.addIssue({
+        code: "custom",
+        path: entry.path,
+        message: "Source document is too large",
+      });
+      return z.NEVER;
+    }
+    if (entry.depth > maximumSourceNestingDepth) {
+      context.addIssue({
+        code: "custom",
+        path: entry.path,
+        message: "Source nesting is too deep",
+      });
+      return z.NEVER;
+    }
+    if (typeof entry.value === "string" && entry.value.length > maximumSourceStringLength) {
+      context.addIssue({
+        code: "custom",
+        path: entry.path,
+        message: "Source text is too long",
+      });
+      return z.NEVER;
+    }
+    if (typeof entry.value !== "object" || entry.value === null) continue;
+    if (ancestors.has(entry.value)) {
+      context.addIssue({
+        code: "custom",
+        path: entry.path,
+        message: "Source values must be acyclic",
+      });
+      return z.NEVER;
+    }
+    if (
+      Array.isArray(entry.value) &&
+      entry.value.length > maximumSourceContainerItems
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: entry.path,
+        message: "Source container has too many items",
+      });
+      return z.NEVER;
+    }
+    const keys: string[] | undefined = Array.isArray(entry.value) ? undefined : [];
+    if (keys !== undefined) {
+      for (const key in entry.value) {
+        if (!Object.prototype.hasOwnProperty.call(entry.value, key)) continue;
+        keys.push(key);
+        if (keys.length > maximumSourceContainerItems) break;
+      }
+    }
+    if (keys !== undefined && keys.length > maximumSourceContainerItems) {
+      context.addIssue({
+        code: "custom",
+        path: entry.path,
+        message: "Source container has too many items",
+      });
+      return z.NEVER;
+    }
+    ancestors.add(entry.value);
+    pending.push({ value: undefined, path: [], depth: 0, exit: entry.value });
+    const count = keys?.length ?? (entry.value as unknown[]).length;
+    for (let index = count - 1; index >= 0; index -= 1) {
+      const key = keys?.[index] ?? index;
+      const child = (entry.value as Record<string | number, unknown>)[key];
+      pending.push({ value: child, path: [...entry.path, key], depth: entry.depth + 1 });
+    }
+  }
+  return value;
+};
+
 const sourceFilterSchema = z.union([z.null(), sourceConditionSchema]);
 const sourceCalendarMappingSchema = z.union([
   z.object({ start: builderKeySchema, end: builderKeySchema }).strict(),
@@ -65,15 +158,15 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
       .object({
         id: sourceAliasSchema,
         type: z.literal("heading"),
-        label: z.string().min(1).max(120),
-        children: z.array(sourceNavigationSchema).min(1),
+        label: labelSchema,
+        children: z.array(sourceNavigationSchema).min(1).max(100),
       })
       .strict(),
     z
       .object({
         id: sourceAliasSchema,
         type: z.literal("page"),
-        label: z.string().min(1).max(120),
+        label: labelSchema,
         page: builderKeySchema,
         permission: namespacedKeySchema,
       })
@@ -82,7 +175,7 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
       .object({
         id: sourceAliasSchema,
         type: z.literal("external"),
-        label: z.string().min(1).max(120),
+        label: labelSchema,
         address: z.string().url().startsWith("https://"),
         permission: namespacedKeySchema,
       })
@@ -92,7 +185,7 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
 const sourcePageV2Common = {
   id: sourceAliasSchema,
   key: builderKeySchema,
-  name: z.string().min(1).max(120),
+  name: labelSchema,
   states: z.array(pageStateSchema).min(1),
   standard_page_replacement: sourceStandardPageReplacementSchema.optional(),
 };
@@ -297,7 +390,7 @@ const sourceWorkflowConfigByType = {
     .strict(),
   copy_relationships: z
     .object({
-      relationships: z.array(sourceQualifiedRelationshipSchema).min(1),
+      relationships: z.array(sourceQualifiedRelationshipSchema).min(1).max(100),
       source_record: sourceWorkflowValueSchema,
       target_record: sourceWorkflowValueSchema,
     })
@@ -308,7 +401,7 @@ const sourceWorkflowConfigByType = {
       responder_permission: namespacedKeySchema,
       due_in_seconds: z.number().int().min(1).max(7_776_000),
       timeout_outcome: builderKeySchema,
-      outputs: z.array(sourceWorkflowDeclaredOutputSchema).min(1),
+      outputs: z.array(sourceWorkflowDeclaredOutputSchema).min(1).max(100),
     })
     .strict(),
   query_records: z.object({ query: builderKeySchema }).strict(),
@@ -575,13 +668,14 @@ export const sourceApplicationBodyV2Schema = z
           })
           .strict(),
       )
-      .min(1),
+      .min(1)
+      .max(100),
     permissions: z.array(
       z
         .object({
           id: sourceAliasSchema,
           key: namespacedKeySchema,
-          label: z.string().min(1).max(120),
+          label: labelSchema,
           description: z.string().min(1).max(1_000),
           record_type: sourceQualifiedRecordTypeSchema.optional(),
           action_kind: z.enum([
@@ -609,30 +703,31 @@ export const sourceApplicationBodyV2Schema = z
               message: "Only record permissions may declare a field policy",
             });
         }),
-    ),
+    ).max(100),
     roles: z
       .array(
         z
           .object({
             id: sourceAliasSchema,
             key: builderKeySchema,
-            name: z.string().min(1).max(120),
+            name: labelSchema,
             home_page: builderKeySchema,
             permissions: applicationRolePermissionKeysSchema,
           })
           .strict(),
       )
-      .min(1),
-    navigation: z.array(sourceNavigationSchema),
+      .min(1)
+      .max(100),
+    navigation: z.array(sourceNavigationSchema).max(100),
     queries: z.array(
       z
         .object({
           id: sourceAliasSchema,
           key: builderKeySchema,
           record_type: sourceQualifiedRecordTypeSchema,
-          select: z.array(builderKeySchema).min(1),
+          select: z.array(builderKeySchema).min(1).max(200),
           filter: sourceFilterSchema,
-          group_by: z.array(builderKeySchema),
+          group_by: z.array(builderKeySchema).max(10),
           aggregates: z.array(
             z
               .object({
@@ -641,19 +736,20 @@ export const sourceApplicationBodyV2Schema = z
                 alias: builderKeySchema,
               })
               .strict(),
-          ),
+          ).max(20),
           sort: z
             .array(
               z
                 .object({ field: builderKeySchema, direction: z.enum(["ascending", "descending"]) })
                 .strict(),
             )
-            .min(1),
+            .min(1)
+            .max(20),
           page_size: z.number().int().min(1).max(200),
           relationship_hops: z.number().int().min(0).max(2),
         })
         .strict(),
-    ),
+    ).max(100),
     workflows: z.array(
       z
         .object({
@@ -707,19 +803,19 @@ export const sourceApplicationBodyV2Schema = z
           ]),
           run_as: z.enum(["triggering_account", "system_with_source_authority"]),
           maximum_nesting_depth: z.number().int().min(1).max(5),
-          nodes: z.array(sourceWorkflowNodeSchema).min(1),
+          nodes: z.array(sourceWorkflowNodeSchema).min(1).max(100),
           edges: z.array(
             z.tuple([sourceAliasSchema, sourceAliasSchema, builderKeySchema.optional()]),
-          ),
+          ).max(200),
         })
         .strict(),
-    ),
+    ).max(100),
     pipelines: z.array(
       z
         .object({
           id: sourceAliasSchema,
           key: builderKeySchema,
-          name: z.string().min(1).max(120),
+          name: labelSchema,
           record_type: sourceQualifiedRecordTypeSchema,
           stage_field: builderKeySchema,
           stages: z
@@ -727,15 +823,16 @@ export const sourceApplicationBodyV2Schema = z
               z
                 .object({
                   key: builderKeySchema,
-                  label: z.string().min(1).max(120),
-                  entry_actions: z.array(namespacedKeySchema),
-                  exit_actions: z.array(namespacedKeySchema),
-                  entry_workflows: z.array(builderKeySchema),
-                  exit_workflows: z.array(builderKeySchema),
+                  label: labelSchema,
+                  entry_actions: z.array(namespacedKeySchema).max(10),
+                  exit_actions: z.array(namespacedKeySchema).max(10),
+                  entry_workflows: z.array(builderKeySchema).max(10),
+                  exit_workflows: z.array(builderKeySchema).max(10),
                 })
                 .strict(),
             )
-            .min(1),
+            .min(1)
+            .max(100),
           transitions: z
             .array(
               z
@@ -748,7 +845,8 @@ export const sourceApplicationBodyV2Schema = z
                 })
                 .strict(),
             )
-            .min(1),
+            .min(1)
+            .max(200),
           time_targets: z.array(
             z
               .object({
@@ -757,10 +855,10 @@ export const sourceApplicationBodyV2Schema = z
                 escalation_event: namespacedKeySchema,
               })
               .strict(),
-          ),
+          ).max(100),
         })
         .strict(),
-    ),
+    ).max(100),
     connection_bindings: z.array(
       z
         .object({
@@ -771,7 +869,7 @@ export const sourceApplicationBodyV2Schema = z
           required_operations: z.array(builderKeySchema).min(1),
         })
         .strict(),
-    ),
+    ).max(100),
     interfaces: z.array(
       z
         .object({
@@ -779,21 +877,21 @@ export const sourceApplicationBodyV2Schema = z
           key: namespacedKeySchema,
           version: semanticVersionSchema,
           state: z.enum(["supported", "deprecated", "removal_scheduled", "removed"]),
-          operations: z.array(sourceInterfaceOperationSchema).min(1),
+          operations: z.array(sourceInterfaceOperationSchema).min(1).max(100),
         })
         .strict(),
-    ),
+    ).max(100),
     actions: z.array(
       z
         .object({
           id: sourceAliasSchema,
           key: namespacedKeySchema,
-          label: z.string().min(1).max(60),
+          label: labelSchema,
           record_type: sourceQualifiedRecordTypeSchema,
           permission: namespacedKeySchema.optional(),
           permission_alternatives: z.array(namespacedKeySchema).min(2).optional(),
           sharing: z.enum(["refused", "allowed"]),
-          inputs: z.array(actionInputSchema),
+          inputs: z.array(actionInputSchema).max(50),
           precondition: sourceConditionSchema.optional(),
           effects: z.array(sourceActionEffectSchema).min(1).max(10),
         })
@@ -824,7 +922,7 @@ export const sourceApplicationBodyV2Schema = z
               message: "Action permission alternatives must use canonical order",
             });
         }),
-    ),
+    ).max(100),
     rules: z.array(
       z
         .object({
@@ -837,18 +935,18 @@ export const sourceApplicationBodyV2Schema = z
           effect: sourceRuleEffectSchema,
         })
         .strict(),
-    ),
+    ).max(100),
     events: z.array(
       z
         .object({
           id: sourceAliasSchema,
           key: namespacedKeySchema,
           record_type: sourceQualifiedRecordTypeSchema,
-          carries: z.array(builderKeySchema),
+          carries: z.array(builderKeySchema).max(30),
           personal_or_sensitive_values_allowed: z.literal(false),
         })
         .strict(),
-    ),
+    ).max(100),
     public_addresses: z.array(
       z
         .object({
@@ -859,13 +957,13 @@ export const sourceApplicationBodyV2Schema = z
           rate_limit_per_minute: z.number().int().min(1).max(10_000),
         })
         .strict(),
-    ),
+    ).max(100),
     platform_block_dependencies: sourcePlatformBlockDependenciesV2Schema,
-    shells: z.array(sourceApplicationShellV2Schema),
-    pages: z.array(sourcePageDefinitionV2Schema).min(1),
+    shells: z.array(sourceApplicationShellV2Schema).max(100),
+    pages: z.array(sourcePageDefinitionV2Schema).min(1).max(100),
     theme: sourceApplicationThemeV2Schema,
-    flows: z.array(sourceCurrentUserFlowSchema),
-    flow_bindings: z.array(sourceComponentFlowBindingSchema),
+    flows: z.array(sourceCurrentUserFlowSchema).max(100),
+    flow_bindings: z.array(sourceComponentFlowBindingSchema).max(100),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1054,7 +1152,7 @@ export const applicationSourceDocumentV2Schema = z
     root_alias: sourceAliasSchema,
     key: namespacedKeySchema,
     kind: z.literal("application"),
-    body: sourceApplicationBodyV2Schema,
+    body: z.preprocess(inspectSourceBounds, sourceApplicationBodyV2Schema),
   })
   .strict();
 

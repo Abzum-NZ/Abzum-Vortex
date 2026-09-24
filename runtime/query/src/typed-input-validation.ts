@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   actionInputDefinitionV2Schema,
   compareExactDecimals,
+  compileTextInputPattern,
   normalizeExactDecimal,
   parseExactDecimal,
   recordRichTextDocumentV2Schema,
@@ -94,12 +95,8 @@ const validateOne = (input: ActionInputDefinitionV2, value: JsonValue): JsonValu
       if (validation?.minimumLength !== undefined && value.length < validation.minimumLength) refuse();
       if (validation?.maximumLength !== undefined && value.length > validation.maximumLength) refuse();
       if (validation?.pattern !== undefined) {
-        let pattern: RegExp;
-        try {
-          pattern = new RegExp(validation.pattern);
-        } catch {
-          return refuse();
-        }
+        const pattern = compileTextInputPattern(validation.pattern);
+        if (pattern === undefined) return refuse();
         if (!pattern.test(value)) refuse();
       }
       return value;

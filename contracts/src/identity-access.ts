@@ -1251,6 +1251,14 @@ export const organizationRuntimeSettingsSchema = z
   })
   .strict();
 
+/**
+ * Steward organisation-account language: the same canonical BCP-47 tag bounded by the
+ * organisation-account language constraint (2..35 characters), so a valid long tag is
+ * refused as an invalid command instead of failing the account constraint later.
+ */
+export const organizationAccountLanguageSchema =
+  organizationRuntimeSettingsSchema.shape.language.max(35);
+
 export const invitationSchema = z
   .object({
     invitationId: invitationIdSchema,
@@ -1595,10 +1603,12 @@ const grantCommon = {
   recipientClusterId: clusterIdSchema,
   recipientOrganizationId: organizationIdSchema,
   recipientApplicationRootId: applicationRootIdSchema,
-  recipientRoleIds: z.array(roleIdSchema).min(1),
+  // A grant's field lists name one record type's fields, which the module contract bounds at 500.
+  readableFieldIds: z.array(fieldIdSchema).min(1).max(500),
+  changeableFieldIds: z.array(fieldIdSchema).max(500),
+  recipientRoleIds: z.array(roleIdSchema).min(1).max(100),
   moduleRootId: moduleRootIdSchema,
-  allowedActionKeys: z.array(namespacedKeySchema),
-  ...readableAndChangeable,
+  allowedActionKeys: z.array(namespacedKeySchema).max(100),
   exportAllowed: z.boolean(),
   approvedRecipientRegion: z.string().min(2).max(100),
   startsAt: timestampSchema,
@@ -1638,6 +1648,27 @@ const recordGrantSchema = z
     recordId: recordIdSchema,
   })
   .strict();
+
+const grantInstantParts = (value: string) => {
+  // Date.parse keeps milliseconds only; grants can name finer ISO timestamp fractions.
+  const match =
+    /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (match === null) return undefined;
+  const wholeSecondMilliseconds = Date.parse(`${match[1]}${match[3]}`);
+  if (!Number.isFinite(wholeSecondMilliseconds)) return undefined;
+  return { wholeSecondMilliseconds, fraction: match[2] ?? "" };
+};
+
+const grantExpiresAfterStart = (startsAt: string, expiresAt: string): boolean => {
+  const start = grantInstantParts(startsAt);
+  const expiry = grantInstantParts(expiresAt);
+  if (start === undefined || expiry === undefined) return false;
+  if (start.wholeSecondMilliseconds !== expiry.wholeSecondMilliseconds)
+    return expiry.wholeSecondMilliseconds > start.wholeSecondMilliseconds;
+  const precision = Math.max(start.fraction.length, expiry.fraction.length);
+  return expiry.fraction.padEnd(precision, "0") > start.fraction.padEnd(precision, "0");
+};
+
 export const accessGrantSchema = z
   .discriminatedUnion("scopeKind", [
     moduleGrantSchema,
@@ -1690,6 +1721,45 @@ export const accessGrantSchema = z
         code: "custom",
         path: ["revokedAt"],
         message: "Revocation evidence is present exactly when the grant is revoked",
+      });
+    if (value.expiresAt !== undefined && !grantExpiresAfterStart(value.startsAt, value.expiresAt))
+      context.addIssue({
+        code: "custom",
+        path: ["expiresAt"],
+        message: "A grant must expire after it starts",
+      });
+    if (value.status === "expired" && value.expiresAt === undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["expiresAt"],
+        message: "An expired grant requires its expiry time",
+      });
+    const canonicalRoleIds = value.recipientRoleIds.map((roleId) => roleId.toLowerCase());
+    if (new Set(canonicalRoleIds).size !== canonicalRoleIds.length)
+      context.addIssue({
+        code: "custom",
+        path: ["recipientRoleIds"],
+        message: "Recipient roles must be unique",
+      });
+    if (new Set(value.allowedActionKeys).size !== value.allowedActionKeys.length)
+      context.addIssue({
+        code: "custom",
+        path: ["allowedActionKeys"],
+        message: "Allowed actions must be unique",
+      });
+    const readable = value.readableFieldIds.map((fieldId) => fieldId.toLowerCase());
+    if (new Set(readable).size !== readable.length)
+      context.addIssue({
+        code: "custom",
+        path: ["readableFieldIds"],
+        message: "Readable fields must be unique",
+      });
+    const changeable = value.changeableFieldIds.map((fieldId) => fieldId.toLowerCase());
+    if (new Set(changeable).size !== changeable.length)
+      context.addIssue({
+        code: "custom",
+        path: ["changeableFieldIds"],
+        message: "Changeable fields must be unique",
       });
   });
 
