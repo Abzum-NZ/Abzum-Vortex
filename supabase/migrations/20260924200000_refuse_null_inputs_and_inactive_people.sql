@@ -5,12 +5,12 @@
 -- and an `if` or a chained `or` treats null as not-true, so a null selector
 -- slipped past several guards: the offboarding inventory classified a null
 -- target kind as transferable and a null limit as no limit; the ownership
--- transfers, the named-action set-fields writer and the record facts loader
--- accepted a null expected revision, target kind, owner kind, release revision
--- or action kind; the field-bounds resolver accepted a decision with no
--- outcome; and the recent-authentication helper treated a requirement it could
--- not evaluate (unknown kind, no maximum age) as satisfied. Each guard now
--- refuses null explicitly.
+-- transfers, the named-action set-fields writer, the named-action selector
+-- resolver and the record facts loader accepted a null expected revision,
+-- target kind, owner kind, release revision or action kind; the field-bounds
+-- resolver accepted a decision with no outcome; and the recent-authentication
+-- helper treated a requirement it could not evaluate (no maximum age or check
+-- time) as satisfied. Each guard now refuses null explicitly.
 --
 -- Three further defects are corrected in the same functions:
 --
@@ -31,9 +31,17 @@
 -- Main rewrites several of these functions in place, so every live body is
 -- patched from its current `pg_get_functiondef` with an exactly-once guard:
 -- ownership, grants, comments and dependencies are untouched, and drift fails
--- the migration instead of silently editing an unexpected body.
+-- the migration instead of silently editing an unexpected body. Each body is
+-- re-created under its function's own current owner, as the earlier in-place
+-- patches do; the Record schema's create privilege is lent to its adapter and
+-- to postgres only for the duration of this migration.
 
 begin;
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+grant create on schema vortex_record to postgres;
+reset role;
 
 do $migration$
 declare
@@ -159,6 +167,22 @@ declare
       or p_expected_concurrency_number not between 1 and 9007199254740990$p$
     ),
 
+    -- Named-action selector resolver, which every named-action path (the
+    -- named facts loader included) calls before reading anything: a null
+    -- owner kind would otherwise fall through to the Module branch, and a null
+    -- release revision would pass the range check.
+    pg_catalog.jsonb_build_array(
+      'vortex_record.resolve_named_action_context_internal(text,uuid,bigint,uuid,uuid)',
+      $p$  if p_action_owner_kind not in ('application', 'module')
+    or p_action_owner_id is null or p_action_owner_id = nil_uuid
+    or p_action_release_revision not between 1 and 9007199254740991$p$,
+      $p$  if p_action_owner_kind is null
+    or p_action_owner_kind not in ('application', 'module')
+    or p_action_owner_id is null or p_action_owner_id = nil_uuid
+    or p_action_release_revision is null
+    or p_action_release_revision not between 1 and 9007199254740991$p$
+    ),
+
     -- Record facts loader: a null action kind is not a valid selector.
     pg_catalog.jsonb_build_array(
       'vortex_record.load_record_access_facts_internal(uuid,text,uuid,bigint)',
@@ -185,6 +209,7 @@ declare
   new_text text;
   occurrences integer;
   definition text;
+  owner_name name;
 begin
   for target in
     select item.value
@@ -215,10 +240,23 @@ begin
       patch_index := patch_index + 2;
     end loop;
 
-    -- CREATE OR REPLACE keeps the function's owner, grants, comment and OID.
+    -- Re-created under the function's own current owner so its grants,
+    -- comment and OID stay put.
+    select pg_catalog.pg_get_userbyid(procedure.proowner) into strict owner_name
+    from pg_catalog.pg_proc as procedure
+    where procedure.oid = procedure_id;
+    execute pg_catalog.format('set local role %I', owner_name);
     execute definition;
+    reset role;
   end loop;
 end
 $migration$;
+
+reset role;
+
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+revoke create on schema vortex_record from postgres;
+reset role;
 
 commit;
