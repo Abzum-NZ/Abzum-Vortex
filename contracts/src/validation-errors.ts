@@ -240,6 +240,7 @@ export const definitionRuleFailureFamilySchema = z.enum([
   "dependency_cycle",
   "unsafe_content",
   "incompatible_change",
+  "more_errors",
 ]);
 
 export const definitionRuleFailureSchema = z
@@ -264,7 +265,8 @@ export const definitionValidationTranslationContextSchema = z
     correlationId: correlationIdSchema,
     rootLocation: definitionValidationLocationSchema,
     pathMap: z.array(definitionValidationPathMapEntrySchema).max(50_000).default([]),
-    requiredPaths: z.array(rawIssuePathSchema).max(50_000).default([]),
+    // One bounded source node can report several missing required properties.
+    requiredPaths: z.array(rawIssuePathSchema).max(1_000_000).default([]),
   })
   .strict();
 
@@ -308,18 +310,11 @@ const failureCodeByFamily = {
   dependency_cycle: "definition_dependency_cycle",
   unsafe_content: "definition_unsafe_content",
   incompatible_change: "definition_incompatible_change",
+  more_errors: "definition_more_errors",
 } as const satisfies Record<
   z.infer<typeof definitionRuleFailureFamilySchema>,
   DefinitionValidationErrorCode
 >;
-
-function pathsEqual(left: readonly (string | number)[], right: readonly (string | number)[]) {
-  return left.length === right.length && left.every((part, index) => part === right[index]);
-}
-
-function isPathPrefix(prefix: readonly (string | number)[], path: readonly (string | number)[]) {
-  return prefix.length <= path.length && prefix.every((part, index) => part === path[index]);
-}
 
 function normalizeIssuePath(path: unknown): (string | number)[] {
   if (!Array.isArray(path)) return [];
@@ -331,21 +326,23 @@ function normalizeIssuePath(path: unknown): (string | number)[] {
 
 function resolveLocation(
   path: readonly (string | number)[],
-  context: z.output<typeof definitionValidationTranslationContextSchema>,
+  pathMap: ReadonlyMap<string, DefinitionValidationLocation>,
+  rootLocation: DefinitionValidationLocation,
 ) {
-  const match = context.pathMap
-    .filter((entry) => isPathPrefix(entry.sourcePath, path))
-    .sort((left, right) => right.sourcePath.length - left.sourcePath.length)[0];
-  return match?.location ?? context.rootLocation;
+  for (let length = path.length; length >= 0; length -= 1) {
+    const match = pathMap.get(JSON.stringify(path.slice(0, length)));
+    if (match) return match;
+  }
+  return rootLocation;
 }
 
 function schemaIssueCode(
   issue: RawIssue,
   path: readonly (string | number)[],
-  context: z.output<typeof definitionValidationTranslationContextSchema>,
+  requiredPaths: ReadonlySet<string>,
 ): DefinitionValidationErrorCode {
   if (issue.code === "invalid_type") {
-    return context.requiredPaths.some((requiredPath) => pathsEqual(requiredPath, path))
+    return requiredPaths.has(JSON.stringify(path))
       ? "definition_required_value"
       : "definition_invalid_value";
   }
@@ -403,8 +400,10 @@ function finishResult(
   errors: readonly PublicDefinitionValidationError[],
   correlationId: z.infer<typeof correlationIdSchema>,
 ): DefinitionValidationResult {
+  const alreadyTruncated = errors.some((error) => error.code === "definition_more_errors");
   const deduplicated = new Map<string, PublicDefinitionValidationError>();
   for (const error of errors) {
+    if (error.code === "definition_more_errors") continue;
     const key = `${error.code}\u0000${locationSortKey(error.location)}`;
     deduplicated.set(key, error);
   }
@@ -418,11 +417,12 @@ function finishResult(
       definitionValidationErrorCatalogue[right.code].order
     );
   });
+  const truncated = alreadyTruncated || sorted.length > 200;
   return definitionValidationResultSchema.parse({
     catalogueVersion: definitionValidationCatalogueVersion,
     correlationId,
     errors:
-      sorted.length > 200
+      truncated
         ? [...sorted.slice(0, 199), makePublicError("definition_more_errors", correlationId)]
         : sorted.length > 0
           ? sorted
@@ -480,12 +480,18 @@ export function translateDefinitionSchemaError(
     detail: error,
   });
   try {
+    const pathMap = new Map<string, DefinitionValidationLocation>();
+    for (const entry of context.pathMap) {
+      const key = JSON.stringify(entry.sourcePath);
+      if (!pathMap.has(key)) pathMap.set(key, entry.location);
+    }
+    const requiredPaths = new Set(context.requiredPaths.map((path) => JSON.stringify(path)));
     const errors = error.issues.map((issue) => {
       const path = normalizeIssuePath(issue.path);
       return makePublicError(
-        schemaIssueCode(issue, path, context),
+        schemaIssueCode(issue, path, requiredPaths),
         context.correlationId,
-        resolveLocation(path, context),
+        resolveLocation(path, pathMap, context.rootLocation),
       );
     });
     return finishResult(errors, context.correlationId);

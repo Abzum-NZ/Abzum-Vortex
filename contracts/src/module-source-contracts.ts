@@ -96,10 +96,8 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
       });
       return z.NEVER;
     }
-    const children = Array.isArray(entry.value)
-      ? entry.value.map((child, index) => [index, child] as const)
-      : Object.entries(entry.value);
-    if (!Array.isArray(entry.value) && children.length > maximumSourceContainerItems) {
+    const keys = Array.isArray(entry.value) ? undefined : Object.keys(entry.value);
+    if (keys !== undefined && keys.length > maximumSourceContainerItems) {
       context.addIssue({
         code: "custom",
         path: entry.path,
@@ -109,8 +107,10 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
     }
     ancestors.add(entry.value);
     pending.push({ value: undefined, path: [], depth: 0, exit: entry.value });
-    for (let index = children.length - 1; index >= 0; index -= 1) {
-      const [key, child] = children[index]!;
+    const count = keys?.length ?? (entry.value as unknown[]).length;
+    for (let index = count - 1; index >= 0; index -= 1) {
+      const key = keys?.[index] ?? index;
+      const child = (entry.value as Record<string | number, unknown>)[key];
       pending.push({ value: child, path: [...entry.path, key], depth: entry.depth + 1 });
     }
   }
@@ -1233,7 +1233,7 @@ export const moduleSourceActionSchema = z
     permission: namespacedKeySchema.optional(),
     permission_alternatives: z.array(namespacedKeySchema).min(2).optional(),
     shareable: z.boolean(),
-    inputs: z.array(moduleSourceActionInputSchema).max(100),
+    inputs: z.array(moduleSourceActionInputSchema).max(50),
     precondition: sourceConditionSchema.optional(),
     effects: z.array(sourceActionEffectSchema).min(1).max(10),
   })
@@ -1430,7 +1430,7 @@ const moduleSourceBodySchema = z
           id: sourceAliasSchema,
           key: namespacedKeySchema,
           record_type: builderKeySchema,
-          carries: z.array(builderKeySchema).max(500),
+          carries: z.array(builderKeySchema).max(30),
           personal_or_sensitive_values_allowed: z.literal(false),
         })
         .strict(),
