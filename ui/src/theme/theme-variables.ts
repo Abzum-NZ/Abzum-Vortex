@@ -1,5 +1,9 @@
 import type { CSSProperties } from "react";
-import type { ApplicationContentV2 } from "@vortex/contracts";
+import {
+  DEFAULT_PLATFORM_THEME_RELEASE_V2,
+  type ApplicationContentV2,
+  type PlatformThemeTokenRoleKeyV2,
+} from "@vortex/contracts";
 
 /** Resolved #594 application theme, as materialised in application content. */
 export type ApplicationThemeV2 = ApplicationContentV2["theme"];
@@ -72,19 +76,41 @@ const FONT_FALLBACK = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans
  * contrast checks run against. The painted surface must be that same surface.
  */
 const SURFACE_PRIORITY = ["background", "canvas", "surface", "bg", "page_background", "app_background"];
-const SURFACE_SUFFIXES = ["_background", "_bg", "_surface", "_canvas"];
 
-/** #594 default contrast surfaces, used when a theme declares no surface token. */
-const DEFAULT_SURFACE: ColorPair = { light: "#ffffff", dark: "#000000" };
-const DEFAULT_TEXT: ColorPair = { light: "#111827", dark: "#f3f4f6" };
+/**
+ * The registered platform theme release's token values. Every renderer fallback below is
+ * read from here, so the renderer holds no second palette: the shared vocabulary and the
+ * registered release are its only source of default colours, type, spacing and shape.
+ */
+const PLATFORM_TOKENS: ThemeTokens = DEFAULT_PLATFORM_THEME_RELEASE_V2.tokens;
 
-/** Platform defaults, readable on the default surface in both appearances. */
+/** The registered release's value for one shared colour role, or a loud failure if absent. */
+function platformColor(role: PlatformThemeTokenRoleKeyV2): ColorPair {
+  const pair = colorPair(PLATFORM_TOKENS, role);
+  if (pair === undefined)
+    throw new Error(`Platform theme release is missing colour role "${role}"`);
+  return pair;
+}
+
+/** #594 default contrast surface, taken from the registered release's background role. */
+const DEFAULT_SURFACE: ColorPair = platformColor("background");
+const DEFAULT_TEXT: ColorPair = platformColor("text");
+
+/** The registered release's focus colour role, so the renderer never assumes it by name. */
+const PLATFORM_FOCUS_COLOR_ROLE: PlatformThemeTokenRoleKeyV2 =
+  PLATFORM_TOKENS.focus?.kind === "focus"
+    ? (PLATFORM_TOKENS.focus.colorToken as PlatformThemeTokenRoleKeyV2)
+    : "primary";
+
+/** Platform fallbacks, each read from the registered release's matching vocabulary role. */
 const PLATFORM_DEFAULTS: Readonly<{
   textMuted: ColorPair;
   border: ColorPair;
   accent: ColorPair;
   primary: ColorPair;
   onPrimary: ColorPair;
+  secondary: ColorPair;
+  onSecondary: ColorPair;
   danger: ColorPair;
   onDanger: ColorPair;
   dangerText: ColorPair;
@@ -92,17 +118,19 @@ const PLATFORM_DEFAULTS: Readonly<{
   infoText: ColorPair;
   focus: ColorPair;
 }> = {
-  textMuted: { light: "#4b5563", dark: "#9ca3af" },
-  border: { light: "#8b958f", dark: "#6b7570" },
-  accent: { light: "#10211b", dark: "#d7ff54" },
-  primary: { light: "#10211b", dark: "#d7ff54" },
-  onPrimary: { light: "#ffffff", dark: "#10211b" },
-  danger: { light: "#b91c1c", dark: "#f87171" },
-  onDanger: { light: "#ffffff", dark: "#000000" },
-  dangerText: { light: "#b91c1c", dark: "#f87171" },
-  warningText: { light: "#92400e", dark: "#fbbf24" },
-  infoText: { light: "#1d4ed8", dark: "#60a5fa" },
-  focus: { light: "#1d4ed8", dark: "#60a5fa" },
+  textMuted: platformColor("muted_text"),
+  border: platformColor("border_color"),
+  accent: platformColor("primary"),
+  primary: platformColor("primary"),
+  onPrimary: platformColor("primary_foreground"),
+  secondary: platformColor("secondary"),
+  onSecondary: platformColor("secondary_foreground"),
+  danger: platformColor("danger"),
+  onDanger: platformColor("danger_foreground"),
+  dangerText: platformColor("danger_text"),
+  warningText: platformColor("warning_text"),
+  infoText: platformColor("info_text"),
+  focus: platformColor(PLATFORM_FOCUS_COLOR_ROLE),
 };
 
 const PLATFORM_ELEVATION = [
@@ -149,38 +177,26 @@ function tokenOfKind<Kind extends ThemeTokenValueV2["kind"]>(
   return token?.kind === kind ? (token as Extract<ThemeTokenValueV2, { kind: Kind }>) : undefined;
 }
 
-/** Mirrors #594's surface selection so painted text is always on its validated surface. */
+/**
+ * Mirrors #594's surface selection: the colour pair the shared vocabulary declares with the
+ * background role, so painted text is always on its validated surface. Token names never
+ * choose the surface; the priority order only settles which declared background role wins.
+ */
 function themeSurface(tokens: ThemeTokens): ColorPair | undefined {
-  const keys = Object.keys(tokens).sort();
+  const backgrounds = Object.keys(tokens).filter((key) => {
+    const token = tokens[key];
+    return token?.kind === "color_pair" && token.role === "background";
+  });
   const selected =
-    SURFACE_PRIORITY.find((key) => colorPair(tokens, key) !== undefined) ??
-    keys.find(
-      (key) =>
-        colorPair(tokens, key) !== undefined &&
-        SURFACE_SUFFIXES.some((suffix) => key.endsWith(suffix)),
-    );
+    SURFACE_PRIORITY.find((key) => backgrounds.includes(key)) ?? backgrounds.sort()[0];
   return selected === undefined ? undefined : colorPair(tokens, selected);
 }
 
-/** A fill and its #594-validated foreground (`<key>_foreground` or `on_<key>`), or nothing. */
+/** A fill and its #594-validated foreground from the vocabulary pair `<key>_foreground`. */
 function filledPair(tokens: ThemeTokens, key: string): readonly [ColorPair, ColorPair] | undefined {
   const fill = colorPair(tokens, key);
-  const foreground = colorPair(tokens, `${key}_foreground`) ?? colorPair(tokens, `on_${key}`);
+  const foreground = colorPair(tokens, `${key}_foreground`);
   return fill === undefined || foreground === undefined ? undefined : [fill, foreground];
-}
-
-/** The token named after its kind, else the first declared token of that kind. */
-function namedOrFirst<Kind extends "focus" | "density">(
-  tokens: ThemeTokens,
-  kind: Kind,
-): Extract<ThemeTokenValueV2, { kind: Kind }> | undefined {
-  const named = tokenOfKind(tokens, kind, kind);
-  if (named !== undefined) return named;
-  for (const key of Object.keys(tokens).sort()) {
-    const token = tokenOfKind(tokens, key, kind);
-    if (token !== undefined) return token;
-  }
-  return undefined;
 }
 
 /**
@@ -188,17 +204,18 @@ function namedOrFirst<Kind extends "focus" | "density">(
  * #594 tokens. Every colour carries both appearances through `light-dark()`, so one map
  * serves light, dark and system selection through the container's `color-scheme`.
  *
- * Declared token roles (one key per role, no aliases):
- * - colour: #594-selected surface with `text`; `muted_text`; `border`; `primary` (accent);
- *   filled pairs `primary`, `secondary`, `danger` with `<key>_foreground` or `on_<key>`;
+ * Token keys are the shared vocabulary's roles (one key per role, no aliases):
+ * - colour: the #594-selected `background` with `text`; `muted_text`; `border_color`; `primary`
+ *   (accent); the filled pairs `primary`, `secondary`, `danger` with `<key>_foreground`;
  *   `danger_text`, `warning_text`, `info_text`.
  * - typography `body` and `heading`; spacing `space_xs`..`space_lg`; corners
  *   `radius_sm`..`radius_lg`; border `border`; elevation `elevation_low`, `elevation_high`;
- *   focus `focus` (or the first focus token); density `density` (or the first density token).
+ *   focus `focus`; density `density`.
  *
  * A colour is applied only where #594 validated it against what is painted beneath it;
- * otherwise the readable platform value is kept. Only validated hex colours, finite numbers
- * and builder-key font families are emitted, so a definition cannot inject CSS.
+ * otherwise the registered platform theme's value for that role is kept. Only validated hex
+ * colours, finite numbers and builder-key font families are emitted, so a definition cannot
+ * inject CSS.
  */
 export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables {
   const appSurface = themeSurface(tokens);
@@ -222,7 +239,7 @@ export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVar
   const secondary = filledPair(tokens, "secondary");
   const danger = filledPair(tokens, "danger");
 
-  const focus = namedOrFirst(tokens, "focus");
+  const focus = tokenOfKind(tokens, "focus", "focus");
   const focusColor = focus === undefined || !surfaceValidated ? undefined : colorPair(tokens, focus.colorToken);
   const border = tokens.border;
   const borderColor =
@@ -234,7 +251,7 @@ export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVar
 
   const body = tokenOfKind(tokens, "body", "typography");
   const heading = tokenOfKind(tokens, "heading", "typography");
-  const density = DENSITY[namedOrFirst(tokens, "density")?.value ?? "comfortable"];
+  const density = DENSITY[tokenOfKind(tokens, "density", "density")?.value ?? "comfortable"];
 
   const spacing = (key: string, fallback: string): string => {
     const token = tokenOfKind(tokens, key, "spacing");
@@ -260,8 +277,8 @@ export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVar
     "--vortex-accent": onSurface("primary", PLATFORM_DEFAULTS.accent),
     "--vortex-primary": colorValue(primary?.[0] ?? PLATFORM_DEFAULTS.primary),
     "--vortex-on-primary": colorValue(primary?.[1] ?? PLATFORM_DEFAULTS.onPrimary),
-    "--vortex-secondary": colorValue(secondary?.[0] ?? surface),
-    "--vortex-on-secondary": colorValue(secondary?.[1] ?? text),
+    "--vortex-secondary": colorValue(secondary?.[0] ?? PLATFORM_DEFAULTS.secondary),
+    "--vortex-on-secondary": colorValue(secondary?.[1] ?? PLATFORM_DEFAULTS.onSecondary),
     "--vortex-danger": colorValue(danger?.[0] ?? PLATFORM_DEFAULTS.danger),
     "--vortex-on-danger": colorValue(danger?.[1] ?? PLATFORM_DEFAULTS.onDanger),
     "--vortex-danger-text": onSurface("danger_text", PLATFORM_DEFAULTS.dangerText),

@@ -88,8 +88,10 @@ export function contrastRatio(
 }
 
 /**
- * A theme whose catalogue declares any colour role is judged only by declared roles.
- * Themes without roles keep the key-name conventions below.
+ * A theme is role-aware when its catalogue declares any colour role. The shared token-role
+ * vocabulary marks every foreground/background colour pair, so a role-aware theme is judged
+ * only by those declarations and never by token names. A theme that declares no roles (no
+ * current platform release produces one) is judged by no contrast rule at all.
  */
 export function declaresColorRoles(tokens: Readonly<Record<string, ThemeTokenValueV2>>): boolean {
   return Object.values(tokens).some(
@@ -97,27 +99,27 @@ export function declaresColorRoles(tokens: Readonly<Record<string, ThemeTokenVal
   );
 }
 
+/**
+ * The surface a theme paints text and brand colours on: the colour pair the shared vocabulary
+ * declares with the `background` role. The priority order only settles which declared
+ * background role wins; token names never decide whether a colour is a surface.
+ */
 export function findThemeSurface(
   tokens: Readonly<Record<string, ThemeTokenValueV2>>,
 ): Readonly<{ key?: string; light: string; dark: string; name: string }> {
-  const colorEntries = Object.keys(tokens)
+  const backgrounds = Object.keys(tokens)
     .sort()
     .flatMap((key) => {
       const token = tokens[key];
-      return token?.kind === "color_pair" ? [[key, token] as const] : [];
+      return token?.kind === "color_pair" && token.role === "background"
+        ? [[key, token] as const]
+        : [];
     });
   const exactPriority = ["background", "canvas", "surface", "bg", "page_background", "app_background"];
-  const byPriority = (entries: typeof colorEntries) =>
+  const selected =
     exactPriority.flatMap((candidate) =>
-      entries.filter(([key]) => key.toLowerCase() === candidate),
-    )[0];
-  let selected: (typeof colorEntries)[number] | undefined;
-  if (declaresColorRoles(tokens)) {
-    const backgrounds = colorEntries.filter(([, token]) => token.role === "background");
-    selected = byPriority(backgrounds) ?? backgrounds[0];
-  } else {
-    selected = byPriority(colorEntries) ?? colorEntries.find(([key]) => isBackgroundTokenKey(key));
-  }
+      backgrounds.filter(([key]) => key.toLowerCase() === candidate),
+    )[0] ?? backgrounds[0];
   if (selected === undefined)
     return {
       light: DEFAULT_LIGHT_SURFACE,
@@ -130,50 +132,6 @@ export function findThemeSurface(
     dark: selected[1].dark,
     name: selected[0],
   };
-}
-
-function isBackgroundTokenKey(key: string): boolean {
-  const lower = key.toLowerCase();
-  return (
-    lower === "background" ||
-    lower === "canvas" ||
-    lower === "surface" ||
-    lower === "bg" ||
-    lower === "page_background" ||
-    lower === "app_background" ||
-    lower.endsWith("_background") ||
-    lower.endsWith("_bg") ||
-    lower.endsWith("_surface") ||
-    lower.endsWith("_canvas")
-  );
-}
-
-function isTextTokenKey(key: string): boolean {
-  const lower = key.toLowerCase();
-  return (
-    lower === "text" ||
-    lower === "foreground" ||
-    lower === "body" ||
-    lower === "heading" ||
-    lower === "label" ||
-    lower === "caption" ||
-    lower === "title" ||
-    lower.endsWith("_text") ||
-    lower.endsWith("_foreground")
-  );
-}
-
-function isBrandOrPrimaryTokenKey(key: string): boolean {
-  const lower = key.toLowerCase();
-  return (
-    lower === "brand" ||
-    lower === "primary" ||
-    lower === "secondary" ||
-    lower === "accent" ||
-    lower === "action" ||
-    lower.endsWith("_brand") ||
-    lower.endsWith("_primary")
-  );
 }
 
 export function validateThemeContrast(
@@ -210,17 +168,16 @@ export function validateThemeContrast(
   const lightSurface = surface.light;
   const darkSurface = surface.dark;
   const surfaceName = surface.name;
+  // A fill's foreground is the vocabulary pair `<fill>_foreground`; nothing else marks it.
   const pairedForegroundKeys = new Set<string>();
   for (const key of Object.keys(tokens).sort()) {
-    const token = tokens[key];
-    if (token?.kind !== "color_pair") continue;
-    const suffixPair = tokens[`${key}_foreground`];
-    if (suffixPair?.kind === "color_pair") pairedForegroundKeys.add(`${key}_foreground`);
-    const prefixPair = tokens[`on_${key}`];
-    if (prefixPair?.kind === "color_pair") pairedForegroundKeys.add(`on_${key}`);
+    if (tokens[key]?.kind !== "color_pair") continue;
+    if (tokens[`${key}_foreground`]?.kind === "color_pair")
+      pairedForegroundKeys.add(`${key}_foreground`);
   }
 
-  // Validate text & brand color pairs against surface
+  // Validate each declared text/foreground colour against what it is painted on, and each
+  // declared foreground against its paired fill. Token names never decide a colour's role.
   for (const key of Object.keys(tokens).sort()) {
     const token = tokens[key];
     if (token === undefined) continue;
@@ -229,9 +186,7 @@ export function validateThemeContrast(
 
     // A paired foreground is evaluated against its declared companion below. It
     // need not also contrast with the application surface on which it is not used.
-    const isForeground = roleAware ? token.role === "foreground" : isTextTokenKey(key);
-
-    if (isForeground && !pairedForegroundKeys.has(key)) {
+    if (token.role === "foreground" && !pairedForegroundKeys.has(key)) {
       const lightRatio = contrastRatio(token.light, lightSurface, DEFAULT_LIGHT_SURFACE);
       if (lightRatio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST) {
         addFailure({
@@ -250,28 +205,9 @@ export function validateThemeContrast(
           tokenKey: key,
         });
       }
-    } else if (!roleAware && isBrandOrPrimaryTokenKey(key)) {
-      const lightRatio = contrastRatio(token.light, lightSurface, DEFAULT_LIGHT_SURFACE);
-      if (lightRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
-        addFailure({
-          code: "INSUFFICIENT_CONTRAST",
-          family: "invalid_value",
-          message: `Brand color token "${key}" has insufficient light mode contrast ratio (${lightRatio.toFixed(2)}:1 < ${WCAG_AA_NON_TEXT_MIN_CONTRAST}:1) against ${surfaceName} (${lightSurface})`,
-          tokenKey: key,
-        });
-      }
-      const darkRatio = contrastRatio(token.dark, darkSurface, DEFAULT_DARK_SURFACE);
-      if (darkRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
-        addFailure({
-          code: "INSUFFICIENT_CONTRAST",
-          family: "invalid_value",
-          message: `Brand color token "${key}" has insufficient dark mode contrast ratio (${darkRatio.toFixed(2)}:1 < ${WCAG_AA_NON_TEXT_MIN_CONTRAST}:1) against ${surfaceName} (${darkSurface})`,
-          tokenKey: key,
-        });
-      }
     }
 
-    // Check paired tokens: e.g. "brand" and "brand_foreground"
+    // Check paired tokens: the vocabulary names a fill's foreground `<fill>_foreground`.
     const foregroundKey = `${key}_foreground`;
     const pairedForeground = tokens[foregroundKey];
     if (pairedForeground !== undefined && pairedForeground.kind === "color_pair") {
@@ -291,30 +227,6 @@ export function validateThemeContrast(
           family: "invalid_value",
           message: `Paired color token "${foregroundKey}" has insufficient dark mode contrast ratio (${darkRatio.toFixed(2)}:1 < ${WCAG_AA_NORMAL_TEXT_MIN_CONTRAST}:1) against "${key}"`,
           tokenKey: foregroundKey,
-        });
-      }
-    }
-
-    // Check paired tokens: e.g. "on_primary" vs "primary"
-    const onKey = `on_${key}`;
-    const pairedOn = tokens[onKey];
-    if (pairedOn !== undefined && pairedOn.kind === "color_pair") {
-      const lightRatio = contrastRatio(pairedOn.light, token.light, lightSurface);
-      if (lightRatio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST) {
-        addFailure({
-          code: "INSUFFICIENT_CONTRAST",
-          family: "invalid_value",
-          message: `Paired color token "${onKey}" has insufficient light mode contrast ratio (${lightRatio.toFixed(2)}:1 < ${WCAG_AA_NORMAL_TEXT_MIN_CONTRAST}:1) against "${key}"`,
-          tokenKey: onKey,
-        });
-      }
-      const darkRatio = contrastRatio(pairedOn.dark, token.dark, darkSurface);
-      if (darkRatio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST) {
-        addFailure({
-          code: "INSUFFICIENT_CONTRAST",
-          family: "invalid_value",
-          message: `Paired color token "${onKey}" has insufficient dark mode contrast ratio (${darkRatio.toFixed(2)}:1 < ${WCAG_AA_NORMAL_TEXT_MIN_CONTRAST}:1) against "${key}"`,
-          tokenKey: onKey,
         });
       }
     }
