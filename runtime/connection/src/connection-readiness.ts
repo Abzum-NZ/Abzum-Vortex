@@ -16,23 +16,38 @@ import {
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
   assertDestinationFingerprint,
+  assertFiniteTokenExpiry,
   assertSafeIntegerRevision,
+  ConnectionInstanceStateError,
 } from "./connection-instance-state";
 
-export type ConnectionReadinessRefusalCode =
-  | "invalid_parameters"
-  | "organization_mismatch"
-  | "application_scope_required"
-  | "application_mismatch"
-  | "connection_unavailable"
-  | "connection_not_active"
-  | "connection_unhealthy"
-  | "connection_token_expired"
-  | "destination_mismatch"
-  | "stale_revision"
-  | "stale_fingerprint"
-  | "grant_unauthorized"
-  | "database_error";
+/** The closed set of reasons a readiness request may be refused. */
+export const connectionReadinessRefusalCodes = [
+  "invalid_parameters",
+  "organization_mismatch",
+  "application_scope_required",
+  "application_mismatch",
+  "connection_unavailable",
+  "connection_not_active",
+  "connection_unhealthy",
+  "connection_token_expired",
+  "destination_mismatch",
+  "stale_revision",
+  "stale_fingerprint",
+  "grant_unauthorized",
+  "database_error",
+] as const;
+
+export type ConnectionReadinessRefusalCode = (typeof connectionReadinessRefusalCodes)[number];
+
+const connectionReadinessRefusalCodeSet: ReadonlySet<string> = new Set<string>(
+  connectionReadinessRefusalCodes,
+);
+
+const asConnectionReadinessRefusalCode = (value: unknown): ConnectionReadinessRefusalCode =>
+  typeof value === "string" && connectionReadinessRefusalCodeSet.has(value)
+    ? (value as ConnectionReadinessRefusalCode)
+    : "connection_unavailable";
 
 export interface ConnectionReadinessQuery {
   readonly connectionInstanceId: ConnectionInstanceId;
@@ -89,33 +104,45 @@ export class ConnectionReadinessError extends Error {
   }
 }
 
+/** Identifiers are case-insensitive: compare the canonical lower-cased forms. */
+const sameIdentifier = (left: string, right: string): boolean =>
+  left.toLowerCase() === right.toLowerCase();
+
+const isValidationError = (error: unknown): boolean =>
+  error instanceof ConnectionInstanceStateError ||
+  (error instanceof Error && error.name === "ZodError");
+
 /**
  * Executes authoritative SQL readiness resolution for an exact Connection instance
  * against the current request context transaction.
  *
  * Exposes the owner-projected read/check surface that 20260923010000 policy SQL consumes.
  * Fails closed on inactive, unhealthy, expired, mismatched destination, ungranted application,
- * or stale revision/fingerprint.
+ * or stale revision/fingerprint. Every failure, including malformed input and an unreadable
+ * token expiry, is returned as a fixed safe refusal; no database message is propagated.
  */
 export async function resolveConnectionInstanceReadiness(
   transaction: RequestDatabaseTransaction,
   query: ConnectionReadinessQuery,
   organizationId: OrganizationId,
 ): Promise<ConnectionReadinessResult> {
-  // Validate query inputs using canonical contracts schemas
-  const validatedConnId = connectionInstanceIdSchema.parse(query.connectionInstanceId);
-  const validatedDestKey = archiveDestinationReferenceSchema.parse(query.destinationKey);
-  const validatedAppId = applicationRootIdSchema.parse(query.applicationRootId);
-  const validatedRevision = assertSafeIntegerRevision(
-    query.expectedRevision,
-    `Readiness check for connection ${validatedConnId}`,
-  );
-  const validatedFingerprint = assertDestinationFingerprint(query.expectedFingerprint);
+  let parametersValidated = false;
 
   try {
+    const validatedConnId = connectionInstanceIdSchema.parse(query.connectionInstanceId);
+    const validatedDestKey = archiveDestinationReferenceSchema.parse(query.destinationKey);
+    const validatedAppId = applicationRootIdSchema.parse(query.applicationRootId);
+    const validatedRevision = assertSafeIntegerRevision(
+      query.expectedRevision,
+      `Readiness check for connection ${validatedConnId}`,
+    );
+    const validatedFingerprint = assertDestinationFingerprint(query.expectedFingerprint);
+    const validatedOrganizationId = organizationIdSchema.parse(organizationId);
+    parametersValidated = true;
+
     const rows = await transaction.query<SqlReadinessRow>`
       select vortex_connection.resolve_connection_instance_readiness(
-        ${organizationId},
+        ${validatedOrganizationId},
         ${validatedAppId},
         ${validatedConnId},
         ${validatedDestKey},
@@ -151,11 +178,12 @@ export async function resolveConnectionInstanceReadiness(
       const healthOutcome = raw.healthOutcome;
       const state = raw.state;
       const verifiedAt = timestampSchema.parse(raw.verifiedAt);
+      assertFiniteTokenExpiry(raw.tokenExpiresAt);
 
       if (
-        connId !== validatedConnId ||
-        orgId !== organizationId ||
-        appId !== validatedAppId ||
+        !sameIdentifier(connId, validatedConnId) ||
+        !sameIdentifier(orgId, validatedOrganizationId) ||
+        !sameIdentifier(appId, validatedAppId) ||
         destKey !== validatedDestKey ||
         destFp !== validatedFingerprint ||
         rev !== validatedRevision
@@ -194,8 +222,7 @@ export async function resolveConnectionInstanceReadiness(
       });
     }
 
-    const reasonCode =
-      (raw.reasonCode as ConnectionReadinessRefusalCode) ?? "connection_unavailable";
+    const reasonCode = asConnectionReadinessRefusalCode(raw.reasonCode);
     return Object.freeze({
       outcome: "refused",
       reasonCode,
@@ -209,10 +236,17 @@ export async function resolveConnectionInstanceReadiness(
         : {}),
     });
   } catch (error) {
+    if (!parametersValidated && isValidationError(error)) {
+      return Object.freeze({
+        outcome: "refused",
+        reasonCode: "invalid_parameters",
+        message: "Connection readiness parameters are invalid",
+      });
+    }
     return Object.freeze({
       outcome: "refused",
       reasonCode: "database_error",
-      message: error instanceof Error ? error.message : String(error),
+      message: "Connection readiness is unavailable",
     });
   }
 }
