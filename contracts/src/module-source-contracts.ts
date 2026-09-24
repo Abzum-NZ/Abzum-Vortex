@@ -12,6 +12,7 @@ import {
   sourceQualifiedRelationshipSchema,
 } from "./definition-source-common";
 import { parseExactDecimal } from "./exact-decimal";
+import { compileTextInputPattern } from "./text-input-pattern";
 import {
   currencyCodeV2Schema,
   exactDecimalFitsDigitsV2,
@@ -240,6 +241,20 @@ export const actionInputSchema = z
         path: ["validation", "maximum_length"],
         message: "Maximum length cannot be below minimum length",
       });
+    if (value.type === "text" && value.validation?.pattern !== undefined) {
+      if (value.validation.maximum_length === undefined)
+        context.addIssue({
+          code: "custom",
+          path: ["validation", "maximum_length"],
+          message: "Maximum length is required when a pattern is set",
+        });
+      if (compileTextInputPattern(value.validation.pattern) === undefined)
+        context.addIssue({
+          code: "custom",
+          path: ["validation", "pattern"],
+          message: "Pattern is invalid or uses an unsupported unsafe construct",
+        });
+    }
     if (
       value.type === "number" &&
       value.validation?.minimum !== undefined &&
