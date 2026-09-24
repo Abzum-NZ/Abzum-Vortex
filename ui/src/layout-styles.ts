@@ -167,7 +167,7 @@ function placementCssSelector(placementId: string): string {
   const escaped = placementId
     .replace(/\\/g, "\\\\")
     .replace(/"/g, '\\"')
-    .replace(/[\n\r\f]/g, "");
+    .replace(/[\n\r]/g, "\\a ");
   return `[${LIVE_LAYOUT_SCOPE_ATTRIBUTE}] [data-vortex-placement-id="${escaped}"]`;
 }
 
