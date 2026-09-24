@@ -15,8 +15,8 @@ const fail = (message: string, location: DefinitionRenderErrorLocation): never =
 };
 
 /**
- * Resolved context shared by the launcher, tile and view-filter blocks. Every launcher block is a
- * read-only display surface: it renders a closed projected `list` of rows and never fetches data.
+ * Resolved context shared by the launcher and tile blocks. Each is a read-only display surface: it
+ * renders a closed projected `list` of rows and never fetches data.
  */
 export type LauncherListContext = Readonly<{
   location: DefinitionRenderErrorLocation;
@@ -33,8 +33,8 @@ export type LauncherListContext = Readonly<{
 }>;
 
 /**
- * Resolves one launcher block's props. It fails closed on any control projection or on ready values
- * of another kind, and never requests data: an absent projection renders the empty state.
+ * Resolves one launcher or tile block's props. It fails closed on any control projection or on ready
+ * values of another kind, and never requests data: an absent projection renders the empty state.
  */
 export function resolveLauncherListContext(
   props: PlatformBlockRenderProps,
@@ -50,12 +50,11 @@ export function resolveLauncherListContext(
 
   let values: Extract<ProjectedDisplayValues, { kind: "list" }> | undefined;
   if (projectedData?.status === "ready") {
-    if (projectedData.values.kind !== "list")
-      fail(
-        `Block '${metadata.key}' expected 'list' projected values, got '${projectedData.values.kind}'`,
-        location,
-      );
-    values = projectedData.values;
+    const ready = projectedData.values;
+    values =
+      ready.kind === "list"
+        ? ready
+        : fail(`Block '${metadata.key}' expected 'list' projected values, got '${ready.kind}'`, location);
   }
 
   const title = getAccessibleName(props.settings, metadata);
@@ -82,6 +81,8 @@ export type LauncherSettings = Readonly<{
     options: readonly Option[],
     fallback: Option,
   ) => Option;
+  /** A declared projected-cell key validated as a builder key, or undefined when absent. */
+  optionalCellKey: (key: string) => string | undefined;
   /** A declared projected-cell key validated as a builder key, or the fallback when absent. */
   cellKey: (key: string, fallback: string) => string;
 }>;
@@ -115,6 +116,18 @@ export function readLauncherSettings(
       : undefined;
   };
 
+  const optionalCellKey = (key: string): string | undefined => {
+    const authored = text(key);
+    if (authored === undefined) return undefined;
+    const parsed = builderKeySchema.safeParse(authored);
+    return parsed.success
+      ? parsed.data
+      : fail(`Setting '${key}' must be lowercase words separated by underscores`, {
+          ...location,
+          propertyPath: [key],
+        });
+  };
+
   return {
     text,
     boolean: (key) => {
@@ -132,16 +145,7 @@ export function readLauncherSettings(
         fail(`Setting '${key}' is not a declared choice`, { ...location, propertyPath: [key] });
       return value.value as Option;
     },
-    cellKey: (key, fallback) => {
-      const authored = text(key);
-      if (authored === undefined) return fallback;
-      const parsed = builderKeySchema.safeParse(authored);
-      return parsed.success
-        ? parsed.data
-        : fail(`Setting '${key}' must be lowercase words separated by underscores`, {
-            ...location,
-            propertyPath: [key],
-          });
-    },
+    optionalCellKey,
+    cellKey: (key, fallback) => optionalCellKey(key) ?? fallback,
   };
 }
