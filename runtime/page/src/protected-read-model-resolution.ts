@@ -17,6 +17,10 @@ import {
   type ListOrganizationAdministrationRoleAssignmentsResult,
   type ListOrganizationAdministrationRolesCommand,
   type ListOrganizationAdministrationRolesResult,
+  type ListOwnPrivilegedActivationsCommand,
+  type ListOwnPrivilegedActivationsResult,
+  type ListOwnPrivilegedEligibilityCommand,
+  type ListOwnPrivilegedEligibilityResult,
   type OrganizationSelectionCandidate,
   type ProtectedReadModelKey,
   type ProtectedReadModelPageRequest,
@@ -72,6 +76,16 @@ export type ProtectedReadModelReaders = Readonly<{
       selection: OrganizationSelectionCandidate,
       command: ReadOrganizationRuntimeSettingsCommand,
     ): Promise<OwnerResult<ReadOrganizationRuntimeSettingsResult>>;
+    listOwnPrivilegedEligibility(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      command: ListOwnPrivilegedEligibilityCommand,
+    ): Promise<OwnerResult<ListOwnPrivilegedEligibilityResult>>;
+    listOwnPrivilegedActivations(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      command: ListOwnPrivilegedActivationsCommand,
+    ): Promise<OwnerResult<ListOwnPrivilegedActivationsResult>>;
   }>;
   identity: Readonly<{
     listTenantHierarchy(
@@ -193,6 +207,22 @@ export const createProtectedReadModelResolver = (readers: ProtectedReadModelRead
             ? refused
             : fromOwner(model, result);
         }
+        case "privileged_eligible":
+          return fromOwner(
+            model,
+            await readers.access.listOwnPrivilegedEligibility(context.session, context.selection, {
+              pageSize: page.pageSize,
+              ...(page.after === undefined ? {} : { afterRoleAssignmentId: page.after }),
+            } as ListOwnPrivilegedEligibilityCommand),
+          );
+        case "privileged_active":
+          return fromOwner(
+            model,
+            await readers.access.listOwnPrivilegedActivations(context.session, context.selection, {
+              pageSize: page.pageSize,
+              ...(page.after === undefined ? {} : { afterRoleActivationId: page.after }),
+            } as ListOwnPrivilegedActivationsCommand),
+          );
         case "tenant_structure": {
           const result = await readers.identity.listTenantHierarchy(context.session, {
             tenantId: context.tenantId,

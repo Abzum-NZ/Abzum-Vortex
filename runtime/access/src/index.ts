@@ -40,6 +40,7 @@ export {
   createOrganizationLocalAdministrationService,
   type OrganizationLocalAdministrationDependencies,
 } from "./organization-local-administration";
+export { createPersonalPrivilegedAccessService } from "./personal-privileged-access";
 export {
   runOrganizationAccessOperation,
   type OrganizationAccessOperationResult,

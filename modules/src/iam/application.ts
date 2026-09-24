@@ -73,12 +73,6 @@ const singleBlockComposition = (
  * A display with no declared protected read model yet. It stays honest text rather than an unbound
  * table, so it never reads as an empty result or binds an approximate model.
  */
-const unavailableComposition = (aliasPrefix: string, heading: string, regionTitle: string) =>
-  singleBlockComposition(`${aliasPrefix}_heading`, TEXT_BLOCK_RELEASE, {
-    title: textValue(heading),
-    text: textValue(`${regionTitle} are not yet available from a protected read model.`),
-  });
-
 /**
  * A region that reads one or more declared protected read models. Each region placement binds one
  * closed read-model key and carries no query, so live protected data is never copied into records.
@@ -685,11 +679,13 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
           type: "dashboard",
           permission: "application.iam.open",
           states: ["normal", "loading", "empty", "refused", "failure", "recovery"],
-          composition: unavailableComposition(
-            "iam_privileged_eligible",
-            "Eligible roles",
-            "Privileged roles the current person may activate",
-          ),
+          composition: readModelComposition("iam_privileged_eligible", "Eligible roles", [
+            {
+              alias: "iam_privileged_eligible_region",
+              key: "privileged_eligible",
+              title: "Privileged roles you may activate",
+            },
+          ]),
         },
         {
           id: "page_iam_privileged_active",
@@ -698,11 +694,13 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
           type: "dashboard",
           permission: "application.iam.open",
           states: ["normal", "loading", "empty", "refused", "failure", "recovery"],
-          composition: unavailableComposition(
-            "iam_privileged_active",
-            "Active roles",
-            "Privileged roles currently active for the current person",
-          ),
+          composition: readModelComposition("iam_privileged_active", "Active roles", [
+            {
+              alias: "iam_privileged_active_region",
+              key: "privileged_active",
+              title: "Privileged roles currently active for you",
+            },
+          ]),
         },
         {
           id: "page_iam_access_requests",

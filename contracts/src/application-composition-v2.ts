@@ -20,14 +20,20 @@ import {
   containedComponentIdSchema,
   fieldIdSchema,
   fingerprintSchema,
+  groupIdSchema,
   namespacedKeySchema,
   pageIdSchema,
   pipelineIdSchema,
   platformIdSchema,
   queryIdSchema,
   recordIdSchema,
+  revisionSchema,
+  roleActivationIdSchema,
+  roleAssignmentIdSchema,
+  roleIdSchema,
   semanticVersionSchema,
   shellIdSchema,
+  timestampSchema,
 } from "./identifiers";
 import {
   richTextDocumentV2Schema,
@@ -942,6 +948,8 @@ export const protectedReadModelKeys = [
   "tenant_structure",
   "organization_invitations",
   "organization_runtime_settings",
+  "privileged_eligible",
+  "privileged_active",
 ] as const;
 export const protectedReadModelKeySchema = z.enum(protectedReadModelKeys);
 export type ProtectedReadModelKey = z.infer<typeof protectedReadModelKeySchema>;
@@ -995,6 +1003,18 @@ export const protectedReadModelDeclarations = Object.freeze({
     filters: Object.freeze([] as const),
     resultContract: "ReadOrganizationRuntimeSettingsResult",
   }),
+  privileged_eligible: Object.freeze({
+    label: "Your eligible privileged roles",
+    ownerReader: "access.listOwnPrivilegedEligibility",
+    filters: Object.freeze([] as const),
+    resultContract: "ListOwnPrivilegedEligibilityResult",
+  }),
+  privileged_active: Object.freeze({
+    label: "Your active privileged roles",
+    ownerReader: "access.listOwnPrivilegedActivations",
+    filters: Object.freeze([] as const),
+    resultContract: "ListOwnPrivilegedActivationsResult",
+  }),
 } satisfies Record<
   ProtectedReadModelKey,
   Readonly<{
@@ -1020,6 +1040,92 @@ export const protectedReadModelPageRequestSchema = z
   })
   .strict();
 export type ProtectedReadModelPageRequest = z.infer<typeof protectedReadModelPageRequestSchema>;
+
+const personalPrivilegedRoleSchema = z
+  .object({
+    roleId: roleIdSchema,
+    key: builderKeySchema,
+    label: labelSchema,
+    lifecycle: z.enum(["active", "acceptance_required", "unavailable", "retired"]),
+  })
+  .strict();
+const personalPrivilegedAccessVersionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
+
+/** The viewer's own command carries no organisation, account or filter: only a bounded page. */
+export const listOwnPrivilegedEligibilityCommandSchema = z
+  .object({
+    pageSize: z.number().int().min(1).max(100),
+    afterRoleAssignmentId: roleAssignmentIdSchema.optional(),
+  })
+  .strict();
+export const listOwnPrivilegedEligibilityResultSchema = z
+  .object({
+    eligibilities: z
+      .array(
+        z
+          .object({
+            roleAssignmentId: roleAssignmentIdSchema,
+            role: personalPrivilegedRoleSchema,
+            source: z.discriminatedUnion("kind", [
+              z.object({ kind: z.literal("direct") }).strict(),
+              z
+                .object({
+                  kind: z.literal("group"),
+                  groupId: groupIdSchema,
+                  key: builderKeySchema,
+                  label: labelSchema,
+                })
+                .strict(),
+            ]),
+            startsAt: timestampSchema,
+            expiresAt: timestampSchema.optional(),
+          })
+          .strict(),
+      )
+      .max(100),
+    nextAfterRoleAssignmentId: roleAssignmentIdSchema.optional(),
+    accessVersion: personalPrivilegedAccessVersionSchema,
+  })
+  .strict();
+
+export const listOwnPrivilegedActivationsCommandSchema = z
+  .object({
+    pageSize: z.number().int().min(1).max(100),
+    afterRoleActivationId: roleActivationIdSchema.optional(),
+  })
+  .strict();
+export const listOwnPrivilegedActivationsResultSchema = z
+  .object({
+    activations: z
+      .array(
+        z
+          .object({
+            roleActivationId: roleActivationIdSchema,
+            role: personalPrivilegedRoleSchema,
+            eligibilitySourceKind: z.enum(["direct", "group"]),
+            activatedAt: timestampSchema,
+            expiresAt: timestampSchema,
+          })
+          .strict(),
+      )
+      .max(100),
+    nextAfterRoleActivationId: roleActivationIdSchema.optional(),
+    accessVersion: personalPrivilegedAccessVersionSchema,
+  })
+  .strict();
+
+export type ListOwnPrivilegedEligibilityCommand = z.infer<
+  typeof listOwnPrivilegedEligibilityCommandSchema
+>;
+export type ListOwnPrivilegedEligibilityResult = z.infer<
+  typeof listOwnPrivilegedEligibilityResultSchema
+>;
+export type ListOwnPrivilegedActivationsCommand = z.infer<
+  typeof listOwnPrivilegedActivationsCommandSchema
+>;
+export type ListOwnPrivilegedActivationsResult = z.infer<
+  typeof listOwnPrivilegedActivationsResultSchema
+>;
 
 type BlockPlacementV2 = {
   block: z.infer<typeof platformBlockReferenceV2Schema>;
