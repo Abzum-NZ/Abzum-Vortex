@@ -4,7 +4,7 @@
 
 ## One read path
 
-Lists, dashboards, reports, workflow selections, exports, programmable interfaces, and search all use validated read contracts and [access](04-access-and-permissions.md). None may bypass record visibility or field permissions.
+Lists, dashboards, reports, workflow selections, exports, programmable interfaces, and search all use validated read contracts and [access](04-access-and-permissions.md). None may bypass record visibility or field permissions. A system module's read-only [system record type](appendices/core-contract-boundary.md#system-modules) is read through this same closed contract: organisation isolation, field permissions and the viewer's current authority apply before any row, count, group or total is produced, and its protected operation remains the only write path. A system record type adds no separate reader, endpoint, materialised copy or cross-request cache, and a query over one always bypasses the cross-request data-result cache ([runtime and caching](17-runtime-storage-and-caching.md#cache-model)).
 
 ```mermaid
 flowchart LR
