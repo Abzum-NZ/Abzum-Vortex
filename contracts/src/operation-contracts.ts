@@ -1069,6 +1069,54 @@ export const activityEntrySchema = z
     outcome: z.enum(["completed", "refused", "failed"]),
   })
   .strict();
+
+export const activitySourceSchema = z.enum([
+  "web",
+  "workflow",
+  "interface",
+  "connection",
+  "federation",
+  "system",
+]);
+
+export const activityOutcomeSchema = z.enum(["completed", "refused", "failed"]);
+
+/**
+ * The two protected Activity projections. Every caller may read the activity
+ * they performed (`own`); the organisation-wide `audit` projection additionally
+ * requires the organisation's access-administration read authority, so a plain
+ * account never enumerates another account's activity.
+ */
+export const activityProjectionSchema = z.enum(["own", "audit"]);
+
+/** Bounded Activity filters. Every filter is optional and combined conjunctively. */
+export const activityHistoryFilterSchema = z
+  .object({
+    occurredFrom: timestampSchema.optional(),
+    occurredTo: timestampSchema.optional(),
+    actorKind: activityActorKindSchema.optional(),
+    actorId: actorIdSchema.optional(),
+    action: builderKeySchema.optional(),
+    correlationId: correlationIdSchema.optional(),
+    outcome: activityOutcomeSchema.optional(),
+    source: activitySourceSchema.optional(),
+  })
+  .strict()
+  .refine(
+    (filter) =>
+      filter.occurredFrom === undefined ||
+      filter.occurredTo === undefined ||
+      Date.parse(filter.occurredFrom) <= Date.parse(filter.occurredTo),
+    { message: "An Activity window cannot start after it ends" },
+  );
+
+/** The bounded dimension one Activity aggregate may group by. */
+export const activityAggregateDimensionSchema = z.enum([
+  "action",
+  "actorKind",
+  "source",
+  "outcome",
+]);
 export const retentionPolicySchema = z
   .object({
     retentionPolicyId: retentionPolicyIdSchema,
@@ -1381,6 +1429,11 @@ export type FileRecord = z.infer<typeof fileRecordSchema>;
 export type UploadGrant = z.infer<typeof uploadGrantSchema>;
 export type DownloadGrant = z.infer<typeof downloadGrantSchema>;
 export type ActivityEntry = z.infer<typeof activityEntrySchema>;
+export type ActivitySource = z.infer<typeof activitySourceSchema>;
+export type ActivityOutcome = z.infer<typeof activityOutcomeSchema>;
+export type ActivityProjection = z.infer<typeof activityProjectionSchema>;
+export type ActivityHistoryFilter = z.infer<typeof activityHistoryFilterSchema>;
+export type ActivityAggregateDimension = z.infer<typeof activityAggregateDimensionSchema>;
 export type RetentionPolicy = z.infer<typeof retentionPolicySchema>;
 export type PermanentRemovalReceipt = z.infer<typeof permanentRemovalReceiptSchema>;
 export type ProtectedRemovalCommand = z.infer<typeof protectedRemovalCommandSchema>;
