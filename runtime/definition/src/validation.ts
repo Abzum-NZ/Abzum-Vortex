@@ -237,6 +237,23 @@ const actionPermissionsMatch = (
         permissionOwnersByKey?.get(String(permission.key)) === firstOwner),
   );
 };
+/**
+ * A `soft_delete_subject` effect deletes the subject at the revision the command
+ * names, so a deleting action has exactly one delete and may otherwise only copy
+ * relationships (which write the target, never the subject) and announce Events.
+ * A subject write or a creation can move that revision. The Record runtime
+ * refuses the same combination when it composes the action (#571).
+ */
+const actionDeleteEffectsSupported = (action: JsonObject): boolean => {
+  const kinds = array(action.effects).map((effect) => String(effect.kind));
+  return (
+    !kinds.includes("soft_delete_subject") ||
+    (kinds.filter((kind) => kind === "soft_delete_subject").length === 1 &&
+      kinds.every((kind) =>
+        ["soft_delete_subject", "copy_relationships", "announce_event"].includes(kind),
+      ))
+  );
+};
 
 const schemaFailureFamily = {
   definition_required_value: "required_value",
@@ -2589,6 +2606,10 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         failures.push(
           failure(output, "vortex.definition.module_action_references", "broken_reference"),
         );
+      if (!actionDeleteEffectsSupported(action))
+        failures.push(
+          failure(output, "vortex.definition.module_action_references", "unsupported_choice"),
+        );
     }
 
     for (const rule of array(content.rules)) {
@@ -4412,6 +4433,10 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       if (!valid)
         failures.push(
           failure(output, "vortex.definition.application_action_references", "broken_reference"),
+        );
+      if (!actionDeleteEffectsSupported(action))
+        failures.push(
+          failure(output, "vortex.definition.application_action_references", "unsupported_choice"),
         );
     }
     for (const event of array(content.events)) {
