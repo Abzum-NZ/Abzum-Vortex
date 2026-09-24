@@ -209,6 +209,16 @@ const bindingsMatch = (
   left.binding.governingPolicyRevision === right.binding.governingPolicyRevision &&
   left.binding.holdPolicyRevision === right.binding.holdPolicyRevision;
 
+const intentBindingMatches = (
+  intent: FileRemovalIntent,
+  decision: FileRemovalEligibleDecision,
+): boolean =>
+  intent.authorityFingerprint === decision.binding.authorityFingerprint &&
+  intent.fileRevision === decision.binding.fileRevision &&
+  intent.recordRevision === decision.binding.recordRevision &&
+  intent.governingPolicyRevision === decision.binding.governingPolicyRevision &&
+  intent.holdPolicyRevision === decision.binding.holdPolicyRevision;
+
 const fingerprintIntent = (
   intent: Omit<FileRemovalIntent, "intentFingerprint">,
 ): Fingerprint => {
@@ -377,6 +387,26 @@ export const createFileRemovalCoordinator = (
   const clock = dependencies.clock ?? (() => new Date());
   const idGenerator = dependencies.idGenerator ?? (() => randomUUID() as PlatformId);
 
+  // A resumed removal may run long after its intent was recorded, so a legal
+  // hold, share or policy change since then must stop it before any external
+  // side effect. Runs before the stage is claimed so a refusal leaves no claim.
+  const assertIntentStillEligible = async (
+    intent: FileRemovalIntent,
+  ): Promise<void> => {
+    let currentDecision: FileRemovalEligibilityDecision;
+    try {
+      currentDecision =
+        await dependencies.eligibilityService.decideFileRemovalEligibility({
+          fileId: intent.fileId,
+        });
+    } catch {
+      throw new Error("File removal refused: current eligibility is unavailable");
+    }
+    if (!currentDecision.eligible || !intentBindingMatches(intent, currentDecision)) {
+      throw new Error("File removal refused: file is no longer eligible for removal");
+    }
+  };
+
   return Object.freeze({
     coordinateFileRemoval: async (candidate: unknown): Promise<FileRemovalResult> => {
       const parsedRequest = fileObjectRemovalRequestSchema.safeParse(candidate);
@@ -453,6 +483,7 @@ export const createFileRemovalCoordinator = (
         if (record.kind === "terminal") return terminalResult(record);
         assertProgressRecord(record);
         const stage = record.currentStage;
+        if (stage !== "metadata") await assertIntentStillEligible(intent);
         const claimedAt = nowIso(clock);
         const claimId = platformIdSchema.parse(idGenerator());
         const claim: FileRemovalStageClaim = Object.freeze({
