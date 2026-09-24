@@ -32,15 +32,14 @@ export type EventDeliveryFailureClassification =
   (typeof eventDeliveryFailureClassifications)[number];
 
 /**
- * Why storage refused to treat a recovery request as authorised. No consumer
- * or occurrence state is revealed alongside these; authority is resolved
- * before the claim is read.
+ * Why storage refused to treat a recovery request as authorised: the system
+ * actor holds no grant for this consumer, or its grant was revoked. No consumer
+ * or occurrence state is revealed alongside these; the grant is resolved before
+ * the claim is read.
  */
 export const eventDeliveryRecoveryRefusalReasons = [
   "authority_not_configured",
-  "authority_disabled",
   "authority_revoked",
-  "authority_session_unauthorised",
 ] as const;
 
 export type EventDeliveryRecoveryRefusalReason =
@@ -94,19 +93,22 @@ export type EventDeliveryFailureReportResult =
     }>;
 
 /**
- * Explicit authorised operator recovery of one exhausted claim, addressed by
- * the same exact consumer and occurrence identity.
+ * Explicit authorised recovery of one exhausted claim, addressed by the same
+ * exact consumer and occurrence identity.
  *
- * There is deliberately no operator identifier here. Authority is resolved by
- * storage from its private recovery registry and the immutable database
- * session user, so a caller can neither assert an operator nor attribute the
- * recovery to one. `expectedFailureCount` guards against acting on a stale
- * view of the claim.
+ * `systemActorId` is the system actor the server already authenticated (the
+ * event dispatcher's configured actor); it is never taken from a request.
+ * Storage authorises the recovery only when Access's one system actor grant
+ * registry holds an active grant for that actor scoped to this consumer, and
+ * attributes the recovery to that actor. It never consults the database
+ * session role or a service-role credential. `expectedFailureCount` guards
+ * against acting on a stale view of the claim.
  */
 export type EventDeliveryRecoveryInput = Readonly<{
   consumerKey: string;
   occurrenceId: string;
   expectedFailureCount: number;
+  systemActorId: string;
 }>;
 
 export type EventDeliveryRecoveryResult =
@@ -215,7 +217,8 @@ const validateRecoveryInput = (input: EventDeliveryRecoveryInput): EventDelivery
     !eventOccurrenceIdSchema.safeParse(input.occurrenceId).success ||
     !Number.isInteger(input.expectedFailureCount) ||
     input.expectedFailureCount < 0 ||
-    input.expectedFailureCount > eventDeliveryRecoveryLimits.maximumRetryAttempts
+    input.expectedFailureCount > eventDeliveryRecoveryLimits.maximumRetryAttempts ||
+    !actorIdSchema.safeParse(input.systemActorId).success
   )
     return inputInvalid();
   return input;
@@ -369,10 +372,9 @@ export interface EventDeliveryRecoveryRepository {
   /** Reports one failed delivery attempt against an existing claim. */
   reportFailure(input: EventDeliveryFailureReportInput): Promise<EventDeliveryFailureReportResult>;
   /**
-   * Requests operator recovery of one exhausted claim. Storage resolves the
-   * authority itself and refuses unless this database session is the consumer's
-   * registered recovery operator, so this call cannot present caller-supplied
-   * authorisation.
+   * Requests recovery of one exhausted claim. Storage refuses unless the named
+   * system actor holds an active system actor grant scoped to the consumer, so
+   * naming an actor confers nothing by itself.
    */
   recoverClaim(input: EventDeliveryRecoveryInput): Promise<EventDeliveryRecoveryResult>;
   /** Bounded inspection of currently exhausted, replayable claims. */
@@ -384,9 +386,9 @@ export interface EventDeliveryRecoveryRepository {
 /**
  * Event-owned runtime adapter over the #639 consumer claim/lease row. The
  * caller supplies the server-only runtime transaction; this adapter never
- * accepts a request context, direct SQL, an organisation selector or an
- * operator identity from a consumer, and it never claims fresh work or mutates
- * an event_outbox row.
+ * accepts a request context, direct SQL or an organisation selector from a
+ * consumer. Recovery authority is only ever a stored system actor grant. It
+ * never claims fresh work or mutates an event_outbox row.
  */
 export const createEventDeliveryRecoveryRepository = (
   transaction: RuntimeDatabaseTransaction,
@@ -418,7 +420,8 @@ export const createEventDeliveryRecoveryRepository = (
           select vortex_event.recover_consumer_occurrence_claim(
             ${input.consumerKey}::text,
             ${input.occurrenceId}::uuid,
-            ${input.expectedFailureCount}::integer
+            ${input.expectedFailureCount}::integer,
+            ${input.systemActorId}::uuid
           ) as result
         `;
         return parseRecoveryResult(requireOne(rows).result);
