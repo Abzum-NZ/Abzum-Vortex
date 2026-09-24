@@ -233,7 +233,6 @@ export function extractApplicationSourceIdentityRequirementsV2(
   add("root", "document", "document", "root", [source.key, source.root_alias]);
   addTopLevel("permission", "permissions");
   addTopLevel("action", "actions");
-  addTopLevel("rule", "rules");
   addTopLevel("event", "events");
   addTopLevel("role", "roles");
   addTopLevel("query", "queries");

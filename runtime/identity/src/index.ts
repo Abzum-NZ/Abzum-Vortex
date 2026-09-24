@@ -2,6 +2,10 @@ import "server-only";
 
 export * from "./identity-verification-error";
 export {
+  requireIdentityNotDisabled,
+  requireRequestIdentityNotDisabled,
+} from "./identity-disablement-publication";
+export {
   completePasswordRecovery,
   confirmEmail,
   requestPasswordRecovery,

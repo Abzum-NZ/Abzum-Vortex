@@ -576,7 +576,6 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
       connection_bindings: [],
       interfaces: [],
       actions: [],
-      rules: [],
       events: [
         {
           id: administrationEventId,
@@ -620,7 +619,11 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
           permission: "application.iam.open",
           states: ["normal", "loading", "empty", "refused", "failure", "recovery"],
           composition: readModelComposition("iam_people", "People", [
-            { alias: "iam_people_region", key: "people", title: "People (Group membership)" },
+            {
+              alias: "iam_people_region",
+              key: "organization_accounts",
+              title: "People (organisation accounts)",
+            },
           ]),
         },
         {
@@ -646,7 +649,7 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
             {
               alias: "iam_assignments_region",
               key: "effective_assignments",
-              title: "Current effective assignments",
+              title: "Role assignment ledger",
             },
           ]),
         },

@@ -3745,9 +3745,6 @@
                  "actions":  [
 
                              ],
-                 "rules":  [
-
-                           ],
                  "events":  [
                                 {
                                     "id":  "form_submit_crm_company_merge",
