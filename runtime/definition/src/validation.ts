@@ -252,6 +252,7 @@ const schemaFailureFamily = {
   definition_dependency_cycle: "dependency_cycle",
   definition_unsafe_content: "unsafe_content",
   definition_incompatible_change: "incompatible_change",
+  definition_more_errors: "more_errors",
   definition_validation_failed: "invalid_value",
 } as const satisfies Record<string, DefinitionRuleFailure["family"]>;
 
@@ -311,44 +312,69 @@ function sourceTranslationContext(source: unknown) {
   const pathMap: { sourcePath: (string | number)[]; location: DefinitionValidationLocation }[] = [
     { sourcePath: [], location: rootLocation },
   ];
-  const visit = (
-    value: unknown,
-    path: (string | number)[],
-    segments: DefinitionValidationLocation["segments"],
-    collectionName?: string,
-  ) => {
-    if (Array.isArray(value)) {
-      value.forEach((entry, index) => visit(entry, [...path, index], segments, collectionName));
-      return;
+  const pending: {
+    value: unknown;
+    path: (string | number)[];
+    segments: DefinitionValidationLocation["segments"];
+    collectionName?: string;
+    depth: number;
+  }[] = [{ value: document, path: [], segments: rootLocation.segments, depth: 0 }];
+  let visited = 0;
+  while (pending.length > 0 && visited < 50_000) {
+    const current = pending.pop()!;
+    if (current.depth > 32) continue;
+    visited += 1;
+    if (Array.isArray(current.value)) {
+      for (let index = Math.min(current.value.length, 1_000) - 1; index >= 0; index -= 1)
+        pending.push({
+          ...current,
+          value: current.value[index],
+          path: [...current.path, index],
+          depth: current.depth + 1,
+        });
+      continue;
     }
-    if (value === null || typeof value !== "object") return;
-    const entry = value as JsonObject;
-    const insideFlow = segments.some((segment) => segment.kind === "flow");
+    if (current.value === null || typeof current.value !== "object") continue;
+    const entry = current.value as JsonObject;
+    const insideFlow = current.segments.some((segment) => segment.kind === "flow");
     const locationKind =
-      insideFlow && collectionName === "nodes"
+      insideFlow && current.collectionName === "nodes"
         ? "flow_node"
-        : insideFlow && collectionName === "edges"
+        : insideFlow && current.collectionName === "edges"
           ? "flow_edge"
-          : collectionName
+          : current.collectionName
             ? sourceCollectionLocationKind[
-                collectionName as keyof typeof sourceCollectionLocationKind
+                current.collectionName as keyof typeof sourceCollectionLocationKind
               ]
             : undefined;
     const candidateKey = entry.key ?? entry.id;
     const parsedCandidate = namespacedKeySchema.or(builderKeySchema).safeParse(candidateKey);
     const nextSegments =
-      locationKind && parsedCandidate.success
-        ? [...segments, { kind: locationKind, key: parsedCandidate.data }]
-        : segments;
-    if (nextSegments !== segments)
+      locationKind && parsedCandidate.success && current.segments.length < 12
+        ? [...current.segments, { kind: locationKind, key: parsedCandidate.data }]
+        : current.segments;
+    if (nextSegments !== current.segments)
       pathMap.push({
-        sourcePath: path,
+        sourcePath: current.path,
         location: { ...rootLocation, segments: nextSegments },
       });
-    for (const [key, child] of Object.entries(entry))
-      visit(child, [...path, key], nextSegments, key);
-  };
-  visit(document, [], rootLocation.segments);
+    const keys: string[] = [];
+    for (const key in entry) {
+      if (!Object.prototype.hasOwnProperty.call(entry, key)) continue;
+      keys.push(key);
+      if (keys.length === 1_000) break;
+    }
+    for (let index = keys.length - 1; index >= 0; index -= 1) {
+      const key = keys[index]!;
+      pending.push({
+        value: entry[key],
+        path: [...current.path, key],
+        segments: nextSegments,
+        collectionName: key,
+        depth: current.depth + 1,
+      });
+    }
+  }
   return { rootLocation, pathMap };
 }
 
