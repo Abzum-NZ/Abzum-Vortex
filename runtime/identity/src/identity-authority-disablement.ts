@@ -19,7 +19,8 @@ import {
  *
  * It disables one identity environment-wide through the provider's Admin API,
  * revokes that identity's provider sessions and records an attributable command
- * (actor, subject, command identity, outcome; never a credential). It performs
+ * with an append-only history of every attempt (actor, subject, command
+ * identity, correlation, outcome; never a credential). It performs
  * no authorisation: the caller (the App coordination operation) has already
  * verified the operator's permission through Access, and Identity never imports
  * Access. It is never exposed to a browser.
@@ -144,8 +145,9 @@ const single = <Row extends DatabaseRow>(rows: readonly Row[]): Row => {
   return row;
 };
 
-const isUserNotFound = (error: { status?: number; code?: string }): boolean =>
-  error.status === 404 || error.code === "user_not_found";
+const isUserNotFound = (
+  error: Readonly<{ status: number | undefined; code: string | undefined }>,
+): boolean => error.status === 404 || error.code === "user_not_found";
 
 export const createIdentityAuthorityDisablement = (
   dependencies: IdentityAuthorityDisablementDependencies,
@@ -159,14 +161,14 @@ export const createIdentityAuthorityDisablement = (
   );
 
   const complete = async (
-    commandId: string,
+    command: IdentityDisablementCommand,
     outcome: "disabled" | "subject_not_found" | "provider_unavailable",
   ): Promise<CompleteRow> =>
     run(async (transaction) =>
       single(
         await transaction.query<CompleteRow>`
           select * from vortex_identity.complete_identity_disablement(
-            ${commandId}::uuid, ${outcome}::text
+            ${command.commandId}::uuid, ${command.correlationId}::uuid, ${outcome}::text
           )
         `,
       ),
@@ -217,15 +219,15 @@ export const createIdentityAuthorityDisablement = (
         });
         if (error) {
           if (isUserNotFound(error)) {
-            await complete(command.commandId, "subject_not_found");
+            await complete(command, "subject_not_found");
             return { outcome: "refused", code: "subject_not_found" };
           }
-          await complete(command.commandId, "provider_unavailable");
+          await complete(command, "provider_unavailable");
           return { outcome: "refused", code: "authority_unavailable" };
         }
 
         // 3. Revoke the subject's provider sessions and record the outcome together.
-        const finished = await complete(command.commandId, "disabled");
+        const finished = await complete(command, "disabled");
         const sessionsRevoked = count(finished.sessions_revoked);
         if (finished.outcome !== "disabled" || sessionsRevoked === undefined)
           throw new Error("Identity disablement record mismatch");

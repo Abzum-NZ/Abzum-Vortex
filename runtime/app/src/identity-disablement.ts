@@ -2,20 +2,20 @@ import "server-only";
 
 import {
   correlationIdSchema,
+  identityIdSchema,
   identitySessionSchema,
   organizationAccessDeclarationSchema,
   organizationIdSchema,
   platformIdSchema,
-  selectedOrganizationScopeSchema,
-  identityIdSchema,
   type IdentitySession,
   type OrganizationAccessDeclaration,
-  type SelectedOrganizationScope,
 } from "@vortex/contracts";
 import {
+  createHumanOrganizationRequestService,
   platformPermissionCatalogue,
   platformPermissionCatalogueOwnerId,
-  type OrganizationAccessOperationResult,
+  runOrganizationAccessOperation,
+  type HumanOrganizationRequestDependencies,
 } from "@vortex/access";
 import { z } from "zod";
 
@@ -27,19 +27,25 @@ import { z } from "zod";
  * fixed server-only Identity Authority adapter disables the identity, revokes
  * its provider sessions and records the attributable command. Because the
  * disablement affects every organisation the identity belongs to, the
- * permission counts only when the operator selected the environment's root
- * (platform) organisation; it is refused in any other organisation, and the
- * permission alone in a tenant or child organisation never reaches Identity.
+ * permission counts only in the environment's root (platform) organisation:
+ * the operation is refused when the operator selected any other organisation,
+ * and Access evaluates the permission only in the configured root, so the
+ * permission held in a tenant or child organisation never reaches Identity.
+ *
+ * Access evaluates the operator's own verified session inside a protected
+ * request for the root organisation, and that same session's identity is the
+ * recorded actor, so the actor cannot differ from the identity Access checked.
  *
  * There is no browser endpoint for this operation: the trusted server supplies
- * the verified session, the selected scope, the root organisation and the
- * Access and Identity dependencies.
+ * the verified session, the configured root organisation and the Identity
+ * Authority adapter.
  */
 
 export const identityDisablementRefusalCodes = [
   "invalid_request",
   "root_organization_required",
   "access_refused",
+  "recent_authentication_required",
   "self_disablement",
   "command_conflict",
   "subject_not_found",
@@ -50,6 +56,8 @@ export type IdentityDisablementRefusalCode = (typeof identityDisablementRefusalC
 
 export const identityDisablementRequestSchema = z
   .object({
+    /** The organisation the operator is working in; it must be the environment root. */
+    selectedOrganizationId: organizationIdSchema,
     /** Stable across retries: an exact retry replays the recorded result. */
     commandId: platformIdSchema,
     subjectIdentityId: identityIdSchema,
@@ -88,29 +96,25 @@ export interface IdentityAuthorityDisabler {
       }>
     | Readonly<{
         outcome: "refused";
-        code: "invalid_command" | IdentityDisablementRefusalCode;
+        code:
+          | "invalid_command"
+          | "self_disablement"
+          | "command_conflict"
+          | "subject_not_found"
+          | "authority_unavailable";
       }>
   >;
 }
 
-export type IdentityDisablementDependencies = Readonly<{
-  /**
-   * The environment's root (platform) organisation, from trusted server
-   * configuration. It is never taken from the request or the operator's input.
-   */
-  environmentRootOrganizationId: string;
-  /**
-   * Runs Access's own permission decision for the operator in the selected
-   * scope (`runOrganizationAccessOperation` bound to the operator's request
-   * transaction). The callback runs only when the permission is effective.
-   */
-  authorize: <Result>(
-    scope: SelectedOrganizationScope,
-    declaration: OrganizationAccessDeclaration,
-    operation: () => Promise<Result>,
-  ) => Promise<OrganizationAccessOperationResult<Result>>;
-  identityAuthority: IdentityAuthorityDisabler;
-}>;
+export type IdentityDisablementDependencies = HumanOrganizationRequestDependencies &
+  Readonly<{
+    /**
+     * The environment's root (platform) organisation, from trusted server
+     * configuration. It is never taken from the request or the operator's input.
+     */
+    environmentRootOrganizationId: string;
+    identityAuthority: IdentityAuthorityDisabler;
+  }>;
 
 const disableIdentitiesPermission = platformPermissionCatalogue.permissions.find(
   (permission) => permission.key === "platform.security.identities.disable",
@@ -142,33 +146,42 @@ export const createIdentityDisablementCoordinator = (
 ) => {
   const rootOrganizationId = organizationIdSchema.parse(dependencies.environmentRootOrganizationId);
   const declaration = buildDeclaration();
+  const requests = createHumanOrganizationRequestService(dependencies);
 
   return Object.freeze({
     async disableIdentity(
       sessionCandidate: IdentitySession,
-      scopeCandidate: SelectedOrganizationScope,
       requestCandidate: IdentityDisablementRequest,
     ): Promise<IdentityDisablementOperationResult> {
       const session = identitySessionSchema.safeParse(sessionCandidate);
-      const scope = selectedOrganizationScopeSchema.safeParse(scopeCandidate);
       const request = identityDisablementRequestSchema.safeParse(requestCandidate);
-      if (!session.success || !scope.success || !request.success)
+      if (!session.success || !request.success)
         return { outcome: "refused", code: "invalid_request" };
 
       // Environment-wide authority exists only in the root organisation.
-      if (scope.data.organizationId.toLowerCase() !== rootOrganizationId.toLowerCase())
+      if (request.data.selectedOrganizationId.toLowerCase() !== rootOrganizationId.toLowerCase())
         return { outcome: "refused", code: "root_organization_required" };
       if (session.data.identityId.toLowerCase() === request.data.subjectIdentityId.toLowerCase())
         return { outcome: "refused", code: "self_disablement" };
 
-      // Access decides; the decision must be exact for this scope, or nothing is disabled.
-      let decision: OrganizationAccessOperationResult<true>;
-      try {
-        decision = await dependencies.authorize(scope.data, declaration, async () => true);
-      } catch {
+      // Access decides for this session in the root organisation, or nothing is disabled.
+      const checked = await requests.run(
+        session.data,
+        { organizationId: rootOrganizationId },
+        (transaction, scope) =>
+          runOrganizationAccessOperation(transaction, scope, declaration, async () => true),
+      );
+      if (checked.kind === "temporarily_unavailable")
         return { outcome: "refused", code: "authority_unavailable" };
-      }
-      if (decision.outcome !== "completed") return { outcome: "refused", code: "access_refused" };
+      if (checked.kind === "unavailable") return { outcome: "refused", code: "access_refused" };
+      if (checked.value.outcome !== "completed")
+        return {
+          outcome: "refused",
+          code:
+            checked.value.reasonCode === "authentication_required"
+              ? "recent_authentication_required"
+              : "access_refused",
+        };
 
       const result = await dependencies.identityAuthority
         .disable({
