@@ -5,6 +5,7 @@ import {
   applicationInstallationDetachCommandSchema,
   applicationInstallationLifecycleResultSchema,
   applicationLifecyclePolicyReadinessSchema,
+  indexReadinessSchema,
   validateRecordTypeLifecyclePolicy,
   type ApplicationInstallationActivationCommand,
   type ApplicationInstallationDetachCommand,
@@ -15,6 +16,7 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 
 type LifecycleRow = DatabaseRow & { readonly lifecycle_result: unknown };
 type LifecyclePolicyReadinessRow = DatabaseRow & { readonly lifecycle_readiness: unknown };
+type IndexReadinessRow = DatabaseRow & { readonly index_readiness: unknown };
 
 export class ApplicationInstallationLifecycleError extends Error {
   readonly code: ApplicationInstallationLifecycleErrorCode;
@@ -153,6 +155,61 @@ const requireExecutableLifecyclePolicies = async (
   }
 };
 
+/**
+ * Refuses the activation unless every uniqueness field index the installation
+ * owns is observed-ready for its exact desired definition and lineage.
+ *
+ * Performance indexes are advisory: a missing or invalid one never blocks
+ * activation, because it cannot remove supported behaviour. A required
+ * uniqueness index that is missing, invalid or recorded against a different
+ * desired definition does block, so an installation can never activate early
+ * without the uniqueness the published definition promises.
+ *
+ * It runs in the same request transaction as the activation write, after the
+ * lifecycle-policy gate and the canonical binding locks, and reads only the
+ * Record-owned projection. Module never reads Record tables or catalog state.
+ */
+const requireReadyUniquenessIndexes = async (
+  transaction: RequestDatabaseTransaction,
+  command: ApplicationInstallationActivationCommand,
+  activated: ApplicationInstallationLifecycleResult,
+): Promise<void> => {
+  // The gate is only meaningful against the exact installation this command
+  // activated; anything else is an unusable result rather than a pass.
+  if (
+    activated.state !== "active" ||
+    !sameIdentifier(activated.applicationRootId, command.applicationRootId) ||
+    activated.applicationReleaseRevision !== command.applicationReleaseRevision
+  )
+    throw bindingsIncomplete();
+
+  const rows = await transaction.query<IndexReadinessRow>`
+    select vortex_record.read_index_readiness(
+      ${activated.organizationId}::uuid,
+      ${command.applicationRootId}::uuid,
+      ${command.applicationReleaseRevision}::bigint,
+      ${JSON.stringify(command.expectedModuleBindings)}::jsonb
+    ) as index_readiness
+  `;
+  if (rows.length !== 1 || rows[0] === undefined) throw bindingsIncomplete();
+
+  const readiness = indexReadinessSchema.safeParse(rows[0].index_readiness);
+  if (
+    !readiness.success ||
+    !sameIdentifier(readiness.data.organizationId, activated.organizationId) ||
+    !sameIdentifier(readiness.data.applicationRootId, activated.applicationRootId) ||
+    readiness.data.applicationReleaseRevision !== command.applicationReleaseRevision
+  )
+    throw bindingsIncomplete();
+
+  for (const index of readiness.data.indexes) {
+    // Performance indexes are advisory: they never refuse activation. Only a
+    // required uniqueness index that is not observed ready does.
+    if (index.purpose !== "uniqueness") continue;
+    if (!index.ready || index.observedState !== "present") throw bindingsIncomplete();
+  }
+};
+
 export interface ApplicationInstallationLifecycleRepository {
   activate(
     command: ApplicationInstallationActivationCommand,
@@ -184,6 +241,7 @@ export const createApplicationInstallationLifecycleRepository = (
           `,
         );
         await requireExecutableLifecyclePolicies(transaction, command.data, activated);
+        await requireReadyUniquenessIndexes(transaction, command.data, activated);
         return activated;
       } catch (error) {
         throw mapFailure(error);
