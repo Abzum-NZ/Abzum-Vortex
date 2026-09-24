@@ -19,53 +19,90 @@ flowchart LR
 
 An **action** is a named operation that participates in a save. A **rule** is a typed flow of immediate logic evaluated in its declared context. An **event** is a committed statement that something happened. A [workflow](09-workflows-and-pipelines.md) performs durable work after the save. The [Frontend Rule Designer](appendices/frontend-rule-designer.md) is the one shared rule/action authoring surface, reusing the Conditions Designer and Page Designer forms.
 
-A user-facing action always enters an application-owned Frontend Flow; the named **action** contract below is its lower-level protected business operation, not a competing click handler. A popup-only or navigation-only flow finishes without a business submission. A one-node Save form flow is sufficient for an ordinary submit button. The [flow-first binding rules](appendices/frontend-rule-designer.md#pages-compose-flows-define-actions) separate page composition from behaviour without replacing the owning services.
+A user-facing action always enters an application-owned Frontend Flow; the named **action** contract below is its lower-level protected business operation, not a competing click handler. A popup-only or navigation-only flow finishes without a business submission. A one-task Save form flow is sufficient for an ordinary submit button. The [flow-first binding rules](appendices/frontend-rule-designer.md#pages-compose-flows-define-actions) separate page composition from behaviour without replacing the owning services.
 
-An interactive flow may collect forms, query data and execute several changing nodes in its configured order. Each protected operation commits independently; cancellation or later failure does not undo earlier commits. The collect-first pattern remains available: collect all required answers before one supported atomic operation when no business changes should occur until every form passes. Each operation revalidates its required path, inputs, current authority and revisions. No database transaction spans human or network waits. See [execution and custom forms](appendices/frontend-rule-designer.md#custom-forms-and-all-or-nothing-submission).
+An interactive flow may collect forms, query data and execute several changing tasks in its configured order. Each protected operation commits independently; cancellation or later failure does not undo earlier commits. The collect-first pattern remains available: collect all required answers before one supported atomic operation when no business changes should occur until every form passes. Each operation revalidates its required path, inputs, current authority and revisions. No database transaction spans human or network waits. See [execution and custom forms](appendices/frontend-rule-designer.md#custom-forms-and-all-or-nothing-submission).
 
 ## Actions
 
-An action belongs to a module when it expresses reusable business meaning, or to an application when it exists only for that application. It records:
+An action is a published **flow** authored in the one [flow language](appendices/frontend-rule-designer.md#one-flow-language). It belongs to a module when it expresses reusable business meaning, or to an application when it exists only for that application. It declares the same fields as every flow: identifier, key, owner, description, labels, execution kind, run-as, invocation permission, typed inputs, variables, a trigger list, an ordered task list, outputs, error and finally handlers, and retry, timeout and concurrency settings.
 
-- Permanent identifier, label, subject record type, and required permission.
-- Inputs with names, labels, types, required flags, and validation that is valid for that type. Plain text accepts length and pattern constraints; formatted text accepts a closed block allowlist and maximum length; numbers accept numeric bounds; dates and date-times accept their own bounds; a record reference names one or more allowed record types; an organisation-account reference selects an account in the current organisation; a Boolean accepts none of those unrelated settings.
-- A precondition.
-- One to ten ordered effects.
-- The events it may announce.
-- A sharing setting of `refused` by default or `allowed`. Only an action explicitly published as shareable may be named by a cross-organisation grant.
+An action body is the flow's ordered task list. Its inputs use names, labels, types, required flags, and validation valid for that type. Plain text accepts length and pattern constraints; formatted text accepts a closed block allowlist and maximum length; numbers accept numeric bounds; dates and date-times accept their own bounds; a record reference names one or more allowed record types; an organisation-account reference selects an account in the current organisation; a Boolean accepts none of those unrelated settings. A flow also records a precondition, the events it may announce, and a sharing setting of `refused` by default or `allowed`; only an action explicitly published as shareable may be named by a cross-organisation grant.
 
-Allowed immediate action effects are:
+A transaction action's ordered tasks are the allowed immediate effects:
 
-1. Set a field from a literal, action input, subject field, subject record, current actor, or current time.
-2. Create a record using an explicit field-to-value map.
-3. Copy an explicit non-empty list of the subject's published relationships to a record supplied through a declared link input.
-4. Soft-delete the subject record.
-5. Announce a declared business event when the save commits.
+1. Set field — from a literal, action input, subject field, subject record, current actor, or execution time (`{{ execution.now }}`).
+2. Create record — using an explicit field-to-value map.
+3. Copy relationships — an explicit non-empty list of the subject's published relationships to a record supplied through a declared input.
+4. Soft-delete record — the subject record.
+5. Announce event — a declared business event when the save commits.
 
-Every field, record type, relationship, input and event named by an effect must resolve during publication. A copy effect never means “all relationships”; the authored definition lists the relationship keys and publication resolves them to permanent relationship identifiers.
+Every field, record type, relationship, input and event named by a task must resolve during publication. A copy task never means “all relationships”; the authored task lists the relationship keys and publication resolves them to permanent relationship identifiers.
 
-An action cannot wait, call an external system, send email, send notifications, invoke a model, or read arbitrary records. Those operations belong to a [workflow](09-workflows-and-pipelines.md). A shared action runs wholly in the source organisation and cannot create or link recipient-owned records.
+A transaction action cannot wait, call an external system, send email, send notifications, invoke a model, or read arbitrary records; those tasks run in a durable flow instead. A shared action runs wholly in the source organisation and cannot create or link recipient-owned records.
 
 ## Rules
 
-A rule flow has a trigger, optional condition, priority, declared typed inputs and flow variables, and an ordered graph of registered nodes. Rules for the same trigger run in a stable published order. The [current graph contract](appendices/frontend-rule-designer.md#current-contracts-and-delivery) replaces the obsolete single-effect representation throughout current definitions and consumers; product publication identity and release selection remain explicit.
+A rule is a flow with a trigger list and an execution kind. Rules for the same trigger run in a stable published order. A rule declares the same fields as every flow in the one [flow language](appendices/frontend-rule-designer.md#one-flow-language): identifier, key, owner, description, labels, execution kind, run-as, invocation permission, typed inputs, variables, a trigger list, an ordered task list, outputs, error and finally handlers, and retry, timeout and concurrency settings. The [current flow contract](appendices/frontend-rule-designer.md#current-contracts-and-delivery) replaces the obsolete single-effect representation throughout current definitions and consumers; product publication identity and release selection remain explicit.
 
-The immediate save-rule effects remain:
+A before-save rule uses the `transaction` execution kind. Its ordered tasks are the immediate save-rule effects:
 
-- Refuse the save with a field-level message.
+- Stop with a field-level refusal message.
 - Set a field value.
 - Require a field.
 - Show or hide a field in the current form.
 - Warn without refusing.
-- Request background work after a successful commit.
+- Start background flow after a successful commit.
 
-The complete [frontend node catalogue](appendices/frontend-rule-designer.md#initial-frontend-node-catalogue-and-extensibility) additionally provides branching, flow variables, input forms, action preparation and semantic interface controls. Context validation separates pure feedback, interactive collection and authoritative submission; Show form is never a node inside a database transaction. New node kinds are versioned platform registrations, not customer-uploaded code.
+An interactive rule uses the `interactive` execution kind, and its task list adds If/Switch branching, For each, flow variables, Wait for a person, action preparation and semantic interface controls. Context validation separates pure feedback, interactive collection and authoritative submission; Wait for a person is never a task inside a database transaction. New task kinds are versioned platform registrations, not customer-uploaded code.
 
-Server validation is authoritative. Client-side rule evaluation may provide immediate feedback, but the server re-evaluates the rule against current data before saving.
+Server validation is authoritative. Client-side rule evaluation may provide immediate feedback, but the server re-evaluates the flow against current data before saving.
 
-The client evaluator is pure: it may show the same predicted field changes, warnings, refusals, and background-work request as the server, but it never writes a record, event, workflow-start intent, or external effect. Only an authoritative protected operation node or save-rule path may accept the request after checking the current organisation, active application installation, permission, exact published action or rule, subject revision, and typed inputs.
+The client evaluator is pure: it may show the same predicted field changes, warnings, refusals, and background-start request as the server, but it never writes a record, event, workflow-start intent, or external effect. Only an authoritative protected operation task or save-rule path may accept the request after checking the current organisation, active application installation, permission, exact published action or rule, subject revision, and typed inputs.
 
-Rules must declare their read fields and write fields. Publication refuses cycles, conflicting writes without a declared order, and a rule that reads information unavailable to its execution context.
+Flows must declare their read fields and write fields. Publication refuses unbounded cycles, conflicting writes without a declared order, a task placed outside its declared execution kinds, and a flow that reads information unavailable to its execution kind.
+
+### One flow language mapping
+
+Every current element is authored as part of the one flow shape. The table maps each existing representation to its replacement:
+
+| Current element | Replacement in the one flow language |
+| --- | --- |
+| Rule-graph Start node | The flow declaration: identity, owner, labels, typed inputs and variables, trigger list and execution kind `transaction`. |
+| Rule-graph Condition node with `true`/`false` ports | An **If** control task with its two declared branches. |
+| Rule-graph Set variable node | A **Set variables** task writing a declared `vars` value. |
+| Rule-graph Set field node | A **Set field** task. |
+| Rule-graph Require field node | A **Require field** task. |
+| Rule-graph Warn node | A **Warn** task. |
+| Rule-graph Refuse node | A **Stop** task with a refusal outcome. |
+| Rule-graph Finish node | The flow's typed outputs and terminal outcomes. |
+| Rule-graph `next`/`true`/`false` ports and edges | The ordered task list with **If**/**Switch** branches; no edge list. |
+| Current-user flow Start node | The flow declaration and its trigger list. |
+| Current-user flow Query node | A **Query records** task. |
+| Current-user flow Action node | A **Save form**, **Run action** or **Start background flow** task. |
+| Current-user flow Transform node | A **Transform / Return data** task. |
+| Current-user flow Return node | The flow's typed outputs; a **Stop** task for an early outcome. |
+| Current-user flow outcome edges | Each task's declared outcomes; a **Run action** task routes every safe result it reports. |
+| Workflow Start node | The flow declaration and its trigger list. |
+| Workflow Condition node / Decision table | **If** / **Switch** control tasks. |
+| Workflow bounded loop | A bounded **For each** control task. |
+| Workflow delay / wait-until | A **Wait until / Delay** control task. |
+| Workflow start child workflow | A **Run flow** control task. |
+| Workflow stop | A **Stop** control task. |
+| Workflow record nodes (create, change, soft-delete, duplicate) | **Create / Change / Soft-delete / Duplicate record** tasks. |
+| Workflow run_action | A **Run action** task. |
+| Workflow relationship nodes (add, copy) | **Add relationship / Copy relationships** tasks. |
+| Workflow request_form | A **Wait for a person** control task. |
+| Workflow query_records | A **Query records** task. |
+| Workflow set_values | A **Set variables / Set field** task. |
+| Workflow format_value | A **Transform** task. |
+| Workflow generate_export | A **Generate export** task. |
+| Workflow attach_file / move_file | **Attach file / Move file** tasks. |
+| Workflow call_connection / acknowledge_message | **Call connection / Acknowledge message** tasks. |
+| Workflow nodes and edges | The ordered task list; edges become declared order and named branches. |
+| Named-action effects (set field, create record, copy relationships, soft-delete, announce event) | Tasks inside the action flow's transaction task list; the action is a flow invoked by a **Run action** task. |
+| Legacy single-effect rules | A `transaction` flow whose task list holds the single effect; obsolete readers and conversion paths are removed. |
+| Pipelines | A durable or interactive flow whose ordered tasks and record-state triggers express stage entry, exit, transition and escalation; no separate pipeline engine. |
 
 ## Conditions
 
@@ -104,7 +141,7 @@ and validate these consumers with the same owning helpers described in the
 
 A workflow input bound to a record field retains its declared allowed record
 types. The field's possible targets must fit within that declaration; downstream
-nodes use the declaration when checking their own accepted targets. Historical
+tasks use the declaration when checking their own accepted targets. Historical
 canonical inputs that omitted this metadata use the owning field's targets.
 These type declarations never grant access to the referenced records.
 
@@ -262,8 +299,8 @@ sequenceDiagram
 
 ## Page binding boundary
 
-[Typed page/form/operation bindings](appendices/page-builder-contracts.md#forms-actions-and-semantic-controls) map each surfaced action to an application-owned flow and typed context. The flow's operation node invokes the protected named action/save, or a closed protected platform operation for an authorised administration form. No component silently saves, and no frontend binding permits arbitrary RPC or bypasses current access, validation, revisions or duplicate protection. Mandatory business rules must also hold for every permitted direct service/interface invocation; hiding or replacing a button never changes them.
+[Typed page/form/operation bindings](appendices/page-builder-contracts.md#forms-actions-and-semantic-controls) map each surfaced action to an application-owned flow and typed context. The flow's operation task invokes the protected named action/save, or a closed protected platform operation for an authorised administration form. No component silently saves, and no frontend binding permits arbitrary RPC or bypasses current access, validation, revisions or duplicate protection. Mandatory business rules must also hold for every permitted direct service/interface invocation; hiding or replacing a button never changes them.
 
 ## Configured effects and execution identity
 
-Component load, refresh and other declared events can invoke read/write node sequences. The pure preview evaluator still has no effects; the orchestrator invokes protected services for effectful nodes. Each node uses its verified [execution identity](appendices/frontend-rule-designer.md#node-execution-identity), with separate initiator and effective actor. Operation atomicity and outbox guarantees apply per committed step, not to all previously completed steps in the flow. A committed background-start intent is not undone because a later form is cancelled.
+Component load, refresh and other declared events can invoke read/write task sequences. The pure preview evaluator still has no effects; the orchestrator invokes protected services for effectful tasks. Each task uses its verified [execution identity](appendices/frontend-rule-designer.md#node-execution-identity), with separate initiator and effective actor. Operation atomicity and outbox guarantees apply per committed step, not to all previously completed steps in the flow. A committed background-start intent is not undone because a later form is cancelled.
