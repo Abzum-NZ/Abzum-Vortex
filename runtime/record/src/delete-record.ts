@@ -7,7 +7,6 @@ import {
   eventOccurrenceIdSchema,
   platformIdSchema,
   recordIdSchema,
-  recordRecoveryEligibilityDecisionSchema,
   recordRecoveryEligibilityReasonSchema,
   recordTypeIdSchema,
   type IdentitySession,
@@ -101,8 +100,7 @@ export type RecordDeleteResult =
 export type RecordRecoveryRefusal = Readonly<{
   outcome: "refused";
   recordId: string;
-  /** Absent when the supplied decision itself refused and no request ran. */
-  correlationId?: string;
+  correlationId: string;
   reason: "recovery_ineligible";
   recoveryReason: RecordRecoveryEligibilityReason;
   governingPolicyRevision: number | null;
@@ -584,34 +582,21 @@ export const createRecordDeleteService = (dependencies: RecordDeleteServiceDepen
   };
 
   /**
-   * `recoveryDecision` is the trusted server-side #567 decision for this
-   * deleted record, made from its deletion time, the recovery window and the
-   * active policy. A refusal is returned unchanged. An allowance is enforced
-   * under lock: its governing revision must still be the stored
-   * recoverable-delete policy of the record's exact target at commit.
+   * The recovery decision is made in the database from the locked deleted
+   * record: its own deletion time, the stored recoverable-delete policy of its
+   * exact target and that policy's recovery window. No caller-supplied
+   * decision is accepted, so nothing can be replayed for another record or
+   * after the window has closed. A record whose policy has no recovery window
+   * is refused rather than treated as recoverable without limit.
    */
   const restoreRecord = async (
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     commandCandidate: unknown,
-    recoveryDecision: unknown,
   ): Promise<HumanOrganizationRequestResult<RecordRestoreResult>> => {
     const command = parseRecordRestoreCommand(commandCandidate);
-    const decision = recordRecoveryEligibilityDecisionSchema.safeParse(recoveryDecision);
-    if (command === undefined || !decision.success || selection.applicationRootId === undefined)
+    if (command === undefined || selection.applicationRootId === undefined)
       return { kind: "unavailable" };
-    if (!decision.data.allowed)
-      return {
-        kind: "available",
-        value: {
-          outcome: "refused",
-          recordId: command.recordId,
-          reason: "recovery_ineligible",
-          recoveryReason: decision.data.reason,
-          governingPolicyRevision: decision.data.governingPolicyRevision,
-        },
-      };
-    const governingPolicyRevision = decision.data.governingPolicyRevision;
     let activityId: string;
     try {
       activityId = activityIdSchema.parse(command.activityId ?? newActivityId());
@@ -629,7 +614,6 @@ export const createRecordDeleteService = (dependencies: RecordDeleteServiceDepen
               ${command.recordTypeId}::uuid,
               ${command.recordId}::uuid,
               ${command.expectedConcurrencyNumber}::bigint,
-              ${governingPolicyRevision}::bigint,
               ${activityId}::uuid
             ) as result
           `,
