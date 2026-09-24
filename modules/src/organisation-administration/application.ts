@@ -37,6 +37,7 @@ const slot = (alias: string, value: unknown) => ({
   order: { desktop: [alias] },
 });
 
+/** A required form text input whose name matches the committed action's input key. */
 const textInput = (name: string, label: string, multiline: boolean) =>
   placement(TEXT_INPUT_BLOCK_RELEASE, {
     name: { kind: "text", value: name },
@@ -166,7 +167,6 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
           home_page: "organisation_overview",
           permissions: [
             "application.organisation_administration.open",
-            "application.organisation_administration.manage",
             "vortex.organisation_administration.organisation_notice.create",
             "vortex.organisation_administration.organisation_notice.read",
             "vortex.organisation_administration.organisation_notice.update",
@@ -174,6 +174,7 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
             "vortex.organisation_administration.organisation_notice.restore",
             "vortex.organisation_administration.organisation_notice.export",
             "vortex.organisation_administration.organisation_notice.record_notice",
+            "vortex.organisation_administration.organisation_notice.withdraw",
             "vortex.organisation_administration.privacy_request_case.create",
             "vortex.organisation_administration.privacy_request_case.read",
             "vortex.organisation_administration.privacy_request_case.update",
@@ -181,7 +182,8 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
             "vortex.organisation_administration.privacy_request_case.restore",
             "vortex.organisation_administration.privacy_request_case.export",
             "vortex.organisation_administration.privacy_request_case.record_privacy_request",
-            "vortex.organisation_administration.privacy_request_case.close",
+            "vortex.organisation_administration.privacy_request_case.complete",
+            "vortex.organisation_administration.privacy_request_case.refuse",
           ],
         },
       ],
@@ -234,11 +236,26 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
               permission: "vortex.organisation_administration.organisation_notice.read",
             },
             {
+              id: "nav_record_notice",
+              type: "page",
+              label: "Record notice",
+              page: "record_organisation_notice",
+              permission: "vortex.organisation_administration.organisation_notice.record_notice",
+            },
+            {
               id: "nav_privacy_cases",
               type: "page",
               label: "Privacy request cases",
               page: "privacy_request_cases",
               permission: "vortex.organisation_administration.privacy_request_case.read",
+            },
+            {
+              id: "nav_record_privacy_request",
+              type: "page",
+              label: "Record privacy request",
+              page: "record_privacy_request_case",
+              permission:
+                "vortex.organisation_administration.privacy_request_case.record_privacy_request",
             },
           ],
         },
@@ -415,9 +432,12 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
             content: {
               slot_primary: slot(
                 "notices_table",
-                placement(TABLE_BLOCK_RELEASE, {
-                  title: { kind: "text", value: "Organisation notices" },
-                }),
+                {
+                  ...placement(TABLE_BLOCK_RELEASE, {
+                    title: { kind: "text", value: "Organisation notices" },
+                  }),
+                  query: "organisation_notices",
+                },
               ),
             },
           },
@@ -428,7 +448,7 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
           name: "Record organisation notice",
           type: "form",
           record_type: "vortex.organisation_administration:organisation_notice",
-          permission: "vortex.organisation_administration.organisation_notice.create",
+          permission: "vortex.organisation_administration.organisation_notice.record_notice",
           commit_action: "vortex.organisation_administration.organisation_notice.record_notice",
           states: formStates,
           composition: {
@@ -441,18 +461,13 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
                   FORM_CONTAINER_BLOCK_RELEASE,
                   { title: { kind: "text", value: "Record organisation notice" } },
                   {
-                    content: slot("notice_fields", {
+                    content: {
                       placements: {
                         notice_title_input: textInput("title", "Title", false),
-                        notice_body_input: placement(TEXT_INPUT_BLOCK_RELEASE, {
-                          name: { kind: "text", value: "body" },
-                          label: { kind: "text", value: "Notice text" },
-                          required: { kind: "boolean", value: true },
-                          multiline: { kind: "boolean", value: true },
-                        }),
+                        notice_body_input: textInput("body", "Notice text", true),
                       },
                       order: { desktop: ["notice_title_input", "notice_body_input"] },
-                    }),
+                    },
                   },
                 ),
               ),
@@ -475,9 +490,12 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
             content: {
               slot_primary: slot(
                 "privacy_cases_table",
-                placement(TABLE_BLOCK_RELEASE, {
-                  title: { kind: "text", value: "Privacy request cases" },
-                }),
+                {
+                  ...placement(TABLE_BLOCK_RELEASE, {
+                    title: { kind: "text", value: "Privacy request cases" },
+                  }),
+                  query: "privacy_request_cases",
+                },
               ),
             },
           },
@@ -488,7 +506,8 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
           name: "Record privacy request case",
           type: "form",
           record_type: "vortex.organisation_administration:privacy_request_case",
-          permission: "vortex.organisation_administration.privacy_request_case.create",
+          permission:
+            "vortex.organisation_administration.privacy_request_case.record_privacy_request",
           commit_action:
             "vortex.organisation_administration.privacy_request_case.record_privacy_request",
           states: formStates,
@@ -502,18 +521,13 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
                   FORM_CONTAINER_BLOCK_RELEASE,
                   { title: { kind: "text", value: "Record privacy request case" } },
                   {
-                    content: slot("privacy_fields", {
+                    content: {
                       placements: {
                         privacy_subject_input: textInput("subject", "Subject", false),
-                        privacy_details_input: placement(TEXT_INPUT_BLOCK_RELEASE, {
-                          name: { kind: "text", value: "details" },
-                          label: { kind: "text", value: "Request details" },
-                          required: { kind: "boolean", value: true },
-                          multiline: { kind: "boolean", value: true },
-                        }),
+                        privacy_details_input: textInput("details", "Request details", true),
                       },
                       order: { desktop: ["privacy_subject_input", "privacy_details_input"] },
-                    }),
+                    },
                   },
                 ),
               ),

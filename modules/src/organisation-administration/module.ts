@@ -1,17 +1,12 @@
 import { moduleSourceDocumentSchema, type ModuleSourceDocument } from "@vortex/contracts";
 
-const noticeFields = ["title", "body", "state", "published_at"] as const;
-const privacyFields = [
-  "subject",
-  "request_kind",
-  "details",
-  "state",
-  "received_at",
-  "closed_at",
-] as const;
-
-const noticeAllFields = [...noticeFields];
-const privacyAllFields = [...privacyFields];
+// Content fields are editable through the standard create and update actions.
+// Lifecycle fields (state and its timestamps) change only through the named
+// actions below, so their preconditions cannot be bypassed by a direct edit.
+const noticeEditableFields = ["title", "body"] as const;
+const noticeAllFields = [...noticeEditableFields, "state", "published_at"];
+const privacyEditableFields = ["subject", "request_kind", "details"] as const;
+const privacyAllFields = [...privacyEditableFields, "state", "received_at", "closed_at"];
 
 /**
  * Ordinary, application-contained records for the Organisation Administration
@@ -44,7 +39,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           storage_scope: "application_contained",
           ownership_mode: "none",
           standard_actions: ["create", "read", "update", "soft_delete", "restore", "export"],
-          custom_actions: ["act_record_notice"],
+          custom_actions: ["act_record_notice", "act_withdraw_notice"],
           fields: [
             {
               id: "fld_notice_title",
@@ -119,7 +114,11 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           storage_scope: "application_contained",
           ownership_mode: "none",
           standard_actions: ["create", "read", "update", "soft_delete", "restore", "export"],
-          custom_actions: ["act_record_privacy_request", "act_close_privacy_request"],
+          custom_actions: [
+            "act_record_privacy_request",
+            "act_complete_privacy_request",
+            "act_refuse_privacy_request",
+          ],
           fields: [
             {
               id: "fld_case_subject",
@@ -183,7 +182,6 @@ export const organisationAdministrationModule: ModuleSourceDocument =
               settings: {
                 options: [
                   { value: "received", label: "Received" },
-                  { value: "in_progress", label: "In progress" },
                   { value: "completed", label: "Completed" },
                   { value: "refused", label: "Refused" },
                 ],
@@ -232,7 +230,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           record_scope: { routes: [{ kind: "all_records" }] },
           field_policy: {
             readable_fields: noticeAllFields,
-            changeable_fields: noticeAllFields,
+            changeable_fields: [...noticeEditableFields],
           },
         },
         {
@@ -257,7 +255,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           record_scope: { routes: [{ kind: "all_records" }] },
           field_policy: {
             readable_fields: noticeAllFields,
-            changeable_fields: noticeAllFields,
+            changeable_fields: [...noticeEditableFields],
           },
         },
         {
@@ -297,7 +295,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           id: "perm_notice_record",
           key: "vortex.organisation_administration.organisation_notice.record_notice",
           label: "Record organisation notice",
-          description: "Allows recording a published organisation notice with its text.",
+          description: "Allows recording a draft organisation notice's text and publishing it.",
           record_type: "organisation_notice",
           action_kind: "named",
           named_action: "record_notice",
@@ -307,6 +305,18 @@ export const organisationAdministrationModule: ModuleSourceDocument =
             readable_fields: noticeAllFields,
             changeable_fields: noticeAllFields,
           },
+        },
+        {
+          id: "perm_notice_withdraw",
+          key: "vortex.organisation_administration.organisation_notice.withdraw",
+          label: "Withdraw organisation notice",
+          description: "Allows withdrawing a published organisation notice.",
+          record_type: "organisation_notice",
+          action_kind: "named",
+          named_action: "withdraw",
+          administrative: false,
+          record_scope: { routes: [{ kind: "all_records" }] },
+          field_policy: { readable_fields: ["state"], changeable_fields: ["state"] },
         },
         {
           id: "perm_privacy_create",
@@ -319,7 +329,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           record_scope: { routes: [{ kind: "all_records" }] },
           field_policy: {
             readable_fields: privacyAllFields,
-            changeable_fields: privacyAllFields,
+            changeable_fields: [...privacyEditableFields],
           },
         },
         {
@@ -344,7 +354,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           record_scope: { routes: [{ kind: "all_records" }] },
           field_policy: {
             readable_fields: privacyAllFields,
-            changeable_fields: privacyAllFields,
+            changeable_fields: [...privacyEditableFields],
           },
         },
         {
@@ -396,13 +406,28 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           },
         },
         {
-          id: "perm_privacy_close",
-          key: "vortex.organisation_administration.privacy_request_case.close",
-          label: "Close privacy request case",
-          description: "Allows completing or refusing an open privacy request case.",
+          id: "perm_privacy_complete",
+          key: "vortex.organisation_administration.privacy_request_case.complete",
+          label: "Complete privacy request case",
+          description: "Allows closing a received privacy request case as completed.",
           record_type: "privacy_request_case",
           action_kind: "named",
-          named_action: "close",
+          named_action: "complete",
+          administrative: false,
+          record_scope: { routes: [{ kind: "all_records" }] },
+          field_policy: {
+            readable_fields: ["state", "closed_at"],
+            changeable_fields: ["state", "closed_at"],
+          },
+        },
+        {
+          id: "perm_privacy_refuse",
+          key: "vortex.organisation_administration.privacy_request_case.refuse",
+          label: "Refuse privacy request case",
+          description: "Allows closing a received privacy request case as refused.",
+          record_type: "privacy_request_case",
+          action_kind: "named",
+          named_action: "refuse",
           administrative: false,
           record_scope: { routes: [{ kind: "all_records" }] },
           field_policy: {
@@ -419,6 +444,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           record_type: "organisation_notice",
           permission: "vortex.organisation_administration.organisation_notice.record_notice",
           shareable: false,
+          precondition: { field: "state", operator: "equals", value: "draft" },
           inputs: [
             {
               key: "title",
@@ -447,12 +473,26 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           ],
         },
         {
+          id: "act_withdraw_notice",
+          key: "vortex.organisation_administration.organisation_notice.withdraw",
+          label: "Withdraw organisation notice",
+          record_type: "organisation_notice",
+          permission: "vortex.organisation_administration.organisation_notice.withdraw",
+          shareable: false,
+          precondition: { field: "state", operator: "equals", value: "published" },
+          inputs: [],
+          effects: [
+            { kind: "set_field", field: "state", value: { source: "literal", value: "withdrawn" } },
+          ],
+        },
+        {
           id: "act_record_privacy_request",
           key: "vortex.organisation_administration.privacy_request_case.record_privacy_request",
           label: "Record privacy request case",
           record_type: "privacy_request_case",
           permission: "vortex.organisation_administration.privacy_request_case.record_privacy_request",
           shareable: false,
+          precondition: { field: "received_at", operator: "is_empty" },
           inputs: [
             {
               key: "subject",
@@ -481,15 +521,30 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           ],
         },
         {
-          id: "act_close_privacy_request",
-          key: "vortex.organisation_administration.privacy_request_case.close",
-          label: "Close privacy request case",
+          id: "act_complete_privacy_request",
+          key: "vortex.organisation_administration.privacy_request_case.complete",
+          label: "Complete privacy request case",
           record_type: "privacy_request_case",
-          permission: "vortex.organisation_administration.privacy_request_case.close",
+          permission: "vortex.organisation_administration.privacy_request_case.complete",
           shareable: false,
+          precondition: { field: "state", operator: "equals", value: "received" },
           inputs: [],
           effects: [
             { kind: "set_field", field: "state", value: { source: "literal", value: "completed" } },
+            { kind: "set_field", field: "closed_at", value: { source: "current_time" } },
+          ],
+        },
+        {
+          id: "act_refuse_privacy_request",
+          key: "vortex.organisation_administration.privacy_request_case.refuse",
+          label: "Refuse privacy request case",
+          record_type: "privacy_request_case",
+          permission: "vortex.organisation_administration.privacy_request_case.refuse",
+          shareable: false,
+          precondition: { field: "state", operator: "equals", value: "received" },
+          inputs: [],
+          effects: [
+            { kind: "set_field", field: "state", value: { source: "literal", value: "refused" } },
             { kind: "set_field", field: "closed_at", value: { source: "current_time" } },
           ],
         },
