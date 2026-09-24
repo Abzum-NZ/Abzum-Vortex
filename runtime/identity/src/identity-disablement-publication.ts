@@ -18,18 +18,23 @@ import type { RequestDatabaseTransaction, RuntimeDatabaseTransaction } from "@vo
  * result; no provider detail or identity state leaves this boundary.
  */
 
-type CheckTransaction = RequestDatabaseTransaction | RuntimeDatabaseTransaction;
-
-/** Refuses an explicit acting identity (a runtime command) that is disabled. */
+/**
+ * Refuses the explicit acting identity of a trusted runtime command (the
+ * identity of its checked session) when that identity is disabled.
+ */
 export const requireIdentityNotDisabled = async (
-  transaction: CheckTransaction,
+  transaction: RuntimeDatabaseTransaction,
   identityId: string,
 ): Promise<void> => {
   const verified = identityIdSchema.parse(identityId);
   await transaction.query`select vortex_identity.require_identity_not_disabled(${verified}::uuid)`;
 };
 
-/** Refuses the identity of the current protected request context if disabled. */
+/**
+ * Refuses the person named by the current protected request context (its
+ * `identityId`) when that person is disabled, and refuses any context that
+ * names no person.
+ */
 export const requireRequestIdentityNotDisabled = async (
   transaction: RequestDatabaseTransaction,
 ): Promise<void> => {

@@ -4,17 +4,25 @@
 --
 -- The recorded `disabled` outcome in vortex_identity.identity_disablement_commands
 -- (written only after the Identity Authority ban succeeded) is the environment
--- fact. Every cluster runtime that shares the environment authority reads that
--- one fact, so no per-cluster copy of it is kept and no new state, read model
--- or approval record is introduced:
+-- fact. Every cluster runtime served by this database reads that one fact, so
+-- no per-cluster copy of it is kept and no new state, read model or approval
+-- record is introduced:
 --
 --   * completing a disablement suspends the subject's existing cluster-local
 --     identity projection in the same transaction as the record;
---   * a projection created later for a disabled identity is created suspended;
+--   * every projection inserted later for a disabled identity (sign-in
+--     bootstrap, invitation acceptance, tenant provisioning or any other
+--     writer) starts suspended;
 --   * a projection of a disabled identity cannot be reactivated, so the
 --     cluster reactivation command cannot undo a disablement;
 --   * sensitive operations call require_identity_not_disabled /
 --     require_request_identity_not_disabled and refuse the identity at once.
+--
+-- Publication and projection inserts serialise on one per-identity transaction
+-- lock, and publication also locks the projection row whatever its state, so a
+-- concurrent sign-in, invitation acceptance or reactivation either waits for
+-- the committed disablement and observes it, or commits first and is then
+-- suspended by the publication.
 --
 -- Ordinary reads keep the documented access-token-expiry policy. There is no
 -- re-enable operation here: re-enabling an identity is a separate, protected
@@ -58,7 +66,9 @@ begin
 end
 $function$;
 
--- Live check for the identity of the current protected request context.
+-- Live check for the acting person of the current protected request context.
+-- Only a human or federated context names a person (`identityId`); any other
+-- caller kind has no identity to check and is refused.
 create function vortex_identity.require_request_identity_not_disabled()
 returns void
 language plpgsql
@@ -66,16 +76,28 @@ stable
 security definer
 set search_path = ''
 as $function$
+declare
+  checked jsonb;
 begin
+  checked := vortex_context.current_context();
+  if checked ->> 'callerKind' is null
+    or checked ->> 'callerKind' not in ('human', 'federated')
+    or not vortex_context.is_non_nil_uuid(checked ->> 'identityId')
+  then
+    raise exception using errcode = '42501', message = 'Identity is unavailable';
+  end if;
+
   perform vortex_identity.require_identity_not_disabled(
-    vortex_context.identity_authority_id(true)
+    (checked ->> 'identityId')::uuid
   );
 end
 $function$;
 
 -- Publishes a completed disablement to this cluster's projection. Private: only
--- complete_identity_disablement calls it. An absent projection is created
--- suspended by ensure_identity_projection; a closed one stays closed.
+-- complete_identity_disablement calls it. It takes the per-identity projection
+-- lock and the projection row lock (whatever its state) before suspending an
+-- active projection. An absent projection is created suspended later by the
+-- insert trigger below; a suspended or closed one keeps its state.
 create function vortex_identity.publish_identity_disablement(
   p_subject_identity_id uuid,
   p_actor_identity_id uuid,
@@ -83,11 +105,23 @@ create function vortex_identity.publish_identity_disablement(
   p_published_at timestamptz
 )
 returns void
-language sql
+language plpgsql
 volatile
 security definer
 set search_path = ''
 as $function$
+begin
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      'vortex_identity.projection:' || p_subject_identity_id::text, 0
+    )
+  );
+
+  perform 1
+  from vortex_identity.identity_projections as projection
+  where projection.identity_id = p_subject_identity_id
+  for update;
+
   update vortex_identity.identity_projections as projection
   set state = 'suspended',
     state_changed_at = greatest(p_published_at, projection.state_changed_at),
@@ -95,8 +129,37 @@ as $function$
     state_change_correlation_id = p_correlation_id,
     revision = projection.revision + 1
   where projection.identity_id = p_subject_identity_id
-    and projection.state = 'active'
+    and projection.state = 'active';
+end
 $function$;
+
+-- Every writer inserts projections directly with state `active`; a disabled
+-- identity's new projection starts suspended instead. The per-identity lock
+-- orders this check against a concurrent publication.
+create function vortex_identity.start_disabled_identity_projection_suspended()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $function$
+begin
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      'vortex_identity.projection:' || new.identity_id::text, 0
+    )
+  );
+
+  if new.state = 'active' and vortex_identity.identity_is_disabled(new.identity_id) then
+    new.state := 'suspended';
+  end if;
+
+  return new;
+end
+$function$;
+
+create trigger identity_projections_start_disabled_suspended
+before insert on vortex_identity.identity_projections
+for each row execute function vortex_identity.start_disabled_identity_projection_suspended();
 
 create or replace function vortex_identity.protect_identity_projection()
 returns trigger
@@ -126,53 +189,6 @@ begin
   end if;
 
   return new;
-end
-$function$;
-
-create or replace function vortex_identity.ensure_identity_projection(
-  p_identity_id uuid,
-  p_correlation_id uuid
-)
-returns table (
-  identity_id uuid,
-  state text,
-  created_at timestamptz,
-  state_changed_at timestamptz,
-  state_changed_by uuid,
-  state_change_correlation_id uuid,
-  revision bigint
-)
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $function$
-declare
-  operation_at timestamptz := pg_catalog.statement_timestamp();
-begin
-  if p_identity_id is null
-    or p_identity_id = '00000000-0000-0000-0000-000000000000'::uuid
-    or p_correlation_id is null
-    or p_correlation_id = '00000000-0000-0000-0000-000000000000'::uuid then
-    raise exception using errcode = '22023', message = 'Identity projection input is invalid';
-  end if;
-
-  insert into vortex_identity.identity_projections (
-    identity_id, state, created_at, state_changed_at, state_changed_by,
-    state_change_correlation_id, revision
-  ) values (
-    p_identity_id,
-    case when vortex_identity.identity_is_disabled(p_identity_id)
-      then 'suspended' else 'active' end,
-    operation_at, operation_at, p_identity_id, p_correlation_id, 1
-  ) on conflict on constraint identity_projections_pk do nothing;
-
-  return query
-  select projection.identity_id, projection.state, projection.created_at,
-    projection.state_changed_at, projection.state_changed_by,
-    projection.state_change_correlation_id, projection.revision
-  from vortex_identity.identity_projections as projection
-  where projection.identity_id = p_identity_id;
 end
 $function$;
 
@@ -270,19 +286,26 @@ revoke all on function vortex_identity.require_request_identity_not_disabled()
 revoke all on function vortex_identity.publish_identity_disablement(uuid, uuid, uuid, timestamptz)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_identity.start_disabled_identity_projection_suspended()
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
+-- The explicit-identity check is for trusted runtime commands only; a request
+-- transaction checks only the person its own verified context names.
 grant execute on function vortex_identity.require_identity_not_disabled(uuid)
-  to vortex_runtime, vortex_request;
+  to vortex_runtime;
 grant execute on function vortex_identity.require_request_identity_not_disabled()
   to vortex_request;
 
 comment on function vortex_identity.identity_is_disabled(uuid) is
   'Private environment-wide disabled fact: true only after a completed identity disablement.';
 comment on function vortex_identity.require_identity_not_disabled(uuid) is
-  'Live check at named sensitive operations: refuses (42501) an identity whose disablement completed.';
+  'Runtime live check at named sensitive operations: refuses (42501) an identity whose disablement completed.';
 comment on function vortex_identity.require_request_identity_not_disabled() is
-  'Live check for the identity of the current protected request context.';
+  'Request live check: refuses (42501) unless the current context names a human or federated person whose disablement has not completed.';
 comment on function vortex_identity.publish_identity_disablement(uuid, uuid, uuid, timestamptz) is
   'Private step of complete_identity_disablement: suspends the subject''s existing cluster-local identity projection.';
+comment on function vortex_identity.start_disabled_identity_projection_suspended() is
+  'Private insert trigger: a new cluster-local projection of a disabled identity starts suspended.';
 
 commit;
