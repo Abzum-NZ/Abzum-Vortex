@@ -189,6 +189,19 @@ export {
   createFullPlatformComponentRegistry,
 } from "./combined-registry";
 
+// Exact-draft Application Preview (#597)
+export {
+  ApplicationPreview,
+  parseApplicationPreviewArtifact,
+  type ApplicationPreviewArtifact,
+  type ApplicationPreviewBreakpoint,
+  type ApplicationPreviewFlowNodeSimulation,
+  type ApplicationPreviewInteraction,
+  type ApplicationPreviewOutcome,
+  type ApplicationPreviewProps,
+  type ApplicationPreviewSimulatedEffect,
+} from "./application-preview";
+
 // Theme variables and shared component styles
 export {
   ALL_UI_STYLES_CSS,
