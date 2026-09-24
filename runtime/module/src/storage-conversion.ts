@@ -1,6 +1,19 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
+import {
+  applicationRootIdSchema,
+  moduleRootIdSchema,
+  type ApplicationInstallationLifecycleResult,
+  type ApplicationRootId,
+  type ModuleInstallationStorageResult,
+  type ModuleRootId,
+} from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+
+import { createApplicationInstallationLifecycleRepository } from "./installation-lifecycle";
+import { createModuleInstallationStorageRepository } from "./storage-provisioning";
 
 /**
  * The closed, lossless conversion set approved for #625. It mirrors the exact
@@ -43,6 +56,7 @@ export type StorageConversionErrorCode =
   | "STORAGE_CONVERSION_UNAVAILABLE"
   | "STORAGE_CONVERSION_CONFLICT"
   | "STORAGE_CONVERSION_INCOMPATIBLE"
+  | "STORAGE_ADOPTION_DEPENDENTS_REMAIN"
   | "STORAGE_CONVERSION_FAILED";
 
 export class StorageConversionError extends Error {
@@ -90,6 +104,52 @@ export interface StorageConversionRegistration {
   readonly sourceReleaseRevision: number;
   readonly targetReleaseRevision: number;
   readonly changed: boolean;
+}
+
+export interface StorageAdoptionModulePin {
+  readonly moduleRootId: ModuleRootId;
+  readonly moduleReleaseRevision: number;
+}
+
+export interface StorageAdoptionExpectedBinding {
+  readonly moduleRootId: ModuleRootId;
+  readonly bindingRevision: number;
+}
+
+/**
+ * Adopts one converted plan and moves the installation to the release that
+ * uses the converted field. `active` names exactly the release being left, with
+ * its binding revisions; `target` names the exact release being entered and its
+ * Module pins. The database re-derives and verifies every one of them against
+ * the stored dependency edges and bindings, so none is trusted as authority.
+ */
+export interface AdoptStorageConversionCommand {
+  readonly conversionContractId: string;
+  readonly expectedPlanRevision: number;
+  readonly applicationRootId: ApplicationRootId;
+  readonly active: {
+    readonly applicationReleaseRevision: number;
+    readonly expectedModuleBindings: readonly StorageAdoptionExpectedBinding[];
+  };
+  readonly target: {
+    readonly applicationReleaseRevision: number;
+    readonly modulePins: readonly StorageAdoptionModulePin[];
+  };
+}
+
+export interface StorageAdoptionResult {
+  readonly conversionContractId: string;
+  readonly storageContractId: string;
+  readonly moduleRootId: string;
+  readonly sourceFieldId: string;
+  readonly targetFieldId: string;
+  readonly organisationId: string;
+  readonly applicationRootId: string;
+  readonly sourceReleaseRevision: number;
+  readonly targetReleaseRevision: number;
+  readonly planRevision: number;
+  readonly changed: boolean;
+  readonly installation: ApplicationInstallationLifecycleResult;
 }
 
 export interface StorageConversionPlanSummary {
@@ -333,6 +393,119 @@ const parseCorrections = (value: unknown): StorageConversionCorrections => {
   });
 };
 
+const parseAdoptionRow = (value: unknown): Omit<StorageAdoptionResult, "installation"> => {
+  if (!isRecord(value)) throw new StorageConversionError("STORAGE_CONVERSION_FAILED");
+  const sourceReleaseRevision = asRevision(value.sourceReleaseRevision);
+  const targetReleaseRevision = asRevision(value.targetReleaseRevision);
+  const planRevision = asRevision(value.planRevision);
+  const dependentCount = asNonNegativeCount(value.dependentCount);
+  if (
+    !isUuid(value.conversionContractId) ||
+    !isUuid(value.storageContractId) ||
+    !isUuid(value.moduleRootId) ||
+    !isUuid(value.sourceFieldId) ||
+    !isUuid(value.targetFieldId) ||
+    !isUuid(value.organisationId) ||
+    !isUuid(value.applicationRootId) ||
+    sourceReleaseRevision === undefined ||
+    targetReleaseRevision === undefined ||
+    planRevision === undefined ||
+    // Retirement is only ever committed with no remaining dependent.
+    dependentCount !== 0 ||
+    typeof value.changed !== "boolean"
+  )
+    throw new StorageConversionError("STORAGE_CONVERSION_FAILED");
+  return Object.freeze({
+    conversionContractId: value.conversionContractId,
+    storageContractId: value.storageContractId,
+    moduleRootId: value.moduleRootId,
+    sourceFieldId: value.sourceFieldId,
+    targetFieldId: value.targetFieldId,
+    organisationId: value.organisationId,
+    applicationRootId: value.applicationRootId,
+    sourceReleaseRevision,
+    targetReleaseRevision,
+    planRevision,
+    changed: value.changed,
+  });
+};
+
+const byRootId = <Value extends { readonly moduleRootId: string }>(
+  values: readonly Value[],
+): Value[] =>
+  [...values].sort((left, right) =>
+    left.moduleRootId < right.moduleRootId ? -1 : left.moduleRootId > right.moduleRootId ? 1 : 0,
+  );
+
+const hasDistinctRoots = (values: readonly { readonly moduleRootId: string }[]): boolean =>
+  new Set(values.map((value) => value.moduleRootId)).size === values.length;
+
+const validateAdoptCommand = (
+  candidate: AdoptStorageConversionCommand,
+): AdoptStorageConversionCommand | undefined => {
+  if (!isRecord(candidate) || !isRecord(candidate.active) || !isRecord(candidate.target))
+    return undefined;
+  const expectedPlanRevision = asRevision(candidate.expectedPlanRevision);
+  const activeRevision = asRevision(candidate.active.applicationReleaseRevision);
+  const targetRevision = asRevision(candidate.target.applicationReleaseRevision);
+  const rawBindings: unknown = candidate.active.expectedModuleBindings;
+  const rawPins: unknown = candidate.target.modulePins;
+  if (
+    !isUuid(candidate.conversionContractId) ||
+    !isUuid(candidate.applicationRootId) ||
+    expectedPlanRevision === undefined ||
+    activeRevision === undefined ||
+    targetRevision === undefined ||
+    // Adoption enters a strictly newer Application release.
+    targetRevision <= activeRevision ||
+    !Array.isArray(rawBindings) ||
+    rawBindings.length < 1 ||
+    rawBindings.length > 10_000 ||
+    !Array.isArray(rawPins) ||
+    rawPins.length < 1 ||
+    rawPins.length > 10_000
+  )
+    return undefined;
+  const applicationRootId = applicationRootIdSchema.safeParse(
+    candidate.applicationRootId.toLowerCase(),
+  );
+  if (!applicationRootId.success) return undefined;
+  const expectedModuleBindings: StorageAdoptionExpectedBinding[] = [];
+  for (const binding of rawBindings as readonly unknown[]) {
+    if (!isRecord(binding)) return undefined;
+    const bindingRevision = asRevision(binding.bindingRevision);
+    const moduleRootId = moduleRootIdSchema.safeParse(
+      typeof binding.moduleRootId === "string" ? binding.moduleRootId.toLowerCase() : undefined,
+    );
+    if (!moduleRootId.success || bindingRevision === undefined) return undefined;
+    expectedModuleBindings.push({ moduleRootId: moduleRootId.data, bindingRevision });
+  }
+  const modulePins: StorageAdoptionModulePin[] = [];
+  for (const pin of rawPins as readonly unknown[]) {
+    if (!isRecord(pin)) return undefined;
+    const moduleReleaseRevision = asRevision(pin.moduleReleaseRevision);
+    const moduleRootId = moduleRootIdSchema.safeParse(
+      typeof pin.moduleRootId === "string" ? pin.moduleRootId.toLowerCase() : undefined,
+    );
+    if (!moduleRootId.success || moduleReleaseRevision === undefined) return undefined;
+    modulePins.push({ moduleRootId: moduleRootId.data, moduleReleaseRevision });
+  }
+  if (!hasDistinctRoots(expectedModuleBindings) || !hasDistinctRoots(modulePins)) return undefined;
+  return Object.freeze({
+    conversionContractId: candidate.conversionContractId,
+    expectedPlanRevision,
+    applicationRootId: applicationRootId.data,
+    active: Object.freeze({
+      applicationReleaseRevision: activeRevision,
+      expectedModuleBindings: Object.freeze(byRootId(expectedModuleBindings)),
+    }),
+    target: Object.freeze({
+      applicationReleaseRevision: targetRevision,
+      modulePins: Object.freeze(byRootId(modulePins)),
+    }),
+  });
+};
+
 const parseCommandRevision = (value: unknown): number | undefined => asRevision(value);
 
 const parseNullableRevision = (value: unknown): number | null | undefined => {
@@ -432,6 +605,8 @@ const mapFailure = (error: unknown): StorageConversionError => {
       return new StorageConversionError("STORAGE_CONVERSION_UNAVAILABLE");
     case "40001":
       return new StorageConversionError("STORAGE_CONVERSION_CONFLICT");
+    case "55006":
+      return new StorageConversionError("STORAGE_ADOPTION_DEPENDENTS_REMAIN");
     case "23514":
     case "55000":
       return new StorageConversionError("STORAGE_CONVERSION_INCOMPATIBLE");
@@ -459,14 +634,15 @@ export interface StorageConversionRepository {
   readCorrections(
     command: ReadStorageConversionCorrectionsCommand,
   ): Promise<StorageConversionCorrections>;
+  adopt(command: AdoptStorageConversionCommand): Promise<StorageAdoptionResult>;
 }
 
 /**
- * Calls only the four fixed Record-owned storage-conversion operations. The
- * supplied transaction already carries the trusted human request context, so
- * neither SQL, physical names nor identities are inputs. A `planned` target
- * mapping is never activated here; the atomic switch and retirement belong to
- * #626.
+ * Calls only the fixed Record-owned storage-conversion operations. The supplied
+ * transaction already carries the trusted human request context, so neither SQL,
+ * physical names nor identities are inputs. Registration, allocation, batches
+ * and corrections never activate a `planned` target mapping; `adopt` is the one
+ * operation that does, and only together with the release change.
  */
 export const createStorageConversionRepository = (
   transaction: RequestDatabaseTransaction,
@@ -542,5 +718,128 @@ export const createStorageConversionRepository = (
       } catch (error) {
         throw mapFailure(error);
       }
+    },
+
+    /**
+     * Atomically adopts a converted plan: detaches the installation from the
+     * release it leaves, switches the target mapping to active and the source
+     * mapping to retired, prepares storage for every pinned Module of the new
+     * release and activates it through the fixed lifecycle operation, whose
+     * lifecycle-policy and index-readiness gates apply unchanged.
+     *
+     * Every step runs on the supplied request transaction and any refusal
+     * throws. As for an activation, the caller must abandon (roll back) the
+     * transaction on a throw, which leaves the prior mappings and the prior
+     * release active. Lifecycle and storage-provisioning refusals keep their own
+     * typed errors; adoption refusals are `StorageConversionError`. Retirement
+     * is a mapping state change only; no column is dropped.
+     */
+    async adopt(commandCandidate: AdoptStorageConversionCommand) {
+      const command = validateAdoptCommand(commandCandidate);
+      if (command === undefined)
+        throw new StorageConversionError("INVALID_STORAGE_CONVERSION_COMMAND");
+
+      const lifecycle = createApplicationInstallationLifecycleRepository(transaction);
+      const storage = createModuleInstallationStorageRepository(transaction);
+
+      // 1. Leave the current release, so no installation of this scope still
+      //    uses the source field when it is retired.
+      const detached = await lifecycle.detach({
+        applicationRootId: command.applicationRootId,
+        applicationReleaseRevision: command.active.applicationReleaseRevision,
+        expectedModuleBindings: [...command.active.expectedModuleBindings],
+      });
+      if (
+        detached.state !== "detached" ||
+        detached.applicationReleaseRevision !== command.active.applicationReleaseRevision
+      )
+        throw new StorageConversionError("STORAGE_CONVERSION_FAILED");
+
+      // 2. Recheck the plan and switch the mappings, or refuse whole.
+      let adopted: Omit<StorageAdoptionResult, "installation">;
+      try {
+        const rows = await transaction.query<PlanRow>`
+          select vortex_record.adopt_storage_conversion(
+            ${command.conversionContractId}::uuid,
+            ${command.expectedPlanRevision}::bigint,
+            ${command.applicationRootId}::uuid
+          ) as conversion_plan
+        `;
+        adopted = parseAdoptionRow(singlePlanRow(rows));
+      } catch (error) {
+        throw mapFailure(error);
+      }
+      if (
+        adopted.conversionContractId.toLowerCase() !==
+          command.conversionContractId.toLowerCase() ||
+        adopted.applicationRootId.toLowerCase() !== command.applicationRootId ||
+        adopted.planRevision !== command.expectedPlanRevision
+      )
+        throw new StorageConversionError("STORAGE_CONVERSION_FAILED");
+      // The release entered must carry exactly the converted field's release.
+      const convertedPin = command.target.modulePins.find(
+        (pin) => pin.moduleRootId === adopted.moduleRootId.toLowerCase(),
+      );
+      if (
+        convertedPin === undefined ||
+        convertedPin.moduleReleaseRevision !== adopted.targetReleaseRevision
+      )
+        throw new StorageConversionError("STORAGE_CONVERSION_INCOMPATIBLE");
+
+      // 3. Prepare storage for the new release's pins. The provisioner accepts
+      //    the target release only because the mappings were just switched.
+      const revisions = new Map<string, number>(
+        detached.moduleBindings.map((binding) => [
+          binding.moduleRootId.toLowerCase(),
+          binding.bindingRevision,
+        ]),
+      );
+      const provisioned: ModuleInstallationStorageResult[] = [];
+      for (const pin of command.target.modulePins) {
+        const result = await storage.provision({
+          applicationRootId: command.applicationRootId,
+          applicationReleaseRevision: command.target.applicationReleaseRevision,
+          moduleRootId: pin.moduleRootId,
+          moduleReleaseRevision: pin.moduleReleaseRevision,
+          expectedBindingRevision: revisions.get(pin.moduleRootId) ?? null,
+        });
+        if (
+          result.applicationRootId.toLowerCase() !== command.applicationRootId ||
+          result.moduleRootId.toLowerCase() !== pin.moduleRootId ||
+          result.moduleReleaseRevision !== pin.moduleReleaseRevision ||
+          result.applicationReleaseRevision !== command.target.applicationReleaseRevision
+        )
+          throw new StorageConversionError("STORAGE_CONVERSION_FAILED");
+        provisioned.push(result);
+      }
+
+      // 4. Enter the new release through the fixed activation and its gates.
+      const activated = await lifecycle.activate({
+        applicationRootId: command.applicationRootId,
+        applicationReleaseRevision: command.target.applicationReleaseRevision,
+        expectedModuleBindings: byRootId(
+          provisioned.map((result) => ({
+            moduleRootId: result.moduleRootId,
+            bindingRevision: result.bindingRevision,
+          })),
+        ),
+      });
+      if (
+        activated.state !== "active" ||
+        activated.applicationRootId.toLowerCase() !== command.applicationRootId ||
+        activated.applicationReleaseRevision !== command.target.applicationReleaseRevision
+      )
+        throw new StorageConversionError("STORAGE_CONVERSION_FAILED");
+      if (activated.changed)
+        await transaction.query`
+          select vortex_module.record_application_installation_outcome(
+            ${randomUUID()}::uuid,
+            ${command.applicationRootId}::uuid,
+            ${command.target.applicationReleaseRevision}::bigint,
+            ${"active"}::text
+          )
+        `;
+
+      return Object.freeze({ ...adopted, installation: activated });
     },
   });
