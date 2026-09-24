@@ -2472,9 +2472,6 @@
                  "actions":  [
 
                              ],
-                 "rules":  [
-
-                           ],
                  "events":  [
                                 {
                                     "id":  "form_submit_0",

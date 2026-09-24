@@ -4586,34 +4586,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         pageSubjectRecordTypesByPlacement.set(placementId, recordTypes);
       }
     }
-    for (const rule of array(content.rules)) {
-      const record = records.get(String(rule.subjectRecordTypeId));
-      const moduleV2 = recordValuePairs.get(String(rule.subjectRecordTypeId)) ?? false;
-      const fieldMap = new Map(
-        record ? array(record.fields).map((field) => [String(field.fieldId), field]) : [],
-      );
-      const fields = new Set(fieldMap.keys());
-      const effect = object(rule.effect);
-      if (
-        !record ||
-        !applicationFieldReferencesValid(rule.condition, fields) ||
-        !applicationFieldReferencesValid(effect, fields) ||
-        !applicationConditionTypesValid(rule.condition, fieldMap, moduleV2) ||
-        (effect.kind === "start_background_work" && !workflows.has(String(effect.workflowId))) ||
-        (effect.kind === "show_or_hide" &&
-          !applicationPlacementIds.has(String(effect.componentId))) ||
-        (effect.kind === "set_value" &&
-          !(moduleV2
-            ? fieldValueMatchesV2(effect.value, fieldMap.get(String(effect.fieldId)), "canonical")
-            : valueTypeCompatible(
-                literalValueType(effect.value),
-                fieldValueType(fieldMap.get(String(effect.fieldId))),
-              )))
-      )
-        failures.push(
-          failure(output, "vortex.definition.application_rule_references", "broken_reference"),
-        );
-    }
     const identityCollections: readonly (readonly [JsonObject[], string, string])[] = [
       [array(content.pages), "pageId", "key"],
       [array(content.roles), "roleId", "key"],
@@ -4621,7 +4593,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       [array(content.pipelines), "pipelineId", "key"],
       [array(content.permissions), "permissionId", "key"],
       [array(content.actions), "actionId", "key"],
-      [array(content.rules), "ruleId", "key"],
       [array(content.events), "eventId", "key"],
       [array(content.workflows), "workflowId", "key"],
       [array(content.connectionBindings), "bindingId", "key"],
