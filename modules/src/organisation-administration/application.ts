@@ -226,9 +226,8 @@ const readModelBlock = (key: ProtectedReadModelKey, title: string) => ({
 /**
  * The Organisation Administration application definition. Every visible region is
  * definition-led. Ordinary notices and privacy request cases come from the bound
- * module; the organisation-account, roles and groups regions read live protected
- * read models. Invitation and runtime-settings regions stay honest "not yet
- * available" text until a protected read model covers them. No region offers a
+ * module; the organisation-account, invitation and runtime-settings regions read live
+ * protected read models. No region offers a
  * parallel access-grant control: role grants run in the IAM application.
  */
 export const organisationAdministrationApplication: ApplicationSourceDocumentV2 =
@@ -445,7 +444,7 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
                 "overview_text",
                 textBlock(
                   "Organisation overview",
-                  "Review organisation accounts, invitations, runtime settings, notices and privacy request cases. Account, role and group displays are read live from protected Identity and Access read models; invitation and runtime-settings displays are not yet available.",
+                  "Review organisation accounts, invitations, runtime settings, notices and privacy request cases. Account, invitation and runtime-settings displays are read live from protected Identity and Access read models.",
                 ),
               ),
             },
@@ -486,13 +485,16 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
             shell_kind: "application",
             shell: "shell_organisation_administration",
             content: {
-              slot_primary: slot(
-                "invitations_text",
-                textBlock(
-                  "Invitations",
-                  "Pending and past invitations are not yet available from a protected read model. Invitations carrying intended role assignments follow the governed IAM journey; this application offers no grant control.",
-                ),
-              ),
+              slot_primary: {
+                placements: {
+                  invitations_text: textBlock(
+                    "Invitations",
+                    "Pending and past invitations are read live from protected Identity and Access data. Invitations carrying intended role assignments follow the governed IAM journey; this application offers no grant control.",
+                  ),
+                  invitations_region: readModelBlock("organization_invitations", "Invitations"),
+                },
+                order: { desktop: ["invitations_text", "invitations_region"] },
+              },
             },
           },
         },
@@ -511,7 +513,11 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
                 placements: {
                   settings_text: textBlock(
                     "Runtime settings",
-                    "The organisation's current runtime localisation settings are not yet available from a protected read model. Change them or the organisation default application with the forms below: each runs under your own authority in protected Access, is checked against the settings revision you supply, and is refused if you lack the authority. These settings are never copied into ordinary records.",
+                    "The organisation's current runtime localisation settings are read live from protected Access data below. Change them or the organisation default application with the forms below: each runs under your own authority in protected Access, is checked against the settings revision you supply, and is refused if you lack the authority. These settings are never copied into ordinary records.",
+                  ),
+                  settings_region: readModelBlock(
+                    "organization_runtime_settings",
+                    "Current runtime settings",
                   ),
                   ...Object.fromEntries(
                     settingsOperations.map((operation) => [
@@ -523,6 +529,7 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
                 order: {
                   desktop: [
                     "settings_text",
+                    "settings_region",
                     ...settingsOperations.map((operation) => formAlias(operation)),
                   ],
                 },
