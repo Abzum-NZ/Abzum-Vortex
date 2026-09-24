@@ -46,7 +46,9 @@ export function NumberInput(props: NumberInputProps): ReactElement {
       ...context.location,
       propertyPath: ["step_value"],
     });
-  const disabled = context.inactive || settings.boolean("disabled");
+  const draftFeedback = useFieldFeedback(fieldKey);
+  const disabled =
+    context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
   const error = context.values?.error;
   const note = inactiveNote(context);
 
@@ -61,7 +63,6 @@ export function NumberInput(props: NumberInputProps): ReactElement {
     return parsed;
   };
   useFormField(fieldKey, props.placementId, toTyped(raw));
-  const draftFeedback = useFieldFeedback(fieldKey);
 
   const onChange = (event: ChangeEvent<HTMLInputElement>): void => {
     if (disabled || readOnly) return;
@@ -73,6 +74,7 @@ export function NumberInput(props: NumberInputProps): ReactElement {
   return (
     <div
       data-vortex-control="number-input"
+      hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
       className="vortex-field"

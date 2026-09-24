@@ -30,14 +30,15 @@ export function DateInput(props: DateInputProps): ReactElement {
   const help = settings.text("help_text");
   const required = settings.boolean("required");
   const readOnly = settings.boolean("read_only");
-  const disabled = context.inactive || settings.boolean("disabled");
+  const draftFeedback = useFieldFeedback(fieldKey);
+  const disabled =
+    context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
   const error = context.values?.error;
   const note = inactiveNote(context);
 
   const [raw, setRaw] = useSeededState(context.values?.value ?? "");
   const toTyped = (text: string): string | null => (isIsoCalendarDate(text) ? text : null);
   useFormField(fieldKey, props.placementId, toTyped(raw));
-  const draftFeedback = useFieldFeedback(fieldKey);
 
   const onChange = (event: ChangeEvent<HTMLInputElement>): void => {
     if (disabled || readOnly) return;
@@ -49,6 +50,7 @@ export function DateInput(props: DateInputProps): ReactElement {
   return (
     <div
       data-vortex-control="date-input"
+      hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
       className="vortex-field"

@@ -60,14 +60,15 @@ export function LinkInput(props: LinkInputProps): ReactElement {
   const placeholder = settings.text("placeholder");
   const required = settings.boolean("required");
   const readOnly = settings.boolean("read_only");
-  const disabled = context.inactive || settings.boolean("disabled");
+  const draftFeedback = useFieldFeedback(fieldKey);
+  const disabled =
+    context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
   const allowedRecordTypeIds = settings.recordTypeIds("record_types");
   const error = context.values?.error;
   const note = inactiveNote(context);
 
   const [value, setValue] = useSeededState(referenceKey(context.values?.value));
   useFormField(fieldKey, props.placementId, parseReferenceKey(value, allowedRecordTypeIds));
-  const draftFeedback = useFieldFeedback(fieldKey);
 
   const onChange = (event: ChangeEvent<HTMLInputElement>): void => {
     if (disabled || readOnly) return;
@@ -84,6 +85,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
   return (
     <div
       data-vortex-control="link-input"
+      hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
       className="vortex-field"

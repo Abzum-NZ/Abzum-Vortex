@@ -2,10 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef } from "react";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
-import type {
-  FormDraftFeedbackSummary,
-  FormFieldDraftFeedback,
-} from "./draft-feedback";
+import type { FormFieldDraftFeedback } from "./draft-feedback";
 import type { TypedFieldValue } from "./projected-data";
 
 type FormField = Readonly<{ placementId: string; read: () => TypedFieldValue }>;
@@ -20,9 +17,7 @@ export type FormScope = Readonly<{
   register: (fieldKey: string, field: FormField) => () => void;
   /** Located draft feedback for one field key, or nothing when none applies now. */
   draftFeedbackFor: (fieldKey: string) => FormFieldDraftFeedback | undefined;
-  /** Form-level draft feedback that no control owns. */
-  draftFeedbackSummary: () => FormDraftFeedbackSummary | undefined;
-  /** Reports that a registered field's value changed, so settled feedback is rechecked. */
+  /** Reports that a field's value or registration changed, so settled feedback is rechecked. */
   reportFieldChanged: () => void;
 }>;
 
@@ -95,16 +90,24 @@ export function createFormFieldRegistry(location: DefinitionRenderErrorLocation)
  */
 export function useFormField(fieldKey: string, placementId: string, value: TypedFieldValue): void {
   const scope = useFormScope();
+  const register = scope?.register;
+  const reportFieldChanged = scope?.reportFieldChanged;
   const valueRef = useRef(value);
   const previousRef = useRef(value);
   valueRef.current = value;
   useEffect(() => {
     if (equalFormValue(previousRef.current, value)) return;
     previousRef.current = value;
-    scope?.reportFieldChanged();
+    reportFieldChanged?.();
   });
-  useEffect(
-    () => scope?.register(fieldKey, { placementId, read: () => valueRef.current }),
-    [scope, fieldKey, placementId],
-  );
+  // A field that mounts, remounts on reset or leaves also changes which values
+  // settled feedback is compared with.
+  useEffect(() => {
+    const unregister = register?.(fieldKey, { placementId, read: () => valueRef.current });
+    reportFieldChanged?.();
+    return () => {
+      unregister?.();
+      reportFieldChanged?.();
+    };
+  }, [register, reportFieldChanged, fieldKey, placementId]);
 }

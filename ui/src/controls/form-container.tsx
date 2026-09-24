@@ -15,16 +15,14 @@ import { DefinitionRenderError } from "../definition-error";
 import type { PlatformBlockRenderProps } from "../registry";
 import { resolveControlContext } from "./control-context";
 import {
+  applicableDraftFeedback,
+  fieldDraftFeedback,
+  formDraftFeedbackSummary,
   FormDraftFeedbackRegion,
-  type FormDraftFeedback,
-  type FormDraftFeedbackMessage,
   type FormDraftFeedbackSupply,
-  type FormDraftFeedbackSummary,
-  type FormFieldDraftFeedback,
 } from "./draft-feedback";
 import {
   createFormFieldRegistry,
-  equalFormValue,
   FormScopeContext,
   useFormScope,
   type FormScope,
@@ -75,61 +73,23 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const [registry] = useState(() => createFormFieldRegistry(context.location));
   const [, setFeedbackTick] = useState(0);
   const supply = props.draftFeedback;
+  const supplied = supply !== undefined;
   // Rechecks settled feedback only while a result is supplied; without one a
   // keystroke must not re-render the whole form.
   const reportFieldChanged = useCallback(() => {
-    if (supply !== undefined) setFeedbackTick((current) => current + 1);
-  }, [supply]);
+    if (supplied) setFeedbackTick((current) => current + 1);
+  }, [supplied]);
 
-  // Feedback applies only to the exact draft it was computed from: a late
-  // fingerprint, or any field whose typed value no longer matches the supplied
-  // draft, discards it until the projection supplies a fresh result.
-  const applicableFeedback = useCallback((): FormDraftFeedback | undefined => {
-    if (supply === undefined) return undefined;
-    if (supply.feedback.fingerprint !== supply.currentFingerprint) return undefined;
-    const current = registry.values();
-    for (const [fieldKey, expected] of Object.entries(supply.values)) {
-      if (!Object.prototype.hasOwnProperty.call(current, fieldKey)) continue;
-      if (!equalFormValue(current[fieldKey], expected)) return undefined;
-    }
-    return supply.feedback;
-  }, [registry, supply]);
-
+  // Applicability is decided once per render from the fields' current typed
+  // values, and the scope changes with it, so every field clears or restores
+  // its feedback together when any field's value changes or a result arrives.
+  const fieldValues = registry.values();
+  const feedback = applicableDraftFeedback(supply, fieldValues);
+  const summary = formDraftFeedbackSummary(feedback, new Set(Object.keys(fieldValues)));
   const draftFeedbackFor = useCallback(
-    (fieldKey: string): FormFieldDraftFeedback | undefined => {
-      const feedback = applicableFeedback();
-      if (feedback === undefined) return undefined;
-      const state = feedback.fields.find((field) => field.fieldKey === fieldKey);
-      if (state !== undefined && !state.visible) return undefined;
-      const messages: FormDraftFeedbackMessage[] = [];
-      for (const requirement of feedback.requirements)
-        if (requirement.fieldKey === fieldKey)
-          messages.push({ severity: "error", text: requirement.message });
-      const refusal = feedback.refusal;
-      if (refusal !== undefined && refusal.fieldKey === fieldKey)
-        messages.push({ severity: "error", text: refusal.message });
-      if (state === undefined && messages.length === 0) return undefined;
-      return { required: state?.required ?? false, disabled: state?.disabled ?? false, messages };
-    },
-    [applicableFeedback],
+    (fieldKey: string) => fieldDraftFeedback(feedback, fieldKey),
+    [feedback],
   );
-
-  const draftFeedbackSummary = useCallback((): FormDraftFeedbackSummary | undefined => {
-    const feedback = applicableFeedback();
-    if (feedback === undefined) return undefined;
-    const messages: FormDraftFeedbackMessage[] = feedback.warnings.map((text) => ({
-      severity: "warning" as const,
-      text,
-    }));
-    const refusal = feedback.refusal;
-    if (
-      refusal !== undefined &&
-      (refusal.fieldKey === undefined ||
-        !feedback.fields.some((field) => field.fieldKey === refusal.fieldKey))
-    )
-      messages.push({ severity: "error", text: refusal.message });
-    return messages.length === 0 ? undefined : { messages };
-  }, [applicableFeedback]);
 
   const scope: FormScope = useMemo(
     () => ({
@@ -137,17 +97,9 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       inactive: context.inactive,
       register: registry.register,
       draftFeedbackFor,
-      draftFeedbackSummary,
       reportFieldChanged,
     }),
-    [
-      context.pending,
-      context.inactive,
-      registry,
-      draftFeedbackFor,
-      draftFeedbackSummary,
-      reportFieldChanged,
-    ],
+    [context.pending, context.inactive, registry, draftFeedbackFor, reportFieldChanged],
   );
 
   const events = context.events;
@@ -228,7 +180,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
           {props.slots.content ?? null}
         </fieldset>
       </FormScopeContext.Provider>
-      <FormDraftFeedbackRegion id={feedbackId} summary={draftFeedbackSummary()} />
+      <FormDraftFeedbackRegion id={feedbackId} summary={summary} />
     </form>
   );
 }

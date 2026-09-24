@@ -64,7 +64,9 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
   const help = settings.text("help_text");
   const required = settings.boolean("required");
   const readOnly = settings.boolean("read_only");
-  const disabled = context.inactive || settings.boolean("disabled");
+  const draftFeedback = useFieldFeedback(fieldKey);
+  const disabled =
+    context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
   const error = context.values?.error;
   const note = inactiveNote(context);
 
@@ -79,7 +81,6 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
   const seededText = documentText(seeded);
   const [value, setValue] = useSeededState(seededText);
   useFormField(fieldKey, props.placementId, value === seededText ? seeded : toDocument(value));
-  const draftFeedback = useFieldFeedback(fieldKey);
 
   const onChange = (event: ChangeEvent<HTMLTextAreaElement>): void => {
     if (disabled || readOnly) return;
@@ -95,6 +96,7 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
   return (
     <div
       data-vortex-control="rich-text-input"
+      hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
       className="vortex-field"

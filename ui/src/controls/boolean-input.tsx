@@ -29,13 +29,14 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
   const help = settings.text("help_text");
   const required = settings.boolean("required");
   const variant = settings.choice<"checkbox" | "switch">("variant", "checkbox");
-  const disabled = context.inactive || settings.boolean("disabled");
+  const draftFeedback = useFieldFeedback(fieldKey);
+  const disabled =
+    context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
   const error = context.values?.error;
   const note = inactiveNote(context);
 
   const [checked, setChecked] = useSeededState(context.values?.value ?? false);
   useFormField(fieldKey, props.placementId, checked);
-  const draftFeedback = useFieldFeedback(fieldKey);
 
   const change = (next: boolean): void => {
     if (disabled) return;
@@ -47,6 +48,7 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
   return (
     <div
       data-vortex-control="boolean-input"
+      hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
       data-vortex-variant={variant}

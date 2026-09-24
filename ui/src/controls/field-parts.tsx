@@ -51,9 +51,9 @@ export const inactiveNote = <Kind extends ProjectedControlValueKind>(
 
 /**
  * Space-separated description references for the field's control, plus the
- * located draft state a supplied projection applies to this control. A required
- * or disabled draft field is exposed through `aria-required`/`aria-disabled`
- * while the person's typed value stays untouched.
+ * located draft requirement a supplied projection applies to it. The input
+ * applies located disabled and hidden state itself; the person's typed value
+ * stays untouched.
  */
 export const describedBy = (
   ids: FieldIds,
@@ -61,11 +61,7 @@ export const describedBy = (
   error: string | undefined,
   note: string | undefined,
   draftFeedback: FormFieldDraftFeedback | undefined,
-): Readonly<{
-  "aria-describedby"?: string;
-  "aria-required"?: boolean;
-  "aria-disabled"?: boolean;
-}> => {
+): Readonly<{ "aria-describedby"?: string; "aria-required"?: boolean }> => {
   const references = [
     help === undefined ? undefined : ids.help,
     error === undefined ? undefined : ids.error,
@@ -75,7 +71,6 @@ export const describedBy = (
   return {
     ...(references.length === 0 ? {} : { "aria-describedby": references.join(" ") }),
     ...(draftFeedback?.required === true ? { "aria-required": true } : {}),
-    ...(draftFeedback?.disabled === true ? { "aria-disabled": true } : {}),
   };
 };
 

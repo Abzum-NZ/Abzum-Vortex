@@ -34,13 +34,14 @@ export function TextInput(props: TextInputProps): ReactElement {
   const readOnly = settings.boolean("read_only");
   const multiline = settings.boolean("multiline");
   const inputType = settings.choice<(typeof INPUT_TYPES)[number]>("input_type", "text");
-  const disabled = context.inactive || settings.boolean("disabled");
+  const draftFeedback = useFieldFeedback(fieldKey);
+  const disabled =
+    context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
   const error = context.values?.error;
   const note = inactiveNote(context);
 
   const [value, setValue] = useSeededState(context.values?.value ?? "");
   useFormField(fieldKey, props.placementId, value);
-  const draftFeedback = useFieldFeedback(fieldKey);
 
   const onChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
     if (disabled || readOnly) return;
@@ -65,6 +66,7 @@ export function TextInput(props: TextInputProps): ReactElement {
   return (
     <div
       data-vortex-control="text-input"
+      hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
       className="vortex-field"

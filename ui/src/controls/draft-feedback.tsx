@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactElement } from "react";
-import { useFormScope } from "./form-context";
+import { equalFormValue, useFormScope } from "./form-context";
 import type { TypedFieldValue } from "./projected-data";
 
 /**
@@ -60,10 +60,15 @@ export type FormDraftFeedbackSupply = Readonly<{
   feedback: FormDraftFeedback;
 }>;
 
-/** Located feedback applicable to one field, or nothing when none applies. */
+/**
+ * Located feedback applicable to one field, or nothing when none applies. A
+ * hidden field stays mounted, so its typed value is kept; its messages move to
+ * the form-level summary because a person cannot act on a hidden control.
+ */
 export type FormFieldDraftFeedback = Readonly<{
   required: boolean;
   disabled: boolean;
+  hidden: boolean;
   messages: readonly FormDraftFeedbackMessage[];
 }>;
 
@@ -79,30 +84,100 @@ export function useFieldFeedback(fieldKey: string): FormFieldDraftFeedback | und
 }
 
 /**
- * One field's located draft feedback. It is a polite live region, so a message
- * that appears later is announced without interrupting, and its control
- * references it through `aria-describedby`. It renders nothing when no feedback
- * applies, so a corrected draft produces no stale text.
+ * The supplied feedback when it describes the draft the form shows now, or
+ * nothing. A late or out-of-order fingerprint, or any placed field whose typed
+ * value differs from the values the result was computed from, discards it.
+ */
+export const applicableDraftFeedback = (
+  supply: FormDraftFeedbackSupply | undefined,
+  current: Readonly<Record<string, TypedFieldValue>>,
+): FormDraftFeedback | undefined => {
+  if (supply === undefined) return undefined;
+  if (supply.feedback.fingerprint !== supply.currentFingerprint) return undefined;
+  for (const [fieldKey, expected] of Object.entries(supply.values)) {
+    if (!Object.prototype.hasOwnProperty.call(current, fieldKey)) continue;
+    if (!equalFormValue(current[fieldKey], expected)) return undefined;
+  }
+  return supply.feedback;
+};
+
+const fieldMessages = (
+  feedback: FormDraftFeedback,
+  fieldKey: string,
+): FormDraftFeedbackMessage[] => {
+  const messages: FormDraftFeedbackMessage[] = feedback.requirements
+    .filter((requirement) => requirement.fieldKey === fieldKey)
+    .map((requirement) => ({ severity: "error" as const, text: requirement.message }));
+  if (feedback.refusal !== undefined && feedback.refusal.fieldKey === fieldKey)
+    messages.push({ severity: "error", text: feedback.refusal.message });
+  return messages;
+};
+
+/** The located state and messages one field's control presents, or nothing. */
+export const fieldDraftFeedback = (
+  feedback: FormDraftFeedback | undefined,
+  fieldKey: string,
+): FormFieldDraftFeedback | undefined => {
+  if (feedback === undefined) return undefined;
+  const state = feedback.fields.find((field) => field.fieldKey === fieldKey);
+  const hidden = state !== undefined && !state.visible;
+  const required = state?.required === true;
+  const disabled = state?.disabled === true;
+  const messages = hidden ? [] : fieldMessages(feedback, fieldKey);
+  if (!hidden && !required && !disabled && messages.length === 0) return undefined;
+  return { required, disabled, hidden, messages };
+};
+
+/**
+ * Form-level feedback: every warning, plus any requirement or refusal whose
+ * field has no visible control in this form, so no located message is lost.
+ */
+export const formDraftFeedbackSummary = (
+  feedback: FormDraftFeedback | undefined,
+  placedFieldKeys: ReadonlySet<string>,
+): FormDraftFeedbackSummary | undefined => {
+  if (feedback === undefined) return undefined;
+  const presented = (fieldKey: string | undefined): boolean =>
+    fieldKey !== undefined &&
+    placedFieldKeys.has(fieldKey) &&
+    fieldDraftFeedback(feedback, fieldKey)?.hidden !== true;
+  const messages: FormDraftFeedbackMessage[] = feedback.warnings.map((text) => ({
+    severity: "warning" as const,
+    text,
+  }));
+  for (const requirement of feedback.requirements)
+    if (!presented(requirement.fieldKey))
+      messages.push({ severity: "error", text: requirement.message });
+  if (feedback.refusal !== undefined && !presented(feedback.refusal.fieldKey))
+    messages.push({ severity: "error", text: feedback.refusal.message });
+  return messages.length === 0 ? undefined : { messages };
+};
+
+/**
+ * One field's located draft feedback. It is a polite live region that stays
+ * mounted while empty, so a message that appears later is announced without
+ * interrupting, and its control references it through `aria-describedby` only
+ * while it has content. It empties when no feedback applies, so a corrected
+ * draft leaves no stale text.
  */
 export function FieldDraftFeedback({
   id,
   feedback,
-}: Readonly<{ id: string; feedback: FormFieldDraftFeedback | undefined }>): ReactElement | null {
-  if (feedback === undefined) return null;
+}: Readonly<{ id: string; feedback: FormFieldDraftFeedback | undefined }>): ReactElement {
   const notes: ReactElement[] = [];
-  if (feedback.required)
+  if (feedback?.required === true)
     notes.push(
       <span key="required" className="vortex-draft-feedback-required">
         Required
       </span>,
     );
-  if (feedback.disabled)
+  if (feedback?.disabled === true)
     notes.push(
       <span key="disabled" className="vortex-draft-feedback-disabled">
         Not editable
       </span>,
     );
-  feedback.messages.forEach((message, index) => {
+  feedback?.messages.forEach((message, index) => {
     notes.push(
       <span key={`message-${index}`} className={`vortex-draft-feedback-${message.severity}`}>
         {message.text}
@@ -122,10 +197,11 @@ export function FieldDraftFeedback({
 }
 
 /**
- * Form-level draft feedback for warnings and for a refusal no control owns. It
- * stays mounted while empty so a later message is announced politely. It is
- * separate from the form's projected operation outcomes and, being display
- * only, can never resubmit an operation or report a rollback.
+ * Form-level draft feedback for warnings and for any requirement or refusal no
+ * visible control in the form presents. It stays mounted while empty so a later
+ * message is announced politely. It is separate from the form's projected
+ * operation outcomes and, being display only, can never resubmit an operation
+ * or report a rollback.
  */
 export function FormDraftFeedbackRegion({
   id,

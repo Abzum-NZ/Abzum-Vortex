@@ -38,7 +38,9 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const placeholder = settings.text("placeholder") ?? "Select an option";
   const required = settings.boolean("required");
   const variant = settings.choice<"select" | "radio">("variant", "select");
-  const disabled = context.inactive || settings.boolean("disabled");
+  const draftFeedback = useFieldFeedback(fieldKey);
+  const disabled =
+    context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
   const options = context.values?.options ?? settings.options("options");
   const error = context.values?.error;
   const note = inactiveNote(context);
@@ -64,7 +66,6 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
       ? selected
       : null;
   useFormField(fieldKey, props.placementId, permittedSelected);
-  const draftFeedback = useFieldFeedback(fieldKey);
 
   const change = (next: string): void => {
     if (disabled) return;
@@ -102,6 +103,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   return (
     <div
       data-vortex-control="choice-input"
+      hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
       data-vortex-variant={variant}
