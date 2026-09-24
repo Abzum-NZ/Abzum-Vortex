@@ -35,6 +35,11 @@ export type FixedAuthenticatedPageCapability = Readonly<{
   page: PageDefinitionV2;
   applicationShells?: readonly ApplicationShellV2[];
   sourceCorrelationId?: string;
+  /**
+   * The exact installed application release revision this fixed capability was loaded from. It is
+   * carried onto the projected page so browser history, cache and late responses can be refused.
+   */
+  applicationReleaseRevision?: number;
   pagePermission: PermissionBinding;
   placements: Readonly<
     Record<
@@ -179,7 +184,14 @@ export const createAuthenticatedPageCapabilityService = <Command>(
           };
         }
         if (correlations.size !== 1) throw new Error("PAGE_CAPABILITY_EVIDENCE_UNAVAILABLE");
-        return projectPageCapability(resolved, { pageAllowed: true, placements: states });
+        return projectPageCapability(resolved, {
+          pageAllowed: true,
+          placements: states,
+          accessVersion: scope.accessVersion,
+          ...(loaded.applicationReleaseRevision === undefined
+            ? {}
+            : { applicationReleaseRevision: loaded.applicationReleaseRevision }),
+        });
       }),
   });
 };
