@@ -20,10 +20,12 @@
 -- Activity, Events and the delete commit or roll back together and a refused
 -- delete leaves no partial effect.
 --
--- The runtime only composes a deleting action that declares no other subject
--- write, creation or relationship copy, because the delete removes the subject
--- those would write to, link to or copy from. A deleting action may announce
--- Events; they are recorded, with the subject's last values, before the delete.
+-- Publication and the runtime only accept a deleting action with exactly one
+-- delete, no `set_field` and no `create_record`: the delete runs against the
+-- subject revision the command names, which a subject write or a creation can
+-- move. It may copy relationships (#570 writes only the target, never the
+-- subject), as the shipped company merge does, and announce Events; both are
+-- recorded, the Events with the subject's last values, before the delete.
 --
 -- A deleted subject cannot be projected, so a replay of a completed deleting
 -- action reports the delete's own stored outcome instead: the deleted revision

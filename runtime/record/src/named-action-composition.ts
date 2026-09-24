@@ -443,14 +443,11 @@ export const composeNamedAction = (
     submittedValues[effect.fieldId] = value;
   }
   if (creations.length !== prepared.createTargets.length) return undefined;
-  // The delete removes the subject the other effects would write to, link to or
-  // copy from, so a deleting action may only announce Events. Refusing the
-  // combination keeps every stored value and edge exactly what the action says.
-  if (
-    softDeletesSubject &&
-    (setFieldIds.size > 0 || creations.length > 0 || relationshipCopies.length > 0)
-  )
-    return undefined;
+  // The delete runs against the subject revision the command names, so a
+  // deleting action may only copy relationships (which write the target, never
+  // the subject) and announce Events. A subject write or a creation can move
+  // that revision, so publication and this composition refuse the combination.
+  if (softDeletesSubject && (setFieldIds.size > 0 || creations.length > 0)) return undefined;
   return {
     submittedValues,
     creations,

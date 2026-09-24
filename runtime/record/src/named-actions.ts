@@ -682,7 +682,13 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
                 stored.reasonCode === "command_invalid" ? "invalid_request" : "operation_refused",
               );
             const storedResult = completedResult(stored);
-            if (storedResult === undefined || !composition.softDeletesSubject)
+            // A writer replay means this command already completed, its delete
+            // included, so the subject is never deleted a second time.
+            if (
+              storedResult === undefined ||
+              !composition.softDeletesSubject ||
+              stored.replayed === true
+            )
               return storedResult ?? recordedRefusal;
 
             // The subject delete is the shared protected lifecycle delete, run

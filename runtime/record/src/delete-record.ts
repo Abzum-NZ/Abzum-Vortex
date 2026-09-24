@@ -307,7 +307,7 @@ export type Settled<Result> =
  * back: a preflight has already deleted or restored rows behind a pending
  * receipt, so every non-final outcome discards the whole transaction.
  */
-export class RecordLifecycleRollback extends Error {
+class RecordLifecycleRollback extends Error {
   constructor(readonly settled: Settled<unknown>) {
     super("RECORD_LIFECYCLE_ROLLBACK");
   }
