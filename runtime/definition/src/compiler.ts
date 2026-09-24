@@ -3145,8 +3145,15 @@ function fieldSettings(
           terminalStatusValues: expression.terminal_status_values,
         };
       }
+      const evaluation =
+        settings.evaluation === "read_time" || settings.evaluation === "stored"
+          ? settings.evaluation
+          : expression.operation === "deadline_passed"
+            ? "read_time"
+            : "stored";
       return {
         resultType: settings.result_type,
+        evaluation,
         ...(settings.decimal_places !== undefined
           ? { decimalPlaces: settings.decimal_places }
           : {}),

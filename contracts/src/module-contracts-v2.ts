@@ -302,6 +302,13 @@ const calculationExpressionV2Schema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
+/**
+ * Whether a calculated field is worked out when the record is read (`read_time`) or stored and
+ * refreshed by the owning save (`stored`). The deadline-passed form uses the current time and is
+ * therefore always read-time; a stored field may never use the current time.
+ */
+export const moduleCalculationEvaluationV2Schema = z.enum(["read_time", "stored"]);
+
 const calculationSettingsV2Schema = z
   .object({
     resultType: z.enum([
@@ -313,12 +320,19 @@ const calculationSettingsV2Schema = z
       "date",
       "date_time",
     ]),
+    evaluation: moduleCalculationEvaluationV2Schema.optional(),
     decimalPlaces: z.number().int().min(0).max(12).optional(),
     expression: calculationExpressionV2Schema,
     dependencyFieldIds: z.array(fieldIdSchema).min(1),
   })
   .strict()
   .superRefine((value, context) => {
+    if (value.evaluation === "stored" && value.expression.kind === "deadline_passed")
+      context.addIssue({
+        code: "custom",
+        path: ["evaluation"],
+        message: "A deadline-passed calculation uses the current time and is read-time",
+      });
     const valid =
       (value.expression.kind === "join_text" && value.resultType === "text") ||
       (value.expression.kind === "condition" && value.resultType === "yes_no") ||
