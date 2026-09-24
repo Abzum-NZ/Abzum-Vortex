@@ -9,6 +9,7 @@ import {
   FieldLabelText,
   FieldMessages,
   inactiveNote,
+  useFieldFeedback,
   useFieldIds,
   useSeededState,
 } from "./field-parts";
@@ -37,7 +38,9 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const placeholder = settings.text("placeholder") ?? "Select an option";
   const required = settings.boolean("required");
   const variant = settings.choice<"select" | "radio">("variant", "select");
-  const disabled = context.inactive || settings.boolean("disabled");
+  const draftFeedback = useFieldFeedback(fieldKey);
+  const disabled =
+    context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
   const options = context.values?.options ?? settings.options("options");
   const error = context.values?.error;
   const note = inactiveNote(context);
@@ -82,7 +85,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
             option.label.toLowerCase().includes(normalizedSearch),
         );
 
-  const described = describedBy(ids, help, error, note);
+  const described = describedBy(ids, help, error, note, draftFeedback);
   const search = searchable ? (
     <div className="vortex-choice-search-box">
       <input
@@ -100,6 +103,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   return (
     <div
       data-vortex-control="choice-input"
+      hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
       data-vortex-variant={variant}
@@ -168,7 +172,13 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
           </select>
         </>
       )}
-      <FieldMessages ids={ids} help={help} error={error} note={note} />
+      <FieldMessages
+        ids={ids}
+        help={help}
+        error={error}
+        note={note}
+        draftFeedback={draftFeedback}
+      />
     </div>
   );
 }

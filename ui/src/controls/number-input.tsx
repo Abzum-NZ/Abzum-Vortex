@@ -9,6 +9,7 @@ import {
   FieldLabelText,
   FieldMessages,
   inactiveNote,
+  useFieldFeedback,
   useFieldIds,
   useSeededState,
 } from "./field-parts";
@@ -45,7 +46,9 @@ export function NumberInput(props: NumberInputProps): ReactElement {
       ...context.location,
       propertyPath: ["step_value"],
     });
-  const disabled = context.inactive || settings.boolean("disabled");
+  const draftFeedback = useFieldFeedback(fieldKey);
+  const disabled =
+    context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
   const error = context.values?.error;
   const note = inactiveNote(context);
 
@@ -71,6 +74,7 @@ export function NumberInput(props: NumberInputProps): ReactElement {
   return (
     <div
       data-vortex-control="number-input"
+      hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
       className="vortex-field"
@@ -93,10 +97,16 @@ export function NumberInput(props: NumberInputProps): ReactElement {
         {...(maximum === undefined ? {} : { max: maximum })}
         step={step ?? (integer ? 1 : "any")}
         aria-invalid={error !== undefined}
-        {...describedBy(ids, help, error, note)}
+        {...describedBy(ids, help, error, note, draftFeedback)}
         className="vortex-input"
       />
-      <FieldMessages ids={ids} help={help} error={error} note={note} />
+      <FieldMessages
+        ids={ids}
+        help={help}
+        error={error}
+        note={note}
+        draftFeedback={draftFeedback}
+      />
     </div>
   );
 }

@@ -467,6 +467,8 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
                 JSON.stringify(previewComposition.submittedValues) ||
               JSON.stringify(composition.creations) !==
                 JSON.stringify(previewComposition.creations) ||
+              JSON.stringify(composition.relationshipCopies) !==
+                JSON.stringify(previewComposition.relationshipCopies) ||
               JSON.stringify(composition.announcedEventKeys) !==
                 JSON.stringify(previewComposition.announcedEventKeys)
             )

@@ -8,6 +8,7 @@ import {
   FieldLabelText,
   FieldMessages,
   inactiveNote,
+  useFieldFeedback,
   useFieldIds,
   useSeededState,
 } from "./field-parts";
@@ -28,7 +29,9 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
   const help = settings.text("help_text");
   const required = settings.boolean("required");
   const variant = settings.choice<"checkbox" | "switch">("variant", "checkbox");
-  const disabled = context.inactive || settings.boolean("disabled");
+  const draftFeedback = useFieldFeedback(fieldKey);
+  const disabled =
+    context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
   const error = context.values?.error;
   const note = inactiveNote(context);
 
@@ -41,10 +44,11 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
     context.events?.field_changed?.({ event: "field_changed", fieldKey, value: next });
   };
 
-  const described = describedBy(ids, help, error, note);
+  const described = describedBy(ids, help, error, note, draftFeedback);
   return (
     <div
       data-vortex-control="boolean-input"
+      hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
       data-vortex-variant={variant}
@@ -82,7 +86,13 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
       <label id={ids.label} htmlFor={ids.control} className="vortex-field-label">
         <FieldLabelText label={label} required={required} />
       </label>
-      <FieldMessages ids={ids} help={help} error={error} note={note} />
+      <FieldMessages
+        ids={ids}
+        help={help}
+        error={error}
+        note={note}
+        draftFeedback={draftFeedback}
+      />
     </div>
   );
 }

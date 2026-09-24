@@ -8,6 +8,7 @@ import {
   FieldLabelText,
   FieldMessages,
   inactiveNote,
+  useFieldFeedback,
   useFieldIds,
   useSeededState,
 } from "./field-parts";
@@ -63,7 +64,9 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
   const help = settings.text("help_text");
   const required = settings.boolean("required");
   const readOnly = settings.boolean("read_only");
-  const disabled = context.inactive || settings.boolean("disabled");
+  const draftFeedback = useFieldFeedback(fieldKey);
+  const disabled =
+    context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
   const error = context.values?.error;
   const note = inactiveNote(context);
 
@@ -93,6 +96,7 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
   return (
     <div
       data-vortex-control="rich-text-input"
+      hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
       className="vortex-field"
@@ -109,10 +113,16 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
         readOnly={readOnly}
         required={required}
         aria-invalid={error !== undefined}
-        {...describedBy(ids, help, error, note)}
+        {...describedBy(ids, help, error, note, draftFeedback)}
         className="vortex-textarea"
       />
-      <FieldMessages ids={ids} help={help} error={error} note={note} />
+      <FieldMessages
+        ids={ids}
+        help={help}
+        error={error}
+        note={note}
+        draftFeedback={draftFeedback}
+      />
     </div>
   );
 }

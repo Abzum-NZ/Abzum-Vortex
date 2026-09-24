@@ -163,6 +163,19 @@ export {
   type ValidationMessageProps,
 } from "./controls";
 
+// Form Draft Feedback
+export {
+  FieldDraftFeedback,
+  FormDraftFeedbackRegion,
+  useFieldFeedback,
+  type FormDraftFeedback,
+  type FormDraftFeedbackFieldState,
+  type FormDraftFeedbackMessage,
+  type FormDraftFeedbackSummary,
+  type FormDraftFeedbackSupply,
+  type FormFieldDraftFeedback,
+} from "./controls";
+
 // Control Registrations & Registry
 export {
   BOOLEAN_INPUT_BLOCK_RELEASE,
@@ -213,6 +226,15 @@ export {
   VIEW_FILTER_BLOCK_RELEASE,
   createLauncherComponentRegistry,
 } from "./launcher";
+
+// Application Navigation (#861)
+export {
+  ApplicationNavigation,
+  NAVIGATION_STYLES_CSS,
+  type ApplicationNavigationProps,
+  type ProjectedNavigation,
+  type ProjectedNavigationItem,
+} from "./navigation";
 
 // Full Platform Component Registry (Display + Controls + Launcher)
 export {
