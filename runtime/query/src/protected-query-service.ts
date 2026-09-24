@@ -25,25 +25,72 @@ import {
   type QueryContinuation,
   type QueryContinuationKey,
 } from "./continuation-token";
+import { decideQueryCache, type QueryCacheDecision, type QueryCacheInput } from "./cache-policy";
 import {
   protectedQueryCommandSchema,
   protectedQueryRefusalReasonCodes,
+  protectedQueryResultSchema,
   type ProtectedQueryCommand,
   type ProtectedQueryRefusalReasonCode,
   type ProtectedQueryResult,
 } from "./protected-query-contracts";
 import { recordSystemValuesSchema } from "./record-system-values";
+import { readThroughQueryCache, type SharedCacheStore } from "./shared-cache-adapter";
 import {
   parseQueryInputDeclarations,
   QueryInputRefusalError,
   validateQueryInputValues,
 } from "./typed-input-validation";
 
+/**
+ * What the query path itself cannot establish and the caller must prove for one
+ * request: the exact definition pin, every Record type read at its current data
+ * version, the eligibility facts and the current-authority window. Anything the
+ * caller cannot prove is left out or reported unsafe, and the query bypasses.
+ */
+export type ProtectedQueryCacheContext = Readonly<{
+  /** Fingerprint of the installed Module release the query runs under. */
+  moduleFingerprint: QueryCacheInput["definition"]["module"]["fingerprint"];
+  application: QueryCacheInput["definition"]["application"];
+  recordDependencies: QueryCacheInput["recordDependencies"];
+  /** True only when a declaration explicitly allows result caching. */
+  cachingAllowed: boolean;
+  /** True when any requested or filtered field is personal data or its classification is unknown. */
+  sensitiveFieldsPresent: boolean;
+  sharedSourceOwnership: QueryCacheInput["eligibility"]["sharedSourceOwnership"];
+  policyTtlSeconds: QueryCacheInput["lifetime"]["policyTtlSeconds"];
+  /** When the current grant or account state stops being valid; absent when unproven. */
+  authorityValidUntil?: string;
+}>;
+
 export type ProtectedQueryServiceDependencies = HumanOrganizationRequestDependencies &
   Readonly<{
     /** Server-held AES-256-GCM key that makes continuation tokens opaque and bound. */
     continuationKey: QueryContinuationKey;
+    /**
+     * The shared cache. With no store, or no context resolver, the service runs
+     * every query exactly as it does without a cache.
+     */
+    sharedCacheStore?: SharedCacheStore;
+    /**
+     * Resolves the cache context inside the request's own transaction, after
+     * the query is admitted. Returning nothing or throwing bypasses the cache.
+     */
+    resolveQueryCacheContext?: (
+      transaction: RequestDatabaseTransaction,
+      scope: SelectedOrganizationScope,
+      command: ProtectedQueryCommand,
+      release: Readonly<{ moduleReleaseRevision: number; moduleReleaseVersion: string }>,
+    ) => Promise<ProtectedQueryCacheContext | undefined>;
   }>;
+
+type QueryCacheHooks = Pick<
+  ProtectedQueryServiceDependencies,
+  "sharedCacheStore" | "resolveQueryCacheContext"
+> &
+  Readonly<{ now: () => Date; sessionExpiresAt: string }>;
+
+type ResolvedInputs = Extract<z.infer<typeof inputsReadSchema>, { outcome: "resolved" }>;
 
 type ResultRow = DatabaseRow & { readonly result: unknown };
 
@@ -140,6 +187,7 @@ const runCommand = async (
   scope: SelectedOrganizationScope,
   command: ProtectedQueryCommand,
   continuationKey: QueryContinuationKey,
+  cache: QueryCacheHooks,
 ): Promise<ProtectedQueryResult> => {
   const applicationRootId = scope.applicationRootId;
   if (applicationRootId === undefined) return refusal("request_invalid");
@@ -181,6 +229,7 @@ const runCommand = async (
   const inputFingerprint = fingerprintQueryInputs(inputValues);
   if (after !== undefined && after.inputFingerprint !== inputFingerprint) return refusal("cursor_stale");
 
+  const load = async (): Promise<ProtectedQueryResult> => {
   const page = await readPage(
     transaction,
     command,
@@ -228,6 +277,106 @@ const runCommand = async (
           ),
         }),
   };
+  };
+
+  const decision = await decideCache(transaction, scope, command, applicationRootId, declared, cache);
+  if (cache.sharedCacheStore === undefined) return load();
+  const { value } = await readThroughQueryCache<ProtectedQueryResult>({
+    store: cache.sharedCacheStore,
+    decision,
+    now: cache.now,
+    load,
+    parse: (stored) => {
+      const parsed = protectedQueryResultSchema.safeParse(stored);
+      return parsed.success ? parsed.data : undefined;
+    },
+    // The query was admitted above by the same current-Access read the ordinary
+    // path uses, in this transaction; a hit is returned only if it is a
+    // completed page for exactly this admitted release and request shape.
+    recheck: async (stored) => sameAdmittedResult(stored, command, declared),
+    shouldStore: (result) => result.outcome === "completed",
+  });
+  return value;
+};
+
+const bypassDecision: QueryCacheDecision = Object.freeze({ outcome: "bypass", reason: "policy_invalid" });
+
+const decideCache = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  command: ProtectedQueryCommand,
+  applicationRootId: string,
+  declared: ResolvedInputs,
+  cache: QueryCacheHooks,
+): Promise<QueryCacheDecision> => {
+  if (cache.sharedCacheStore === undefined || cache.resolveQueryCacheContext === undefined)
+    return bypassDecision;
+  try {
+    const context = await cache.resolveQueryCacheContext(transaction, scope, command, {
+      moduleReleaseRevision: declared.moduleReleaseRevision,
+      moduleReleaseVersion: declared.moduleReleaseVersion,
+    });
+    if (context === undefined) return bypassDecision;
+    return decideQueryCache({
+      request: command,
+      scope: {
+        organizationId: scope.organizationId,
+        organizationAccountId: scope.organizationAccountId,
+        applicationRootId,
+        accessVersion: scope.accessVersion,
+      },
+      definition: {
+        moduleRootId: command.moduleRootId,
+        module: {
+          releaseRevision: declared.moduleReleaseRevision,
+          releaseVersion: declared.moduleReleaseVersion,
+          fingerprint: context.moduleFingerprint,
+        },
+        application: context.application,
+      },
+      recordDependencies: context.recordDependencies,
+      eligibility: {
+        cachingAllowed: context.cachingAllowed,
+        sensitiveFieldsPresent: context.sensitiveFieldsPresent,
+        sharedSourceOwnership: context.sharedSourceOwnership,
+      },
+      lifetime: {
+        now: cache.now().toISOString(),
+        policyTtlSeconds: context.policyTtlSeconds,
+        ...(context.authorityValidUntil === undefined
+          ? {}
+          : { authorityValidUntil: context.authorityValidUntil }),
+        sessionExpiresAt: cache.sessionExpiresAt,
+      },
+    } satisfies QueryCacheInput);
+  } catch {
+    // Anything unresolved bypasses to the ordinary authorised query.
+    return bypassDecision;
+  }
+};
+
+/** A stored page is reusable only as a completed page for this admitted release, query and field set. */
+const sameAdmittedResult = (
+  stored: ProtectedQueryResult,
+  command: ProtectedQueryCommand,
+  declared: ResolvedInputs,
+): boolean => {
+  if (
+    stored.outcome !== "completed" ||
+    stored.moduleRootId !== command.moduleRootId ||
+    stored.queryId !== command.queryId ||
+    stored.moduleReleaseVersion !== declared.moduleReleaseVersion ||
+    stored.rows.length > command.pageSize
+  )
+    return false;
+  const requestedFields = new Set(command.requestedFieldIds.map((fieldId) => fieldId.toLowerCase()));
+  const requestedSystem = new Set<string>(command.requestedSystemFieldKeys);
+  return stored.rows.every(
+    (row) =>
+      Object.keys(row.values).every((fieldId) => requestedFields.has(fieldId.toLowerCase())) &&
+      Object.keys(row.systemValues ?? {}).every((key) => requestedSystem.has(key)) &&
+      (requestedSystem.size > 0) === (row.systemValues !== undefined),
+  );
 };
 
 /**
@@ -239,7 +388,8 @@ const runCommand = async (
  */
 export const createProtectedQueryService = (dependencies: ProtectedQueryServiceDependencies) => {
   const requests = createHumanOrganizationRequestService(dependencies);
-  const { continuationKey } = dependencies;
+  const { continuationKey, sharedCacheStore, resolveQueryCacheContext } = dependencies;
+  const now = dependencies.clock ?? (() => new Date());
 
   return Object.freeze({
     async run(
@@ -251,7 +401,12 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       if (!command.success) return { kind: "available", value: refusal("request_invalid") };
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
       return requests.run(session, selection, (transaction, scope) =>
-        runCommand(transaction, scope, command.data, continuationKey),
+        runCommand(transaction, scope, command.data, continuationKey, {
+          sharedCacheStore,
+          resolveQueryCacheContext,
+          now,
+          sessionExpiresAt: session.accessTokenExpiresAt,
+        }),
       );
     },
   });
