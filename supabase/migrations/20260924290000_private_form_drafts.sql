@@ -7,8 +7,9 @@
 -- installation always come from the validated request context, never from a
 -- caller, so one person can never read or update another person's draft. Each
 -- save carries the exact current revision, so a stale update is refused instead
--- of overwriting newer input. A draft untouched for thirty days is removed by
--- the maintenance sweep and is never returned after expiry.
+-- of overwriting newer input. A row exists only while its draft is live: an
+-- abandoned draft is deleted at once, and a draft untouched for thirty days is
+-- never returned again and is deleted by the bounded purges below.
 
 begin;
 
@@ -17,9 +18,29 @@ create schema if not exists vortex_page authorization postgres;
 revoke all on schema vortex_page from public, anon, authenticated, service_role;
 grant usage on schema vortex_page to vortex_request;
 
--- Values and validation are bounded objects keyed only by permanent field
--- identity, so no other value shape can be stored.
-create function vortex_page.private_form_draft_record_is_valid(p_record jsonb)
+-- A key is a permanent field identity (lower-case UUID, as the Page contract
+-- normalises it) or a declared record-free form input key.
+create function vortex_page.private_form_draft_key_is_valid(p_key text)
+returns boolean
+language sql
+immutable
+security invoker
+set search_path = ''
+as $function$
+  select p_key is not null
+    and (
+      p_key ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      or (
+        pg_catalog.length(p_key) <= 40
+        and p_key ~ '^[a-z][a-z0-9]*(_[a-z0-9]+)*$'
+      )
+    )
+$function$;
+
+-- Values are a bounded object keyed only by valid draft keys. The Page contract
+-- enforces the exact 256 KiB serialised bound; the store keeps a looser text
+-- bound as a backstop because canonical jsonb text adds separator whitespace.
+create function vortex_page.private_form_draft_values_are_valid(p_values jsonb)
 returns boolean
 language sql
 immutable
@@ -27,24 +48,53 @@ security invoker
 set search_path = ''
 as $function$
   select case
-    when p_record is null or pg_catalog.jsonb_typeof(p_record) <> 'object' then false
-    else pg_catalog.pg_column_size(p_record) <= 262144
-      and (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(p_record)) <= 500
+    when p_values is null or pg_catalog.jsonb_typeof(p_values) <> 'object' then false
+    else pg_catalog.octet_length(p_values::text) <= 524288
+      and (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(p_values)) <= 500
       and not exists (
         select 1
-        from pg_catalog.jsonb_object_keys(p_record) as supplied(key)
-        where supplied.key !~*
-          '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+        from pg_catalog.jsonb_object_keys(p_values) as supplied(key)
+        where not vortex_page.private_form_draft_key_is_valid(supplied.key)
+      )
+  end
+$function$;
+
+-- Validation state holds only a closed state and an optional machine reason
+-- code per field, never a rendered message or raw server value.
+create function vortex_page.private_form_draft_validation_is_valid(p_validation jsonb)
+returns boolean
+language sql
+immutable
+security invoker
+set search_path = ''
+as $function$
+  select case
+    when p_validation is null or pg_catalog.jsonb_typeof(p_validation) <> 'object' then false
+    else (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(p_validation)) <= 500
+      and not exists (
+        select 1
+        from pg_catalog.jsonb_each(p_validation) as supplied(key, value)
+        where not vortex_page.private_form_draft_key_is_valid(supplied.key)
+          or pg_catalog.jsonb_typeof(supplied.value) <> 'object'
+          or supplied.value ->> 'state' is null
+          or supplied.value ->> 'state' not in ('valid', 'invalid', 'incomplete')
+          or (supplied.value - array['state', 'reasonCode']) <> '{}'::jsonb
+          or (
+            supplied.value ? 'reasonCode'
+            and (
+              pg_catalog.jsonb_typeof(supplied.value -> 'reasonCode') <> 'string'
+              or pg_catalog.length(supplied.value ->> 'reasonCode') > 120
+              or supplied.value ->> 'reasonCode' !~ '^[a-z][a-z0-9_]*$'
+            )
+          )
       )
   end
 $function$;
 
 create table vortex_page.form_drafts (
   draft_id uuid not null primary key,
-  organization_id uuid not null
-    references vortex_identity.organizations (organization_id),
-  organization_account_id uuid not null
-    references vortex_identity.organization_accounts (organization_account_id),
+  organization_id uuid not null,
+  organization_account_id uuid not null,
   identity_id uuid not null,
   application_root_id uuid not null,
   installation_release_revision bigint not null,
@@ -55,11 +105,24 @@ create table vortex_page.form_drafts (
   revision bigint not null,
   field_values jsonb not null,
   validation_state jsonb not null,
-  state text not null,
   created_at timestamptz not null,
   updated_at timestamptz not null,
   expires_at timestamptz not null,
   correlation_id uuid not null,
+  constraint form_drafts_account_same_organization_fk foreign key (
+    organization_id,
+    organization_account_id
+  ) references vortex_identity.organization_accounts (
+    organization_id,
+    organization_account_id
+  ),
+  constraint form_drafts_identity_same_organization_fk foreign key (
+    organization_id,
+    identity_id
+  ) references vortex_identity.organization_accounts (
+    organization_id,
+    identity_id
+  ),
   constraint form_drafts_ids_non_nil check (
     vortex_context.is_non_nil_uuid(draft_id::text)
     and vortex_context.is_non_nil_uuid(organization_id::text)
@@ -76,31 +139,29 @@ create table vortex_page.form_drafts (
     installation_release_revision between 1 and 9007199254740991
     and revision between 1 and 9007199254740991
   ),
-  constraint form_drafts_state_valid check (
-    state in ('active', 'abandoned', 'expired')
-  ),
   constraint form_drafts_times_valid check (
     created_at not in ('-infinity'::timestamptz, 'infinity'::timestamptz)
     and updated_at not in ('-infinity'::timestamptz, 'infinity'::timestamptz)
     and expires_at not in ('-infinity'::timestamptz, 'infinity'::timestamptz)
-    and expires_at > created_at
+    and updated_at >= created_at
+    and expires_at > updated_at
   ),
   constraint form_drafts_values_valid check (
-    vortex_page.private_form_draft_record_is_valid(field_values)
+    vortex_page.private_form_draft_values_are_valid(field_values)
   ),
   constraint form_drafts_validation_valid check (
-    vortex_page.private_form_draft_record_is_valid(validation_state)
+    vortex_page.private_form_draft_validation_is_valid(validation_state)
   )
 );
 
 comment on table vortex_page.form_drafts is
-  'Private revisioned form drafts. Rows are keyed by person, organisation, exact installed Application release and exact form/flow/node; only the protected Page operations write here, and drafts are never business records.';
+  'Private revisioned form drafts. Rows are keyed by person, organisation, exact installed Application release and exact form/flow/node, exist only while the draft is live, are written only by the protected Page operations, and are never business records.';
 
--- One live draft per exact scope for one person and one installed release. The
+-- One draft per exact scope for one person and one installed release. The
 -- release is part of the identity so an upgraded installation can start a fresh
--- draft beside the one bound to the replaced release, which is never resumed;
--- expired rows are retired first so they do not hold the scope.
-create unique index form_drafts_active_scope_unique
+-- draft beside the one bound to the replaced release, which is never resumed.
+-- An expired row for the scope is deleted before a new draft is created.
+create unique index form_drafts_scope_unique
   on vortex_page.form_drafts (
     organization_id,
     organization_account_id,
@@ -110,12 +171,10 @@ create unique index form_drafts_active_scope_unique
     coalesce(flow_id, '00000000-0000-0000-0000-000000000000'::uuid),
     coalesce(node_id, '00000000-0000-0000-0000-000000000000'::uuid),
     coalesce(subject_record_id, '00000000-0000-0000-0000-000000000000'::uuid)
-  )
-  where state = 'active';
+  );
 
-create index form_drafts_expiry_idx
-  on vortex_page.form_drafts (expires_at)
-  where state = 'active';
+create index form_drafts_organization_expiry_idx
+  on vortex_page.form_drafts (organization_id, expires_at);
 
 alter table vortex_page.form_drafts enable row level security;
 alter table vortex_page.form_drafts force row level security;
@@ -124,10 +183,11 @@ revoke all on table vortex_page.form_drafts
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
--- The stored row always carries its own identity and revision; a draft is turned
--- into canonical JSON only here, and optional scope is added without null keys.
+-- The only canonical JSON form of a draft; optional scope is added without null
+-- keys. The state is supplied because a row exists only while it is active.
 create function vortex_page.private_form_draft_to_json_internal(
-  d vortex_page.form_drafts
+  d vortex_page.form_drafts,
+  p_state text
 )
 returns jsonb
 language sql
@@ -146,7 +206,7 @@ as $function$
     'revision', d.revision,
     'values', d.field_values,
     'validation', d.validation_state,
-    'state', d.state,
+    'state', p_state,
     'createdAt', pg_catalog.to_char(d.created_at at time zone 'UTC',
       'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
     'updatedAt', pg_catalog.to_char(d.updated_at at time zone 'UTC',
@@ -200,7 +260,7 @@ begin
     or (installation ->> 'organizationId')::uuid
       is distinct from (checked ->> 'organizationId')::uuid
     or (installation ->> 'applicationRootId')::uuid is distinct from selected_application_root_id
-    or not (installation ? 'applicationReleaseRevision')
+    or pg_catalog.jsonb_typeof(installation -> 'applicationReleaseRevision') <> 'number'
     or not vortex_context.is_non_nil_uuid(checked ->> 'correlationId') then
     raise exception using errcode = '42501',
       message = 'Private form draft scope is unavailable';
@@ -216,20 +276,53 @@ begin
 end
 $function$;
 
--- The single policy point for how long an untouched draft survives. Thirty days
--- is the current policy; a shorter organisation policy would narrow this value
--- and is the only change needed to adopt one.
-create function vortex_page.private_form_draft_expiry_internal(p_created_at timestamptz)
+-- The single policy point for how long an untouched draft survives: thirty days
+-- after its last revision. A shorter organisation policy narrows this value.
+create function vortex_page.private_form_draft_expiry_internal(p_touched_at timestamptz)
 returns timestamptz
 language sql
 immutable
 security invoker
 set search_path = ''
 as $function$
-  select p_created_at + interval '30 days'
+  select p_touched_at + interval '30 days'
 $function$;
 
--- Reads one exact active draft of the current person, or reports the draft is
+-- Deletes a bounded batch of one organisation's drafts that reached expiry.
+-- Expired drafts are already never returned, so this only removes unreachable
+-- private input; locked rows are skipped for the next purge.
+create function vortex_page.private_form_draft_purge_internal(
+  p_organization_id uuid,
+  p_limit integer
+)
+returns integer
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  affected integer;
+begin
+  with expired as (
+    select draft.draft_id
+    from vortex_page.form_drafts as draft
+    where draft.organization_id = p_organization_id
+      and draft.expires_at <= pg_catalog.clock_timestamp()
+    order by draft.expires_at
+    limit p_limit
+    for update skip locked
+  )
+  delete from vortex_page.form_drafts as draft
+  using expired
+  where draft.draft_id = expired.draft_id;
+
+  get diagnostics affected = row_count;
+  return affected;
+end
+$function$;
+
+-- Reads one exact live draft of the current person, or reports the draft is
 -- bound to an installation that is no longer the active one. Expired rows are
 -- never returned.
 create function vortex_page.read_private_form_draft(
@@ -272,11 +365,10 @@ begin
     and draft.flow_id is not distinct from p_flow_id
     and draft.node_id is not distinct from p_node_id
     and draft.subject_record_id is not distinct from p_subject_record_id
-    and draft.state = 'active'
     and draft.expires_at > pg_catalog.clock_timestamp();
   if found then
     return query select 'available'::text,
-      vortex_page.private_form_draft_to_json_internal(stored);
+      vortex_page.private_form_draft_to_json_internal(stored, 'active');
     return;
   end if;
 
@@ -288,11 +380,11 @@ begin
     and draft.organization_account_id = scope.organization_account_id
     and draft.identity_id = scope.identity_id
     and draft.application_root_id = scope.application_root_id
+    and draft.installation_release_revision <> scope.release_revision
     and draft.form_id = p_form_id
     and draft.flow_id is not distinct from p_flow_id
     and draft.node_id is not distinct from p_node_id
     and draft.subject_record_id is not distinct from p_subject_record_id
-    and draft.state = 'active'
     and draft.expires_at > pg_catalog.clock_timestamp();
   if found then
     return query select 'stale_installation'::text, null::jsonb;
@@ -304,7 +396,7 @@ end
 $function$;
 
 -- Creates revision 1 for the current person, or reports that the exact scope is
--- already held by a live draft. Expired rows for that scope are retired first.
+-- already held by a live draft. Expired rows for that scope are deleted first.
 create function vortex_page.create_private_form_draft(
   p_form_id uuid,
   p_flow_id uuid,
@@ -330,8 +422,8 @@ begin
     or (p_node_id is not null and not vortex_context.is_non_nil_uuid(p_node_id::text))
     or (p_subject_record_id is not null
       and not vortex_context.is_non_nil_uuid(p_subject_record_id::text))
-    or not vortex_page.private_form_draft_record_is_valid(p_field_values)
-    or not vortex_page.private_form_draft_record_is_valid(p_validation_state) then
+    or not vortex_page.private_form_draft_values_are_valid(p_field_values)
+    or not vortex_page.private_form_draft_validation_is_valid(p_validation_state) then
     raise exception using errcode = '22023',
       message = 'Private form draft create command is invalid';
   end if;
@@ -339,9 +431,8 @@ begin
   select context.* into strict scope
   from vortex_page.private_form_draft_context_internal() as context;
 
-  -- An untouched row that has reached its expiry no longer holds the scope.
-  update vortex_page.form_drafts as draft
-  set state = 'expired', updated_at = pg_catalog.clock_timestamp()
+  -- An untouched draft that has reached its expiry no longer holds the scope.
+  delete from vortex_page.form_drafts as draft
   where draft.organization_id = scope.organization_id
     and draft.organization_account_id = scope.organization_account_id
     and draft.application_root_id = scope.application_root_id
@@ -349,8 +440,9 @@ begin
     and draft.flow_id is not distinct from p_flow_id
     and draft.node_id is not distinct from p_node_id
     and draft.subject_record_id is not distinct from p_subject_record_id
-    and draft.state = 'active'
     and draft.expires_at <= pg_catalog.clock_timestamp();
+
+  perform vortex_page.private_form_draft_purge_internal(scope.organization_id, 100);
 
   perform 1
   from vortex_page.form_drafts as draft
@@ -362,7 +454,6 @@ begin
     and draft.flow_id is not distinct from p_flow_id
     and draft.node_id is not distinct from p_node_id
     and draft.subject_record_id is not distinct from p_subject_record_id
-    and draft.state = 'active'
   for update;
   if found then
     return query select 'exists'::text, null::jsonb;
@@ -376,34 +467,32 @@ begin
       draft_id, organization_id, organization_account_id, identity_id,
       application_root_id, installation_release_revision,
       form_id, flow_id, node_id, subject_record_id,
-      revision, field_values, validation_state, state,
+      revision, field_values, validation_state,
       created_at, updated_at, expires_at, correlation_id
     ) values (
       new_draft_id, scope.organization_id, scope.organization_account_id, scope.identity_id,
       scope.application_root_id, scope.release_revision,
       p_form_id, p_flow_id, p_node_id, p_subject_record_id,
-      1, p_field_values, p_validation_state, 'active',
+      1, p_field_values, p_validation_state,
       created_at, created_at,
       vortex_page.private_form_draft_expiry_internal(created_at), scope.correlation_id
-    );
+    )
+    returning * into stored;
   exception
     when unique_violation then
       return query select 'exists'::text, null::jsonb;
       return;
   end;
 
-  select draft.* into strict stored
-  from vortex_page.form_drafts as draft
-  where draft.draft_id = new_draft_id;
-
   return query select 'created'::text,
-    vortex_page.private_form_draft_to_json_internal(stored);
+    vortex_page.private_form_draft_to_json_internal(stored, 'active');
 end
 $function$;
 
--- Compare-and-update one exact owned active draft. A stale expected revision is
+-- Compare-and-update one exact owned live draft. A stale expected revision is
 -- refused instead of overwriting newer input; a draft bound to a replaced
--- installation also stops being resumable.
+-- installation also stops being resumable. Each revision restarts the thirty
+-- day expiry, so only an untouched draft expires.
 create function vortex_page.update_private_form_draft(
   p_draft_id uuid,
   p_expected_revision bigint,
@@ -423,6 +512,7 @@ as $function$
 declare
   scope record;
   stored vortex_page.form_drafts%rowtype;
+  touched_at timestamptz;
 begin
   if p_draft_id is null or not vortex_context.is_non_nil_uuid(p_draft_id::text)
     or p_expected_revision is null
@@ -432,8 +522,8 @@ begin
     or (p_node_id is not null and not vortex_context.is_non_nil_uuid(p_node_id::text))
     or (p_subject_record_id is not null
       and not vortex_context.is_non_nil_uuid(p_subject_record_id::text))
-    or not vortex_page.private_form_draft_record_is_valid(p_field_values)
-    or not vortex_page.private_form_draft_record_is_valid(p_validation_state) then
+    or not vortex_page.private_form_draft_values_are_valid(p_field_values)
+    or not vortex_page.private_form_draft_validation_is_valid(p_validation_state) then
     raise exception using errcode = '22023',
       message = 'Private form draft update command is invalid';
   end if;
@@ -449,25 +539,20 @@ begin
     and draft.organization_id = scope.organization_id
     and draft.organization_account_id = scope.organization_account_id
     and draft.identity_id = scope.identity_id
+    and draft.application_root_id = scope.application_root_id
   for update;
   if not found
-    or stored.state <> 'active'
-    or stored.expires_at <= pg_catalog.clock_timestamp() then
-    return query select 'unavailable'::text, null::jsonb;
-    return;
-  end if;
-
-  if stored.installation_release_revision <> scope.release_revision
-    or stored.application_root_id <> scope.application_root_id then
-    return query select 'stale_installation'::text, null::jsonb;
-    return;
-  end if;
-
-  if stored.form_id <> p_form_id
+    or stored.expires_at <= pg_catalog.clock_timestamp()
+    or stored.form_id <> p_form_id
     or stored.flow_id is distinct from p_flow_id
     or stored.node_id is distinct from p_node_id
     or stored.subject_record_id is distinct from p_subject_record_id then
     return query select 'unavailable'::text, null::jsonb;
+    return;
+  end if;
+
+  if stored.installation_release_revision <> scope.release_revision then
+    return query select 'stale_installation'::text, null::jsonb;
     return;
   end if;
 
@@ -476,22 +561,27 @@ begin
     return;
   end if;
 
+  touched_at := pg_catalog.clock_timestamp();
   update vortex_page.form_drafts as draft
   set field_values = p_field_values,
       validation_state = p_validation_state,
       revision = draft.revision + 1,
-      updated_at = pg_catalog.clock_timestamp()
+      updated_at = touched_at,
+      expires_at = vortex_page.private_form_draft_expiry_internal(touched_at)
   where draft.draft_id = p_draft_id
   returning * into stored;
 
+  perform vortex_page.private_form_draft_purge_internal(scope.organization_id, 100);
+
   return query select 'updated'::text,
-    vortex_page.private_form_draft_to_json_internal(stored);
+    vortex_page.private_form_draft_to_json_internal(stored, 'active');
 end
 $function$;
 
--- Abandons one exact owned active draft at its expected revision. Abandoning
--- does not compare the installation release, so a person can always close a
--- draft that the active installation has moved beyond.
+-- Abandons one exact owned live draft at its expected revision and deletes it,
+-- so no private input outlives the draft. Abandoning does not compare the
+-- installation release, so a person can always close a draft that the active
+-- installation has moved beyond. The result carries no values.
 create function vortex_page.abandon_private_form_draft(
   p_draft_id uuid,
   p_expected_revision bigint
@@ -522,10 +612,9 @@ begin
     and draft.organization_id = scope.organization_id
     and draft.organization_account_id = scope.organization_account_id
     and draft.identity_id = scope.identity_id
+    and draft.application_root_id = scope.application_root_id
   for update;
-  if not found
-    or stored.state <> 'active'
-    or stored.expires_at <= pg_catalog.clock_timestamp() then
+  if not found or stored.expires_at <= pg_catalog.clock_timestamp() then
     return query select 'unavailable'::text, null::jsonb;
     return;
   end if;
@@ -535,21 +624,22 @@ begin
     return;
   end if;
 
-  update vortex_page.form_drafts as draft
-  set state = 'abandoned',
-      revision = draft.revision + 1,
-      updated_at = pg_catalog.clock_timestamp()
-  where draft.draft_id = p_draft_id
-  returning * into stored;
+  delete from vortex_page.form_drafts as draft
+  where draft.draft_id = p_draft_id;
+
+  stored.revision := stored.revision + 1;
+  stored.updated_at := pg_catalog.clock_timestamp();
+  stored.field_values := '{}'::jsonb;
+  stored.validation_state := '{}'::jsonb;
 
   return query select 'abandoned'::text,
-    vortex_page.private_form_draft_to_json_internal(stored);
+    vortex_page.private_form_draft_to_json_internal(stored, 'abandoned');
 end
 $function$;
 
--- Retires a bounded batch of the current person's untouched drafts that have
--- reached thirty days. Expired drafts are already never returned, so this is
--- only a self-service cleanup of already unreachable rows.
+-- Deletes a bounded batch of the current organisation's drafts that reached
+-- expiry, for a caller that wants to purge beyond the bounded purge each save
+-- already performs. It returns only a count.
 create function vortex_page.expire_private_form_drafts(p_limit integer default 500)
 returns integer
 language plpgsql
@@ -558,50 +648,46 @@ security definer
 set search_path = ''
 as $function$
 declare
-  scope record;
-  affected integer;
+  checked jsonb;
 begin
   if p_limit is null or p_limit not between 1 and 10000 then
     raise exception using errcode = '22023',
       message = 'Private form draft expiry command is invalid';
   end if;
 
-  select context.* into strict scope
-  from vortex_page.private_form_draft_context_internal() as context;
+  checked := vortex_access.validated_human_request_context();
+  if not vortex_context.is_non_nil_uuid(checked ->> 'organizationId') then
+    raise exception using errcode = '42501',
+      message = 'Private form draft scope is unavailable';
+  end if;
 
-  with expired as (
-    select draft.draft_id
-    from vortex_page.form_drafts as draft
-    where draft.organization_id = scope.organization_id
-      and draft.organization_account_id = scope.organization_account_id
-      and draft.identity_id = scope.identity_id
-      and draft.state = 'active'
-      and draft.expires_at <= pg_catalog.clock_timestamp()
-    order by draft.expires_at
-    limit p_limit
-    for update skip locked
-  )
-  update vortex_page.form_drafts as draft
-  set state = 'expired', updated_at = pg_catalog.clock_timestamp()
-  from expired
-  where draft.draft_id = expired.draft_id;
-
-  get diagnostics affected = row_count;
-  return affected;
+  return vortex_page.private_form_draft_purge_internal(
+    (checked ->> 'organizationId')::uuid,
+    p_limit
+  );
 end
 $function$;
 
-revoke all on function vortex_page.private_form_draft_record_is_valid(jsonb)
+revoke all on function vortex_page.private_form_draft_key_is_valid(text)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_page.private_form_draft_values_are_valid(jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_page.private_form_draft_validation_is_valid(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 revoke all on function vortex_page.private_form_draft_to_json_internal(
-  vortex_page.form_drafts
+  vortex_page.form_drafts, text
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 revoke all on function vortex_page.private_form_draft_context_internal()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 revoke all on function vortex_page.private_form_draft_expiry_internal(timestamptz)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_page.private_form_draft_purge_internal(uuid, integer)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
@@ -637,14 +723,14 @@ grant execute on function vortex_page.expire_private_form_drafts(integer)
   to vortex_request;
 
 comment on function vortex_page.read_private_form_draft(uuid, uuid, uuid, uuid) is
-  'Reads one exact active private form draft of the current person, rechecking the exact active installation before returning any value.';
+  'Reads one exact live private form draft of the current person, rechecking the exact active installation before returning any value.';
 comment on function vortex_page.create_private_form_draft(uuid, uuid, uuid, uuid, jsonb, jsonb) is
   'Creates revision 1 of a private form draft for the current person and exact active installation, or reports the scope is already held.';
 comment on function vortex_page.update_private_form_draft(uuid, bigint, uuid, uuid, uuid, uuid, jsonb, jsonb) is
-  'Compare-and-updates one exact owned active private form draft at its current revision, refusing a stale revision or replaced installation.';
+  'Compare-and-updates one exact owned live private form draft at its current revision, refusing a stale revision or replaced installation.';
 comment on function vortex_page.abandon_private_form_draft(uuid, bigint) is
-  'Abandons one exact owned active private form draft at its expected revision.';
+  'Abandons and deletes one exact owned live private form draft at its expected revision.';
 comment on function vortex_page.expire_private_form_drafts(integer) is
-  'Retires a bounded batch of the current person''s untouched private form drafts after thirty days.';
+  'Deletes a bounded batch of the current organisation''s private form drafts untouched for thirty days.';
 
 commit;

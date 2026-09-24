@@ -1,11 +1,10 @@
 import "server-only";
 
-import {
-  organizationAccessDeclarationSchema,
-  type IdentitySession,
-  type OrganizationAccessDeclaration,
-  type OrganizationSelectionCandidate,
-  type SelectedOrganizationScope,
+import type {
+  IdentitySession,
+  OrganizationAccessDeclaration,
+  OrganizationSelectionCandidate,
+  SelectedOrganizationScope,
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
@@ -14,6 +13,7 @@ import {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
+import type { z } from "zod";
 import {
   abandonPrivateFormDraftCommandSchema,
   createPrivateFormDraftCommandSchema,
@@ -21,13 +21,16 @@ import {
   privateFormDraftSchema,
   projectPrivateFormDraft,
   readPrivateFormDraftCommandSchema,
+  restrictPrivateFormDraftInput,
   updatePrivateFormDraftCommandSchema,
   type AbandonPrivateFormDraftCommand,
   type CreatePrivateFormDraftCommand,
   type PrivateFormDraft,
   type PrivateFormDraftAbandonResult,
   type PrivateFormDraftCreateResult,
+  type PrivateFormDraftProjection,
   type PrivateFormDraftReadResult,
+  type PrivateFormDraftScope,
   type PrivateFormDraftUpdateResult,
   type ReadPrivateFormDraftCommand,
   type UpdatePrivateFormDraftCommand,
@@ -40,11 +43,13 @@ import {
  * transaction, so the organisation, identity, organisation account and active
  * installation always come from the validated request context. A caller never
  * supplies them, which is what keeps one person out of another person's draft.
+ * Values are stored and returned only through the server-owned projection of
+ * the exact installed form.
  *
- * The session service additionally re-evaluates the exact current access
- * declaration on every operation, so a resume after access was reduced returns
- * no values, and it reads the active installation again so a draft bound to a
- * different installed release is refused instead of silently resumed.
+ * The session service derives that projection and the governing access
+ * declaration on the server for every operation, from the exact form/flow/node
+ * of the active installation, and re-evaluates current access before any value
+ * is stored or returned.
  */
 
 type DraftResultRow = DatabaseRow & { outcome: unknown; result: unknown };
@@ -64,6 +69,16 @@ const parseDraft = (value: unknown): PrivateFormDraft => {
   return parsed.data;
 };
 
+const parseCommand = <Schema extends z.ZodType>(
+  schema: Schema,
+  candidate: unknown,
+): z.infer<Schema> => {
+  const command = schema.safeParse(candidate);
+  if (!command.success)
+    throw new PrivateFormDraftError("INVALID_PRIVATE_FORM_DRAFT_COMMAND", { cause: command.error });
+  return command.data;
+};
+
 const databaseCode = (error: unknown): string | undefined =>
   typeof error === "object" && error !== null && "code" in error
     ? String((error as { readonly code?: unknown }).code)
@@ -75,12 +90,6 @@ const mapStorageFailure = (error: unknown): PrivateFormDraftError => {
     return new PrivateFormDraftError("INVALID_PRIVATE_FORM_DRAFT_COMMAND", { cause: error });
   if (code === "42501" || code === "P0002" || code === "55000")
     return new PrivateFormDraftError("PRIVATE_FORM_DRAFT_SCOPE_UNAVAILABLE", { cause: error });
-  if (code === "23505")
-    return new PrivateFormDraftError("PRIVATE_FORM_DRAFT_ALREADY_EXISTS", { cause: error });
-  if (code === "V3102")
-    return new PrivateFormDraftError("PRIVATE_FORM_DRAFT_REVISION_STALE", { cause: error });
-  if (code === "V3103")
-    return new PrivateFormDraftError("PRIVATE_FORM_DRAFT_INSTALLATION_STALE", { cause: error });
   return new PrivateFormDraftError("PRIVATE_FORM_DRAFT_OPERATION_FAILED", { cause: error });
 };
 
@@ -93,65 +102,56 @@ const runStorage = async <Result>(operation: () => Promise<Result>): Promise<Res
   }
 };
 
-const scopeArguments = (
-  flowId: string | undefined,
-  nodeId: string | undefined,
-  subjectRecordId: string | undefined,
-) => [flowId ?? null, nodeId ?? null, subjectRecordId ?? null] as const;
+const scopeArguments = (scope: PrivateFormDraftScope) =>
+  [scope.flowId ?? null, scope.nodeId ?? null, scope.subjectRecordId ?? null] as const;
 
-/** Creates revision 1, or reports `exists` when an active draft already holds the exact scope. */
+/**
+ * Creates revision 1 holding only the permitted values, or reports `exists` when
+ * a live draft already holds the exact scope.
+ */
 export const createPrivateFormDraft = async (
   transaction: RequestDatabaseTransaction,
   commandCandidate: CreatePrivateFormDraftCommand,
+  projection: PrivateFormDraftProjection,
 ): Promise<PrivateFormDraftCreateResult> => {
-  const command = createPrivateFormDraftCommandSchema.safeParse(commandCandidate);
-  if (!command.success)
-    throw new PrivateFormDraftError("INVALID_PRIVATE_FORM_DRAFT_COMMAND", { cause: command.error });
-  const [flowId, nodeId, subjectRecordId] = scopeArguments(
-    command.data.flowId,
-    command.data.nodeId,
-    command.data.subjectRecordId,
-  );
+  const command = parseCommand(createPrivateFormDraftCommandSchema, commandCandidate);
+  const input = restrictPrivateFormDraftInput(command, projection);
+  const [flowId, nodeId, subjectRecordId] = scopeArguments(command);
   return runStorage(async () => {
     const row = requireOne(
       await transaction.query<DraftResultRow>`
         select outcome, result
         from vortex_page.create_private_form_draft(
-          ${command.data.formId}::uuid,
+          ${command.formId}::uuid,
           ${flowId}::uuid,
           ${nodeId}::uuid,
           ${subjectRecordId}::uuid,
-          ${JSON.stringify(command.data.values)}::text::jsonb,
-          ${JSON.stringify(command.data.validation)}::text::jsonb
+          ${JSON.stringify(input.values)}::text::jsonb,
+          ${JSON.stringify(input.validation)}::text::jsonb
         )
       `,
     );
     if (row.outcome === "exists") return { outcome: "exists" };
     if (row.outcome !== "created")
       throw new PrivateFormDraftError("INVALID_PRIVATE_FORM_DRAFT_STORAGE_RESULT");
-    return { outcome: "created", draft: parseDraft(row.result) };
+    return { outcome: "created", draft: projectPrivateFormDraft(parseDraft(row.result), projection) };
   });
 };
 
-/** Reads the exact active draft and projects it through the permitted fields and choices. */
+/** Reads the exact live draft and projects it through the permitted fields and choices. */
 export const readPrivateFormDraft = async (
   transaction: RequestDatabaseTransaction,
   commandCandidate: ReadPrivateFormDraftCommand,
+  projection: PrivateFormDraftProjection,
 ): Promise<PrivateFormDraftReadResult> => {
-  const command = readPrivateFormDraftCommandSchema.safeParse(commandCandidate);
-  if (!command.success)
-    throw new PrivateFormDraftError("INVALID_PRIVATE_FORM_DRAFT_COMMAND", { cause: command.error });
-  const [flowId, nodeId, subjectRecordId] = scopeArguments(
-    command.data.flowId,
-    command.data.nodeId,
-    command.data.subjectRecordId,
-  );
+  const command = parseCommand(readPrivateFormDraftCommandSchema, commandCandidate);
+  const [flowId, nodeId, subjectRecordId] = scopeArguments(command);
   return runStorage(async () => {
     const row = requireOne(
       await transaction.query<DraftResultRow>`
         select outcome, result
         from vortex_page.read_private_form_draft(
-          ${command.data.formId}::uuid,
+          ${command.formId}::uuid,
           ${flowId}::uuid,
           ${nodeId}::uuid,
           ${subjectRecordId}::uuid
@@ -164,37 +164,36 @@ export const readPrivateFormDraft = async (
       throw new PrivateFormDraftError("INVALID_PRIVATE_FORM_DRAFT_STORAGE_RESULT");
     return {
       outcome: "available",
-      draft: projectPrivateFormDraft(parseDraft(row.result), command.data.projection),
+      draft: projectPrivateFormDraft(parseDraft(row.result), projection),
     };
   });
 };
 
-/** Compare-and-updates one draft at its exact current revision; a stale revision is refused. */
+/**
+ * Compare-and-updates one draft at its exact current revision with only the
+ * permitted values; a stale revision is refused.
+ */
 export const updatePrivateFormDraft = async (
   transaction: RequestDatabaseTransaction,
   commandCandidate: UpdatePrivateFormDraftCommand,
+  projection: PrivateFormDraftProjection,
 ): Promise<PrivateFormDraftUpdateResult> => {
-  const command = updatePrivateFormDraftCommandSchema.safeParse(commandCandidate);
-  if (!command.success)
-    throw new PrivateFormDraftError("INVALID_PRIVATE_FORM_DRAFT_COMMAND", { cause: command.error });
-  const [flowId, nodeId, subjectRecordId] = scopeArguments(
-    command.data.flowId,
-    command.data.nodeId,
-    command.data.subjectRecordId,
-  );
+  const command = parseCommand(updatePrivateFormDraftCommandSchema, commandCandidate);
+  const input = restrictPrivateFormDraftInput(command, projection);
+  const [flowId, nodeId, subjectRecordId] = scopeArguments(command);
   return runStorage(async () => {
     const row = requireOne(
       await transaction.query<DraftResultRow>`
         select outcome, result
         from vortex_page.update_private_form_draft(
-          ${command.data.draftId}::uuid,
-          ${command.data.expectedRevision}::bigint,
-          ${command.data.formId}::uuid,
+          ${command.draftId}::uuid,
+          ${command.expectedRevision}::bigint,
+          ${command.formId}::uuid,
           ${flowId}::uuid,
           ${nodeId}::uuid,
           ${subjectRecordId}::uuid,
-          ${JSON.stringify(command.data.values)}::text::jsonb,
-          ${JSON.stringify(command.data.validation)}::text::jsonb
+          ${JSON.stringify(input.values)}::text::jsonb,
+          ${JSON.stringify(input.validation)}::text::jsonb
         )
       `,
     );
@@ -203,25 +202,23 @@ export const updatePrivateFormDraft = async (
     if (row.outcome === "stale_installation") return { outcome: "stale_installation" };
     if (row.outcome !== "updated")
       throw new PrivateFormDraftError("INVALID_PRIVATE_FORM_DRAFT_STORAGE_RESULT");
-    return { outcome: "updated", draft: parseDraft(row.result) };
+    return { outcome: "updated", draft: projectPrivateFormDraft(parseDraft(row.result), projection) };
   });
 };
 
-/** Abandons exactly the owned active draft at its expected revision. */
+/** Abandons and deletes exactly the owned live draft at its expected revision; no values are returned. */
 export const abandonPrivateFormDraft = async (
   transaction: RequestDatabaseTransaction,
   commandCandidate: AbandonPrivateFormDraftCommand,
 ): Promise<PrivateFormDraftAbandonResult> => {
-  const command = abandonPrivateFormDraftCommandSchema.safeParse(commandCandidate);
-  if (!command.success)
-    throw new PrivateFormDraftError("INVALID_PRIVATE_FORM_DRAFT_COMMAND", { cause: command.error });
+  const command = parseCommand(abandonPrivateFormDraftCommandSchema, commandCandidate);
   return runStorage(async () => {
     const row = requireOne(
       await transaction.query<DraftResultRow>`
         select outcome, result
         from vortex_page.abandon_private_form_draft(
-          ${command.data.draftId}::uuid,
-          ${command.data.expectedRevision}::bigint
+          ${command.draftId}::uuid,
+          ${command.expectedRevision}::bigint
         )
       `,
     );
@@ -233,7 +230,7 @@ export const abandonPrivateFormDraft = async (
   });
 };
 
-/** Expires at most `limit` untouched drafts. Runs without a human draft scope. */
+/** Deletes at most `limit` of the current organisation's untouched expired drafts. */
 export const expirePrivateFormDrafts = async (
   transaction: RequestDatabaseTransaction,
   limit = 500,
@@ -251,90 +248,156 @@ export const expirePrivateFormDrafts = async (
   });
 };
 
-export type PrivateFormDraftServiceDependencies = HumanOrganizationRequestDependencies;
+/**
+ * What the server currently allows for one exact installed form: the access
+ * declaration that governs filling it and the projection of fields and choices
+ * the person may store and read back now.
+ */
+export type PrivateFormDraftAuthority = Readonly<{
+  access: OrganizationAccessDeclaration;
+  projection: PrivateFormDraftProjection;
+}>;
 
 /**
- * Session-facing service. Every operation verifies the session and selection,
- * re-establishes the exact declared access, then runs the storage-bound
- * repository under that same protected request. `undefined` (or the explicit
- * refusal outcome) means current access refused the operation.
+ * Server-side source of draft authority. It resolves the exact form, flow and
+ * node from the active installed release of the request's application, inside
+ * the same protected transaction, and returns `undefined` when that release
+ * does not declare them, so a draft is never resumed against a changed form.
+ */
+export interface PrivateFormDraftAuthorityAdapter {
+  load(
+    transaction: RequestDatabaseTransaction,
+    scope: SelectedOrganizationScope,
+    form: PrivateFormDraftScope,
+  ): Promise<PrivateFormDraftAuthority | undefined>;
+}
+
+export type PrivateFormDraftServiceDependencies = HumanOrganizationRequestDependencies &
+  Readonly<{ authority: PrivateFormDraftAuthorityAdapter }>;
+
+const formScope = (command: PrivateFormDraftScope): PrivateFormDraftScope => ({
+  formId: command.formId,
+  ...(command.flowId === undefined ? {} : { flowId: command.flowId }),
+  ...(command.nodeId === undefined ? {} : { nodeId: command.nodeId }),
+  ...(command.subjectRecordId === undefined ? {} : { subjectRecordId: command.subjectRecordId }),
+});
+
+/**
+ * Lets the protected request classify a storage refusal exactly as it does for
+ * every other service: an access or scope refusal is `unavailable`, anything
+ * else is `temporarily_unavailable`, and no database detail reaches the caller.
+ */
+const asProtectedRequest = async <Result>(operation: () => Promise<Result>): Promise<Result> => {
+  try {
+    return await operation();
+  } catch (error) {
+    if (
+      error instanceof PrivateFormDraftError &&
+      error.code === "PRIVATE_FORM_DRAFT_SCOPE_UNAVAILABLE" &&
+      error.cause !== undefined
+    )
+      throw error.cause;
+    throw error;
+  }
+};
+
+/**
+ * Session-facing service. Every operation validates its command before any
+ * request is opened, verifies the session and application selection, derives
+ * the exact form authority on the server, re-establishes current access, and
+ * only then runs the storage-bound repository under that same protected request.
  */
 export const createPrivateFormDraftService = (
   dependencies: PrivateFormDraftServiceDependencies,
 ) => {
   const requests = createHumanOrganizationRequestService(dependencies);
 
-  const accessAllowed = async (
+  const withAuthority = async <Result>(
     transaction: RequestDatabaseTransaction,
     scope: SelectedOrganizationScope,
-    accessCandidate: OrganizationAccessDeclaration,
-  ): Promise<boolean> => {
-    const access = organizationAccessDeclarationSchema.parse(accessCandidate);
+    form: PrivateFormDraftScope,
+    unavailable: Result,
+    operation: (projection: PrivateFormDraftProjection) => Promise<Result>,
+  ): Promise<Result> => {
+    const authority = await dependencies.authority.load(transaction, scope, formScope(form));
+    if (authority === undefined) return unavailable;
     const checked = await runOrganizationAccessOperation(
       transaction,
       scope,
-      access,
+      authority.access,
       async () => true,
     );
-    return checked.outcome === "completed";
+    if (checked.outcome !== "completed") return unavailable;
+    return asProtectedRequest(() => operation(authority.projection));
   };
 
   return Object.freeze({
-    create: (
+    async create(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
-      access: OrganizationAccessDeclaration,
-      command: CreatePrivateFormDraftCommand,
-    ): Promise<HumanOrganizationRequestResult<PrivateFormDraftCreateResult>> =>
-      requests.runChange<PrivateFormDraftCreateResult>(
-        session,
-        selection,
-        async (transaction, scope) =>
-          (await accessAllowed(transaction, scope, access))
-            ? createPrivateFormDraft(transaction, command)
-            : { outcome: "unavailable" },
-      ),
-    read: (
+      commandCandidate: CreatePrivateFormDraftCommand,
+    ): Promise<HumanOrganizationRequestResult<PrivateFormDraftCreateResult>> {
+      const command = parseCommand(createPrivateFormDraftCommandSchema, commandCandidate);
+      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      return requests.runChange(session, selection, (transaction, scope) =>
+        withAuthority<PrivateFormDraftCreateResult>(
+          transaction,
+          scope,
+          command,
+          { outcome: "unavailable" },
+          (projection) => createPrivateFormDraft(transaction, command, projection),
+        ),
+      );
+    },
+    async read(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
-      access: OrganizationAccessDeclaration,
-      command: ReadPrivateFormDraftCommand,
-    ): Promise<HumanOrganizationRequestResult<PrivateFormDraftReadResult>> =>
-      requests.run<PrivateFormDraftReadResult>(
-        session,
-        selection,
-        async (transaction, scope) =>
-          (await accessAllowed(transaction, scope, access))
-            ? readPrivateFormDraft(transaction, command)
-            : { outcome: "unavailable" },
-      ),
-    update: (
+      commandCandidate: ReadPrivateFormDraftCommand,
+    ): Promise<HumanOrganizationRequestResult<PrivateFormDraftReadResult>> {
+      const command = parseCommand(readPrivateFormDraftCommandSchema, commandCandidate);
+      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      return requests.run(session, selection, (transaction, scope) =>
+        withAuthority<PrivateFormDraftReadResult>(
+          transaction,
+          scope,
+          command,
+          { outcome: "unavailable" },
+          (projection) => readPrivateFormDraft(transaction, command, projection),
+        ),
+      );
+    },
+    async update(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
-      access: OrganizationAccessDeclaration,
-      command: UpdatePrivateFormDraftCommand,
-    ): Promise<HumanOrganizationRequestResult<PrivateFormDraftUpdateResult>> =>
-      requests.runChange<PrivateFormDraftUpdateResult>(
-        session,
-        selection,
-        async (transaction, scope) =>
-          (await accessAllowed(transaction, scope, access))
-            ? updatePrivateFormDraft(transaction, command)
-            : { outcome: "unavailable" },
-      ),
-    abandon: (
+      commandCandidate: UpdatePrivateFormDraftCommand,
+    ): Promise<HumanOrganizationRequestResult<PrivateFormDraftUpdateResult>> {
+      const command = parseCommand(updatePrivateFormDraftCommandSchema, commandCandidate);
+      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      return requests.runChange(session, selection, (transaction, scope) =>
+        withAuthority<PrivateFormDraftUpdateResult>(
+          transaction,
+          scope,
+          command,
+          { outcome: "unavailable" },
+          (projection) => updatePrivateFormDraft(transaction, command, projection),
+        ),
+      );
+    },
+    /**
+     * Abandoning deletes the person's own draft and returns no values, so it
+     * needs only the verified request, not current form access: a person can
+     * always discard their own input, even after access or the form changed.
+     */
+    async abandon(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
-      access: OrganizationAccessDeclaration,
-      command: AbandonPrivateFormDraftCommand,
-    ): Promise<HumanOrganizationRequestResult<PrivateFormDraftAbandonResult>> =>
-      requests.runChange<PrivateFormDraftAbandonResult>(
-        session,
-        selection,
-        async (transaction, scope) =>
-          (await accessAllowed(transaction, scope, access))
-            ? abandonPrivateFormDraft(transaction, command)
-            : { outcome: "unavailable" },
-      ),
+      commandCandidate: AbandonPrivateFormDraftCommand,
+    ): Promise<HumanOrganizationRequestResult<PrivateFormDraftAbandonResult>> {
+      const command = parseCommand(abandonPrivateFormDraftCommandSchema, commandCandidate);
+      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      return requests.runChange(session, selection, (transaction) =>
+        asProtectedRequest(() => abandonPrivateFormDraft(transaction, command)),
+      );
+    },
   });
 };
