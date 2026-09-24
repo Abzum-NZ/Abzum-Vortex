@@ -155,29 +155,62 @@ flowchart TD
 
 ## Scheduled time-based calculations
 
-A calculation that determines whether a named deadline has passed is evaluated
-when the value is read, not stored and refreshed by a background worker. The read
-uses the record's own stored inputs—the deadline and the explicitly listed
-terminal status values—together with the statement time, so an overdue record is
-correct at every read without a person editing it and without a recalculation
-running first. Detail views, list filters, sorting, grouping/aggregation, exports
-and MCP evaluate the same expression the same way; one statement uses one read
-time so its rows are internally consistent, and no read is refused for pending
-freshness.
+A value that depends on the current time, such as whether a named deadline has
+passed, is a read-time computed field ([Decision 4](../../build-plan/architecture-decisions-2026-09-25.md#decision-4--formulas-and-read-time-computed-fields)).
+It is a [formula](frontend-rule-designer.md#formulas) that uses `now`, and it is
+computed whenever the record is read. It is never stored, and no background
+worker, due-time metadata or recalculation refreshes it. The first release's
+read-time form is the deadline-passed calculation in
+[05](../05-modules-fields-and-relationships.md#calculations-and-totals): it reads
+the record's stored deadline and status and the explicitly listed terminal status
+values, so an overdue record is correct at every read without a person editing it.
+Neither a person, an agent nor a flow can submit a read-time value on save.
 
-Relationship totals never depend on a deadline-passed value. A total aggregates
-stored related inputs, so a deadline-passed calculation cannot be a total's
-aggregate source or a dependency of one, and publication refuses that dependency.
-Ordinary non-time-based calculations and totals remain save-driven.
+Detail views, list filters, sorting, grouping and query-time aggregation,
+exports and MCP evaluate the same formula. A filterable or sortable read-time
+field compiles to SQL inside the authorised query, so filtering, sorting and
+paging run over every matching record rather than over an already-selected page.
+One statement uses one statement timestamp in the organisation's time zone, which
+also decides the current date for a date-only deadline, so the rows it returns
+agree with each other. No read waits for, or is refused because of, pending
+freshness. The value is disclosed only when the field and its inputs are readable
+to the viewer, like any other calculated field. Components display the value the
+engine returns and never compute it themselves. Queries that use a read-time
+field bypass the data-result cache
+([17](../17-runtime-storage-and-caching.md#cache-model)), because the value changes
+without any data change.
 
-An overdue escalation is a scheduled durable workflow, not a stored value. A
-deadline-driven escalation event or pipeline time target starts its published
-[Kestra flow](../09-workflows-and-pipelines.md) through the ordinary protected
-workflow-start path; Kestra owns the schedule and is authoritative for whether
-the run occurred. Escalation does not introduce a separate Vortex recalculation
-engine, a stored deadline-passed value, a background worker or one deployed flow
-per record. Installation registers and verifies the application's exact
-schedules, an explicit upgrade or rollback activates the matching revision, and
-detaching or uninstalling deactivates them without erasing completed runs.
-Duplicate protection follows the published trigger and installation revision, so
-a retry converges on the same escalation rather than starting another.
+Stored values never depend on a read-time field. A calculation that uses a
+read-time field is itself read-time. A relationship total is stored, so
+publication refuses a total whose aggregate source, aggregate-source filter or
+dependency chain includes a read-time field. Calculations and totals that do not
+depend on the current time remain stored and save-driven.
+
+An overdue escalation is an ordinary flow with a `Schedule` trigger and `durable`
+execution, not a stored value
+([Decision 1](../../build-plan/architecture-decisions-2026-09-25.md#decision-1--one-flow-definition-one-vortex-flow-engine-kestra-for-durable-work)).
+It belongs to the release of the module or application that owns it; the platform
+provides no managed escalation flow. Kestra runs the schedule and is
+authoritative for whether an occurrence ran. Each occurrence queries the records
+whose read-time value shows them overdue and acts on them through protected
+tasks that call back into Vortex, where access is rechecked before every task.
+The flow runs as the specified account or System that it declares, through a
+scoped [execution grant](frontend-rule-designer.md#run-as); it never borrows the
+authority of the person who last saved a record. Duplicate protection is keyed by
+occurrence, installation revision, flow, task path and iteration, so a retried
+occurrence repeats no effect. An escalation that must happen once per record
+states that in the flow, for example by filtering on a stored escalation field
+that the flow sets through apply record changes; the platform keeps no hidden
+per-record escalation state. An overdue record is escalated at the first scheduled
+occurrence after its deadline, while the read-time value is exact at every read.
+
+Escalation schedules follow the ordinary
+[installation, upgrade and uninstallation](application-packages.md#installation)
+lifecycle ([09](../09-workflows-and-pipelines.md)). Installation registers them in
+Kestra as inactive and enables them only after the installation revision is
+activated. An upgrade or explicit rollback enables the matching revision's
+schedules and disables superseded ones, and every scheduled start rechecks that
+its exact installation revision is still active. Uninstallation stops new
+scheduled starts while draining and then removes the schedules with the
+installation's other Kestra registrations. There is no second scheduler, no
+separate Vortex recalculation engine and no deployed flow per record.
