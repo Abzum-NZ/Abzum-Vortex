@@ -156,14 +156,13 @@ export const tenantAdministrationApplication: ApplicationSourceDocumentV2 =
           home_page: "tenant_overview",
           permissions: [
             "application.tenant_administration.open",
-            "application.tenant_administration.manage",
             "vortex.tenant_administration.organization_lifecycle_request.create",
             "vortex.tenant_administration.organization_lifecycle_request.read",
             "vortex.tenant_administration.organization_lifecycle_request.update",
             "vortex.tenant_administration.organization_lifecycle_request.soft_delete",
             "vortex.tenant_administration.organization_lifecycle_request.restore",
             "vortex.tenant_administration.organization_lifecycle_request.export",
-            "vortex.tenant_administration.organization_lifecycle_request.apply",
+            "vortex.tenant_administration.organization_lifecycle_request.submit",
           ],
         },
       ],
@@ -321,9 +320,12 @@ export const tenantAdministrationApplication: ApplicationSourceDocumentV2 =
             content: {
               slot_primary: slot(
                 "requests_table",
-                placement(TABLE_BLOCK_RELEASE, {
-                  title: { kind: "text", value: "Organisation lifecycle requests" },
-                }),
+                {
+                  ...placement(TABLE_BLOCK_RELEASE, {
+                    title: { kind: "text", value: "Organisation lifecycle requests" },
+                  }),
+                  query: "organization_lifecycle_requests",
+                },
               ),
             },
           },
@@ -331,11 +333,11 @@ export const tenantAdministrationApplication: ApplicationSourceDocumentV2 =
         {
           id: "page_record_lifecycle_request",
           key: "record_lifecycle_request",
-          name: "Record organisation lifecycle request",
+          name: "Submit organisation lifecycle request",
           type: "form",
           record_type: "vortex.tenant_administration:organization_lifecycle_request",
-          permission: "vortex.tenant_administration.organization_lifecycle_request.create",
-          commit_action: "vortex.tenant_administration.organization_lifecycle_request.apply",
+          permission: "vortex.tenant_administration.organization_lifecycle_request.submit",
+          commit_action: "vortex.tenant_administration.organization_lifecycle_request.submit",
           states: formStates,
           composition: {
             shell_kind: "application",
@@ -345,7 +347,7 @@ export const tenantAdministrationApplication: ApplicationSourceDocumentV2 =
                 "request_form",
                 placement(
                   FORM_CONTAINER_BLOCK_RELEASE,
-                  { title: { kind: "text", value: "Record organisation lifecycle request" } },
+                  { title: { kind: "text", value: "Submit organisation lifecycle request" } },
                   {
                     content: slot(
                       "request_reason",

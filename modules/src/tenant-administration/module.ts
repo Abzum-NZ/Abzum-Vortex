@@ -1,15 +1,14 @@
 import { moduleSourceDocumentSchema, type ModuleSourceDocument } from "@vortex/contracts";
 
-const recordFields = [
+const editableRecordFields = [
   "subject_display_name",
   "change_kind",
   "requested_display_name",
   "requested_parent_reference",
   "reason",
-  "state",
 ] as const;
 
-const allRecordFields = [...recordFields];
+const allRecordFields = [...editableRecordFields, "state"];
 
 /**
  * Ordinary, application-contained records that capture an organisation lifecycle
@@ -38,7 +37,7 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
         storage_scope: "application_contained",
         ownership_mode: "none",
         standard_actions: ["create", "read", "update", "soft_delete", "restore", "export"],
-        custom_actions: ["act_record_organization_lifecycle_request"],
+        custom_actions: ["act_submit_organization_lifecycle_request"],
         fields: [
           {
             id: "fld_lifecycle_subject",
@@ -131,8 +130,6 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
               options: [
                 { value: "draft", label: "Draft" },
                 { value: "submitted", label: "Submitted" },
-                { value: "applied", label: "Applied" },
-                { value: "refused", label: "Refused" },
               ],
             },
             default: "draft",
@@ -153,7 +150,7 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
         record_scope: { routes: [{ kind: "all_records" }] },
         field_policy: {
           readable_fields: allRecordFields,
-          changeable_fields: allRecordFields,
+          changeable_fields: [...editableRecordFields],
         },
       },
       {
@@ -178,7 +175,7 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
         record_scope: { routes: [{ kind: "all_records" }] },
         field_policy: {
           readable_fields: allRecordFields,
-          changeable_fields: allRecordFields,
+          changeable_fields: [...editableRecordFields],
         },
       },
       {
@@ -215,13 +212,13 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
         field_policy: { readable_fields: allRecordFields, changeable_fields: [] },
       },
       {
-        id: "perm_lifecycle_apply",
-        key: "vortex.tenant_administration.organization_lifecycle_request.apply",
-        label: "Record organisation lifecycle request",
+        id: "perm_lifecycle_submit",
+        key: "vortex.tenant_administration.organization_lifecycle_request.submit",
+        label: "Submit organisation lifecycle request",
         description: "Allows recording a lifecycle request reason and submitting it for review.",
         record_type: "organization_lifecycle_request",
         action_kind: "named",
-        named_action: "apply",
+        named_action: "submit",
         administrative: false,
         record_scope: { routes: [{ kind: "all_records" }] },
         field_policy: { readable_fields: ["reason", "state"], changeable_fields: ["reason", "state"] },
@@ -229,19 +226,20 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
     ],
     actions: [
       {
-        id: "act_record_organization_lifecycle_request",
-        key: "vortex.tenant_administration.organization_lifecycle_request.apply",
-        label: "Record organisation lifecycle request",
+        id: "act_submit_organization_lifecycle_request",
+        key: "vortex.tenant_administration.organization_lifecycle_request.submit",
+        label: "Submit organisation lifecycle request",
         record_type: "organization_lifecycle_request",
-        permission: "vortex.tenant_administration.organization_lifecycle_request.apply",
+        permission: "vortex.tenant_administration.organization_lifecycle_request.submit",
         shareable: false,
+        precondition: { field: "state", operator: "equals", value: "draft" },
         inputs: [
           {
             key: "reason",
             label: "Reason",
             required: true,
             type: "text",
-            validation: { max_length: 1_000 },
+            validation: { maximum_length: 1_000 },
           },
         ],
         effects: [
