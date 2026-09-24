@@ -1,0 +1,726 @@
+{
+  "source_contract_version": "3.0.0",
+  "root_alias": "mod_operations_incidents",
+  "key": "vortex.operations.incidents",
+  "kind": "module",
+  "body": {
+    "name": "Operations Incidents",
+    "description": "Operational incident records for the Operations application. Content-free operational evidence only: timeline, scope, containment, recovery, evidence, communication, cause and follow-up. No customer content.",
+    "dependencies": [],
+    "record_types": [
+      {
+        "id": "rt_operations_incident",
+        "key": "incident",
+        "name": "Incident",
+        "plural_name": "Incidents",
+        "title_field": "incident_number",
+        "storage_contract_id": "srt_operations_incident",
+        "storage_scope": "application_contained",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore",
+          "export"
+        ],
+        "custom_actions": [
+          "act_incident_attach"
+        ],
+        "fields": [
+          {
+            "id": "fld_incident_number",
+            "key": "incident_number",
+            "label": "Incident number",
+            "required": true,
+            "unique": true,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "reference_number",
+            "settings": {
+              "prefix": "INC-",
+              "digits": 7
+            }
+          },
+          {
+            "id": "fld_incident_code",
+            "key": "code",
+            "label": "Code",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 120
+            }
+          },
+          {
+            "id": "fld_incident_severity",
+            "key": "severity",
+            "label": "Severity",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "warning",
+                  "label": "Warning"
+                },
+                {
+                  "value": "error",
+                  "label": "Error"
+                },
+                {
+                  "value": "critical",
+                  "label": "Critical"
+                }
+              ]
+            },
+            "default": "error"
+          },
+          {
+            "id": "fld_incident_service",
+            "key": "affected_service",
+            "label": "Affected service",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 120
+            }
+          },
+          {
+            "id": "fld_incident_deduplication_key",
+            "key": "deduplication_key",
+            "label": "Deduplication key",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 200
+            }
+          },
+          {
+            "id": "fld_incident_owning_role",
+            "key": "owning_role",
+            "label": "Owning role",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 40
+            }
+          },
+          {
+            "id": "fld_incident_runbook_reference",
+            "key": "runbook_reference",
+            "label": "Runbook reference",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 120
+            }
+          },
+          {
+            "id": "fld_incident_timeline",
+            "key": "timeline",
+            "label": "Timeline",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "formatted_text",
+            "settings": {
+              "allowed_blocks": [
+                "paragraph",
+                "heading",
+                "list",
+                "link"
+              ]
+            }
+          },
+          {
+            "id": "fld_incident_scope",
+            "key": "scope",
+            "label": "Scope",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "formatted_text",
+            "settings": {
+              "allowed_blocks": [
+                "paragraph",
+                "heading",
+                "list",
+                "link"
+              ]
+            }
+          },
+          {
+            "id": "fld_incident_containment",
+            "key": "containment",
+            "label": "Containment",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "formatted_text",
+            "settings": {
+              "allowed_blocks": [
+                "paragraph",
+                "heading",
+                "list",
+                "link"
+              ]
+            }
+          },
+          {
+            "id": "fld_incident_recovery",
+            "key": "recovery",
+            "label": "Recovery",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "formatted_text",
+            "settings": {
+              "allowed_blocks": [
+                "paragraph",
+                "heading",
+                "list",
+                "link"
+              ]
+            }
+          },
+          {
+            "id": "fld_incident_evidence",
+            "key": "evidence",
+            "label": "Evidence",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "formatted_text",
+            "settings": {
+              "allowed_blocks": [
+                "paragraph",
+                "heading",
+                "list",
+                "link"
+              ]
+            }
+          },
+          {
+            "id": "fld_incident_communication",
+            "key": "communication",
+            "label": "Communication",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "formatted_text",
+            "settings": {
+              "allowed_blocks": [
+                "paragraph",
+                "heading",
+                "list",
+                "link"
+              ]
+            }
+          },
+          {
+            "id": "fld_incident_cause",
+            "key": "cause",
+            "label": "Cause",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "formatted_text",
+            "settings": {
+              "allowed_blocks": [
+                "paragraph",
+                "heading",
+                "list",
+                "link"
+              ]
+            }
+          },
+          {
+            "id": "fld_incident_follow_up",
+            "key": "follow_up",
+            "label": "Follow-up work",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "formatted_text",
+            "settings": {
+              "allowed_blocks": [
+                "paragraph",
+                "heading",
+                "list",
+                "link"
+              ]
+            }
+          },
+          {
+            "id": "fld_incident_state",
+            "key": "state",
+            "label": "State",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "open",
+                  "label": "Open"
+                },
+                {
+                  "value": "acknowledged",
+                  "label": "Acknowledged"
+                },
+                {
+                  "value": "contained",
+                  "label": "Contained"
+                },
+                {
+                  "value": "recovering",
+                  "label": "Recovering"
+                },
+                {
+                  "value": "resolved",
+                  "label": "Resolved"
+                },
+                {
+                  "value": "closed",
+                  "label": "Closed"
+                }
+              ]
+            },
+            "default": "open"
+          },
+          {
+            "id": "fld_incident_opened_at",
+            "key": "opened_at",
+            "label": "Opened at",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "date_time",
+            "settings": {
+              "display_time_zone": "organisation"
+            }
+          }
+        ],
+        "relationships": []
+      }
+    ],
+    "permissions": [
+      {
+        "id": "perm_incident_create",
+        "key": "vortex.operations.incidents.incident.create",
+        "label": "Create incident",
+        "description": "Allows the standard create operation for incidents.",
+        "record_type": "incident",
+        "action_kind": "create",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "incident_number",
+            "code",
+            "severity",
+            "affected_service",
+            "deduplication_key",
+            "owning_role",
+            "runbook_reference",
+            "timeline",
+            "scope",
+            "containment",
+            "recovery",
+            "evidence",
+            "communication",
+            "cause",
+            "follow_up",
+            "state",
+            "opened_at"
+          ],
+          "changeable_fields": [
+            "code",
+            "severity",
+            "affected_service",
+            "deduplication_key",
+            "owning_role",
+            "runbook_reference",
+            "timeline",
+            "scope",
+            "containment",
+            "recovery",
+            "evidence",
+            "communication",
+            "cause",
+            "follow_up"
+          ]
+        }
+      },
+      {
+        "id": "perm_incident_read",
+        "key": "vortex.operations.incidents.incident.read",
+        "label": "Read incident",
+        "description": "Allows the standard read operation for incidents.",
+        "record_type": "incident",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "incident_number",
+            "code",
+            "severity",
+            "affected_service",
+            "deduplication_key",
+            "owning_role",
+            "runbook_reference",
+            "timeline",
+            "scope",
+            "containment",
+            "recovery",
+            "evidence",
+            "communication",
+            "cause",
+            "follow_up",
+            "state",
+            "opened_at"
+          ],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_incident_update",
+        "key": "vortex.operations.incidents.incident.update",
+        "label": "Update incident",
+        "description": "Allows the standard update operation for incidents.",
+        "record_type": "incident",
+        "action_kind": "update",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "incident_number",
+            "code",
+            "severity",
+            "affected_service",
+            "deduplication_key",
+            "owning_role",
+            "runbook_reference",
+            "timeline",
+            "scope",
+            "containment",
+            "recovery",
+            "evidence",
+            "communication",
+            "cause",
+            "follow_up",
+            "state",
+            "opened_at"
+          ],
+          "changeable_fields": [
+            "code",
+            "severity",
+            "affected_service",
+            "deduplication_key",
+            "owning_role",
+            "runbook_reference",
+            "timeline",
+            "scope",
+            "containment",
+            "recovery",
+            "evidence",
+            "communication",
+            "cause",
+            "follow_up"
+          ]
+        }
+      },
+      {
+        "id": "perm_incident_soft_delete",
+        "key": "vortex.operations.incidents.incident.soft_delete",
+        "label": "Remove incident",
+        "description": "Allows the standard soft-delete operation for incidents.",
+        "record_type": "incident",
+        "action_kind": "delete",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_incident_restore",
+        "key": "vortex.operations.incidents.incident.restore",
+        "label": "Restore incident",
+        "description": "Allows the standard restore operation for incidents.",
+        "record_type": "incident",
+        "action_kind": "restore",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_incident_export",
+        "key": "vortex.operations.incidents.incident.export",
+        "label": "Export incident",
+        "description": "Allows the standard export operation for incidents.",
+        "record_type": "incident",
+        "action_kind": "export",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "incident_number",
+            "code",
+            "severity",
+            "affected_service",
+            "deduplication_key",
+            "owning_role",
+            "runbook_reference",
+            "timeline",
+            "scope",
+            "containment",
+            "recovery",
+            "evidence",
+            "communication",
+            "cause",
+            "follow_up",
+            "state",
+            "opened_at"
+          ],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_incident_attach",
+        "key": "vortex.operations.incidents.incident.attach",
+        "label": "Attach a signal to an incident",
+        "description": "Allows the named attach operation to record a signal's deduplication key and evidence on an incident.",
+        "record_type": "incident",
+        "action_kind": "named",
+        "named_action": "attach",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "deduplication_key",
+            "evidence",
+            "state"
+          ],
+          "changeable_fields": [
+            "deduplication_key",
+            "evidence"
+          ]
+        }
+      }
+    ],
+    "actions": [
+      {
+        "id": "act_incident_attach",
+        "key": "vortex.operations.incidents.incident.attach",
+        "label": "Attach to incident",
+        "record_type": "incident",
+        "permission": "vortex.operations.incidents.incident.attach",
+        "shareable": false,
+        "inputs": [
+          {
+            "key": "deduplication_key",
+            "label": "Deduplication key",
+            "required": true,
+            "type": "text",
+            "validation": {
+              "maximum_length": 200
+            }
+          },
+          {
+            "key": "evidence",
+            "label": "Evidence",
+            "required": true,
+            "type": "formatted_text"
+          }
+        ],
+        "effects": [
+          {
+            "kind": "set_field",
+            "field": "deduplication_key",
+            "value": {
+              "source": "input",
+              "input": "deduplication_key"
+            }
+          },
+          {
+            "kind": "set_field",
+            "field": "evidence",
+            "value": {
+              "source": "input",
+              "input": "evidence"
+            }
+          },
+          {
+            "kind": "announce_event",
+            "event": "vortex.operations.incidents.incident.attached"
+          }
+        ]
+      }
+    ],
+    "events": [
+      {
+        "id": "evt_incident_created",
+        "key": "vortex.operations.incidents.incident.created",
+        "record_type": "incident",
+        "carries": [
+          "incident_number",
+          "code",
+          "severity"
+        ],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "evt_incident_attached",
+        "key": "vortex.operations.incidents.incident.attached",
+        "record_type": "incident",
+        "carries": [
+          "incident_number",
+          "deduplication_key"
+        ],
+        "personal_or_sensitive_values_allowed": false
+      }
+    ],
+    "rules": [],
+    "extension_points": [
+      {
+        "id": "ext_incident_fields",
+        "key": "incident_fields",
+        "record_type": "incident",
+        "accepts": [
+          "field"
+        ]
+      },
+      {
+        "id": "ext_incident_actions",
+        "key": "incident_actions",
+        "record_type": "incident",
+        "accepts": [
+          "action"
+        ]
+      }
+    ],
+    "sharing_conditions": [],
+    "queries": []
+  }
+}
