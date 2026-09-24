@@ -7,6 +7,8 @@ import {
   connectionTypeSourceDocumentSchema,
   platformBlockReferenceV2Schema,
   platformBlockReleaseV2Schema,
+  PLATFORM_SERVICE_OPERATION_RELEASES,
+  PLATFORM_SERVICE_OPERATIONS,
   platformIdSchema,
   platformThemeReleaseV2Schema,
   platformManagedFlowDependencySchema,
@@ -195,6 +197,33 @@ const ensureUniqueApplicationCompositionReleases = (
   }
 };
 
+/**
+ * The registered platform-service operations are published exactly as registered: each release's
+ * content fingerprint must be the canonical-JSON SHA-256 of its descriptor and its catalogue
+ * fingerprint that of its identity and content, so a descriptor edited without a new release
+ * refuses instead of silently changing what an Application published against.
+ */
+const ensureRegisteredPlatformServiceOperationsAuthentic = (): void => {
+  for (const { release, descriptor } of Object.values(PLATFORM_SERVICE_OPERATIONS)) {
+    const contentFingerprint = fingerprintCanonicalValue(descriptor);
+    if (
+      descriptor.operation.owner.kind !== "platform_service" ||
+      descriptor.operation.owner.serviceId !== release.serviceId ||
+      descriptor.operation.operationId !== release.operationId ||
+      release.contentFingerprint !== contentFingerprint ||
+      release.catalogueFingerprint !==
+        fingerprintCanonicalValue({
+          kind: "platform_service_operation",
+          serviceId: release.serviceId,
+          operationId: release.operationId,
+          releaseVersion: release.releaseVersion,
+          contentFingerprint,
+        })
+    )
+      duplicate();
+  }
+};
+
 const compileConnectionTypeRelease = (
   definition: PlatformConnectionTypeReleaseDefinition,
 ): ResolvableConnectionTypeRelease => {
@@ -309,7 +338,11 @@ export const createImmutableDefinitionPublicationCatalogue = (
     managedFlowReleases.map((release) => `${release.flowId}:${release.releaseVersion}`),
   );
   if (managedFlowIdentities.size !== managedFlowReleases.length) duplicate();
-  const operationReleases = definition.platformServiceOperationReleases ?? [];
+  ensureRegisteredPlatformServiceOperationsAuthentic();
+  const operationReleases = [
+    ...PLATFORM_SERVICE_OPERATION_RELEASES,
+    ...(definition.platformServiceOperationReleases ?? []),
+  ];
   const operationIdentities = new Set(
     operationReleases.map(
       (release) => `${release.serviceId}:${release.operationId}:${release.releaseVersion}`,
