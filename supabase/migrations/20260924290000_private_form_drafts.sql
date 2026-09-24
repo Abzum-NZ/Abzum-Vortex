@@ -82,18 +82,21 @@ as $function$
         select 1
         from pg_catalog.jsonb_each(p_validation) as supplied(key, value)
         where not vortex_page.private_form_draft_key_is_valid(supplied.key)
-          or pg_catalog.jsonb_typeof(supplied.value) <> 'object'
-          or supplied.value ->> 'state' is null
-          or supplied.value ->> 'state' not in ('valid', 'invalid', 'incomplete')
-          or (supplied.value - array['state', 'reasonCode']) <> '{}'::jsonb
-          or (
-            supplied.value ? 'reasonCode'
-            and (
-              pg_catalog.jsonb_typeof(supplied.value -> 'reasonCode') <> 'string'
-              or pg_catalog.length(supplied.value ->> 'reasonCode') > 120
-              or supplied.value ->> 'reasonCode' !~ '^[a-z][a-z0-9_]*$'
-            )
-          )
+          or case
+            when pg_catalog.jsonb_typeof(supplied.value) <> 'object' then true
+            else supplied.value ->> 'state' is null
+              or supplied.value ->> 'state' not in ('valid', 'invalid', 'incomplete')
+              or (supplied.value - array['state', 'reasonCode']) <> '{}'::jsonb
+              or (
+                supplied.value ? 'reasonCode'
+                and case
+                  when pg_catalog.jsonb_typeof(supplied.value -> 'reasonCode') <> 'string'
+                    then true
+                  else pg_catalog.length(supplied.value ->> 'reasonCode') > 120
+                    or supplied.value ->> 'reasonCode' !~ '^[a-z][a-z0-9_]*$'
+                end
+              )
+          end
       )
   end
 $function$;
@@ -267,7 +270,8 @@ begin
     or (installation ->> 'organizationId')::uuid
       is distinct from (checked ->> 'organizationId')::uuid
     or (installation ->> 'applicationRootId')::uuid is distinct from selected_application_root_id
-    or pg_catalog.jsonb_typeof(installation -> 'applicationReleaseRevision') <> 'number'
+    or pg_catalog.jsonb_typeof(installation -> 'applicationReleaseRevision')
+      is distinct from 'number'
     or not vortex_context.is_non_nil_uuid(checked ->> 'correlationId') then
     raise exception using errcode = '42501',
       message = 'Private form draft scope is unavailable';
