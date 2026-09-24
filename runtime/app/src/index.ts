@@ -8,6 +8,7 @@ import { projectFlowResultHandoff } from "./flow-result-handoff";
 import { createApplicationInstallationCoordinator } from "./installation-coordinator";
 import { createInstalledRuntimeContextLoader } from "./installed-runtime-context";
 import { createOperationsAlertSink, readOpenOperationsAlertSignals } from "./operations-alert-sink";
+import { createProtectedOperationExecutor } from "./protected-operation-executor";
 import { createAppTelemetryCollector } from "./telemetry";
 
 export {
@@ -114,6 +115,17 @@ export {
   type IdentityDisablementRequest,
 } from "./identity-disablement";
 
+export {
+  createProtectedOperationExecutor,
+  protectedOperationIdentitySchema,
+  type ProtectedOperationExecution,
+  type ProtectedOperationExecutionRequest,
+  type ProtectedOperationExecutor,
+  type ProtectedOperationExecutorDependencies,
+  type ProtectedOperationIdentity,
+  type ProtectedOperationValue,
+} from "./protected-operation-executor";
+
 export const AppService = Object.freeze({
   key: "app",
   boundary: "@vortex/app",
@@ -126,4 +138,5 @@ export const AppService = Object.freeze({
   createApplicationInstallationCoordinator,
   createInstalledRuntimeContextLoader,
   createIdentityDisablementCoordinator,
+  createProtectedOperationExecutor,
 });

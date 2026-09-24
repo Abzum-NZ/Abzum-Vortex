@@ -523,11 +523,6 @@ function conditionRootPaths(
       sourceRoot: ["body", "actions", first, "precondition"],
       canonicalRoot: ["content", "actions", first, "precondition"],
     });
-  if (collection === "rules")
-    fixedRoots.push({
-      sourceRoot: ["body", "rules", first, "condition"],
-      canonicalRoot: ["content", "rules", first, "condition"],
-    });
   if (collection === "sharing_conditions")
     fixedRoots.push({
       sourceRoot: ["body", "sharing_conditions", first, "condition"],
@@ -4529,61 +4524,6 @@ function compileApplication(
               return { kind: "announce_event", eventKey: effect.event };
             return { kind: "soft_delete_subject" };
           }),
-        };
-      }),
-      rules: (body.rules as JsonObject[]).map((rule) => {
-        const record = String(rule.record_type);
-        const localField = (alias: string) => resolution.field(record, alias);
-        const valueContext = valueIndex.record(record)?.moduleV2
-          ? valueIndex.context(record)
-          : undefined;
-        const effect = asObject(rule.effect);
-        const effectField =
-          effect.kind === "set_value"
-            ? valueIndex.fieldById(localField(String(effect.field)))?.field
-            : undefined;
-        const compiledEffect =
-          effect.kind === "set_value"
-            ? {
-                kind: "set_value",
-                fieldId: localField(String(effect.field)),
-                value: valueContext
-                  ? normaliseModuleFieldValueV2(effectField, effect.value, valueContext)
-                  : effect.value,
-              }
-            : effect.kind === "require"
-              ? { kind: "require", fieldId: localField(String(effect.field)) }
-              : effect.kind === "show_or_hide"
-                ? {
-                    kind: "show_or_hide",
-                    componentId: resolution.id(
-                      definitionKey,
-                      "block_placement",
-                      String(effect.component),
-                    ),
-                    visibility: effect.visibility,
-                  }
-                : effect.kind === "warn"
-                  ? { kind: "warn", messageKey: effect.message }
-                  : effect.kind === "start_background_work"
-                    ? {
-                        kind: "start_background_work",
-                        workflowId: resolution.id(
-                          definitionKey,
-                          "workflow",
-                          String(effect.workflow),
-                          "content",
-                        ),
-                      }
-                    : { kind: "refuse", reasonCode: effect.reason_code };
-        return {
-          ruleId: resolution.id(definitionKey, "rule", String(rule.id), "content"),
-          key: rule.key,
-          subjectRecordTypeId: resolution.recordType(record).recordTypeId,
-          trigger: rule.trigger,
-          condition: condition(rule.condition, localField, valueContext),
-          priority: rule.priority,
-          effect: compiledEffect,
         };
       }),
       events: (body.events as JsonObject[]).map((event) => {

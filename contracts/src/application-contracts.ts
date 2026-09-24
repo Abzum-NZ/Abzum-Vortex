@@ -13,7 +13,6 @@ import {
   actionDefinitionSchema,
   conditionNodeSchema,
   eventDefinitionSchema,
-  ruleDefinitionSchema,
 } from "./module-contracts";
 import { workflowDefinitionSchema } from "./automation-contracts";
 import { interfaceDefinitionSchema } from "./integration-contracts";
@@ -413,7 +412,6 @@ const applicationSharedContentSchema = z
     pipelines: z.array(pipelineSchema),
     permissions: z.array(permissionDeclarationSchema),
     actions: z.array(actionDefinitionSchema),
-    rules: z.array(ruleDefinitionSchema),
     events: z.array(eventDefinitionSchema),
     workflows: z.array(workflowDefinitionSchema),
     connectionBindings: z.array(applicationConnectionBindingSchema),
