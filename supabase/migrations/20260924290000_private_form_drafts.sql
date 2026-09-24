@@ -18,6 +18,13 @@ create schema if not exists vortex_page authorization postgres;
 revoke all on schema vortex_page from public, anon, authenticated, service_role;
 grant usage on schema vortex_page to vortex_request;
 
+alter default privileges for role postgres in schema vortex_page
+  revoke all on tables from public, anon, authenticated, service_role;
+alter default privileges for role postgres in schema vortex_page
+  revoke all on sequences from public, anon, authenticated, service_role;
+alter default privileges for role postgres in schema vortex_page
+  revoke execute on functions from public, anon, authenticated, service_role;
+
 -- A key is a permanent field identity (lower-case UUID, as the Page contract
 -- normalises it) or a declared record-free form input key.
 create function vortex_page.private_form_draft_key_is_valid(p_key text)
