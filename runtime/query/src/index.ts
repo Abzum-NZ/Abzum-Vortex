@@ -25,6 +25,7 @@ export {
 
 export {
   createProtectedQueryService,
+  type ProtectedQueryCacheContext,
   type ProtectedQueryServiceDependencies,
 } from "./protected-query-service";
 
