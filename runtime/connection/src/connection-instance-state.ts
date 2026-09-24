@@ -1,5 +1,7 @@
 import "server-only";
 
+import { timestampSchema } from "@vortex/contracts";
+
 export const connectionStateValues = ["pending", "active", "unhealthy", "revoked"] as const;
 export type ConnectionState = (typeof connectionStateValues)[number];
 
@@ -98,15 +100,23 @@ export function assertSafeIntegerRevision(rawRevision: unknown, contextMessage: 
  * unreadable expiry is refused rather than silently accepted as a live token.
  */
 export function assertFiniteTokenExpiry(rawExpiry: unknown): Date | null {
-  if (rawExpiry === null || rawExpiry === undefined || rawExpiry === "") {
+  if (rawExpiry === null) {
     return null;
   }
 
-  const parsed = rawExpiry instanceof Date ? rawExpiry : new Date(rawExpiry as string | number);
+  const timestamp = timestampSchema.safeParse(rawExpiry);
+  if (!timestamp.success) {
+    throw new ConnectionInstanceStateError(
+      "CONNECTION_TOKEN_INVALID",
+      "Connection token expiry is unreadable",
+    );
+  }
+
+  const parsed = new Date(timestamp.data);
   if (!Number.isFinite(parsed.getTime())) {
     throw new ConnectionInstanceStateError(
       "CONNECTION_TOKEN_INVALID",
-      `Connection token expiry is unreadable: ${String(rawExpiry)}`,
+      "Connection token expiry is unreadable",
     );
   }
   return parsed;
