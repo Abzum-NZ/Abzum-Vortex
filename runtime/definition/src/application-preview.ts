@@ -1,8 +1,11 @@
+import "server-only";
+
 import {
   applicationContentV2Schema,
   applicationRootIdSchema,
+  canonicalPlacementEntriesV2,
   revisionSchema,
-  type ApplicationCompilationOutputV2,
+  sessionContextSchema,
   type ApplicationContentV2,
   type ComponentFlowBinding,
   type ComponentSemanticEventKind,
@@ -10,16 +13,24 @@ import {
   type CurrentUserFlowNode,
   type FlowEffectKind,
   type FrontendFlowNodeTarget,
+  type SessionContext,
 } from "@vortex/contracts";
 import { z } from "zod";
+import { isLiveDefinitionSystemContext } from "./definition-consumer-read";
+import {
+  DefinitionPublicationError,
+  type ApplicationDraftCompilation,
+  type DefinitionPublicationFailureCode,
+} from "./definition-publication";
 
 /**
- * Exact-draft Application preview.
+ * Exact-draft Application preview (#597).
  *
- * Preview renders one exact application draft revision through the shared #580 renderer. It never
- * adopts or installs a release and never treats the installation as authority: the caller supplies
- * the draft compilation that belongs to the addressed root and revision, and the materialiser
- * proves the request, the draft identity and the rendered page agree before it emits an artifact.
+ * Preview renders one exact Application draft revision through the shared #580 renderer. It never
+ * adopts or installs a release and never reads an installation: the preview service compiles the
+ * caller organisation's current draft at the requested revision through the Definition
+ * publication chain, and the materialiser proves the request, the draft identity and the rendered
+ * page agree before it emits an artifact.
  *
  * The emitted artifact is deliberately inert. Every effectful flow node (a read, a change, a form
  * continuation or a durable workflow start) is replaced by an explicit, labelled simulation, and
@@ -32,9 +43,6 @@ import { z } from "zod";
 export const applicationPreviewBreakpoints = ["desktop", "tablet", "phone"] as const;
 export type ApplicationPreviewBreakpoint = (typeof applicationPreviewBreakpoints)[number];
 
-export const applicationPreviewDataOrigins = ["labelled_sample", "authorized_read"] as const;
-export type ApplicationPreviewDataOrigin = (typeof applicationPreviewDataOrigins)[number];
-
 export const applicationPreviewDataSurfaces = ["display", "control"] as const;
 export type ApplicationPreviewDataSurface = (typeof applicationPreviewDataSurfaces)[number];
 
@@ -42,15 +50,14 @@ const previewDataEntrySchema = z
   .object({
     placementId: z.string().min(1).max(200),
     surface: z.enum(applicationPreviewDataSurfaces),
-    origin: z.enum(applicationPreviewDataOrigins),
     value: z.unknown(),
   })
   .strict();
 
 /**
- * Selects one permitted application root and one exact draft revision. A page and guided step may
- * be named; when they are absent the application home page and its first ordered step are used.
- * Sample data is only ever labelled preview data, never installed authority.
+ * Selects one Application root and one exact draft revision. A page and guided step may be named;
+ * when they are absent the application home page and its first ordered step are used. Sample data
+ * is only ever a labelled preview value, never installed application authority.
  */
 export const applicationPreviewRequestSchema = z
   .object({
@@ -72,8 +79,8 @@ export type ApplicationPreviewDraft = Readonly<{
   draftRevision: number;
   /** The compiled canonical content, exactly as Definition compilation produced it. */
   content: ApplicationContentV2;
-  /** The root's installed release revision, echoed only to show preview ignores it. */
-  installedReleaseRevision: number | null;
+  /** The root's current published release revision, echoed only to label what preview ignores. */
+  currentReleaseRevision: number | null;
 }>;
 
 type ApplicationPreviewPage = Readonly<{
@@ -82,7 +89,7 @@ type ApplicationPreviewPage = Readonly<{
   steps?: readonly Readonly<{ id: string; name: string; summary: boolean }>[];
 }>;
 
-/** The renderer input for #580, built from the compiled draft content. */
+/** The renderer input for #580: the requested page of the compiled draft, with its shells. */
 export type ApplicationPreviewComposition = Readonly<{
   platformBlockDependencies: ApplicationContentV2["platformBlockDependencies"];
   shells: ApplicationContentV2["shells"];
@@ -125,11 +132,7 @@ export type ApplicationPreviewInteraction = Readonly<{
 
 /** A truthful preview outcome: what resolved, and what the preview could not show. */
 export type ApplicationPreviewOutcome =
-  | Readonly<{
-      kind: "preview_available";
-      placementId: string;
-      source: "definition" | ApplicationPreviewDataOrigin;
-    }>
+  | Readonly<{ kind: "preview_available"; placementId: string; source: "labelled_sample" }>
   | Readonly<{ kind: "sample_data_unresolved"; placementId: string }>
   | Readonly<{ kind: "flow_unavailable"; controlId: string; flowId: string }>;
 
@@ -137,7 +140,7 @@ export type ApplicationPreviewArtifact = Readonly<{
   kind: "application_preview";
   rootId: string;
   draftRevision: number;
-  installedReleaseRevision: number | null;
+  currentReleaseRevision: number | null;
   pageId: string;
   activeStepId?: string;
   breakpoint: ApplicationPreviewBreakpoint;
@@ -152,8 +155,10 @@ export type ApplicationPreviewArtifact = Readonly<{
 
 export const applicationPreviewRefusalReasons = [
   "invalid_request",
+  "context_refused",
   "draft_stale_or_missing",
-  "draft_kind_mismatch",
+  "dependency_unavailable",
+  "compilation_refused",
   "content_invalid",
   "page_not_found",
   "step_not_found",
@@ -251,9 +256,11 @@ const buildInteraction = (
 /**
  * Replaces every effectful flow node with an explicit simulation. An application-owned flow that
  * the draft cannot resolve is reported as a preview outcome instead of being silently replaced.
+ * When `controlIds` is given, only bindings on those placements are considered.
  */
 export const substituteApplicationPreviewInteractions = (
   content: ApplicationContentV2,
+  controlIds?: ReadonlySet<string>,
 ): Readonly<{
   interactions: readonly ApplicationPreviewInteraction[];
   outcomes: readonly ApplicationPreviewOutcome[];
@@ -263,6 +270,7 @@ export const substituteApplicationPreviewInteractions = (
   const outcomes: ApplicationPreviewOutcome[] = [];
   const interactions: ApplicationPreviewInteraction[] = [];
   for (const binding of content.flowBindings) {
+    if (controlIds !== undefined && !controlIds.has(String(binding.controlId))) continue;
     const flow =
       binding.flow.kind === "application_owned"
         ? flowsById.get(String(binding.flow.flowId))
@@ -281,66 +289,59 @@ export const substituteApplicationPreviewInteractions = (
   };
 };
 
-const collectSlotPlacementIds = (slot: unknown, into: Set<string>): void => {
-  if (slot === null || typeof slot !== "object") return;
-  const placements = (slot as { placements?: unknown }).placements;
-  if (placements === null || typeof placements !== "object") return;
-  for (const [placementId, placement] of Object.entries(placements as Record<string, unknown>)) {
-    into.add(placementId);
-    const slots =
-      placement !== null && typeof placement === "object"
-        ? (placement as { slots?: unknown }).slots
-        : undefined;
-    if (slots !== null && typeof slots === "object")
-      for (const child of Object.values(slots as Record<string, unknown>))
-        collectSlotPlacementIds(child, into);
-  }
-};
+type ApplicationPageV2 = ApplicationContentV2["pages"][number];
+type PlacementSlotV2 = ApplicationContentV2["shells"][number]["layout"];
 
-const collectCompositionPlacementIds = (composition: unknown, into: Set<string>): void => {
-  if (composition === null || typeof composition !== "object") return;
-  const candidate = composition as Record<string, unknown>;
-  if ("main" in candidate) collectSlotPlacementIds(candidate.main, into);
-  if (candidate.content !== null && typeof candidate.content === "object")
-    for (const slot of Object.values(candidate.content as Record<string, unknown>))
-      collectSlotPlacementIds(slot, into);
-  if (candidate.stepContent !== null && typeof candidate.stepContent === "object")
-    for (const entry of Object.values(candidate.stepContent as Record<string, unknown>)) {
-      if (entry !== null && typeof entry === "object" && "placements" in entry)
-        collectSlotPlacementIds(entry, into);
-      else if (entry !== null && typeof entry === "object")
-        for (const slot of Object.values(entry as Record<string, unknown>))
-          collectSlotPlacementIds(slot, into);
-    }
-};
-
-/** Every placement identity the compiled application content can render, across all its pages. */
-const applicationPlacementIds = (content: ApplicationContentV2): ReadonlySet<string> => {
+/**
+ * Every placement identity the requested page renders: its application shell's layout, if any,
+ * and the page content, or for a guided form only the active step's content.
+ */
+const pagePlacementIds = (
+  content: ApplicationContentV2,
+  page: ApplicationPageV2,
+  activeStepId: string | undefined,
+): ReadonlySet<string> => {
   const ids = new Set<string>();
-  for (const shell of content.shells) collectSlotPlacementIds(shell.layout, ids);
-  for (const page of content.pages) collectCompositionPlacementIds(page.composition, ids);
+  const addSlot = (slot: PlacementSlotV2): void => {
+    for (const [placementId] of canonicalPlacementEntriesV2(slot)) ids.add(placementId);
+  };
+  const composition = page.composition;
+  if (composition.shellKind === "application") {
+    const shell = content.shells.find(
+      (candidate) => String(candidate.shellId) === String(composition.shellId),
+    );
+    if (shell !== undefined) addSlot(shell.layout);
+  }
+  if (page.type === "guided_form") {
+    if (activeStepId === undefined) return ids;
+    const guided = page.composition;
+    if (guided.shellKind === "default") {
+      for (const [stepId, slot] of Object.entries(guided.stepContent))
+        if (stepId === activeStepId) addSlot(slot);
+    } else {
+      for (const [stepId, slots] of Object.entries(guided.stepContent))
+        if (stepId === activeStepId) for (const slot of Object.values(slots)) addSlot(slot);
+    }
+    return ids;
+  }
+  const standard = page.composition;
+  if (standard.shellKind === "default") addSlot(standard.main);
+  else for (const slot of Object.values(standard.content)) addSlot(slot);
   return ids;
 };
 
-const buildComposition = (content: ApplicationContentV2): ApplicationPreviewComposition => ({
-  platformBlockDependencies: content.platformBlockDependencies,
-  shells: content.shells,
-  pages: content.pages.map(
-    (page): ApplicationPreviewPage => ({
-      pageId: String(page.pageId),
-      composition: page.composition,
-      ...(page.type === "guided_form"
-        ? {
-            steps: page.steps.map((step) => ({
-              id: String(step.id),
-              name: step.name,
-              summary: step.summary,
-            })),
-          }
-        : {}),
-    }),
-  ),
-  theme: content.theme,
+const previewPage = (page: ApplicationPageV2): ApplicationPreviewPage => ({
+  pageId: String(page.pageId),
+  composition: page.composition,
+  ...(page.type === "guided_form"
+    ? {
+        steps: page.steps.map((step) => ({
+          id: String(step.id),
+          name: step.name,
+          summary: step.summary,
+        })),
+      }
+    : {}),
 });
 
 const refuse = (
@@ -364,73 +365,97 @@ export type MaterialiseApplicationPreviewInput = Readonly<{
 
 /**
  * Pure exact-draft materialisation. It proves the request and the supplied draft agree, chooses
- * the requested page and step, substitutes every effectful flow node with a simulation and binds
- * the labelled preview data. It reads no installation and performs no write.
+ * the requested page and step, substitutes every effectful flow node on that page with a
+ * simulation and binds the labelled preview data. It reads no installation and performs no write.
  */
 export const materialiseApplicationPreview = (
   input: MaterialiseApplicationPreviewInput,
 ): ApplicationPreviewResult => {
   const { request, draft } = input;
+  const addressed = { rootId: String(request.rootId), draftRevision: request.draftRevision };
   if (
     String(draft.rootId) !== String(request.rootId) ||
     draft.draftRevision !== request.draftRevision
   )
-    return refuse("draft_stale_or_missing", "The supplied draft does not match the requested root and revision", {
-      rootId: String(request.rootId),
-      draftRevision: request.draftRevision,
-    });
+    return refuse(
+      "draft_stale_or_missing",
+      "The supplied draft does not match the requested root and revision",
+      addressed,
+    );
 
   const parsedContent = applicationContentV2Schema.safeParse(draft.content);
   if (!parsedContent.success)
-    return refuse("content_invalid", "The supplied draft content is not a valid Application document", {
-      rootId: String(request.rootId),
-      draftRevision: draft.draftRevision,
-    });
+    return refuse(
+      "content_invalid",
+      "The supplied draft content is not a valid Application document",
+      addressed,
+    );
   const content = parsedContent.data;
 
   const requestedPageId = request.pageId ?? String(content.homePageId);
   const pageMatches = content.pages.filter((page) => String(page.pageId) === requestedPageId);
   const page = pageMatches[0];
   if (pageMatches.length !== 1 || page === undefined)
-    return refuse("page_not_found", `Page '${requestedPageId}' is not in this application draft`, {
-      rootId: String(request.rootId),
-      draftRevision: draft.draftRevision,
-    });
+    return refuse(
+      "page_not_found",
+      "The requested page is not in this application draft",
+      addressed,
+    );
 
   let activeStepId: string | undefined;
   if (page.type === "guided_form") {
     const stepIds = page.steps.map((step) => String(step.id));
     if (request.activeStepId === undefined) activeStepId = stepIds[0];
     else if (!stepIds.includes(request.activeStepId))
-      return refuse("step_not_found", `Guided step '${request.activeStepId}' is not in this guided form`, {
-        rootId: String(request.rootId),
-        draftRevision: draft.draftRevision,
-      });
+      return refuse(
+        "step_not_found",
+        "The requested guided step is not in this guided form",
+        addressed,
+      );
     else activeStepId = request.activeStepId;
   } else if (request.activeStepId !== undefined)
-    return refuse("invalid_request", "A guided step may only be selected for a guided form page", {
-      rootId: String(request.rootId),
-      draftRevision: draft.draftRevision,
-    });
+    return refuse(
+      "invalid_request",
+      "A guided step may only be selected for a guided form page",
+      addressed,
+    );
 
-  const { interactions, outcomes, suppressedEffects } =
-    substituteApplicationPreviewInteractions(content);
+  const renderedPlacements = pagePlacementIds(content, page, activeStepId);
+  const { interactions, outcomes, suppressedEffects } = substituteApplicationPreviewInteractions(
+    content,
+    renderedPlacements,
+  );
 
-  const knownPlacements = applicationPlacementIds(content);
   const displaySampleDataByPlacement: Record<string, unknown> = {};
   const controlSampleDataByPlacement: Record<string, unknown> = {};
   const sampleOutcomes: ApplicationPreviewOutcome[] = [];
+  const boundSamples = new Set<string>();
   for (const entry of request.sampleData) {
-    if (!knownPlacements.has(entry.placementId)) {
+    const sampleKey = `${entry.surface}\0${entry.placementId}`;
+    if (boundSamples.has(sampleKey))
+      return refuse(
+        "invalid_request",
+        "Each placement may receive at most one sample value per surface",
+        addressed,
+      );
+    boundSamples.add(sampleKey);
+    if (!renderedPlacements.has(entry.placementId)) {
       sampleOutcomes.push({ kind: "sample_data_unresolved", placementId: entry.placementId });
       continue;
     }
-    if (entry.surface === "display") displaySampleDataByPlacement[entry.placementId] = entry.value;
-    else controlSampleDataByPlacement[entry.placementId] = entry.value;
+    // Own data properties only, so a "__proto__" placement key stays an ordinary key.
+    const target =
+      entry.surface === "display" ? displaySampleDataByPlacement : controlSampleDataByPlacement;
+    Object.defineProperty(target, entry.placementId, {
+      value: entry.value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
     sampleOutcomes.push({
       kind: "preview_available",
       placementId: entry.placementId,
-      source: entry.origin,
+      source: "labelled_sample",
     });
   }
 
@@ -440,12 +465,17 @@ export const materialiseApplicationPreview = (
       kind: "application_preview",
       rootId: String(draft.rootId),
       draftRevision: draft.draftRevision,
-      installedReleaseRevision: draft.installedReleaseRevision,
+      currentReleaseRevision: draft.currentReleaseRevision,
       pageId: requestedPageId,
       ...(activeStepId === undefined ? {} : { activeStepId }),
       breakpoint: request.breakpoint,
       interactionMode: "simulation",
-      composition: buildComposition(content),
+      composition: {
+        platformBlockDependencies: content.platformBlockDependencies,
+        shells: content.shells,
+        pages: [previewPage(page)],
+        theme: content.theme,
+      },
       interactions,
       displaySampleDataByPlacement,
       controlSampleDataByPlacement,
@@ -462,52 +492,89 @@ export const parseApplicationPreviewRequest = (
   return parsed.success ? parsed.data : undefined;
 };
 
-/** Reads one exact draft compilation by root and revision. It never reads an installation. */
-export type ApplicationPreviewDraftSource = (
-  command: Readonly<{ rootId: string; draftRevision: number }>,
-) => Promise<ApplicationPreviewDraft | undefined>;
-
 /**
- * Builds the exact preview draft from one Application compilation output. A caller that already
- * holds the draft compilation (for example Definition publication preparation) wraps it here so
- * the preview service never has to re-derive identities or read an installation.
+ * Builds the exact preview draft from one compiled current draft. Identities come from the
+ * compilation itself, never from the preview request.
  */
 export const applicationPreviewDraftFromCompilation = (
-  output: ApplicationCompilationOutputV2,
-  installedReleaseRevision: number | null,
+  compiled: ApplicationDraftCompilation,
 ): ApplicationPreviewDraft => ({
-  rootId: String(output.artifact.rootId),
-  draftRevision: output.canonical.envelope.draftRevision,
-  content: output.canonical.content,
-  installedReleaseRevision,
+  rootId: String(compiled.compilation.artifact.rootId),
+  draftRevision: compiled.compilation.canonical.envelope.draftRevision,
+  content: compiled.compilation.canonical.content,
+  currentReleaseRevision: compiled.currentReleaseRevision,
 });
 
+/** The Definition read the preview service needs: one organisation-scoped exact-draft compile. */
+export type ApplicationPreviewDraftCompiler = Readonly<{
+  compileApplicationDraft(
+    context: SessionContext,
+    command: Readonly<{ rootId: string; expectedDraftRevision: number }>,
+  ): Promise<ApplicationDraftCompilation>;
+}>;
+
+/** Publication refusals preview reports; every other publication code is a fault and rethrown. */
+const refusalByPublicationCode: Readonly<
+  Partial<Record<DefinitionPublicationFailureCode, ApplicationPreviewRefusalReason>>
+> = {
+  INVALID_DEFINITION_PUBLICATION_COMMAND: "invalid_request",
+  DEFINITION_DRAFT_STALE_OR_MISSING: "draft_stale_or_missing",
+  DEFINITION_SOURCE_EVIDENCE_MISMATCH: "draft_stale_or_missing",
+  DEFINITION_ORGANIZATION_MISMATCH: "context_refused",
+  DEFINITION_DEPENDENCY_MISSING: "dependency_unavailable",
+  DEFINITION_DEPENDENCY_PRERELEASE_ONLY: "dependency_unavailable",
+  DEFINITION_DEPENDENCY_INCOMPATIBLE: "dependency_unavailable",
+  DEFINITION_DEPENDENCY_AMBIGUOUS: "dependency_unavailable",
+  DEFINITION_DEPENDENCY_SUBSTITUTED: "dependency_unavailable",
+  DEFINITION_DEPENDENCY_CYCLE: "dependency_unavailable",
+  DEFINITION_COMPILATION_REFUSED: "compilation_refused",
+};
+
+const refusalDetail: Readonly<Record<ApplicationPreviewRefusalReason, string>> = {
+  invalid_request: "The preview request is invalid",
+  context_refused: "The preview request is not permitted in this context",
+  draft_stale_or_missing: "The addressed draft revision is not the current Application draft",
+  dependency_unavailable: "A dependency of this draft is unavailable",
+  compilation_refused: "This draft does not compile",
+  content_invalid: "The draft content is not a valid Application document",
+  page_not_found: "The requested page is not in this application draft",
+  step_not_found: "The requested guided step is not in this guided form",
+};
+
 /**
- * The preview service composes an injected exact-draft reader over the pure materialiser. It
- * exposes no install, publish, save or restore operation, so preview can never change an
- * installation or a draft.
+ * The preview service. It requires a live system context, compiles the caller organisation's
+ * current Application draft at the exact requested revision and materialises it. It exposes no
+ * install, publish, save or restore operation, so preview can never change an installation or a
+ * draft. A draft that is not the current revision is refused rather than substituted.
  */
-export const createApplicationPreviewService = (source: ApplicationPreviewDraftSource) => ({
-  async preview(candidate: unknown): Promise<ApplicationPreviewResult> {
+export const createApplicationPreviewService = (drafts: ApplicationPreviewDraftCompiler) => ({
+  async preview(
+    contextCandidate: SessionContext,
+    candidate: unknown,
+  ): Promise<ApplicationPreviewResult> {
+    const context = sessionContextSchema.safeParse(contextCandidate);
+    if (!context.success || !isLiveDefinitionSystemContext(context.data))
+      return refuse("context_refused", refusalDetail.context_refused);
     const request = parseApplicationPreviewRequest(candidate);
-    if (request === undefined) return refuse("invalid_request", "The preview request is invalid");
-    let draft: ApplicationPreviewDraft | undefined;
+    if (request === undefined) return refuse("invalid_request", refusalDetail.invalid_request);
+    const addressed = { rootId: String(request.rootId), draftRevision: request.draftRevision };
+    let compiled: ApplicationDraftCompilation;
     try {
-      draft = await source({
+      compiled = await drafts.compileApplicationDraft(context.data, {
         rootId: String(request.rootId),
-        draftRevision: request.draftRevision,
+        expectedDraftRevision: request.draftRevision,
       });
-    } catch {
-      return refuse("draft_stale_or_missing", "The addressed draft could not be read", {
-        rootId: String(request.rootId),
-        draftRevision: request.draftRevision,
-      });
+    } catch (error) {
+      const reason =
+        error instanceof DefinitionPublicationError
+          ? refusalByPublicationCode[error.code]
+          : undefined;
+      if (reason === undefined) throw error;
+      return refuse(reason, refusalDetail[reason], addressed);
     }
-    if (draft === undefined)
-      return refuse("draft_stale_or_missing", "The addressed draft revision does not exist", {
-        rootId: String(request.rootId),
-        draftRevision: request.draftRevision,
-      });
-    return materialiseApplicationPreview({ request, draft });
+    return materialiseApplicationPreview({
+      request,
+      draft: applicationPreviewDraftFromCompilation(compiled),
+    });
   },
 });

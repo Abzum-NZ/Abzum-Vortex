@@ -1,5 +1,10 @@
 import type { CSSProperties, ReactElement } from "react";
-import type { ComponentSemanticEventKind, FlowEffectKind } from "@vortex/contracts";
+import {
+  componentSemanticEventKindSchema,
+  flowEffectKindSchema,
+  type ComponentSemanticEventKind,
+  type FlowEffectKind,
+} from "@vortex/contracts";
 import {
   DefinitionRenderError,
   validatePlacementTree,
@@ -15,7 +20,6 @@ import {
 import type { PlatformComponentRegistry } from "./registry";
 import {
   parseProjectedDataByPlacement,
-  type DisplayEventHandlers,
   type DisplayEventsByPlacement,
   type DisplaySemanticEventName,
   type ProjectedDataByPlacement,
@@ -23,7 +27,6 @@ import {
 import {
   CONTROL_EVENT_NAMES,
   parseProjectedControlDataByPlacement,
-  type ControlEventHandlers,
   type ControlEventsByPlacement,
   type ControlSemanticEventName,
   type ProjectedControlDataByPlacement,
@@ -43,13 +46,13 @@ import type { ThemeMode } from "./theme";
 export const applicationPreviewBreakpoints = ["desktop", "tablet", "phone"] as const;
 export type ApplicationPreviewBreakpoint = (typeof applicationPreviewBreakpoints)[number];
 
-export type ApplicationPreviewDataOrigin = "labelled_sample" | "authorized_read";
-
-export type ApplicationPreviewSimulatedEffect =
-  | "read"
-  | "change"
-  | "background_start"
-  | "form_interaction";
+const applicationPreviewSimulatedEffects = [
+  "read",
+  "change",
+  "background_start",
+  "form_interaction",
+] as const;
+export type ApplicationPreviewSimulatedEffect = (typeof applicationPreviewSimulatedEffects)[number];
 
 export type ApplicationPreviewFlowNodeSimulation = Readonly<{
   nodeId: string;
@@ -72,11 +75,7 @@ export type ApplicationPreviewInteraction = Readonly<{
 }>;
 
 export type ApplicationPreviewOutcome =
-  | Readonly<{
-      kind: "preview_available";
-      placementId: string;
-      source: "definition" | ApplicationPreviewDataOrigin;
-    }>
+  | Readonly<{ kind: "preview_available"; placementId: string; source: "labelled_sample" }>
   | Readonly<{ kind: "sample_data_unresolved"; placementId: string }>
   | Readonly<{ kind: "flow_unavailable"; controlId: string; flowId: string }>;
 
@@ -84,7 +83,7 @@ export type ApplicationPreviewArtifact = Readonly<{
   kind: "application_preview";
   rootId: string;
   draftRevision: number;
-  installedReleaseRevision: number | null;
+  currentReleaseRevision: number | null;
   pageId: string;
   activeStepId?: string;
   breakpoint: ApplicationPreviewBreakpoint;
@@ -124,6 +123,20 @@ const requireArray = (value: unknown, message: string): readonly unknown[] =>
 const requireObject = (value: unknown, message: string): Record<string, unknown> =>
   isPlainObject(value) ? value : fail(message);
 
+const requireSimulatedEffect = (value: unknown): ApplicationPreviewSimulatedEffect =>
+  applicationPreviewSimulatedEffects.find((effect) => effect === value) ??
+  fail("A preview flow-node simulation requires a known simulated effect");
+
+const requireEvent = (value: unknown): ComponentSemanticEventKind => {
+  const parsed = componentSemanticEventKindSchema.safeParse(value);
+  return parsed.success ? parsed.data : fail("A preview interaction requires a known event");
+};
+
+const requireEffect = (value: unknown, message: string): FlowEffectKind => {
+  const parsed = flowEffectKindSchema.safeParse(value);
+  return parsed.success ? parsed.data : fail(message);
+};
+
 const parseFlowNodeSimulation = (value: unknown): ApplicationPreviewFlowNodeSimulation => {
   const record = requireObject(value, "A preview flow-node simulation must be an object");
   return {
@@ -132,10 +145,7 @@ const parseFlowNodeSimulation = (value: unknown): ApplicationPreviewFlowNodeSimu
     ...(record.targetKind === undefined
       ? {}
       : { targetKind: requireString(record.targetKind, "A preview flow-node target kind is invalid") }),
-    simulatedEffect: requireString(
-      record.simulatedEffect,
-      "A preview flow-node simulation requires a simulated effect",
-    ) as ApplicationPreviewSimulatedEffect,
+    simulatedEffect: requireSimulatedEffect(record.simulatedEffect),
     label: requireString(record.label, "A preview flow-node simulation requires a label"),
   };
 };
@@ -150,13 +160,13 @@ const parseInteraction = (value: unknown): ApplicationPreviewInteraction => {
     bindingId: requireString(record.bindingId, "A preview interaction requires a binding identity"),
     controlId: requireString(record.controlId, "A preview interaction requires a control identity"),
     eventId: requireString(record.eventId, "A preview interaction requires an event identity"),
-    event: requireString(record.event, "A preview interaction requires an event name") as ComponentSemanticEventKind,
+    event: requireEvent(record.event),
     flowKind,
     flowId: requireString(record.flowId, "A preview interaction requires a flow identity"),
     declaredEffects: requireArray(
       record.declaredEffects,
       "A preview interaction requires declared effects",
-    ).map((effect) => requireString(effect, "A preview interaction effect is invalid")) as readonly FlowEffectKind[],
+    ).map((effect) => requireEffect(effect, "A preview interaction effect is invalid")),
     simulatedNodes: requireArray(
       record.simulatedNodes,
       "A preview interaction requires simulated nodes",
@@ -168,16 +178,14 @@ const parseInteraction = (value: unknown): ApplicationPreviewInteraction => {
 const parseOutcome = (value: unknown): ApplicationPreviewOutcome => {
   const record = requireObject(value, "A preview outcome must be an object");
   switch (record.kind) {
-    case "preview_available": {
-      const source = record.source;
-      if (source !== "definition" && source !== "labelled_sample" && source !== "authorized_read")
-        fail("A preview availability outcome requires a known data source");
+    case "preview_available":
+      if (record.source !== "labelled_sample")
+        fail("A preview availability outcome must be a labelled sample");
       return {
         kind: "preview_available",
         placementId: requireString(record.placementId, "A preview outcome requires a placement"),
-        source,
+        source: "labelled_sample",
       };
-    }
     case "sample_data_unresolved":
       return {
         kind: "sample_data_unresolved",
@@ -212,9 +220,9 @@ export const parseApplicationPreviewArtifact = (value: unknown): ApplicationPrev
   const breakpoint = record.breakpoint;
   if (breakpoint !== "desktop" && breakpoint !== "tablet" && breakpoint !== "phone")
     fail("A preview artifact requires a known breakpoint");
-  const installedReleaseRevision = record.installedReleaseRevision;
-  if (installedReleaseRevision !== null && typeof installedReleaseRevision !== "number")
-    fail("A preview artifact requires its installed release revision or null");
+  const currentReleaseRevision = record.currentReleaseRevision;
+  if (currentReleaseRevision !== null && typeof currentReleaseRevision !== "number")
+    fail("A preview artifact requires its current release revision or null");
   const composition = requireObject(record.composition, "A preview artifact requires a composition");
   requireArray(composition.pages, "A preview composition requires its pages");
   requireArray(composition.shells, "A preview composition requires its shells");
@@ -228,8 +236,10 @@ export const parseApplicationPreviewArtifact = (value: unknown): ApplicationPrev
     kind: "application_preview",
     rootId: requireString(record.rootId, "A preview artifact requires an application root"),
     draftRevision: requireRevision(record.draftRevision, "A preview artifact requires a draft revision"),
-    installedReleaseRevision:
-      installedReleaseRevision === null ? null : requireRevision(installedReleaseRevision, "An installed release revision is invalid"),
+    currentReleaseRevision:
+      currentReleaseRevision === null
+        ? null
+        : requireRevision(currentReleaseRevision, "A current release revision is invalid"),
     pageId: requireString(record.pageId, "A preview artifact requires a page identity"),
     ...(activeStepId === undefined
       ? {}
@@ -253,8 +263,8 @@ export const parseApplicationPreviewArtifact = (value: unknown): ApplicationPrev
     ),
     suppressedEffects: Object.freeze(
       requireArray(record.suppressedEffects, "A preview artifact requires its suppressed effects").map(
-        (effect) => requireString(effect, "A suppressed preview effect is invalid"),
-      ) as readonly FlowEffectKind[],
+        (effect) => requireEffect(effect, "A suppressed preview effect is invalid"),
+      ),
     ),
   });
 };
@@ -266,12 +276,51 @@ const collectPlacementIds = (slot: PlacementSlotV2, into: Set<string>): void => 
   }
 };
 
+/**
+ * Checks, before rendering, what the shared renderer would otherwise refuse while rendering: every
+ * placement must use the exact release its dependency manifest pins, and a draft preview carries
+ * no permission-projected availability. A refusal is then shown as a preview outcome.
+ */
+const validatePreviewPlacements = (
+  slot: PlacementSlotV2,
+  dependencies: MaterialisedApplicationCompositionV2["platformBlockDependencies"],
+  location: DefinitionRenderErrorLocation,
+): void => {
+  const releases = new Map(
+    dependencies.map((dependency) => [dependency.blockId, dependency.releaseVersion]),
+  );
+  for (const [placementId, placement] of Object.entries(slot.placements)) {
+    const placementLocation = {
+      ...location,
+      placementId,
+      blockId: placement.block.blockId,
+      releaseVersion: placement.block.releaseVersion,
+    };
+    if (releases.get(placement.block.blockId) !== placement.block.releaseVersion)
+      throw new DefinitionRenderError(
+        "MISMATCHED_RELEASE",
+        `Placement '${placementId}' does not match the draft's platform-block dependency manifest`,
+        placementLocation,
+      );
+    if ("availability" in placement || "unavailableReason" in placement)
+      throw new DefinitionRenderError(
+        "INVALID_COMPOSITION",
+        `Placement '${placementId}' carries permission-projected availability in a draft preview`,
+        placementLocation,
+      );
+    for (const [slotKey, child] of Object.entries(placement.slots))
+      validatePreviewPlacements(child, dependencies, { ...placementLocation, slotKey });
+  }
+};
+
 const onlyKnownPlacements = (
   values: Readonly<Record<string, unknown>>,
   placementIds: ReadonlySet<string>,
 ): Readonly<Record<string, unknown>> =>
   Object.freeze(
-    Object.fromEntries(Object.entries(values).filter(([placementId]) => placementIds.has(placementId))),
+    Object.fromEntries(
+      Object.entries(values).filter(([placementId]) => placementIds.has(placementId)),
+    ),
   );
 
 export type ApplicationPreviewProps = Readonly<{
@@ -314,7 +363,11 @@ export function ApplicationPreview({
   style,
   onSimulation,
 }: ApplicationPreviewProps): ReactElement {
-  const location: DefinitionRenderErrorLocation = { pageId: artifact.pageId, breakpoint };
+  const location: DefinitionRenderErrorLocation = {
+    pageId: artifact.pageId,
+    ...(artifact.activeStepId === undefined ? {} : { stepId: artifact.activeStepId }),
+    breakpoint,
+  };
   const composition = artifact.composition;
 
   let resolvedSlot: PlacementSlotV2 | undefined;
@@ -326,12 +379,18 @@ export function ApplicationPreview({
       pageId: artifact.pageId,
       ...(artifact.activeStepId === undefined ? {} : { activeStepId: artifact.activeStepId }),
     });
+    validatePreviewPlacements(resolvedSlot, composition.platformBlockDependencies, location);
     validatePlacementTree(resolvedSlot, registry, location, { allowEmptyRequiredSlots: false });
   } catch (error) {
+    resolvedSlot = undefined;
     renderFailure =
       error instanceof DefinitionRenderError
         ? error
-        : new DefinitionRenderError("INVALID_COMPOSITION", "The preview composition could not be rendered", location);
+        : new DefinitionRenderError(
+            "INVALID_COMPOSITION",
+            "The preview composition could not be rendered",
+            location,
+          );
   }
 
   const availablePlacementIds = new Set<string>();
@@ -349,7 +408,7 @@ export function ApplicationPreview({
       location,
     );
   } catch (error) {
-    renderFailure =
+    renderFailure ??=
       error instanceof DefinitionRenderError
         ? error
         : new DefinitionRenderError(
@@ -359,22 +418,25 @@ export function ApplicationPreview({
           );
   }
 
-  const displayEvents: Record<string, DisplayEventHandlers> = {};
-  const controlEvents: Record<string, ControlEventHandlers> = {};
+  // Only local simulations are wired: each callback reports the interaction and does nothing else.
+  const displayHandlers = new Map<string, Partial<Record<DisplaySemanticEventName, () => void>>>();
+  const controlHandlers = new Map<string, Partial<Record<ControlSemanticEventName, () => void>>>();
   for (const interaction of artifact.interactions) {
     if (!availablePlacementIds.has(interaction.controlId)) continue;
     const handler = () => onSimulation?.(interaction);
     if (DISPLAY_EVENT_NAMES.includes(interaction.event as DisplaySemanticEventName))
-      displayEvents[interaction.controlId] = {
-        ...(displayEvents[interaction.controlId] ?? {}),
+      displayHandlers.set(interaction.controlId, {
+        ...displayHandlers.get(interaction.controlId),
         [interaction.event as DisplaySemanticEventName]: handler,
-      };
+      });
     if (CONTROL_EVENT_NAMES.includes(interaction.event as ControlSemanticEventName))
-      controlEvents[interaction.controlId] = {
-        ...(controlEvents[interaction.controlId] ?? {}),
+      controlHandlers.set(interaction.controlId, {
+        ...controlHandlers.get(interaction.controlId),
         [interaction.event as ControlSemanticEventName]: handler,
-      };
+      });
   }
+  const displayEvents: DisplayEventsByPlacement = Object.fromEntries(displayHandlers);
+  const controlEvents: ControlEventsByPlacement = Object.fromEntries(controlHandlers);
 
   return (
     <div
@@ -388,9 +450,9 @@ export function ApplicationPreview({
         <strong>Draft preview (simulated)</strong>
         <span>
           Revision {artifact.draftRevision}
-          {artifact.installedReleaseRevision === null
-            ? "; no installed release"
-            : `; installed revision ${artifact.installedReleaseRevision} is not shown`}
+          {artifact.currentReleaseRevision === null
+            ? "; not yet published"
+            : `; current release revision ${artifact.currentReleaseRevision} is not shown`}
         </span>
         {artifact.interactions.length === 0 ? null : (
           <span>{artifact.interactions.length} interaction(s) are simulated</span>
@@ -414,9 +476,9 @@ export function ApplicationPreview({
           locale={locale}
           timeZone={timeZone}
           projectedData={projectedData}
-          displayEvents={displayEvents as DisplayEventsByPlacement}
+          displayEvents={displayEvents}
           controlData={controlData}
-          controlEvents={controlEvents as ControlEventsByPlacement}
+          controlEvents={controlEvents}
         />
       ) : (
         <div data-vortex-preview-unavailable="">

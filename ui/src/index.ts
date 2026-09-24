@@ -187,7 +187,6 @@ export {
   parseApplicationPreviewArtifact,
   type ApplicationPreviewArtifact,
   type ApplicationPreviewBreakpoint,
-  type ApplicationPreviewDataOrigin,
   type ApplicationPreviewFlowNodeSimulation,
   type ApplicationPreviewInteraction,
   type ApplicationPreviewOutcome,
