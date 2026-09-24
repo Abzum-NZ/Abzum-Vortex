@@ -40,17 +40,20 @@ export type ProjectedNavigation = readonly ProjectedNavigationItem[];
 /** One permission decision per distinct navigation permission key, from the viewer's live access. */
 export type NavigationPermissionDecisions = Readonly<Record<string, boolean>>;
 
+const held = (decisions: NavigationPermissionDecisions, permissionKey: string): boolean =>
+  Object.hasOwn(decisions, permissionKey) && decisions[permissionKey] === true;
+
 const projectNavigationItem = (
   item: NavigationItem,
   decisions: NavigationPermissionDecisions,
 ): ProjectedNavigationItem | undefined => {
   switch (item.type) {
     case "page":
-      return decisions[item.permissionKey] === true
+      return held(decisions, item.permissionKey)
         ? { type: "page", id: item.id, label: item.label, pageId: item.pageId }
         : undefined;
     case "external":
-      return decisions[item.permissionKey] === true
+      return held(decisions, item.permissionKey)
         ? { type: "external", id: item.id, label: item.label, address: item.address }
         : undefined;
     case "heading": {
@@ -123,11 +126,6 @@ export type AuthenticatedNavigationProjectionDependencies<Command> =
   HumanOrganizationRequestDependencies &
     Readonly<{ adapter: FixedAuthenticatedNavigationProjectionAdapter<Command> }>;
 
-type RequiredBinding = Readonly<{
-  permissionKey: string;
-  declaration: OrganizationAccessDeclaration;
-}>;
-
 /**
  * Evaluates each distinct navigation permission through the same live Access decision path as
  * page capability, then projects the ordered tree. Every item the viewer does not currently
@@ -150,8 +148,9 @@ export const createAuthenticatedNavigationProjectionService = <Command>(
         const correlations = new Set([loaded.sourceCorrelationId.toLowerCase()]);
         const decisions: Record<string, boolean> = {};
         for (const permissionKey of collectNavigationPermissionKeys(loaded.navigation)) {
-          if (Object.hasOwn(decisions, permissionKey)) continue;
-          const binding: RequiredBinding | undefined = bindings[permissionKey];
+          const binding = Object.hasOwn(bindings, permissionKey)
+            ? bindings[permissionKey]
+            : undefined;
           if (binding === undefined || binding.permissionKey !== permissionKey)
             throw new Error("NAVIGATION_PERMISSION_BINDING_UNAVAILABLE");
           const evaluated = await runOrganizationAccessOperation(
@@ -160,8 +159,11 @@ export const createAuthenticatedNavigationProjectionService = <Command>(
             binding.declaration,
             async (decision) => decision.correlationId,
           );
-          correlations.add(evaluated.correlationId.toLowerCase());
-          decisions[permissionKey] = evaluated.outcome === "completed";
+          // An allowed decision carries its correlation as the operation value; a refusal carries
+          // it directly. Both must belong to this one request.
+          const allowed = evaluated.outcome === "completed";
+          correlations.add((allowed ? evaluated.value : evaluated.correlationId).toLowerCase());
+          decisions[permissionKey] = allowed;
         }
         if (correlations.size !== 1) throw new Error("NAVIGATION_PERMISSION_EVIDENCE_UNAVAILABLE");
         return projectNavigation(loaded.navigation, decisions);

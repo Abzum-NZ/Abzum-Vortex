@@ -50,6 +50,8 @@ export type ApplicationNavigationProps = Readonly<{
 type NavigationListProps = Readonly<{
   items: ProjectedNavigation;
   listId?: string;
+  /** The heading that names a nested group, so assistive technology announces the group. */
+  labelledBy?: string;
   nested: boolean;
   headingId: (itemId: string) => string;
   resolvePageHref: (pageId: string) => string;
@@ -63,6 +65,7 @@ const samePage = (left: string, right: string): boolean => left.toLowerCase() ==
 function NavigationList({
   items,
   listId,
+  labelledBy,
   nested,
   headingId,
   resolvePageHref,
@@ -72,6 +75,7 @@ function NavigationList({
   return (
     <ul
       {...(listId === undefined ? {} : { id: listId })}
+      {...(labelledBy === undefined ? {} : { "aria-labelledby": labelledBy })}
       className={nested ? "vortex-navigation-children" : "vortex-navigation-list"}
     >
       {items.map((item) => {
@@ -84,6 +88,7 @@ function NavigationList({
               </span>
               <NavigationList
                 items={item.children}
+                labelledBy={id}
                 nested
                 headingId={headingId}
                 resolvePageHref={resolvePageHref}
@@ -106,7 +111,7 @@ function NavigationList({
                 href={item.address}
                 rel="noopener noreferrer"
               >
-                <span className="vortex-navigation-label">{item.label}</span>
+                <span className="vortex-navigation-label">{item.label}</span>{" "}
                 <span className="vortex-navigation-external-indicator">External</span>
               </a>
             </li>
@@ -140,9 +145,9 @@ function NavigationList({
  * Renders the application navigation in the shell. On desktop it is the full ordered tree; on a
  * phone viewport it is the same tree behind one disclosure control, so the compact form is the
  * same information architecture rather than a second definition. The component keeps its own
- * disclosure state, and therefore keeps it across internal page changes while the shell stays
- * mounted. Every page link carries `aria-current` when it names the shown page, and external
- * links are marked external and carry no referrer or opener access.
+ * state while the shell stays mounted across internal page changes; choosing a page closes the
+ * compact disclosure. Every page link carries `aria-current` when it names the shown page, and
+ * external links are marked external and carry no referrer or opener access.
  */
 export function ApplicationNavigation({
   navigation,
@@ -158,6 +163,12 @@ export function ApplicationNavigation({
   const listId = `${baseId}-list`;
   const headingId = (itemId: string): string => `${baseId}-heading-${itemId}`;
   const compact = breakpoint === "phone";
+  // Choosing a page closes the compact disclosure so the destination is visible; the shell still
+  // performs the transition and this component stays mounted.
+  const activatePage = (pageId: string, event: MouseEvent<HTMLAnchorElement>): void => {
+    setOpen(false);
+    onNavigate?.(pageId, event);
+  };
 
   return (
     <nav
@@ -192,7 +203,7 @@ export function ApplicationNavigation({
             headingId={headingId}
             resolvePageHref={resolvePageHref}
             currentPageId={currentPageId}
-            onNavigate={onNavigate}
+            onNavigate={activatePage}
           />
         </>
       )}
