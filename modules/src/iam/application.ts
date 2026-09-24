@@ -5,12 +5,17 @@ import {
   DATE_INPUT_BLOCK_RELEASE,
   DEFAULT_PLATFORM_THEME_RELEASE_V2,
   FORM_CONTAINER_BLOCK_RELEASE,
+  NUMBER_INPUT_BLOCK_RELEASE,
+  PLATFORM_SERVICE_OPERATIONS,
   RECORD_DETAIL_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
+  platformServiceOperationBindingSource,
+  platformServiceOperationFlowSource,
   type ApplicationSourceDocumentV2,
   type PlatformBlockReleaseV2,
+  type PlatformServiceOperationCatalogueEntry,
   type ProtectedReadModelKey,
 } from "@vortex/contracts";
 import { requestTypeOptions } from "./module";
@@ -181,11 +186,114 @@ const formComposition = (
   };
 };
 
+/**
+ * The protected administration operations this application offers. Each is one registered
+ * platform-service operation of an existing Access administration method that ends, revises the
+ * metadata of, or creates an empty, Group or Role. Granting, assigning and activating access are
+ * absent from this definition, not disabled, so no control can expand anyone's authority.
+ */
+const rolesAndGroupsOperations: readonly PlatformServiceOperationCatalogueEntry[] = [
+  PLATFORM_SERVICE_OPERATIONS.revise_role_metadata,
+  PLATFORM_SERVICE_OPERATIONS.retire_role,
+  PLATFORM_SERVICE_OPERATIONS.create_group,
+  PLATFORM_SERVICE_OPERATIONS.rename_group,
+  PLATFORM_SERVICE_OPERATIONS.retire_group,
+  PLATFORM_SERVICE_OPERATIONS.remove_group_membership,
+];
+const assignmentOperations: readonly PlatformServiceOperationCatalogueEntry[] = [
+  PLATFORM_SERVICE_OPERATIONS.revoke_role_assignment,
+  PLATFORM_SERVICE_OPERATIONS.deactivate_role_activation,
+  PLATFORM_SERVICE_OPERATIONS.revoke_delegation_authority,
+];
+const administrationOperations = [...rolesAndGroupsOperations, ...assignmentOperations];
+const administrationEventId = "event_iam_administration_action";
+const endingOperations: ReadonlySet<string> = new Set([
+  "retire_role",
+  "retire_group",
+  "remove_group_membership",
+  "revoke_role_assignment",
+  "deactivate_role_activation",
+  "revoke_delegation_authority",
+]);
+
+const humanise = (key: string): string => {
+  const words = key.replaceAll("_", " ");
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+};
+
+const controlAlias = (operation: PlatformServiceOperationCatalogueEntry) =>
+  `button_${operation.key}`;
+const formAlias = (operation: PlatformServiceOperationCatalogueEntry) => `form_${operation.key}`;
+
+/**
+ * One form for one operation: an input for each typed flow input, named by the input's key, and the
+ * button whose `action` event starts the bound flow. Identities and expected revisions are typed
+ * in because protected read models do not yet carry a selectable row context.
+ */
+const administrationForm = (operation: PlatformServiceOperationCatalogueEntry) => {
+  const children: Record<string, unknown> = {};
+  const order: string[] = [];
+  for (const [key, declaration] of Object.entries(operation.descriptor.inputs)) {
+    const alias = `input_${operation.key}_${key}`;
+    children[alias] =
+      declaration.type === "whole_number"
+        ? placement(NUMBER_INPUT_BLOCK_RELEASE, {
+            name: textValue(key),
+            label: textValue(humanise(key)),
+            required: booleanValue(declaration.required),
+            integer: booleanValue(true),
+            min_value: { kind: "number", value: 1 },
+          })
+        : placement(TEXT_INPUT_BLOCK_RELEASE, {
+            name: textValue(key),
+            label: textValue(humanise(key)),
+            required: booleanValue(declaration.required),
+            ...(key === "description" ? { multiline: booleanValue(true) } : {}),
+          });
+    order.push(alias);
+  }
+  children[controlAlias(operation)] = placement(BUTTON_BLOCK_RELEASE, {
+    label: textValue(operation.name),
+    action_kind: choiceValue("action"),
+    variant: choiceValue(endingOperations.has(operation.key) ? "danger" : "primary"),
+  });
+  order.push(controlAlias(operation));
+  return {
+    block: blockRef(FORM_CONTAINER_BLOCK_RELEASE),
+    settings: { title: textValue(operation.name) },
+    theme_overrides: {},
+    responsive: { desktop: layout },
+    slots: { content: slot(children, order) },
+  };
+};
+
+/** A manage-only page of operation forms under one explanatory heading. */
+const administrationComposition = (
+  aliasPrefix: string,
+  heading: string,
+  description: string,
+  operations: readonly PlatformServiceOperationCatalogueEntry[],
+) => {
+  const placements: Record<string, unknown> = {
+    [`${aliasPrefix}_heading`]: placement(TEXT_BLOCK_RELEASE, {
+      title: textValue(heading),
+      text: textValue(description),
+    }),
+  };
+  const order = [`${aliasPrefix}_heading`];
+  for (const operation of operations) {
+    placements[formAlias(operation)] = administrationForm(operation);
+    order.push(formAlias(operation));
+  }
+  return { shell_kind: "default" as const, main: slot(placements, order) };
+};
+
 const usedReleases: readonly PlatformBlockReleaseV2[] = [
   BUTTON_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE,
   DATE_INPUT_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
+  NUMBER_INPUT_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE,
@@ -359,11 +467,25 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
               permission: "application.iam.open",
             },
             {
+              id: "nav_iam_manage_roles_groups",
+              type: "page",
+              label: "Manage roles and Groups",
+              page: "iam_manage_roles_groups",
+              permission: "application.iam.manage",
+            },
+            {
               id: "nav_iam_assignments",
               type: "page",
               label: "Assignments",
               page: "iam_assignments",
               permission: "application.iam.open",
+            },
+            {
+              id: "nav_iam_manage_assignments",
+              type: "page",
+              label: "Manage assignments",
+              page: "iam_manage_assignments",
+              permission: "application.iam.manage",
             },
           ],
         },
@@ -455,7 +577,15 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
       interfaces: [],
       actions: [],
       rules: [],
-      events: [],
+      events: [
+        {
+          id: administrationEventId,
+          key: "vortex.app.iam.administration_action",
+          record_type: "vortex.iam.core:access_request",
+          carries: [],
+          personal_or_sensitive_values_allowed: false,
+        },
+      ],
       public_addresses: [],
       platform_block_dependencies: platformBlockDependencies,
       shells: [],
@@ -519,6 +649,34 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
               title: "Current effective assignments",
             },
           ]),
+        },
+        {
+          id: "page_iam_manage_roles_groups",
+          key: "iam_manage_roles_groups",
+          name: "Manage roles and Groups",
+          type: "dashboard",
+          permission: "application.iam.manage",
+          states: ["normal", "loading", "validation", "refused", "conflict", "failure", "recovery"],
+          composition: administrationComposition(
+            "iam_manage_roles_groups",
+            "Manage roles and Groups",
+            "Revise a role's label and description, create an empty Group, rename a Group, or end a role, Group or Group membership. Each change runs under your own authority in protected Access, is checked against the revision you read, and is refused if you lack the authority. Granting access is never done from here.",
+            rolesAndGroupsOperations,
+          ),
+        },
+        {
+          id: "page_iam_manage_assignments",
+          key: "iam_manage_assignments",
+          name: "Manage assignments",
+          type: "dashboard",
+          permission: "application.iam.manage",
+          states: ["normal", "loading", "validation", "refused", "conflict", "failure", "recovery"],
+          composition: administrationComposition(
+            "iam_manage_assignments",
+            "Manage assignments",
+            "End a role assignment, a role activation or a delegation authority. Each change runs under your own authority in protected Access, is checked against the revision you read, and is refused if you lack the authority. Granting, assigning and activating access are never done from here.",
+            assignmentOperations,
+          ),
         },
         {
           id: "page_iam_privileged_eligible",
@@ -689,8 +847,14 @@ export const iamApplication: ApplicationSourceDocumentV2 = applicationSourceDocu
           ]),
         },
       ],
-      flows: [],
-      flow_bindings: [],
+      flows: administrationOperations.map(platformServiceOperationFlowSource),
+      flow_bindings: administrationOperations.map((operation) =>
+        platformServiceOperationBindingSource(operation, {
+          control: controlAlias(operation),
+          form: formAlias(operation),
+          eventId: administrationEventId,
+        }),
+      ),
     },
   },
 );
