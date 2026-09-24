@@ -8,7 +8,6 @@ import {
   versionRequirementSchema,
 } from "./definitions";
 import type { ResolveRecordTypeReferences } from "./definitions";
-import { listArrangementSchema, pageStateSchema } from "./catalogues";
 import {
   actionDefinitionSchema,
   conditionNodeSchema,
@@ -152,20 +151,11 @@ export const calendarMappingSchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-export const standardPageReplacementSchema = z
-  .object({
-    standardPage: z.enum(["list", "detail", "create_form"]),
-    recordType: recordTypeReferenceSchema,
-  })
-  .strict();
-
 const pageV2Common = {
   pageId: pageIdSchema,
   key: builderKeySchema,
   name: labelSchema,
   accessPermissionKey: namespacedKeySchema,
-  states: z.array(pageStateSchema).min(1),
-  standardPageReplacement: standardPageReplacementSchema.optional(),
 };
 
 const pageV2Base = {
@@ -179,19 +169,8 @@ const listPageV2Schema = z
     type: z.literal("list"),
     recordType: recordTypeReferenceSchema,
     queryId: queryIdSchema,
-    arrangements: z.array(listArrangementSchema).min(1),
-    calendarMapping: calendarMappingSchema.optional(),
   })
-  .strict()
-  .superRefine((value, context) => {
-    const usesCalendar = value.arrangements.includes("calendar");
-    if (usesCalendar !== (value.calendarMapping !== undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["calendarMapping"],
-        message: "Calendar mapping is required exactly when the calendar arrangement is enabled",
-      });
-  });
+  .strict();
 
 const guidedFormStepV2Schema = z
   .object({
@@ -668,7 +647,6 @@ export type PublishedApplicationDefinitionV2 = z.infer<
   typeof publishedApplicationDefinitionV2Schema
 >;
 export type PublishedApplicationDefinition = z.infer<typeof publishedApplicationDefinitionSchema>;
-export type StandardPageReplacement = z.infer<typeof standardPageReplacementSchema>;
 export type ApplicationRole = z.infer<typeof applicationRoleSchema>;
 export type Pipeline = z.infer<typeof pipelineSchema>;
 export type ApplicationConnectionBinding = z.infer<typeof applicationConnectionBindingSchema>;
