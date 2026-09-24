@@ -9,7 +9,8 @@ import {
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
   type PermissionRegistryEntryCandidate,
-  type CurrentUserFlow,
+  type CurrentUserFlowActionTarget as FlowActionTarget,
+  type CurrentUserFlowQueryTarget as FlowQueryTarget,
   type ProtectedReadModelKey,
 } from "@vortex/contracts";
 import {
@@ -55,8 +56,6 @@ export type StoredPageReadModelValue = Readonly<{
   value: unknown;
 }>;
 
-type FlowActionTarget = Extract<CurrentUserFlow["nodes"][number], { kind: "action" }>["target"];
-
 const sameUuid = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
@@ -83,26 +82,50 @@ const declaration = (
   authority: { kind: "permission" },
 });
 
+type OperationOwner = Extract<FlowActionTarget, { kind: "protected_operation" }>["operation"]["owner"];
+
+type ReleaseEvidence = Readonly<{
+  releaseVersion: string;
+  contentFingerprint: string;
+  resolutionFingerprint: string;
+}>;
+
+/** Whether a placement's flow bindings reach an operation, and whether all of them resolve. */
+type PlacementOperationBinding = Readonly<{ required: boolean; bound: boolean }>;
+
+const operationOwnerId = (owner: OperationOwner): string =>
+  owner.kind === "application"
+    ? owner.applicationRootId
+    : owner.kind === "module"
+      ? owner.moduleRootId
+      : owner.serviceId;
+
 /**
- * A placement is operation-bound when its compiled component flow bindings reach at least one
- * operation Action target and every such target resolves in this exact installed release: the
- * Application's verified dependency manifest carries the identical release evidence and, for a
- * Module-owned target, the bound release set carries that exact Module release. The operation is
+ * Resolves every placement's compiled component flow bindings against this exact installed release.
+ * A placement requires an operation when one of its bound flows reaches an Action target, or when
+ * any binding cannot be proved (a platform-managed flow, or a flow or target missing from this
+ * release), so an unprovable binding fails closed even without a use gate. It is operation-bound
+ * only when it requires an operation and every flow and target it reaches resolves: application
+ * evidence names this exact Application release and its verified dependency manifest carries the
+ * identical entry, and Module evidence names the exact bound Module release. The operation is
  * never named by the placement or the browser, and this only proves the binding resolves; the
  * owning operation still re-checks its own authority when invoked.
  */
-const operationBoundPlacements = (context: InstalledRuntimeContext): ReadonlySet<string> => {
+const placementOperationBindings = (
+  context: InstalledRuntimeContext,
+): ReadonlyMap<string, PlacementOperationBinding> => {
   const release = context.releaseSet;
   const application = release.application;
-  const flows = new Map(application.content.flows.map((flow) => [flow.flowId.toLowerCase(), flow]));
   const manifest = application.dependencyManifest;
-  const sameEvidence = (
-    entry: { releaseVersion: string; contentFingerprint: string; resolutionFingerprint: string },
-    target: { releaseVersion: string; contentFingerprint: string; resolutionFingerprint: string },
-  ): boolean =>
+  const flows = new Map(application.content.flows.map((flow) => [flow.flowId.toLowerCase(), flow]));
+  const sameEvidence = (entry: ReleaseEvidence, target: ReleaseEvidence): boolean =>
     entry.releaseVersion === target.releaseVersion &&
     entry.contentFingerprint === target.contentFingerprint &&
     entry.resolutionFingerprint === target.resolutionFingerprint;
+  const applicationReleased = (applicationRootId: string, evidence: ReleaseEvidence): boolean =>
+    sameUuid(applicationRootId, application.rootId) &&
+    evidence.releaseVersion === application.releaseVersion &&
+    evidence.resolutionFingerprint === application.resolutionFingerprint;
   const moduleReleased = (
     moduleRootId: string,
     releaseVersion: string,
@@ -114,81 +137,149 @@ const operationBoundPlacements = (context: InstalledRuntimeContext): ReadonlySet
         module.releaseVersion === releaseVersion &&
         module.resolutionFingerprint === resolutionFingerprint,
     );
-  const resolves = (target: FlowActionTarget): boolean => {
+  const queryResolves = (target: FlowQueryTarget): boolean => {
+    switch (target.kind) {
+      case "application_query":
+        return (
+          applicationReleased(target.applicationRootId, target) &&
+          manifest.some(
+            (entry) =>
+              entry.kind === "application_query" &&
+              sameUuid(entry.applicationRootId, target.applicationRootId) &&
+              sameUuid(entry.queryId, target.queryId) &&
+              sameEvidence(entry, target),
+          )
+        );
+      case "query":
+        return (
+          moduleReleased(
+            target.moduleRootId,
+            target.moduleReleaseVersion,
+            target.resolutionFingerprint,
+          ) &&
+          manifest.some(
+            (entry) =>
+              entry.kind === "module_query" &&
+              sameUuid(entry.moduleRootId, target.moduleRootId) &&
+              sameUuid(entry.queryId, target.queryId) &&
+              sameEvidence(entry, { ...target, releaseVersion: target.moduleReleaseVersion }),
+          )
+        );
+      default:
+        return false;
+    }
+  };
+  const actionResolves = (target: FlowActionTarget): boolean => {
     switch (target.kind) {
       case "protected_operation": {
         const owner = target.operation.owner;
-        const ownerId =
-          owner.kind === "application"
-            ? owner.applicationRootId
-            : owner.kind === "module"
-              ? owner.moduleRootId
-              : owner.serviceId;
         if (
-          owner.kind === "module" &&
-          !moduleReleased(owner.moduleRootId, target.releaseVersion, target.resolutionFingerprint)
+          (owner.kind === "application" && !applicationReleased(owner.applicationRootId, target)) ||
+          (owner.kind === "module" &&
+            !moduleReleased(
+              owner.moduleRootId,
+              target.releaseVersion,
+              target.resolutionFingerprint,
+            )) ||
+          (owner.kind === "platform_service" && target.catalogueFingerprint === undefined)
         )
           return false;
         return manifest.some(
           (entry) =>
             entry.kind === "protected_operation" &&
             entry.operation.owner.kind === owner.kind &&
-            sameUuid(
-              entry.operation.owner.kind === "application"
-                ? entry.operation.owner.applicationRootId
-                : entry.operation.owner.kind === "module"
-                  ? entry.operation.owner.moduleRootId
-                  : entry.operation.owner.serviceId,
-              ownerId,
-            ) &&
+            sameUuid(operationOwnerId(entry.operation.owner), operationOwnerId(owner)) &&
             sameUuid(entry.operation.operationId, target.operation.operationId) &&
-            sameEvidence(entry, target),
+            sameEvidence(entry, target) &&
+            entry.catalogueFingerprint === target.catalogueFingerprint,
         );
       }
-      case "application_action":
-        return manifest.some(
-          (entry) =>
-            entry.kind === "application_action" &&
-            sameUuid(entry.applicationRootId, target.applicationRootId) &&
-            sameUuid(entry.actionId, target.actionId) &&
-            sameEvidence(entry, target),
+      case "form_continuation":
+        return (
+          applicationReleased(target.applicationRootId, target) &&
+          manifest.some(
+            (entry) =>
+              entry.kind === "application_form" &&
+              sameUuid(entry.applicationRootId, target.applicationRootId) &&
+              sameUuid(entry.formId, target.formId) &&
+              sameEvidence(entry, target),
+          )
         );
       case "durable_workflow_start":
-        return manifest.some(
-          (entry) =>
-            entry.kind === "application_workflow" &&
-            sameUuid(entry.applicationRootId, target.applicationRootId) &&
-            sameUuid(entry.workflowId, target.workflowId) &&
-            sameEvidence(entry, target),
+        return (
+          applicationReleased(target.applicationRootId, target) &&
+          manifest.some(
+            (entry) =>
+              entry.kind === "application_workflow" &&
+              sameUuid(entry.applicationRootId, target.applicationRootId) &&
+              sameUuid(entry.workflowId, target.workflowId) &&
+              sameEvidence(entry, target),
+          )
         );
+      case "application_action":
+        return (
+          applicationReleased(target.applicationRootId, target) &&
+          manifest.some(
+            (entry) =>
+              entry.kind === "application_action" &&
+              sameUuid(entry.applicationRootId, target.applicationRootId) &&
+              sameUuid(entry.actionId, target.actionId) &&
+              sameEvidence(entry, target),
+          )
+        );
+      // A generic record save is pinned only by its owning Module's exact bound release.
       case "record_save":
-        return moduleReleased(target.moduleRootId, target.releaseVersion, target.resolutionFingerprint);
+        return (
+          sameUuid(target.applicationRootId, application.rootId) &&
+          moduleReleased(target.moduleRootId, target.releaseVersion, target.resolutionFingerprint)
+        );
       default:
         return false;
     }
   };
-  const targetsByPlacement = new Map<string, boolean[]>();
+  const outcomes = new Map<string, { required: boolean; resolved: boolean }>();
   for (const binding of application.content.flowBindings) {
-    const flow =
-      binding.flow.kind === "application_owned"
-        ? flows.get(binding.flow.flowId.toLowerCase())
-        : undefined;
     const placementId = binding.controlId.toLowerCase();
-    const outcomes = targetsByPlacement.get(placementId) ?? [];
-    targetsByPlacement.set(placementId, outcomes);
-    // An unresolved or platform-managed flow cannot prove its operations, so it fails closed.
-    if (flow === undefined || flow.contentFingerprint !== binding.flow.contentFingerprint) {
-      outcomes.push(false);
+    const outcome = outcomes.get(placementId) ?? { required: false, resolved: true };
+    outcomes.set(placementId, outcome);
+    const reference = binding.flow;
+    const flow =
+      reference.kind === "application_owned" ? flows.get(reference.flowId.toLowerCase()) : undefined;
+    // A platform-managed flow's operations cannot be read here, so it fails closed like any flow
+    // whose exact evidence is not this release's.
+    if (
+      reference.kind !== "application_owned" ||
+      flow === undefined ||
+      !applicationReleased(reference.applicationRootId, reference) ||
+      !applicationReleased(application.rootId, flow) ||
+      flow.contentFingerprint !== reference.contentFingerprint ||
+      !manifest.some(
+        (entry) =>
+          entry.kind === "application_flow" &&
+          sameUuid(entry.applicationRootId, application.rootId) &&
+          sameUuid(entry.flowId, flow.flowId) &&
+          sameEvidence(entry, reference),
+      )
+    ) {
+      outcome.required = true;
+      outcome.resolved = false;
       continue;
     }
-    for (const node of flow.nodes)
-      if (node.kind === "action" && node.target.kind !== "form_continuation")
-        outcomes.push(resolves(node.target));
+    for (const node of flow.nodes) {
+      if (node.kind === "action") {
+        outcome.required = true;
+        if (!actionResolves(node.target)) outcome.resolved = false;
+      } else if (node.kind === "query" && !queryResolves(node.target)) {
+        outcome.required = true;
+        outcome.resolved = false;
+      }
+    }
   }
-  return new Set(
-    [...targetsByPlacement].flatMap(([placementId, outcomes]) =>
-      outcomes.length > 0 && outcomes.every(Boolean) ? [placementId] : [],
-    ),
+  return new Map(
+    [...outcomes].map(([placementId, outcome]) => [
+      placementId,
+      { required: outcome.required, bound: outcome.required && outcome.resolved },
+    ]),
   );
 };
 
@@ -271,7 +362,7 @@ export const createStoredPageCapabilityService = (
         throw new Error("STORED_PAGE_PERMISSION_BINDING_UNAVAILABLE");
       return matches[0];
     };
-    const boundPlacements = operationBoundPlacements(context);
+    const operationBindings = placementOperationBindings(context);
     const pageEntry = permission(page.accessPermissionKey);
     const resolved = resolvePageComposition(page, applicationRelease.content.shells);
     const placements: Record<string, unknown>[] =
@@ -295,6 +386,7 @@ export const createStoredPageCapabilityService = (
             viewPermissionKey === undefined ? undefined : permission(viewPermissionKey);
           const useEntry =
             usePermissionKey === undefined ? undefined : permission(usePermissionKey);
+          const operation = operationBindings.get(placementId.toLowerCase());
           return [
             placementId,
             {
@@ -322,7 +414,8 @@ export const createStoredPageCapabilityService = (
                       ),
                     },
                   }),
-              operationBound: boundPlacements.has(placementId.toLowerCase()),
+              operationRequired: operation?.required === true,
+              operationBound: operation?.bound === true,
             },
           ];
         }),
