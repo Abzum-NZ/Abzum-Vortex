@@ -678,8 +678,8 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
       serviceId: "e0a60e5a-cb5c-449d-ab9d-4a47ab344e3f",
       operationId: "9116e660-375d-4157-b3be-d0943a1c988a",
       releaseVersion: "1.0.0",
-      contentFingerprint: "sha256:b9663975654126162032cde7e2413626777ff53e13546e832ea53a5788fca0f0",
-      catalogueFingerprint: "sha256:fa5b0dfd127f082cc11abce4c8523311556c2c84fbdf5d5763bb6c0f46dbf1f2",
+      contentFingerprint: "sha256:faf7a39edae6f3055da93758acd2d0706ee3f6a1d016cedc22301e75aa360495",
+      catalogueFingerprint: "sha256:a71111b19b9b1df68e8d537e6b879f0552fcb52e2a50433d6786f5002a9d9fad",
     },
     descriptor: {
       "contractVersion": "1.0.0",
@@ -707,10 +707,6 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
         },
         "revision": {
           "type": "whole_number",
-          "required": true
-        },
-        "changed": {
-          "type": "yes_no",
           "required": true
         }
       },
