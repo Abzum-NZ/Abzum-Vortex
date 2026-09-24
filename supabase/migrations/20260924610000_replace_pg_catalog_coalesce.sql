@@ -6,7 +6,8 @@
 -- definition with plain coalesce(...) in place of the catalog-qualified call.
 -- Each body is otherwise identical to its live definition, including the
 -- changes applied in place by 20260924070000, 20260924140000 and
--- 20260924180000. Each function is re-created under its own current owner, so
+-- 20260924180000 and the replacement of is_lifecycle_destination by
+-- 20260924590000. Each function is re-created under its own current owner, so
 -- OID, owner, grants, comment, security and search_path stay put; where the live
 -- definition carried explicit owner, privilege or comment statements they are
 -- restated verbatim below.
@@ -440,7 +441,7 @@ as $function$
 $function$;
 
 
--- vortex_record.is_lifecycle_destination (live: 20260923080000_record_lifecycle_policy_storage.sql, owner vortex_record_owner; 1 catalog-qualified COALESCE calls) --
+-- vortex_record.is_lifecycle_destination (live: 20260924590000_remove_unreachable_surfaces.sql, owner vortex_record_owner; 1 catalog-qualified COALESCE calls) --
 create or replace function vortex_record.is_lifecycle_destination(p_value text)
 returns boolean
 language sql
@@ -450,8 +451,7 @@ set search_path = ''
 as $function$
   select coalesce(
     pg_catalog.char_length(p_value) between 1 and 80
-    and p_value ~ '^[a-z0-9]+(?:[-_][a-z0-9]+)*$'
-    and p_value !~* '^https?://|postgres://|select |insert ',
+    and p_value ~ '^[a-z0-9]+(?:[-_][a-z0-9]+)*$',
     false
   );
 $function$;
