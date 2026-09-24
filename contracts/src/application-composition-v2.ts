@@ -928,12 +928,92 @@ export const applicationCompositionCatalogueSnapshotV2Schema = z
       });
   });
 
+/**
+ * Closed, platform-declared protected read models. A page binds to one by key only; the request-time
+ * resolver reads it live through the owning protected reader under the viewer's current authority.
+ * Nothing here is copied into application records, and there are no free-form keys or filters.
+ */
+export const protectedReadModelKeys = [
+  "people",
+  "organization_accounts",
+  "roles",
+  "groups",
+  "effective_assignments",
+  "tenant_structure",
+] as const;
+export const protectedReadModelKeySchema = z.enum(protectedReadModelKeys);
+export type ProtectedReadModelKey = z.infer<typeof protectedReadModelKeySchema>;
+
+export const protectedReadModelDeclarations = Object.freeze({
+  people: Object.freeze({
+    label: "People (Group membership)",
+    ownerReader: "access.listGroupMemberships",
+    filters: Object.freeze(["groupId"] as const),
+    resultContract: "ListOrganizationAdministrationMembershipsResult",
+  }),
+  organization_accounts: Object.freeze({
+    label: "Organisation accounts",
+    ownerReader: "access.listOrganizationAccounts",
+    filters: Object.freeze([] as const),
+    resultContract: "ListOrganizationAccountsResult",
+  }),
+  roles: Object.freeze({
+    label: "Roles",
+    ownerReader: "access.listRoles",
+    filters: Object.freeze([] as const),
+    resultContract: "ListOrganizationAdministrationRolesResult",
+  }),
+  groups: Object.freeze({
+    label: "Groups",
+    ownerReader: "access.listGroups",
+    filters: Object.freeze([] as const),
+    resultContract: "ListOrganizationAdministrationGroupsResult",
+  }),
+  effective_assignments: Object.freeze({
+    label: "Effective assignments",
+    ownerReader: "access.listRoleAssignments",
+    filters: Object.freeze([] as const),
+    resultContract: "ListOrganizationAdministrationRoleAssignmentsResult",
+  }),
+  tenant_structure: Object.freeze({
+    label: "Tenant structure",
+    ownerReader: "identity.listTenantHierarchy",
+    filters: Object.freeze([] as const),
+    resultContract: "TenantHierarchyResult",
+  }),
+} satisfies Record<
+  ProtectedReadModelKey,
+  Readonly<{
+    label: string;
+    ownerReader: string;
+    filters: readonly "groupId"[];
+    resultContract: string;
+  }>
+>);
+
+/** A placement's binding names one declared read model and nothing else. */
+export const protectedReadModelBindingV2Schema = z
+  .object({ key: protectedReadModelKeySchema })
+  .strict();
+export type ProtectedReadModelBindingV2 = z.infer<typeof protectedReadModelBindingV2Schema>;
+
+/** Request-time input is closed: a bounded page, the reader's own cursor and the declared filters. */
+export const protectedReadModelPageRequestSchema = z
+  .object({
+    pageSize: z.number().int().min(1).max(100),
+    after: z.uuid().optional(),
+    groupId: z.uuid().optional(),
+  })
+  .strict();
+export type ProtectedReadModelPageRequest = z.infer<typeof protectedReadModelPageRequestSchema>;
+
 type BlockPlacementV2 = {
   block: z.infer<typeof platformBlockReferenceV2Schema>;
   viewPermissionKey?: z.infer<typeof namespacedKeySchema> | undefined;
   usePermissionKey?: z.infer<typeof namespacedKeySchema> | undefined;
   visibilityCondition?: z.infer<typeof conditionNodeSchema> | undefined;
   queryId?: z.infer<typeof queryIdSchema> | undefined;
+  readModel?: ProtectedReadModelBindingV2 | undefined;
   settings: Record<string, BlockPropertyValueV2Contract>;
   themeOverrides: Record<string, z.infer<typeof themeTokenValueV2Schema>>;
   responsive: z.infer<typeof responsivePlacementV2Schema>;
@@ -950,6 +1030,7 @@ type SourceBlockPlacementV2 = {
   use_permission?: z.infer<typeof namespacedKeySchema> | undefined;
   visibility_condition?: z.infer<typeof sourceQualifiedConditionSchema> | undefined;
   query?: z.infer<typeof builderKeySchema> | undefined;
+  read_model?: ProtectedReadModelKey | undefined;
   settings: Record<string, SourceBlockPropertyValueV2Contract>;
   theme_overrides: Record<string, z.infer<typeof sourceThemeTokenValueV2Schema>>;
   responsive: z.infer<typeof sourceResponsivePlacementV2Schema>;
@@ -973,6 +1054,7 @@ export const blockPlacementV2Schema: z.ZodType<BlockPlacementV2> = z.lazy(() =>
       usePermissionKey: namespacedKeySchema.optional(),
       visibilityCondition: conditionNodeSchema.optional(),
       queryId: queryIdSchema.optional(),
+      readModel: protectedReadModelBindingV2Schema.optional(),
       settings: z.record(builderKeySchema, blockPropertyValueV2Schema),
       themeOverrides: z.record(builderKeySchema, themeTokenValueV2Schema),
       responsive: responsivePlacementV2Schema,
@@ -1014,6 +1096,7 @@ export const sourceBlockPlacementV2Schema: z.ZodType<SourceBlockPlacementV2> = z
       use_permission: namespacedKeySchema.optional(),
       visibility_condition: sourceQualifiedConditionSchema.optional(),
       query: builderKeySchema.optional(),
+      read_model: protectedReadModelKeySchema.optional(),
       settings: z.record(builderKeySchema, sourceBlockPropertyValueV2Schema),
       theme_overrides: z.record(builderKeySchema, sourceThemeTokenValueV2Schema),
       responsive: sourceResponsivePlacementV2Schema,
