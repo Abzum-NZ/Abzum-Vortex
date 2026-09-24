@@ -11,19 +11,25 @@ import type { DatabaseRow, RuntimeDatabaseTransaction } from "@vortex/db";
  *
  * 1. opens one short worker transaction and calls
  *    `vortex_record.claim_record_index_build`, which leases one non-present
- *    catalogue row and returns the exact statements it needs;
- * 2. runs each returned statement as a standalone statement outside any
- *    transaction block, because PostgreSQL refuses `CREATE INDEX CONCURRENTLY`
- *    and `DROP INDEX CONCURRENTLY` inside one;
+ *    catalogue row under a fresh claim identity and returns the exact
+ *    statements it needs;
+ * 2. before each returned statement, confirms and extends that exact claim
+ *    through `vortex_record.renew_record_index_build_lease` in its own short
+ *    transaction, then runs the statement standalone outside any transaction
+ *    block, because PostgreSQL refuses `CREATE INDEX CONCURRENTLY` and
+ *    `DROP INDEX CONCURRENTLY` inside one;
  * 3. opens one more short worker transaction and calls
  *    `vortex_record.record_index_build_result`, which re-observes the physical
  *    definition and records readiness.
  *
  * Nothing here supplies SQL or a physical name: both come back from the
- * Record-owned catalogue, and physical statements are only ever produced for a
- * worker that already owns the record data tables. `runWorkerTransaction` and
- * `runStandaloneStatement` must both be bound to that operational worker login;
- * neither may run on a human request connection.
+ * Record-owned catalogue. `runWorkerTransaction` and `runStandaloneStatement`
+ * must both be bound to one dedicated operational login that is a member of
+ * `vortex_record_owner` with INHERIT: that membership alone may execute the
+ * owner-only claim, renew and record functions and owns the `record_data`
+ * tables, which PostgreSQL requires for a concurrent index build. Neither may
+ * run on a human request, runtime, adapter or module connection, and no such
+ * role is ever granted DDL.
  */
 
 export const indexBuildRunnerLimits = Object.freeze({
@@ -57,8 +63,8 @@ export class IndexBuildRunnerError extends Error {
 
 /**
  * Opens one fresh transaction on the operational index-build worker login and
- * commits it when `operation` resolves (rolls back when it throws). Claim and
- * result calls must each be a new transaction on that login.
+ * commits it when `operation` resolves (rolls back when it throws). Claim,
+ * renew and result calls must each be a new transaction on that login.
  */
 export type IndexBuildWorkerTransactionRunner = <Result>(
   operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
@@ -66,9 +72,9 @@ export type IndexBuildWorkerTransactionRunner = <Result>(
 
 /**
  * Executes one derived DDL statement as a standalone statement outside any
- * transaction block. It must be bound to a connection that owns the record data
- * tables, because PostgreSQL only builds an index concurrently for the table
- * owner.
+ * transaction block. It must be bound to the same operational login, whose
+ * `vortex_record_owner` membership owns the record data tables, because
+ * PostgreSQL only builds an index concurrently for the table owner.
  */
 export type IndexBuildStandaloneStatementRunner = (statement: string) => Promise<void>;
 
@@ -85,6 +91,7 @@ export const indexBuildRefusalReasonCodes = [
   "storage_contract_unavailable",
   "field_unavailable",
   "index_definition_drifted",
+  "index_name_conflict",
   "uniqueness_enforcement_present",
   "desired_definition_changed",
   "definition_mismatch",
@@ -105,10 +112,11 @@ export type IndexBuildItemResult = Readonly<{
 
 export type IndexBuildStop =
   | Readonly<{ stage: "claim"; outcome: "repeated_claim" }>
-  | Readonly<{ stage: "claim"; outcome: "refused"; reasonCode: string }>
+  | Readonly<{ stage: "claim"; outcome: "refused"; reasonCode: IndexBuildRefusalReasonCode }>
   | Readonly<{ stage: "build"; outcome: "failed" }>
+  | Readonly<{ stage: "build"; outcome: "lease_lost"; reasonCode: IndexBuildRefusalReasonCode }>
   | Readonly<{ stage: "record"; outcome: "not_ready" }>
-  | Readonly<{ stage: "record"; outcome: "refused"; reasonCode: string }>;
+  | Readonly<{ stage: "record"; outcome: "refused"; reasonCode: IndexBuildRefusalReasonCode }>;
 
 export type IndexBuildRunResult =
   | Readonly<{ status: "idle"; items: readonly IndexBuildItemResult[] }>
@@ -125,9 +133,10 @@ export interface IndexBuildRunner {
   run(inputCandidate?: unknown): Promise<IndexBuildRunResult>;
 }
 
-type ClaimRow = DatabaseRow & { readonly result: unknown };
+type ResultRow = DatabaseRow & { readonly result: unknown };
 
 type IndexBuildJob = Readonly<{
+  claimId: string;
   indexContractId: string;
   storageContractId: string;
   fieldId: string;
@@ -138,12 +147,16 @@ type IndexBuildJob = Readonly<{
 
 type ParsedClaim =
   | Readonly<{ kind: "none" }>
-  | Readonly<{ kind: "refused"; reasonCode: string }>
+  | Readonly<{ kind: "refused"; reasonCode: IndexBuildRefusalReasonCode }>
   | Readonly<{ kind: "claimed"; job: IndexBuildJob }>;
+
+type ParsedRenewal =
+  | Readonly<{ kind: "renewed" }>
+  | Readonly<{ kind: "refused"; reasonCode: IndexBuildRefusalReasonCode }>;
 
 type ParsedRecord =
   | Readonly<{ kind: "recorded"; observedState: "present" | "missing" | "invalid" }>
-  | Readonly<{ kind: "refused"; reasonCode: string }>;
+  | Readonly<{ kind: "refused"; reasonCode: IndexBuildRefusalReasonCode }>;
 
 const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -181,6 +194,21 @@ const isPurpose = (value: unknown): value is "uniqueness" | "performance" =>
 const isObservedState = (value: unknown): value is "present" | "missing" | "invalid" =>
   value === "present" || value === "missing" || value === "invalid";
 
+const isRefusalReasonCode = (value: unknown): value is IndexBuildRefusalReasonCode =>
+  typeof value === "string" && (indexBuildRefusalReasonCodes as readonly string[]).includes(value);
+
+/** A refusal carries exactly one known reason code and nothing else. */
+const parseRefusal = (
+  candidate: Readonly<Record<string, unknown>>,
+): IndexBuildRefusalReasonCode | undefined => {
+  const reasonCode = candidate.reasonCode;
+  return candidate.outcome === "refused" &&
+    hasExactKeys(candidate, ["outcome", "reasonCode"]) &&
+    isRefusalReasonCode(reasonCode)
+    ? reasonCode
+    : undefined;
+};
+
 const uuidText = (value: unknown): string | undefined => {
   if (
     typeof value !== "string" ||
@@ -196,7 +224,7 @@ const uuidText = (value: unknown): string | undefined => {
  * this bounds a compromised or drifted catalogue return to one known shape.
  */
 const parseStatements = (candidate: unknown): readonly string[] | undefined => {
-  if (!Array.isArray(candidate) || candidate.length < 1 || candidate.length > 3) return undefined;
+  if (!Array.isArray(candidate) || candidate.length < 1 || candidate.length > 2) return undefined;
   const statements: string[] = [];
   for (const entry of candidate) {
     if (typeof entry !== "string" || entry.length < 1 || entry.length > 2000) return undefined;
@@ -215,18 +243,13 @@ const parseClaim = (candidate: unknown): ParsedClaim => {
   if (!isObject(candidate)) throw invalidResult();
   if (candidate.outcome === "none" && hasExactKeys(candidate, ["outcome"]))
     return { kind: "none" };
-  if (
-    candidate.outcome === "refused" &&
-    hasExactKeys(candidate, ["outcome", "reasonCode"]) &&
-    typeof candidate.reasonCode === "string" &&
-    candidate.reasonCode.length > 0 &&
-    candidate.reasonCode.length <= 64
-  )
-    return { kind: "refused", reasonCode: candidate.reasonCode };
+  const refusal = parseRefusal(candidate);
+  if (refusal !== undefined) return { kind: "refused", reasonCode: refusal };
   if (
     candidate.outcome !== "claimed" ||
     !hasExactKeys(candidate, [
       "outcome",
+      "claimId",
       "indexContractId",
       "storageContractId",
       "fieldId",
@@ -237,6 +260,7 @@ const parseClaim = (candidate: unknown): ParsedClaim => {
   )
     throw invalidResult();
 
+  const claimId = uuidText(candidate.claimId);
   const indexContractId = uuidText(candidate.indexContractId);
   const storageContractId = storageContractIdSchema.safeParse(candidate.storageContractId);
   const fieldId = fieldIdSchema.safeParse(candidate.fieldId);
@@ -244,6 +268,7 @@ const parseClaim = (candidate: unknown): ParsedClaim => {
   const statements = parseStatements(candidate.statements);
   const purpose = candidate.purpose;
   if (
+    claimId === undefined ||
     indexContractId === undefined ||
     !storageContractId.success ||
     !fieldId.success ||
@@ -256,6 +281,7 @@ const parseClaim = (candidate: unknown): ParsedClaim => {
   return {
     kind: "claimed",
     job: {
+      claimId,
       indexContractId,
       storageContractId: storageContractId.data,
       fieldId: fieldId.data,
@@ -266,17 +292,21 @@ const parseClaim = (candidate: unknown): ParsedClaim => {
   };
 };
 
-const parseRecord = (candidate: unknown): ParsedRecord => {
+const parseRenewal = (candidate: unknown): ParsedRenewal => {
   if (!isObject(candidate)) throw invalidResult();
-  if (
-    candidate.outcome === "refused" &&
-    hasExactKeys(candidate, ["outcome", "reasonCode"]) &&
-    typeof candidate.reasonCode === "string" &&
-    candidate.reasonCode.length > 0 &&
-    candidate.reasonCode.length <= 64
-  )
-    return { kind: "refused", reasonCode: candidate.reasonCode };
+  if (candidate.outcome === "renewed" && hasExactKeys(candidate, ["outcome"]))
+    return { kind: "renewed" };
+  const refusal = parseRefusal(candidate);
+  if (refusal === undefined) throw invalidResult();
+  return { kind: "refused", reasonCode: refusal };
+};
+
+const parseRecord = (candidate: unknown, job: IndexBuildJob): ParsedRecord => {
+  if (!isObject(candidate)) throw invalidResult();
+  const refusal = parseRefusal(candidate);
+  if (refusal !== undefined) return { kind: "refused", reasonCode: refusal };
   const outcome = candidate.outcome;
+  // A recorded result must describe exactly the claimed index.
   if (
     !isObservedState(outcome) ||
     !hasExactKeys(candidate, [
@@ -288,7 +318,12 @@ const parseRecord = (candidate: unknown): ParsedRecord => {
       "desiredDefinitionFingerprint",
       "observedState",
     ]) ||
-    candidate.observedState !== outcome
+    candidate.observedState !== outcome ||
+    candidate.indexContractId !== job.indexContractId ||
+    candidate.storageContractId !== job.storageContractId ||
+    candidate.fieldId !== job.fieldId ||
+    candidate.purpose !== job.purpose ||
+    candidate.desiredDefinitionFingerprint !== job.desiredDefinitionFingerprint
   )
     throw invalidResult();
   return { kind: "recorded", observedState: outcome };
@@ -329,7 +364,7 @@ const claimOnce = async (
   leaseSeconds: number,
 ): Promise<ParsedClaim> =>
   dependencies.runWorkerTransaction(async (transaction) => {
-    const rows = await transaction.query<ClaimRow>`
+    const rows = await transaction.query<ResultRow>`
       select vortex_record.claim_record_index_build(${leaseSeconds}::integer) as result
     `;
     const row = rows[0];
@@ -337,21 +372,41 @@ const claimOnce = async (
     return parseClaim(row.result);
   });
 
+const renewOnce = async (
+  dependencies: IndexBuildRunnerDependencies,
+  job: IndexBuildJob,
+  leaseSeconds: number,
+): Promise<ParsedRenewal> =>
+  dependencies.runWorkerTransaction(async (transaction) => {
+    const rows = await transaction.query<ResultRow>`
+      select vortex_record.renew_record_index_build_lease(
+        ${job.storageContractId}::uuid,
+        ${job.fieldId}::uuid,
+        ${job.claimId}::uuid,
+        ${leaseSeconds}::integer
+      ) as result
+    `;
+    const row = rows[0];
+    if (rows.length !== 1 || row === undefined) throw invalidResult();
+    return parseRenewal(row.result);
+  });
+
 const recordOnce = async (
   dependencies: IndexBuildRunnerDependencies,
   job: IndexBuildJob,
 ): Promise<ParsedRecord> =>
   dependencies.runWorkerTransaction(async (transaction) => {
-    const rows = await transaction.query<ClaimRow>`
+    const rows = await transaction.query<ResultRow>`
       select vortex_record.record_index_build_result(
         ${job.storageContractId}::uuid,
         ${job.fieldId}::uuid,
+        ${job.claimId}::uuid,
         ${job.desiredDefinitionFingerprint}::text
       ) as result
     `;
     const row = rows[0];
     if (rows.length !== 1 || row === undefined) throw invalidResult();
-    return parseRecord(row.result);
+    return parseRecord(row.result, job);
   });
 
 const runBuild = async (
@@ -382,6 +437,18 @@ const runBuild = async (
 
     let buildFailed = false;
     for (const statement of job.statements) {
+      // The claim must still be this run's before every statement: a lease
+      // that expired and was claimed again belongs to another run, which may
+      // be building the same index, so no further DDL is issued here.
+      const renewal = await renewOnce(dependencies, job, input.leaseSeconds);
+      if (renewal.kind === "refused") {
+        items.push({ ...jobIdentity(job), outcome: "refused", reasonCode: renewal.reasonCode });
+        return {
+          status: "stopped",
+          stop: { stage: "build", outcome: "lease_lost", reasonCode: renewal.reasonCode },
+          items,
+        };
+      }
       try {
         await dependencies.runStandaloneStatement(statement);
       } catch {
@@ -390,6 +457,8 @@ const runBuild = async (
       }
     }
 
+    // Recording releases the lease on every outcome, so a failed build is
+    // observed (usually `invalid`) and resumed by a later run.
     const recorded = await recordOnce(dependencies, job);
     items.push(
       recorded.kind === "refused"
