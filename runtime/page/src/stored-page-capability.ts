@@ -1,7 +1,6 @@
 import "server-only";
 
 import {
-  applicationDefinitionConsumerReadResultV2Schema,
   applicationRootIdSchema,
   pageIdSchema,
   revisionSchema,
@@ -13,11 +12,10 @@ import {
 } from "@vortex/contracts";
 import {
   createHumanOrganizationRequestService,
-  createStoredApplicationPermissionSource,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-  type StoredApplicationPermissionSourceDependencies,
 } from "@vortex/access";
+import type { InstalledRuntimeContext } from "@vortex/app";
 import {
   createAuthenticatedPageCapabilityService,
   type FixedAuthenticatedPageCapability,
@@ -25,15 +23,20 @@ import {
 import type { ProjectedPageCapability } from "./page-capability-projection";
 import { resolvePageComposition } from "./page-composition-resolution";
 
+/** The browser address may select only a page; organisation, installation and release come from context. */
 export type StoredPageCapabilitySelection = Readonly<{
-  applicationRootId: string;
-  releaseRevision: number;
   pageId: string;
 }>;
 
 export type StoredPageCapabilityDependencies = HumanOrganizationRequestDependencies &
-  Omit<StoredApplicationPermissionSourceDependencies, "applicationRootId" | "releaseRevision"> &
-  Readonly<{ selection: StoredPageCapabilitySelection }>;
+  Readonly<{
+    /**
+     * The single trusted installed context assembled by App. Page projects only from this exact
+     * release set and never re-reads or rebuilds organisation, release or permission authority.
+     */
+    context: InstalledRuntimeContext;
+    selection: StoredPageCapabilitySelection;
+  }>;
 
 const sameUuid = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
@@ -72,105 +75,105 @@ const v2Placements = (slot: unknown): Record<string, unknown>[] => {
 export const createStoredPageCapabilityService = (
   dependencies: StoredPageCapabilityDependencies,
 ) => {
-  const applicationRootId = applicationRootIdSchema.parse(dependencies.selection.applicationRootId);
+  const context = dependencies.context;
+  const applicationRootId = applicationRootIdSchema.parse(context.applicationRootId);
   const releaseRevision = revisionSchema
     .max(Number.MAX_SAFE_INTEGER)
-    .parse(dependencies.selection.releaseRevision);
+    .parse(context.applicationReleaseRevision);
   const selectedPageId = pageIdSchema.parse(dependencies.selection.pageId);
-  const source = createStoredApplicationPermissionSource({
-    systemContext: dependencies.systemContext,
-    applicationRootId,
-    releaseRevision,
-    definitionCatalogue: dependencies.definitionCatalogue,
-    ...(dependencies.resolvedRequestTransaction === undefined
-      ? {}
-      : { resolvedRequestTransaction: dependencies.resolvedRequestTransaction }),
-  });
+
+  // The loader has already verified this, but Page depends only on evidence it can see, so a
+  // context whose exact release, registration and scope disagree is refused rather than projected.
+  const applicationRelease = context.releaseSet.application;
+  const registration = context.permissionRegistration;
+  if (
+    applicationRelease.organizationId !== context.organizationId ||
+    applicationRelease.rootId !== context.applicationRootId ||
+    applicationRelease.releaseRevision !== context.applicationReleaseRevision ||
+    registration.organizationId !== context.organizationId ||
+    registration.applicationRootId !== context.applicationRootId ||
+    registration.applicationRelease.releaseRevision !== context.applicationReleaseRevision
+  )
+    throw new Error("STORED_PAGE_TRUSTED_CONTEXT_UNAVAILABLE");
 
   const requestDependencies = {
     ...dependencies,
-    correlationId: () => dependencies.systemContext.correlationId,
+    correlationId: () => context.correlationId,
   };
   const requests = createHumanOrganizationRequestService(requestDependencies);
 
   // Undefined means the selected page is not in the release: a lasting answer, not a fault.
-  const load = async (): Promise<FixedAuthenticatedPageCapability | undefined> =>
-    source
-      .readExact()
-      .then(({ applicationRelease: release, permissionRegistration: registration }) => {
-        const parsed = applicationDefinitionConsumerReadResultV2Schema.safeParse(release);
-        if (!parsed.success) throw new Error("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
-        const applicationRelease = parsed.data;
-        const pages = applicationRelease.content.pages.filter((page) =>
-          sameUuid(page.pageId, selectedPageId),
-        );
-        if (pages.length === 0) return undefined;
-        if (pages.length !== 1 || pages[0] === undefined)
-          throw new Error("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
-        const page = pages[0];
-        const permission = (key: string) => {
-          const matches = registration.entries.filter((entry) => entry.permission.key === key);
-          if (matches.length !== 1 || matches[0] === undefined)
-            throw new Error("STORED_PAGE_PERMISSION_BINDING_UNAVAILABLE");
-          return matches[0];
-        };
-        const pageEntry = permission(page.accessPermissionKey);
-        const resolved = resolvePageComposition(page, applicationRelease.content.shells);
-        const placements: Record<string, unknown>[] =
-          resolved.roots.kind === "page"
-            ? v2Placements(resolved.roots.main)
-            : Object.values(resolved.roots.stepContent).flatMap(v2Placements);
-        return {
-          page,
-          applicationShells: applicationRelease.content.shells,
-          sourceCorrelationId: applicationRelease.correlationId,
-          pagePermission: {
-            permissionKey: page.accessPermissionKey,
-            declaration: declaration("application.page.discover", applicationRootId, pageEntry),
-          },
-          placements: Object.fromEntries(
-            placements.map((placement) => {
-              const placementId = String(placement.placementId);
-              const viewPermissionKey = placement.viewPermissionKey as string | undefined;
-              const usePermissionKey = placement.usePermissionKey as string | undefined;
-              const viewEntry =
-                viewPermissionKey === undefined ? undefined : permission(viewPermissionKey);
-              const useEntry =
-                usePermissionKey === undefined ? undefined : permission(usePermissionKey);
-              return [
-                placementId,
-                {
-                  ...(viewEntry === undefined || viewPermissionKey === undefined
-                    ? {}
-                    : {
-                        viewPermission: {
-                          permissionKey: viewPermissionKey,
-                          declaration: declaration(
-                            "application.page.placement.view",
-                            applicationRootId,
-                            viewEntry,
-                          ),
-                        },
-                      }),
-                  ...(useEntry === undefined || usePermissionKey === undefined
-                    ? {}
-                    : {
-                        usePermission: {
-                          permissionKey: usePermissionKey,
-                          declaration: declaration(
-                            "application.page.placement.use",
-                            applicationRootId,
-                            useEntry,
-                          ),
-                        },
-                      }),
-                  operationBound: false,
-                },
-              ];
-            }),
-          ),
-        };
-      });
+  const load = async (): Promise<FixedAuthenticatedPageCapability | undefined> => {
+    const pages = applicationRelease.content.pages.filter((page) =>
+      sameUuid(page.pageId, selectedPageId),
+    );
+    if (pages.length === 0) return undefined;
+    if (pages.length !== 1 || pages[0] === undefined)
+      throw new Error("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
+    const page = pages[0];
+    const permission = (key: string) => {
+      const matches = registration.entries.filter((entry) => entry.permission.key === key);
+      if (matches.length !== 1 || matches[0] === undefined)
+        throw new Error("STORED_PAGE_PERMISSION_BINDING_UNAVAILABLE");
+      return matches[0];
+    };
+    const pageEntry = permission(page.accessPermissionKey);
+    const resolved = resolvePageComposition(page, applicationRelease.content.shells);
+    const placements: Record<string, unknown>[] =
+      resolved.roots.kind === "page"
+        ? v2Placements(resolved.roots.main)
+        : Object.values(resolved.roots.stepContent).flatMap(v2Placements);
+    return {
+      page,
+      applicationShells: applicationRelease.content.shells,
+      sourceCorrelationId: applicationRelease.correlationId,
+      pagePermission: {
+        permissionKey: page.accessPermissionKey,
+        declaration: declaration("application.page.discover", applicationRootId, pageEntry),
+      },
+      placements: Object.fromEntries(
+        placements.map((placement) => {
+          const placementId = String(placement.placementId);
+          const viewPermissionKey = placement.viewPermissionKey as string | undefined;
+          const usePermissionKey = placement.usePermissionKey as string | undefined;
+          const viewEntry =
+            viewPermissionKey === undefined ? undefined : permission(viewPermissionKey);
+          const useEntry =
+            usePermissionKey === undefined ? undefined : permission(usePermissionKey);
+          return [
+            placementId,
+            {
+              ...(viewEntry === undefined || viewPermissionKey === undefined
+                ? {}
+                : {
+                    viewPermission: {
+                      permissionKey: viewPermissionKey,
+                      declaration: declaration(
+                        "application.page.placement.view",
+                        applicationRootId,
+                        viewEntry,
+                      ),
+                    },
+                  }),
+              ...(useEntry === undefined || usePermissionKey === undefined
+                ? {}
+                : {
+                    usePermission: {
+                      permissionKey: usePermissionKey,
+                      declaration: declaration(
+                        "application.page.placement.use",
+                        applicationRootId,
+                        useEntry,
+                      ),
+                    },
+                  }),
+              operationBound: false,
+            },
+          ];
+        }),
+      ),
+    };
+  };
 
   return Object.freeze({
     async project(
@@ -178,15 +181,14 @@ export const createStoredPageCapabilityService = (
       candidate: OrganizationSelectionCandidate,
     ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> {
       if (
-        !sameUuid(candidate.organizationId, dependencies.systemContext.organizationId) ||
+        !sameUuid(candidate.organizationId, context.organizationId) ||
         candidate.applicationRootId === undefined ||
         !sameUuid(candidate.applicationRootId, applicationRootId)
       )
         return { kind: "unavailable" };
-      // Verify the session and application scope before the system-rights read, so a caller
-      // without access gets the same answer whether or not the page exists. The read opens its
-      // own transaction, so it runs between the verification and the projection rather than
-      // inside either: the runtime client holds one connection and would wait on itself.
+      // Verify the session and application scope before projecting, so a caller without access
+      // gets the same answer whether or not the page exists. The context read is already done by
+      // App; the human request only proves the person's current authority over this scope.
       const verified = await requests.run(session, candidate, async () => undefined);
       if (verified.kind !== "available") return verified;
       let fixed: FixedAuthenticatedPageCapability | undefined;
@@ -203,7 +205,7 @@ export const createStoredPageCapabilityService = (
           load: async (_transaction, scope) => {
             if (
               scope.applicationRootId === undefined ||
-              !sameUuid(scope.organizationId, dependencies.systemContext.organizationId) ||
+              !sameUuid(scope.organizationId, context.organizationId) ||
               !sameUuid(scope.applicationRootId, applicationRootId)
             )
               throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
