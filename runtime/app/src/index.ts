@@ -67,6 +67,18 @@ export {
   type OptionalInstallationReader,
 } from "./installation-coordinator";
 
+export {
+  createFirstOwnerApplicationEntryComposition,
+  FirstOwnerApplicationEntryError,
+  firstOwnerApplicationEntryErrorCodes,
+  firstOwnerApplicationEntryRequestSchema,
+  type FirstOwnerApplicationEntryComposition,
+  type FirstOwnerApplicationEntryCompositionDependencies,
+  type FirstOwnerApplicationEntryErrorCode,
+  type FirstOwnerApplicationEntryRequest,
+  type FirstOwnerApplicationEntryResult,
+} from "./first-owner-entry";
+
 export const AppService = Object.freeze({
   key: "app",
   boundary: "@vortex/app",
