@@ -51,5 +51,6 @@ export * from "./storage";
 export * from "./telemetry";
 export * from "./tenant-provisioning";
 export * from "./tenant-governance";
+export * from "./text-input-pattern";
 export * from "./validation-errors";
 export * from "./version-impact";
