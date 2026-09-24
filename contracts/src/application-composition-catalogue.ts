@@ -25,8 +25,8 @@ export const TEXT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "addfad00-1b11-4674-83fa-913667f87e79",
   key: "platform.display.text",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:a8964d4a351d02ed6b5b6c2a18960722c0f71ba7661e105e214f717edb9ac292",
-  catalogueFingerprint: "sha256:57be52ee0755ca927565e5148f5393fc3fe57c72a4027b8bf55d0c40249b71a0",
+  contentFingerprint: "sha256:4a087e3647b1a5fc79a289f8ef40511c0bbd21ee89dce4b487f85066ba63e698",
+  catalogueFingerprint: "sha256:13c5e23a1794a9da7c877404642eda7cd5c992a94d810a2fc4bb3c74a9df04bb",
   name: "Plain text",
   icon: "type",
   paletteGroup: "content",
@@ -61,6 +61,8 @@ export const TEXT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "optional",
     accessibleNamePropertyPath: ["title"],
   },
+  supportedEvents: ["refresh"],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the structured rich text display block. */
@@ -68,8 +70,8 @@ export const RICH_TEXT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "148f420f-f7db-4145-80f4-3d3fa036096b",
   key: "platform.display.rich_text",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:85347b7eb5855b0565b3bd05d2e6d802d6909fee09b1ff4b09dda224d818993a",
-  catalogueFingerprint: "sha256:c8566e88a84f229ab8acca5b780efb648c5965188bd4148a254dc90bfd187626",
+  contentFingerprint: "sha256:467d05800b26b6030b0a6a85d4f66c467083773ec478e2bc5e827bbc84707ef1",
+  catalogueFingerprint: "sha256:4d076a70f9f28e5b20735d212f4957c1eac3709f6dde80de3ae59794ca4e899e",
   name: "Rich text",
   icon: "file-text",
   paletteGroup: "content",
@@ -103,6 +105,8 @@ export const RICH_TEXT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "optional",
     accessibleNamePropertyPath: ["title"],
   },
+  supportedEvents: ["refresh"],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the list display block. */
@@ -110,8 +114,8 @@ export const LIST_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "4881c816-e4ce-4c39-b0b7-20958b947748",
   key: "platform.display.list",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:57de3de8146aff7b144287013212a56a1776931b0ccd64ec2dd33fbb2302410c",
-  catalogueFingerprint: "sha256:1f85bfc0817bb2f01cc67dfe14d408f9305e12b892863e2ec8bc5b3f2d767837",
+  contentFingerprint: "sha256:6e08c4d1dfb02a8c97656f63d6c63b5170be229bc327f0d2bb16b4fa97fb0bb1",
+  catalogueFingerprint: "sha256:1003f628cd64c10e37762ba22d63f85988d503c5b40f485352a9fea0832fe913",
   name: "List",
   icon: "list",
   paletteGroup: "data",
@@ -137,6 +141,8 @@ export const LIST_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "optional",
     accessibleNamePropertyPath: ["title"],
   },
+  supportedEvents: ["refresh", "row_action", "selection_changed", "page_changed"],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the table display block. */
@@ -144,8 +150,8 @@ export const TABLE_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
   key: "platform.display.table",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:ddf3237b66a623d0d9bab1c843395b3991b132d14e60275219b200911b82dd69",
-  catalogueFingerprint: "sha256:d3ce60391d8610678e37474d649c7ec50afc67a8489ef999bab17a68379fd990",
+  contentFingerprint: "sha256:f3834bd367a1e2fb8f1bacba947242055b26c92f475f769aa4821b53e6fa6ed8",
+  catalogueFingerprint: "sha256:6d14243cbef91449ae6564a0fa8fb21eb854a5966920244392a32ce8d2874ab5",
   name: "Table",
   icon: "table",
   paletteGroup: "data",
@@ -171,6 +177,8 @@ export const TABLE_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "optional",
     accessibleNamePropertyPath: ["title"],
   },
+  supportedEvents: ["refresh", "row_action", "selection_changed", "sort_changed", "page_changed"],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the record detail display block. */
@@ -178,8 +186,8 @@ export const RECORD_DETAIL_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "e2569df0-2f10-4b20-b41d-177b66cd136c",
   key: "platform.display.record_detail",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:ed4b64a50a6aa5d1e42795ac073173b481e4e69be12ca959938ccb8aa079af5d",
-  catalogueFingerprint: "sha256:8efdda07e305a445b29e4e0d69dcb513a61daaaf5840e591b54c9cc164f064ba",
+  contentFingerprint: "sha256:4b2550cfe2935efc2e2e57d41e0376417baefdcd2a3539470fa08423792f5b98",
+  catalogueFingerprint: "sha256:d0af4d9b65f61860a8e14ab9eda514d484e2308cfc8a2b35ec8e80dbebc195ca",
   name: "Record detail",
   icon: "file",
   paletteGroup: "record",
@@ -205,6 +213,8 @@ export const RECORD_DETAIL_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "optional",
     accessibleNamePropertyPath: ["title"],
   },
+  supportedEvents: ["refresh", "row_action"],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the grouped data display block. */
@@ -212,8 +222,8 @@ export const GROUPED_DATA_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "6c27a0c2-ad91-4a5a-ab1d-54d337bebe36",
   key: "platform.display.grouped_data",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:88a63161fb47527b9849d79c692a2cfb1a7d7ad0e8eefa6526c8b96b211c1e51",
-  catalogueFingerprint: "sha256:c257f534817c1d175774ce78e1efd8e50cafe9caa8fc854818323f49025ead3f",
+  contentFingerprint: "sha256:598d060d1de259928f19b9a573717162fa10568b194a0a12f81963a72bb7b0a3",
+  catalogueFingerprint: "sha256:47666a6c2bea48a7307e3e7c52994336e736779ccc5079564747d9a863223b30",
   name: "Grouped data",
   icon: "layers",
   paletteGroup: "data",
@@ -239,6 +249,8 @@ export const GROUPED_DATA_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "optional",
     accessibleNamePropertyPath: ["title"],
   },
+  supportedEvents: ["refresh", "row_action", "selection_changed"],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the summary values display block. */
@@ -246,8 +258,8 @@ export const SUMMARY_VALUES_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "b00f7a0f-9094-4186-b8c4-066b1df6c395",
   key: "platform.display.summary_values",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:9ab8233005907928f32818ae8e0b89107942498c003dc84c05833624885e81b8",
-  catalogueFingerprint: "sha256:f477dd3f15ea3408a743f2fb30817bee4f897d7bb76481b86eac0537298b24c6",
+  contentFingerprint: "sha256:8b8160d617dca754b1051f5690d577c4f1fdb3ac92677ce121e707d32341b74c",
+  catalogueFingerprint: "sha256:d3f58f8c6eb95bf7022ac55df3edfda1e4f653d4a3a562281ef15d156ef42897",
   name: "Summary values",
   icon: "hash",
   paletteGroup: "figures",
@@ -273,6 +285,8 @@ export const SUMMARY_VALUES_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "optional",
     accessibleNamePropertyPath: ["title"],
   },
+  supportedEvents: ["refresh"],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the text input block. */
@@ -280,8 +294,8 @@ export const TEXT_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "15b2d6f6-228d-4248-84be-1f8f45e204fc",
   key: "platform.form.text_input",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:68159a6d6135d509b70c5173afa6ad99e67323708029895ee5424d776268fd36",
-  catalogueFingerprint: "sha256:3220a105a1bcb62c1193ddc458034d2615f628fd101369a13616bc9e64cb18a0",
+  contentFingerprint: "sha256:ac1633a389a0e63066584d60989292e71e95d091b951fb9c61b94290058aacb9",
+  catalogueFingerprint: "sha256:089c881e4d7b1d39ef9282af7c9787afc09eb83f8fa87c55e3df14bf048ec065",
   name: "Text input",
   icon: "type",
   paletteGroup: "input",
@@ -391,6 +405,8 @@ export const TEXT_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "required",
     accessibleNamePropertyPath: ["label"],
   },
+  supportedEvents: ["field_changed"],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the number input block. */
@@ -398,8 +414,8 @@ export const NUMBER_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "c8645b41-48b5-489c-bd2e-02283535a7c5",
   key: "platform.form.number_input",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:6b34dcb3871b368cf8005adc78437e3f8f9e246ecb87a0f41f4e4a1b30aaae7b",
-  catalogueFingerprint: "sha256:ffece9be1ef2fbef66f64aaea5c61c21433bec2ee79257c357a374ea7d26a76e",
+  contentFingerprint: "sha256:7b4842382778e3c4fe82e0ec28c959218beed591182d75e68e5e205c87923e9b",
+  catalogueFingerprint: "sha256:97dfe8ac6a7e44aa6fddf0df21237977b4bb44240a2a87f1ed9d17e304740fe1",
   name: "Number input",
   icon: "hash",
   paletteGroup: "input",
@@ -504,6 +520,8 @@ export const NUMBER_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "required",
     accessibleNamePropertyPath: ["label"],
   },
+  supportedEvents: ["field_changed"],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the boolean input block. */
@@ -511,8 +529,8 @@ export const BOOLEAN_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "e9418c36-3234-4806-a05a-0f259482238d",
   key: "platform.form.boolean_input",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:6b58bea792aa6ccbc9459cd930508f1bcbd955c8387a6d7c65ef8fb373a8ac30",
-  catalogueFingerprint: "sha256:b8f4165e5314a0d9dffe2b2eafb43d5939f195ee1cb29e384b57210769fd21d0",
+  contentFingerprint: "sha256:26cfa1e7aba67de07f8888b3bcc3e2e54e17d3231f820e1a120b4843d59b07f2",
+  catalogueFingerprint: "sha256:e9ca9db5b9cd8b388ea604ca60e619ffd7f3d229923f6c3b053f941e5552c8e3",
   name: "Boolean input",
   icon: "check-square",
   paletteGroup: "input",
@@ -587,6 +605,8 @@ export const BOOLEAN_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "required",
     accessibleNamePropertyPath: ["label"],
   },
+  supportedEvents: ["field_changed"],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the date input block. */
@@ -594,8 +614,8 @@ export const DATE_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "a5610880-05be-426b-a82b-7f3b645bf255",
   key: "platform.form.date_input",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:d3044e9a8b499eec5fb295e0709f6d49adcda5d2fe06a9e4c1ebf5c2ae853c06",
-  catalogueFingerprint: "sha256:c2ae363f07720937fa4019f1bf973c855b9f82a2f15974dda22b11542975eb8a",
+  contentFingerprint: "sha256:9b809e15aeecf3f0fd67383d98a9c1fabac04c94db2e00368f74339965ed76de",
+  catalogueFingerprint: "sha256:6abc82387c20258387aa69bd4735f19a3f3007a738735d5d598bc87cfddc5e39",
   name: "Date input",
   icon: "calendar",
   paletteGroup: "input",
@@ -660,6 +680,8 @@ export const DATE_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "required",
     accessibleNamePropertyPath: ["label"],
   },
+  supportedEvents: ["field_changed"],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the choice input block. */
@@ -667,8 +689,8 @@ export const CHOICE_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
   key: "platform.form.choice_input",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:0eb9b4dc7a7196197b1e32144399fd904bdb29a183750e5f358deaf7bafa67e2",
-  catalogueFingerprint: "sha256:757bdcb22e5afdca14df7994e9524a19bb68d79f437bbf14f1d90650fff7db1d",
+  contentFingerprint: "sha256:632b8133a29b6523c1388e4689884f798949271af0a00f6ec8fa114ebc5888f6",
+  catalogueFingerprint: "sha256:3eb5a63257fb6fb47ed384573ae47938a86fbd99e65ed31bc62857b7170c2e1a",
   name: "Choice input",
   icon: "list",
   paletteGroup: "input",
@@ -787,6 +809,8 @@ export const CHOICE_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "required",
     accessibleNamePropertyPath: ["label"],
   },
+  supportedEvents: ["field_changed"],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the validation message block. */
@@ -794,8 +818,8 @@ export const VALIDATION_MESSAGE_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(
   blockId: "78acc234-87bc-4e8f-986f-4857369b41f8",
   key: "platform.form.validation_message",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:a4338e66e8497ba5b79f96359cfbd94081a3b58a2c6f68ed5fb9e335a8a701da",
-  catalogueFingerprint: "sha256:f04ba33e4c56d5c8664f369116413df3e9c7a68a1f473d4220eea71805799ff7",
+  contentFingerprint: "sha256:738bd011d18317f2b3e3901016357cdfce945c43e7482232be5006f51ee3d046",
+  catalogueFingerprint: "sha256:876ca64b165ecda23f3e300561352f50c2c12d3a5a6b4eb4e1117060476232e2",
   name: "Validation message",
   icon: "alert-circle",
   paletteGroup: "input",
@@ -860,6 +884,8 @@ export const VALIDATION_MESSAGE_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(
     accessibleName: "optional",
     accessibleNamePropertyPath: ["title"],
   },
+  supportedEvents: [],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the button block. */
@@ -867,8 +893,8 @@ export const BUTTON_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
   key: "platform.action.button",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:f222e8acd1a4857b20a41098adafc5346405872b56c00f108bd297ad9b92c7ec",
-  catalogueFingerprint: "sha256:e2536549f3f9222d8c36f193a2addd18fda6be05d3b9033888ad3adeccdd3971",
+  contentFingerprint: "sha256:e0c7038c22f41833299abde924616a4a35d3f3054491fa0629d765e641fc2a04",
+  catalogueFingerprint: "sha256:f764f32aff25db3e0ec18d99d203f6c8b73371a17f79a379132790121a749573",
   name: "Button",
   icon: "play",
   paletteGroup: "actions",
@@ -947,6 +973,8 @@ export const BUTTON_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "required",
     accessibleNamePropertyPath: ["label"],
   },
+  supportedEvents: ["action"],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the tabs block. */
@@ -954,8 +982,8 @@ export const TABS_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "a3b7065b-47ef-4c92-93d1-59300f8b059c",
   key: "platform.layout.tabs",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:f137fed1662b2adbd92ec908fd9372f651e0350dfc1656baac175fac616f7625",
-  catalogueFingerprint: "sha256:2f3c3498ce27360add59d87b4f85e6be6c7a6a88a25968687dc3bf97f3b55016",
+  contentFingerprint: "sha256:107bba6981db81be9585ed16c57d29d50d3bcef48810235eeba1d8df924d07a3",
+  catalogueFingerprint: "sha256:19edb22edb15c9ef54a8377f97b075b2c621d6a656fd0a016032ce5b8fb39770",
   name: "Tabs",
   icon: "folder",
   paletteGroup: "layout",
@@ -1067,6 +1095,8 @@ export const TABS_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "required",
     accessibleNamePropertyPath: ["title"],
   },
+  supportedEvents: ["tab_changed"],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the dialog block. */
@@ -1074,8 +1104,8 @@ export const DIALOG_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "651460f1-5fce-4443-bc9d-4dd4b6ae8a8b",
   key: "platform.layout.dialog",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:112f752861a5251566943e6a4c256a891bdd5bda2410a378af77f7850608f377",
-  catalogueFingerprint: "sha256:733c93f706fd6f4a9b5525f74418b824ea47710bf1930de0f09c4918c6b00dde",
+  contentFingerprint: "sha256:9da43dc5edce454f5f6f0c2c1d9e100bdc252519191231c1e16a902b289cef92",
+  catalogueFingerprint: "sha256:1fc71ce1c40f2a8432259a2bcf4ad377f2d03e28c2cc1db8b9cdf0fabeeb54a4",
   name: "Dialog",
   icon: "message-square",
   paletteGroup: "layout",
@@ -1142,6 +1172,8 @@ export const DIALOG_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "required",
     accessibleNamePropertyPath: ["title"],
   },
+  supportedEvents: ["action"],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the drawer block. */
@@ -1149,8 +1181,8 @@ export const DRAWER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "a399ff74-5716-4411-bca8-c5ab87ec2e7d",
   key: "platform.layout.drawer",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:76d19ff37abb70a756e98e2ab21c70f38e3d848366677c7a6714868e1b443d5e",
-  catalogueFingerprint: "sha256:b9fd6eb7146426ca5ddc119895822beeafa6f7d087b1cf697895a4d8ff67ef6e",
+  contentFingerprint: "sha256:305e6b3de43c94e360a90fbc86e02938d60d53399f57b9c9a431fc98bba5c90d",
+  catalogueFingerprint: "sha256:83ef7426a8e7ee035acbca068db7eca1857be2234e257f5f437b348ea2b6b0df",
   name: "Drawer",
   icon: "sidebar",
   paletteGroup: "layout",
@@ -1242,6 +1274,8 @@ export const DRAWER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "required",
     accessibleNamePropertyPath: ["title"],
   },
+  supportedEvents: ["action"],
+  supportedStateOperations: [],
 });
 
 /** Exact immutable metadata release for the form container block. */
@@ -1249,8 +1283,8 @@ export const FORM_CONTAINER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
   key: "platform.form.container",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:d79dbf59d2fb9d39b170a376ce2858d776375499173c589746a754172b5c8c2f",
-  catalogueFingerprint: "sha256:f92038e5ca4f37c2d48f57b090d7242d44d2b3cec66579d03636ac89f8156ccc",
+  contentFingerprint: "sha256:4b3a94e0581297a06a3b9f52a6a5b854c326d28f5c26138d493b27f0f4aca655",
+  catalogueFingerprint: "sha256:94122c2189ac6f000ea43594900920ddf081fee7eb1a29b0f74838492ff8907b",
   name: "Form container",
   icon: "edit-3",
   paletteGroup: "input",
@@ -1283,6 +1317,8 @@ export const FORM_CONTAINER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleName: "optional",
     accessibleNamePropertyPath: ["title"],
   },
+  supportedEvents: ["form_ready", "form_submit", "form_reset"],
+  supportedStateOperations: [],
 });
 
 /** All seven immutable display block releases. */
