@@ -1,0 +1,542 @@
+import {
+  applicationSourceDocumentV2Schema,
+  DEFAULT_PLATFORM_THEME_RELEASE_V2,
+  FORM_CONTAINER_BLOCK_RELEASE,
+  TABLE_BLOCK_RELEASE,
+  TABS_BLOCK_RELEASE,
+  TEXT_BLOCK_RELEASE,
+  TEXT_INPUT_BLOCK_RELEASE,
+  type ApplicationSourceDocumentV2,
+  type PlatformBlockReleaseV2,
+  type SourceBlockPropertyValueV2Contract,
+} from "@vortex/contracts";
+
+const placementLayout = {
+  visible: true,
+  width: { kind: "fill" as const },
+  height: { kind: "content" as const },
+};
+
+/** Authored V2 block placement: exact block release, typed settings and named child slots. */
+const placement = (
+  release: PlatformBlockReleaseV2,
+  settings: Record<string, SourceBlockPropertyValueV2Contract> = {},
+  slots: Record<string, unknown> = {},
+) => ({
+  block: { block_id: release.blockId, release_version: release.releaseVersion },
+  settings,
+  theme_overrides: {},
+  responsive: { desktop: placementLayout },
+  slots,
+});
+
+const emptySlot = () => ({ placements: {} as Record<string, unknown>, order: { desktop: [] as string[] } });
+
+const slot = (alias: string, value: unknown) => ({
+  placements: { [alias]: value },
+  order: { desktop: [alias] },
+});
+
+/** A required form text input whose name matches the committed action's input key. */
+const textInput = (name: string, label: string, multiline: boolean) =>
+  placement(TEXT_INPUT_BLOCK_RELEASE, {
+    name: { kind: "text", value: name },
+    label: { kind: "text", value: label },
+    required: { kind: "boolean", value: true },
+    multiline: { kind: "boolean", value: multiline },
+  });
+
+const usedBlockReleases = [
+  TEXT_BLOCK_RELEASE,
+  TABLE_BLOCK_RELEASE,
+  FORM_CONTAINER_BLOCK_RELEASE,
+  TEXT_INPUT_BLOCK_RELEASE,
+  TABS_BLOCK_RELEASE,
+];
+
+const platformBlockDependencies = usedBlockReleases
+  .map((release) => ({
+    kind: "platform_block" as const,
+    block_id: String(release.blockId),
+    release_version: release.releaseVersion,
+    content_fingerprint: release.contentFingerprint,
+    catalogue_fingerprint: release.catalogueFingerprint,
+  }))
+  .sort((left, right) => (left.block_id < right.block_id ? -1 : left.block_id > right.block_id ? 1 : 0));
+
+const theme = {
+  base: {
+    kind: "platform_theme" as const,
+    catalogue_theme_id: String(DEFAULT_PLATFORM_THEME_RELEASE_V2.catalogueThemeId),
+    release_version: DEFAULT_PLATFORM_THEME_RELEASE_V2.releaseVersion,
+    content_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE_V2.contentFingerprint,
+    catalogue_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE_V2.catalogueFingerprint,
+  },
+  token_overrides: {},
+};
+
+const shell = {
+  id: "shell_organisation_administration",
+  key: "organisation_administration_shell",
+  name: "Organisation administration shell",
+  layout: {
+    placements: {
+      shell_root: placement(
+        TABS_BLOCK_RELEASE,
+        { title: { kind: "text", value: "Organisation administration" } },
+        { tab_one: emptySlot() },
+      ),
+    },
+    order: { desktop: ["shell_root"] },
+  },
+  content_slots: [
+    {
+      id: "slot_primary",
+      key: "primary",
+      label: "Primary",
+      required: true,
+      allowed_child_categories: ["content", "data", "figures", "record", "actions", "input", "layout"],
+      parent_placement: "shell_root",
+      parent_slot: "tab_one",
+    },
+  ],
+};
+
+const dashboardStates = ["normal", "loading", "empty", "refused", "failure", "recovery"];
+const listStates = ["normal", "loading", "empty", "refused", "access_ended", "failure", "recovery"];
+const formStates = ["normal", "loading", "validation", "refused", "conflict", "failure", "recovery"];
+
+const textBlock = (title: string, text: string) =>
+  placement(TEXT_BLOCK_RELEASE, {
+    title: { kind: "text", value: title },
+    text: { kind: "text", value: text },
+  });
+
+/**
+ * The Organisation Administration application definition. Every visible region is
+ * definition-led. Ordinary notices and privacy request cases come from the bound
+ * module; the organisation-account, invitation and runtime-settings regions are
+ * intentionally left unbound until the protected Identity and Access read-model
+ * sources are published (#908) and bound (#909). No region offers a parallel
+ * access-grant control: role grants run in the IAM application.
+ */
+export const organisationAdministrationApplication: ApplicationSourceDocumentV2 =
+  applicationSourceDocumentV2Schema.parse({
+    source_contract_version: "2.0.0",
+    root_alias: "app_organisation_administration",
+    key: "vortex.app.organisation_administration",
+    kind: "application",
+    body: {
+      name: "Organisation Administration",
+      description:
+        "Organisation accounts, invitations, runtime settings, notices and privacy request cases for an organisation administrator, entirely definition-led.",
+      icon: "sliders-horizontal",
+      home_page: "organisation_overview",
+      module_bindings: [
+        {
+          module: "vortex.organisation_administration",
+          version: { selection: "exact", version: "1.0.0" },
+          purpose: "primary",
+        },
+      ],
+      permissions: [
+        {
+          id: "app_permission_open",
+          key: "application.organisation_administration.open",
+          label: "Open Organisation Administration",
+          description: "Allows opening the Organisation Administration application.",
+          action_kind: "named",
+          named_action: "open",
+          administrative: false,
+        },
+        {
+          id: "app_permission_manage",
+          key: "application.organisation_administration.manage",
+          label: "Manage Organisation Administration",
+          description:
+            "Allows managing Organisation Administration definition-level administration.",
+          action_kind: "manage",
+          administrative: true,
+        },
+      ],
+      roles: [
+        {
+          id: "role_organisation_administrator",
+          key: "organisation_administrator",
+          name: "Organisation administrator",
+          home_page: "organisation_overview",
+          permissions: [
+            "application.organisation_administration.open",
+            "vortex.organisation_administration.organisation_notice.create",
+            "vortex.organisation_administration.organisation_notice.read",
+            "vortex.organisation_administration.organisation_notice.update",
+            "vortex.organisation_administration.organisation_notice.soft_delete",
+            "vortex.organisation_administration.organisation_notice.restore",
+            "vortex.organisation_administration.organisation_notice.export",
+            "vortex.organisation_administration.organisation_notice.record_notice",
+            "vortex.organisation_administration.organisation_notice.withdraw",
+            "vortex.organisation_administration.privacy_request_case.create",
+            "vortex.organisation_administration.privacy_request_case.read",
+            "vortex.organisation_administration.privacy_request_case.update",
+            "vortex.organisation_administration.privacy_request_case.soft_delete",
+            "vortex.organisation_administration.privacy_request_case.restore",
+            "vortex.organisation_administration.privacy_request_case.export",
+            "vortex.organisation_administration.privacy_request_case.record_privacy_request",
+            "vortex.organisation_administration.privacy_request_case.complete",
+            "vortex.organisation_administration.privacy_request_case.refuse",
+          ],
+        },
+      ],
+      navigation: [
+        {
+          id: "nav_organisation",
+          type: "heading",
+          label: "Organisation",
+          children: [
+            {
+              id: "nav_overview",
+              type: "page",
+              label: "Overview",
+              page: "organisation_overview",
+              permission: "application.organisation_administration.open",
+            },
+            {
+              id: "nav_accounts",
+              type: "page",
+              label: "Organisation accounts",
+              page: "organisation_accounts",
+              permission: "application.organisation_administration.open",
+            },
+            {
+              id: "nav_invitations",
+              type: "page",
+              label: "Invitations",
+              page: "organisation_invitations",
+              permission: "application.organisation_administration.open",
+            },
+            {
+              id: "nav_runtime_settings",
+              type: "page",
+              label: "Runtime settings",
+              page: "organisation_runtime_settings",
+              permission: "application.organisation_administration.open",
+            },
+          ],
+        },
+        {
+          id: "nav_content",
+          type: "heading",
+          label: "Organisation content",
+          children: [
+            {
+              id: "nav_notices",
+              type: "page",
+              label: "Notices",
+              page: "organisation_notices",
+              permission: "vortex.organisation_administration.organisation_notice.read",
+            },
+            {
+              id: "nav_record_notice",
+              type: "page",
+              label: "Record notice",
+              page: "record_organisation_notice",
+              permission: "vortex.organisation_administration.organisation_notice.record_notice",
+            },
+            {
+              id: "nav_privacy_cases",
+              type: "page",
+              label: "Privacy request cases",
+              page: "privacy_request_cases",
+              permission: "vortex.organisation_administration.privacy_request_case.read",
+            },
+            {
+              id: "nav_record_privacy_request",
+              type: "page",
+              label: "Record privacy request",
+              page: "record_privacy_request_case",
+              permission:
+                "vortex.organisation_administration.privacy_request_case.record_privacy_request",
+            },
+          ],
+        },
+        {
+          id: "nav_access",
+          type: "heading",
+          label: "Access",
+          children: [
+            {
+              id: "nav_roles_and_groups",
+              type: "page",
+              label: "Roles and groups",
+              page: "roles_and_groups",
+              permission: "application.organisation_administration.open",
+            },
+          ],
+        },
+      ],
+      queries: [
+        {
+          id: "qry_organisation_notices",
+          key: "organisation_notices",
+          record_type: "vortex.organisation_administration:organisation_notice",
+          select: ["title", "body", "state", "published_at"],
+          filter: null,
+          group_by: [],
+          aggregates: [],
+          sort: [{ field: "title", direction: "ascending" }],
+          page_size: 50,
+          relationship_hops: 0,
+        },
+        {
+          id: "qry_privacy_request_cases",
+          key: "privacy_request_cases",
+          record_type: "vortex.organisation_administration:privacy_request_case",
+          select: ["subject", "request_kind", "state", "received_at", "closed_at"],
+          filter: null,
+          group_by: [],
+          aggregates: [],
+          sort: [{ field: "received_at", direction: "descending" }],
+          page_size: 50,
+          relationship_hops: 0,
+        },
+      ],
+      workflows: [],
+      pipelines: [],
+      connection_bindings: [],
+      interfaces: [],
+      actions: [],
+      rules: [],
+      events: [],
+      public_addresses: [],
+      platform_block_dependencies: platformBlockDependencies,
+      shells: [shell],
+      pages: [
+        {
+          id: "page_organisation_overview",
+          key: "organisation_overview",
+          name: "Organisation overview",
+          type: "dashboard",
+          permission: "application.organisation_administration.open",
+          states: dashboardStates,
+          composition: {
+            shell_kind: "application",
+            shell: "shell_organisation_administration",
+            content: {
+              slot_primary: slot(
+                "overview_text",
+                textBlock(
+                  "Organisation overview",
+                  "Review organisation accounts, invitations, runtime settings, notices and privacy request cases. Account, invitation and settings displays come from protected Identity and Access read models and stay unbound until their protected sources are published and bound.",
+                ),
+              ),
+            },
+          },
+        },
+        {
+          id: "page_organisation_accounts",
+          key: "organisation_accounts",
+          name: "Organisation accounts",
+          type: "dashboard",
+          permission: "application.organisation_administration.open",
+          states: dashboardStates,
+          composition: {
+            shell_kind: "application",
+            shell: "shell_organisation_administration",
+            content: {
+              slot_primary: slot(
+                "accounts_text",
+                textBlock(
+                  "Organisation accounts",
+                  "Organisation accounts appear here from the protected Identity account administration projections once they are bound; no account directory is copied into this application. Suspending, reactivating or closing an account runs through its protected operation, and role grants run in the IAM application, never here.",
+                ),
+              ),
+            },
+          },
+        },
+        {
+          id: "page_organisation_invitations",
+          key: "organisation_invitations",
+          name: "Invitations",
+          type: "dashboard",
+          permission: "application.organisation_administration.open",
+          states: dashboardStates,
+          composition: {
+            shell_kind: "application",
+            shell: "shell_organisation_administration",
+            content: {
+              slot_primary: slot(
+                "invitations_text",
+                textBlock(
+                  "Invitations",
+                  "Pending and past invitations appear here from the protected Identity invitation projections once they are bound. Invitations carrying intended role assignments follow the governed IAM journey; this application offers no grant control.",
+                ),
+              ),
+            },
+          },
+        },
+        {
+          id: "page_organisation_runtime_settings",
+          key: "organisation_runtime_settings",
+          name: "Runtime settings",
+          type: "dashboard",
+          permission: "application.organisation_administration.open",
+          states: dashboardStates,
+          composition: {
+            shell_kind: "application",
+            shell: "shell_organisation_administration",
+            content: {
+              slot_primary: slot(
+                "settings_text",
+                textBlock(
+                  "Runtime settings",
+                  "The organisation's runtime localisation settings appear here from the protected runtime-settings reader once it is bound; changing them invokes the protected settings operation. These settings are never copied into ordinary records.",
+                ),
+              ),
+            },
+          },
+        },
+        {
+          id: "page_roles_and_groups",
+          key: "roles_and_groups",
+          name: "Roles and groups",
+          type: "dashboard",
+          permission: "application.organisation_administration.open",
+          states: dashboardStates,
+          composition: {
+            shell_kind: "application",
+            shell: "shell_organisation_administration",
+            content: {
+              slot_primary: slot(
+                "roles_text",
+                textBlock(
+                  "Roles and groups",
+                  "Role grants, groups and assignments are managed in the IAM application. This application contributes its permissions and role templates to the organisation catalogue and offers no parallel grant control.",
+                ),
+              ),
+            },
+          },
+        },
+        {
+          id: "page_organisation_notices",
+          key: "organisation_notices",
+          name: "Organisation notices",
+          type: "list",
+          record_type: "vortex.organisation_administration:organisation_notice",
+          permission: "vortex.organisation_administration.organisation_notice.read",
+          query: "organisation_notices",
+          arrangements: ["table", "summary"],
+          states: listStates,
+          composition: {
+            shell_kind: "application",
+            shell: "shell_organisation_administration",
+            content: {
+              slot_primary: slot(
+                "notices_table",
+                {
+                  ...placement(TABLE_BLOCK_RELEASE, {
+                    title: { kind: "text", value: "Organisation notices" },
+                  }),
+                  query: "organisation_notices",
+                },
+              ),
+            },
+          },
+        },
+        {
+          id: "page_record_notice",
+          key: "record_organisation_notice",
+          name: "Record organisation notice",
+          type: "form",
+          record_type: "vortex.organisation_administration:organisation_notice",
+          permission: "vortex.organisation_administration.organisation_notice.record_notice",
+          commit_action: "vortex.organisation_administration.organisation_notice.record_notice",
+          states: formStates,
+          composition: {
+            shell_kind: "application",
+            shell: "shell_organisation_administration",
+            content: {
+              slot_primary: slot(
+                "notice_form",
+                placement(
+                  FORM_CONTAINER_BLOCK_RELEASE,
+                  { title: { kind: "text", value: "Record organisation notice" } },
+                  {
+                    content: {
+                      placements: {
+                        notice_title_input: textInput("title", "Title", false),
+                        notice_body_input: textInput("body", "Notice text", true),
+                      },
+                      order: { desktop: ["notice_title_input", "notice_body_input"] },
+                    },
+                  },
+                ),
+              ),
+            },
+          },
+        },
+        {
+          id: "page_privacy_request_cases",
+          key: "privacy_request_cases",
+          name: "Privacy request cases",
+          type: "list",
+          record_type: "vortex.organisation_administration:privacy_request_case",
+          permission: "vortex.organisation_administration.privacy_request_case.read",
+          query: "privacy_request_cases",
+          arrangements: ["table", "summary"],
+          states: listStates,
+          composition: {
+            shell_kind: "application",
+            shell: "shell_organisation_administration",
+            content: {
+              slot_primary: slot(
+                "privacy_cases_table",
+                {
+                  ...placement(TABLE_BLOCK_RELEASE, {
+                    title: { kind: "text", value: "Privacy request cases" },
+                  }),
+                  query: "privacy_request_cases",
+                },
+              ),
+            },
+          },
+        },
+        {
+          id: "page_record_privacy_request",
+          key: "record_privacy_request_case",
+          name: "Record privacy request case",
+          type: "form",
+          record_type: "vortex.organisation_administration:privacy_request_case",
+          permission:
+            "vortex.organisation_administration.privacy_request_case.record_privacy_request",
+          commit_action:
+            "vortex.organisation_administration.privacy_request_case.record_privacy_request",
+          states: formStates,
+          composition: {
+            shell_kind: "application",
+            shell: "shell_organisation_administration",
+            content: {
+              slot_primary: slot(
+                "privacy_form",
+                placement(
+                  FORM_CONTAINER_BLOCK_RELEASE,
+                  { title: { kind: "text", value: "Record privacy request case" } },
+                  {
+                    content: {
+                      placements: {
+                        privacy_subject_input: textInput("subject", "Subject", false),
+                        privacy_details_input: textInput("details", "Request details", true),
+                      },
+                      order: { desktop: ["privacy_subject_input", "privacy_details_input"] },
+                    },
+                  },
+                ),
+              ),
+            },
+          },
+        },
+      ],
+      theme,
+      flows: [],
+      flow_bindings: [],
+    },
+  });
