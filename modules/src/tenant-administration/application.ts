@@ -305,11 +305,11 @@ export const tenantAdministrationApplication: ApplicationSourceDocumentV2 =
                 placements: {
                   administrators_text: textBlock(
                     "Tenant administrators",
-                    "Tenant administrator assignments are among the current effective assignments below, read live from protected Access. Granting and revoking tenant-administrator access runs through IAM, never from this application.",
+                    "Tenant administrators are not yet available from a protected read model. The Role assignment ledger below is the organisation's assignment history, including ended entries, read live from protected Access. Granting and revoking tenant-administrator access runs through IAM, never from this application.",
                   ),
                   administrators_region: readModelBlock(
                     "effective_assignments",
-                    "Current effective assignments",
+                    "Role assignment ledger",
                   ),
                 },
                 order: { desktop: ["administrators_text", "administrators_region"] },
