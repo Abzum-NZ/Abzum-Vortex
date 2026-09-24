@@ -89,9 +89,15 @@ begin
       message = 'Index status context changed';
   end if;
 
-  if permission_decision.organization_id is distinct from p_organization_id then
+  -- The organisation and the Application are both the validated request
+  -- context's own. The conflict search runs behind the `record_data` policies
+  -- of that context, so a status for any other Application would resolve
+  -- conflicts against the wrong rows.
+  if permission_decision.organization_id is distinct from p_organization_id
+    or (checked_context ->> 'applicationRootId') is null
+    or (checked_context ->> 'applicationRootId')::uuid is distinct from p_application_root_id then
     raise exception using errcode = '42501',
-      message = 'Index status organisation is unavailable';
+      message = 'Index status scope is unavailable';
   end if;
 
   -- The named Application must be a real Application of exactly this
@@ -402,7 +408,7 @@ declare
   record_id_value uuid;
   loaded jsonb;
   decision jsonb;
-  references jsonb := '[]'::jsonb;
+  readable_references jsonb := '[]'::jsonb;
   group_count integer := 0;
   record_count integer := 0;
 begin
@@ -420,14 +426,20 @@ begin
 
   -- Only the participating record identities are selected; the conflicting
   -- field value is grouped on but never projected, so no raw value can leave.
+  -- The search mirrors the unique index exactly: its lifecycle predicate, and
+  -- no null value, because the index treats every null as distinct. The
+  -- forced `record_data` policies keep it to the caller's organisation and
+  -- Application.
   conflict_sql := pg_catalog.format(
-    'select pg_catalog.array_agg(stored.record_id) as record_ids
+    'select pg_catalog.array_agg(stored.record_id order by stored.record_id) as record_ids
      from record_data.%I as stored
      where stored.lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')
+       and stored.%I is not null
      group by %s, stored.%I
      having pg_catalog.count(*) > 1
+     order by 1
      limit %s',
-    p_table_token, p_scope_columns, p_column_token, max_groups + 1
+    p_table_token, p_column_token, p_scope_columns, p_column_token, max_groups + 1
   );
 
   for group_row in execute conflict_sql
@@ -470,7 +482,7 @@ begin
           return pg_catalog.jsonb_build_object('outcome', 'unreadable');
       end;
 
-      references := references || pg_catalog.jsonb_build_array(
+      readable_references := readable_references || pg_catalog.jsonb_build_array(
         pg_catalog.jsonb_build_object(
           'recordTypeId', p_record_type_id,
           'recordId', record_id_value
@@ -482,7 +494,7 @@ begin
   if group_count = 0 then
     return pg_catalog.jsonb_build_object('outcome', 'none');
   end if;
-  return pg_catalog.jsonb_build_object('outcome', 'readable', 'records', references);
+  return pg_catalog.jsonb_build_object('outcome', 'readable', 'records', readable_references);
 end
 $function$;
 

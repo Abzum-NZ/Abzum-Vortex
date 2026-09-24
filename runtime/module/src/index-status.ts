@@ -287,7 +287,9 @@ const parseProgress = (candidate: unknown, entryCount: number): IndexStatusProgr
     ])
   )
     return undefined;
-  const total = safeRevision(candidate.total);
+  // An installation whose fields declare no unique, filterable or sortable
+  // value owns no index, so an empty status is a complete one.
+  const total = safeCount(candidate.total);
   const ready = safeCount(candidate.ready);
   const pending = safeCount(candidate.pending);
   const running = safeCount(candidate.running);
@@ -400,7 +402,11 @@ export const createApplicationIndexStatusRepository = (
         const installationRows = await transaction.query<ActiveInstallationRow>`
           select vortex_module.read_current_active_installation() as active_installation
         `;
-        if (installationRows.length !== 1 || installationRows[0] === undefined)
+        if (
+          installationRows.length !== 1 ||
+          installationRows[0] === undefined ||
+          installationRows[0].active_installation === null
+        )
           throw new IndexStatusError("INDEX_STATUS_INSTALLATION_UNAVAILABLE");
         const installation = activeApplicationInstallationEvidenceSchema.safeParse(
           installationRows[0].active_installation,
