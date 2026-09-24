@@ -7,6 +7,7 @@ import { flowValueDeclarationSchema } from "./application-flow-bindings";
 import { connectionTypeSourceDocumentSchema } from "./connection-source-contracts";
 import { connectionTypeSchema } from "./integration-contracts";
 import { actionInputDefinitionSchema } from "./module-contracts";
+import { actionInputDefinitionV2Schema } from "./module-contracts-v2";
 import { moduleContractVersionPairV3Schema, moduleDraftV3Schema } from "./module-contracts-v3";
 import { moduleSourceDocumentSchema } from "./definition-source";
 import { descriptionSchema } from "./common";
@@ -24,6 +25,7 @@ import {
   pageIdSchema,
   platformIdSchema,
   queryIdSchema,
+  recordTypeIdSchema,
   revisionSchema,
   ruleIdSchema,
   semanticVersionSchema,
@@ -280,24 +282,60 @@ export const compiledDefinitionArtifactSchema = z.discriminatedUnion("kind", [
 ]);
 
 /**
+ * A compiled tool name: `<applicationKey>.<operationKind>.<operationKey>`. The operation kind keeps
+ * an action, flow, query and navigation target with the same key distinct, and the bound is sized
+ * for the longest key the definition contracts accept so a valid application always compiles.
+ */
+export const applicationToolNameSchema = z
+  .string()
+  .min(5)
+  .max(320)
+  .regex(
+    /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*)+$/,
+    "Use lowercase dot-separated namespace segments",
+  );
+
+/** The permanent definition that owns a compiled tool's operation. */
+export const applicationToolOperationOwnerSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("application"), applicationRootId: applicationRootIdSchema }).strict(),
+  z.object({ kind: z.literal("module"), moduleRootId: moduleRootIdSchema }).strict(),
+]);
+
+/**
  * One exact business operation a compiled application tool invokes. The reference keeps the
  * operation's declared key and its permanent owning identity, so a call reaches the same published
- * binding as the matching web control and never a caller-supplied target. A bound Module's standard
- * record action has no Application-owned action identity, so `actionId` is null for it.
+ * binding as the matching web control and never a caller-supplied target. A form or public page may
+ * commit a bound Module's standard record action, which has no action identity of its own and is
+ * pinned instead by its exact record type.
  */
 export const applicationToolOperationReferenceSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("action"),
+      owner: applicationToolOperationOwnerSchema,
       key: namespacedKeySchema,
-      actionId: actionIdSchema.nullable(),
+      actionId: actionIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("standard_record_action"),
+      key: namespacedKeySchema,
+      moduleRootId: moduleRootIdSchema,
+      recordTypeId: recordTypeIdSchema,
+      standardAction: z.enum(["create", "read", "update", "soft_delete", "restore", "export"]),
     })
     .strict(),
   z
     .object({ kind: z.literal("flow"), key: builderKeySchema, flowId: ruleIdSchema })
     .strict(),
   z
-    .object({ kind: z.literal("query"), key: builderKeySchema, queryId: queryIdSchema })
+    .object({
+      kind: z.literal("query"),
+      owner: applicationToolOperationOwnerSchema,
+      key: builderKeySchema,
+      queryId: queryIdSchema,
+    })
     .strict(),
   z
     .object({ kind: z.literal("navigation"), key: builderKeySchema, pageId: pageIdSchema })
@@ -306,9 +344,10 @@ export const applicationToolOperationReferenceSchema = z.discriminatedUnion("kin
 
 /**
  * The declared input contract of one compiled tool, copied from the operation's own definition:
- * a named action's typed inputs, a Frontend Flow's typed inputs, or no declared inputs (a
- * navigation target or a permitted query read). Nothing is invented here; the projection at the
- * MCP surfaces renders exactly what the operation already declares.
+ * an Application action's typed inputs, a bound Module action's or Module query's typed inputs, a
+ * Frontend Flow's typed inputs, the exact record type a standard record action writes, or no
+ * declared inputs (a navigation target or an Application query read). Nothing is invented here;
+ * the MCP surfaces render exactly what the operation already declares.
  */
 export const applicationToolInputSchema = z.discriminatedUnion("kind", [
   z
@@ -319,31 +358,41 @@ export const applicationToolInputSchema = z.discriminatedUnion("kind", [
     .strict(),
   z
     .object({
+      kind: z.literal("module_inputs"),
+      inputs: z.array(actionInputDefinitionV2Schema).max(50),
+    })
+    .strict(),
+  z
+    .object({
       kind: z.literal("flow_inputs"),
       inputs: z.record(builderKeySchema, flowValueDeclarationSchema),
     })
     .strict(),
+  z.object({ kind: z.literal("record_type"), recordTypeId: recordTypeIdSchema }).strict(),
   z.object({ kind: z.literal("none") }).strict(),
 ]);
 
 /**
  * The permission meaning one compiled tool carries. It names the gates that govern discoverability
  * and invocation without carrying any internal permission key, role name or private value: the
- * runtime reader resolves the exact Access declaration from the owning operation and its page.
- * `discover` is `application_navigation` when the application navigation gate admits the viewer,
- * otherwise `page_access` for the page that hosts the operation; `use` is `operation_permission`
- * when the owning operation declares its own permission, otherwise `none`.
+ * runtime reader resolves the exact Access declarations from the owning operation and the pages
+ * that host it. `discover` is `application_navigation` for a navigation target (its navigation
+ * entry and page access), otherwise `page_access` for the pages that host the operation. `use` is
+ * `operation_permission` when the owning operation declares its own permission (a named or
+ * standard record action), `delegated_operations` for a Frontend Flow whose protected operations
+ * each apply their own permission, and `none` for a read or navigation governed only by discovery
+ * and record access.
  */
 export const applicationToolPermissionMeaningSchema = z
   .object({
     discover: z.enum(["application_navigation", "page_access"]),
-    use: z.enum(["operation_permission", "none"]),
+    use: z.enum(["operation_permission", "delegated_operations", "none"]),
   })
   .strict();
 
 export const applicationToolSchema = z
   .object({
-    name: namespacedKeySchema,
+    name: applicationToolNameSchema,
     description: descriptionSchema.optional(),
     inputSchema: applicationToolInputSchema,
     operation: applicationToolOperationReferenceSchema,
@@ -353,10 +402,10 @@ export const applicationToolSchema = z
 
 /**
  * The agent tools one Application release carries, compiled from its published navigation, pages,
- * forms, named actions, Frontend Flow entry points and queries. Names are deterministic and
- * namespaced by the application key, and each tool maps to exactly one real operation, so buttons
- * that start the same operation never add a second tool. Nothing is authored here separately from
- * the definition.
+ * forms, named actions, Frontend Flow entry points and the queries it reads. Names are
+ * deterministic and namespaced by the application key, and each tool maps to exactly one real
+ * operation, so buttons that start the same operation never add a second tool. Nothing is authored
+ * here separately from the definition.
  */
 export const applicationToolBundleSchema = z
   .object({
@@ -367,17 +416,11 @@ export const applicationToolBundleSchema = z
   .strict()
   .superRefine((value, context) => {
     const names = value.tools.map((tool) => tool.name);
-    if (new Set(names).size !== names.length)
-      context.addIssue({
-        code: "custom",
-        path: ["tools"],
-        message: "Compiled tool names must be unique",
-      });
     if (names.some((name, index) => index > 0 && names[index - 1]! >= name))
       context.addIssue({
         code: "custom",
         path: ["tools"],
-        message: "Compiled tools must use canonical name order",
+        message: "Compiled tools must use unique names in canonical order",
       });
     if (value.tools.some((tool) => !tool.name.startsWith(`${value.applicationKey}.`)))
       context.addIssue({
@@ -397,11 +440,17 @@ export const applicationCompilationOutputV2Schema = z
     dependencyOrder: z.array(namespacedKeySchema),
     resolvedDependencies: z.array(resolvedDefinitionSchema),
     resolutionFingerprint: fingerprintSchema,
-    // Always produced by the compiler for a fresh release; optional so the additive field can be
-    // decoded from releases compiled before the bundle contract existed.
-    toolBundle: applicationToolBundleSchema.optional(),
+    toolBundle: applicationToolBundleSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.toolBundle.applicationKey !== value.canonical.envelope.key)
+      context.addIssue({
+        code: "custom",
+        path: ["toolBundle", "applicationKey"],
+        message: "A release's tool bundle belongs to the application it was compiled from",
+      });
+  });
 
 export const moduleCompilationOutputV3Schema = z
   .object({
@@ -581,6 +630,8 @@ export type ModuleCompilationOutputV3 = z.infer<typeof moduleCompilationOutputV3
 export type ApplicationCompilationOutputV2 = z.infer<typeof applicationCompilationOutputV2Schema>;
 export type ApplicationTool = z.infer<typeof applicationToolSchema>;
 export type ApplicationToolBundle = z.infer<typeof applicationToolBundleSchema>;
+/** The unbranded shape the compiler builds before the bundle contract validates it. */
+export type ApplicationToolBundleInput = z.input<typeof applicationToolBundleSchema>;
 export type ApplicationToolOperationReference = z.infer<
   typeof applicationToolOperationReferenceSchema
 >;
