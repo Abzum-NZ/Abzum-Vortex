@@ -134,19 +134,6 @@ export const organizationLifecycleLimitsSchema = z
           "allowedArchiveDestinations cannot be empty when 'archive_workflow' is an allowed action",
       });
     }
-
-    // 5. No URLs or SQL in destination names
-    for (let i = 0; i < limits.allowedArchiveDestinations.length; i++) {
-      const dest = limits.allowedArchiveDestinations[i]!;
-      if (/^https?:\/\/|postgres:\/\/|select\s|insert\s/i.test(dest)) {
-        context.addIssue({
-          code: "custom",
-          path: ["allowedArchiveDestinations", i],
-          message:
-            "Archive destination cannot contain URLs, connection strings, or SQL escape hatches",
-        });
-      }
-    }
   });
 
 export type OrganizationLifecycleLimits = z.infer<typeof organizationLifecycleLimitsSchema>;
@@ -258,17 +245,7 @@ export const archiveWorkflowRecordLifecyclePolicySchema = z
     expectedConnectionHealthOutcome: z.literal("healthy"),
   })
   .strict()
-  .superRefine(validatePolicyLimitsConsistency)
-  .superRefine((policy, context) => {
-    if (/^https?:\/\/|postgres:\/\/|select\s|insert\s/i.test(policy.archiveDestination)) {
-      context.addIssue({
-        code: "custom",
-        path: ["archiveDestination"],
-        message:
-          "archiveDestination cannot contain URLs, connection strings, or SQL escape hatches",
-      });
-    }
-  });
+  .superRefine(validatePolicyLimitsConsistency);
 
 export type ArchiveWorkflowRecordLifecyclePolicy = z.infer<
   typeof archiveWorkflowRecordLifecyclePolicySchema
