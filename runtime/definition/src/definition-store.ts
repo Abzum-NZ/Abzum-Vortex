@@ -9,6 +9,7 @@ import {
   type StoredDefinitionDraft,
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+import { requireBuilderAuthority, type BuilderAuthority } from "./builder-authority";
 import { fingerprintCanonicalValue } from "./canonical-json";
 import { extractStoredSourceIdentityRequirements } from "./source-identities";
 import { validateDefinitionSource } from "./validation";
@@ -163,19 +164,16 @@ const safeStoreOperation = async <Result>(
 };
 
 /**
- * Caller-supplied assertion that verifies the session context's caller holds the required
- * builder permission before the operation proceeds. The assertion must throw when the
- * permission is not held. The caller provides this because it has the database transaction
- * and scope the permission check needs.
+ * Every draft change requires `definition_drafts.manage` (and `system_applications.manage` for a
+ * system application), decided by the builder authority before anything is stored. The authority
+ * is a required argument, so no draft-change path can skip the check.
  */
-export type DefinitionStorePermissionAssertion = () => Promise<void>;
-
 export const createDefinitionStore = (
   transaction: RequestDatabaseTransaction,
-  assertBuilderPermission?: DefinitionStorePermissionAssertion,
+  authority: BuilderAuthority,
 ) => ({
   async createRoot(candidate: CreateDefinitionRootCommand): Promise<StoredDefinitionDraft> {
-    if (assertBuilderPermission) await assertBuilderPermission();
+    await requireBuilderAuthority(authority, { kind: "draft_change" });
     return safeStoreOperation("create_root", async () => {
       const command = createDefinitionRootCommandSchema.safeParse(candidate);
       if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
@@ -198,7 +196,9 @@ export const createDefinitionStore = (
   },
 
   async saveDraft(candidate: SaveDefinitionDraftCommand): Promise<StoredDefinitionDraft> {
-    if (assertBuilderPermission) await assertBuilderPermission();
+    const rootId = saveDefinitionDraftCommandSchema.safeParse(candidate);
+    if (!rootId.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+    await requireBuilderAuthority(authority, { kind: "draft_change", rootId: rootId.data.rootId });
     return safeStoreOperation("save_draft", async () => {
       const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
       if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
@@ -224,10 +224,14 @@ export const createDefinitionStore = (
 
 export const createDefinitionRoot = (
   transaction: RequestDatabaseTransaction,
+  authority: BuilderAuthority,
   candidate: CreateDefinitionRootCommand,
-): Promise<StoredDefinitionDraft> => createDefinitionStore(transaction).createRoot(candidate);
+): Promise<StoredDefinitionDraft> =>
+  createDefinitionStore(transaction, authority).createRoot(candidate);
 
 export const saveDefinitionDraft = (
   transaction: RequestDatabaseTransaction,
+  authority: BuilderAuthority,
   candidate: SaveDefinitionDraftCommand,
-): Promise<StoredDefinitionDraft> => createDefinitionStore(transaction).saveDraft(candidate);
+): Promise<StoredDefinitionDraft> =>
+  createDefinitionStore(transaction, authority).saveDraft(candidate);

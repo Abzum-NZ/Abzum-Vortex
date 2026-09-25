@@ -9,7 +9,6 @@ import { fingerprintCanonicalValue } from "@vortex/definition";
 export const platformPermissionCatalogueOwnerId = "cabe121e-0baf-4084-9471-cce915d460a8";
 export const platformPermissionCatalogueVersionV1 = "1.0.0";
 export const platformPermissionCatalogueVersionV1_0_1 = "1.0.1";
-export const platformPermissionCatalogueVersionV1_2_0 = "1.2.0";
 export const platformPermissionCatalogueVersion = "1.4.0";
 
 const historicalPermissionsV1 = [
@@ -201,7 +200,7 @@ const currentPermissions = [
     administrative: true,
   },
   {
-    permissionId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    permissionId: "0548c061-b1a9-48e5-a04a-eb1d0dae0644",
     key: "platform.organization.definition_drafts.manage",
     label: "Manage definition drafts",
     description:
@@ -210,7 +209,7 @@ const currentPermissions = [
     administrative: true,
   },
   {
-    permissionId: "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    permissionId: "dfdd5aba-2b85-4169-b570-92be284e7b5c",
     key: "platform.organization.definition_releases.manage",
     label: "Manage definition releases",
     description:
@@ -219,7 +218,7 @@ const currentPermissions = [
     administrative: true,
   },
   {
-    permissionId: "c3d4e5f6-a7b8-9012-cdef-123456789012",
+    permissionId: "d1be247f-094d-47c1-a38d-762290868c91",
     key: "platform.organization.custom_code.manage",
     label: "Manage custom code",
     description:
@@ -228,7 +227,7 @@ const currentPermissions = [
     administrative: true,
   },
   {
-    permissionId: "d4e5f6a7-b8c9-0123-defa-234567890123",
+    permissionId: "eaade6fd-7390-44d2-a7ef-343324c7384a",
     key: "platform.organization.system_applications.manage",
     label: "Manage system applications",
     description:
@@ -269,24 +268,10 @@ export const platformPermissionCatalogueV1_0_1 = buildCatalogue(
 /**
  * Current additive catalogue, mirroring platform registration revision 6 (1.4.0): its
  * fingerprint equals that revision's catalogue fingerprint. Historical permission
- * identities and meanings remain unchanged. Version 1.2.0 added the four builder
- * permissions (definition_drafts.manage, definition_releases.manage, custom_code.manage,
- * system_applications.manage). Version 1.3.0 added connections.manage, identities.disable,
- * support.request and support.approve. Version 1.4.0 is the union of both additions.
+ * identities and meanings remain unchanged; 1.4.0 adds only the four builder permissions
+ * to the 1.3.0 set. Registering them grants nobody authority.
  */
 export const platformPermissionCatalogue = buildCatalogue(
   platformPermissionCatalogueVersion,
   currentPermissions,
 );
-
-/**
- * Builder permission keys, exported for server-side permission checks in definition
- * publication, installation coordination and draft-change paths.
- */
-export const builderPermissionKeys = {
-  definitionDraftsManage: "platform.organization.definition_drafts.manage",
-  definitionReleasesManage: "platform.organization.definition_releases.manage",
-  customCodeManage: "platform.organization.custom_code.manage",
-  systemApplicationsManage: "platform.organization.system_applications.manage",
-  applicationsManage: "platform.organization.applications.manage",
-} as const;

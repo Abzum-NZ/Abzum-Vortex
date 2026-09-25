@@ -23,6 +23,7 @@ import {
   type StoredDefinitionDraft,
 } from "@vortex/contracts";
 import { z } from "zod";
+import { requireBuilderAuthority, type BuilderAuthority } from "./builder-authority";
 import { fingerprintCanonicalValue } from "./canonical-json";
 import {
   definitionReleaseManifestMatchesCanonicalContent,
@@ -422,9 +423,16 @@ const mapRepositoryFailure = (
   return new DefinitionHistoryError(fallback);
 };
 
+/**
+ * Restoring a release writes a new draft revision, so it is a draft change: it needs
+ * `definition_drafts.manage` (and `system_applications.manage` for a system application), decided
+ * by the required builder authority before anything is read or written. Listing history and
+ * reading release metadata change nothing and stay ungated.
+ */
 export const createDefinitionHistoryService = (
   repository: DefinitionHistoryRepository,
   catalogue: DefinitionPublicationCatalogue,
+  authority: BuilderAuthority,
 ) => ({
   async list(
     contextCandidate: SessionContext,
@@ -479,6 +487,7 @@ export const createDefinitionHistoryService = (
     const context = sessionContextSchema.safeParse(contextCandidate);
     if (!context.success || !isLiveDefinitionSystemContext(context.data))
       throw new DefinitionHistoryError("DEFINITION_CONTEXT_REFUSED");
+    await requireBuilderAuthority(authority, { kind: "draft_change", rootId: command.data.rootId });
     try {
       let verifiedRestore: VerifiedRestoreInput | undefined;
       const attempt = await repository.restore(context.data, command.data, async (evidence) => {

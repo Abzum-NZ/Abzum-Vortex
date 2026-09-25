@@ -48,6 +48,7 @@ import {
 } from "@vortex/contracts";
 import { compare, satisfies } from "semver";
 import type { z } from "zod";
+import { requireBuilderAuthority, type BuilderAuthority } from "./builder-authority";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
 import { createApplicationResolutionSnapshotV2 } from "./application-v2-resolution";
 import { compileParsedDefinition } from "./compiler";
@@ -1275,41 +1276,28 @@ const safely = async <Result>(operation: () => Promise<Result>): Promise<Result>
 };
 
 /**
- * Caller-supplied assertion that verifies the session context's caller holds the required
- * builder permission before the operation proceeds. The assertion must throw when the
- * permission is not held; the thrown error is wrapped by the safely() handler. The caller
- * provides this because it has the database transaction and scope the permission check needs.
- */
-export type BuilderPermissionAssertion = (
-  context: SessionContext,
-  requiredPermissionKey: string,
-) => Promise<void>;
-
-/**
  * Publication orchestration over private injected stores. Preparation exposes only safe JSON
  * evidence; every byte that matters is recomputed inside the publish transaction.
  *
- * The `assertBuilderPermission` callback is called at the entry of every publication method
- * to verify the caller holds `platform.organization.definition_releases.manage`. Designer,
- * API and MCP paths all provide the same server-side check through this callback.
+ * Every operation is decided by the builder authority before any evidence is read: publication
+ * preparation and publication need `definition_releases.manage`, and compiling a draft for preview
+ * needs `definition_drafts.manage` (each with `system_applications.manage` for a system
+ * application). The authority is a required argument, so the designer, the API and MCP all pass
+ * the same server-side check and none can publish without it.
  */
 export const createDefinitionPublicationService = (
   repository: DefinitionPublicationRepository,
   catalogue: DefinitionPublicationCatalogue,
-  assertBuilderPermission?: BuilderPermissionAssertion,
+  authority: BuilderAuthority,
 ) => ({
   prepare: async (
     context: SessionContext,
     input: unknown,
   ): Promise<PreparedDefinitionPublication> => {
-    if (assertBuilderPermission)
-      await assertBuilderPermission(
-        context,
-        "platform.organization.definition_releases.manage",
-      );
     const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
     if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
+    await requireBuilderAuthority(authority, { kind: "publication", rootId: parsedCommand.rootId });
     return safely(async () => {
       const state = await repository.read(context, async (reader) =>
         prepareFromReader(
@@ -1336,14 +1324,13 @@ export const createDefinitionPublicationService = (
     context: SessionContext,
     input: unknown,
   ): Promise<ApplicationDraftCompilation> => {
-    if (assertBuilderPermission)
-      await assertBuilderPermission(
-        context,
-        "platform.organization.definition_drafts.manage",
-      );
     const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
     if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
+    await requireBuilderAuthority(authority, {
+      kind: "draft_change",
+      rootId: parsedCommand.rootId,
+    });
     return safely(async () =>
       repository.read(context, async (reader) => {
         const candidate = validateCandidate(
@@ -1374,14 +1361,13 @@ export const createDefinitionPublicationService = (
   },
 
   publish: async (context: SessionContext, input: unknown): Promise<PublishDefinitionResult> => {
-    if (assertBuilderPermission)
-      await assertBuilderPermission(
-        context,
-        "platform.organization.definition_releases.manage",
-      );
     const command = publishDefinitionCommandSchema.safeParse(input);
     if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     const parsedCommand = command.data as PublishDefinitionCommand;
+    await requireBuilderAuthority(authority, {
+      kind: "publication",
+      rootId: parsedCommand.confirmation.rootId,
+    });
     return safely(async () =>
       repository.transaction(context, async (transaction) => {
         const confirmation = parsedCommand.confirmation;

@@ -89,7 +89,11 @@ export {
   type PrepareApplicationPermissionRegistrationCommand,
 } from "./permission-registry-definition-adapter";
 export {
-  builderPermissionKeys,
+  createBuilderAuthority,
+  type BuilderAuthorityDependencies,
+  type BuilderTargetFactsReader,
+} from "./builder-authority";
+export {
   platformPermissionCatalogue,
   platformPermissionCatalogueV1,
   platformPermissionCatalogueV1_0_1,
@@ -97,7 +101,6 @@ export {
   platformPermissionCatalogueVersion,
   platformPermissionCatalogueVersionV1,
   platformPermissionCatalogueVersionV1_0_1,
-  platformPermissionCatalogueVersionV1_2_0,
 } from "./platform-permission-catalogue";
 export {
   createPermissionRegistryPrivateRepository,
