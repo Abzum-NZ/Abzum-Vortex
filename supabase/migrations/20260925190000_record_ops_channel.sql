@@ -9,6 +9,17 @@
 -- Signatures elsewhere, ownership, comments, security and search_path are
 -- preserved. Access administration wrappers are #1094.
 
+-- The postgres-owned functions replaced below live in vortex_module and
+-- vortex_record, whose owners have not granted postgres access to them. The schema
+-- owners lend postgres USAGE and CREATE for this migration only; revoked again at
+-- the end.
+set local role vortex_module_owner;
+grant usage, create on schema vortex_module to postgres;
+reset role;
+set local role vortex_record_owner;
+grant usage, create on schema vortex_record to postgres;
+reset role;
+
 drop function vortex_access.grant_organization_direct_record_share(uuid, uuid, text, uuid, uuid, uuid, uuid, uuid, text, uuid, uuid, uuid[], uuid[], timestamptz, timestamptz, text, uuid, uuid, text, uuid);
 drop function vortex_access.revoke_organization_direct_record_share(uuid, uuid, bigint, text, uuid, uuid, text, uuid);
 drop function vortex_access.grant_record_share_for_administration(uuid, uuid, text, uuid, uuid, uuid[], uuid[], timestamptz, timestamptz, text, text, uuid, jsonb);
@@ -2964,3 +2975,10 @@ comment on function vortex_access.set_organization_default_application_for_admin
   uuid, bigint, uuid
 ) is
   'Fixed protected organisation default-application setter requiring runtime-settings.manage and an exact current revision; accepts only an exact active installed application of the context organisation, or null to clear, and appends content-free Activity for the change.';
+
+set local role vortex_module_owner;
+revoke usage, create on schema vortex_module from postgres;
+reset role;
+set local role vortex_record_owner;
+revoke usage, create on schema vortex_record from postgres;
+reset role;
