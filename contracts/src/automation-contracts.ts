@@ -390,10 +390,13 @@ export const installationWorkflowFlowReferenceSchema = z
  * `installationRevision` is the Application release revision that the #64
  * activation acts on, so readiness evidence and the activation target cannot
  * drift apart. Every workflow of the release appears exactly once in canonical
- * workflow-revision order.
+ * workflow-revision order. `kestraInstance` names the application Kestra
+ * instance (#1152), the only provider a schedule change may target; the
+ * operations instance cannot be expressed.
  */
 export const installationWorkflowActivationEvidenceSchema = z
   .object({
+    kestraInstance: z.literal("application"),
     environment: z.enum(["local", "testing", "production"]),
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
@@ -516,10 +519,12 @@ export const installationWorkflowWithdrawalStartSchema = z
  * scheduled wake-up, is blocked; the withdrawn release's schedules are disabled;
  * and every accepted start is retained with an explicit refusal or cancellation
  * request rather than discarded. Execution, mapping, intent and activity history
- * remain available to explain each outcome.
+ * remain available to explain each outcome. Schedules are disabled only on the
+ * application Kestra instance (#1152).
  */
 export const installationWorkflowWithdrawalReconciliationSchema = z
   .object({
+    kestraInstance: z.literal("application"),
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
     applicationReleaseRevision: revisionSchema,

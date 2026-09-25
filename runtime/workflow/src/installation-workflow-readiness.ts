@@ -30,6 +30,7 @@ import type {
   KestraFlowRegistrationCommand,
   KestraFlowRegistrationResult,
 } from "./flow-registration-repository";
+import { workflowServiceKestraInstanceKind } from "./kestra-instance";
 
 /**
  * #662: installation activation and withdrawal readiness over the #661 flow
@@ -51,6 +52,12 @@ import type {
  * - `reconcileInstallationWorkflowWithdrawal` blocks new acceptance, disables
  *   the withdrawn release's schedules and settles every accepted start with an
  *   explicit refusal or cancellation request while retaining the run reference.
+ *
+ * Every flow this module names must sit in the generated namespace of the
+ * target's own environment, organisation and Application, so neither evidence
+ * nor a schedule change can reach another organisation's flows. Both results
+ * name the application Kestra instance (#1152) as their only provider target;
+ * the operations instance cannot be expressed.
  *
  * This module is pure. It performs no I/O, calls no Kestra API, compiles no
  * flow, and never invents an identity, revision, fingerprint or authority from
@@ -233,6 +240,54 @@ const sameWorkflowIdentity = (left: KestraFlowIdentity, right: KestraFlowIdentit
   left.applicationVersion === right.applicationVersion &&
   left.installationRevision === right.installationRevision &&
   left.workflowRevision === right.workflowRevision;
+
+/**
+ * The namespace prefix #661 derives for every installation revision of one
+ * environment, organisation and Application; the installation revision follows.
+ */
+const applicationNamespacePrefix = (target: InstallationWorkflowInstallationIdentity): string =>
+  [
+    "vortex",
+    "application",
+    target.environment,
+    target.organizationId,
+    target.applicationRootId,
+    "i",
+  ].join(".");
+
+/** The exact namespace #661 derives for the target installation revision. */
+const installationNamespace = (target: InstallationWorkflowInstallationIdentity): string =>
+  `${applicationNamespacePrefix(target)}${target.installationRevision}`;
+
+/** True when the flow id carries the target release version and the given workflow revision. */
+const isReleaseFlowId = (
+  target: InstallationWorkflowInstallationIdentity,
+  flowId: string,
+  workflowRevision: number,
+): boolean =>
+  flowId.startsWith("w_") &&
+  flowId.endsWith(`_${target.applicationVersion.replaceAll(".", "-")}_r${workflowRevision}`);
+
+/**
+ * True when a flow belongs to the target's own environment, organisation and
+ * Application under any installation revision, so a superseded release can be
+ * named but another organisation's or Application's flow cannot.
+ */
+const isSameApplicationFlow = (
+  target: InstallationWorkflowInstallationIdentity,
+  reference: InstallationWorkflowFlowReference,
+): boolean => {
+  const prefix = applicationNamespacePrefix(target);
+  return (
+    reference.namespace.startsWith(prefix) &&
+    /^[1-9][0-9]*$/.test(reference.namespace.slice(prefix.length)) &&
+    reference.flowId.startsWith("w_") &&
+    reference.flowId.endsWith(`_r${reference.workflowRevision}`)
+  );
+};
+
+const hasDistinctRunIds = (starts: readonly AcceptedInstallationWorkflowStart[]): boolean =>
+  new Set(starts.map((start) => start.runId.toLowerCase())).size === starts.length;
 
 type ParsedCandidate = Readonly<{
   identity: KestraFlowIdentity;
@@ -461,7 +516,12 @@ export const planInstallationWorkflowActivation = (
   for (const candidate of candidatesInput) {
     const parsed = parseCandidate(candidate);
     if (parsed === undefined) return refusedPlan("invalid_input");
-    if (!sameTargetIdentity(target, parsed.identity)) return refusedPlan("identity_mismatch");
+    if (
+      !sameTargetIdentity(target, parsed.identity) ||
+      parsed.namespace !== installationNamespace(target) ||
+      !isReleaseFlowId(target, parsed.flowId, parsed.identity.workflowRevision)
+    )
+      return refusedPlan("identity_mismatch");
     candidates.push(parsed);
   }
   const candidateRevisions = candidates.map((candidate) => candidate.identity.workflowRevision);
@@ -514,6 +574,7 @@ export const planInstallationWorkflowActivation = (
   if (present.length !== matched.size) return refusedPlan("mismatched_registration");
 
   const evidence: InstallationWorkflowActivationEvidence = {
+    kestraInstance: workflowServiceKestraInstanceKind,
     environment: target.environment,
     organizationId: target.organizationId,
     applicationRootId: target.applicationRootId,
@@ -538,25 +599,28 @@ export const planInstallationWorkflowActivation = (
     for (const candidate of supersededInput) {
       const reference = parseFlowReference(candidate);
       if (reference === undefined) return refusedPlan("invalid_input");
+      if (!isSameApplicationFlow(target, reference)) return refusedPlan("identity_mismatch");
       if (currentFlows.has(`${reference.namespace}\0${reference.flowId}`)) continue;
       scheduleChanges.push({ ...reference, action: "disable" });
     }
   }
 
-  const retainedStarts: InstallationWorkflowRetainedStart[] = [];
+  const acceptedStarts: AcceptedInstallationWorkflowStart[] = [];
   const acceptedInput = inputCandidate.acceptedStarts;
   if (acceptedInput !== undefined) {
     if (!Array.isArray(acceptedInput)) return refusedPlan("invalid_input");
     for (const candidate of acceptedInput) {
       const start = parseAcceptedStart(candidate);
       if (start === undefined) return refusedPlan("invalid_input");
-      retainedStarts.push({
-        runId: start.runId,
-        applicationReleaseRevision: start.applicationReleaseRevision,
-        workflowRevision: start.workflowRevision,
-      });
+      acceptedStarts.push(start);
     }
   }
+  if (!hasDistinctRunIds(acceptedStarts)) return refusedPlan("invalid_input");
+  const retainedStarts: InstallationWorkflowRetainedStart[] = acceptedStarts.map((start) => ({
+    runId: start.runId,
+    applicationReleaseRevision: start.applicationReleaseRevision,
+    workflowRevision: start.workflowRevision,
+  }));
 
   const plan = { outcome: "ready" as const, evidence, scheduleChanges, retainedStarts };
   const validated = installationWorkflowActivationPlanSchema.safeParse(plan);
@@ -589,9 +653,21 @@ export const reconcileInstallationWorkflowWithdrawal = (
   const flows: InstallationWorkflowRegisteredFlow[] = [];
   for (const candidate of flowsInput) {
     const flow = parseRegisteredFlow(candidate);
-    if (flow === undefined) throw invalidInput();
+    if (
+      flow === undefined ||
+      flow.namespace !== installationNamespace(target) ||
+      !isReleaseFlowId(target, flow.flowId, flow.workflowRevision)
+    )
+      throw invalidInput();
     flows.push(flow);
   }
+  const flowRevisions = flows.map((flow) => flow.workflowRevision);
+  const flowIds = flows.map((flow) => flow.flowId);
+  if (
+    new Set(flowRevisions).size !== flowRevisions.length ||
+    new Set(flowIds).size !== flowIds.length
+  )
+    throw invalidInput();
 
   const acceptedInput = inputCandidate.acceptedStarts;
   if (!Array.isArray(acceptedInput)) throw invalidInput();
@@ -601,8 +677,10 @@ export const reconcileInstallationWorkflowWithdrawal = (
     if (start === undefined) throw invalidInput();
     acceptedStarts.push(start);
   }
+  if (!hasDistinctRunIds(acceptedStarts)) throw invalidInput();
 
   const reconciliation = {
+    kestraInstance: workflowServiceKestraInstanceKind,
     organizationId: target.organizationId,
     applicationRootId: target.applicationRootId,
     applicationReleaseRevision: target.installationRevision,
