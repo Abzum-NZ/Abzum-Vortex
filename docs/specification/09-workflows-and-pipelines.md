@@ -111,7 +111,7 @@ Post-commit dispatch scopes the hand-off duplicate key to the source event or st
 
 ## Task types in the shared registry
 
-A durable flow uses the same task types as every other flow. There is no second frontend, background or workflow catalogue: every task type is registered once in the one task registry ([#983](https://github.com/Abzum-NZ/Abzum-Vortex/issues/983)) with its version, its typed properties, outputs and outcomes, its default policy, how it compiles for Kestra, and:
+A durable flow uses the same task types as every other flow. There is no second frontend, background or workflow catalogue: every task type is registered once in the one task registry ([`flow-task-registry.ts`](../../contracts/src/flow-task-registry.ts), [#983](https://github.com/Abzum-NZ/Abzum-Vortex/issues/983)) with its version, its typed properties, outputs and outcomes, its default policy, how it compiles for Kestra, and:
 
 - its run locations: **browser**; **server**, a protected operation in its own short transaction; **transaction**, only inside the owning record save; **durable**, on Kestra;
 - its effect class: **pure**, **read**, **change**, **background start** or **interface**.
@@ -127,13 +127,17 @@ The registered task types cover the governed operations:
 
 | Task group | Registered task types | Run locations | Effect class |
 | --- | --- | --- | --- |
-| Record | Save record, Create record, Set fields, Link records, Delete record, Restore record and Apply record changes | Server, transaction (changes to the record being saved) and durable | Change |
-| Query and data | Query records; Set values; Set variable; Calculate; Format value | Browser, server, transaction (under the saver's authority) and durable | Read or pure |
+| Record | Save record, Create record, Link records, Delete record, Restore record and Apply record changes | Server and durable | Change |
+| Record | Set fields | Server, durable and transaction (the record being saved only) | Change |
+| Query | Query records | Server, durable and transaction (under the saver's authority) | Read |
+| Data | Calculate, Set values, Set variable and Format value | Browser, server, transaction and durable | Pure |
 | Save rules | Require field, Warn and Refuse save | Browser (feedback only) and transaction | Pure |
 | Interface | Show message, Show form, Confirm, Navigate, Refresh, Open or close panel and Set filter | Browser | Interface |
-| Background and events | Run background flow; Announce event | Server and durable; server and transaction | Background start or change |
-| Connections and files | Call connection, Acknowledge message and Export to file | Server and durable | Change |
-| Protected operation | Call protected operation, whose operation descriptor declares its own effect | Server and durable | Of the called operation |
+| Background start | Run background flow | Server and durable | Background start |
+| Events | Announce event | Server, durable and transaction (the record being saved only) | Change |
+| Connections and files | Acknowledge message and Export to file | Server and durable | Change |
+| Connections | Call connection | Durable | Change |
+| Protected operation | Call protected operation, whose operation descriptor declares its own effect | Server and durable | Change, as declared by the called operation |
 
 Every record task calls one protected operation, **apply record changes**: `record.save`, `record.create`, `record.setFields`, `record.link`, `record.delete`, `record.restore` and `record.changes`. One call is one transaction that enforces the access decision for each touched record, field permissions, pipeline transitions and gates, action-only fields, revision checks, `BeforeSave` flows, and read-time and stored computed values. A flow cannot split or bypass this operation: record changes that must succeed or fail together are one `record.changes` task.
 
@@ -141,9 +145,9 @@ Values passed between tasks are explicit. A value is a literal, a declared trigg
 
 Output types cover text and formatted text, numbers and money, Boolean, dates, choices, JSON, record or record-list references, organisation-account references, child-run references, relationship or relationship-list references, and file references. Record-producing tasks also declare how their target is derived: the task's configured record type, its query, or its input record. Publication propagates that target through create, change, duplicate, bounded-loop and query tasks, set-values tasks, trigger inputs and form-response outputs. Assigning a value to a link field checks the link's exact allowed record targets as well as the general record-reference type. File tasks accept only a file reference and only an attachment field on the selected record.
 
-**Wait until** reads one date-time value from the flow's current record. Event and button flows use their subject record, and a child flow inherits that record through its exact parent chain. A schedule, interface or incoming-message flow has no current record unless an explicit task contract supplies one, so it cannot use **Wait until**.
+**Wait until** resumes at one declared time or date-time value: a field of the triggering record, a typed flow input or a typed output of an earlier task. A flow with no such declared value cannot use **Wait until**; no record is guessed.
 
-A **Run flow** task invokes another flow of the same execution kind with typed inputs and outputs; a **Run background flow** task commits the start of a durable flow. A child flow names its exact parent, and publication proves that the named parent contains the matching Run flow or Run background flow task. Adding independently typed child inputs requires a versioned contract change rather than an implicit payload convention.
+A **Run flow** task invokes another flow, which keeps its own declared execution kind, with a typed input map and typed outputs; a **Run background flow** task commits the start of a durable flow with a typed input map. The parent's task is the binding: it names the exact child flow, and publication checks its input map against the child's declared inputs, refuses cycles between flows and enforces the Run flow depth limit. A child never inherits undeclared context, and no payload is widened by convention.
 
 Authored definitions may omit repetitive execution policy. The versioned source contract then supplies the documented conservative defaults before publication: a five-minute timeout, three exponential retry attempts from one to thirty seconds, the task type as its activity key, and no payload in activity. Tasks that create or change records, relationships, files, external calls, child runs or human-input requests default to required duplicate protection; read, wait, branch, format and stop tasks default to not applicable. Canonical published tasks always contain the resolved policy explicitly, and publication refuses a policy that is unsafe for the task type.
 
@@ -151,7 +155,7 @@ The registry excludes arbitrary SQL, JavaScript, shell commands, database creden
 
 ## Limits and safeguards
 
-- A flow holds at most 100 tasks including nested tasks, nested no deeper than five levels.
+- A durable flow holds at most 100 tasks including nested tasks, nested no deeper than five levels.
 - One interactive or background run has at most 100 **For each** items, at most 25 protected operations, at most 10 seconds of server time and a **Run flow** depth of at most 3.
 - A durable flow's **For each** task handles at most 1,000 items in one run and uses stable pagination.
 - One durable wait lasts at most 90 days; a longer process renews the wait or uses a **Schedule** trigger.

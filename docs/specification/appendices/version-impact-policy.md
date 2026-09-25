@@ -149,7 +149,7 @@ Changing a placed block's tagged setting value or reference is major unless the 
 
 ## Flow-task policy
 
-The governed [task types in the shared registry](../09-workflows-and-pipelines.md#task-types-in-the-shared-registry) are generic. Adding a flow or reachable task changes executable behaviour and is major. Removing, retyping, reordering or reconfiguring any task is major; no task-list reorder is a no-change.
+The governed [task types in the shared registry](../09-workflows-and-pipelines.md#task-types-in-the-shared-registry) are generic. Adding a flow or reachable task changes executable behaviour and is major. Removing, retyping, reordering or reconfiguring any task is major; task order is executable behaviour, so reordering is never a no-change.
 
 | Task | Major configuration |
 |---|---|
@@ -175,7 +175,7 @@ The governed [task types in the shared registry](../09-workflows-and-pipelines.m
 | Show message / Show form / Confirm | Form, safe message, defaults and declared outputs |
 | Navigate / Refresh / Open or close panel / Set filter | Semantic target and declared parameters |
 
-Every task's permission, timeout, retry, duplicate protection, activity key, and redaction policy is executable behaviour and therefore major when changed. Flow-value source, literal, field, record, actor, time, or prior-task reference changes are also major.
+Every task's permission, timeout, retry, duplicate protection, activity key, and redaction policy is executable behaviour and therefore major when changed. Flow-value source, literal, field, record, actor, time, or prior-task reference changes are also major. Any change to a custom component bundle that a release carries is major ([Decision 7](../../build-plan/architecture-decisions-2026-09-25.md#decision-7--applications-are-delivered-as-packages-and-custom-logic-follows-a-ladder)).
 
 ## Integrity, history, and confirmation
 
