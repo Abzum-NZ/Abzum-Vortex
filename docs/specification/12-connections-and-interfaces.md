@@ -141,7 +141,7 @@ Every Application release carries its own agent tool bundle. It is part of the r
 - At every listing and call, the bundle is filtered by the person's current access exactly like the semantic interface map: an operation the person may not discover is absent; one they may see but cannot currently use is described as unavailable and is not callable. A direct call is still refused by the central access decision.
 - Calling a tool enters the same published Frontend Flow binding as the web control, with the same inputs, revisions, duplicate protection, validation, confirmation, activity and safe refusals. A tool never binds a protected owning operation directly; its flow's task invokes that operation.
 
-Platform tools (context selection, navigation, generic form drafts, refresh, Studio authoring and administration operations) are owned by the platform, not by an application bundle, and follow the same rules.
+Platform tools (context selection, navigation, generic form drafts, refresh and Studio authoring) are owned by the platform, not by an application bundle, and follow the same rules. Administration operations are not platform tools: the Tenant Administration, Organisation Administration and IAM applications each carry their own bundle, so an administration operation tool is published, listed and filtered with its application release and reached through that application's ordinary address exactly like any other application tool.
 
 ### Browser MCP (WebMCP)
 
