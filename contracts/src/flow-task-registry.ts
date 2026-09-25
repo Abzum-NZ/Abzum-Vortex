@@ -1,10 +1,5 @@
 import { z } from "zod";
 import { safeFlowResultKindSchema } from "./application-flow-bindings";
-import type {
-  CurrentUserFlowActionTarget,
-  CurrentUserFlowNode,
-  CurrentUserFlowQueryTarget,
-} from "./application-flow-bindings";
 import type { workflowNodeTypeKeys } from "./catalogues";
 import { workflowValueTypeSchema } from "./catalogues";
 import { retryPolicySchema } from "./common";
@@ -624,7 +619,11 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     summary: "Refuses the save with a reason.",
     runLocations: ["browser", "transaction"],
     effect: "pure",
-    properties: { reason: required("builder_key"), message: required("message_text") },
+    properties: {
+      reason: required("builder_key"),
+      message: required("message_text"),
+      field: optional("field_id"),
+    },
     kestra: "not_compiled",
   },
 
@@ -801,28 +800,6 @@ export const flowTaskMappingForActionEffect = {
   soft_delete_subject: task("record.delete"),
   announce_event: task("event.announce"),
 } as const satisfies Record<z.infer<typeof actionEffectSchema>["kind"], FlowLegacyKindMapping>;
-
-/** The current-user frontend flow node kinds; an action node maps through its target kind below. */
-export const flowTaskMappingForFrontendFlowNode = {
-  start: structural("flow_inputs"),
-  query: task("record.query"),
-  action: { kind: "by_target" },
-  transform: task("data.calculate"),
-  return: structural("flow_outputs"),
-} as const satisfies Record<CurrentUserFlowNode["kind"], FlowLegacyKindMapping | { kind: "by_target" }>;
-
-export const flowTaskMappingForFrontendActionTarget = {
-  protected_operation: task("operation.call"),
-  form_continuation: task("interface.show_form"),
-  durable_workflow_start: task("flow.run_background"),
-  application_action: structural("run_flow"),
-  record_save: task("record.save"),
-} as const satisfies Record<CurrentUserFlowActionTarget["kind"], FlowLegacyKindMapping>;
-
-export const flowTaskMappingForFrontendQueryTarget = {
-  query: task("record.query"),
-  application_query: task("record.query"),
-} as const satisfies Record<CurrentUserFlowQueryTarget["kind"], FlowLegacyKindMapping>;
 
 /** The before-save rule graph nodes; a rule becomes a transaction flow with a BeforeSave trigger. */
 export const flowTaskMappingForRuleGraphNode = {

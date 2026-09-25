@@ -42,10 +42,8 @@ import {
   pageCompositionV2Schema,
   platformBlockDependenciesV2Schema,
 } from "./application-composition-v2";
-import {
-  componentFlowBindingSchema,
-  currentUserFlowSchema,
-} from "./application-flow-bindings";
+import { componentFlowBindingSchema } from "./application-flow-bindings";
+import { flowSchema } from "./flow-contracts";
 
 export const moduleBindingSchema = z
   .object({
@@ -454,7 +452,8 @@ const applicationSharedContentSchema = z
     interfaces: z.array(interfaceDefinitionSchema),
     publicAddresses: z.array(publicAddressSchema),
     homePageId: pageIdSchema,
-    flows: z.array(currentUserFlowSchema),
+    /** Every flow this Application owns (architecture decision 1); each has one owner. */
+    flows: z.array(flowSchema).max(100),
     flowBindings: z.array(componentFlowBindingSchema),
   })
   .strict();
@@ -626,14 +625,14 @@ export const applicationContentV2Schema = applicationSharedContentSchema
         message: "The platform-block dependency list cannot contain unused releases",
       });
 
-    const flowIds = value.flows.map((flow) => String(flow.flowId));
+    const flowIds = value.flows.map((flow) => String(flow.id));
     const flowKeys = value.flows.map((flow) => flow.key);
     if (new Set(flowIds).size !== flowIds.length)
       context.addIssue({ code: "custom", path: ["flows"], message: "Flow identities must be unique" });
     if (new Set(flowKeys).size !== flowKeys.length)
       context.addIssue({ code: "custom", path: ["flows"], message: "Flow keys must be unique" });
 
-    const flowsById = new Map(value.flows.map((flow) => [String(flow.flowId), flow]));
+    const flowIdSet = new Set(flowIds);
     const placementIdSet = new Set(placementIds.map(String));
     const flowBindingIds = value.flowBindings.map((binding) => String(binding.bindingId));
     const flowBindingEvents = value.flowBindings.map(
@@ -652,23 +651,18 @@ export const applicationContentV2Schema = applicationSharedContentSchema
         message: "A control event can have only one flow binding",
       });
     for (const [bindingIndex, binding] of value.flowBindings.entries()) {
-      if (binding.flow.kind === "application_owned") {
-        const flow = flowsById.get(String(binding.flow.flowId));
-        if (flow === undefined) {
-          context.addIssue({
-            code: "custom",
-            path: ["flowBindings", bindingIndex, "flow"],
-            message: "A flow binding must resolve inside the same application",
-          });
-        }
-      }
-      if (!placementIdSet.has(String(binding.controlId))) {
+      if (!flowIdSet.has(String(binding.flow.flowId)))
+        context.addIssue({
+          code: "custom",
+          path: ["flowBindings", bindingIndex, "flow"],
+          message: "A flow binding must resolve inside the same application",
+        });
+      if (!placementIdSet.has(String(binding.controlId)))
         context.addIssue({
           code: "custom",
           path: ["flowBindings", bindingIndex, "controlId"],
           message: "A flow binding control must resolve to a placement inside the application",
         });
-      }
     }
   });
 

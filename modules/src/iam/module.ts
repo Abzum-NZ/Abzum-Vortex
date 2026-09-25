@@ -441,7 +441,7 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
     permissions,
     actions: [],
     events: [],
-    rules: [],
+    flows: [],
     extension_points: [],
     sharing_conditions: [
       {

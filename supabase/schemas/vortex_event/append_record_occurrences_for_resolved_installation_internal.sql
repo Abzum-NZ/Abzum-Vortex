@@ -97,27 +97,14 @@ begin
     raise exception using errcode = '22023', message = 'Event occurrence identities are invalid';
   end;
 
-  -- The only System caller is the deadline closure: its context is revalidated
-  -- against the configured deadline actor and attributes that actor. Every
-  -- other caller keeps the exact human Application context requirement.
-  if vortex_context.current_context() ->> 'callerKind' = 'system' then
-    context_value := vortex_record.validated_deadline_system_context_internal();
-    if not context_value ?& array[
-      'organizationId', 'applicationRootId', 'systemActorId', 'correlationId'
+  context_value := vortex_access.validated_human_request_context();
+  if context_value ->> 'callerKind' is distinct from 'human'
+    or not context_value ?& array[
+      'organizationId', 'applicationRootId', 'organizationAccountId', 'correlationId'
     ] then
-      raise exception using errcode = '42501', message = 'System Application context is required';
-    end if;
-    context_actor_id := (context_value ->> 'systemActorId')::uuid;
-  else
-    context_value := vortex_access.validated_human_request_context();
-    if context_value ->> 'callerKind' is distinct from 'human'
-      or not context_value ?& array[
-        'organizationId', 'applicationRootId', 'organizationAccountId', 'correlationId'
-      ] then
-      raise exception using errcode = '42501', message = 'Human Application context is required';
-    end if;
-    context_actor_id := (context_value ->> 'organizationAccountId')::uuid;
+    raise exception using errcode = '42501', message = 'Human Application context is required';
   end if;
+  context_actor_id := (context_value ->> 'organizationAccountId')::uuid;
   context_organization_id := (context_value ->> 'organizationId')::uuid;
   context_application_root_id := (context_value ->> 'applicationRootId')::uuid;
   context_correlation_id := (context_value ->> 'correlationId')::uuid;
@@ -147,9 +134,7 @@ begin
   -- committed it sees the committed lifecycle state.  `p_installation` carries
   -- an exact pin-set only from a trusted reader that already resolved it while
   -- holding the same canonical lifecycle lock.
-  if p_installation is null and context_value ->> 'callerKind' = 'system' then
-    installation := vortex_record.read_deadline_active_installation_internal();
-  elsif p_installation is null then
+  if p_installation is null then
     installation := vortex_module.read_current_active_installation();
   else
     installation := p_installation;
@@ -503,8 +488,11 @@ begin
 end
 $function$;
 
-revoke all on function vortex_event.append_record_occurrences_for_resolved_installation_internal(uuid, uuid, jsonb, jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+revoke all on function vortex_event.append_record_occurrences_for_resolved_installation_internal(
+  uuid, uuid, jsonb, jsonb
+)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_adapter;
 comment on function vortex_event.append_record_occurrences_for_resolved_installation_internal(
   uuid, uuid, jsonb, jsonb
 ) is
