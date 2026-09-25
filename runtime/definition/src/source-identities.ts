@@ -8,6 +8,8 @@ import type {
   SourceIdentityKindV3,
 } from "@vortex/contracts";
 
+import { isBeforeSaveFlow, lowerBeforeSaveFlow } from "./before-save-flow-rules";
+
 export type SourceIdentityRequirement = Readonly<{
   definitionKey: string;
   /** Stable parent-owner scope used only by the identity store. */
@@ -112,7 +114,6 @@ export function extractSourceIdentityRequirements(
 
   addTopLevel("permission", "permissions");
   addTopLevel("action", "actions");
-  addTopLevel("rule", "rules");
   addTopLevel("event", "events");
 
   for (const recordType of collection("record_types")) {
@@ -137,7 +138,11 @@ export function extractSourceIdentityRequirements(
   return requirements;
 }
 
-/** Adds graph-owned identities to the shared vocabulary computed above. */
+/**
+ * Adds the identities a Module's flows own to the shared vocabulary computed above: each flow, and,
+ * for a `BeforeSave` flow, the nodes of the rule graph it is lowered to. A flow that cannot be
+ * lowered lists no nodes; compiling it refuses with the located reason.
+ */
 export function extractModuleSourceIdentityRequirementsV3(
   source: ModuleSourceDocument,
 ): SourceIdentityRequirementV3[] {
@@ -145,7 +150,7 @@ export function extractModuleSourceIdentityRequirementsV3(
     (requirement) => ({ ...requirement }),
   );
   const add = (
-    kind: Extract<SourceIdentityKindV3, "rule_input" | "rule_variable" | "rule_node">,
+    kind: Extract<SourceIdentityKindV3, "flow" | "rule_node">,
     ownerScope: string,
     scope: string,
     componentOwner: string,
@@ -160,14 +165,13 @@ export function extractModuleSourceIdentityRequirementsV3(
       aliases: uniqueStrings(aliases),
     });
 
-  for (const rule of source.body.rules) {
-    const ownerScope = `rule_owner:${rule.id}`;
-    const scope = `rule:${rule.key}`;
-    for (const input of rule.inputs)
-      add("rule_input", ownerScope, scope, input.id, [input.id, input.key]);
-    for (const variable of rule.variables)
-      add("rule_variable", ownerScope, scope, variable.id, [variable.id, variable.key]);
-    for (const node of rule.nodes) add("rule_node", ownerScope, scope, node.id, [node.id]);
+  for (const flow of source.body.flows) {
+    add("flow", "content", "content", flow.id, [flow.id, flow.key]);
+    if (!isBeforeSaveFlow(flow)) continue;
+    const lowered = lowerBeforeSaveFlow(flow);
+    if (!lowered.ok) continue;
+    for (const node of lowered.graph.nodes)
+      add("rule_node", `rule_owner:${flow.id}`, `rule:${flow.key}`, node.id, [node.id]);
   }
   return requirements;
 }
@@ -233,7 +237,6 @@ export function extractApplicationSourceIdentityRequirementsV2(
   add("root", "document", "document", "root", [source.key, source.root_alias]);
   addTopLevel("permission", "permissions");
   addTopLevel("action", "actions");
-  addTopLevel("rule", "rules");
   addTopLevel("event", "events");
   addTopLevel("role", "roles");
   addTopLevel("query", "queries");
@@ -307,19 +310,8 @@ export function extractApplicationSourceIdentityRequirementsV2(
       );
   }
 
-  for (const flow of collection("flows")) {
-    addIdentified("flow", "content", "content", flow);
-    const flowKey = stringValue(flow.key);
-    const flowOwner = stringValue(flow.id);
-    if (flowKey === undefined || flowOwner === undefined) continue;
-    for (const node of objects(flow.nodes))
-      addIdentified("flow_node", `flow_owner:${flowOwner}`, `flow:${flowKey}`, node);
-    for (const edge of objects(flow.edges)) {
-      const edgeId = stringValue(edge.id);
-      if (edgeId !== undefined)
-        add("flow_edge", `flow_owner:${flowOwner}`, `flow:${flowKey}`, edgeId, [edgeId]);
-    }
-  }
+  // A flow is one identity; its tasks are readable ids inside it, not identities.
+  for (const flow of collection("flows")) addIdentified("flow", "content", "content", flow);
 
   for (const binding of collection("flow_bindings")) {
     const bindingId = stringValue(binding.id);

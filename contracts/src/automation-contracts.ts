@@ -290,6 +290,11 @@ export const workflowTriggerSchema = z.discriminatedUnion("kind", [
     .object({ kind: z.literal("workflow"), workflowId: workflowIdSchema, ...workflowTriggerCommon })
     .strict(),
 ]);
+/**
+ * @deprecated The durable node-and-edge workflow is replaced by the one flow definition in
+ * `flow-contracts.ts` (`durable` execution). Conversion and removal belong to #986 and #988; do not
+ * extend this format.
+ */
 export const workflowDefinitionSchema = z
   .object({
     workflowId: workflowIdSchema,

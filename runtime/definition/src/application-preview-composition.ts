@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { RequestDatabaseTransaction } from "@vortex/db";
+import type { BuilderAuthority } from "./builder-authority";
 import { createApplicationPreviewService } from "./application-preview";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./definition-publication-catalogue";
 import { createDatabaseDefinitionPublicationService } from "./definition-publication-composition";
@@ -13,7 +14,8 @@ import { createDatabaseDefinitionPublicationService } from "./definition-publica
 export const createDatabaseApplicationPreviewService = (
   catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
   transaction: RequestDatabaseTransaction,
+  authority: BuilderAuthority,
 ) =>
   createApplicationPreviewService(
-    createDatabaseDefinitionPublicationService(catalogueDefinition, transaction),
+    createDatabaseDefinitionPublicationService(catalogueDefinition, transaction, authority),
   );

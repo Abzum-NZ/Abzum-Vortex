@@ -5,7 +5,13 @@ import {
   jsonValueSchema,
   labelSchema,
 } from "./common";
-import { personalDataClassSchema, publicDisplaySchema, searchPrioritySchema } from "./catalogues";
+import {
+  actionInputValueTypes,
+  personalDataClassSchema,
+  publicDisplaySchema,
+  searchPrioritySchema,
+  sharingParameterValueTypeSchema,
+} from "./catalogues";
 import {
   actionIdSchema,
   applicationRootIdSchema,
@@ -21,7 +27,6 @@ import {
   platformIdSchema,
   recordTypeIdSchema,
   revisionSchema,
-  ruleIdSchema,
   semanticVersionSchema,
   storageContractIdSchema,
   workflowIdSchema,
@@ -689,7 +694,7 @@ const actionValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("current_actor") }).strict(),
   z.object({ source: z.literal("current_time") }).strict(),
 ]);
-const actionEffectSchema = z.discriminatedUnion("kind", [
+export const actionEffectSchema = z.discriminatedUnion("kind", [
   z
     .object({ kind: z.literal("set_field"), fieldId: fieldIdSchema, value: actionValueSchema })
     .strict(),
@@ -718,7 +723,7 @@ const actionInputBase = {
 const textActionInputSchema = z
   .object({
     ...actionInputBase,
-    type: z.literal("text"),
+    type: z.literal(actionInputValueTypes.text),
     validation: z
       .object({
         minimumLength: z.number().int().min(0).optional(),
@@ -732,7 +737,7 @@ const textActionInputSchema = z
 const formattedTextActionInputSchema = z
   .object({
     ...actionInputBase,
-    type: z.literal("formatted_text"),
+    type: z.literal(actionInputValueTypes.formatted_text),
     validation: z
       .object({
         allowedBlocks: z
@@ -747,7 +752,7 @@ const formattedTextActionInputSchema = z
 const numberActionInputSchema = z
   .object({
     ...actionInputBase,
-    type: z.literal("number"),
+    type: z.literal(actionInputValueTypes.number),
     validation: z
       .object({ minimum: z.number().finite().optional(), maximum: z.number().finite().optional() })
       .strict()
@@ -757,7 +762,7 @@ const numberActionInputSchema = z
 const dateActionInputSchema = z
   .object({
     ...actionInputBase,
-    type: z.literal("date"),
+    type: z.literal(actionInputValueTypes.date),
     validation: z
       .object({
         earliest: z
@@ -776,7 +781,7 @@ const dateActionInputSchema = z
 const dateTimeActionInputSchema = z
   .object({
     ...actionInputBase,
-    type: z.literal("date_time"),
+    type: z.literal(actionInputValueTypes.date_time),
     validation: z
       .object({
         earliest: z.string().datetime({ offset: true }).optional(),
@@ -791,20 +796,20 @@ export const actionInputDefinitionSchema = z
     textActionInputSchema,
     formattedTextActionInputSchema,
     numberActionInputSchema,
-    z.object({ ...actionInputBase, type: z.literal("boolean") }).strict(),
+    z.object({ ...actionInputBase, type: z.literal(actionInputValueTypes.boolean) }).strict(),
     dateActionInputSchema,
     dateTimeActionInputSchema,
     z
       .object({
         ...actionInputBase,
-        type: z.literal("record_reference"),
+        type: z.literal(actionInputValueTypes.record_reference),
         recordTypes: z.array(recordTypeReferenceSchema).min(1).max(20),
       })
       .strict(),
     z
       .object({
         ...actionInputBase,
-        type: z.literal("organization_account_reference"),
+        type: z.literal(actionInputValueTypes.organization_account_reference),
       })
       .strict(),
   ])
@@ -878,34 +883,6 @@ export const actionDefinitionSchema = z
         message: "Action input keys must be unique",
       });
   });
-
-const ruleEffectSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("refuse"), reasonCode: builderKeySchema }).strict(),
-  z
-    .object({ kind: z.literal("set_value"), fieldId: fieldIdSchema, value: jsonValueSchema })
-    .strict(),
-  z.object({ kind: z.literal("require"), fieldId: fieldIdSchema }).strict(),
-  z
-    .object({
-      kind: z.literal("show_or_hide"),
-      componentId: containedComponentIdSchema,
-      visibility: z.enum(["show", "hide"]),
-    })
-    .strict(),
-  z.object({ kind: z.literal("warn"), messageKey: builderKeySchema }).strict(),
-  z.object({ kind: z.literal("start_background_work"), workflowId: workflowIdSchema }).strict(),
-]);
-export const ruleDefinitionSchema = z
-  .object({
-    ruleId: ruleIdSchema,
-    key: builderKeySchema,
-    subjectRecordTypeId: recordTypeIdSchema,
-    trigger: z.enum(["create", "change", "delete", "form_change", "action"]),
-    condition: conditionNodeSchema,
-    priority: z.number().int().min(0).max(10_000),
-    effect: ruleEffectSchema,
-  })
-  .strict();
 
 export const eventDefinitionSchema = z
   .object({
@@ -1050,14 +1027,7 @@ export const savedSharingConditionSchema = z
       z
         .object({
           key: builderKeySchema,
-          type: z.enum([
-            "text",
-            "number",
-            "boolean",
-            "date",
-            "date_time",
-            "organization_account_reference",
-          ]),
+          type: sharingParameterValueTypeSchema,
         })
         .strict(),
     ),
@@ -1087,7 +1057,6 @@ export const moduleContentSchema = z
     permissions: z.array(permissionDeclarationSchema),
     actions: z.array(actionDefinitionSchema),
     events: z.array(eventDefinitionSchema),
-    rules: z.array(ruleDefinitionSchema),
     sharingConditions: z.array(savedSharingConditionSchema),
     extensionPoints: z.array(
       z
@@ -1136,7 +1105,6 @@ export type ModuleContent = z.infer<typeof moduleContentSchema>;
 export type ModuleDraft = z.infer<typeof moduleDraftSchema>;
 export type PublishedModuleDefinition = z.infer<typeof publishedModuleDefinitionSchema>;
 export type ActionDefinition = z.infer<typeof actionDefinitionSchema>;
-export type RuleDefinition = z.infer<typeof ruleDefinitionSchema>;
 export type EventDefinition = z.infer<typeof eventDefinitionSchema>;
 export type StandardInstalledEventKind = z.infer<typeof standardInstalledEventKindSchema>;
 export type StandardInstalledEventDescriptor = z.infer<

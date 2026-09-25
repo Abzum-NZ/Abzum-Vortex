@@ -6,21 +6,18 @@ import {
 } from "@vortex/contracts";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 
-/** Declared semantic event names this form and action family can emit. */
-export type ControlSemanticEventName = Extract<
-  ComponentSemanticEventKind,
-  "action" | "field_changed" | "form_ready" | "form_reset" | "form_submit" | "tab_changed"
->;
-
 /** Every event name any control accepts; each block further narrows this to its own declaration. */
-export const CONTROL_EVENT_NAMES: readonly ControlSemanticEventName[] = Object.freeze([
+export const CONTROL_EVENT_NAMES = Object.freeze([
   "action",
   "field_changed",
   "form_ready",
   "form_reset",
   "form_submit",
   "tab_changed",
-]);
+] as const satisfies readonly ComponentSemanticEventKind[]);
+
+/** Declared semantic event names this form and action family can emit. */
+export type ControlSemanticEventName = (typeof CONTROL_EVENT_NAMES)[number];
 
 /** Closed set of typed values that form field inputs collect and emit. */
 export type TypedRichTextDocument = Extract<

@@ -1,0 +1,151 @@
+{
+  "catalogueThemeId": "3f0a2b14-9c6d-4e58-8a71-6d2e5f4b1c09",
+  "releaseVersion": "2.0.0",
+  "tokens": {
+    "background": {
+      "kind": "color_pair",
+      "light": "#FFFFFF",
+      "dark": "#0F172A",
+      "role": "background"
+    },
+    "surface": {
+      "kind": "color_pair",
+      "light": "#F8FAFC",
+      "dark": "#1E293B",
+      "role": "background"
+    },
+    "text": {
+      "kind": "color_pair",
+      "light": "#0F172A",
+      "dark": "#F8FAFC",
+      "role": "foreground"
+    },
+    "muted_text": {
+      "kind": "color_pair",
+      "light": "#475569",
+      "dark": "#CBD5E1",
+      "role": "foreground"
+    },
+    "border_color": {
+      "kind": "color_pair",
+      "light": "#CBD5E1",
+      "dark": "#334155"
+    },
+    "border": {
+      "kind": "border",
+      "widthRem": 0.0625,
+      "style": "solid",
+      "colorToken": "border_color"
+    },
+    "primary": {
+      "kind": "color_pair",
+      "light": "#1D4ED8",
+      "dark": "#93C5FD"
+    },
+    "primary_foreground": {
+      "kind": "color_pair",
+      "light": "#FFFFFF",
+      "dark": "#0B1220",
+      "role": "foreground"
+    },
+    "secondary": {
+      "kind": "color_pair",
+      "light": "#E2E8F0",
+      "dark": "#334155"
+    },
+    "secondary_foreground": {
+      "kind": "color_pair",
+      "light": "#0F172A",
+      "dark": "#F8FAFC",
+      "role": "foreground"
+    },
+    "danger": {
+      "kind": "color_pair",
+      "light": "#B91C1C",
+      "dark": "#F87171"
+    },
+    "danger_foreground": {
+      "kind": "color_pair",
+      "light": "#FFFFFF",
+      "dark": "#000000",
+      "role": "foreground"
+    },
+    "danger_text": {
+      "kind": "color_pair",
+      "light": "#B91C1C",
+      "dark": "#F87171",
+      "role": "foreground"
+    },
+    "warning_text": {
+      "kind": "color_pair",
+      "light": "#92400E",
+      "dark": "#FBBF24",
+      "role": "foreground"
+    },
+    "info_text": {
+      "kind": "color_pair",
+      "light": "#1D4ED8",
+      "dark": "#60A5FA",
+      "role": "foreground"
+    },
+    "focus": {
+      "kind": "focus",
+      "colorToken": "primary",
+      "widthRem": 0.125
+    },
+    "body": {
+      "kind": "typography",
+      "family": "body",
+      "sizeRem": 1,
+      "lineHeight": 1.5,
+      "weight": 400
+    },
+    "heading": {
+      "kind": "typography",
+      "family": "heading",
+      "sizeRem": 1.5,
+      "lineHeight": 1.25,
+      "weight": 600
+    },
+    "space_xs": {
+      "kind": "spacing",
+      "rem": 0.25
+    },
+    "space_sm": {
+      "kind": "spacing",
+      "rem": 0.5
+    },
+    "space_md": {
+      "kind": "spacing",
+      "rem": 1
+    },
+    "space_lg": {
+      "kind": "spacing",
+      "rem": 1.5
+    },
+    "radius_sm": {
+      "kind": "corners",
+      "rem": 0.125
+    },
+    "radius_md": {
+      "kind": "corners",
+      "rem": 0.25
+    },
+    "radius_lg": {
+      "kind": "corners",
+      "rem": 0.5
+    },
+    "elevation_low": {
+      "kind": "elevation",
+      "level": 1
+    },
+    "elevation_high": {
+      "kind": "elevation",
+      "level": 3
+    },
+    "density": {
+      "kind": "density",
+      "value": "comfortable"
+    }
+  }
+}

@@ -1,10 +1,5 @@
 import "server-only";
 
-import {
-  resolvePageTheme,
-  resolvePlacementThemeTokens,
-} from "./page-theme-resolution";
-
 export {
   createAuthenticatedPageCapabilityService,
   type AuthenticatedPageCapabilityDependencies,
@@ -56,6 +51,13 @@ export {
   type ProtectedReadModelResolution,
 } from "./protected-read-model-resolution";
 export {
+  buildRecordsTableQueryCommand,
+  createRecordsTableQueryResolver,
+  type RecordsTableQueryRequest,
+  type RecordsTableQueryResolution,
+  type RecordsTableQueryRunner,
+} from "./records-table-query";
+export {
   abandonPrivateFormDraftCommandSchema,
   createPrivateFormDraftCommandSchema,
   PrivateFormDraftError,
@@ -98,14 +100,17 @@ export {
   type PrivateFormDraftServiceDependencies,
 } from "./form-drafts-repository";
 export {
-  resolvePageTheme,
-  resolvePlacementThemeTokens,
-  type PlacementThemeResolutionContext,
-} from "./page-theme-resolution";
+  createPrivateFormContinuationAdapter,
+  type PrivateFormContinuationAdapter,
+  type PrivateFormContinuationDependencies,
+  type PrivateFormContinuationDraft,
+  type PrivateFormContinuationDraftDisposition,
+  type PrivateFormContinuationDraftPort,
+  type PrivateFormContinuationInput,
+  type PrivateFormContinuationResult,
+} from "./form-continuation";
 
 export const PageService = Object.freeze({
   key: "page",
   boundary: "@vortex/page",
-  resolvePageTheme,
-  resolvePlacementThemeTokens,
 });

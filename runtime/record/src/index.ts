@@ -7,8 +7,6 @@ export * from "./totals";
 export * from "./save-record";
 export * from "./transfer-record-ownership";
 export * from "./named-actions";
-export * from "./deadline-refresh";
-export * from "./deadline-closure";
 export * from "./record-lifecycle-policy";
 export * from "./delete-record";
 
