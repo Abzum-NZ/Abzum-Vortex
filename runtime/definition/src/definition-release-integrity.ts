@@ -46,9 +46,9 @@ export const hasAuthenticResolutionFingerprint = (
 const manifestSubject = (dependency: ExactDefinitionDependency): string =>
   dependency.kind === "platform_theme"
     ? `${dependency.kind}:${dependency.catalogueThemeId}`
-      : dependency.kind === "platform_block"
-        ? `${dependency.kind}:${dependency.blockId}`
-        : dependency.kind === "application_flow"
+    : dependency.kind === "platform_block"
+      ? `${dependency.kind}:${dependency.blockId}`
+      : dependency.kind === "application_flow"
           ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}`
           : dependency.kind === "application_flow_node"
             ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}:${dependency.nodeId}`

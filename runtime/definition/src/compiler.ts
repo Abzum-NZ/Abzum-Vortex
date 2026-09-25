@@ -5161,15 +5161,6 @@ function compileApplicationFlowBindings(
   const rawBindings = body.flow_bindings as JsonObject[];
   const appVersion = root.exactVersion;
   const resolutionFingerprint = resolution.snapshot.fingerprint;
-  const managedFlow = (flowId: string, releaseVersion: string): JsonObject => {
-    const matches = catalogueEvidence.managedFlows.filter(
-      (candidate) =>
-        String(candidate.flowId) === flowId && String(candidate.releaseVersion) === releaseVersion,
-    );
-    if (matches.length !== 1)
-      fail("vortex.definition.missing_identity", "unresolved_reference");
-    return matches[0]!;
-  };
   const sourceFlow = (alias: string): JsonObject | undefined =>
     (body.flows as JsonObject[]).find(
       (flow) => String(flow.id) === alias || String(flow.key) === alias,

@@ -579,8 +579,8 @@ const findPinned = <Kind extends ExactDefinitionDependency["kind"]>(
         : entry.kind === "platform_block"
           ? entry.blockId === subject
           : entry.kind === "protected_operation"
-              ? entry.operation.operationId === subject
-          : entry.key === subject),
+            ? entry.operation.operationId === subject
+            : entry.key === subject),
   );
   if (matches.length !== 1) return refuse("DEFINITION_CONFIRMATION_MISMATCH");
   return matches[0] as Extract<ExactDefinitionDependency, { kind: Kind }>;
@@ -951,17 +951,15 @@ const flowTargetManifestFor = (
       // Module binding already pins exactly.
     }
   }
-  for (const binding of content.flowBindings) {
-    if (binding.flow.kind === "application_owned")
-      add({
-        kind: "application_flow",
-        applicationRootId,
-        flowId: binding.flow.flowId,
-        releaseVersion: binding.flow.releaseVersion,
-        contentFingerprint: binding.flow.contentFingerprint,
-        resolutionFingerprint: binding.flow.resolutionFingerprint,
-      });
-  }
+  for (const binding of content.flowBindings)
+    add({
+      kind: "application_flow",
+      applicationRootId,
+      flowId: binding.flow.flowId,
+      releaseVersion: binding.flow.releaseVersion,
+      contentFingerprint: binding.flow.contentFingerprint,
+      resolutionFingerprint: binding.flow.resolutionFingerprint,
+    });
   return entries;
 };
 
