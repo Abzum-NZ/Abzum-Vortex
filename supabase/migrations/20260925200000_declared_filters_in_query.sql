@@ -39,6 +39,7 @@ declare
   operand_is_field boolean;
   operand_parameter_index integer;
   operand_value jsonb;
+  member jsonb;
   operand_is_array boolean;
   operand_types text[];
   operand_sqls text[];
@@ -69,6 +70,7 @@ declare
   empty_sql text;
   predicate_sql text;
   operator_sql text;
+  value_valid boolean := true;
 begin
   if p_condition is null
     or pg_catalog.jsonb_typeof(p_condition) is distinct from 'object'
@@ -361,6 +363,81 @@ begin
   end if;
 
   if shared_type is null then
+    return pg_catalog.jsonb_build_object('predicate', null, 'parameters', parameter_values);
+  end if;
+
+  if shared_type in (
+    'number', 'decimal_number', 'money', 'date', 'date_time'
+  ) then
+    for i in 1..operand_count loop
+      if not operand_is_fields[i]
+        and operand_values[i] is not null
+        and operand_values[i] <> 'null'::jsonb then
+        if pg_catalog.jsonb_typeof(operand_values[i]) = 'array' then
+          for member in
+            select item.value from pg_catalog.jsonb_array_elements(operand_values[i]) as item(value)
+          loop
+            if shared_type = 'number'
+              and (pg_catalog.jsonb_typeof(member) <> 'number'
+                or not pg_catalog.pg_input_is_valid(member #>> '{}', 'double precision')) then
+              value_valid := false;
+            elsif shared_type = 'decimal_number'
+              and (pg_catalog.jsonb_typeof(member) not in ('number', 'string')
+                or not pg_catalog.pg_input_is_valid(member #>> '{}', 'numeric')) then
+              value_valid := false;
+            elsif shared_type = 'money'
+              and (pg_catalog.jsonb_typeof(member) <> 'object'
+                or pg_catalog.jsonb_typeof(member -> 'amount') <> 'string'
+                or not pg_catalog.pg_input_is_valid(member ->> 'amount', 'numeric')) then
+              value_valid := false;
+            elsif shared_type = 'date'
+              and (pg_catalog.jsonb_typeof(member) <> 'string'
+                or not pg_catalog.pg_input_is_valid(member #>> '{}', 'date')) then
+              value_valid := false;
+            elsif shared_type = 'date_time'
+              and (pg_catalog.jsonb_typeof(member) <> 'string'
+                or not pg_catalog.pg_input_is_valid(
+                  member #>> '{}', 'timestamp with time zone'
+                )) then
+              value_valid := false;
+            end if;
+          end loop;
+        elsif shared_type = 'number'
+          and (pg_catalog.jsonb_typeof(operand_values[i]) <> 'number'
+            or not pg_catalog.pg_input_is_valid(
+              operand_values[i] #>> '{}', 'double precision'
+            )) then
+          value_valid := false;
+        elsif shared_type = 'decimal_number'
+          and (pg_catalog.jsonb_typeof(operand_values[i]) not in ('number', 'string')
+            or not pg_catalog.pg_input_is_valid(
+              operand_values[i] #>> '{}', 'numeric'
+            )) then
+          value_valid := false;
+        elsif shared_type = 'money'
+          and (pg_catalog.jsonb_typeof(operand_values[i]) <> 'object'
+            or pg_catalog.jsonb_typeof(operand_values[i] -> 'amount') <> 'string'
+            or not pg_catalog.pg_input_is_valid(
+              operand_values[i] ->> 'amount', 'numeric'
+            )) then
+          value_valid := false;
+        elsif shared_type = 'date'
+          and (pg_catalog.jsonb_typeof(operand_values[i]) <> 'string'
+            or not pg_catalog.pg_input_is_valid(
+              operand_values[i] #>> '{}', 'date'
+            )) then
+          value_valid := false;
+        elsif shared_type = 'date_time'
+          and (pg_catalog.jsonb_typeof(operand_values[i]) <> 'string'
+            or not pg_catalog.pg_input_is_valid(
+              operand_values[i] #>> '{}', 'timestamp with time zone'
+            )) then
+          value_valid := false;
+        end if;
+      end if;
+    end loop;
+  end if;
+  if not value_valid then
     return pg_catalog.jsonb_build_object('predicate', null, 'parameters', parameter_values);
   end if;
 
@@ -845,7 +922,7 @@ begin
       filter_condition, 'lax $.**?(@.source == "field").fieldId'
     ) as referenced(value);
     foreach field_key in array filter_ids loop
-      -- Field values are keyed by lowercase identifier; so must the tree.
+      -- Field values are keyed by lowercase identifier; so must the tree be.
       if field_key <> pg_catalog.lower(field_key) or not (fields_by_id ? field_key)
         or coalesce((fields_by_id -> field_key ->> 'filterable')::boolean, false) is not true then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
@@ -1081,7 +1158,7 @@ begin
           else pg_catalog.format('((%s) is null or coalesce(%s < %s, false))',
             sort_value_sql[sort_index], column_sql, value_sql) end);
         equal_prefix := equal_prefix
-          || pg_catalog.format('coalesce(%s = %s, false)', column_sql, value_sql);
+          || pg_catalog.format('coalesce(%s = %s, false) and ', column_sql, value_sql);
       end if;
     end if;
   end loop;

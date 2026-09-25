@@ -32,6 +32,7 @@ declare
   operand_is_field boolean;
   operand_parameter_index integer;
   operand_value jsonb;
+  member jsonb;
   operand_is_array boolean;
   operand_types text[];
   operand_sqls text[];
@@ -62,6 +63,7 @@ declare
   empty_sql text;
   predicate_sql text;
   operator_sql text;
+  value_valid boolean := true;
 begin
   if p_condition is null
     or pg_catalog.jsonb_typeof(p_condition) is distinct from 'object'
@@ -127,11 +129,11 @@ begin
       p_field_database_types,
       p_field_definitions,
       p_read_time_expressions,
-       p_parameter_types,
-       p_parameter_values,
-       p_parameter_sql_parameter,
-       p_parameter_offset
-      );
+      p_parameter_types,
+      p_parameter_values,
+      p_parameter_sql_parameter,
+      p_parameter_offset
+    );
     if child_result ->> 'predicate' is null then
       return pg_catalog.jsonb_build_object(
         'predicate', null,
@@ -354,6 +356,81 @@ begin
   end if;
 
   if shared_type is null then
+    return pg_catalog.jsonb_build_object('predicate', null, 'parameters', parameter_values);
+  end if;
+
+  if shared_type in (
+    'number', 'decimal_number', 'money', 'date', 'date_time'
+  ) then
+    for i in 1..operand_count loop
+      if not operand_is_fields[i]
+        and operand_values[i] is not null
+        and operand_values[i] <> 'null'::jsonb then
+        if pg_catalog.jsonb_typeof(operand_values[i]) = 'array' then
+          for member in
+            select item.value from pg_catalog.jsonb_array_elements(operand_values[i]) as item(value)
+          loop
+            if shared_type = 'number'
+              and (pg_catalog.jsonb_typeof(member) <> 'number'
+                or not pg_catalog.pg_input_is_valid(member #>> '{}', 'double precision')) then
+              value_valid := false;
+            elsif shared_type = 'decimal_number'
+              and (pg_catalog.jsonb_typeof(member) not in ('number', 'string')
+                or not pg_catalog.pg_input_is_valid(member #>> '{}', 'numeric')) then
+              value_valid := false;
+            elsif shared_type = 'money'
+              and (pg_catalog.jsonb_typeof(member) <> 'object'
+                or pg_catalog.jsonb_typeof(member -> 'amount') <> 'string'
+                or not pg_catalog.pg_input_is_valid(member ->> 'amount', 'numeric')) then
+              value_valid := false;
+            elsif shared_type = 'date'
+              and (pg_catalog.jsonb_typeof(member) <> 'string'
+                or not pg_catalog.pg_input_is_valid(member #>> '{}', 'date')) then
+              value_valid := false;
+            elsif shared_type = 'date_time'
+              and (pg_catalog.jsonb_typeof(member) <> 'string'
+                or not pg_catalog.pg_input_is_valid(
+                  member #>> '{}', 'timestamp with time zone'
+                )) then
+              value_valid := false;
+            end if;
+          end loop;
+        elsif shared_type = 'number'
+          and (pg_catalog.jsonb_typeof(operand_values[i]) <> 'number'
+            or not pg_catalog.pg_input_is_valid(
+              operand_values[i] #>> '{}', 'double precision'
+            )) then
+          value_valid := false;
+        elsif shared_type = 'decimal_number'
+          and (pg_catalog.jsonb_typeof(operand_values[i]) not in ('number', 'string')
+            or not pg_catalog.pg_input_is_valid(
+              operand_values[i] #>> '{}', 'numeric'
+            )) then
+          value_valid := false;
+        elsif shared_type = 'money'
+          and (pg_catalog.jsonb_typeof(operand_values[i]) <> 'object'
+            or pg_catalog.jsonb_typeof(operand_values[i] -> 'amount') <> 'string'
+            or not pg_catalog.pg_input_is_valid(
+              operand_values[i] ->> 'amount', 'numeric'
+            )) then
+          value_valid := false;
+        elsif shared_type = 'date'
+          and (pg_catalog.jsonb_typeof(operand_values[i]) <> 'string'
+            or not pg_catalog.pg_input_is_valid(
+              operand_values[i] #>> '{}', 'date'
+            )) then
+          value_valid := false;
+        elsif shared_type = 'date_time'
+          and (pg_catalog.jsonb_typeof(operand_values[i]) <> 'string'
+            or not pg_catalog.pg_input_is_valid(
+              operand_values[i] #>> '{}', 'timestamp with time zone'
+            )) then
+          value_valid := false;
+        end if;
+      end if;
+    end loop;
+  end if;
+  if not value_valid then
     return pg_catalog.jsonb_build_object('predicate', null, 'parameters', parameter_values);
   end if;
 
