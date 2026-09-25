@@ -34,6 +34,11 @@
 -- supabase/schemas/vortex_record/<function>.sql changed in this commit.
 -- `record_lifecycle_receipt_outcome_internal` is superseded by the claim helper
 -- and dropped.
+--
+-- The two ownership-transfer writers also lose their update of
+-- `vortex_record.record_deadline_due_metadata`: #1067 (20260925090000) dropped
+-- that table but left the update in both live bodies, so every transfer failed
+-- at run time.
 
 begin;
 
@@ -2406,15 +2411,6 @@ begin
     case when record_fact #>> '{recordScope,storageScope}' = 'application_contained'
       then application_root_id_value else null end
   );
-  update vortex_record.record_deadline_due_metadata as metadata
-  set record_concurrency_number = updated_concurrency_number,
-    changed_at = pg_catalog.statement_timestamp()
-  where metadata.organization_id = organization_id_value
-    and metadata.storage_contract_id = (record_type_fact ->> 'storageContractId')::uuid
-    and metadata.record_id = p_record_id
-    and metadata.application_root_id is not distinct from case
-      when record_fact #>> '{recordScope,storageScope}' = 'application_contained'
-        then application_root_id_value else null end;
   perform vortex_record.append_ownership_transfer_activity_internal(p_activity_id, p_record_id, 'completed');
   event_result := vortex_event.append_record_occurrences(
     (record_type_fact ->> 'storageContractId')::uuid,
@@ -2583,15 +2579,6 @@ begin
     case when record_fact #>> '{recordScope,storageScope}' = 'application_contained'
       then application_root_id_value else null end
   );
-  update vortex_record.record_deadline_due_metadata as metadata
-  set record_concurrency_number = updated_concurrency,
-    changed_at = pg_catalog.statement_timestamp()
-  where metadata.organization_id = organization_id_value
-    and metadata.storage_contract_id = (type_fact ->> 'storageContractId')::uuid
-    and metadata.record_id = p_record_id
-    and metadata.application_root_id is not distinct from case
-      when record_fact #>> '{recordScope,storageScope}' = 'application_contained'
-        then application_root_id_value else null end;
   perform vortex_record.append_ownership_transfer_activity_internal(p_activity_id,p_record_id,'completed');
   if loaded ->> 'installationState' = 'detached' then
     event_result := vortex_event.append_detached_offboarding_reassignment_internal(
