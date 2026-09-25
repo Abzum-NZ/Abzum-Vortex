@@ -240,12 +240,12 @@ kind may be added until the engine lands.
 Base save:
 
 - `prepare_base_record_save`, `save_base_record`.
-- `prepare_relationship_total_save`, `save_base_record_with_relationship_totals`, `save_base_record_with_relationship_totals_and_deadline_due_metadata`.
+- `prepare_relationship_total_save`, `save_base_record_with_relationship_totals`.
 
 Named-action writers:
 
 - `prepare_named_action_set_announce`, `save_named_action_set_announce`, `save_named_action_set_announce_with_relationship_totals`.
-- `prepare_named_action_relationship_totals`, `prepare_named_action_command_totals`, `save_named_action_effects_with_relationship_totals`, `save_named_action_effects_with_relationship_totals_and_deadline_due_metadata`.
+- `prepare_named_action_relationship_totals`, `prepare_named_action_command_totals`, `save_named_action_effects_with_relationship_totals`.
 - `save_named_action_set_fields_internal`, `change_record_by_named_action_internal`, `insert_named_action_record_internal`, `write_named_action_relationship_value_internal`.
 - `apply_named_action_create_patch_internal`, `apply_named_action_copy_patch_internal`, `apply_named_action_relationship_copies_internal`, `apply_named_action_delete_patch_internal`.
 
@@ -268,9 +268,10 @@ The engine keeps and builds on the private primitives `create_record_internal`,
 `vortex_record.record_lifecycle_command_effects`, the identity-only journal of
 what a delete or restore traversal changed, is the only trusted source of a
 command's deleted set; it moves under the one receipt rather than being
-dropped. Generated-value writers that apply derived values after a change
-(`apply_relationship_total_parent_internal` and the System-attributed
-`apply_deadline_closure_record_internal`) are not command writers. The
+dropped. The generated-value writer `apply_relationship_total_parent_internal`,
+which applies derived parent values after a change, is not a command writer.
+Deadline-passed values are evaluated at read time, so no writer stores or
+refreshes deadline due metadata. The
 unrelated identity-administration receipt store is not a record-write receipt
 and remains outside this command.
 

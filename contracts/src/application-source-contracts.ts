@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
-  listArrangementKeys,
-  pageStateSchema,
+  applicationExperienceStateSchema,
   workflowNodeTypeKeys,
   workflowValueTypeSchema,
 } from "./catalogues";
@@ -32,10 +31,8 @@ import {
   sourcePlacementEntriesV2,
   sourcePlatformBlockDependenciesV2Schema,
 } from "./application-composition-v2";
-import {
-  sourceComponentFlowBindingSchema,
-  sourceCurrentUserFlowSchema,
-} from "./application-flow-bindings";
+import { sourceComponentFlowBindingSchema } from "./application-flow-bindings";
+import { sourceFlowCollectionSchema } from "./flow-source-contracts";
 
 const maximumSourceDocumentNodes = 50_000;
 const maximumSourceNestingDepth = 32;
@@ -131,22 +128,34 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
 };
 
 const sourceFilterSchema = z.union([z.null(), sourceConditionSchema]);
-const sourceCalendarMappingSchema = z.union([
-  z.object({ start: builderKeySchema, end: builderKeySchema }).strict(),
-  z
-    .object({
-      start: builderKeySchema,
-      duration_field: builderKeySchema,
-      duration_unit: z.enum(["minutes", "hours", "days"]),
-    })
-    .strict(),
-]);
-const sourceStandardPageReplacementSchema = z
-  .object({
-    standard_page: z.enum(["list", "detail", "create_form"]),
-    record_type: sourceQualifiedRecordTypeSchema,
-  })
+/**
+ * The fixed set of application experience pages an application may declare: the page shown
+ * when an addressed page is refused or missing, when the application or its installation is
+ * temporarily unavailable, and when resolving it fails unexpectedly. A refused page and a
+ * missing page resolve to the same experience, so their surfaces stay indistinguishable.
+ */
+const sourceApplicationExperienceSchema = z
+  .object({ state: applicationExperienceStateSchema, page: builderKeySchema })
   .strict();
+/** Placement bindings that gate, condition or load data; none may appear on an experience page. */
+const sourceExperienceGatedPlacementKeys = [
+  "view_permission",
+  "use_permission",
+  "visibility_condition",
+  "query",
+  "read_model",
+] as const;
+const declaresGatedSourcePlacement = (value: unknown): boolean => {
+  if (Array.isArray(value)) return value.some(declaresGatedSourcePlacement);
+  if (value === null || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  if (
+    "block" in record &&
+    sourceExperienceGatedPlacementKeys.some((key) => record[key] !== undefined)
+  )
+    return true;
+  return Object.values(record).some(declaresGatedSourcePlacement);
+};
 type SourceNavigation =
   | { id: string; type: "heading"; label: string; children: SourceNavigation[] }
   | { id: string; type: "page"; label: string; page: string; permission: string }
@@ -181,12 +190,16 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
       .strict(),
   ]),
 );
+// Retired page settings (#1011): accepted as opaque, unused JSON so stored authored
+// sources keep their fingerprints and older sources still parse; never compiled.
+const retiredSourcePageSettingV2Schema = jsonValueSchema.optional();
+
 const sourcePageV2Common = {
   id: sourceAliasSchema,
   key: builderKeySchema,
   name: labelSchema,
-  states: z.array(pageStateSchema).min(1),
-  standard_page_replacement: sourceStandardPageReplacementSchema.optional(),
+  states: retiredSourcePageSettingV2Schema,
+  standard_page_replacement: retiredSourcePageSettingV2Schema,
 };
 
 const sourcePageV2Base = {
@@ -201,18 +214,10 @@ const sourceListPageV2Schema = z
     record_type: sourceQualifiedRecordTypeSchema,
     permission: namespacedKeySchema,
     query: builderKeySchema,
-    arrangements: z.array(z.enum(listArrangementKeys)).min(1),
-    calendar_mapping: sourceCalendarMappingSchema.optional(),
+    arrangements: retiredSourcePageSettingV2Schema,
+    calendar_mapping: retiredSourcePageSettingV2Schema,
   })
-  .strict()
-  .superRefine((value, context) => {
-    if (value.arrangements.includes("calendar") !== (value.calendar_mapping !== undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["calendar_mapping"],
-        message: "Calendar mapping is required exactly for a calendar arrangement",
-      });
-  });
+  .strict();
 
 const sourceGuidedFormStepV2Schema = z
   .object({ id: sourceAliasSchema, name: z.string().min(1).max(60), summary: z.boolean() })
@@ -947,12 +952,49 @@ export const sourceApplicationBodyV2Schema = z
     platform_block_dependencies: sourcePlatformBlockDependenciesV2Schema,
     shells: z.array(sourceApplicationShellV2Schema).max(100),
     pages: z.array(sourcePageDefinitionV2Schema).min(1).max(100),
+    experiences: z.array(sourceApplicationExperienceSchema).max(3).optional(),
     theme: sourceApplicationThemeV2Schema,
-    flows: z.array(sourceCurrentUserFlowSchema).max(100),
+    /** Every flow this Application owns (architecture decision 1); each has one owner. */
+    flows: sourceFlowCollectionSchema,
     flow_bindings: z.array(sourceComponentFlowBindingSchema).max(100),
   })
   .strict()
   .superRefine((value, context) => {
+    const experiences = value.experiences ?? [];
+    if (new Set(experiences.map((experience) => experience.state)).size !== experiences.length)
+      context.addIssue({
+        code: "custom",
+        path: ["experiences"],
+        message: "Each application experience state may be declared only once",
+      });
+    for (const [experienceIndex, experience] of experiences.entries()) {
+      const page = value.pages.find((candidate) => candidate.key === experience.page);
+      if (page === undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["experiences", experienceIndex, "page"],
+          message: "An application experience page must resolve inside the same application",
+        });
+        continue;
+      }
+      // Shown before any placement authority or data is projected, so presentation-only.
+      const composition = page.composition;
+      const shellAlias = composition.shell_kind === "application" ? composition.shell : undefined;
+      const shell =
+        shellAlias === undefined
+          ? undefined
+          : value.shells.find((candidate) => candidate.id === shellAlias);
+      if (
+        declaresGatedSourcePlacement(composition) ||
+        (shell !== undefined && declaresGatedSourcePlacement(shell.layout))
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["experiences", experienceIndex, "page"],
+          message:
+            "An application experience page must be presentation-only: no permission-gated, conditional or data-bound placements",
+        });
+    }
     const shellAliases = value.shells.map((shell) => shell.id);
     const shellKeys = value.shells.map((shell) => shell.key);
     if (new Set(shellAliases).size !== shellAliases.length)
@@ -1086,14 +1128,8 @@ export const sourceApplicationBodyV2Schema = z
         message: "The platform-block dependency list cannot contain unused releases",
       });
 
-    const flowAliases = value.flows.map((flow) => flow.id);
-    const flowKeys = value.flows.map((flow) => flow.key);
-    if (new Set(flowAliases).size !== flowAliases.length)
-      context.addIssue({ code: "custom", path: ["flows"], message: "Flow aliases must be unique" });
-    if (new Set(flowKeys).size !== flowKeys.length)
-      context.addIssue({ code: "custom", path: ["flows"], message: "Flow keys must be unique" });
-
-    const flowsByAlias = new Map(value.flows.map((flow) => [flow.id, flow]));
+    // Flow aliases and keys are unique in the collection schema; a binding names its flow by either.
+    const flowReferences = new Set(value.flows.flatMap((flow) => [flow.id, flow.key]));
     const placementAliasSet = new Set(placementEntries.map(([alias]) => alias));
     const flowBindingAliases = value.flow_bindings.map((binding) => binding.id);
     const flowBindingEvents = value.flow_bindings.map(
@@ -1112,23 +1148,18 @@ export const sourceApplicationBodyV2Schema = z
         message: "A control event can have only one flow binding",
       });
     for (const [bindingIndex, binding] of value.flow_bindings.entries()) {
-      if (binding.flow.kind === "application_owned") {
-        const flow = flowsByAlias.get(binding.flow.flow);
-        if (flow === undefined) {
-          context.addIssue({
-            code: "custom",
-            path: ["flow_bindings", bindingIndex, "flow"],
-            message: "A flow binding must resolve inside the same application",
-          });
-        }
-      }
-      if (!placementAliasSet.has(binding.control)) {
+      if (!flowReferences.has(binding.flow))
+        context.addIssue({
+          code: "custom",
+          path: ["flow_bindings", bindingIndex, "flow"],
+          message: "A flow binding must resolve inside the same application",
+        });
+      if (!placementAliasSet.has(binding.control))
         context.addIssue({
           code: "custom",
           path: ["flow_bindings", bindingIndex, "control"],
           message: "A flow binding control must resolve to a placement inside the application",
         });
-      }
     }
   });
 

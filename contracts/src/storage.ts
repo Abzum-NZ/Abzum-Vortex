@@ -48,7 +48,6 @@ export const storageCatalogEntrySchema = z
     storageScope: z.enum(["organization_shared", "application_contained"]),
     compatibleRevisions: compatibleRevisionRangeSchema,
     state: z.enum(["planned", "active", "retired"]),
-    generatorContractVersion: z.literal("1.0.0"),
     contentFingerprint: fingerprintSchema,
   })
   .strict();
@@ -134,9 +133,6 @@ export const moduleInstallationStorageResultSchema = z
     applicationReleaseRevision: javascriptSafeRevisionSchema,
     moduleRootId: moduleRootIdSchema,
     moduleReleaseRevision: javascriptSafeRevisionSchema,
-    contentFingerprint: fingerprintSchema,
-    resolutionFingerprint: fingerprintSchema,
-    generatorContractVersion: z.literal("1.0.0"),
     storageContractIds: canonicalStorageContractIdsSchema,
   })
   .strict();
@@ -291,9 +287,6 @@ export const recordStorageReleaseProvisionSchema = z
   .object({
     moduleRootId: moduleRootIdSchema,
     releaseRevision: javascriptSafeRevisionSchema,
-    contentFingerprint: fingerprintSchema,
-    resolutionFingerprint: fingerprintSchema,
-    generatorContractVersion: z.literal("1.0.0"),
     storageContractIds: canonicalStorageContractIdsSchema,
   })
   .strict();

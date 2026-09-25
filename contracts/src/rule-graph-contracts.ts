@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ValueType } from "./catalogues";
 import { conditionMaximumNestingDepth, conditionMaximumOperandCount } from "./common";
 import {
   builderKeySchema,
@@ -22,6 +23,11 @@ export {
 } from "./rule-table-values";
 export type { RuleTableColumn } from "./rule-table-values";
 
+/**
+ * @deprecated The node-and-edge rule graph is replaced by the one flow definition in
+ * `flow-contracts.ts` (a `BeforeSave` trigger with `transaction` execution). Conversion and removal
+ * of this format belong to #986 and #988; do not extend it.
+ */
 export const ruleGraphContractVersion = "1.0.0" as const;
 export const ruleGraphNodeContractVersion = "1.0.0" as const;
 
@@ -45,7 +51,7 @@ export const ruleGraphValueTypeKeys = [
   "link_to_one_of_several",
   "link_to_person",
   "attachment",
-] as const;
+] as const satisfies readonly ValueType[];
 
 export const ruleGraphValueTypeSchema = z.enum(ruleGraphValueTypeKeys);
 export type RuleGraphValueType = z.infer<typeof ruleGraphValueTypeSchema>;

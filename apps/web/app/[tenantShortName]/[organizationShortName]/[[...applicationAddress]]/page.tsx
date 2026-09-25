@@ -1,10 +1,34 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import {
+  ALL_UI_STYLES_CSS,
+  APPLICATION_LAUNCHER_BLOCK_RELEASE,
+  ApplicationLauncher,
+  createThemeRootProps,
+  parsePermittedApplicationsLauncherProjection,
+  permittedApplicationsToListValues,
+  type DisplaySemanticEvent,
+} from "@vortex/ui";
+import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { AuthShell } from "../../../auth/_components/auth-shell";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * The one fixed neutral state for an address that is refused or missing. It never names the
+ * application, a reason, or whether anything exists, so the two cases stay indistinguishable.
+ */
+const unavailableFallback = (
+  <AuthShell
+    eyebrow="Application access"
+    title="Application unavailable"
+    description="This application address cannot be opened from your current sign-in."
+  >
+    <Link href="/signed-in">Choose an organisation</Link>
+  </AuthShell>
+);
 
 type ApplicationAddressPageProps = Readonly<{
   params: Promise<{
@@ -22,6 +46,9 @@ const addressPath = (
 ) =>
   `/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}/${encodeURIComponent(applicationKey)}/${encodeURIComponent(pageKey)}`;
 
+const launcherPath = (tenantShortName: string, organizationShortName: string) =>
+  `/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}`;
+
 export default async function ApplicationAddressPage({ params }: ApplicationAddressPageProps) {
   const identity = await resolveIdentitySession();
   if (identity.kind === "invalid_session_state" || identity.kind === "expired_or_revoked")
@@ -31,6 +58,41 @@ export default async function ApplicationAddressPage({ params }: ApplicationAddr
 
   const { tenantShortName, organizationShortName, applicationAddress } = await params;
   const addressSegments = applicationAddress ?? [];
+
+  /**
+   * Tile activation is the launcher block's declared `row_action` event. The browser supplies only
+   * the tile's application identity; this server action re-resolves the signed-in person's current
+   * permitted applications at this address and opens the matching one, so a withdrawn or refused
+   * application is never opened from stale page data or a crafted identity.
+   */
+  async function openApplication(event: DisplaySemanticEvent): Promise<void> {
+    "use server";
+    if (event?.event !== "row_action" || typeof event.recordId !== "string") return;
+    const chooser = launcherPath(tenantShortName, organizationShortName);
+    const currentIdentity = await resolveIdentitySession();
+    if (currentIdentity.kind === "temporarily_unavailable") redirect(chooser);
+    if (
+      currentIdentity.kind === "invalid_session_state" ||
+      currentIdentity.kind === "expired_or_revoked"
+    )
+      redirect("/auth/session-ended");
+    if (currentIdentity.kind !== "active") redirect("/auth/sign-in?status=session-ended");
+
+    const rechecked = await resolveApplicationAddress(
+      currentIdentity.session,
+      tenantShortName,
+      organizationShortName,
+    );
+    if (rechecked.kind !== "organization_launcher") redirect(chooser);
+    const application = rechecked.read.applications.find(
+      (candidate) => candidate.applicationRootId === event.recordId,
+    );
+    if (application === undefined) redirect(chooser);
+    redirect(
+      addressPath(tenantShortName, organizationShortName, application.key, application.homePageKey),
+    );
+  }
+
   if (identity.kind === "temporarily_unavailable")
     return (
       <AuthShell
@@ -38,22 +100,11 @@ export default async function ApplicationAddressPage({ params }: ApplicationAddr
         title="This address is temporarily unavailable"
         description="Your sign-in is still active. Try loading this address again."
       >
-        <Link href={`/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}`}>
-          Try again
-        </Link>
+        <Link href={launcherPath(tenantShortName, organizationShortName)}>Try again</Link>
       </AuthShell>
     );
 
-  if (addressSegments.length > 2)
-    return (
-      <AuthShell
-        eyebrow="Application access"
-        title="Application unavailable"
-        description="This application address cannot be opened from your current sign-in."
-      >
-        <Link href="/signed-in">Choose an organisation</Link>
-      </AuthShell>
-    );
+  if (addressSegments.length > 2) return unavailableFallback;
 
   const resolved = await resolveApplicationAddress(
     identity.session,
@@ -69,21 +120,20 @@ export default async function ApplicationAddressPage({ params }: ApplicationAddr
         title="This address is temporarily unavailable"
         description="Your sign-in is still active. Try loading this address again."
       >
-        <Link href={`/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}`}>
-          Try again
-        </Link>
+        <Link href={launcherPath(tenantShortName, organizationShortName)}>Try again</Link>
       </AuthShell>
     );
 
   if (resolved.kind === "unavailable")
-    return (
-      <AuthShell
-        eyebrow="Application access"
-        title="Application unavailable"
-        description="This application address cannot be opened from your current sign-in."
-      >
-        <Link href="/signed-in">Choose an organisation</Link>
-      </AuthShell>
+    // A refused page and a missing page of an application the viewer may open both show that
+    // application's own not-found page; everything else shows the fixed neutral fallback.
+    return resolved.experience === undefined ? (
+      unavailableFallback
+    ) : (
+      <ApplicationExperiencePage
+        page={resolved.experience.page}
+        shells={resolved.experience.shells}
+      />
     );
 
   if (resolved.kind === "organization_launcher") {
@@ -100,31 +150,34 @@ export default async function ApplicationAddressPage({ params }: ApplicationAddr
         ),
       );
 
+    const projection = parsePermittedApplicationsLauncherProjection(resolved.read);
+    const launcherValues =
+      projection.kind === "available" ? permittedApplicationsToListValues(projection) : undefined;
+
     return (
       <AuthShell
         eyebrow={resolved.read.tenantShortName}
         title={resolved.read.organizationShortName}
         description="Choose an application you can open."
       >
-        {resolved.read.applications.length === 0 ? (
+        {launcherValues === undefined ? (
           <p>No applications are available for this organisation.</p>
         ) : (
-          <ul>
-            {resolved.read.applications.map((application) => (
-              <li key={application.applicationRootId}>
-                <Link
-                  href={addressPath(
-                    tenantShortName,
-                    organizationShortName,
-                    application.key,
-                    application.homePageKey,
-                  )}
-                >
-                  {application.name}
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <div {...createThemeRootProps(undefined)}>
+            <style href="vortex-ui-styles" precedence="default">
+              {ALL_UI_STYLES_CSS}
+            </style>
+            <ApplicationLauncher
+              placementId="organization-application-launcher"
+              settings={{ title: { kind: "text", value: "Available applications" } }}
+              slots={{}}
+              breakpoint="desktop"
+              metadata={APPLICATION_LAUNCHER_BLOCK_RELEASE}
+              availability="available"
+              projectedData={{ status: "ready", values: launcherValues }}
+              displayEvents={{ row_action: openApplication }}
+            />
+          </div>
         )}
         <Link href="/signed-in">Choose another organisation</Link>
       </AuthShell>
@@ -157,9 +210,7 @@ export default async function ApplicationAddressPage({ params }: ApplicationAddr
       >
         Open application start page
       </Link>
-      <Link href={`/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}`}>
-        Application launcher
-      </Link>
+      <Link href={launcherPath(tenantShortName, organizationShortName)}>Application launcher</Link>
     </AuthShell>
   );
 }

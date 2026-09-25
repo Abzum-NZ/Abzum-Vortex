@@ -234,8 +234,6 @@ Return data validates the component's expected schema, rows, safe capabilities, 
 
 Load, explicit refresh, filter, sort, paging and relevant-input changes have exact semantic bindings. Renders, speculative prefetch, retries and cache reads never start writes. A safe default flow only reads, but published configuration may add writes on those events. The builder previews this effect summary; this is not another approval gate. A deliberate refresh is a new invocation and may write again. A write's own invalidation refreshes affected read results without recursively rerunning its originating write path. Explicit same-cause re-entry is refused; changed filter or selection discards stale display responses while preserving confirmed write outcomes. Do not invent a global polling or orchestration service.
 
-<a id="managed-and-application-owned-flows"></a>
-
 ## Flow ownership
 
 Every flow has exactly one owner: the module or application release that contains it. There are no platform-managed flows, hidden flow internals, extension slots or separate flow use and edit permissions. Behaviour that must stay hidden or platform-controlled is a protected operation; reusable platform behaviour ships as ordinary flows in [system modules](core-contract-boundary.md#system-modules). [#980](https://github.com/Abzum-NZ/Abzum-Vortex/issues/980) retires the remaining managed-flow text and contracts elsewhere.

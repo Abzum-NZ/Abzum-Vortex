@@ -273,6 +273,11 @@ type ValidatedGraph = Readonly<{
   loopBackEdges: ReadonlySet<WorkflowEdge>;
 }>;
 
+// Removal point (Phase 9): this repeat of the graph structure, routing, reachability and cycle checks is
+// superseded by the one flow validator (runtime/definition/src/flow-validation.ts, #985). Durable
+// workflows keep their node-and-edge shape until Phase 9 converts them to durable flows, so it stays
+// until then.
+
 /**
  * Rejects a graph that cannot compile to one exact Kestra candidate, applying
  * the same structural rules publication does: one start, known and unique

@@ -32,12 +32,7 @@ import {
   type BeforeSaveRuleExecution,
 } from "./before-save-rules";
 import { evaluateRecordCalculationsV2 } from "./calculations";
-import {
-  deriveEarliestPendingDeadlineTransitionV2,
-  deriveParentDeadlineDueTransitions,
-  isDateDeadlineDueFieldV2,
-  type ParentDeadlineDueTransition,
-} from "./deadline-transitions";
+import { isDateDeadlineDueFieldV2 } from "./deadline-transitions";
 import {
   finalizeRecordFieldCandidateV2,
   prepareInitialRecordFieldCandidateV2,
@@ -548,11 +543,9 @@ const persist = async (
   activityId: string,
   occurrenceId: string,
   parentMutations: readonly RelationshipTotalParentMutation[] = [],
-  dueTransition?: Readonly<{ calculationFieldId: string; transitionAt: string }>,
-  parentDueTransitions: readonly ParentDeadlineDueTransition[] = [],
 ): Promise<StoredResult> => {
   const rows = await transaction.query<SaveRow>`
-    select vortex_record.save_base_record_with_relationship_totals_and_deadline_due_metadata(
+    select vortex_record.save_base_record_with_relationship_totals(
       ${command.commandId}::uuid,
       ${command.operation}::text,
       ${command.recordTypeId}::uuid,
@@ -563,9 +556,7 @@ const persist = async (
       ${command.operation === "create" ? (command.selectedOwnerGroupId ?? null) : null}::uuid,
       ${activityId}::uuid,
       ${occurrenceId}::uuid,
-      ${JSON.stringify(parentMutations)}::text::jsonb,
-      ${dueTransition === undefined ? null : JSON.stringify(dueTransition)}::text::jsonb,
-      ${JSON.stringify(parentDueTransitions)}::text::jsonb
+      ${JSON.stringify(parentMutations)}::text::jsonb
     ) as result
   `;
   const candidate = one(rows).result;
@@ -773,23 +764,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                 : { ...values.setValues };
             if ("clearFieldIds" in values)
               for (const fieldId of values.clearFieldIds) finalValues[fieldId] = null;
-            const dueTransition = deriveEarliestPendingDeadlineTransitionV2({
-              recordType: prepared.recordType,
-              finalAuthoritativeFieldValues: { ...prepared.existingValues, ...finalValues },
-              // A date deadline cannot have reached this point without the
-              // organisation setting; UTC is therefore inert for the existing
-              // date-time-only no-settings path.
-              organizationTimeZone: settings?.timeZone ?? "UTC",
-            });
             occurrenceId ??= eventOccurrenceIdSchema.parse(newOccurrenceId());
-            const parentDueTransitions =
-              "parentMutations" in values && totalPreparation.outcome === "prepared"
-                ? deriveParentDeadlineDueTransitions(
-                    values.parentMutations,
-                    totalPreparation.records,
-                    settings?.timeZone ?? "UTC",
-                  )
-                : [];
             const stored = await persist(
               transaction,
               command.data,
@@ -797,8 +772,6 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               activityId,
               occurrenceId,
               "parentMutations" in values ? values.parentMutations : [],
-              dueTransition,
-              parentDueTransitions,
             );
             if (stored.outcome === "restart") return restartRelationshipTotalSave;
             if (stored.outcome === "refused_recorded") return recordedRefusal;
