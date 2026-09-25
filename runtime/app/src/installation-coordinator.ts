@@ -669,6 +669,16 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     acceptance: "accept_role_templates" | "restore_accepted_role_templates",
   ): Promise<boolean> => {
     if (state.registeredReleaseRevision === applicationReleaseRevision) return false;
+    // Registering the release accepts its role templates. That needs the installer's recent
+    // authentication and every permission the templates confer inside the installer's delegated
+    // assignment scope, whatever any approval workflow says. It is decided in the same
+    // transaction and before registration: registering advances the Access version the request
+    // context is pinned to, so no decision can be made after it, and a permission the current
+    // registration does not yet hold lies outside every bounded delegated scope. Restoring the
+    // registration of a release that was already accepted grants nothing new and is not a fresh
+    // acceptance.
+    if (acceptance === "accept_role_templates")
+      await requireBuilderAuthority(authority, installOperation(applicationRootId, exact, true));
     const access = await changeAccess(
       transaction,
       newActivityId(),
@@ -676,17 +686,6 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       "prepare",
       exact.preparedTemplates,
     );
-    // Registering the release accepts its role templates. That needs the installer's recent
-    // authentication and every permission the templates confer inside the installer's delegated
-    // assignment scope, whatever any approval workflow says. It is decided in the same
-    // transaction, after registration, so a refusal rolls the registration back. Restoring the
-    // registration of a release that was already accepted grants nothing new and is not a fresh
-    // acceptance.
-    if (access.outcome === "changed" && acceptance === "accept_role_templates")
-      await requireBuilderAuthority(
-        authority,
-        installOperation(applicationRootId, exact, true),
-      );
     return access.outcome === "changed";
   };
 

@@ -48,7 +48,11 @@ import {
 } from "@vortex/contracts";
 import { compare, satisfies } from "semver";
 import type { z } from "zod";
-import { requireBuilderAuthority, type BuilderAuthority } from "./builder-authority";
+import {
+  requireBuilderAuthority,
+  type BuilderAuthority,
+  type BuilderOperation,
+} from "./builder-authority";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
 import { createApplicationResolutionSnapshotV2 } from "./application-v2-resolution";
 import { compileParsedDefinition } from "./compiler";
@@ -1276,10 +1280,28 @@ const safely = async <Result>(operation: () => Promise<Result>): Promise<Result>
 };
 
 /**
+ * The authority decides for exactly one organisation. A context for any other organisation is
+ * refused before the authority or any evidence is consulted.
+ */
+const authorize = async (
+  authority: BuilderAuthority,
+  context: SessionContext,
+  operation: BuilderOperation,
+): Promise<void> => {
+  if (
+    typeof context?.organizationId !== "string" ||
+    context.organizationId.toLowerCase() !== authority.organizationId.toLowerCase()
+  )
+    refuse("DEFINITION_PUBLICATION_FAILED");
+  await requireBuilderAuthority(authority, operation);
+};
+
+/**
  * Publication orchestration over private injected stores. Preparation exposes only safe JSON
  * evidence; every byte that matters is recomputed inside the publish transaction.
  *
- * Every operation is decided by the builder authority before any evidence is read: publication
+ * Every operation is decided by the builder authority before any evidence is read, and only for
+ * the authority's own organisation: a context for any other organisation is refused. Publication
  * preparation and publication need `definition_releases.manage`, and compiling a draft for preview
  * needs `definition_drafts.manage` (each with `system_applications.manage` for a system
  * application). The authority is a required argument, so the designer, the API and MCP all pass
@@ -1297,7 +1319,7 @@ export const createDefinitionPublicationService = (
     const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
     if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
-    await requireBuilderAuthority(authority, { kind: "publication", rootId: parsedCommand.rootId });
+    await authorize(authority, context, { kind: "publication", rootId: parsedCommand.rootId });
     return safely(async () => {
       const state = await repository.read(context, async (reader) =>
         prepareFromReader(
@@ -1327,10 +1349,7 @@ export const createDefinitionPublicationService = (
     const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
     if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
-    await requireBuilderAuthority(authority, {
-      kind: "draft_change",
-      rootId: parsedCommand.rootId,
-    });
+    await authorize(authority, context, { kind: "draft_change", rootId: parsedCommand.rootId });
     return safely(async () =>
       repository.read(context, async (reader) => {
         const candidate = validateCandidate(
@@ -1364,7 +1383,7 @@ export const createDefinitionPublicationService = (
     const command = publishDefinitionCommandSchema.safeParse(input);
     if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     const parsedCommand = command.data as PublishDefinitionCommand;
-    await requireBuilderAuthority(authority, {
+    await authorize(authority, context, {
       kind: "publication",
       rootId: parsedCommand.confirmation.rootId,
     });

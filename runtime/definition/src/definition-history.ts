@@ -487,6 +487,9 @@ export const createDefinitionHistoryService = (
     const context = sessionContextSchema.safeParse(contextCandidate);
     if (!context.success || !isLiveDefinitionSystemContext(context.data))
       throw new DefinitionHistoryError("DEFINITION_CONTEXT_REFUSED");
+    // The authority decides for exactly one organisation; any other context is refused first.
+    if (context.data.organizationId.toLowerCase() !== authority.organizationId.toLowerCase())
+      throw new DefinitionHistoryError("DEFINITION_CONTEXT_REFUSED");
     await requireBuilderAuthority(authority, { kind: "draft_change", rootId: command.data.rootId });
     try {
       let verifiedRestore: VerifiedRestoreInput | undefined;
