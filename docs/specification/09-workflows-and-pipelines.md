@@ -78,7 +78,7 @@ Every other start is a **binding**, not a trigger: a component placement, naviga
 
 A **frontend flow** is a flow a person or agent starts through a binding (`interactive`, or `transaction` for a named action); a **backend flow** is a flow started automatically (`background` or `durable`). There is one start path ([#979](https://github.com/Abzum-NZ/Abzum-Vortex/issues/979)):
 
-1. Every button, menu command, record gesture, agent tool call and interface operation starts a frontend flow through its binding. A form, interface action or agent tool binds a flow entry point — a generated one-task flow by default — and never binds a lower-level operation directly.
+1. Every button, menu command, record gesture, agent tool call and interface operation starts a frontend flow through its binding. A form, interface operation or agent tool binds a flow entry point — a generated one-task flow by default — and never binds a lower-level operation directly.
 2. A frontend flow starts a backend flow only through a **Run background flow** task with declared typed inputs, whether or not a record is involved, and the exact start intent is committed before dispatch. A `transaction` flow runs inside a record save and cannot contain a `Run background flow` task.
 3. Backend flows are otherwise started only by a committed record `Event`, a `Schedule` or a verified `IncomingMessage`, and may call one another only with typed inputs and outputs through a **Run flow** or **Run background flow** task.
 
@@ -111,7 +111,7 @@ sequenceDiagram
     K-->>D: Accepted or already accepted
 ```
 
-For a record save, its changes and durable event or flow-start intent commit together. A rejected or rolled-back save never starts a flow. An authorised binding that changes no record still persists its start intent in its own Vortex transaction; dispatch occurs only after that commit. Supporting a record-free start is part of the one start path specified in [#979](https://github.com/Abzum-NZ/Abzum-Vortex/issues/979), with the declared trigger and typed inputs of the starting flow.
+For a record save, its changes and durable event or flow-start intent commit together. A rejected or rolled-back save never starts a flow. An authorised binding that changes no record still persists its start intent in its own Vortex transaction; dispatch occurs only after that commit. A record-free start follows the same [one start path](#triggers): the frontend flow's Run background flow task supplies the started flow's declared typed inputs, and no subject record, placeholder record or arbitrary payload is required.
 
 Post-commit dispatch scopes the hand-off duplicate key to the source event or start-intent identity together with the exact accepted installation revision, flow, and trigger. One event may legitimately start multiple different flows; each has its own duplicate-safe acceptance. Repeating that same acceptance returns the existing Vortex run mapping instead of creating another Kestra execution. Dispatch validates the retained accepted revision and rechecks current permission and withdrawal without following a newer installation pointer; a normal upgrade therefore cannot retarget or strand committed work. Withdrawal explicitly refuses or cancels an accepted start that has not begun and retains that outcome. If Kestra is unavailable, the committed intent remains pending and recoverable; the application does not report a committed record save as failed or discard the request.
 

@@ -74,7 +74,7 @@ An application-contained **interface** contains named operations and publishes w
 - Authentication method and required permission.
 - Rate and size limits.
 - Whether it is organisation-private, partner-facing, or public.
-- The published flow entry point it calls: an action or workflow operation names the exact flow binding it invokes (a generated one-task flow by default for an action), while a query operation names its query. An interface operation never binds a lower-level operation directly. Standard record tasks cannot be exposed until their own explicit input and output contract exists; publication never derives an external write contract from a record form. A permission key alone is not an executable target.
+- The published flow entry point it calls: an action operation names the exact frontend flow binding it invokes (a generated one-task flow by default); an operation that starts background work binds a frontend flow whose Run background flow task commits the start; a query operation names its query. An interface operation never binds a lower-level operation directly. Standard record tasks cannot be exposed until their own explicit input and output contract exists; publication never derives an external write contract from a record form. A permission key alone is not an executable target.
 - Duplicate-protection requirements for writes.
 - Error codes that do not expose private implementation details.
 

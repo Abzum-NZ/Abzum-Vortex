@@ -238,7 +238,7 @@ The ordinary list, detail, search-result, report, dashboard-block, and action co
 
 ## Page composition
 
-Pages compose registered blocks through reusable application-contained shells and declared named slots. The complete normative structure, setting schemas, responsive inheritance, related-record contexts, form/operation bindings and Fluid adapter are specified in [Page builder contracts](appendices/page-builder-contracts.md). [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) and [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) deliver the missing code contracts before the canvas.
+Pages compose registered blocks through reusable application-contained shells and declared named slots. The complete normative structure, setting schemas, responsive inheritance, related-record contexts, form/flow bindings and Fluid adapter are specified in [Page builder contracts](appendices/page-builder-contracts.md). [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) and [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) deliver the missing code contracts before the canvas.
 
 ```mermaid
 flowchart TD
@@ -250,7 +250,7 @@ flowchart TD
     SLOT --> TREE[Ordered nested registered blocks]
     TREE --> SETTINGS[Schema-validated values]
     TREE --> DATA[Typed query and related-record contexts]
-    TREE --> OP[Typed form and operation bindings]
+    TREE --> OP[Typed form and flow bindings]
 ```
 
 All page types use the same block composition model. Layouts may use a twelve-column grid, stack, row or shell. Height follows content unless a registered block permits bounded resizing. Desktop/tablet/phone overrides inherit explicitly; one validated ordering structure determines each slot's reading order.
