@@ -105,10 +105,16 @@ export type ApplicationPreviewSimulatedEffect =
   | "background_start"
   | "form_interaction";
 
-export type ApplicationPreviewFlowTaskSimulation = Readonly<{
-  taskId: string;
-  /** The registered task type, for example `record.save`. */
-  taskType: string;
+/**
+ * One simulated step of a flow. Each registered task that reads, changes, starts background work
+ * or shows a form is one step: `nodeId` is its task id, `nodeKind` is always `task` and
+ * `targetKind` is its registered task type, for example `record.save`. The wire shape is the one
+ * the browser hook already decodes, so a flow's tasks reach it without a second contract.
+ */
+export type ApplicationPreviewFlowNodeSimulation = Readonly<{
+  nodeId: string;
+  nodeKind: "task";
+  targetKind: string;
   simulatedEffect: ApplicationPreviewSimulatedEffect;
   label: string;
 }>;
@@ -119,9 +125,10 @@ export type ApplicationPreviewInteraction = Readonly<{
   controlId: string;
   eventId: string;
   event: ComponentSemanticEventKind;
+  flowKind: "application_owned";
   flowId: string;
   declaredEffects: readonly FlowEffectKind[];
-  simulatedTasks: readonly ApplicationPreviewFlowTaskSimulation[];
+  simulatedNodes: readonly ApplicationPreviewFlowNodeSimulation[];
   simulated: true;
 }>;
 
@@ -190,12 +197,18 @@ const simulatedEffectOf = (task: FlowTask): ApplicationPreviewSimulatedEffect | 
 
 const simulateTasks = (
   tasks: readonly FlowTask[],
-  into: ApplicationPreviewFlowTaskSimulation[],
+  into: ApplicationPreviewFlowNodeSimulation[],
 ): void => {
   for (const task of tasks) {
     const simulatedEffect = simulatedEffectOf(task);
     if (simulatedEffect !== undefined)
-      into.push({ taskId: task.id, taskType: task.type, simulatedEffect, label: task.id });
+      into.push({
+        nodeId: task.id,
+        nodeKind: "task",
+        targetKind: task.type,
+        simulatedEffect,
+        label: task.id,
+      });
     for (const child of flowTaskChildLists(task)) simulateTasks(child.tasks, into);
   }
 };
@@ -209,21 +222,22 @@ const buildInteraction = (
   if (flow === undefined) {
     outcomes.push({ kind: "flow_unavailable", controlId: String(binding.controlId), flowId });
   }
-  const simulatedTasks: ApplicationPreviewFlowTaskSimulation[] = [];
+  const simulatedNodes: ApplicationPreviewFlowNodeSimulation[] = [];
   if (flow !== undefined) {
-    simulateTasks(flow.tasks, simulatedTasks);
-    simulateTasks(flow.errors, simulatedTasks);
-    simulateTasks(flow.finally, simulatedTasks);
+    simulateTasks(flow.tasks, simulatedNodes);
+    simulateTasks(flow.errors, simulatedNodes);
+    simulateTasks(flow.finally, simulatedNodes);
   }
-  if (simulatedTasks.length === 0) return undefined;
+  if (simulatedNodes.length === 0) return undefined;
   return {
     bindingId: String(binding.bindingId),
     controlId: String(binding.controlId),
     eventId: String(binding.eventId),
     event: binding.event,
+    flowKind: "application_owned",
     flowId,
-    declaredEffects: [...new Set(simulatedTasks.map((task) => task.simulatedEffect))].sort(),
-    simulatedTasks,
+    declaredEffects: [...new Set(simulatedNodes.map((node) => node.simulatedEffect))].sort(),
+    simulatedNodes,
     simulated: true,
   };
 };

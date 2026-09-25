@@ -950,7 +950,7 @@ const compareFlow = (
     "patch",
     "presentation_changed",
     "flow",
-    "labels",
+    "configuration",
     flowId,
   );
   pushChange(

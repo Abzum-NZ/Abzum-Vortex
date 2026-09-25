@@ -75,7 +75,6 @@ import {
   validateApplicationSourceCatalogue,
 } from "./application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
-import { validateFlow, validateFlowSet } from "./flow-validation";
 
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
@@ -5158,31 +5157,10 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     for (const workflow of workflows.values())
       visitChild(String(workflow.workflowId), 1, Number(workflow.maximumNestingDepth));
 
-    // Every flow is judged by the one flow validator; the compiler already refused a bad source, and
-    // this repeats the judgement on the published content so a stored release cannot drift from it.
+    // The flow compiler judged every flow with the one flow validator (`flow-validation.ts`) before
+    // it produced this content, so only what binds to them is judged here.
     const flows = array(content.flows) as unknown as FlowDefinition[];
     const flowsById = new Map(flows.map((flow) => [String(flow.id), flow]));
-    const flowLocation = (flow: FlowDefinition, taskId?: string): DefinitionRuleFailure["location"] => {
-      const location = failure(output, "", "invalid_value", { kind: "flow", key: flow.key }).location;
-      return taskId === undefined || location === undefined || location.segments.length >= 12
-        ? location
-        : { ...location, segments: [...location.segments, { kind: "flow_node", key: taskId }] };
-    };
-    for (const flow of flows)
-      for (const issue of validateFlow(flow, { targetFlow: (reference) => flowsById.get(reference) }))
-        failures.push({
-          ruleCode: issue.ruleCode,
-          family: issue.family,
-          location: flowLocation(flow, issue.taskId),
-        });
-    for (const issue of validateFlowSet(flows)) {
-      const flow = flowsById.get(issue.flowId);
-      failures.push({
-        ruleCode: issue.ruleCode,
-        family: issue.family,
-        location: flow === undefined ? rootLocation(output) : flowLocation(flow),
-      });
-    }
     const eventIds = new Set(array(content.events).map((event) => String(event.eventId)));
     for (const binding of array(content.flowBindings)) {
       const bindingFailure = (ruleCode: string, family: DefinitionRuleFailure["family"]) =>

@@ -323,19 +323,6 @@ export const safeFlowResultDescriptors: Readonly<{
   failed: { outcome: "failed", commit: "none", outputs: "unavailable", recovery: "new_invocation" },
 });
 
-/** Declared results must be unique and are rendered in declaration order. */
-const safeFlowResultDescriptorListSchema = z
-  .array(safeFlowResultDescriptorSchema)
-  .min(1)
-  .max(safeFlowResultKindSchema.options.length)
-  .superRefine((value, context) => {
-    if (new Set(value.map((result) => result.outcome)).size !== value.length)
-      context.addIssue({
-        code: "custom",
-        message: "Declared flow results must be unique",
-      });
-  });
-
 /** Results an operation may report for its declared effect; the first is its confirmed result. */
 const protectedOperationResultsByEffect: Readonly<
   Record<ProtectedOperationEffectKind, readonly [SafeFlowResultKind, ...SafeFlowResultKind[]]>

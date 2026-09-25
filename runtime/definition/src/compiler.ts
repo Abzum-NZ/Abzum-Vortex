@@ -198,7 +198,6 @@ const sourceCollectionIdKeys: Readonly<Record<string, string>> = Object.freeze({
   relationships: "relationshipId",
   permissions: "permissionId",
   actions: "actionId",
-  rules: "ruleId",
   events: "eventId",
   extension_points: "extensionPointId",
   sharing_conditions: "conditionId",
@@ -1366,13 +1365,12 @@ function explicitSourceTargets(
       permissions: "permissions",
       actions: "actions",
       events: "events",
-      rules: "rules",
       extension_points: "extensionPoints",
     };
     const canonicalCollection = collectionMap[collection];
     if (canonicalCollection) {
       const targetKey =
-        collection === "actions" || collection === "rules" ? "subjectRecordTypeId" : "recordTypeId";
+        collection === "actions" ? "subjectRecordTypeId" : "recordTypeId";
       return [["content", canonicalCollection, sourcePath[2], targetKey]];
     }
   }
