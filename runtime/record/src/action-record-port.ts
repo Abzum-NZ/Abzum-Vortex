@@ -22,7 +22,16 @@ import {
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
-import type { BeforeSaveRuleWarning } from "@vortex/rule";
+import type { ActionFlowRunner, BeforeSaveRuleWarning } from "@vortex/rule";
+import {
+  actionFlowSeed,
+  composeFlowEffects,
+  normalizeActionInputs,
+  type NamedActionComposition,
+  type NamedActionCreateTarget,
+  type NamedActionCreation,
+  type PreparedNamedAction,
+} from "./action-flow-effects";
 import {
   beginBeforeSaveRuleExecution,
   parseBeforeSaveRuleSet,
@@ -34,12 +43,6 @@ import {
   type RecordDeleteResult,
   type Settled,
 } from "./delete-record";
-import {
-  composeNamedAction,
-  type NamedActionCreateTarget,
-  type NamedActionCreation,
-  type PreparedNamedAction,
-} from "./named-action-composition";
 import {
   calculateLockedRelationshipTotalSave,
   type RelationshipTotalParentMutation,
@@ -339,32 +342,64 @@ const refusePrecondition = async (
     : { outcome: "refused" };
 };
 
-const persist = async (
+/**
+ * The one record-change call of a named action: the subject write, each creation in authored order,
+ * the relationship copies, the derived-total updates of the other records the action moves and the
+ * declared Event identities, all under the action's own identity so its receipt, fingerprint, field
+ * rules, Activity and Events stay the installed action's.
+ */
+const applyChanges = async (
   transaction: RequestDatabaseTransaction,
   command: ExecuteNamedActionCommandV2,
-  submittedValues: Readonly<Record<string, unknown>>,
+  composition: NamedActionComposition,
   finalValues: Readonly<Record<string, unknown>>,
-  creations: readonly unknown[],
+  creations: readonly Readonly<{
+    ordinal: number;
+    recordTypeId: string;
+    values: Readonly<Record<string, JsonValue | null>>;
+    finalValues: Readonly<Record<string, JsonValue | null>>;
+  }>[],
   activityId: string,
   standardOccurrenceId: string,
   declaredOccurrenceIds: readonly string[],
   creationOccurrenceIds: readonly string[],
-  parentMutations: readonly unknown[],
+  parentMutations: readonly RelationshipTotalParentMutation[],
 ) => {
+  const mutations = [
+    { kind: "set_fields", values: finalValues },
+    ...creations.map((creation, index) => ({
+      kind: "create_record",
+      ordinal: creation.ordinal,
+      recordTypeId: creation.recordTypeId,
+      values: creation.values,
+      finalValues: creation.finalValues,
+      occurrenceId: creationOccurrenceIds[index],
+    })),
+    ...composition.relationshipCopies.map(() => ({ kind: "copy_relationships", values: {} })),
+    ...parentMutations.map((parent) => ({
+      kind: "set_derived_fields",
+      recordTypeId: parent.recordTypeId,
+      recordId: parent.recordId,
+      expectedConcurrencyNumber: parent.expectedConcurrencyNumber,
+      finalValues: parent.finalValues,
+    })),
+    { kind: "announce_events", occurrenceIds: declaredOccurrenceIds },
+  ];
+  const action = {
+    ownerKind: command.action.ownerKind,
+    ownerId: command.action.ownerId,
+    releaseRevision: command.action.releaseRevision,
+    actionId: command.action.actionId,
+    inputs: command.inputs,
+  };
   const rows = await transaction.query<ResultRow>`
-    select vortex_record.save_named_action_effects_with_relationship_totals(
-      ${command.commandId}::uuid, ${command.recordTypeId}::uuid,
+    select vortex_record.apply_action_record_changes(
+      ${command.commandId}::uuid, 'update'::text, ${command.recordTypeId}::uuid,
       ${command.recordId}::uuid, ${command.expectedConcurrencyNumber}::bigint,
-      ${JSON.stringify(submittedValues)}::text::jsonb,
-      ${JSON.stringify(finalValues)}::text::jsonb,
+      ${JSON.stringify(composition.submittedValues)}::text::jsonb,
+      ${JSON.stringify(mutations)}::text::jsonb,
       ${activityId}::uuid, ${standardOccurrenceId}::uuid,
-      ${JSON.stringify(parentMutations)}::text::jsonb,
-      ${JSON.stringify(declaredOccurrenceIds)}::text::jsonb,
-      ${JSON.stringify(creations)}::text::jsonb,
-      ${JSON.stringify(creationOccurrenceIds)}::text::jsonb,
-      ${command.action.ownerKind}::text, ${command.action.ownerId}::uuid,
-      ${command.action.releaseRevision}::bigint, ${command.action.actionId}::uuid,
-      ${JSON.stringify(command.inputs)}::text::jsonb
+      ${JSON.stringify(action)}::text::jsonb
     ) as value
   `;
   const value = one(rows).value;
@@ -373,14 +408,46 @@ const persist = async (
     : { outcome: "refused" };
 };
 
-export type NamedActionServiceDependencies = HumanOrganizationRequestDependencies &
+export type NamedActionRecordPortDependencies = HumanOrganizationRequestDependencies &
   Readonly<{
     activityId?: () => string;
     occurrenceId?: () => string;
   }>;
 
-/** The only public human named-action operation in slice 1 of #50. */
-export const createNamedActionService = (dependencies: NamedActionServiceDependencies) => {
+/** What one flow run of a named action composed, or why it could not be composed. */
+type FlowComposition =
+  | Readonly<{ kind: "composed"; composition: NamedActionComposition }>
+  | Readonly<{ kind: "refused"; normalizedInputs: Readonly<Record<string, JsonValue>> }>
+  | Readonly<{ kind: "invalid" }>;
+
+/**
+ * Runs the named action's flow once for the prepared subject and turns what it collected into the
+ * composition the database applies. The flow's precondition refusal is its own outcome: the run
+ * never reaches an effect, and the caller records the refusal as the action always has.
+ */
+const composeFromFlow = (
+  prepared: PreparedNamedAction,
+  suppliedInputs: Readonly<Record<string, unknown>>,
+  issuedAt: string,
+  run: ActionFlowRunner,
+): FlowComposition => {
+  const normalizedInputs = normalizeActionInputs(prepared.action, suppliedInputs);
+  if (normalizedInputs === undefined) return { kind: "invalid" };
+  const outcome = run(actionFlowSeed(prepared, normalizedInputs, issuedAt));
+  if (outcome.kind === "refused") return { kind: "refused", normalizedInputs };
+  if (outcome.kind !== "collected") return { kind: "invalid" };
+  const composition = composeFlowEffects(prepared, normalizedInputs, outcome, issuedAt);
+  return composition === undefined ? { kind: "invalid" } : { kind: "composed", composition };
+};
+
+/**
+ * The record port of the flow runner for named actions (#1063). The runner has already resolved the
+ * exact release's action flow, checked its invocation permission and supplied the flow run; this
+ * port owns what needs the database: the action's preparation and permission decision, the typed
+ * inputs, the relationship totals, the before-save rules, and the one apply record changes call that
+ * writes every effect of the action in one transaction, receipt, Activity and Events included.
+ */
+export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortDependencies) => {
   const requests = createHumanOrganizationRequestService(dependencies);
   const newActivityId = dependencies.activityId ?? randomUUID;
   const newOccurrenceId = dependencies.occurrenceId ?? randomUUID;
@@ -389,6 +456,7 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
+      run: ActionFlowRunner,
     ): Promise<NamedActionServiceResult> {
       const command = executeNamedActionCommandV2Schema.safeParse(commandCandidate);
       if (!command.success || selection.applicationRootId === undefined)
@@ -431,25 +499,27 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
               return preview.correlationId
                 ? safeRefusal(preview.correlationId, "operation_refused")
                 : recordedRefusal;
-            const previewComposition = composeNamedAction(preview, command.data.inputs, issuedAt);
-            if (previewComposition === undefined)
+            const previewRun = composeFromFlow(preview, command.data.inputs, issuedAt, run);
+            if (previewRun.kind === "invalid")
               return safeRefusal(preview.correlationId, "invalid_request");
-            if (
-              !(await validateReferenceInputs(
-                transaction,
-                command.data,
-                previewComposition.normalizedInputs,
-              ))
-            )
+            const previewInputs =
+              previewRun.kind === "composed"
+                ? previewRun.composition.normalizedInputs
+                : previewRun.normalizedInputs;
+            if (!(await validateReferenceInputs(transaction, command.data, previewInputs)))
               return safeRefusal(preview.correlationId, "operation_refused");
 
-            const totalPreparation = await prepareTotals(
-              transaction,
-              command.data,
-              previewComposition.submittedValues,
-              previewComposition.creations,
-              activityId,
-            );
+            // A refused precondition writes nothing, so it has no totals to prepare.
+            const totalPreparation: RelationshipTotalPreparationOutcome =
+              previewRun.kind === "composed"
+                ? await prepareTotals(
+                    transaction,
+                    command.data,
+                    previewRun.composition.submittedValues,
+                    previewRun.composition.creations,
+                    activityId,
+                  )
+                : { outcome: "not_required" };
             if (totalPreparation.outcome === "restart") return restart;
             if (totalPreparation.outcome === "refused_recorded") return recordedRefusal;
             if (totalPreparation.outcome === "conflict")
@@ -468,9 +538,20 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
               return prepared.correlationId
                 ? safeRefusal(prepared.correlationId, "operation_refused")
                 : recordedRefusal;
-            const composition = composeNamedAction(prepared, command.data.inputs, issuedAt);
-            if (composition === undefined)
+            const preparedRun = composeFromFlow(prepared, command.data.inputs, issuedAt, run);
+            if (preparedRun.kind === "invalid")
               return safeRefusal(prepared.correlationId, "invalid_request");
+            // The record moved between the preview and the locked preparation: run again.
+            if (preparedRun.kind !== previewRun.kind) return restart;
+            if (preparedRun.kind === "refused") {
+              const refusal = await refusePrecondition(transaction, command.data, activityId);
+              return refusal.outcome === "refused_recorded"
+                ? recordedRefusal
+                : safeRefusal(prepared.correlationId, "operation_refused");
+            }
+            const composition = preparedRun.composition;
+            const previewComposition = (previewRun as Extract<FlowComposition, { kind: "composed" }>)
+              .composition;
             if (
               JSON.stringify(composition.submittedValues) !==
                 JSON.stringify(previewComposition.submittedValues) ||
@@ -483,12 +564,6 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
                 JSON.stringify(previewComposition.announcedEventKeys)
             )
               return restart;
-            if (!composition.preconditionSatisfied) {
-              const refusal = await refusePrecondition(transaction, command.data, activityId);
-              return refusal.outcome === "refused_recorded"
-                ? recordedRefusal
-                : safeRefusal(prepared.correlationId, "operation_refused");
-            }
 
             // A save that writes subject fields runs the exact release's compiled
             // before-save rules once. A totals-prepared closure is only reached
@@ -642,10 +717,10 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
               throw new Error("NAMED_ACTION_OCCURRENCE_ID_INVALID");
             }
             if (creationOccurrenceIds.length !== creations.length) return restart;
-            const stored = await persist(
+            const stored = await applyChanges(
               transaction,
               command.data,
-              composition.submittedValues,
+              composition,
               finalValues,
               creations,
               activityId,
