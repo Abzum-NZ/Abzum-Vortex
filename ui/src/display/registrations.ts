@@ -127,7 +127,7 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       render: SummaryValuesDisplay,
       parsePayload: SUMMARY_VALUES_PAYLOAD_PARSER,
     }),
-    // Release 1.1.0 adds the optional authored empty message; the same renderer and parser serve both.
+    // Release 1.1.0 adds the optional authored empty message; the same parser serves both releases.
     Object.freeze({
       metadata: TEXT_BLOCK_RELEASE_1_1_0,
       render: PlainTextDisplay,

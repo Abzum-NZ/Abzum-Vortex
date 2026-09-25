@@ -2,9 +2,12 @@
 
 import { useState, type ReactElement } from "react";
 import { DefinitionRenderError } from "../definition-error";
-import type { PlatformBlockRenderProps } from "../registry";
 import type { ChoiceInputPayload } from "./projected-data";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import {
   describedBy,
   FieldLabelText,
@@ -16,7 +19,7 @@ import {
 } from "./field-parts";
 import { useFormField } from "./form-context";
 
-export type ChoiceInputProps = PlatformBlockRenderProps;
+export type ChoiceInputProps = ControlRenderProps<ChoiceInputPayload>;
 
 /** Lists longer than this offer a search box; shorter lists are scanned directly. */
 const SEARCHABLE_OPTION_THRESHOLD = 7;

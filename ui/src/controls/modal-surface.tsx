@@ -8,7 +8,11 @@ import {
   type ReactElement,
   type SyntheticEvent,
 } from "react";
-import { readControlSettings, resolveControlContext, type ControlRenderProps } from "./control-context";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import { useSeededState } from "./field-parts";
 
 export type ModalSurfaceKind = "dialog" | "drawer";
@@ -25,7 +29,10 @@ const focusIfConnected = (element: HTMLElement | null): void => {
  * `open` value drives the declared `open` and `close` state operations, and the rendered surface
  * advertises exactly those declared operations for the placement's flow tasks.
  */
-export function ModalSurface<Values>({
+/** The one payload member both modal surfaces read: the projected open state. */
+type ModalSurfacePayload = Readonly<{ open: boolean }>;
+
+export function ModalSurface<Values extends ModalSurfacePayload>({
   props,
   kind,
   surfaceStyle,

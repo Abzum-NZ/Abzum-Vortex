@@ -3,11 +3,14 @@
 import { builderKeySchema } from "@vortex/contracts";
 import type { ReactElement } from "react";
 import { DefinitionRenderError } from "../definition-error";
-import type { PlatformBlockRenderProps } from "../registry";
 import type { ValidationPayload } from "./projected-data";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 
-export type ValidationMessageProps = PlatformBlockRenderProps;
+export type ValidationMessageProps = ControlRenderProps<ValidationPayload>;
 
 /**
  * Form-wide or field-targeted validation summary. The live region is always present so a later

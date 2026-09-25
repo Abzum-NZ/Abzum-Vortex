@@ -391,35 +391,22 @@ export function ApplicationPreview({
   const availablePlacementIds = new Set<string>();
   if (resolvedSlot !== undefined) collectPlacementIds(resolvedSlot, availablePlacementIds);
 
-  // One generic runtime-input map per placement. The renderer passes each entry to the placement's
-  // own registration, which is the only thing that decides what the block accepts.
+  // One generic runtime-input map per placement. The renderer hands each entry to the placement's
+  // own registration, which is the only thing that decides what that block accepts.
   const runtimeInputs: RuntimeInputsByPlacement = {};
-  const addInput = (placementId: string, data: unknown, events: unknown): void => {
-    if (data === undefined && events === undefined) return;
-    runtimeInputs[placementId] = Object.freeze({
-      ...(data === undefined ? {} : { data }),
-      ...(events === undefined ? {} : { events }),
-    });
+  const supply = (placementId: string, name: string, value: unknown): void => {
+    if (value === undefined) return;
+    const current: Readonly<Record<string, unknown>> = runtimeInputs[placementId] ?? {};
+    runtimeInputs[placementId] = Object.freeze({ ...current, [name]: value });
   };
-  try {
-    for (const [placementId, data] of Object.entries(
-      onlyKnownPlacements(artifact.displaySampleDataByPlacement, availablePlacementIds),
-    ))
-      addInput(placementId, data, undefined);
-    for (const [placementId, data] of Object.entries(
-      onlyKnownPlacements(artifact.controlSampleDataByPlacement, availablePlacementIds),
-    ))
-      addInput(placementId, data, undefined);
-  } catch (error) {
-    renderFailure ??=
-      error instanceof DefinitionRenderError
-        ? error
-        : new DefinitionRenderError(
-            "INVALID_COMPOSITION",
-            "The preview sample data could not be read",
-            location,
-          );
-  }
+  for (const [placementId, data] of Object.entries(
+    onlyKnownPlacements(artifact.displaySampleDataByPlacement, availablePlacementIds),
+  ))
+    supply(placementId, "data", data);
+  for (const [placementId, data] of Object.entries(
+    onlyKnownPlacements(artifact.controlSampleDataByPlacement, availablePlacementIds),
+  ))
+    supply(placementId, "data", data);
 
   // Only local simulations are wired: each callback reports the interaction and does nothing else.
   const displayHandlers = new Map<string, Partial<Record<DisplaySemanticEventName, () => void>>>();
@@ -438,10 +425,8 @@ export function ApplicationPreview({
         [interaction.event as ControlSemanticEventName]: handler,
       });
   }
-  for (const [placementId, events] of displayHandlers)
-    addInput(placementId, undefined, events);
-  for (const [placementId, events] of controlHandlers)
-    addInput(placementId, undefined, events);
+  for (const [placementId, events] of displayHandlers) supply(placementId, "events", events);
+  for (const [placementId, events] of controlHandlers) supply(placementId, "events", events);
 
   return (
     <div

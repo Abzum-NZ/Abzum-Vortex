@@ -12,7 +12,11 @@ import {
   type PlatformComponentRegistry,
 } from "../registry";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
-import { parseDisplayData, parseDisplayEventHandlers, parseListPayload } from "../display/projected-data";
+import {
+  parseDisplayData,
+  parseDisplayEventHandlers,
+  parseListPayload,
+} from "../display/projected-data";
 import { ApplicationLauncher } from "./application-launcher";
 import { LinkTiles } from "./link-tiles";
 import { ViewFilter } from "./view-filter";

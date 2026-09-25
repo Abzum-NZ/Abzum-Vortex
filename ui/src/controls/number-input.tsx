@@ -2,9 +2,12 @@
 
 import type { ChangeEvent, ReactElement } from "react";
 import { DefinitionRenderError } from "../definition-error";
-import type { PlatformBlockRenderProps } from "../registry";
 import type { NumberInputPayload } from "./projected-data";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import {
   describedBy,
   FieldLabelText,
@@ -16,7 +19,7 @@ import {
 } from "./field-parts";
 import { useFormField } from "./form-context";
 
-export type NumberInputProps = PlatformBlockRenderProps;
+export type NumberInputProps = ControlRenderProps<NumberInputPayload>;
 
 /**
  * Typed number input. Empty, unparsable or non-integer (when integer is declared) entry is the

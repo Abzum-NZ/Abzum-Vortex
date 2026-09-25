@@ -16,7 +16,9 @@ import type { DisplayField, RecordDetailPayload } from "./projected-data";
  * detail fields shows exactly those fields in declared order; the projected fields supply their
  * values and any label the placement left unset. Never executes or fetches a Query.
  */
-export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayload>): ReactElement {
+export function RecordDetailDisplay(
+  props: DisplayRenderProps<RecordDetailPayload>,
+): ReactElement {
   const { placementId, availability } = props;
   const { title, accessibleName, values, state, emptyMessage, refusedMessage, errorMessage, events } =
     resolveDisplayContext<RecordDetailPayload>(

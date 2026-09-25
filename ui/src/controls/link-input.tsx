@@ -1,8 +1,11 @@
 "use client";
 
 import type { ChangeEvent, ReactElement } from "react";
-import type { PlatformBlockRenderProps } from "../registry";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import {
   describedBy,
   FieldLabelText,
@@ -14,9 +17,8 @@ import {
 } from "./field-parts";
 import { useFormField } from "./form-context";
 import type { LinkInputPayload, TypedRecordReference } from "./projected-data";
-import type { TypedRecordReference } from "./projected-data";
 
-export type LinkInputProps = PlatformBlockRenderProps;
+export type LinkInputProps = ControlRenderProps<LinkInputPayload>;
 
 /**
  * A record-reference key is the exact `recordTypeId:recordId` pair of the linked record. It names

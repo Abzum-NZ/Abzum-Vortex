@@ -70,7 +70,11 @@ const columnAttributes = (
 export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElement {
   const { placementId, availability } = props;
   const { title, accessibleName, values, state, emptyMessage, refusedMessage, errorMessage, events } =
-    resolveDisplayContext<TablePayload>(props, (table) => table.rows.length === 0, "No records to show");
+    resolveDisplayContext<TablePayload>(
+      props,
+      (table) => table.rows.length === 0,
+      "No records to show",
+    );
   const contract = readRecordsTableContract(props.settings);
   const columns = values === undefined ? [] : renderedColumns(contract, values.columns);
   const sortable = (column: RenderedColumn): boolean =>

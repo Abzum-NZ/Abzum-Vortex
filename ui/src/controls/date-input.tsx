@@ -1,8 +1,11 @@
 "use client";
 
 import type { ChangeEvent, ReactElement } from "react";
-import type { PlatformBlockRenderProps } from "../registry";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import {
   describedBy,
   FieldLabelText,
@@ -14,9 +17,8 @@ import {
 } from "./field-parts";
 import { useFormField } from "./form-context";
 import { isIsoCalendarDate, type DateInputPayload } from "./projected-data";
-import { isIsoCalendarDate } from "./projected-data";
 
-export type DateInputProps = PlatformBlockRenderProps;
+export type DateInputProps = ControlRenderProps<DateInputPayload>;
 
 /**
  * ISO calendar date input emitting only its declared `field_changed` event. The typed value is

@@ -1,9 +1,12 @@
 "use client";
 
 import type { ReactElement } from "react";
-import type { PlatformBlockRenderProps } from "../registry";
 import type { BooleanInputPayload } from "./projected-data";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import {
   describedBy,
   FieldLabelText,
@@ -15,7 +18,7 @@ import {
 } from "./field-parts";
 import { useFormField } from "./form-context";
 
-export type BooleanInputProps = PlatformBlockRenderProps;
+export type BooleanInputProps = ControlRenderProps<BooleanInputPayload>;
 
 /**
  * Checkbox or switch emitting only its declared `field_changed` event with a typed boolean.

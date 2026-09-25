@@ -65,6 +65,9 @@ export { RecordDetailDisplay } from "./record-detail";
 export { GroupedDataDisplay } from "./grouped-data";
 export { SummaryValuesDisplay } from "./summary-values";
 
+// Per-Block Render Props
+export { type DisplayRenderProps } from "./controls";
+
 // Display Registrations & Registry
 export {
   DISPLAY_BLOCK_RELEASES,

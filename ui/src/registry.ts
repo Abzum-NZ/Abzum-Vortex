@@ -80,7 +80,7 @@ export function createPayloadParser(
         "Component runtime inputs must be an object",
         location,
       );
-    const record: Readonly<Record<string, unknown>> = inputs;
+    const record = inputs as Readonly<Record<string, unknown>>;
     for (const supplied of Object.keys(record))
       if (!declared.includes(supplied))
         throw new DefinitionRenderError(

@@ -99,7 +99,6 @@ export {
   type TextData,
   type TextPayload,
 } from "./display";
-export { type DisplayRenderProps } from "./display/controls";
 
 // Display Components & Views
 export {
@@ -117,6 +116,7 @@ export {
   formatIsoDate,
   getAccessibleName,
   richTextToPlainText,
+  type DisplayRenderProps,
   type DisplayStateContainerProps,
 } from "./display";
 
@@ -254,7 +254,7 @@ export {
   VALIDATION_MESSAGE_BLOCK_RELEASE,
 } from "./controls";
 
-// Launcher Projected Data & Binding Contracts
+// Launcher List Payload & Binding Contracts
 export {
   linkTilesToListValues,
   parsePermittedApplicationsLauncherProjection,
@@ -262,6 +262,7 @@ export {
   readLauncherSettings,
   resolveLauncherListContext,
   type LauncherListContext,
+  type LauncherRenderProps,
   type LauncherSettings,
   type LinkTileRow,
   type LinkTilesQueryBinding,

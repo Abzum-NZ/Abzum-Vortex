@@ -2,12 +2,15 @@
 
 import { useId, useRef, type KeyboardEvent, type ReactElement } from "react";
 import { DefinitionRenderError } from "../definition-error";
-import type { PlatformBlockRenderProps } from "../registry";
 import type { TabsPayload } from "./projected-data";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import { useSeededState } from "./field-parts";
 
-export type TabsProps = PlatformBlockRenderProps;
+export type TabsProps = ControlRenderProps<TabsPayload>;
 
 /** Declared tab slots in order, each with its label property. */
 const TAB_SLOTS = [

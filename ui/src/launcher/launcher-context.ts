@@ -2,7 +2,11 @@ import { builderKeySchema } from "@vortex/contracts";
 import { createDeclaredSettingsReader } from "../controls/control-context";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import { getAccessibleName } from "../display/display-state-container";
-import type { DisplayDataState, DisplayEventHandlers, ListPayload } from "../display/projected-data";
+import type {
+  DisplayDataState,
+  DisplayEventHandlers,
+  ListPayload,
+} from "../display/projected-data";
 import type { PlatformBlockRenderProps } from "../registry";
 
 const EMPTY_STATE: DisplayDataState<never> = Object.freeze({ status: "empty" });

@@ -301,8 +301,7 @@ export const parseTypedFieldValue = (
   if (typeof value === "number")
     return Number.isFinite(value) ? value : fail("A typed number must be finite", location);
   if (!isRecord(value)) return fail("A typed field value must be a field value", location);
-  if (Object.hasOwn(value, "blocks"))
-    return parseRichTextDocument(value, location) as TypedRichTextDocument;
+  if (Object.hasOwn(value, "blocks")) return parseRichTextDocument(value, location);
   if (Object.hasOwn(value, "recordTypeId") && Object.hasOwn(value, "recordId"))
     return requireRecordReference(value, location);
   return fail(

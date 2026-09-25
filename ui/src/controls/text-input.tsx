@@ -1,9 +1,12 @@
 "use client";
 
 import type { ChangeEvent, ReactElement } from "react";
-import type { PlatformBlockRenderProps } from "../registry";
 import type { TextInputPayload } from "./projected-data";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import {
   describedBy,
   FieldLabelText,
@@ -15,7 +18,7 @@ import {
 } from "./field-parts";
 import { useFormField } from "./form-context";
 
-export type TextInputProps = PlatformBlockRenderProps;
+export type TextInputProps = ControlRenderProps<TextInputPayload>;
 
 const INPUT_TYPES = ["text", "email", "password", "tel", "url"] as const;
 

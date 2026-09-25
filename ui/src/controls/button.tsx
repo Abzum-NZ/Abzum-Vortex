@@ -2,12 +2,15 @@
 
 import { useId, type ReactElement } from "react";
 import { DefinitionRenderError } from "../definition-error";
-import type { PlatformBlockRenderProps } from "../registry";
 import type { ButtonPayload } from "./projected-data";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import { useFormScope } from "./form-context";
 
-export type ButtonProps = PlatformBlockRenderProps;
+export type ButtonProps = ControlRenderProps<ButtonPayload>;
 
 type ButtonMode = "action" | "submit" | "reset";
 
