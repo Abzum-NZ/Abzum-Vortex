@@ -12,7 +12,7 @@ flowchart TD
     MODULE --> TYPE[Record type]
     TYPE --> RECORD[Record]
     APP --> PAGE[Page]
-    APP --> WORKFLOW[Workflow]
+    APP --> FLOW[Flow]
 ```
 
 | Term | Meaning and governing section |
@@ -36,7 +36,7 @@ flowchart TD
 | Connection | An organisation's authorised link to another system under [Connections, programmable interfaces and MCP](../12-connections-and-interfaces.md). |
 | Connection instance | One organisation's encrypted credentials and grants for a platform-catalogue connection type. |
 | Connection type | A platform-catalogue description of authentication, allowed operations and safety policy. |
-| Contained component | A page, field, rule, workflow, or similar item published with its module or application under [Platform composition and publication](../03-composition-and-publication.md#definition-ownership-and-versions). |
+| Contained component | A page, field, flow, or similar item published with its module or application under [Platform composition and publication](../03-composition-and-publication.md#definition-ownership-and-versions). |
 | Concurrency number | A number changed on every record update so a later edit is not silently overwritten, described in [Records and their lifecycle](../06-records-and-lifecycle.md#concurrent-changes). |
 | Definition | A versioned description of structure or behaviour. Root definitions and publication are described in [Platform composition and publication](../03-composition-and-publication.md). |
 | Draft | The editable, non-live version of a module or application. |
@@ -44,6 +44,8 @@ flowchart TD
 | Event | A committed statement that something happened, described in [Forms, actions, rules and events](../08-forms-actions-rules-and-events.md#events). |
 | Event outbox | Database records written with a business save and later delivered safely. |
 | Field | One named value on a record type, described in [Modules, fields and relationships](../05-modules-fields-and-relationships.md#common-field-properties). |
+| Flow | One stored definition of behaviour in the one flow language, owned by exactly one module or application release and shaped like a Kestra flow. A flow declares its execution kind (`interactive`, `transaction`, `background` or `durable`), its triggers, its ordered tasks, its inputs, variables, outputs and policies. Save rules, named actions, screen flows, background flows and durable workflows are all flows; there is no separate rule, workflow or pipeline language. See [One flow language](frontend-rule-designer.md#one-flow-language). |
+| Flow engine | The in-house Vortex flow runner: the pure interpreter in Rule shared by the browser and the server, the server orchestrator in App that drives any flow containing a protected task, and the browser runner in `ui`. See [Runtime package placement](frontend-rule-designer.md#runtime-package-placement). |
 | Federation | A signed Vortex-to-Vortex request that lets a recipient use source-owned records across clusters without database credentials or a persistent recipient copy under [Vortex federation](../17-runtime-storage-and-caching.md#vortex-federation-between-clusters). |
 | Gallery | A reviewed catalogue of definition packages under [Copying, sharing, import and export](../16-copying-sharing-import-export.md#gallery). |
 | Global identity | One human sign-in that can be linked to a separate account in several organisations under [People, organisations and sign-in](../02-people-organisations-and-sign-in.md). |
@@ -57,7 +59,7 @@ flowchart TD
 | Organisation role | A collection of organisation-wide permissions under [Access and permissions](../04-access-and-permissions.md#organisation-roles). |
 | Page | A published application screen type and block layout under [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md#page-types). |
 | Permission | One permanently named right that a role may grant. |
-| Process pipeline | The ordered business stages of a record under [Workflows and process pipelines](../09-workflows-and-pipelines.md#process-pipelines). |
+| Process pipeline | The ordered business stages through which a record moves; its transitions and entry and exit effects are tasks inside flows, not a separate pipeline language. See [Process pipelines](../09-workflows-and-pipelines.md#process-pipelines). |
 | Protected operation | A named platform operation that is the only way to change a protected core fact. It rechecks current authority, target revision and its safeguard, and commits with its Activity evidence in one transaction. A system module's actions bind to it. See [system modules](core-contract-boundary.md#system-modules). |
 | Public operation | A narrowly published page or interface operation that does not require an organisation account. |
 | Published version | An immutable, numbered snapshot used by live requests under [Platform composition and publication](../03-composition-and-publication.md#draft-and-published-versions). |
@@ -67,7 +69,7 @@ flowchart TD
 | Record | One organisation-owned instance of a record type under [Records and their lifecycle](../06-records-and-lifecycle.md). |
 | Record type | A named business object and its fields inside a module. |
 | Publishable definition | One independently published module or application. |
-| Rule | Immediate typed logic evaluated during a record save under [Forms, actions, rules and events](../08-forms-actions-rules-and-events.md#rules). |
+| Rule | A flow with a `BeforeSave` trigger and the `transaction` execution kind; the server runs it inside the record save for every writer, and the browser runs the same definition only for feedback. It is not a separate rule language or engine. See [Rules](../08-forms-actions-rules-and-events.md#rules). |
 | Semantic interface map | The permission-filtered, stable description of navigation, pages, forms and controls used by both the web interface and MCP, under [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md#semantic-interface-map). It contains meaning and typed operations, not DOM details or screen coordinates. |
 | Saved view | A saved query and arrangement under [Queries, reports, search and live updates](../10-queries-reports-search.md#saved-views). |
 | Saved sharing condition | A published and tested condition that defines which changing source records a grant may cover under [Record sharing](../16-copying-sharing-import-export.md#scope-and-saved-sharing-conditions). |
@@ -79,7 +81,8 @@ flowchart TD
 | Tenant administrator | A tenant-level administrator who can manage organisation structure and explicitly granted protected tenant operations but receives no organisation record access from that role. |
 | Theme | Validated design values contained by an application or supplied by the platform catalogue under [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md#themes). |
 | Vortex Identity Authority | The environment-wide sign-in authority that gives one person a stable global identity across clusters while each cluster keeps its own organisation accounts under [Identity across clusters](../02-people-organisations-and-sign-in.md#identity-across-clusters). |
-| Workflow | Durable background work executed with Kestra under [Workflows and process pipelines](../09-workflows-and-pipelines.md). |
+| Task | One registered step in a flow's ordered task list. Every task has a type from the one task registry ([#983](https://github.com/Abzum-NZ/Abzum-Vortex/issues/983)), a pinned version, declared run locations, an effect class and typed properties, outputs and outcomes; control tasks give the list its branches, iteration and order. See [Task types in the shared registry](../09-workflows-and-pipelines.md#task-types-in-the-shared-registry). |
+| Workflow | A flow whose execution kind is `durable`, executed by Kestra for schedules, waits, human tasks, retries and external calls; it uses the same flow language and task registry as every other flow. See [Workflows and process pipelines](../09-workflows-and-pipelines.md). |
 
 ## Page-builder additions
 

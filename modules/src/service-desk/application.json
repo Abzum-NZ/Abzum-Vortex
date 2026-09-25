@@ -417,14 +417,6 @@
                                    "key":  "service_desk_overview",
                                    "name":  "Service overview",
                                    "type":  "dashboard",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "permission":  "application.service_desk.open",
                                    "composition":  {
                                                        "shell_kind":  "default",
@@ -473,27 +465,9 @@
                                    "key":  "service_desk_cases",
                                    "name":  "Case queue",
                                    "type":  "list",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.service_desk.cases:case",
                                    "permission":  "vortex.service_desk.cases.case.read",
                                    "query":  "service_desk_open_cases",
-                                   "arrangements":  [
-                                                        "table",
-                                                        "board",
-                                                        "calendar",
-                                                        "summary"
-                                                    ],
-                                   "calendar_mapping":  {
-                                                            "start":  "resolution_due_at",
-                                                            "end":  "resolution_due_at"
-                                                        },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -535,26 +509,13 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "list",
-                                                                     "record_type":  "vortex.service_desk.cases:case"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_sd_case_detail",
                                    "key":  "service_desk_case_detail",
                                    "name":  "Case detail",
                                    "type":  "detail",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-"validation",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.service_desk.cases:case",
                                    "permission":  "vortex.service_desk.cases.case.read",
                                    "composition":  {
@@ -813,26 +774,13 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "detail",
-                                                                     "record_type":  "vortex.service_desk.cases:case"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_sd_new_case",
                                    "key":  "service_desk_new_case",
                                    "name":  "New case",
                                    "type":  "form",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "validation",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.service_desk.cases:case",
                                    "permission":  "vortex.service_desk.cases.case.create",
                                    "commit_action":  "vortex.service_desk.cases.case.create",
@@ -955,32 +903,16 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "create_form",
-                                                                     "record_type":  "vortex.service_desk.cases:case"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_sd_knowledge",
                                    "key":  "service_desk_knowledge",
                                    "name":  "Knowledge",
                                    "type":  "list",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.service_desk.knowledge:article",
                                    "permission":  "vortex.service_desk.knowledge.article.read",
                                    "query":  "service_desk_knowledge",
-                                   "arrangements":  [
-                                                        "table",
-                                                        "summary"
-                                                    ],
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1022,25 +954,13 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "list",
-                                                                     "record_type":  "vortex.service_desk.knowledge:article"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_sd_article",
                                    "key":  "service_desk_article",
                                    "name":  "Knowledge article",
                                    "type":  "detail",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.service_desk.knowledge:article",
                                    "permission":  "vortex.service_desk.knowledge.article.read",
                                    "composition":  {
@@ -1118,24 +1038,13 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "detail",
-                                                                     "record_type":  "vortex.service_desk.knowledge:article"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_sd_public_article",
                                    "key":  "service_desk_public_article",
                                    "name":  "Public knowledge article",
                                    "type":  "public",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "not_found",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.service_desk.knowledge:article",
                                    "permission":  "application.service_desk.open",
                                    "public_fields":  [
@@ -1193,20 +1102,9 @@
                                    "key":  "service_desk_service_levels",
                                    "name":  "Service levels",
                                    "type":  "list",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.service_desk.sla:service_level",
                                    "permission":  "vortex.service_desk.sla.service_level.read",
                                    "query":  "service_desk_service_levels",
-                                   "arrangements":  [
-                                                        "table"
-                                                    ],
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1248,11 +1146,7 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "list",
-                                                                     "record_type":  "vortex.service_desk.sla:service_level"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_sd_case_edit",
@@ -1262,15 +1156,6 @@
                                    "record_type":  "vortex.service_desk.cases:case",
                                    "permission":  "vortex.service_desk.cases.case.update",
                                    "commit_action":  "vortex.service_desk.cases.case.update",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "validation",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1399,18 +1284,6 @@
                                    "type":  "detail",
                                    "record_type":  "vortex.service_desk.sla:service_level",
                                    "permission":  "vortex.service_desk.sla.service_level.read",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "detail",
-                                                                     "record_type":  "vortex.service_desk.sla:service_level"
-                                                                 },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1496,21 +1369,6 @@
                                    "record_type":  "vortex.crm.organisations:company",
                                    "permission":  "vortex.crm.organisations.company.read",
                                    "query":  "service_desk_customers",
-                                   "arrangements":  [
-                                                        "table"
-                                                    ],
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "list",
-                                                                     "record_type":  "vortex.crm.organisations:company"
-                                                                 },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1561,18 +1419,6 @@
                                    "type":  "detail",
                                    "record_type":  "vortex.crm.organisations:company",
                                    "permission":  "vortex.crm.organisations.company.read",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "detail",
-                                                                     "record_type":  "vortex.crm.organisations:company"
-                                                                 },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1623,21 +1469,6 @@
                                    "record_type":  "vortex.crm.people:contact",
                                    "permission":  "vortex.crm.people.contact.read",
                                    "query":  "service_desk_requesters",
-                                   "arrangements":  [
-                                                        "table"
-                                                    ],
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "list",
-                                                                     "record_type":  "vortex.crm.people:contact"
-                                                                 },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1688,18 +1519,6 @@
                                    "type":  "detail",
                                    "record_type":  "vortex.crm.people:contact",
                                    "permission":  "vortex.crm.people.contact.read",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "detail",
-                                                                     "record_type":  "vortex.crm.people:contact"
-                                                                 },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
