@@ -4776,15 +4776,8 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           failure(output, "vortex.definition.application_page_query", "broken_reference"),
         );
       const pageRecord = page.recordType ? records.get(pageRecordId!) : undefined;
-      const replacementRecordId = page.standardPageReplacement
-        ? String(object(object(page.standardPageReplacement).recordType).recordTypeId)
-        : undefined;
       if (
         (page.recordType && !pageRecord) ||
-        (page.standardPageReplacement &&
-          (!records.has(replacementRecordId!) ||
-            !pageRecordId ||
-            replacementRecordId !== pageRecordId)) ||
         (page.commitActionKey &&
           (!executableActionKeys.has(String(page.commitActionKey)) ||
             !pageRecordId ||
@@ -4793,28 +4786,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         failures.push(
           failure(output, "vortex.definition.application_page_references", "broken_reference"),
         );
-      if (page.calendarMapping) {
-        const mapping = object(page.calendarMapping);
-        const pageFields = new Map(
-          pageRecord
-            ? array(pageRecord.fields).map((field) => [String(field.fieldId), String(field.type)])
-            : [],
-        );
-        const startType = pageFields.get(String(mapping.startFieldId));
-        const endType = mapping.endFieldId ? pageFields.get(String(mapping.endFieldId)) : undefined;
-        const durationType = mapping.durationFieldId
-          ? pageFields.get(String(mapping.durationFieldId))
-          : undefined;
-        if (
-          !["date", "date_time"].includes(String(startType)) ||
-          (mapping.kind === "start_end" && endType !== startType) ||
-          (mapping.kind === "start_duration" &&
-            !["whole_number", "decimal_number"].includes(String(durationType)))
-        )
-          failures.push(
-            failure(output, "vortex.definition.application_calendar_mapping", "scope_conflict"),
-          );
-      }
       const placements = [
         ...pageContentPlacementEntriesV2(page).map(([, placement]) => placement),
         ...pageShellPlacementEntriesV2(page).map(([, placement]) => placement),
@@ -6166,7 +6137,6 @@ const applicationRuleCodes = [
   "vortex.definition.application_page_permission",
   "vortex.definition.application_page_query",
   "vortex.definition.application_page_references",
-  "vortex.definition.application_calendar_mapping",
   "vortex.definition.application_layout_complete",
   "vortex.definition.application_block_references",
   "vortex.definition.application_block_settings",
