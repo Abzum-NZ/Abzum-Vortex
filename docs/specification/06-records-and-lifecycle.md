@@ -150,6 +150,131 @@ a deliberately defined trusted identity and compatible attribution before it
 can exist. This is a prerequisite for [#48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48),
 not a reason to invent a System context in an ordinary-human save.
 
+## Record-change command
+
+One command describes every record write, so one engine can own validation,
+ordered mutation, announced Events, one receipt and all-or-nothing commit. The
+command is `recordChangeCommandV2Schema` in the
+[Record contracts](../../contracts/src/records.ts); its result is
+`recordChangeResultV2Schema` and its single receipt is
+`recordChangeReceiptSchema`. It is the request to the one protected "apply
+record changes" operation of
+[Decision 2](../build-plan/architecture-decisions-2026-09-25.md#decision-2--saving-is-a-flow-around-one-atomic-operation).
+The engine itself is built after Phase 6 (#1060-#1065); until it lands, this
+contract and the retired-writer list below govern new work.
+
+The command carries a contract version, command identifier, subject record-type
+identifier, and - only for an existing record - the subject record identifier
+and expected concurrency number. A new record omits both and starts its ordered
+mutation list with `create_subject`. Like `SaveRecordCommandV2`, the command
+carries no actor, organisation, Application, installed binding, invoking flow
+or action, row scope or authority declaration.
+
+### Invocation and authority
+
+Only a trusted caller issues the command: the record task of a published flow,
+or the protected delete, restore and ownership-transfer boundaries. The default
+Save of a form is a generated one-task flow and a builder may add tasks around
+it, so saving is a configurable flow whose record task ends in one command. A
+named action is a `transaction` flow started through its binding; the
+binding's installed action reference and typed inputs start that flow, and the
+flow's record changes compile into one command. Flow record tasks map onto
+mutations as follows: `record.save` is `create_subject` or `set_fields`,
+`record.create` is `create_subject` or `create_related`, `record.setFields` is
+`set_fields`, `record.link` is `change_relationship`, `record.delete` is
+`delete_subject`, `record.restore` is `restore_subject`, and `record.changes`
+is an ordered list of several mutations.
+
+The trusted caller supplies the invoking published definition - the Save flow,
+the named-action flow and its binding, or the lifecycle or ownership boundary -
+through the transaction context, never through the command. The mutation list
+and announced Event keys are statements of intent, not authority. The engine
+decides every touched record against current access and field permissions, and
+it accepts action-only fields, stage transitions, `create_related`,
+`copy_relationships` and announced Event keys only when the exact invoking
+published definition declares them. A browser, agent or interface can never
+widen a write by adding a mutation or an Event key.
+
+### Mutations
+
+The ordered mutation list is closed:
+
+| Mutation | Change | Today's equivalent |
+| --- | --- | --- |
+| `create_subject` | Create the subject from submitted values, optionally into one selected membership Group | Ordinary create |
+| `set_fields` | Set or clear submitted fields, including a link field's record-link value | Ordinary update and named-action `set_field` |
+| `change_relationship` | Link or unlink one relationship edge to a named target | The relationship primitive behind link values and relationship copies |
+| `create_related` | Create one dependent record from submitted values | Named-action `create_record` |
+| `copy_relationships` | Copy the subject's named relationships to another record of the same type | Named-action `copy_relationships` |
+| `delete_subject` | Soft-delete the subject through the protected lifecycle primitive | Delete and named-action `soft_delete_subject` |
+| `restore_subject` | Restore the subject through the protected lifecycle primitive | Restore |
+| `transfer_ownership` | Transfer the subject to one Organisation account or Group | Ownership transfer |
+
+A null `set_fields` value clears a field. `create_subject`, `delete_subject`,
+`restore_subject` and `transfer_ownership` each occur at most once. A deleting
+command may only copy relationships and announce Events, because a subject
+write or creation could move the revision the delete names; this is today's
+named-action rule. Restore and ownership transfer each run alone. A
+relationship copy targets another record of the subject's type and names each
+relationship once. Offboarding issues one command per owned record. Announced
+Event keys travel in their own ordered list and are written, with the
+mutations, into the same outbox and logged queue inside the one transaction.
+
+### Result and receipt
+
+The command commits or is refused as one unit. A committed command returns
+exactly one receipt - receipt identifier, command identifier, correlation
+identifier, record identifier, new concurrency number, the committed mutation
+kinds in order, and the announced Event keys - beside the readable values and
+background delivery. A deleted subject returns no readable values. A repeated
+command identifier with the same command replays the stored result and receipt
+without writing again. A conflict, refusal or correction returns no receipt; a
+correction names the mutation whose value needs correcting.
+
+### Writer variants to be retired
+
+The one engine retires the overlapping entry points, cloned writers, receipt
+ledgers and helpers below. No new record writer variant or named-action effect
+kind may be added until the engine lands.
+
+Base save:
+
+- `prepare_base_record_save`, `save_base_record`.
+- `prepare_relationship_total_save`, `save_base_record_with_relationship_totals`.
+
+Named-action writers:
+
+- `prepare_named_action_set_announce`, `save_named_action_set_announce`, `save_named_action_set_announce_with_relationship_totals`.
+- `prepare_named_action_relationship_totals`, `prepare_named_action_command_totals`, `save_named_action_effects_with_relationship_totals`.
+- `save_named_action_set_fields_internal`, `change_record_by_named_action_internal`, `insert_named_action_record_internal`, `write_named_action_relationship_value_internal`.
+- `apply_named_action_create_patch_internal`, `apply_named_action_copy_patch_internal`, `apply_named_action_relationship_copies_internal`, `apply_named_action_delete_patch_internal`.
+
+Lifecycle and ownership entry points:
+
+- `prepare_protected_record_delete`, `finalize_protected_record_delete`.
+- `prepare_protected_record_restore`, `finalize_protected_record_restore`.
+- `transfer_record_ownership`, `transfer_record_ownership_for_offboarding_internal`, `transfer_offboarding_owned_record`, `transfer_offboarding_active_owned_record`.
+
+Receipt ledgers and helpers:
+
+- `vortex_record.save_command_receipts`, `vortex_record.named_action_command_receipts`, `vortex_record.record_lifecycle_command_receipts`.
+- `base_save_command_fingerprint_internal`, `named_action_command_fingerprint_internal`, `record_lifecycle_command_fingerprint_internal`, `ownership_transfer_command_fingerprint_internal`.
+- `append_base_save_activity_internal`, `append_named_action_activity_internal`, `append_record_lifecycle_activity_internal`, `append_ownership_transfer_activity_internal`.
+
+The engine keeps and builds on the private primitives `create_record_internal`,
+`change_record`, `change_record_relationship_internal`,
+`write_relationship_value_internal`, `soft_delete_record_internal`,
+`soft_delete_record_recursive_internal` and `restore_record_internal`.
+`vortex_record.record_lifecycle_command_effects`, the identity-only journal of
+what a delete or restore traversal changed, is the only trusted source of a
+command's deleted set; it moves under the one receipt rather than being
+dropped. The generated-value writer `apply_relationship_total_parent_internal`,
+which applies derived parent values after a change, is not a command writer.
+Deadline-passed values are evaluated at read time, so no writer stores or
+refreshes deadline due metadata. The
+unrelated identity-administration receipt store is not a record-write receipt
+and remains outside this command.
+
 ## Concurrent changes
 
 Every update request includes the last concurrency number the person received; a create request has no existing concurrency number. If the stored number differs, the save is refused as a conflict. Current values may be returned only when current access permits disclosure. The platform never silently overwrites a later change. The exact request and response boundary is the [record save contract](appendices/data-contracts.md#record-save-command-and-result).

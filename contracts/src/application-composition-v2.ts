@@ -1136,6 +1136,59 @@ export const platformThemeReleaseV2Schema = z
   .strict();
 
 /**
+ * The token-role vocabulary shared by the platform theme release, the readability checks and
+ * the renderer. Each entry names one role and the token kind a complete platform theme release
+ * must map it with; a colour role also declares the foreground/background role the release must
+ * mark that pair with, and a colour role that declares none stays unmarked (fills such as
+ * `primary` are judged through their paired foreground). Defining the roles once here keeps
+ * those three consumers from drifting into separate token conventions. A platform theme release
+ * is complete only when it maps every role below; application and placement overrides inherit
+ * the kind and declared colour role.
+ */
+export const platformThemeTokenRoleV2Schema = z
+  .object({
+    key: builderKeySchema,
+    kind: themeTokenKindV2Schema,
+    colorRole: themeColorRoleSchema.optional(),
+  })
+  .strict();
+export type PlatformThemeTokenRoleV2 = z.infer<typeof platformThemeTokenRoleV2Schema>;
+
+export const platformThemeTokenRolesV2 = [
+  { key: "background", kind: "color_pair", colorRole: "background" },
+  { key: "surface", kind: "color_pair", colorRole: "background" },
+  { key: "text", kind: "color_pair", colorRole: "foreground" },
+  { key: "muted_text", kind: "color_pair", colorRole: "foreground" },
+  { key: "border_color", kind: "color_pair" },
+  { key: "border", kind: "border" },
+  { key: "primary", kind: "color_pair" },
+  { key: "primary_foreground", kind: "color_pair", colorRole: "foreground" },
+  { key: "secondary", kind: "color_pair" },
+  { key: "secondary_foreground", kind: "color_pair", colorRole: "foreground" },
+  { key: "danger", kind: "color_pair" },
+  { key: "danger_foreground", kind: "color_pair", colorRole: "foreground" },
+  { key: "danger_text", kind: "color_pair", colorRole: "foreground" },
+  { key: "warning_text", kind: "color_pair", colorRole: "foreground" },
+  { key: "info_text", kind: "color_pair", colorRole: "foreground" },
+  { key: "focus", kind: "focus" },
+  { key: "body", kind: "typography" },
+  { key: "heading", kind: "typography" },
+  { key: "space_xs", kind: "spacing" },
+  { key: "space_sm", kind: "spacing" },
+  { key: "space_md", kind: "spacing" },
+  { key: "space_lg", kind: "spacing" },
+  { key: "radius_sm", kind: "corners" },
+  { key: "radius_md", kind: "corners" },
+  { key: "radius_lg", kind: "corners" },
+  { key: "elevation_low", kind: "elevation" },
+  { key: "elevation_high", kind: "elevation" },
+  { key: "density", kind: "density" },
+] as const satisfies readonly PlatformThemeTokenRoleV2[];
+
+/** Every token-role key a complete platform theme release must map. */
+export type PlatformThemeTokenRoleKeyV2 = (typeof platformThemeTokenRolesV2)[number]["key"];
+
+/**
  * Exact catalogue evidence locked by a trusted caller before pure V2 compilation.
  * Its fingerprint covers every field except the fingerprint itself.
  */

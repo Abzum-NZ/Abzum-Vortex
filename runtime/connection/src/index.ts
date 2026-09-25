@@ -7,3 +7,4 @@ export const ConnectionService = Object.freeze({
 
 export * from "./connection-instance-state";
 export * from "./connection-readiness";
+export * from "./administration";

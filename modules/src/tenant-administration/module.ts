@@ -249,7 +249,7 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
       },
     ],
     events: [],
-    rules: [],
+    flows: [],
     extension_points: [],
     sharing_conditions: [],
     queries: [],

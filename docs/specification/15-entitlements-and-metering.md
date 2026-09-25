@@ -57,7 +57,7 @@ Corrections are explicit later events or protected reconciliation operations; hi
 
 ## Administration and presentation
 
-Entitlement policy administration is a protected platform operation with activity evidence. Its user interface is a locked administration application built from ordinary [application primitives](07-applications-pages-and-themes.md), not a special hardcoded screen.
+Entitlement policy administration is a protected platform operation with activity evidence. Its user interface is a platform-supplied administration application, with platform-owned protected-operation bindings as for [system applications](07-applications-pages-and-themes.md#system-applications), built from ordinary [application primitives](07-applications-pages-and-themes.md), not a special hardcoded screen.
 
 A reusable banner block may show application-provided notices. Emergency service or security status shown before applications load is derived from the narrow [operational status](19-operations-backup-and-recovery.md) boundary and a safe message catalogue; it is not a persistent announcement business domain.
 

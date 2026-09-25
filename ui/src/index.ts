@@ -227,6 +227,18 @@ export {
   createLauncherComponentRegistry,
 } from "./launcher";
 
+// General Layout Components (#1008)
+export { Container, Heading, type ContainerProps, type HeadingProps } from "./layout";
+
+// General Layout Registrations & Registry
+export {
+  CONTAINER_BLOCK_RELEASE,
+  HEADING_BLOCK_RELEASE,
+  LAYOUT_BLOCK_RELEASES,
+  LAYOUT_COMPONENT_REGISTRATIONS,
+  createLayoutComponentRegistry,
+} from "./layout";
+
 // Application Navigation (#861)
 export {
   ApplicationNavigation,
@@ -236,7 +248,7 @@ export {
   type ProjectedNavigationItem,
 } from "./navigation";
 
-// Full Platform Component Registry (Display + Controls + Launcher)
+// Full Platform Component Registry (Display + Controls + Launcher + Layout)
 export {
   ALL_PLATFORM_COMPONENT_REGISTRATIONS,
   createFullPlatformComponentRegistry,
