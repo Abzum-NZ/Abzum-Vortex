@@ -3496,6 +3496,13 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       const key = String(permissionKey);
       return permissions.has(key) || isPlatformPermissionKey(key);
     };
+    // A requirement key names exactly one permission, and the runtime reads a platform catalogue
+    // key as platform authority. An application or bound-Module permission reusing a platform key
+    // would make that reference ambiguous, so it is refused.
+    if ([...permissions].some(isPlatformPermissionKey))
+      failures.push(
+        failure(output, "vortex.definition.application_identity_unique", "duplicate_key"),
+      );
     const applicationPermissions = new Map(
       array(content.permissions).map((permission) => [String(permission.key), permission]),
     );
@@ -3883,11 +3890,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       const usesPlatformPermission = actionPermissionKeys(action).some(isPlatformPermissionKey);
       if (usesPlatformPermission)
         failures.push(
-          failure(
-            output,
-            "vortex.definition.platform_permission_unsupported_on_action",
-            "unsupported_choice",
-          ),
+          failure(output, "vortex.definition.application_action_references", "unsupported_choice"),
         );
       let valid =
         subject !== undefined &&
@@ -5348,7 +5351,6 @@ const applicationRuleCodes = [
   "vortex.definition.application_dependency_manifest",
   "vortex.definition.application_module_bindings",
   "vortex.definition.application_action_references",
-  "vortex.definition.platform_permission_unsupported_on_action",
   "vortex.definition.application_event_references",
   "vortex.definition.application_home_page",
   "vortex.definition.application_role_references",
