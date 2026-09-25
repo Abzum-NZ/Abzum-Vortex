@@ -228,6 +228,20 @@
         "record_type": "vortex.iam.core:access_request",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_iam_access_request_create_submit",
+        "key": "vortex.app.iam.access_request_create_submit",
+        "record_type": "vortex.iam.core:access_request",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_iam_access_request_edit_submit",
+        "key": "vortex.app.iam.access_request_edit_submit",
+        "record_type": "vortex.iam.core:access_request",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "public_addresses": [],
@@ -4431,6 +4445,142 @@
             }
           }
         }
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_access_request_create",
+        "key": "access_request_create",
+        "labels": {
+          "name": "Submit access request"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "save",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.iam.core:access_request"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": [
+              "vortex.iam.core:access_request"
+            ],
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "save",
+                "key": "record"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_access_request_update",
+        "key": "access_request_update",
+        "labels": {
+          "name": "Save access request"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": [
+              "vortex.iam.core:access_request"
+            ],
+            "required": true
+          },
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "save",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.iam.core:access_request"
+                }
+              },
+              "record": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "record"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": [
+              "vortex.iam.core:access_request"
+            ],
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "save",
+                "key": "record"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
       }
     ],
     "flow_bindings": [
@@ -4662,6 +4812,36 @@
           "expires_at": {
             "kind": "caller",
             "name": "expires_at"
+          }
+        }
+      },
+      {
+        "id": "binding_access_request_create_submit",
+        "control": "iam_access_request_new_form",
+        "event_id": "event_iam_access_request_create_submit",
+        "event": "form_submit",
+        "flow": "flow_access_request_create",
+        "inputs": {
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_access_request_edit_submit",
+        "control": "iam_access_request_edit_form",
+        "event_id": "event_iam_access_request_edit_submit",
+        "event": "form_submit",
+        "flow": "flow_access_request_update",
+        "inputs": {
+          "record": {
+            "kind": "caller",
+            "name": "record"
+          },
+          "values": {
+            "kind": "caller",
+            "name": "values"
           }
         }
       }
