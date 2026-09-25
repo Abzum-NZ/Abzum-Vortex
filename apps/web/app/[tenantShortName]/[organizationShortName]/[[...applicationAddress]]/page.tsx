@@ -9,11 +9,26 @@ import {
   permittedApplicationsToListValues,
   type DisplaySemanticEvent,
 } from "@vortex/ui";
+import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { AuthShell } from "../../../auth/_components/auth-shell";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * The one fixed neutral state for an address that is refused or missing. It never names the
+ * application, a reason, or whether anything exists, so the two cases stay indistinguishable.
+ */
+const unavailableFallback = (
+  <AuthShell
+    eyebrow="Application access"
+    title="Application unavailable"
+    description="This application address cannot be opened from your current sign-in."
+  >
+    <Link href="/signed-in">Choose an organisation</Link>
+  </AuthShell>
+);
 
 type ApplicationAddressPageProps = Readonly<{
   params: Promise<{
@@ -89,16 +104,7 @@ export default async function ApplicationAddressPage({ params }: ApplicationAddr
       </AuthShell>
     );
 
-  if (addressSegments.length > 2)
-    return (
-      <AuthShell
-        eyebrow="Application access"
-        title="Application unavailable"
-        description="This application address cannot be opened from your current sign-in."
-      >
-        <Link href="/signed-in">Choose an organisation</Link>
-      </AuthShell>
-    );
+  if (addressSegments.length > 2) return unavailableFallback;
 
   const resolved = await resolveApplicationAddress(
     identity.session,
@@ -119,14 +125,15 @@ export default async function ApplicationAddressPage({ params }: ApplicationAddr
     );
 
   if (resolved.kind === "unavailable")
-    return (
-      <AuthShell
-        eyebrow="Application access"
-        title="Application unavailable"
-        description="This application address cannot be opened from your current sign-in."
-      >
-        <Link href="/signed-in">Choose an organisation</Link>
-      </AuthShell>
+    // A refused page and a missing page of an application the viewer may open both show that
+    // application's own not-found page; everything else shows the fixed neutral fallback.
+    return resolved.experience === undefined ? (
+      unavailableFallback
+    ) : (
+      <ApplicationExperiencePage
+        page={resolved.experience.page}
+        shells={resolved.experience.shells}
+      />
     );
 
   if (resolved.kind === "organization_launcher") {

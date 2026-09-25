@@ -29,14 +29,31 @@ grant create on schema vortex_record to vortex_record_adapter;
 grant create on schema vortex_record to postgres;
 reset role;
 
+-- Every object below is dropped by its owner: postgres holds the Record and
+-- Module owner roles with SET but without INHERIT, so it cannot drop what they
+-- own directly.
+--
 -- 1. The installation and organisation-settings triggers go first, so the
---    functions they call can be dropped without CASCADE.
+--    functions they call can be dropped without CASCADE. Each is dropped by
+--    its table's owner.
+set local role vortex_module_owner;
 drop trigger if exists installation_bindings_maintain_deadline_due_metadata
   on vortex_module.installation_bindings;
+reset role;
 drop trigger if exists organization_runtime_settings_reselect_deadline_due_metadata
   on vortex_identity.organization_runtime_settings;
 
--- 2. Every deadline-only function, in one pass.
+-- 2. The deadline tables. Dropping the actor registry also drops the triggers
+--    that call its protection and integrity functions. The actor bindings and
+--    actors reference each other, so both are dropped in one statement.
+set local role vortex_record_adapter;
+drop table if exists vortex_record.deadline_transition_effects;
+drop table if exists vortex_record.record_deadline_due_metadata;
+reset role;
+set local role vortex_record_owner;
+drop table if exists vortex_record.deadline_actors, vortex_record.deadline_actor_bindings;
+
+-- 3. Every deadline-only function, grouped by owner.
 drop function if exists vortex_record.validate_deadline_actor_binding_scope_internal();
 drop function if exists vortex_record.protect_deadline_actor_binding_internal();
 drop function if exists vortex_record.protect_deadline_actor_internal();
@@ -45,13 +62,20 @@ drop function if exists vortex_record.create_deadline_actor_binding_internal(uui
 drop function if exists vortex_record.rotate_deadline_actor_binding_internal(uuid, bigint);
 drop function if exists vortex_record.revoke_deadline_actor_binding_internal(uuid, bigint);
 drop function if exists vortex_record.resolve_configured_deadline_actor_internal(uuid, uuid);
+reset role;
+
 drop function if exists vortex_record.establish_deadline_system_context_internal(uuid, uuid);
 drop function if exists vortex_record.claim_configured_deadline_due_row_internal(uuid, uuid, uuid, timestamptz);
-drop function if exists vortex_record.claim_record_deadline_refresh(uuid, uuid, uuid, timestamptz);
-drop function if exists vortex_record.validated_deadline_system_context_internal();
 drop function if exists vortex_record.read_deadline_active_installation_internal();
 drop function if exists vortex_record.read_deadline_organization_currency_internal();
 drop function if exists vortex_record.append_deadline_closure_activity_internal(uuid, uuid, uuid[]);
+drop function if exists vortex_record.maintain_installation_deadline_due_metadata_internal();
+drop function if exists vortex_record.reselect_organization_deadline_due_metadata_internal();
+drop function if exists vortex_record.next_deadline_refresh_due_at();
+
+set local role vortex_record_adapter;
+drop function if exists vortex_record.claim_record_deadline_refresh(uuid, uuid, uuid, timestamptz);
+drop function if exists vortex_record.validated_deadline_system_context_internal();
 drop function if exists vortex_record.deadline_due_transition_is_valid_internal(jsonb);
 drop function if exists vortex_record.write_deadline_closure_due_metadata_internal(uuid, uuid, jsonb, bigint, jsonb);
 drop function if exists vortex_record.apply_deadline_closure_record_internal(jsonb, jsonb, uuid, uuid, jsonb);
@@ -62,23 +86,13 @@ drop function if exists vortex_record.parent_deadline_due_transitions_are_valid_
 drop function if exists vortex_record.write_parent_deadline_due_metadata_internal(uuid, uuid, jsonb);
 drop function if exists vortex_record.creation_deadline_due_transitions_are_valid_internal(jsonb, jsonb);
 drop function if exists vortex_record.write_created_deadline_due_metadata_internal(uuid, uuid, jsonb, jsonb, jsonb);
-drop function if exists vortex_record.maintain_installation_deadline_due_metadata_internal();
-drop function if exists vortex_record.reselect_organization_deadline_due_metadata_internal();
-drop function if exists vortex_record.next_deadline_refresh_due_at();
 drop function if exists vortex_record.save_base_record_with_relationship_totals_and_deadline_due_metadata(uuid, text, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid, uuid, jsonb, jsonb, jsonb);
 drop function if exists vortex_record.save_named_action_effects_with_relationship_totals_and_deadline_due_metadata(uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid, jsonb, jsonb, jsonb, jsonb, text, uuid, bigint, uuid, jsonb, jsonb, jsonb, jsonb);
 
--- 3. The deadline tables. The actor bindings and actors reference each other,
---    so both are dropped in one statement.
-drop table if exists vortex_record.deadline_transition_effects;
-drop table if exists vortex_record.record_deadline_due_metadata;
-drop table if exists vortex_record.deadline_actors, vortex_record.deadline_actor_bindings;
-
 -- 4. Re-install the shared primitives without the deadline System-context
---    alternative. Granting CREATE to the adapter for the duration of this
---    transaction is the same pattern every earlier record-function migration
---    uses.
-set local role vortex_record_adapter;
+--    alternative, as their owner. Granting CREATE to the adapter for the
+--    duration of this transaction is the same pattern every earlier
+--    record-function migration uses.
 
 create or replace function vortex_record.relationship_total_catalogue_internal()
 returns jsonb
@@ -838,8 +852,6 @@ begin
       select 1 from vortex_record.release_provisions as provision
       where provision.module_root_id = module_release.root_id
         and provision.release_revision = module_release.release_revision
-        and provision.content_fingerprint = module_release.content_fingerprint
-        and provision.resolution_fingerprint = module_release.resolution_fingerprint
         and p_storage_contract_id = any (provision.storage_contract_ids)
     ) then
     raise exception using errcode = '55000', message = 'Installed Event storage is unavailable';

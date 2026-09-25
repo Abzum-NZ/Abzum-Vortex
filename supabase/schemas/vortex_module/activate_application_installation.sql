@@ -124,23 +124,13 @@ begin
       binding.state = 'provisioned'
       and binding.binding_revision = expected.binding_revision
       and binding.application_release_revision = p_application_release_revision
-      and binding.module_release_revision = required.target_release_revision
-      and binding.content_fingerprint = required.dependency_content_fingerprint
-      and binding.resolution_fingerprint = required.evidence_fingerprint
-      and binding.content_fingerprint = module_release.content_fingerprint
-      and binding.resolution_fingerprint = module_release.resolution_fingerprint
-      and binding.generator_contract_version = '1.0.0', false
+      and binding.module_release_revision = required.target_release_revision, false
     )),
     pg_catalog.bool_and(coalesce(
       binding.state = 'active'
       and binding.binding_revision = expected.binding_revision
       and binding.application_release_revision = p_application_release_revision
-      and binding.module_release_revision = required.target_release_revision
-      and binding.content_fingerprint = required.dependency_content_fingerprint
-      and binding.resolution_fingerprint = required.evidence_fingerprint
-      and binding.content_fingerprint = module_release.content_fingerprint
-      and binding.resolution_fingerprint = module_release.resolution_fingerprint
-      and binding.generator_contract_version = '1.0.0', false
+      and binding.module_release_revision = required.target_release_revision, false
     ))
   into all_provisioned, all_active
   from vortex_definition.reachable_module_dependency_edges(
@@ -150,9 +140,6 @@ begin
     on binding.organization_id = initial_authority.organization_id
     and binding.application_root_id = p_application_root_id
     and binding.module_root_id = required.target_root_id
-  left join vortex_definition.releases as module_release
-    on module_release.root_id = required.target_root_id
-    and module_release.release_revision = required.target_release_revision
   left join lateral (
     select (expected.value ->> 'bindingRevision')::bigint as binding_revision
     from pg_catalog.jsonb_array_elements(p_expected_module_bindings) as expected(value)
@@ -194,11 +181,7 @@ begin
       pin.target_root_id, pin.target_release_revision
     ) as provision;
 
-    if locked_binding.content_fingerprint <> storage_provision.content_fingerprint
-      or locked_binding.resolution_fingerprint <> storage_provision.resolution_fingerprint
-      or locked_binding.generator_contract_version <>
-        storage_provision.generator_contract_version
-      or locked_binding.storage_contract_ids <> storage_provision.storage_contract_ids then
+    if locked_binding.storage_contract_ids <> storage_provision.storage_contract_ids then
       raise exception using errcode = '40001',
         message = 'Application installation storage evidence changed or is incomplete';
     end if;

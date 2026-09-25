@@ -177,8 +177,6 @@ begin
       select 1 from vortex_record.release_provisions as provision
       where provision.module_root_id = module_release.root_id
         and provision.release_revision = module_release.release_revision
-        and provision.content_fingerprint = module_release.content_fingerprint
-        and provision.resolution_fingerprint = module_release.resolution_fingerprint
         and p_storage_contract_id = any (provision.storage_contract_ids)
     ) then
     raise exception using errcode = '55000', message = 'Installed Event storage is unavailable';
