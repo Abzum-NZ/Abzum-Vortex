@@ -6,7 +6,7 @@ security definer
 set search_path = ''
 as $function$
 begin
-  if pg_catalog.coalesce(vortex_context.current_context() ->> 'callerKind', '') <> 'human' then
+  if coalesce(vortex_context.current_context() ->> 'callerKind', '') <> 'human' then
     raise exception using
       errcode = '42501',
       message = 'Connection administration requires a human request context';
