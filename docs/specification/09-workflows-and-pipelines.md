@@ -78,7 +78,7 @@ Every other start is a **binding**, not a trigger: a component placement, naviga
 
 A **frontend flow** is a flow a person or agent starts through a binding (`interactive`, or `transaction` for a named action); a **backend flow** is a flow started automatically (`background` or `durable`). There is one start path ([#979](https://github.com/Abzum-NZ/Abzum-Vortex/issues/979)):
 
-1. Every button, menu command, record gesture, agent tool call and interface operation starts a frontend flow through its binding. A form, interface operation or agent tool binds a flow entry point — a generated one-task flow by default — and never binds a lower-level operation directly.
+1. Every button, menu command, record gesture, agent tool call and interface operation starts a frontend flow through its binding. A form, interface operation or agent tool binds a flow entry point — a generated one-task flow by default — and never binds a lower-level operation directly. An interface read operation or a query tool names a declared query, which the Query engine runs directly under the caller's access; a data flow is used only when a builder adds transform or write steps.
 2. A frontend flow starts a backend flow only through a **Run background flow** task with declared typed inputs, whether or not a record is involved, and the exact start intent is committed before dispatch. A `transaction` flow runs inside a record save and cannot contain a `Run background flow` task.
 3. Backend flows are otherwise started only by a committed record `Event`, a `Schedule` or a verified `IncomingMessage`, and may call one another only with typed inputs and outputs through a **Run flow** or **Run background flow** task.
 
