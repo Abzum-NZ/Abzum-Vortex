@@ -1,8 +1,7 @@
-create or replace function vortex_access.revise_organization_role_metadata_for_administration(
+create or replace function vortex_access.retire_organization_role_for_administration(
   p_role_id uuid,
   p_expected_role_revision bigint,
-  p_label text,
-  p_description text,
+  p_prepared_role_change jsonb,
   p_activity_id uuid
 )
 returns table (
@@ -25,25 +24,37 @@ declare
   locked_access_version bigint;
   role_fact vortex_access.organization_roles%rowtype;
   revision_fact vortex_access.organization_role_revisions%rowtype;
+  expected_candidate jsonb;
   affected_permissions jsonb;
   authority_requirement jsonb;
   decision record;
+  changed record;
   changed_summary jsonb;
-  operation_at timestamptz;
   activity_result text;
 begin
   if p_role_id is null
     or p_role_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_expected_role_revision is null
     or p_expected_role_revision not between 1 and 9007199254740991
-    or p_label is null or p_label <> pg_catalog.btrim(p_label)
-    or pg_catalog.char_length(p_label) not between 1 and 60
-    or p_description is null or p_description <> pg_catalog.btrim(p_description)
-    or pg_catalog.char_length(p_description) not between 1 and 1000
+    or p_prepared_role_change is null
+    or pg_catalog.jsonb_typeof(p_prepared_role_change) is distinct from 'object'
+    or p_prepared_role_change - array[
+      'contractVersion', 'candidate', 'roleCandidateFingerprint'
+    ]::text[] <> '{}'::jsonb
+    or not (p_prepared_role_change ?& array[
+      'contractVersion', 'candidate', 'roleCandidateFingerprint'
+    ])
+    or p_prepared_role_change ->> 'contractVersion' is distinct from '1.0.0'
+    or pg_catalog.jsonb_typeof(p_prepared_role_change -> 'candidate')
+      is distinct from 'object'
+    or pg_catalog.jsonb_typeof(p_prepared_role_change -> 'roleCandidateFingerprint')
+      is distinct from 'string'
+    or p_prepared_role_change ->> 'roleCandidateFingerprint'
+      !~ '^sha256:[a-f0-9]{64}$'
     or p_activity_id is null
     or p_activity_id = '00000000-0000-0000-0000-000000000000'::uuid then
     raise exception using errcode = '22023',
-      message = 'Organization role metadata revision input is invalid';
+      message = 'Organization role retirement input is invalid';
   end if;
 
   context_value := vortex_access.validated_human_request_context();
@@ -64,7 +75,7 @@ begin
   for update of version;
   if not found or locked_access_version is distinct from context_access_version then
     raise exception using errcode = '42501',
-      message = 'Organization role metadata revision is unavailable';
+      message = 'Organization role retirement is unavailable';
   end if;
 
   select role.* into role_fact
@@ -74,7 +85,7 @@ begin
   for update;
   if not found or role_fact.live_revision <> p_expected_role_revision then
     raise exception using errcode = '40001',
-      message = 'Organization role metadata revision is stale or unavailable';
+      message = 'Organization role retirement is stale or unavailable';
   end if;
   select revision.* into strict revision_fact
   from vortex_access.organization_role_revisions as revision
@@ -83,7 +94,18 @@ begin
     and revision.revision = role_fact.live_revision;
   if revision_fact.lifecycle = 'retired' then
     raise exception using errcode = '40001',
-      message = 'Organization role metadata revision is stale or unavailable';
+      message = 'Organization role retirement is stale or unavailable';
+  end if;
+
+  expected_candidate := pg_catalog.jsonb_build_object(
+    'operation', 'retire_role',
+    'organizationId', context_organization_id,
+    'roleId', p_role_id,
+    'expectedRoleRevision', p_expected_role_revision
+  );
+  if p_prepared_role_change -> 'candidate' is distinct from expected_candidate then
+    raise exception using errcode = '40001',
+      message = 'Prepared organization role retirement is stale or unavailable';
   end if;
 
   select pg_catalog.jsonb_agg(
@@ -119,16 +141,14 @@ begin
       'before', pg_catalog.jsonb_build_object(
         'kind', 'bounded', 'permissions', affected_permissions
       ),
-      'after', pg_catalog.jsonb_build_object(
-        'kind', 'bounded', 'permissions', affected_permissions
-      )
+      'after', pg_catalog.jsonb_build_object('kind', 'none')
     )
   end;
 
   select evaluated.* into strict decision
   from vortex_access.evaluate_organization_permission_eligibility(
     pg_catalog.jsonb_build_object(
-      'operationKey', 'platform.organization.roles.revise_metadata',
+      'operationKey', 'platform.organization.roles.retire',
       'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
@@ -141,7 +161,7 @@ begin
     )
   ) as evaluated;
   if decision.outcome = 'refused'
-    and decision.operation_key = 'platform.organization.roles.revise_metadata'
+    and decision.operation_key = 'platform.organization.roles.retire'
     and decision.target_kind = 'organization'
     and decision.target_application_root_id is null
     and decision.organization_id = context_organization_id
@@ -154,13 +174,13 @@ begin
     ) then
     activity_result := vortex_activity.append_organization_activity_entry(
       context_organization_id, p_activity_id, decision.checked_at,
-      'organization_account', context_account_id, 'revise_role_metadata',
+      'organization_account', context_account_id, 'retire_role',
       array[context_organization_id]::uuid[], array[]::uuid[], vortex_context.channel(),
       context_correlation_id, 'refused'
     );
     if activity_result is distinct from 'inserted' then
       raise exception using errcode = '40001',
-        message = 'Organization role metadata revision refusal Activity is stale';
+        message = 'Organization role retirement refusal Activity is stale';
     end if;
     return query select 'refused'::text, context_organization_id,
       null::jsonb, context_access_version;
@@ -168,7 +188,7 @@ begin
   end if;
 
   if decision.outcome is distinct from 'eligible'
-    or decision.operation_key is distinct from 'platform.organization.roles.revise_metadata'
+    or decision.operation_key is distinct from 'platform.organization.roles.retire'
     or decision.target_kind is distinct from 'organization'
     or decision.target_application_root_id is not null
     or decision.organization_id is distinct from context_organization_id
@@ -176,88 +196,13 @@ begin
     or decision.access_version is distinct from context_access_version
     or decision.correlation_id is distinct from context_correlation_id then
     raise exception using errcode = '42501',
-      message = 'Organization role metadata revision is unavailable';
+      message = 'Organization role retirement is unavailable';
   end if;
 
-  if role_fact.live_revision = 9007199254740991 then
-    raise exception using errcode = '22003',
-      message = 'Organization role revision is exhausted';
-  end if;
-  if revision_fact.label is not distinct from p_label
-    and revision_fact.description is not distinct from p_description then
-    raise exception using errcode = '40001',
-      message = 'Organization role label and description are unchanged';
-  end if;
-
-  -- A label or description edit changes no permission, assignment policy,
-  -- lifecycle or source fact, so it appends one revision that carries every
-  -- other fact forward and leaves the Access version untouched.
-  operation_at := greatest(
-    revision_fact.changed_at, pg_catalog.clock_timestamp()
-  );
-  insert into vortex_access.organization_role_permission_entries (
-    organization_id, role_id, role_revision, entry_ordinal, role_kind,
-    role_application_root_id, application_root_id, owner_kind, owner_id,
-    permission_id, registration_kind, registration_owner_id,
-    accepted_registration_revision, catalogue_fingerprint,
-    continuity_revision, meaning_fingerprint
-  )
-  select permission.organization_id, permission.role_id,
-    role_fact.live_revision + 1, permission.entry_ordinal, permission.role_kind,
-    permission.role_application_root_id, permission.application_root_id,
-    permission.owner_kind, permission.owner_id, permission.permission_id,
-    permission.registration_kind, permission.registration_owner_id,
-    permission.accepted_registration_revision, permission.catalogue_fingerprint,
-    permission.continuity_revision, permission.meaning_fingerprint
-  from vortex_access.organization_role_permission_entries as permission
-  where permission.organization_id = context_organization_id
-    and permission.role_id = p_role_id
-    and permission.role_revision = role_fact.live_revision
-  order by permission.entry_ordinal;
-
-  insert into vortex_access.organization_role_revisions (
-    organization_id, role_id, revision, role_kind, application_root_id,
-    lifecycle, privilege_classification, assignment_policy,
-    policy_continuity_revision, authority_continuity_revision,
-    activation_policy_id, activation_policy_revision,
-    activation_policy_fingerprint, role_key, label, description,
-    source_definition_key, source_release_revision, source_release_version,
-    source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint, source_template_fingerprint,
-    source_catalogue_fingerprint, accepted_registration_revision,
-    template_continuity_revision, accepted_grant_fingerprint,
-    changed_by, changed_at, change_correlation_id
-  ) values (
-    context_organization_id, p_role_id, role_fact.live_revision + 1,
-    revision_fact.role_kind, revision_fact.application_root_id,
-    revision_fact.lifecycle, revision_fact.privilege_classification,
-    revision_fact.assignment_policy, revision_fact.policy_continuity_revision,
-    revision_fact.authority_continuity_revision,
-    revision_fact.activation_policy_id, revision_fact.activation_policy_revision,
-    revision_fact.activation_policy_fingerprint, revision_fact.role_key,
-    p_label, p_description, revision_fact.source_definition_key,
-    revision_fact.source_release_revision, revision_fact.source_release_version,
-    revision_fact.source_validation_contract_version,
-    revision_fact.source_content_fingerprint,
-    revision_fact.source_resolution_fingerprint,
-    revision_fact.source_template_fingerprint,
-    revision_fact.source_catalogue_fingerprint,
-    revision_fact.accepted_registration_revision,
-    revision_fact.template_continuity_revision,
-    revision_fact.accepted_grant_fingerprint,
-    context_account_id, operation_at, context_correlation_id
-  );
-
-  update vortex_access.organization_roles as stored
-  set live_revision = role_fact.live_revision + 1
-  where stored.organization_id = context_organization_id
-    and stored.role_id = p_role_id
-    and stored.live_revision = p_expected_role_revision;
-  if not found then
-    raise exception using errcode = '40001',
-      message = 'Organization role revision changed concurrently';
-  end if;
-
+  select result.* into strict changed
+  from vortex_access.coordinate_organization_role_change(
+    p_prepared_role_change, context_account_id, context_correlation_id
+  ) as result;
   changed_summary := vortex_access.project_organization_role_change_summary(
     context_organization_id, p_role_id
   );
@@ -268,25 +213,25 @@ begin
 
   activity_result := vortex_activity.append_organization_activity_entry(
     context_organization_id, p_activity_id,
-    operation_at,
-    'organization_account', context_account_id, 'revise_role_metadata',
+    (changed.role ->> 'changedAt')::timestamptz,
+    'organization_account', context_account_id, 'retire_role',
     array[p_role_id]::uuid[], array[]::uuid[], vortex_context.channel(),
     context_correlation_id, 'completed'
   );
   if activity_result is distinct from 'inserted' then
     raise exception using errcode = '40001',
-      message = 'Organization role metadata Activity is stale';
+      message = 'Organization role retirement Activity is stale';
   end if;
 
   return query select 'completed'::text, context_organization_id, changed_summary,
-    context_access_version;
+    changed.access_version;
 end
 $function$;
 
-revoke execute on function vortex_access.revise_organization_role_metadata_for_administration(uuid, bigint, text, text, uuid)
+revoke execute on function vortex_access.retire_organization_role_for_administration(uuid, bigint, jsonb, uuid)
 from public, anon, authenticated, service_role, vortex_runtime;
-grant execute on function vortex_access.revise_organization_role_metadata_for_administration(uuid, bigint, text, text, uuid)
+grant execute on function vortex_access.retire_organization_role_for_administration(uuid, bigint, jsonb, uuid)
 to vortex_request;
 
-comment on function vortex_access.revise_organization_role_metadata_for_administration(uuid, bigint, text, text, uuid) is
-  'Standalone request entry: performs a display-only role label and description revision after fixed protected checks without advancing the Access version, records one atomic completed Activity or returns one content-free refused Activity row; no SQL function composes this result.';
+comment on function vortex_access.retire_organization_role_for_administration(uuid, bigint, jsonb, uuid) is
+  'Standalone request entry: performs retire_role after fixed protected checks, records one atomic completed Activity or returns one content-free refused Activity row; no SQL function composes this result.';
