@@ -8,6 +8,7 @@ import {
   safeHttpsUrlSchema,
   type ContainedComponentId,
   type NavigationItem,
+  type PageId,
 } from "@vortex/contracts";
 
 /**
@@ -112,13 +113,15 @@ const requiredChild = <T>(items: readonly T[], at: string): void => {
   bounded(items, at);
 };
 
-/** Creates the pure navigation adapter over the application pages a builder may link to. */
-export const createVortexNavigationAdapterV2 = (
-  pagesInput: readonly StudioNavigationPage[] = [],
-) => {
-  const keyByIdentity = new Map<string, string>();
-  const identityByKey = new Map<string, string>();
-  for (const [index, page] of pagesInput.entries()) {
+/**
+ * Creates the pure navigation adapter over the application pages a builder may link to. Each page
+ * contributes only its identity and key, so the draft's own page definitions can be passed as-is.
+ */
+export const createVortexNavigationAdapterV2 = (pagesInput: readonly StudioNavigationPage[]) => {
+  const keyByIdentity = new Map<PageId, string>();
+  const identityByKey = new Map<string, PageId>();
+  for (const [index, raw] of asArray(pagesInput, "pages").entries()) {
+    const page = asObject(raw, `pages[${index}]`);
     const pageId = validated(() => pageIdSchema.parse(page.pageId), `pages[${index}].pageId`);
     const key = validated(() => builderKeySchema.parse(page.key), `pages[${index}].key`);
     if (keyByIdentity.has(pageId))
@@ -217,7 +220,7 @@ export const createVortexNavigationAdapterV2 = (
         id,
         type: "page",
         label,
-        pageId: pageIdSchema.parse(pageId),
+        pageId,
         permissionKey,
       };
       return validated(() => navigationItemSchema.parse(assembled), at);
