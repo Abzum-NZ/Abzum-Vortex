@@ -117,33 +117,42 @@ const flowManifestSubject = (dependency: ExactDefinitionDependency): string => {
 /**
  * The Application's flows and bindings are contained in its own release, so the only flow targets
  * its manifest pins are the platform-service operations its Call protected operation tasks name.
- * The manifest must hold exactly one entry for each, with the exact release the catalogue registers.
+ * The manifest must hold exactly one entry for each, resolved with this release's own resolution.
+ * The operation's release version and fingerprints are the ones publication pinned; they are read
+ * from the manifest, never from today's catalogue, so a later catalogue release cannot make an
+ * earlier Application release fail its integrity check.
  */
 const exactApplicationFlowTargetsMatch = (
   output: Extract<CustomerDefinitionOutput, { kind: "application" }>,
   manifest: readonly ExactDefinitionDependency[],
 ): boolean => {
-  const expected = platformOperationsCalledBy(
-    output.canonical.content.flows as unknown as FlowDefinition[],
-  ).map((operation): ExactDefinitionDependency => ({
-    kind: "protected_operation",
-    operation: {
-      owner: { kind: "platform_service", serviceId: operation.release.serviceId },
-      operationId: operation.release.operationId,
-    },
-    releaseVersion: operation.release.releaseVersion,
-    contentFingerprint: operation.release.contentFingerprint,
-    resolutionFingerprint: output.resolutionFingerprint,
-    catalogueFingerprint: operation.release.catalogueFingerprint,
-  }));
-  const expectedBySubject = new Map(expected.map((entry) => [flowManifestSubject(entry), entry]));
+  const expectedSubjects = new Set(
+    platformOperationsCalledBy(output.canonical.content.flows as unknown as FlowDefinition[]).map(
+      (operation) =>
+        flowManifestSubject({
+          kind: "protected_operation",
+          operation: {
+            owner: { kind: "platform_service", serviceId: operation.release.serviceId },
+            operationId: operation.release.operationId,
+          },
+          releaseVersion: operation.release.releaseVersion,
+          contentFingerprint: operation.release.contentFingerprint,
+          resolutionFingerprint: output.resolutionFingerprint,
+          catalogueFingerprint: operation.release.catalogueFingerprint,
+        }),
+    ),
+  );
   const actual = manifest.filter((entry) => flowManifestSubject(entry) !== "");
-  const actualBySubject = new Map(actual.map((entry) => [flowManifestSubject(entry), entry]));
-  if (expectedBySubject.size !== expected.length || actualBySubject.size !== actual.length)
+  const actualSubjects = new Set(actual.map(flowManifestSubject));
+  if (actualSubjects.size !== actual.length || actualSubjects.size !== expectedSubjects.size)
     return false;
-  if (expectedBySubject.size !== actualBySubject.size) return false;
-  return [...expectedBySubject].every(([subject, entry]) =>
-    sameCanonicalJson(entry, actualBySubject.get(subject)),
+  return actual.every(
+    (entry) =>
+      entry.kind === "protected_operation" &&
+      entry.operation.owner.kind === "platform_service" &&
+      entry.resolutionFingerprint === output.resolutionFingerprint &&
+      entry.catalogueFingerprint !== undefined &&
+      expectedSubjects.has(flowManifestSubject(entry)),
   );
 };
 

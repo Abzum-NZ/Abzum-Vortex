@@ -3757,7 +3757,7 @@
                          "contractVersion": "1.0.0",
                          "id": "crm_form_flow_3",
                          "key": "crm_form_flow_3",
-                         "description": "Continue the declared form submission using its current Application action.",
+                         "description": "Converts the lead from the submitted Qualify lead answers through the bound lead.convert named action.",
                          "labels": {
                              "name": "Continue Qualify lead"
                          },
@@ -3765,57 +3765,30 @@
                          "runAs": {
                              "kind": "initiator"
                          },
-                         "inputs": {},
+                         "inputs": {
+                             "first_name": {
+                                 "type": "text",
+                                 "required": true
+                             },
+                             "last_name": {
+                                 "type": "text",
+                                 "required": true
+                             }
+                         },
                          "tasks": [
                              {
-                                 "id": "collect",
-                                 "type": "interface.show_form",
+                                 "id": "commit",
+                                 "type": "operation.call",
                                  "version": "1.0.0",
                                  "properties": {
-                                     "form": {
+                                     "operation": {
                                          "kind": "literal",
                                          "literal": {
                                              "type": "text",
-                                             "value": "form_6_3"
+                                             "value": "vortex.crm.people.lead.convert"
                                          }
                                      }
                                  }
-                             },
-                             {
-                                 "id": "confirmed",
-                                 "type": "if",
-                                 "condition": {
-                                     "op": "reference",
-                                     "reference": {
-                                         "source": "task_output",
-                                         "task": "collect",
-                                         "key": "submitted"
-                                     }
-                                 },
-                                 "then": [
-                                     {
-                                         "id": "commit",
-                                         "type": "operation.call",
-                                         "version": "1.0.0",
-                                         "properties": {
-                                             "operation": {
-                                                 "kind": "literal",
-                                                 "literal": {
-                                                     "type": "text",
-                                                     "value": "vortex.crm.people.lead.convert"
-                                                 }
-                                             },
-                                             "inputs": {
-                                                 "kind": "reference",
-                                                 "reference": {
-                                                     "source": "task_output",
-                                                     "task": "collect",
-                                                     "key": "values"
-                                                 }
-                                             }
-                                         }
-                                     }
-                                 ]
                              }
                          ],
                          "outputs": {}
@@ -4317,7 +4290,16 @@
                          "event_id": "form_submit_3",
                          "event": "form_submit",
                          "flow": "crm_form_flow_3",
-                         "inputs": {}
+                         "inputs": {
+                             "first_name": {
+                                 "kind": "caller",
+                                 "name": "first_name"
+                             },
+                             "last_name": {
+                                 "kind": "caller",
+                                 "name": "last_name"
+                             }
+                         }
                      },
                      {
                          "id": "form_binding_4",

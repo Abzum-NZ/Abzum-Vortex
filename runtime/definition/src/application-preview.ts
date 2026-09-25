@@ -195,11 +195,38 @@ const simulatedEffectOf = (task: FlowTask): ApplicationPreviewSimulatedEffect | 
     : undefined;
 };
 
+/** Flows a Run flow task may reach, and the flows already followed for one binding. */
+type FlowReach = Readonly<{
+  flowsById: ReadonlyMap<string, FlowDefinition>;
+  followed: Set<string>;
+}>;
+
+/** Simulates one flow's tasks once, however many Run flow tasks reach it. */
+const simulateFlow = (
+  flow: FlowDefinition,
+  into: ApplicationPreviewFlowNodeSimulation[],
+  reach: FlowReach,
+): void => {
+  if (reach.followed.has(String(flow.id))) return;
+  reach.followed.add(String(flow.id));
+  simulateTasks(flow.tasks, into, reach);
+  simulateTasks(flow.errors, into, reach);
+  simulateTasks(flow.finally, into, reach);
+};
+
 const simulateTasks = (
   tasks: readonly FlowTask[],
   into: ApplicationPreviewFlowNodeSimulation[],
+  reach: FlowReach,
 ): void => {
   for (const task of tasks) {
+    // A Run flow task performs whatever the flow it runs performs.
+    if (task.type === "run_flow") {
+      const target = reach.flowsById.get(
+        String((task as Extract<FlowTask, { type: "run_flow" }>).flowId),
+      );
+      if (target !== undefined) simulateFlow(target, into, reach);
+    }
     const simulatedEffect = simulatedEffectOf(task);
     if (simulatedEffect !== undefined)
       into.push({
@@ -209,13 +236,14 @@ const simulateTasks = (
         simulatedEffect,
         label: task.id,
       });
-    for (const child of flowTaskChildLists(task)) simulateTasks(child.tasks, into);
+    for (const child of flowTaskChildLists(task)) simulateTasks(child.tasks, into, reach);
   }
 };
 
 const buildInteraction = (
   binding: ComponentFlowBinding,
   flow: FlowDefinition | undefined,
+  flowsById: ReadonlyMap<string, FlowDefinition>,
   outcomes: ApplicationPreviewOutcome[],
 ): ApplicationPreviewInteraction | undefined => {
   const flowId = String(binding.flow.flowId);
@@ -223,11 +251,7 @@ const buildInteraction = (
     outcomes.push({ kind: "flow_unavailable", controlId: String(binding.controlId), flowId });
   }
   const simulatedNodes: ApplicationPreviewFlowNodeSimulation[] = [];
-  if (flow !== undefined) {
-    simulateTasks(flow.tasks, simulatedNodes);
-    simulateTasks(flow.errors, simulatedNodes);
-    simulateTasks(flow.finally, simulatedNodes);
-  }
+  if (flow !== undefined) simulateFlow(flow, simulatedNodes, { flowsById, followed: new Set() });
   if (simulatedNodes.length === 0) return undefined;
   return {
     bindingId: String(binding.bindingId),
@@ -261,7 +285,7 @@ export const substituteApplicationPreviewInteractions = (
   for (const binding of content.flowBindings) {
     if (controlIds !== undefined && !controlIds.has(String(binding.controlId))) continue;
     const flow = flowsById.get(String(binding.flow.flowId));
-    const interaction = buildInteraction(binding, flow, outcomes);
+    const interaction = buildInteraction(binding, flow, flowsById, outcomes);
     if (interaction !== undefined) interactions.push(interaction);
   }
   const suppressed = new Set<FlowEffectKind>();

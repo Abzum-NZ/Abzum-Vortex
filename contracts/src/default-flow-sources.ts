@@ -89,20 +89,11 @@ export type DefaultQueryFlowInput = DefaultFlowIdentity &
     query: string;
     /** The record type of the rows the query returns, for the typed `records` output. */
     recordType: string;
-    /** The query's typed parameters; the invoking component supplies each by name. */
-    parameters?: Readonly<
-      Record<
-        string,
-        Readonly<{ type: SourceFlowInputType; required: boolean; recordTypeIds?: readonly string[] }>
-      >
-    >;
   }>;
-type SourceFlowInputType = SourceFlow["inputs"][string]["type"];
-
 /**
  * The default Query flow of one data component: one `record.query` task that reads the declared
- * query under the viewer's authority and returns its records. The component's parameters arrive as
- * the flow's own inputs of the same names.
+ * query under the viewer's authority and returns its records. It takes no inputs; a query that
+ * needs parameters is an ordinary flow whose task maps them in its `parameters` property.
  */
 export const defaultQueryFlowSource = (input: DefaultQueryFlowInput): SourceFlow => ({
   contractVersion: flowContractVersion,
@@ -112,18 +103,7 @@ export const defaultQueryFlowSource = (input: DefaultQueryFlowInput): SourceFlow
   labels: {},
   execution: "interactive",
   runAs: { kind: "initiator" },
-  inputs: Object.fromEntries(
-    Object.entries(input.parameters ?? {}).map(([name, declaration]) => [
-      name,
-      {
-        type: declaration.type,
-        required: declaration.required,
-        ...(declaration.recordTypeIds === undefined
-          ? {}
-          : { recordTypeIds: [...declaration.recordTypeIds] }),
-      },
-    ]),
-  ),
+  inputs: {},
   variables: {},
   triggers: [],
   tasks: [

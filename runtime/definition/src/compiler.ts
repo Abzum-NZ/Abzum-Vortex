@@ -5290,21 +5290,6 @@ function compileApplicationToolBundle(
       ),
     ),
   );
-  const moduleQueriesById = new Map(
-    boundModuleOutputs.flatMap((output) =>
-      output.canonical.content.queries.map(
-        (query) =>
-          [
-            `${String(output.artifact.rootId)}:${String(query.queryId)}`,
-            {
-              moduleRootId: String(output.artifact.rootId),
-              moduleKey: String(output.artifact.definitionKey),
-              query,
-            },
-          ] as const,
-      ),
-    ),
-  );
   const boundModuleKeys = new Set(
     (asObject(source.body).module_bindings as JsonObject[]).map((binding) =>
       String(binding.module),
@@ -5388,38 +5373,30 @@ function compileApplicationToolBundle(
       addCommittedAction(page.name, String(page.publicActionKey), false);
   }
 
-  for (const flow of content.flows) {
+  // A flow's record reads name only this Application's own queries, which have their own tools
+  // below, so a flow contributes exactly its own entry point.
+  for (const flow of content.flows)
     add({
       name: applicationToolName(applicationKey, "flow", String(flow.key)),
-      ...applicationToolDescription(flow.description, flow.name),
-      inputSchema: { kind: "flow_inputs", inputs: flow.inputs },
-      operation: { kind: "flow", key: flow.key, flowId: flow.flowId },
+      ...applicationToolDescription(flow.description, flow.labels.name),
+      inputSchema: {
+        kind: "flow_inputs",
+        inputs: Object.fromEntries(
+          Object.entries(flow.inputs).map(([name, declaration]) => [
+            name,
+            {
+              type: declaration.type,
+              required: declaration.required,
+              ...(declaration.recordTypeIds === undefined
+                ? {}
+                : { recordTypeIds: declaration.recordTypeIds }),
+            },
+          ]),
+        ),
+      },
+      operation: { kind: "flow", key: flow.key, flowId: ruleIdSchema.parse(String(flow.id)) },
       permission: { discover: "page_access", use: "delegated_operations" },
     });
-    for (const node of flow.nodes) {
-      if (node.kind !== "query" || node.target.kind !== "query") continue;
-      const moduleQuery = moduleQueriesById.get(
-        `${String(node.target.moduleRootId)}:${String(node.target.queryId)}`,
-      );
-      if (moduleQuery === undefined) continue;
-      add({
-        name: applicationToolName(
-          applicationKey,
-          "query",
-          `${moduleQuery.moduleKey}.${String(moduleQuery.query.key)}`,
-        ),
-        ...applicationToolDescription(moduleQuery.query.description, moduleQuery.query.label),
-        inputSchema: { kind: "module_inputs", inputs: moduleQuery.query.inputs },
-        operation: {
-          kind: "query",
-          owner: { kind: "module", moduleRootId: moduleQuery.moduleRootId },
-          key: moduleQuery.query.key,
-          queryId: moduleQuery.query.queryId,
-        },
-        permission: { discover: "page_access", use: "none" },
-      });
-    }
-  }
 
   for (const query of content.queries)
     add({
@@ -5684,7 +5661,7 @@ function compileParsedModuleV3Request(
           throw new DefinitionCompilationError(
             lowered.refusal.ruleCode,
             lowered.refusal.family,
-            resolution.location("flow", flow.key),
+            flowIssueLocation(resolution.location("flow", flow.key), lowered.refusal),
           );
         return {
           sourceIndex,

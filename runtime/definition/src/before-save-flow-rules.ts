@@ -36,6 +36,8 @@ export type BeforeSaveLoweringRefusal = Readonly<{
   family: DefinitionRuleFailureFamily;
   /** Path inside the flow of the first thing that cannot be lowered. */
   path: Path;
+  /** The innermost task that cannot be lowered, when the refusal is inside one. */
+  taskId?: string;
 }>;
 
 export type BeforeSaveLowering =
@@ -229,7 +231,23 @@ const buildList = (
   return entry;
 };
 
+/** Builds one task, locating a refusal inside it on the innermost task that caused it. */
 const buildTask = (builder: Builder, task: SourceFlowTask, next: string, path: Path): string => {
+  try {
+    return buildTaskNodes(builder, task, next, path);
+  } catch (error) {
+    if (error instanceof Refused && error.refusal.taskId === undefined)
+      throw new Refused({ ...error.refusal, taskId: task.id });
+    throw error;
+  }
+};
+
+const buildTaskNodes = (
+  builder: Builder,
+  task: SourceFlowTask,
+  next: string,
+  path: Path,
+): string => {
   if (task.retry !== undefined || task.timeout !== undefined) return unsupported(path);
   const alias = taskNodeAlias(task.id);
   switch (task.type) {

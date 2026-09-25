@@ -3659,11 +3659,31 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
      * The executable action keys a flow commits: a Save record task commits the standard create
      * or update of its record type, and a Call protected operation task commits the named action it
      * calls. An unresolvable Save commits an empty key, so it never matches a declared commit.
+     * A Run flow task commits whatever the flow it runs commits, followed once per flow.
      */
+    const flowsForCommits = new Map(
+      array(content.flows).map((flow) => [String(flow.id), flow as unknown as FlowDefinition]),
+    );
     const flowCommitActionKeys = (flow: JsonObject): string[] => {
       const keys: string[] = [];
+      const followed = new Set<string>();
+      const visitFlow = (canonical: FlowDefinition) => {
+        if (followed.has(String(canonical.id))) return;
+        followed.add(String(canonical.id));
+        visit(canonical.tasks);
+        visit(canonical.errors);
+        visit(canonical.finally);
+      };
       const visit = (tasks: readonly FlowTask[]) => {
         for (const task of tasks) {
+          if (task.type === "run_flow") {
+            const target = flowsForCommits.get(
+              String((task as Extract<FlowTask, { type: "run_flow" }>).flowId),
+            );
+            // A flow outside this release commits nothing a page could declare, so it never matches.
+            if (target === undefined) keys.push("");
+            else visitFlow(target);
+          }
           const properties = (task as { properties?: Record<string, JsonObject> }).properties;
           const literal = (name: string): string | undefined => {
             const value = properties?.[name];
@@ -3682,10 +3702,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           for (const child of flowTaskChildLists(task)) visit(child.tasks);
         }
       };
-      const canonical = flow as unknown as FlowDefinition;
-      visit(canonical.tasks);
-      visit(canonical.errors);
-      visit(canonical.finally);
+      visitFlow(flow as unknown as FlowDefinition);
       return keys;
     };
     const executableActionKeys = new Set([...actionKeys, ...standardActionKeys]);
