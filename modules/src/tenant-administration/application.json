@@ -66,14 +66,14 @@
             "type": "page",
             "label": "Overview",
             "page": "tenant_overview",
-            "permission": "application.tenant_administration.open"
+            "permission": "platform.organization.assignments.read"
           },
           {
             "id": "nav_structure",
             "type": "page",
             "label": "Tenant structure",
             "page": "tenant_structure",
-            "permission": "application.tenant_administration.open"
+            "permission": "platform.organization.assignments.read"
           },
           {
             "id": "nav_requests",
@@ -94,7 +94,7 @@
             "type": "page",
             "label": "Tenant administrators",
             "page": "tenant_administrators",
-            "permission": "application.tenant_administration.open"
+            "permission": "platform.organization.assignments.read"
           }
         ]
       }
@@ -213,7 +213,7 @@
         "key": "tenant_overview",
         "name": "Tenant overview",
         "type": "dashboard",
-        "permission": "application.tenant_administration.open",
+        "permission": "platform.organization.assignments.read",
         "states": [
           "normal",
           "loading",
@@ -272,7 +272,7 @@
         "key": "tenant_structure",
         "name": "Tenant structure",
         "type": "dashboard",
-        "permission": "application.tenant_administration.open",
+        "permission": "platform.organization.assignments.read",
         "states": [
           "normal",
           "loading",
@@ -328,7 +328,7 @@
         "key": "tenant_administrators",
         "name": "Tenant administrators",
         "type": "dashboard",
-        "permission": "application.tenant_administration.open",
+        "permission": "platform.organization.assignments.read",
         "states": [
           "normal",
           "loading",
