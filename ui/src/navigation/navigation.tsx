@@ -2,7 +2,13 @@
 
 import { useId, useState, type MouseEvent, type ReactElement } from "react";
 import type { ProjectedNavigation, ProjectedNavigationItem } from "@vortex/contracts";
-import type { Breakpoint } from "../definition-error";
+import {
+  DefinitionRenderError,
+  type Breakpoint,
+  type DefinitionRenderErrorLocation,
+} from "../definition-error";
+import { getAccessibleName } from "../display/display-state-container";
+import type { PlatformBlockRenderProps } from "../registry";
 import { NAVIGATION_STYLES_CSS } from "./navigation-styles";
 
 export type { ProjectedNavigation, ProjectedNavigationItem };
@@ -194,5 +200,60 @@ export function ApplicationNavigation({
         </>
       )}
     </nav>
+  );
+}
+
+/**
+ * Registered renderer for the application navigation block. It draws the one `ProjectedNavigation`
+ * the server already filtered for this viewer, in definition order, and never filters, fetches or
+ * invents an item; an absent projection is an empty menu. The shell supplies the page-address
+ * resolver, so route composition owns the address shape; a non-empty menu without one is refused
+ * rather than linking to an invented address. Component data and semantic events are refused,
+ * because a menu is navigation rather than a data surface.
+ */
+export function ApplicationNavigationBlock(props: PlatformBlockRenderProps): ReactElement {
+  const location: DefinitionRenderErrorLocation = {
+    placementId: props.placementId,
+    blockId: props.metadata.blockId,
+    releaseVersion: props.metadata.releaseVersion,
+  };
+  if (
+    props.projectedData !== undefined ||
+    props.displayEvents !== undefined ||
+    props.controlData !== undefined ||
+    props.controlEvents !== undefined
+  )
+    throw new DefinitionRenderError(
+      "INVALID_COMPOSITION",
+      "The application navigation block does not accept component data or semantic events",
+      location,
+    );
+
+  const label = getAccessibleName(props.settings, props.metadata);
+  if (label === undefined)
+    throw new DefinitionRenderError(
+      "MISSING_ACCESSIBLE_NAME",
+      "The application navigation block requires a non-blank accessible name",
+      location,
+    );
+
+  const navigation = props.projectedNavigation ?? [];
+  const resolvePageHref = props.resolvePageHref;
+  if (resolvePageHref === undefined && navigation.length > 0)
+    throw new DefinitionRenderError(
+      "INVALID_COMPOSITION",
+      "The application navigation block requires the shell's page-address resolver",
+      location,
+    );
+
+  return (
+    <ApplicationNavigation
+      navigation={navigation}
+      label={label}
+      // Only reachable with an empty menu, which renders no page link.
+      resolvePageHref={resolvePageHref ?? (() => "")}
+      {...(props.currentPageId === undefined ? {} : { currentPageId: props.currentPageId })}
+      breakpoint={props.breakpoint}
+    />
   );
 }
