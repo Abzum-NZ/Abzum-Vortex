@@ -1,3 +1,50 @@
+-- #1063: run named actions through the one apply_record_changes operation.
+--
+-- A named action's effects were written by three dedicated entry points
+-- (save_named_action_effects_with_relationship_totals, which called
+-- save_named_action_set_announce, which called
+-- save_named_action_set_fields_internal), a cloned copy of the ordinary update
+-- path. This migration folds them into apply_record_changes and drops them:
+--
+--   * apply_record_changes gains an optional p_action identity (owner kind, owner
+--     id, release revision, action id and typed inputs). Without it the ordinary
+--     save is exactly as before. With it the same operation is a named-action
+--     command: its receipt keeps the named_action kind and the named-action
+--     fingerprint, so a replay is unchanged; its facts, field rules, Activity
+--     and Events are the installed action's, exactly as before; and its mutation
+--     list is closed to set_fields (the subject), create_record (each creation,
+--     in authored order), copy_relationships (a statement of intent the database
+--     re-derives from the installed action), set_derived_fields (each other
+--     record whose totals the action moves, revision-checked) and
+--     announce_events (the declared Event identities). The actor is only ever the
+--     verified request context.
+--   * apply_action_record_changes is the request role's only way in. It refuses a
+--     call without an action identity and delegates once, so the ordinary save
+--     and its relationship-total preparation cannot be skipped by calling the
+--     operation directly.
+--   * The old ten-argument apply_record_changes is dropped and re-created with the
+--     action argument; save_base_record keeps calling it with ten arguments.
+--
+-- change_record_by_named_action_internal, insert_named_action_record_internal and
+-- write_named_action_relationship_value_internal are NOT dropped: the operation
+-- still calls each of them for a named action's authority (the action's own
+-- facts and field rules), and they have no other caller.
+--
+-- Each function below is installed with the security and search_path of the
+-- function it replaces, and its statement is identical to the canonical file
+-- supabase/schemas/vortex_record/<function>.sql changed in this commit.
+
+begin;
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+
+drop function vortex_record.apply_record_changes(
+  uuid, text, uuid, uuid, bigint, jsonb, uuid, jsonb, uuid, uuid
+);
+
 create or replace function vortex_record.apply_record_changes(
   p_command_id uuid,
   p_operation text,
@@ -1417,3 +1464,71 @@ comment on function vortex_record.apply_record_changes(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, jsonb, uuid, uuid, jsonb
 ) is
   'The one protected Record-change operation: claims one receipt, applies an ordered mutation list under one canonical lock order and one access decision per touched record, and writes one Activity and one Event in the same transaction. The ordinary save is a batch of one; a named action is one call with an action identity and its subject, creation, relationship copy, derived-total and declared-Event mutations, keeping the named_action receipt, fingerprint, field rules, Activity and Events.';
+
+create or replace function vortex_record.apply_action_record_changes(
+  p_command_id uuid,
+  p_operation text,
+  p_record_type_id uuid,
+  p_record_id uuid,
+  p_expected_concurrency_number bigint,
+  p_submitted_values jsonb,
+  p_mutations jsonb,
+  p_activity_id uuid,
+  p_occurrence_id uuid,
+  p_action jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+begin
+  -- The request role reaches the one record-change operation only through a
+  -- named action's identity. The ordinary save and its relationship-total
+  -- preparation keep their own entry points, so a caller can never skip them by
+  -- calling the operation without an action.
+  if p_action is null
+    or pg_catalog.jsonb_typeof(p_action) is distinct from 'object' then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused', 'reasonCode', 'command_invalid'
+    );
+  end if;
+
+  return vortex_record.apply_record_changes(
+    p_command_id, p_operation, p_record_type_id, p_record_id,
+    p_expected_concurrency_number, p_submitted_values, null,
+    p_mutations, p_activity_id, p_occurrence_id, p_action
+  );
+end
+$function$;
+
+revoke all on function vortex_record.apply_action_record_changes(
+  uuid, text, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid, jsonb
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_record_owner, vortex_module_owner;
+grant execute on function vortex_record.apply_action_record_changes(
+  uuid, text, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid, jsonb
+) to vortex_runtime;
+
+comment on function vortex_record.apply_action_record_changes(
+  uuid, text, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid, jsonb
+) is
+  'The named-action entry to the one protected apply_record_changes operation: refuses a call without an action identity, then applies the action''s subject, creation, relationship copy, derived-total and declared-Event mutations in one transaction.';
+
+drop function vortex_record.save_named_action_effects_with_relationship_totals(
+  uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid, jsonb, jsonb, jsonb, jsonb, text, uuid, bigint, uuid, jsonb
+);
+drop function vortex_record.save_named_action_set_announce(
+  uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid, jsonb, text, uuid, bigint, uuid, jsonb
+);
+drop function vortex_record.save_named_action_set_fields_internal(
+  uuid, text, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid, uuid, text, uuid, bigint, uuid, jsonb
+);
+
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+
+commit;
