@@ -22,7 +22,9 @@ const focusIfConnected = (element: HTMLElement | null): void => {
  * Shared modal surface for dialogs and drawers, built on the native modal `<dialog>`: the
  * browser makes the rest of the page inert, moves focus into the surface and keeps Tab inside
  * it. Escape and the close button dismiss it, emitting only the declared `action` event with
- * intent `dismiss`, and focus returns to the element that was focused when it opened.
+ * intent `dismiss`, and focus returns to the element that was focused when it opened. A projected
+ * `open` value drives the declared `open` and `close` state operations, and the rendered surface
+ * advertises exactly those declared operations for the placement's flow tasks.
  */
 export function ModalSurface({
   props,
@@ -83,6 +85,7 @@ export function ModalSurface({
       data-vortex-control={kind}
       data-vortex-placement-id={props.placementId}
       data-vortex-open={String(open)}
+      data-vortex-state-operations={props.metadata.supportedStateOperations.join(" ")}
       data-vortex-size={size}
       {...(dataAttributes ?? {})}
       onCancel={onCancel}

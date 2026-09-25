@@ -8,7 +8,7 @@ The platform uses three operated services:
 
 - [Vercel](https://vercel.com/docs) runs the [Next.js](https://nextjs.org/docs) web application, server routes, and shared runtime cache.
 - [Supabase](https://supabase.com/docs) provides [PostgreSQL](https://www.postgresql.org/docs/) data storage, identity-authority support, file storage, live updates, and a durable [message queue](https://supabase.com/docs/guides/queues).
-- [Kestra](https://kestra.io/docs) executes durable workflows, schedules, migrations, access-test orchestration, backups, and operational jobs.
+- [Kestra](https://kestra.io/docs) executes durable flows, schedules, migrations, access-test orchestration, backups, and operational jobs.
 
 [Doppler](https://docs.doppler.com/docs) distributes environment secrets. It is a secret-management control, not an application data store.
 
@@ -28,7 +28,7 @@ flowchart LR
     IDP --> VERCEL[Vercel web and server]
     VERCEL --> SUPA[Supabase data, accounts, files, live updates and queue]
     SUPA -->|event wake-up| VERCEL
-    VERCEL -->|start or advance run| KESTRA[Kestra workflow execution]
+    VERCEL -->|start or advance run| KESTRA[Kestra durable flow execution]
     KESTRA -->|signed protected operation| VERCEL
     DOPPLER[Doppler secrets] --> VERCEL
     DOPPLER --> KESTRA
@@ -49,7 +49,7 @@ Vortex uses Supabase as an integrated platform, but each capability has one narr
 | [CLI, database tests and linting](https://supabase.com/docs/guides/local-development/cli/testing-and-linting)                                                                                           | Reproducible local database, migration checks, pgTAP tests and database lint                                                                          | The shared Testing project remains the authoritative platform and separation test. Kestra alone migrates Testing and Production.                                                                                                          |
 | [Managed backups](https://supabase.com/docs/guides/platform/backups) and database advisers                                                                                                              | Provider recovery layer and reviewed security/performance findings                                                                                    | Independent encrypted backups, restore drills and reviewed migrations remain required. Adviser suggestions never change production automatically.                                                                                         |
 
-Supabase Cron is not a second workflow system: Kestra owns business schedules, retention, recovery, and operational jobs. Edge Functions are not a second server boundary: Vercel owns web and interface routes. Supabase Vault is not a second secret authority: Doppler owns secrets. Read replicas are added only after measured read demand, recovery needs, cost, and routing behaviour justify them. Direct browser access to business tables, direct cross-cluster database connections, logical replication for sharing, and service-role-key use are refused.
+Supabase Cron is not a second scheduler: Kestra owns business schedules, retention, recovery, and operational jobs. Edge Functions are not a second server boundary: Vercel owns web and interface routes. Supabase Vault is not a second secret authority: Doppler owns secrets. Read replicas are added only after measured read demand, recovery needs, cost, and routing behaviour justify them. Direct browser access to business tables, direct cross-cluster database connections, logical replication for sharing, and service-role-key use are refused.
 
 The Phase 10 MCP interface uses the managed Supabase OAuth 2.1 server under the approved authorization contract. Its adapter implements the required protocol behavior and returns a safe unavailable result when the configured capability cannot serve the request. A missing provider capability cannot silently introduce a second identity or token service; any necessary change to the approved provider boundary belongs to the owning specification decision. Hosted capability checks are not a development completion gate. See the [current roadmap](../build-plan/README.md#phases).
 
@@ -82,10 +82,10 @@ The codebase is divided into sixteen named services. These are package and owner
 | Module     | Module installation, dependencies, generated storage changes                                                                                                                                 |
 | Record     | Record validation, storage, calculations, totals, concurrency, data versions                                                                                                                 |
 | Query      | Tables, boards, calendars, summaries and saved views                                                                                                                                         |
-| Rule       | Typed conditions and immediate rule effects                                                                                                                                                  |
+| Rule       | The pure flow interpreter shared by the browser and the server: typed conditions, the one formula tree and the transaction-safe task subset, with no server-service imports                                       |
 | Event      | Transactional event outbox, queue dispatch, retries and failed sequences                                                                                                                     |
-| Workflow   | Execution references, schedules, generic human-input waits and the [Kestra](https://kestra.io/docs) boundary; Kestra owns execution status                                                   |
-| App        | Application assembly, module bindings, navigation, options and application roles                                                                                                             |
+| Workflow   | The [Kestra](https://kestra.io/docs) adapter: execution references, schedules and generic human-input waits; Kestra owns execution status                                                       |
+| App        | The server flow orchestrator, which drives any flow containing a protected task, plus application assembly, module bindings, navigation, options and application roles                             |
 | Page       | Block registration, page resolution, form drafts, page states and rendering contract                                                                                                         |
 | Theme      | Application-contained and platform-catalogue theme values, inheritance and legibility validation                                                                                             |
 | Search     | Search-document maintenance, ranking and access recheck                                                                                                                                      |
@@ -125,7 +125,7 @@ The durable identity session remains in Supabase Auth; no Vortex database sessio
 - Database row restrictions protect every organisation-owned table for select, insert, update, and delete.
 - Only application-record tables explicitly marked shareable evaluate active [access grants](04-access-and-permissions.md#shared-record-access). Identity, secrets, connections, activity, grant-consent decisions, access-control rows, entitlement policy, and other protected platform tables never become visible through a record grant.
 - Request database roles do not own tables and cannot bypass the row restrictions.
-- The trusted backend owns the runtime database connection; browser, import, flow and MCP callers receive closed protected commands, never SQL or database credentials. Temporarily selecting a restricted request role is not a sandbox against compromised backend code: [PostgreSQL can restore the connection's session role](https://www.postgresql.org/docs/current/sql-set-role.html). The [Record save handoff](../build-plan/module-record-provisioning.md#protected-save) separates untrusted submitted values from server-computed final changes without duplicating the business-rule engine in SQL. Tests must distinguish a genuinely restricted session from a runtime session temporarily using the request role.
+- The trusted backend owns the runtime database connection; browser, import, flow and MCP callers receive closed protected commands, never SQL or database credentials. Temporarily selecting a restricted request role is not a sandbox against compromised backend code: [PostgreSQL can restore the connection's session role](https://www.postgresql.org/docs/current/sql-set-role.html). The [Record save handoff](../build-plan/module-record-provisioning.md#protected-save) separates untrusted submitted values from server-computed final changes without duplicating the flow engine in SQL. Tests must distinguish a genuinely restricted session from a runtime session temporarily using the request role.
 - The Supabase project-owner credential is limited to migration and controlled verification work. The separate non-login Record object owner is callable only through the protected [storage provisioner](#record-storage-provisioning); request roles cannot inherit it.
 - Every protected database transaction establishes one complete context containing the caller kind, Identity Authority identifier or system actor where applicable, tenant, organisation account where applicable, organisation, optional application, session, authentication strength, issue and expiry times, access version, and correlation identifier before reading organisation data. The cluster-local identity projection and all selected scope rows must be active. Tenant-administrator context alone never satisfies an organisation record policy.
 - Organisation file paths begin with the organisation identifier and are protected by storage policy and server checks.
@@ -133,7 +133,7 @@ The durable identity session remains in Supabase Auth; no Vortex database sessio
 
 ### Definition storage and publication evidence
 
-The private `vortex_definition` schema uses six relations with one responsibility each. It stores no starter application, business record, consumer installation, grant, workflow run, or duplicate history document.
+The private `vortex_definition` schema uses six relations with one responsibility each. It stores no starter application, business record, consumer installation, grant, flow run, or duplicate history document.
 
 | Relation                  | Stored responsibility                                                                                                                                                                                                                                                                                                       |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -242,7 +242,7 @@ operation still requires the central permission decision.
 A tenant-administration operation may use tenant scope only where its owning service explicitly
 permits it; it never satisfies an organisation-record policy.
 
-The initiating human request context remains immutable for the request. A future Frontend Flow node bound to a different specified account or registered system actor does not rewrite or reuse that context: after validating separate exact execution authority, the runtime opens a new Access-resolved transaction for that protected node and establishes only the effective actor's closed context. A later node repeats that resolution. Transactions remain short, never cross a form wait, and sequential commits are not rolled back by a later node failure. Current service access, tenant and application scope, record sharing, file and entitlement checks remain unchanged; a service-role credential is never an execution-identity shortcut.
+The initiating human request context remains immutable for the request. A future flow task bound to a different specified account or registered system actor does not rewrite or reuse that context: after validating separate exact execution authority, the runtime opens a new Access-resolved transaction for that protected task and establishes only the effective actor's closed context. A later task repeats that resolution. Transactions remain short, never cross a form wait, and sequential commits are not rolled back by a later task failure. Current service access, tenant and application scope, record sharing, file and entitlement checks remain unchanged; a service-role credential is never an execution-identity shortcut.
 
 The database package exposes no production operation that accepts a caller-assembled request context.
 Only Access may use the resolved-request transaction capability. Protected service adapters receive
@@ -305,7 +305,7 @@ flowchart LR
 - An independently created or structurally forked record type receives a new storage-contract identity and table. Reusing the same local published root does not require package-copy evidence. Copying a package while preserving its source storage identity requires the signed package lineage and fingerprint validation described in [copying](16-copying-sharing-import-export.md).
 - Organisation-shared rows use `organisation_id` as their data boundary. Application-contained rows additionally require `application_root_id`. Unique constraints and lookup indexes include the complete applicable scope before a business value.
 - A relationship always repeats and enforces `organisation_id`. Two application-contained endpoints must also have the same `application_root_id`. An application-contained record may link to an organisation-shared record in the same organisation. A sharing grant never creates a stored cross-organisation or cross-application relationship.
-- Platform migrations and the protected provisioner resolve tables and fields through the catalog. Runtime requests provide stable definition identifiers and never accept a physical table or column name from a browser, definition author, workflow, interface caller, or federation peer.
+- Platform migrations and the protected provisioner resolve tables and fields through the catalog. Runtime requests provide stable definition identifiers and never accept a physical table or column name from a browser, definition author, flow, interface caller, or federation peer.
 
 Creating a separate schema or table set for every organisation or application is refused because it would multiply migrations, indexes, row restrictions, backups, and operational checks without improving isolation. Organisation separation is enforced by row restrictions and the complete scope keys, while structurally different definitions remain physically separate through their storage-contract identities.
 
@@ -397,7 +397,7 @@ Lock the installation and storage identities in a consistent order. First create
 or compatible provisioning commits its generated objects and catalogue mappings
 in one short transaction. An exact retry verifies and reuses that state. The
 existing catalogue `contentFingerprint` records canonical storage meaning, not
-labels, frontend rule graphs or unrelated actions: equality permits no-change reuse; a difference
+labels, frontend flows or unrelated actions: equality permits no-change reuse; a difference
 requires an explicit compatibility comparison and the appropriate structure
 change, not silent reuse or automatic refusal of every compatible addition.
 Exact release content/resolution evidence records what was provisioned. No extra
@@ -506,7 +506,7 @@ Remote queries are efficient by contract: filters, search, sorting, field select
 
 Recipient-side gateway consumption is measured for the recipient organisation. Source queries, searches, reports, actions, temporary export or file storage, and any network delivery are measured for the source organisation. Linked metering entries share one correlation identifier, the same category is not counted twice, and the allocation does not change between local and remote routes. The source rate-limits by recipient cluster, organisation, grant, and operation.
 
-The recipient may cache signed cluster metadata, public keys, definition fingerprints, grant mirrors, saved non-content report definitions, and content-free invalidations. It does not persist business-record responses, files, search documents, report results, workflow payloads, or cross-request shared-data cache entries.
+The recipient may cache signed cluster metadata, public keys, definition fingerprints, grant mirrors, saved non-content report definitions, and content-free invalidations. It does not persist business-record responses, files, search documents, report results, flow payloads, or cross-request shared-data cache entries.
 
 A timeout, unreachable source, invalid signature, replay, version mismatch, disabled route, entitlement or rate-limit refusal, unapproved recipient region, or uncertain grant status fails closed. The screen shows that the source organisation is temporarily unavailable when retry is safe; it never displays a stored stale record as if it were current. Shared-record responses use private no-store browser and intermediary caching instructions.
 
@@ -518,7 +518,7 @@ Matching schemas make contract validation and query translation easier, but they
 
 ## Event dispatch without a permanent web worker
 
-The [record save](06-records-and-lifecycle.md#save-sequence) writes an event outbox entry and a message to a logged durable [Supabase Queue](https://supabase.com/docs/guides/queues) in the same database transaction. Queue access is server-only and is not added to an exposed Data API schema. An asynchronous [database webhook](https://supabase.com/docs/guides/database/webhooks) wakes a protected Vercel dispatcher route. The dispatcher claims a bounded batch, honours per-record sequence, and starts [Kestra executions](https://kestra.io/docs/workflow-components/execution) for matched workflows.
+The [record save](06-records-and-lifecycle.md#save-sequence) writes an event outbox entry and a message to a logged durable [Supabase Queue](https://supabase.com/docs/guides/queues) in the same database transaction. Queue access is server-only and is not added to an exposed Data API schema. An asynchronous [database webhook](https://supabase.com/docs/guides/database/webhooks) wakes a protected Vercel dispatcher route. The dispatcher claims a bounded batch, honours per-record sequence, and starts [Kestra executions](https://kestra.io/docs/workflow-components/execution) for matched flows.
 
 A scheduled [Kestra](https://kestra.io/docs/workflow-components/triggers) recovery flow calls the platform dispatcher endpoint; it does not read the database. This recovers messages after a failed webhook or web deployment, while the database webhook provides the normal wake-up path.
 
@@ -563,7 +563,7 @@ The [Access service](04-access-and-permissions.md) owns access versions. The [Re
 - Data cache keys name every record-type data version used by the query.
 - Read current account, session, Access and relevant data versions before lookup. A hit never bypasses current permission or field checks. Reuse ends at the earliest cache-policy lifetime, authority validity or session/context expiry; there is no fixed 60-second security policy.
 - Permission-administration and Activity responses are not cross-request cached. Provider failure falls back to the ordinary authorised query, never unverifiable stale content.
-- Publication does not retarget an existing consumer. It invalidates discovery and Studio views of the root's current release; installed applications, grants, workflows and in-flight operations continue to use their stored exact release references until an explicit upgrade changes them.
+- Publication does not retarget an existing consumer. It invalidates discovery and Studio views of the root's current release; installed applications, grants, flows and in-flight operations continue to use their stored exact release references until an explicit upgrade changes them.
 - [Vercel cache invalidation](https://vercel.com/docs/cli/cache) may reclaim old entries but is not the security mechanism.
 - Private page responses instruct browsers and shared networks not to store them.
 

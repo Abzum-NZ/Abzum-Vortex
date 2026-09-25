@@ -193,23 +193,6 @@ export const verifyDefinitionCatalogueDependencies = async (
         return "invalid";
       continue;
     }
-    if (dependency.kind === "platform_flow") {
-      if (validationContractVersion !== "2.0.0") return "invalid";
-      const release = await catalogue.readPlatformManagedFlowRelease?.(
-        dependency.flowId,
-        dependency.releaseVersion,
-      );
-      if (release === undefined) return "unavailable";
-      if (
-        release.kind !== "platform_flow" ||
-        release.flowId !== dependency.flowId ||
-        release.releaseVersion !== dependency.releaseVersion ||
-        release.contentFingerprint !== dependency.contentFingerprint ||
-        release.catalogueFingerprint !== dependency.catalogueFingerprint
-      )
-        return "invalid";
-      continue;
-    }
     if (dependency.kind === "protected_operation" && dependency.operation.owner.kind === "platform_service") {
       if (validationContractVersion !== "2.0.0") return "invalid";
       const release = await catalogue.readPlatformServiceOperationRelease?.(

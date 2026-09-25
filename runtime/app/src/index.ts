@@ -3,6 +3,7 @@ import "server-only";
 import { createApplicationInstallationCoordinator } from "./installation-coordinator";
 import { createInstalledRuntimeContextLoader } from "./installed-runtime-context";
 import { createOperationsAlertSink, readOpenOperationsAlertSignals } from "./operations-alert-sink";
+import { createProtectedOperationExecutor } from "./protected-operation-executor";
 import { createAppTelemetryCollector } from "./telemetry";
 
 export {
@@ -19,11 +20,15 @@ export {
   type OperationsAlertSinkDependencies,
 } from "./operations-alert-sink";
 export {
+  applicationExperienceSchema,
   isReservedTenantSegment,
   permittedApplicationSchema,
   permittedApplicationsReadSchema,
+  readAddressedApplicationAtAddress,
   readPermittedApplicationsAtAddress,
   resolvePermittedApplicationAddress,
+  type AddressedApplicationRead,
+  type ApplicationExperience,
   type PermittedApplication,
   type PermittedApplicationsRead,
 } from "./application-address";
@@ -83,6 +88,46 @@ export {
   type IdentityDisablementRequest,
 } from "./identity-disablement";
 
+export {
+  createProtectedOperationExecutor,
+  protectedOperationIdentitySchema,
+  type ProtectedOperationExecution,
+  type ProtectedOperationExecutionRequest,
+  type ProtectedOperationExecutor,
+  type ProtectedOperationExecutorDependencies,
+  type ProtectedOperationIdentity,
+  type ProtectedOperationValue,
+} from "./protected-operation-executor";
+
+export {
+  createFlowOrchestrator,
+  flowContinuationLifetimeSeconds,
+  type FlowOrchestrator,
+  type FlowOrchestratorDependencies,
+  type FlowOrchestratorResponse,
+  type FlowRelease,
+  type FlowRunExpectation,
+  type FlowResumeRequest,
+  type FlowStartRequest,
+  type FlowUnavailableNotice,
+} from "./flow-orchestrator";
+
+export {
+  createFormContinuationService,
+  type FormContinuationInstallationResolver,
+  type FormContinuationInstalledRelease,
+  type FormContinuationServiceDependencies,
+} from "./form-continuation";
+
+export {
+  createDatabaseFlowStores,
+  type FlowContinuationBinding,
+  type FlowContinuationStore,
+  type FlowEffectClaim,
+  type FlowEffectKey,
+  type FlowEffectLedger,
+} from "./flow-continuation-store";
+
 export const AppService = Object.freeze({
   key: "app",
   boundary: "@vortex/app",
@@ -92,4 +137,8 @@ export const AppService = Object.freeze({
   createApplicationInstallationCoordinator,
   createInstalledRuntimeContextLoader,
   createIdentityDisablementCoordinator,
+  createProtectedOperationExecutor,
+  createFlowOrchestrator,
+  createFormContinuationService,
+  createDatabaseFlowStores,
 });

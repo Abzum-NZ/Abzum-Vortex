@@ -14,7 +14,7 @@ export function assertDestinationFingerprint(fingerprint: string): string {
   if (!fingerprint || typeof fingerprint !== "string" || !hexFingerprintRegex.test(fingerprint)) {
     throw new ConnectionInstanceStateError(
       "CONNECTION_INVALID_STATE",
-      `Invalid destination fingerprint: ${fingerprint}; must be a 64-character lowercase hex string`,
+      "Invalid destination fingerprint: must be a 64-character lowercase hex string",
     );
   }
   return fingerprint;

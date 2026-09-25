@@ -1,6 +1,12 @@
 import "server-only";
 
-import { isLoopbackHostname, sessionContextSchema, type SessionContext } from "@vortex/contracts";
+import {
+  isLoopbackHostname,
+  protectedOperationChannelSchema,
+  sessionContextSchema,
+  type ProtectedOperationChannel,
+  type SessionContext,
+} from "@vortex/contracts";
 import postgres, { type Row, type Sql, type TransactionSql } from "postgres";
 
 export type DatabaseValue = string | number | boolean | Date | Uint8Array | null;
@@ -40,6 +46,12 @@ interface RuntimeDatabaseConfiguration {
 type RuntimeOperation<Result> = (transaction: RuntimeDatabaseTransaction) => Promise<Result>;
 export type ResolvedRequestContext<Scope> = Readonly<{
   context: SessionContext;
+  /**
+   * The channel the trusted entry point reached this request through. It is installed in the
+   * request context, never read from client input; when absent `vortex_context.channel()` reads
+   * it as `web`.
+   */
+  channel?: ProtectedOperationChannel;
   scope: Scope;
 }>;
 type RequestContextResolver<Scope> = (
@@ -87,7 +99,16 @@ export const createResolvedRequestTransactionRunner =
     driver.transaction(async (transaction) => {
       const resolved = await resolve(transaction);
       const validated = validateContext(resolved.context);
-      const serialized = JSON.stringify(validated);
+      const parsedChannel =
+        resolved.channel === undefined
+          ? undefined
+          : protectedOperationChannelSchema.safeParse(resolved.channel);
+      if (parsedChannel !== undefined && !parsedChannel.success)
+        throw databaseError("INVALID_REQUEST_CONTEXT_CHANNEL");
+      const serialized = JSON.stringify({
+        ...validated,
+        ...(parsedChannel === undefined ? {} : { channel: parsedChannel.data }),
+      });
 
       await transaction.query`select vortex_context.initialize(${serialized}::text::jsonb)`;
       await transaction.query`set local role vortex_request`;

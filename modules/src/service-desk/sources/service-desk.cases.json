@@ -1149,88 +1149,95 @@
         "personal_or_sensitive_values_allowed": false
       }
     ],
-    "rules": [
+    "flows": [
       {
+        "contractVersion": "1.0.0",
         "id": "rule_case_resolution",
         "key": "resolution_required",
-        "record_type": "case",
-        "profile": "before_save",
-        "graph_version": "1.0.0",
-        "priority": 100,
-        "inputs": [],
-        "variables": [],
-        "nodes": [
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
           {
-            "id": "start",
-            "node_version": "1.0.0",
-            "type": "start",
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "case",
             "operations": [
-              "create",
-              "update"
-            ]
-          },
+              {
+                "kind": "create"
+              },
+              {
+                "kind": "update"
+              }
+            ],
+            "priority": 100
+          }
+        ],
+        "tasks": [
           {
             "id": "resolved_without_time",
-            "node_version": "1.0.0",
-            "type": "condition",
+            "type": "if",
             "condition": {
-              "kind": "all",
-              "conditions": [
+              "op": "and",
+              "args": [
                 {
-                  "kind": "comparison",
-                  "operator": "equals",
+                  "op": "eq",
                   "left": {
-                    "source": "current_field",
-                    "field": "status"
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "status"
+                    }
                   },
                   "right": {
-                    "source": "literal",
-                    "value": {
-                      "type": "choice",
-                      "value": "resolved"
-                    }
+                    "op": "literal",
+                    "type": "choice",
+                    "value": "resolved"
                   }
                 },
                 {
-                  "kind": "comparison",
-                  "operator": "is_empty",
-                  "left": {
-                    "source": "current_field",
-                    "field": "resolved_at"
+                  "op": "is_empty",
+                  "arg": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "resolved_at"
+                    }
                   }
                 }
               ]
-            }
-          },
-          {
-            "id": "refuse_without_resolution_time",
-            "node_version": "1.0.0",
-            "type": "refuse",
-            "code": "resolution_time_required",
-            "message": "Record when the case was resolved.",
-            "field": "resolved_at"
-          },
-          {
-            "id": "finish",
-            "node_version": "1.0.0",
-            "type": "finish"
-          }
-        ],
-        "edges": [
-          {
-            "from": "start",
-            "port": "next",
-            "to": "resolved_without_time"
-          },
-          {
-            "from": "resolved_without_time",
-            "port": "true",
-            "to": "refuse_without_resolution_time"
-          },
-          {
-            "from": "resolved_without_time",
-            "port": "false",
-            "to": "finish"
+            },
+            "then": [
+              {
+                "id": "refuse_without_resolution_time",
+                "type": "rule.refuse",
+                "version": "1.0.0",
+                "properties": {
+                  "reason": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "resolution_time_required"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "Record when the case was resolved."
+                    }
+                  },
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "case.resolved_at"
+                    }
+                  }
+                }
+              }
+            ]
           }
         ]
       }

@@ -72,28 +72,11 @@ const scopedRecordPermission = (
   description: `Allows ${action} on ${suffix.replace(/_/g, " ")} ${recordKey.replace(/_/g, " ")} records only.`,
 });
 
-// Ordinary request edits apply only while the request is a draft; protected journeys move it
-// onwards and bind review to the exact proposal.
+// Ordinary request edits apply only while the request is a draft; protected journeys move it onwards.
 const draftRequestCondition = { condition: "draft_request", parameter_bindings: [] };
 const draftRequests: RecordScope = { ...allRecords, saved_condition: draftRequestCondition };
 const ownRecords: RecordScope = { routes: [{ kind: "ownership" }] };
 const ownDraftRequests: RecordScope = { ...ownRecords, saved_condition: draftRequestCondition };
-const assignedReviews: RecordScope = {
-  routes: [{ kind: "all_records" }],
-  saved_condition: {
-    condition: "assigned_reviewer",
-    parameter_bindings: [{ key: "current_account", source: "current_organization_account_id" }],
-  },
-};
-const reviewedRequests: RecordScope = {
-  routes: [
-    {
-      kind: "relationship",
-      relationship: "vortex.iam.core:access_review.request",
-      source_permission: "vortex.iam.core.access_review.read_assigned",
-    },
-  ],
-};
 
 /** Access request kinds; the IAM request forms offer the same choices. */
 export const requestTypeOptions = [
@@ -150,20 +133,6 @@ const requestItemReadable = [
   "application_key",
 ];
 
-const reviewChangeable = ["comments"];
-const reviewReadable = [
-  "review_number",
-  "request",
-  "proposal_revision",
-  "decision",
-  "reviewer",
-  "decided_at",
-  "comments",
-];
-
-const reviewResponseChangeable = ["comment"];
-const reviewResponseReadable = ["review", "responder", "outcome", "comment", "responded_at"];
-
 const permissions = [
   ...standardActions.flatMap((action) => {
     const readable =
@@ -184,19 +153,6 @@ const permissions = [
           : [];
     return [recordPermission("access_request_item", action, readable, changeable)];
   }),
-  ...standardActions.flatMap((action) => {
-    const readable = action === "soft_delete" || action === "restore" ? [] : reviewReadable;
-    const changeable =
-      action === "create" || action === "update" ? reviewChangeable : [];
-    return [recordPermission("access_review", action, readable, changeable)];
-  }),
-  ...standardActions.flatMap((action) => {
-    const readable =
-      action === "soft_delete" || action === "restore" ? [] : reviewResponseReadable;
-    const changeable =
-      action === "create" || action === "update" ? reviewResponseChangeable : [];
-    return [recordPermission("access_review_response", action, readable, changeable)];
-  }),
   scopedRecordPermission(
     "access_request", "create", "own", ownRecords, requestReadable, requestChangeable,
   ),
@@ -214,15 +170,6 @@ const permissions = [
     requestItemCreateChangeable,
   ),
   scopedRecordPermission("access_request_item", "read", "own", ownRecords, requestItemReadable, []),
-  scopedRecordPermission(
-    "access_review", "read", "assigned", assignedReviews, reviewReadable, [],
-  ),
-  scopedRecordPermission(
-    "access_review", "update", "assigned", assignedReviews, reviewReadable, reviewChangeable,
-  ),
-  scopedRecordPermission(
-    "access_request", "read", "reviewed", reviewedRequests, requestReadable, [],
-  ),
 ];
 
 export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse({
@@ -233,7 +180,7 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
   body: {
     name: "IAM",
     description:
-      "Ordinary access request, request item, review and review response records for the IAM application. These records describe intent and decisions only; they confer no access.",
+      "Ordinary access request and request item records for the IAM application. These records describe intent only; they confer no access.",
     dependencies: [],
     record_types: [
       {
@@ -490,224 +437,11 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
           },
         ],
       },
-      {
-        id: "rt_iam_access_review",
-        key: "access_review",
-        name: "Access review",
-        plural_name: "Access reviews",
-        title_field: "review_number",
-        storage_contract_id: "srt_iam_access_review",
-        storage_scope: "application_contained",
-        ownership_mode: "none",
-        standard_actions: [...standardActions],
-        custom_actions: [],
-        fields: [
-          {
-            ...fieldBase,
-            id: "fld_iam_review_number",
-            key: "review_number",
-            label: "Review number",
-            required: true,
-            unique: true,
-            filterable: true,
-            sortable: true,
-            search_priority: "first",
-            type: "reference_number",
-            settings: { prefix: "REV-", digits: 6 },
-          },
-          {
-            ...fieldBase,
-            id: "fld_iam_review_request",
-            key: "request",
-            label: "Request",
-            required: true,
-            filterable: true,
-            type: "link",
-            settings: {
-              target: "vortex.iam.core:access_request",
-              reverse_key: "reviews",
-              on_parent_delete: "refuse",
-            },
-          },
-          {
-            ...fieldBase,
-            id: "fld_iam_review_proposal_revision",
-            key: "proposal_revision",
-            label: "Proposal revision",
-            required: true,
-            filterable: true,
-            sortable: true,
-            type: "whole_number",
-            settings: { minimum: 1 },
-          },
-          {
-            ...fieldBase,
-            id: "fld_iam_review_decision",
-            key: "decision",
-            label: "Decision",
-            required: true,
-            filterable: true,
-            sortable: true,
-            type: "choice",
-            settings: {
-              options: [
-                { value: "pending", label: "Pending" },
-                { value: "approved", label: "Approved" },
-                { value: "refused", label: "Refused" },
-                { value: "expired", label: "Expired" },
-              ],
-            },
-            default: "pending",
-          },
-          {
-            ...fieldBase,
-            id: "fld_iam_review_reviewer",
-            key: "reviewer",
-            label: "Reviewer",
-            required: true,
-            filterable: true,
-            personal_data: "personal",
-            type: "link_to_person",
-            settings: {
-              audience: "organisation_accounts",
-              application_root_required: false,
-              on_person_deactivation: "retain_reference",
-            },
-          },
-          {
-            ...fieldBase,
-            id: "fld_iam_review_decided",
-            key: "decided_at",
-            label: "Decided at",
-            filterable: true,
-            sortable: true,
-            type: "date_time",
-            settings: {},
-          },
-          {
-            ...fieldBase,
-            id: "fld_iam_review_evidence",
-            key: "workflow_evidence",
-            label: "Protected human-input evidence",
-            filterable: true,
-            type: "text",
-            settings: { max_length: 200 },
-          },
-          {
-            ...fieldBase,
-            id: "fld_iam_review_comments",
-            key: "comments",
-            label: "Comments",
-            personal_data: "personal",
-            type: "long_text",
-            settings: { max_length: 2000 },
-          },
-        ],
-        relationships: [
-          {
-            id: "rel_iam_review_request",
-            key: "request",
-            from_field: "request",
-            to_record_type: "vortex.iam.core:access_request",
-            cardinality: "many_to_one",
-            on_parent_delete: "refuse",
-          },
-        ],
-      },
-      {
-        id: "rt_iam_access_review_response",
-        key: "access_review_response",
-        name: "Access review response",
-        plural_name: "Access review responses",
-        title_field: "outcome",
-        storage_contract_id: "srt_iam_access_review_response",
-        storage_scope: "application_contained",
-        ownership_mode: "none",
-        standard_actions: [...standardActions],
-        custom_actions: [],
-        fields: [
-          {
-            ...fieldBase,
-            id: "fld_iam_response_review",
-            key: "review",
-            label: "Review",
-            required: true,
-            filterable: true,
-            type: "link",
-            settings: {
-              target: "vortex.iam.core:access_review",
-              reverse_key: "responses",
-              on_parent_delete: "soft_delete_dependent",
-            },
-          },
-          {
-            ...fieldBase,
-            id: "fld_iam_response_responder",
-            key: "responder",
-            label: "Responder",
-            required: true,
-            filterable: true,
-            personal_data: "personal",
-            type: "link_to_person",
-            settings: {
-              audience: "organisation_accounts",
-              application_root_required: false,
-              on_person_deactivation: "retain_reference",
-            },
-          },
-          {
-            ...fieldBase,
-            id: "fld_iam_response_outcome",
-            key: "outcome",
-            label: "Outcome",
-            required: true,
-            filterable: true,
-            type: "choice",
-            settings: {
-              options: [
-                { value: "approved", label: "Approved" },
-                { value: "refused", label: "Refused" },
-                { value: "commented", label: "Commented" },
-              ],
-            },
-          },
-          {
-            ...fieldBase,
-            id: "fld_iam_response_comment",
-            key: "comment",
-            label: "Comment",
-            personal_data: "personal",
-            type: "long_text",
-            settings: { max_length: 2000 },
-          },
-          {
-            ...fieldBase,
-            id: "fld_iam_response_responded",
-            key: "responded_at",
-            label: "Responded at",
-            required: true,
-            filterable: true,
-            sortable: true,
-            type: "date_time",
-            settings: {},
-          },
-        ],
-        relationships: [
-          {
-            id: "rel_iam_response_review",
-            key: "review",
-            from_field: "review",
-            to_record_type: "vortex.iam.core:access_review",
-            cardinality: "many_to_one",
-            on_parent_delete: "soft_delete_dependent",
-          },
-        ],
-      },
     ],
     permissions,
     actions: [],
     events: [],
-    rules: [],
+    flows: [],
     extension_points: [],
     sharing_conditions: [
       {
@@ -728,32 +462,6 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
             name: "Submitted request cannot be edited",
             parameters: {},
             field_values: { state: "submitted" },
-            expected: false,
-          },
-        ],
-      },
-      {
-        id: "condition_iam_assigned_review",
-        source_record_type: "access_review",
-        key: "assigned_reviewer",
-        parameters: [{ key: "current_account", type: "organization_account_reference" }],
-        condition: { field: "reviewer", operator: "equals", parameter: "current_account" },
-        declared_fields: ["reviewer"],
-        publication_tests: [
-          {
-            name: "Assigned reviewer may see review",
-            parameters: { current_account: "11111111-1111-4111-8111-111111111111" },
-            field_values: {
-              reviewer: { organization_account_id: "11111111-1111-4111-8111-111111111111" },
-            },
-            expected: true,
-          },
-          {
-            name: "Other reviewer cannot see review",
-            parameters: { current_account: "22222222-2222-4222-8222-222222222222" },
-            field_values: {
-              reviewer: { organization_account_id: "11111111-1111-4111-8111-111111111111" },
-            },
             expected: false,
           },
         ],

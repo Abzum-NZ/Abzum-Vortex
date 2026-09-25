@@ -92,6 +92,17 @@ export {
   type PrivateFormDraftAuthorityAdapter,
   type PrivateFormDraftServiceDependencies,
 } from "./form-drafts-repository";
+export {
+  createPrivateFormContinuationAdapter,
+  type PrivateFormContinuationAdapter,
+  type PrivateFormContinuationDependencies,
+  type PrivateFormContinuationDraft,
+  type PrivateFormContinuationDraftDisposition,
+  type PrivateFormContinuationDraftPort,
+  type PrivateFormContinuationInput,
+  type PrivateFormContinuationResult,
+} from "./form-continuation";
+
 export const PageService = Object.freeze({
   key: "page",
   boundary: "@vortex/page",

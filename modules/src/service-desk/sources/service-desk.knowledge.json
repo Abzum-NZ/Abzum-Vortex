@@ -644,95 +644,100 @@
         "personal_or_sensitive_values_allowed": false
       }
     ],
-    "rules": [
+    "flows": [
       {
+        "contractVersion": "1.0.0",
         "id": "rule_article_public",
         "key": "only_published_articles_are_public",
-        "record_type": "article",
-        "profile": "before_save",
-        "graph_version": "1.0.0",
-        "priority": 100,
-        "inputs": [],
-        "variables": [],
-        "nodes": [
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
           {
-            "id": "start",
-            "node_version": "1.0.0",
-            "type": "start",
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "article",
             "operations": [
-              "create",
-              "update"
-            ]
-          },
+              {
+                "kind": "create"
+              },
+              {
+                "kind": "update"
+              }
+            ],
+            "priority": 100
+          }
+        ],
+        "tasks": [
           {
             "id": "public_before_publication",
-            "node_version": "1.0.0",
-            "type": "condition",
+            "type": "if",
             "condition": {
-              "kind": "all",
-              "conditions": [
+              "op": "and",
+              "args": [
                 {
-                  "kind": "comparison",
-                  "operator": "equals",
+                  "op": "eq",
                   "left": {
-                    "source": "current_field",
-                    "field": "public"
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "public"
+                    }
                   },
                   "right": {
-                    "source": "literal",
-                    "value": {
-                      "type": "yes_no",
-                      "value": true
-                    }
+                    "op": "literal",
+                    "type": "yes_no",
+                    "value": true
                   }
                 },
                 {
-                  "kind": "comparison",
-                  "operator": "not_equals",
+                  "op": "neq",
                   "left": {
-                    "source": "current_field",
-                    "field": "status"
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "status"
+                    }
                   },
                   "right": {
-                    "source": "literal",
-                    "value": {
-                      "type": "choice",
-                      "value": "published"
-                    }
+                    "op": "literal",
+                    "type": "choice",
+                    "value": "published"
                   }
                 }
               ]
-            }
-          },
-          {
-            "id": "refuse_unpublished_public",
-            "node_version": "1.0.0",
-            "type": "refuse",
-            "code": "published_state_required",
-            "message": "Publish the article before making it public.",
-            "field": "status"
-          },
-          {
-            "id": "finish",
-            "node_version": "1.0.0",
-            "type": "finish"
-          }
-        ],
-        "edges": [
-          {
-            "from": "start",
-            "port": "next",
-            "to": "public_before_publication"
-          },
-          {
-            "from": "public_before_publication",
-            "port": "true",
-            "to": "refuse_unpublished_public"
-          },
-          {
-            "from": "public_before_publication",
-            "port": "false",
-            "to": "finish"
+            },
+            "then": [
+              {
+                "id": "refuse_unpublished_public",
+                "type": "rule.refuse",
+                "version": "1.0.0",
+                "properties": {
+                  "reason": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "published_state_required"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "Publish the article before making it public."
+                    }
+                  },
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "article.status"
+                    }
+                  }
+                }
+              }
+            ]
           }
         ]
       }

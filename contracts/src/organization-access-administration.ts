@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   applicationRootIdSchema,
   builderKeySchema,
+  containedComponentIdSchema,
   delegationAuthorityIdSchema,
   groupIdSchema,
   membershipIdSchema,
@@ -190,6 +191,23 @@ export const changeOrganizationAdministrationMembershipResultSchema = z
   })
   .strict();
 
+export const addOrganizationAdministrationMembershipCommandSchema = z
+  .object({
+    groupId: groupIdSchema,
+    organizationAccountId: organizationAccountIdSchema,
+    startsAt: timestampSchema,
+    expiresAt: timestampSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.expiresAt !== undefined && Date.parse(value.expiresAt) <= Date.parse(value.startsAt))
+      context.addIssue({
+        code: "custom",
+        path: ["expiresAt"],
+        message: "Membership expiry must follow its start",
+      });
+  });
+
 export const organizationAdministrationPermissionSchema = z
   .object({
     reference: organizationAccessExactPermissionSchema,
@@ -259,7 +277,7 @@ export const organizationAdministrationRoleAssignmentPolicySchema = z.discrimina
       maximumActivationDurationSeconds: javascriptSafeRevisionSchema,
       reasonRequired: z.boolean(),
       recentAuthentication: roleRecentAuthenticationRequirementSchema,
-      independentApprovalRequired: z.boolean(),
+      requiredCallerExecutionBindingId: containedComponentIdSchema.optional(),
     })
     .strict(),
 ]);
@@ -571,6 +589,40 @@ export const changeOrganizationAdministrationRoleAssignmentResultSchema = z
   })
   .strict();
 
+export const assignOrganizationAdministrationRoleAssignmentCommandSchema = z
+  .object({
+    roleId: roleIdSchema,
+    expectedRoleRevision: javascriptSafeRevisionSchema,
+    assigneeKind: z.enum(["organization_account", "group"]),
+    organizationAccountId: organizationAccountIdSchema.optional(),
+    groupId: groupIdSchema.optional(),
+    assignmentKind: z.enum(["standing", "eligible"]),
+    startsAt: timestampSchema,
+    expiresAt: timestampSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const accountAssignee = value.assigneeKind === "organization_account";
+    if (accountAssignee !== (value.organizationAccountId !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["organizationAccountId"],
+        message: "Only an organisation-account assignee names an organisation account",
+      });
+    if (accountAssignee === (value.groupId !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["groupId"],
+        message: "Only a Group assignee names a Group",
+      });
+    if (value.expiresAt !== undefined && Date.parse(value.expiresAt) <= Date.parse(value.startsAt))
+      context.addIssue({
+        code: "custom",
+        path: ["expiresAt"],
+        message: "Assignment expiry must follow its start",
+      });
+  });
+
 export const organizationAdministrationDelegationScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("organization_catalogue") }).strict(),
   z
@@ -714,7 +766,7 @@ export const organizationAdministrationRoleActivationPolicySchema = z
     maximumActivationDurationSeconds: javascriptSafeRevisionSchema,
     reasonRequired: z.boolean(),
     recentAuthentication: roleRecentAuthenticationRequirementSchema,
-    independentApprovalRequired: z.boolean(),
+    requiredCallerExecutionBindingId: containedComponentIdSchema.optional(),
   })
   .strict();
 
@@ -953,4 +1005,10 @@ export type DeactivateOrganizationAdministrationRoleActivationCommand = z.infer<
 >;
 export type ChangeOrganizationAdministrationRoleActivationResult = z.infer<
   typeof changeOrganizationAdministrationRoleActivationResultSchema
+>;
+export type AddOrganizationAdministrationMembershipCommand = z.infer<
+  typeof addOrganizationAdministrationMembershipCommandSchema
+>;
+export type AssignOrganizationAdministrationRoleAssignmentCommand = z.infer<
+  typeof assignOrganizationAdministrationRoleAssignmentCommandSchema
 >;
