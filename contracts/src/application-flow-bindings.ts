@@ -31,8 +31,10 @@ import { protectedOperationChannelSchema } from "./operation-contracts";
 /**
  * The vocabulary Application flows share with the protected-operation, execution-binding and
  * dependency-manifest contracts. The current-user node-and-edge flow and its per-surface component
- * binding no longer exist: an Application owns ordinary flows (`flow-contracts.ts`), and a
- * component binding holds only the flow id plus a typed input map (`flowBindingSchema`).
+ * binding were removed with #986: an Application owns ordinary flows (`flow-contracts.ts`), and a
+ * component binding holds only the flow id plus a typed input map (`flowBindingSchema`). #988
+ * removed the remaining unused authored type aliases; every schema that stays below is consumed by
+ * the compiler, publication, access or runtime contracts.
  */
 export const applicationFlowBindingContractVersion = "1.0.0" as const;
 
@@ -552,31 +554,15 @@ export const sourceComponentFlowBindingSchema = z
   .strict();
 
 
-export type FlowValueDeclaration = z.infer<typeof flowValueDeclarationSchema>;
-export type TypedFlowResultMapping = z.infer<typeof typedFlowResultMappingSchema>;
 export type ComponentSemanticEventKind = z.infer<typeof componentSemanticEventKindSchema>;
 export type FlowEffectKind = z.infer<typeof flowEffectKindSchema>;
 export type ProtectedOperationEffectKind = z.infer<typeof protectedOperationEffectKindSchema>;
 export type ComponentFlowBinding = z.infer<typeof componentFlowBindingSchema>;
-export type ProtectedOperationOwner = z.infer<typeof protectedOperationOwnerSchema>;
 export type ProtectedOperationReference = z.infer<typeof protectedOperationReferenceSchema>;
-export type FlowTargetDependency = z.infer<typeof flowTargetDependencySchema>;
 export type PlatformServiceOperationRelease = z.infer<
   typeof platformServiceOperationReleaseSchema
->;
-export type ProtectedOperationPermissionReference = z.infer<
-  typeof protectedOperationPermissionReferenceSchema
 >;
 export type SafeFlowResultKind = z.infer<typeof safeFlowResultKindSchema>;
 export type SafeFlowResultDescriptor = z.infer<typeof safeFlowResultDescriptorSchema>;
 export type ProtectedOperationDescriptor = z.infer<typeof protectedOperationDescriptorSchema>;
-export type FlowNodeRunAs = z.infer<typeof flowNodeRunAsSchema>;
-export type FlowExecutionBindingSurface = z.infer<typeof flowExecutionBindingSurfaceSchema>;
-export type FlowExecutionInvoker = z.infer<typeof flowExecutionInvokerSchema>;
-export type FlowExecutionBindingActor = z.infer<typeof flowExecutionBindingActorSchema>;
-export type FlowExecutionBindingState = z.infer<typeof flowExecutionBindingStateSchema>;
-export type FlowExecutionBindingEffectiveState = z.infer<
-  typeof flowExecutionBindingEffectiveStateSchema
->;
 export type FlowExecutionBinding = z.infer<typeof flowExecutionBindingSchema>;
-export type SourceComponentFlowBinding = z.infer<typeof sourceComponentFlowBindingSchema>;
