@@ -202,7 +202,7 @@ Write the full HR JSON fixture set first, including the future workflow definiti
 
 ### Approvals are workflows, not custom code
 
-Leave submission emits an ordinary application event. The HR workflow resolves an eligible responder from declared relationships/roles, uses the generic `request_form` wait, branches on the validated response and invokes the named approve/refuse action. Request/response history and status are ordinary HR records. The generic action precondition repeats current responder eligibility and requester-versus-actor checks so a direct call cannot bypass them. No custom JavaScript, HR-specific route, approval node or privileged approval table is required.
+Leave submission emits an ordinary application event. The HR workflow resolves an eligible responder from declared relationships/roles, uses the durable **Wait for a person** task that Kestra runs, branches on the validated response and invokes the named approve/refuse action. Request/response history and status are ordinary HR records. Responder eligibility and the no-self-approval rule live in the workflow's human-task assignment, not in a named-action precondition. No custom JavaScript, HR-specific route, approval node or privileged approval table is required.
 
 [Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34), [conditions #57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57) and [bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) must supply the generic actor-relative relationship/condition support already promised by section 4. Trusted current-account parameters come from the server, never from a form value purporting to identify the approver.
 
@@ -210,11 +210,10 @@ Leave submission emits an ordinary application event. The HR workflow resolves a
 flowchart LR
     S[Submit leave action] --> E[Ordinary application event]
     E --> W[HR workflow]
-    W --> R[Resolve eligible approver]
-    R --> F[Generic request-form wait]
+    W --> R[Resolve eligible responder]
+    R --> F[Wait for a person task]
     R -->|none eligible| P[Pending assignment]
-    F --> C[Recheck actor and no self-approval]
-    C --> A[Named approve or refuse action]
+    F --> A[Named approve or refuse action]
     A --> H[Ordinary record and event history]
 ```
 
