@@ -29,11 +29,15 @@ export {
   type OperationsAlertSinkDependencies,
 } from "./operations-alert-sink";
 export {
+  applicationExperienceSchema,
   isReservedTenantSegment,
   permittedApplicationSchema,
   permittedApplicationsReadSchema,
+  readAddressedApplicationAtAddress,
   readPermittedApplicationsAtAddress,
   resolvePermittedApplicationAddress,
+  type AddressedApplicationRead,
+  type ApplicationExperience,
   type PermittedApplication,
   type PermittedApplicationsRead,
 } from "./application-address";
