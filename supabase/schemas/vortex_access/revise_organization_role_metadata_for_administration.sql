@@ -155,7 +155,7 @@ begin
     activity_result := vortex_activity.append_organization_activity_entry(
       context_organization_id, p_activity_id, decision.checked_at,
       'organization_account', context_account_id, 'revise_role_metadata',
-      array[context_organization_id]::uuid[], array[]::uuid[], 'web',
+      array[context_organization_id]::uuid[], array[]::uuid[], vortex_context.channel(),
       context_correlation_id, 'refused'
     );
     if activity_result is distinct from 'inserted' then
@@ -270,7 +270,7 @@ begin
     context_organization_id, p_activity_id,
     operation_at,
     'organization_account', context_account_id, 'revise_role_metadata',
-    array[p_role_id]::uuid[], array[]::uuid[], 'web',
+    array[p_role_id]::uuid[], array[]::uuid[], vortex_context.channel(),
     context_correlation_id, 'completed'
   );
   if activity_result is distinct from 'inserted' then
