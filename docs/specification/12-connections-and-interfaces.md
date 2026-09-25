@@ -15,12 +15,14 @@ flowchart LR
     FLOW -->|named outgoing operation| EDGE
     EDGE --> EXT
     CLIENT[Approved interface client] --> API[Versioned interface operation]
-    API --> DATA
     AGENT[Authorised external MCP client] --> MCP[MCP resources and tools]
     BROWSER[Agent in the person's browser] --> WEBMCP[WebMCP tools in the open Vortex page]
     MCP --> VIEW[Permission-filtered semantic interface map]
     WEBMCP --> VIEW
-    VIEW --> DATA
+    API --> BIND[Flow entry-point binding]
+    VIEW --> BIND
+    BIND --> FFLOW[Frontend flow and its ordered tasks]
+    FFLOW --> DATA
 ```
 
 The programmable interface and MCP serve different purposes. An organisation chooses which stable operations to publish as an integration API. MCP is a platform interaction channel: after the person authorises a client, it mirrors that person's current interface capabilities without requiring each application builder to publish a second API.
@@ -72,7 +74,7 @@ An application-contained **interface** contains named operations and publishes w
 - Authentication method and required permission.
 - Rate and size limits.
 - Whether it is organisation-private, partner-facing, or public.
-- The declared custom action, query, or interface-triggered workflow it calls. Standard record actions cannot be exposed until their own explicit input and output contract exists; publication never derives an external write contract from a record form. A permission key alone is not an executable target.
+- The published flow entry point it calls: an action or workflow operation names the exact flow binding it invokes (a generated one-task flow by default for an action), while a query operation names its query. An interface operation never binds a lower-level operation directly. Standard record tasks cannot be exposed until their own explicit input and output contract exists; publication never derives an external write contract from a record form. A permission key alone is not an executable target.
 - Duplicate-protection requirements for writes.
 - Error codes that do not expose private implementation details.
 
@@ -132,12 +134,12 @@ Resources are paginated when needed and announce changes when a role, grant, app
 Every Application release carries its own agent tool bundle. It is part of the release, not separate code:
 
 - At publication the compiler derives the bundle from the release's published navigation, pages, forms, named actions and Frontend Flow entry points, and module queries the application uses. The bundle is stored with the release and versioned with it. Nothing else is published, reviewed or installed separately.
-- One tool represents one business operation: a declared action or flow entry point, a form's commit action, a permitted query read, or a navigation target. Layout, decoration and individual buttons that start the same operation do not produce extra tools.
+- One tool represents one business operation: a frontend flow entry point (a declared action, a form's commit flow, or a navigation target) or a permitted query read. Layout, decoration and individual buttons that start the same operation do not produce extra tools.
 - Tool names are namespaced by application key (`<applicationKey>.<operationKey>`); if two installed applications share a key, the listing also qualifies the name with the application's owner so names never collide. Names stay stable across releases while the operation keeps its identity. Input schemas are the operation's declared input contract; descriptions come from the definition's labels and help text. A tool never exposes an internal permission key, role name or private value.
 - Builders do not write tools, tool code or a second agent-specific definition. Changing the application and publishing it changes its tools.
 - A bundle is available only while its release is installed and active in the organisation. Upgrading the installation replaces the bundle; uninstalling or withdrawing the installation removes it.
 - At every listing and call, the bundle is filtered by the person's current access exactly like the semantic interface map: an operation the person may not discover is absent; one they may see but cannot currently use is described as unavailable and is not callable. A direct call is still refused by the central access decision.
-- Calling a tool enters the same published Frontend Flow binding or protected owning operation as the web control, with the same inputs, revisions, duplicate protection, validation, confirmation, activity and safe refusals.
+- Calling a tool enters the same published Frontend Flow binding as the web control, with the same inputs, revisions, duplicate protection, validation, confirmation, activity and safe refusals. A tool never binds a protected owning operation directly; its flow's task invokes that operation.
 
 Platform tools (context selection, navigation, generic form drafts, refresh, Studio authoring and administration operations) are owned by the platform, not by an application bundle, and follow the same rules.
 
@@ -234,7 +236,7 @@ stateDiagram-v2
 
 ## Public forms and operations
 
-Public access uses explicitly published operations, approved fields from [public access](04-access-and-permissions.md#public-access), abuse controls, and neutral responses. A public operation and its target action must use non-administrative permissions. The action must be explicitly shareable, its subject must resolve, and every subject field read by its condition or values and every field it changes or creates must be approved for public display on the correct record type. Public relationship copying is refused in the first release because the public-surface contract has no relationship allowlist. Public callers never receive a general organisation token or an interface-discovery catalogue.
+Public access uses explicitly published operations, approved fields from [public access](04-access-and-permissions.md#public-access), abuse controls, and neutral responses. A public operation binds a published frontend flow entry point under the same one start path and never targets a lower-level operation directly. A public operation and its target action must use non-administrative permissions. The action must be explicitly shareable, its subject must resolve, and every subject field read by its condition or values and every field it changes or creates must be approved for public display on the correct record type. Public relationship copying is refused in the first release because the public-surface contract has no relationship allowlist. Public callers never receive a general organisation token or an interface-discovery catalogue.
 
 ## Acceptance examples
 

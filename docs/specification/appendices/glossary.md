@@ -22,7 +22,7 @@ flowchart TD
 | Eligible role assignment | Permission to request activation, not permission to use the role. See [eligibility](groups-and-privileged-access.md#eligibility-is-not-active-access). |
 | PIM | Privileged Identity Management: the governed, time-limited activation of eligible roles under their current policy. See [privileged activation](groups-and-privileged-access.md). |
 | Access grant | A source organisation's limited, approved, and revocable permission for a named recipient context to use specified records, actions, and fields under [Shared-record access](../04-access-and-permissions.md#shared-record-access). |
-| Action | A named operation that participates in one [record save](../08-forms-actions-rules-and-events.md#actions). |
+| Action | A flow a person or agent starts through a binding: a button, menu command, record gesture, agent tool call or interface operation. It declares typed inputs and may finish without touching a record. See [Actions](../08-forms-actions-rules-and-events.md#actions). |
 | Application | A published user experience composed from modules, described in [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md). |
 | Application binding | Application-specific settings attached to a reusable module field or record type, described in [Modules, fields and relationships](../05-modules-fields-and-relationships.md#extension-points). |
 | Application role | A collection of permissions inside one [application](../04-access-and-permissions.md#application-roles). |
@@ -60,6 +60,7 @@ flowchart TD
 | Page | A published application screen type and block layout under [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md#page-types). |
 | Permission | One permanently named right that a role may grant. |
 | Process pipeline | The ordered business stages through which a record moves; its transitions and entry and exit effects are tasks inside flows, not a separate pipeline language. See [Process pipelines](../09-workflows-and-pipelines.md#process-pipelines). |
+| Operation | A lower-level protected platform change that a flow task invokes in its own short transaction, such as apply record changes. An operation is never what a person or agent starts: every start is an [action](../08-forms-actions-rules-and-events.md#actions), whose flow performs its operations. See [task types in the shared registry](../09-workflows-and-pipelines.md#task-types-in-the-shared-registry). |
 | Protected operation | A named platform operation that is the only way to change a protected core fact. It rechecks current authority, target revision and its safeguard, and commits with its Activity evidence in one transaction. A system module's actions bind to it. See [system modules](core-contract-boundary.md#system-modules). |
 | Public operation | A narrowly published page or interface operation that does not require an organisation account. |
 | Published version | An immutable, numbered snapshot used by live requests under [Platform composition and publication](../03-composition-and-publication.md#draft-and-published-versions). |

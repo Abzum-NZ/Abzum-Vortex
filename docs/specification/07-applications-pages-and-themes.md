@@ -52,7 +52,7 @@ An application records:
 - Exact bindings to independently published Modules, whose record types declare organisation-shared or application-contained row scope. Row scope does not change definition ownership or publication.
 - Navigation tree, reusable shells with named content slots, and pages.
 - Application role templates. Live organisation assignments are managed separately through [Access](04-access-and-permissions.md#one-organisation-managed-catalogue).
-- Actions, rules, events, flows, and process pipelines.
+- Actions, rules, event reactions and other flows, and process pipelines.
 - Theme and allowed organisation-level theme adjustments.
 - Public addresses and programmable interfaces.
 - Default landing page and empty, denied, not-found, and error experiences.
@@ -104,7 +104,7 @@ The map covers every meaningful interface capability:
 
 Discoverability and invocability are separate. A page, field, choice or control the person may not discover is absent. A control the person may see but cannot currently invoke remains in the semantic resource with `availability: unavailable` and a safe fixed explanation, but it is absent from invocable MCP tool choices. The client-facing entry never exposes an internal permission key, role name or private value. A direct invocation is still refused by the central access decision. Layout coordinates, colours, animation frames and decorative content are not business capabilities and are not copied into the semantic map.
 
-A page or platform screen cannot ship a meaningful operation that exists only as handwritten click behaviour. Configurable application actions bind to application-owned [flows](appendices/frontend-rule-designer.md#pages-compose-flows-define-actions); their tasks delegate to stable platform operations. Form input and ordinary browser behaviour remain generic registered capabilities. Keyboard submission, web action controls and MCP invoke the same declared action binding, not separate save paths.
+A page or platform screen cannot ship a meaningful operation that exists only as handwritten click behaviour. Configurable application actions bind to application-owned [flows](appendices/frontend-rule-designer.md#pages-compose-flows-define-actions); their tasks delegate to stable platform operations. Form input and ordinary browser behaviour remain generic registered capabilities. Keyboard submission, web action controls and MCP invoke the same declared flow binding, not separate save paths.
 
 ### Page and nested placement permissions
 
@@ -269,7 +269,7 @@ These published roles are reusable templates. Registering the application regist
 
 ## Forms and guided forms
 
-- A form commits through one typed operation binding: a named [application action](08-forms-actions-rules-and-events.md), or a closed protected platform operation in an authorised administration application. [Binding contracts](appendices/page-builder-contracts.md#forms-actions-and-semantic-controls) define inputs, validation, confirmation and outcomes.
+- A form commits through one typed flow binding: the exact flow id plus a typed input map, defaulting to a generated one-task flow whose task calls [apply record changes](09-workflows-and-pipelines.md#task-types-in-the-shared-registry). An authorised administration form binds a flow whose protected-operation task calls a closed platform operation. A form never binds a lower-level operation directly. [Binding contracts](appendices/page-builder-contracts.md#forms-actions-and-semantic-controls) define inputs, validation, confirmation and outcomes.
 - A guided form has two to twenty reachable steps and at least one reachable completion outcome. It may use a summary and a single final commit, or explicitly sequence several protected operations as defined by its bound flow.
 - A guided-form draft is private to the person, form, subject, application, and organisation.
 - The browser and an authorised MCP client may update the same draft only through its current revision. A stale update is refused instead of overwriting newer person or agent input.

@@ -74,7 +74,15 @@ A flow's `triggers[]` holds only its automatic starts. There are exactly four, a
 | `Schedule` | At a closed recurrence value owned by the flow | `durable` |
 | `IncomingMessage` | On a verified incoming [connection](12-connections-and-interfaces.md) message | `background`, or `durable` when the work waits |
 
-Every other start is a **binding**, not a trigger: a component placement, navigation item, interface operation, agent tool or parent flow holds the exact flow id plus a typed input map. Pages never hold flow logic of their own. The one start path from a person, an agent, a form or an interface operation to a flow is specified in [#979](https://github.com/Abzum-NZ/Abzum-Vortex/issues/979).
+Every other start is a **binding**, not a trigger: a component placement, navigation item, form commit, interface operation, agent tool or parent flow holds the exact flow id plus a typed input map. Pages never hold flow logic of their own.
+
+A **frontend flow** is a flow a person or agent starts through a binding (`interactive`, or `transaction` for a named action); a **backend flow** is a flow started automatically (`background` or `durable`). There is one start path ([#979](https://github.com/Abzum-NZ/Abzum-Vortex/issues/979)):
+
+1. Every button, menu command, record gesture, agent tool call and interface operation starts a frontend flow through its binding. A form, interface action or agent tool binds a flow entry point — a generated one-task flow by default — and never binds a lower-level operation directly.
+2. A frontend flow starts a backend flow only through a **Run background flow** task with declared typed inputs, whether or not a record is involved, and the exact start intent is committed before dispatch. A `transaction` flow runs inside a record save and cannot contain a `Run background flow` task.
+3. Backend flows are otherwise started only by a committed record `Event`, a `Schedule` or a verified `IncomingMessage`, and may call one another only with typed inputs and outputs through a **Run flow** or **Run background flow** task.
+
+A flow a person or agent starts is an **action**; a lower-level protected change such as apply record changes is an **operation**, not an action.
 
 Each trigger declares its typed inputs, a nullable entry condition and its duplicate-protection rule. Publication matches every declared input to its exact owning contract and refuses missing, extra or invented inputs. An `Event` trigger names both the event and its record type; publication proves that the event exists, belongs to that record type, and carries every declared record-field input the flow reads. A `Schedule` trigger owns a closed recurrence value: cadence (`hourly`, `daily`, `weekly`, or `monthly`), positive interval, time zone, minute, and only the hour, weekday, or month-day values required by that cadence; it never names an unverified external schedule. An `IncomingMessage` trigger uses its connection's named trigger mapping and input shape. A condition may reference only fields on the actual event or binding subject record. Any compiled trigger index is derived from the published flows, never a second independently editable list.
 
