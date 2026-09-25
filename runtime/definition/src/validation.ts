@@ -20,7 +20,6 @@ import {
   workflowDefinitionSchema,
   jsonValueSchema,
   walkDefinitionContract,
-  analyzeFlowResultRouting,
   definitionSourceDocumentSchema,
   definitionCompilationRequestSchema,
   definitionPublicationContextSchema,
@@ -32,6 +31,7 @@ import {
   workflowNodeOutputsByType,
   canonicalWorkflowValueType,
   valueTypesCompatible,
+  flowTaskChildLists,
   type DefinitionCompilationOutput,
   type DefinitionCompilationRequest,
   type ApplicationCompilationRequestV2,
@@ -46,7 +46,8 @@ import {
   type DefinitionRuleFailure,
   type DefinitionValidationLocation,
   type FieldDefinition,
-  type FlowRoutingNode,
+  type FlowDefinition,
+  type FlowTask,
   type PlatformBlockReleaseV2,
   type PublishedDefinitionHistory,
   type VersionRequirement,
@@ -299,12 +300,19 @@ const sourceCollectionLocationKind = {
   operations: "setting",
   incoming_messages: "setting",
   flows: "flow",
-  flow_nodes: "flow_node",
-  flow_edges: "flow_edge",
   flow_bindings: "flow_binding",
 } as const satisfies Partial<
   Record<string, DefinitionValidationLocation["segments"][number]["kind"]>
 >;
+
+const flowTaskListNames: ReadonlySet<string> = new Set([
+  "tasks",
+  "then",
+  "else",
+  "default",
+  "errors",
+  "finally",
+]);
 
 function sourceTranslationContext(source: unknown) {
   if (source === null || typeof source !== "object" || Array.isArray(source)) return undefined;
@@ -357,16 +365,15 @@ function sourceTranslationContext(source: unknown) {
     if (current.value === null || typeof current.value !== "object") continue;
     const entry = current.value as JsonObject;
     const insideFlow = current.segments.some((segment) => segment.kind === "flow");
+    // A flow's tasks, at any depth, are located by their readable task id.
     const locationKind =
-      insideFlow && current.collectionName === "nodes"
+      insideFlow && current.collectionName !== undefined && flowTaskListNames.has(current.collectionName)
         ? "flow_node"
-        : insideFlow && current.collectionName === "edges"
-          ? "flow_edge"
-          : current.collectionName
-            ? sourceCollectionLocationKind[
-                current.collectionName as keyof typeof sourceCollectionLocationKind
-              ]
-            : undefined;
+        : current.collectionName
+          ? sourceCollectionLocationKind[
+              current.collectionName as keyof typeof sourceCollectionLocationKind
+            ]
+          : undefined;
     const candidateKey = entry.key ?? entry.id;
     const parsedCandidate = namespacedKeySchema.or(builderKeySchema).safeParse(candidateKey);
     const nextSegments =
@@ -734,14 +741,19 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
           });
         }
       }
-      // Graph node and value references are resolved by the graph publication rule.
-      for (const rule of array(body.rules))
-        if (
-          !array(body.record_types).some(
-            (record) => record.key === rule.record_type || record.id === rule.record_type,
+      // Task and value references are resolved by the flow compiler and validator; a save rule or
+      // reaction of this Module can only be about one of its own record types, or a declared
+      // dependency's, written with its definition key.
+      for (const flow of array(body.flows))
+        for (const trigger of array(flow.triggers))
+          if (
+            (trigger.type === "BeforeSave" || trigger.type === "Event") &&
+            !String(trigger.recordTypeId).includes(":") &&
+            !array(body.record_types).some(
+              (record) => record.key === trigger.recordTypeId || record.id === trigger.recordTypeId,
+            )
           )
-        )
-          valid = false;
+            valid = false;
       for (const event of array(body.events)) {
         const record = records.get(String(event.record_type));
         const fields = new Set(
@@ -2907,587 +2919,9 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
   return failures;
 }
 
-// Removal point (#986): the frontend flow routing block that starts here and the workflow reachability checks in validateWorkflow are superseded by the one flow validator
-// (runtime/definition/src/flow-validation.ts, #985). It stays only while an old-shape definition can still
-// be published; #986 converts the shipped definitions to flows and deletes it in the same change.
-
-function flowTypesCompatible(actual: string, expected: string): boolean {
-  return actual === expected;
-}
-
-function flowInputMatchesTarget(actual: string, expected: string): boolean {
-  if (flowTypesCompatible(actual, expected)) return true;
-  if (expected === "number") return actual === "whole_number" || actual === "decimal_number";
-  if (expected === "boolean") return actual === "yes_no";
-  return false;
-}
-
-function flowTypeForField(field: JsonObject | undefined): string | undefined {
-  const type = fieldDeclaredResultType(field);
-  if (type === undefined) return undefined;
-  if (
-    [
-      "text",
-      "long_text",
-      "reference_number",
-      "email_address",
-      "phone_number",
-      "web_address",
-    ].includes(type)
-  )
-    return "text";
-  if (type === "link" || type === "link_to_one_of_several") return "record_reference";
-  if (type === "link_to_person") return "organization_account_reference";
-  if (type === "attachment") return "file_reference";
-  if (type === "table") return "json";
-  return type;
-}
-
-function flowLiteralMatchesType(value: unknown, type: string): boolean {
-  if (type === "text" || type === "choice") return typeof value === "string";
-  if (type === "formatted_text")
-    return moduleFieldValueV2Schemas.formatted_text.safeParse(value).success;
-  if (type === "whole_number") return typeof value === "number" && Number.isInteger(value);
-  if (type === "decimal_number") return exactDecimalTextV2Schema.safeParse(value).success;
-  if (type === "money") return moneyValueV2Schema.safeParse(value).success;
-  if (type === "yes_no") return typeof value === "boolean";
-  if (type === "date") {
-    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-    const parsed = new Date(`${value}T00:00:00.000Z`);
-    return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
-  }
-  if (type === "date_time")
-    return (
-      typeof value === "string" &&
-      /^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value) &&
-      !Number.isNaN(Date.parse(value))
-    );
-  if (type === "several_choices")
-    return Array.isArray(value) && value.every((entry) => typeof entry === "string");
-  if (type === "record_reference")
-    return (
-      value !== null &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      platformIdSchema.safeParse(object(value).recordTypeId).success &&
-      platformIdSchema.safeParse(object(value).recordId).success
-    );
-  if (type === "record_reference_list")
-    return (
-      Array.isArray(value) &&
-      value.every((entry) => flowLiteralMatchesType(entry, "record_reference"))
-    );
-  if (
-    type === "organization_account_reference" ||
-    type === "workflow_run_reference" ||
-    type === "relationship_reference" ||
-    type === "file_reference"
-  )
-    return platformIdSchema.safeParse(value).success;
-  if (type === "relationship_reference_list")
-    return (
-      Array.isArray(value) &&
-      value.every((entry) => platformIdSchema.safeParse(entry).success)
-    );
-  return type === "json" && jsonValueSchema.safeParse(value).success;
-}
-
-function flowLiteralRecordTypeIds(value: unknown, type: string): string[] {
-  if (type === "record_reference") return [String(object(value).recordTypeId)];
-  if (type === "record_reference_list")
-    return array(value).map((entry) => String(object(entry).recordTypeId));
-  return [];
-}
-
-type CurrentUserFlowQueryReference = Readonly<{
-  query: JsonObject;
-  kind: "application_query" | "query";
-  moduleRootId?: string;
-  moduleReleaseVersion?: string;
-  declaredRequirement?: unknown;
-}>;
-
-function validateCurrentUserFlow(
-  output: Output,
-  flow: JsonObject,
-  queries: ReadonlyMap<string, CurrentUserFlowQueryReference>,
-  actions: ReadonlyMap<string, JsonObject>,
-  workflows: ReadonlyMap<string, JsonObject>,
-  applicationRootId: string,
-  boundModuleRootIds: ReadonlySet<string>,
-  definitionEvidenceByRoot: ReadonlyMap<
-    string,
-    Readonly<{ releaseVersion: string; resolutionFingerprint: string }>
-  >,
-  protectedOperations: ReadonlyMap<string, JsonObject>,
-  placementIds: ReadonlySet<string>,
-  eventIds: ReadonlySet<string>,
-  fields: ReadonlyMap<string, JsonObject>,
-  records: ReadonlyMap<string, JsonObject>,
-  recordModuleRootIds: ReadonlyMap<string, string>,
-): DefinitionRuleFailure[] {
-  const failures: DefinitionRuleFailure[] = [];
-  const flowFailure = (ruleCode: string, family: DefinitionRuleFailure["family"]) =>
-    failure(output, ruleCode, family, { kind: "flow", key: String(flow.key) });
-  const nodes = array(flow.nodes);
-  const edges = array(flow.edges);
-  const byId = new Map(nodes.map((node) => [String(node.nodeId), node]));
-  const starts = nodes.filter((node) => node.kind === "start");
-  const returns = nodes.filter((node) => node.kind === "return");
-  const ownEvidence = definitionEvidenceByRoot.get(applicationRootId);
-
-  if (
-    ownEvidence === undefined ||
-    flow.releaseVersion !== ownEvidence.releaseVersion ||
-    flow.resolutionFingerprint !== ownEvidence.resolutionFingerprint
-  )
-    failures.push(flowFailure("vortex.definition.application_flow_node_references", "broken_reference"));
-
-  if (starts.length !== 1) {
-    failures.push(flowFailure("vortex.definition.application_flow_single_start", "invalid_value"));
-  }
-
-  let edgeEndpointsValid = true;
-  for (const edge of edges) {
-    if (!byId.has(String(edge.fromNodeId)) || !byId.has(String(edge.toNodeId))) {
-      edgeEndpointsValid = false;
-    }
-  }
-  if (!edgeEndpointsValid) {
-    failures.push(flowFailure("vortex.definition.application_flow_edge_endpoints", "broken_reference"));
-  }
-
-  const outgoing = new Map<string, string[]>();
-  const incoming = new Map<string, string[]>();
-  for (const node of nodes) {
-    outgoing.set(String(node.nodeId), []);
-    incoming.set(String(node.nodeId), []);
-  }
-  for (const edge of edges) {
-    if (byId.has(String(edge.fromNodeId)) && byId.has(String(edge.toNodeId))) {
-      outgoing.get(String(edge.fromNodeId))!.push(String(edge.toNodeId));
-      incoming.get(String(edge.toNodeId))!.push(String(edge.fromNodeId));
-    }
-  }
-
-  if (starts.length === 1) {
-    const startId = String(starts[0]!.nodeId);
-    if ((incoming.get(startId)?.length ?? 0) !== 0 || (outgoing.get(startId)?.length ?? 0) < 1) {
-      failures.push(flowFailure("vortex.definition.application_flow_single_start", "invalid_value"));
-    }
-    const reachable = new Set<string>();
-    const queue = [startId];
-    while (queue.length > 0) {
-      const curr = queue.shift()!;
-      if (reachable.has(curr)) continue;
-      reachable.add(curr);
-      for (const next of outgoing.get(curr) ?? []) {
-        queue.push(next);
-      }
-    }
-    if (reachable.size !== nodes.length) {
-      failures.push(flowFailure("vortex.definition.application_flow_reachability", "broken_reference"));
-    }
-  }
-
-  for (const node of nodes) {
-    const id = String(node.nodeId);
-    if (node.kind !== "start" && node.kind !== "return") {
-      if ((incoming.get(id)?.length ?? 0) < 1 || (outgoing.get(id)?.length ?? 0) < 1) {
-        failures.push(flowFailure("vortex.definition.application_flow_reachability", "broken_reference"));
-        break;
-      }
-    }
-  }
-
-  if (returns.length < 1) {
-    failures.push(flowFailure("vortex.definition.application_flow_termination", "invalid_value"));
-  } else {
-    for (const ret of returns) {
-      if ((outgoing.get(String(ret.nodeId))?.length ?? 0) > 0) {
-        failures.push(flowFailure("vortex.definition.application_flow_termination", "scope_conflict"));
-        break;
-      }
-    }
-    const canTerminate = new Set(returns.map((n) => String(n.nodeId)));
-    let termChanged = true;
-    while (termChanged) {
-      termChanged = false;
-      for (const edge of edges) {
-        const fromId = String(edge.fromNodeId);
-        const toId = String(edge.toNodeId);
-        if (canTerminate.has(toId) && !canTerminate.has(fromId)) {
-          canTerminate.add(fromId);
-          termChanged = true;
-        }
-      }
-    }
-    if (nodes.some((n) => !canTerminate.has(String(n.nodeId)))) {
-      failures.push(flowFailure("vortex.definition.application_flow_termination", "dependency_cycle"));
-    }
-  }
-
-  const inDegrees = new Map<string, number>();
-  for (const node of nodes) inDegrees.set(String(node.nodeId), incoming.get(String(node.nodeId))?.length ?? 0);
-  const zeroInQueue: string[] = [];
-  for (const [id, deg] of inDegrees.entries()) {
-    if (deg === 0) zeroInQueue.push(id);
-  }
-  let processedCount = 0;
-  const topOrder: string[] = [];
-  while (zeroInQueue.length > 0) {
-    const curr = zeroInQueue.shift()!;
-    topOrder.push(curr);
-    processedCount++;
-    for (const next of outgoing.get(curr) ?? []) {
-      const newDeg = (inDegrees.get(next) ?? 1) - 1;
-      inDegrees.set(next, newDeg);
-      if (newDeg === 0) zeroInQueue.push(next);
-    }
-  }
-  if (processedCount !== nodes.length) {
-    failures.push(flowFailure("vortex.definition.application_flow_acyclic", "dependency_cycle"));
-  }
-
-  const routingRefusals = new Set<string>();
-  for (const issue of analyzeFlowResultRouting(
-    nodes.map((node) => ({
-      id: String(node.nodeId),
-      kind: String(node.kind),
-      ...(node.kind === "action"
-        ? {
-            actionTarget: String(object(node.target).kind) as NonNullable<
-              FlowRoutingNode["actionTarget"]
-            >,
-          }
-        : {}),
-      ...(node.kind === "return" ? { returnOutcome: String(node.outcome ?? "completed") } : {}),
-    })),
-    edges.map((edge) => ({
-      from: String(edge.fromNodeId),
-      to: String(edge.toNodeId),
-      ...(edge.outcome === undefined ? {} : { outcome: String(edge.outcome) }),
-    })),
-  )) {
-    // A routing refusal is located at the offending node, or at the source node of an edge.
-    const node =
-      issue.path[0] === "nodes"
-        ? nodes[Number(issue.path[1])]
-        : byId.get(String(edges[Number(issue.path[1])]?.fromNodeId));
-    const refusalKey = node === undefined ? "" : String(node.key);
-    if (routingRefusals.has(refusalKey)) continue;
-    routingRefusals.add(refusalKey);
-    const located = flowFailure("vortex.definition.application_flow_termination", "invalid_value");
-    failures.push(
-      node === undefined || located.location === undefined
-        ? located
-        : {
-            ...located,
-            location: {
-              ...located.location,
-              segments: [...located.location.segments, { kind: "flow_node", key: String(node.key) }],
-            },
-          },
-    );
-  }
-
-  const dominators = new Map<string, Set<string>>();
-  for (const id of topOrder) {
-    const parents = incoming.get(id) ?? [];
-    const dominated =
-      parents.length === 0
-        ? new Set<string>()
-        : new Set(
-            [...(dominators.get(parents[0]!) ?? [])].filter((candidate) =>
-              parents.slice(1).every((parent) => dominators.get(parent)?.has(candidate)),
-            ),
-          );
-    dominated.add(id);
-    dominators.set(id, dominated);
-  }
-
-  const flowInputs = object(flow.inputs ?? {});
-  const flowVariables = object(flow.variables ?? {});
-  const valueRecordTypeIds = (value: JsonObject): string[] => {
-    if (value.source === "flow_input")
-      return array(object(flowInputs[String(value.input)]).recordTypeIds).map(String);
-    if (value.source === "flow_variable")
-      return array(object(flowVariables[String(value.variable)]).recordTypeIds).map(String);
-    if (value.source === "node_output")
-      return array(
-        object(
-          object(byId.get(String(value.nodeId))?.outputs)[String(value.output)],
-        ).recordTypeIds,
-      ).map(String);
-    if (value.source === "literal") {
-      if (Array.isArray(value.value))
-        return value.value.map((entry) => String(object(entry).recordTypeId));
-      const literal = object(value.value);
-      return literal.recordTypeId === undefined ? [] : [String(literal.recordTypeId)];
-    }
-    return [];
-  };
-
-  for (const node of nodes) {
-    if (
-      node.kind === "start" &&
-      node.entryCondition !== undefined &&
-      (!applicationFieldReferencesValid(node.entryCondition, new Set(fields.keys())) ||
-        !conditionTypesValidV2(node.entryCondition, fields))
-    )
-      failures.push(flowFailure("vortex.definition.application_flow_node_values", "invalid_value"));
-    if (node.kind === "query") {
-      const target = object(node.target);
-      if (target.kind === "query" || target.kind === "application_query") {
-        const referenced = queries.get(String(target.queryId));
-        if (
-          !referenced ||
-          referenced.kind !== target.kind ||
-          (target.kind === "query" &&
-            (referenced.moduleRootId !== String(target.moduleRootId) ||
-              referenced.moduleReleaseVersion !== String(target.moduleReleaseVersion) ||
-              fingerprintCanonicalValue(referenced.declaredRequirement) !==
-                fingerprintCanonicalValue(target.declaredRequirement) ||
-              definitionEvidenceByRoot.get(String(target.moduleRootId))?.resolutionFingerprint !==
-                target.resolutionFingerprint)) ||
-          (target.kind === "application_query" &&
-            (target.applicationRootId !== applicationRootId ||
-              target.releaseVersion !== flow.releaseVersion ||
-              target.resolutionFingerprint !== flow.resolutionFingerprint))
-        ) {
-          failures.push(flowFailure("vortex.definition.application_flow_node_references", "broken_reference"));
-        }
-      }
-    } else if (node.kind === "action") {
-      const target = object(node.target);
-      if (target.kind === "application_action") {
-        const action = actions.get(String(target.actionKey));
-        if (!action) {
-          failures.push(flowFailure("vortex.definition.application_flow_node_references", "broken_reference"));
-        } else if (
-          target.applicationRootId !== applicationRootId ||
-          target.releaseVersion !== flow.releaseVersion ||
-          target.resolutionFingerprint !== flow.resolutionFingerprint ||
-          (action !== undefined && target.actionId !== action.actionId)
-        ) {
-          failures.push(flowFailure("vortex.definition.application_flow_node_references", "broken_reference"));
-        }
-      } else if (target.kind === "durable_workflow_start") {
-        if (
-          target.applicationRootId !== applicationRootId ||
-          !workflows.has(String(target.workflowId)) ||
-          target.releaseVersion !== flow.releaseVersion ||
-          target.resolutionFingerprint !== flow.resolutionFingerprint
-        ) {
-          failures.push(flowFailure("vortex.definition.application_flow_node_references", "broken_reference"));
-        }
-      } else if (target.kind === "form_continuation") {
-        if (
-          target.applicationRootId !== applicationRootId ||
-          !placementIds.has(String(target.formId)) ||
-          !eventIds.has(String(target.continuationEventId)) ||
-          target.releaseVersion !== flow.releaseVersion ||
-          target.resolutionFingerprint !== flow.resolutionFingerprint
-        )
-          failures.push(flowFailure("vortex.definition.application_flow_node_references", "broken_reference"));
-      } else if (target.kind === "protected_operation") {
-        const operation = object(target.operation);
-        const owner = object(operation.owner);
-        if (owner.kind === "platform_service") {
-          if (
-            typeof target.releaseVersion !== "string" ||
-            typeof target.contentFingerprint !== "string" ||
-            typeof target.catalogueFingerprint !== "string"
-          )
-            failures.push(
-              flowFailure(
-                "vortex.definition.application_flow_node_references",
-                "broken_reference",
-              ),
-            );
-        } else {
-          const ownerRootId =
-            owner.kind === "application"
-              ? String(owner.applicationRootId)
-              : String(owner.moduleRootId);
-          if (
-            (owner.kind === "application" && ownerRootId !== applicationRootId) ||
-            (owner.kind === "module" && !boundModuleRootIds.has(ownerRootId)) ||
-            target.releaseVersion !==
-              definitionEvidenceByRoot.get(ownerRootId)?.releaseVersion ||
-            target.resolutionFingerprint !==
-              definitionEvidenceByRoot.get(ownerRootId)?.resolutionFingerprint ||
-            !protectedOperations.has(`${ownerRootId}:${String(operation.operationId)}`)
-          )
-            failures.push(
-              flowFailure(
-                "vortex.definition.application_flow_node_references",
-                "broken_reference",
-              ),
-            );
-        }
-      } else if (target.kind === "record_save") {
-        // A generic record save commits through the ordinary Record operation, so the bound
-        // Module must own the record type and the record type must allow that standard action.
-        const moduleRootId = String(target.moduleRootId);
-        const moduleEvidence = definitionEvidenceByRoot.get(moduleRootId);
-        const record = records.get(String(target.recordTypeId));
-        if (
-          target.applicationRootId !== applicationRootId ||
-          !boundModuleRootIds.has(moduleRootId) ||
-          moduleEvidence === undefined ||
-          target.releaseVersion !== moduleEvidence.releaseVersion ||
-          target.resolutionFingerprint !== moduleEvidence.resolutionFingerprint ||
-          record === undefined ||
-          recordModuleRootIds.get(String(target.recordTypeId)) !== moduleRootId ||
-          !array(record.standardActions).some((action) => action === target.mode)
-        )
-          failures.push(
-            flowFailure(
-              "vortex.definition.application_flow_node_references",
-              "broken_reference",
-            ),
-          );
-      }
-    }
-
-    let targetInputs: JsonObject[] | undefined;
-    if (node.kind === "query") {
-      const referenced = queries.get(String(object(node.target).queryId));
-      targetInputs = referenced ? array(referenced.query.inputs) : undefined;
-    }
-    if (node.kind === "action" && object(node.target).kind === "application_action") {
-      const action = actions.get(String(object(node.target).actionKey));
-      targetInputs = action ? array(action.inputs) : undefined;
-    }
-    if (node.kind === "action" && object(node.target).kind === "protected_operation") {
-      const operation = object(object(node.target).operation);
-      const owner = object(operation.owner);
-      const ownerRootId =
-        owner.kind === "application"
-          ? String(owner.applicationRootId)
-          : owner.kind === "module"
-            ? String(owner.moduleRootId)
-            : undefined;
-      const action = ownerRootId
-        ? protectedOperations.get(`${ownerRootId}:${String(operation.operationId)}`)
-        : undefined;
-      targetInputs = action ? array(action.inputs) : undefined;
-    }
-    if (node.kind === "action" && object(node.target).kind === "durable_workflow_start") {
-      const workflow = workflows.get(String(object(node.target).workflowId));
-      targetInputs = workflow
-        ? array(object(workflow.trigger).inputs).map((input) => ({
-            ...input,
-            required: true,
-          }))
-        : undefined;
-    }
-    if (targetInputs !== undefined) {
-      const provided = object(node.inputs ?? {});
-      const expected = new Map(targetInputs.map((input) => [String(input.key), input]));
-      if (
-        targetInputs.some((input) => input.required === true && !(String(input.key) in provided)) ||
-        Object.entries(provided).some(([key, binding]) => {
-          const declaration = expected.get(key);
-          const bound = object(binding);
-          const actualType = String(bound.type);
-          const expectedType = String(declaration?.type);
-          const expectedRecordTypeIds = new Set(
-            [
-              ...array(declaration?.recordTypes).map((reference) =>
-                String(object(reference).recordTypeId),
-              ),
-              ...array(declaration?.recordTypeIds).map(String),
-            ],
-          );
-          const actualRecordTypeIds = valueRecordTypeIds(object(bound.value));
-          return (
-            !declaration ||
-            !flowInputMatchesTarget(actualType, expectedType) ||
-            ((expectedType === "record_reference" ||
-              expectedType === "record_reference_list") &&
-              (actualRecordTypeIds.length === 0 ||
-                actualRecordTypeIds.some((id) => !expectedRecordTypeIds.has(id))))
-          );
-        })
-      )
-        failures.push(flowFailure("vortex.definition.application_flow_node_values", "invalid_value"));
-    }
-  }
-
-  for (const variable of Object.values(flowVariables)) {
-    const declaration = object(variable);
-    if (
-      declaration.defaultValue !== undefined &&
-      (!flowLiteralMatchesType(declaration.defaultValue, String(declaration.type)) ||
-        flowLiteralRecordTypeIds(declaration.defaultValue, String(declaration.type)).some(
-          (recordTypeId) =>
-            !array(declaration.recordTypeIds).some(
-              (allowed) => String(allowed) === recordTypeId,
-            ),
-        ))
-    )
-      failures.push(flowFailure("vortex.definition.application_flow_node_values", "invalid_value"));
-  }
-  for (const node of nodes) {
-    const nodeId = String(node.nodeId);
-    const nodeDominators = dominators.get(nodeId) ?? new Set<string>();
-    const inspectValue = (val: JsonObject, expectedType?: string): boolean => {
-      if (val.source === "literal")
-        return expectedType === undefined || flowLiteralMatchesType(val.value, expectedType);
-      if (val.source === "flow_input") {
-        const input = object(flowInputs[String(val.input)]);
-        if (!input || !input.type) return false;
-        if (expectedType && !flowTypesCompatible(String(input.type), expectedType)) return false;
-        return true;
-      }
-      if (val.source === "flow_variable") {
-        const variable = object(flowVariables[String(val.variable)]);
-        if (!variable || !variable.type) return false;
-        if (expectedType && !flowTypesCompatible(String(variable.type), expectedType)) return false;
-        return true;
-      }
-      if (val.source === "node_output") {
-        const producerId = String(val.nodeId);
-        if (producerId === nodeId || !nodeDominators.has(producerId)) return false;
-        const producer = byId.get(producerId);
-        if (!producer) return false;
-        const outputs = object(producer.outputs ?? {});
-        const outputDecl = object(outputs[String(val.output)]);
-        if (!outputDecl || !outputDecl.type) return false;
-        if (expectedType && !flowTypesCompatible(String(outputDecl.type), expectedType)) return false;
-        return true;
-      }
-      if (val.source === "current_organization_account_id") {
-        return !expectedType || flowTypesCompatible("organization_account_reference", expectedType);
-      }
-      return false;
-    };
-
-    if (node.kind === "query" || node.kind === "action" || node.kind === "transform") {
-      for (const input of Object.values(object(node.inputs ?? {}))) {
-        const inputObj = object(input);
-        if (!inspectValue(object(inputObj.value), String(inputObj.type))) {
-          failures.push(flowFailure("vortex.definition.application_flow_node_values", "broken_reference"));
-          break;
-        }
-      }
-    }
-    if (node.kind === "return") {
-      for (const [resKey, resVal] of Object.entries(object(node.results ?? {}))) {
-        const flowOutput = object(object(flow.outputs ?? {})[resKey]);
-        const expectedType = flowOutput ? String(flowOutput.type) : undefined;
-        if (!inspectValue(object(resVal), expectedType)) {
-          failures.push(flowFailure("vortex.definition.application_flow_node_values", "broken_reference"));
-          break;
-        }
-      }
-    }
-  }
-
-  return failures;
-}
+// Removal point (Phase 9): the workflow reachability checks in validateWorkflow are superseded by the
+// one flow validator (runtime/definition/src/flow-validation.ts, #985). Durable workflows keep their
+// node-and-edge shape until Phase 9 converts them to durable flows, so they stay until then.
 
 const outputsByNodeType: Readonly<Record<string, readonly string[]>> = workflowNodeOutputKeysByType;
 
@@ -3988,13 +3422,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       array(object(object(module.canonical).content).recordTypes),
     );
     const records = new Map(recordTypes.map((record) => [String(record.recordTypeId), record]));
-    const recordModuleRootIds = new Map(
-      boundModules.flatMap((module) =>
-        array(object(object(module.canonical).content).recordTypes).map(
-          (record) => [String(record.recordTypeId), String(module.artifact.rootId)] as const,
-        ),
-      ),
-    );
     const recordValuePairs = new Map<string, ApplicationFieldValuePair["moduleV2"]>(
       boundModules.flatMap((module) =>
         array(object(object(module.canonical).content).recordTypes).map(
@@ -4024,14 +3451,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       recordTypes.flatMap((record) =>
         array(record.relationships).map(
           (relationship) => [String(relationship.relationshipId), relationship] as const,
-        ),
-      ),
-    );
-    const relationshipRecordTypes = new Map(
-      recordTypes.flatMap((record) =>
-        array(record.relationships).map(
-          (relationship) =>
-            [String(relationship.relationshipId), String(record.recordTypeId)] as const,
         ),
       ),
     );
@@ -4237,40 +3656,54 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       ),
     );
     /**
-     * The executable action key a flow action node commits, or undefined for a node that commits
-     * nothing. An unresolvable commit yields an empty key so it never matches a declared commit.
+     * The executable action keys a flow commits: a Save record task commits the standard create
+     * or update of its record type, and a Call protected operation task commits the named action it
+     * calls. An unresolvable Save commits an empty key, so it never matches a declared commit.
+     * A Run flow task commits whatever the flow it runs commits, followed once per flow.
      */
-    const flowCommitActionKey = (target: JsonObject): string | undefined => {
-      if (target.kind === "record_save")
-        return (
-          standardActionKeysByRecordAction.get(
-            `${String(target.recordTypeId)}:${String(target.mode)}`,
-          ) ?? ""
-        );
-      if (target.kind === "application_action") return String(target.actionKey);
-      if (target.kind === "protected_operation") {
-        const operation = object(target.operation);
-        const owner = object(operation.owner);
-        const ownerRootId =
-          owner.kind === "application"
-            ? String(owner.applicationRootId)
-            : owner.kind === "module"
-              ? String(owner.moduleRootId)
-              : undefined;
-        if (ownerRootId === undefined) return undefined;
-        const action = array(
-          ownerRootId === applicationRootId
-            ? content.actions
-            : object(
-                object(
-                  boundModules.find((module) => String(module.artifact.rootId) === ownerRootId)
-                    ?.canonical,
-                ).content,
-              ).actions,
-        ).find((candidate) => String(candidate.actionId) === String(operation.operationId));
-        return action === undefined ? "" : String(action.key);
-      }
-      return undefined;
+    const flowsForCommits = new Map(
+      array(content.flows).map((flow) => [String(flow.id), flow as unknown as FlowDefinition]),
+    );
+    const flowCommitActionKeys = (flow: JsonObject): string[] => {
+      const keys: string[] = [];
+      const followed = new Set<string>();
+      const visitFlow = (canonical: FlowDefinition) => {
+        if (followed.has(String(canonical.id))) return;
+        followed.add(String(canonical.id));
+        visit(canonical.tasks);
+        visit(canonical.errors);
+        visit(canonical.finally);
+      };
+      const visit = (tasks: readonly FlowTask[]) => {
+        for (const task of tasks) {
+          if (task.type === "run_flow") {
+            const target = flowsForCommits.get(
+              String((task as Extract<FlowTask, { type: "run_flow" }>).flowId),
+            );
+            // A flow outside this release commits nothing a page could declare, so it never matches.
+            if (target === undefined) keys.push("");
+            else visitFlow(target);
+          }
+          const properties = (task as { properties?: Record<string, JsonObject> }).properties;
+          const literal = (name: string): string | undefined => {
+            const value = properties?.[name];
+            return value?.kind === "literal" ? String(object(value.literal).value) : undefined;
+          };
+          if (task.type === "record.save")
+            keys.push(
+              standardActionKeysByRecordAction.get(
+                `${literal("record_type")}:${properties?.record === undefined ? "create" : "update"}`,
+              ) ?? "",
+            );
+          else if (task.type === "operation.call") {
+            const called = literal("operation");
+            if (called !== undefined && executableActionKeys.has(called)) keys.push(called);
+          }
+          for (const child of flowTaskChildLists(task)) visit(child.tasks);
+        }
+      };
+      visitFlow(flow as unknown as FlowDefinition);
+      return keys;
     };
     const executableActionKeys = new Set([...actionKeys, ...standardActionKeys]);
     const events = new Map(
@@ -4317,33 +3750,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       return collectPlacementEntriesV2(shells.get(String(composition.shellId))?.layout);
     };
     const queries = new Map(array(content.queries).map((query) => [String(query.queryId), query]));
-    const flowQueries = new Map<string, CurrentUserFlowQueryReference>([
-      ...array(content.queries).map(
-        (query) =>
-          [
-            String(query.queryId),
-            { query, kind: "application_query" as const },
-          ] as const,
-      ),
-      ...boundModules.flatMap((module) =>
-        array(object(object(module.canonical).content).queries).map(
-          (query) =>
-            [
-              String(query.queryId),
-              {
-                query,
-                kind: "query" as const,
-                moduleRootId: module.artifact.rootId,
-                moduleReleaseVersion: module.artifact.exactVersion,
-                declaredRequirement: bindings.find(
-                  (binding) =>
-                    String(binding.moduleRootId) === String(module.artifact.rootId),
-                )?.version,
-              },
-            ] as const,
-        ),
-      ),
-    ]);
     const pipelines = new Map(
       array(content.pipelines).map((pipeline) => [String(pipeline.pipelineId), pipeline]),
     );
@@ -4549,11 +3955,9 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       ...[...shells.values()].flatMap((shell) => collectPlacementEntriesV2(shell.layout)),
       ...[...pages.values()].flatMap(pageContentPlacementEntriesV2),
     ];
-    const applicationPlacements = new Map(applicationPlacementEntries);
     const applicationPlacementIds = new Set(
       applicationPlacementEntries.map(([placementId]) => placementId),
     );
-    const pageSubjectRecordTypesByPlacement = new Map<string, Set<string>>();
     // The declared commit action of every form page that places each component. A form's
     // submission flow may commit only that action, so the page and its flow share one commit.
     const pageCommitActionKeysByPlacement = new Map<string, Set<string>>();
@@ -4568,13 +3972,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           commitKeys.add(String(page.commitActionKey));
           pageCommitActionKeysByPlacement.set(placementId, commitKeys);
         }
-      const recordTypeId = object(page.recordType).recordTypeId;
-      if (typeof recordTypeId !== "string") continue;
-      for (const placementId of pagePlacementIds) {
-        const recordTypes = pageSubjectRecordTypesByPlacement.get(placementId) ?? new Set<string>();
-        recordTypes.add(recordTypeId);
-        pageSubjectRecordTypesByPlacement.set(placementId, recordTypes);
-      }
     }
     const identityCollections: readonly (readonly [JsonObject[], string, string])[] = [
       [array(content.pages), "pageId", "key"],
@@ -4588,7 +3985,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       [array(content.connectionBindings), "bindingId", "key"],
       [array(content.interfaces), "interfaceId", "key"],
       [array(content.publicAddresses), "addressId", "path"],
-      [array(content.flows), "flowId", "key"],
+      [array(content.flows), "id", "key"],
     ] as const;
     for (const [collection, idProperty, keyProperty] of identityCollections) {
       const ids = collection.map((entry) => String(entry[idProperty]));
@@ -5777,64 +5174,11 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     for (const workflow of workflows.values())
       visitChild(String(workflow.workflowId), 1, Number(workflow.maximumNestingDepth));
 
-    const flowsById = new Map(
-      array(content.flows).map((flow) => [String(flow.flowId), flow]),
-    );
-    const eventsById = new Map(
-      array(content.events).map((event) => [String(event.eventId), event]),
-    );
-    const eventIds = new Set(eventsById.keys());
-    const protectedOperations = new Map([
-      ...array(content.actions).map(
-        (action) =>
-          [`${applicationRootId}:${String(action.actionId)}`, action] as const,
-      ),
-      ...boundModules.flatMap((module) =>
-        array(object(object(module.canonical).content).actions).map(
-          (action) =>
-            [`${module.artifact.rootId}:${String(action.actionId)}`, action] as const,
-        ),
-      ),
-    ]);
-    const definitionEvidenceByRoot = new Map([
-      [
-        applicationRootId,
-        {
-          releaseVersion: String(output.artifact.exactVersion),
-          resolutionFingerprint: String(output.resolutionFingerprint),
-        },
-      ] as const,
-      ...boundModules.map(
-        (module) =>
-          [
-            String(module.artifact.rootId),
-            {
-              releaseVersion: String(module.artifact.exactVersion),
-              resolutionFingerprint: String(module.resolutionFingerprint),
-            },
-          ] as const,
-      ),
-    ]);
-    for (const flow of array(content.flows)) {
-      failures.push(
-        ...validateCurrentUserFlow(
-          output,
-          flow,
-          flowQueries,
-          actions,
-          workflows,
-          applicationRootId,
-          boundRoots,
-          definitionEvidenceByRoot,
-          protectedOperations,
-          applicationPlacementIds,
-          eventIds,
-          allFields,
-          records,
-          recordModuleRootIds,
-        ),
-      );
-    }
+    // The flow compiler judged every flow with the one flow validator (`flow-validation.ts`) before
+    // it produced this content, so only what binds to them is judged here.
+    const flows = array(content.flows) as unknown as FlowDefinition[];
+    const flowsById = new Map(flows.map((flow) => [String(flow.id), flow]));
+    const eventIds = new Set(array(content.events).map((event) => String(event.eventId)));
     for (const binding of array(content.flowBindings)) {
       const bindingFailure = (ruleCode: string, family: DefinitionRuleFailure["family"]) =>
         failure(output, ruleCode, family, {
@@ -5842,234 +5186,42 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           key: String(binding.bindingId),
         });
       const flowReference = object(binding.flow);
-      const flow =
-        flowReference.kind === "application_owned"
-          ? flowsById.get(String(flowReference.flowId))
-          : undefined;
+      const flow = flowsById.get(String(flowReference.flowId));
+      // A binding starts an interactive flow of this release, from a control and event it declares.
       if (
-        flowReference.kind === "application_owned" &&
-        (flowReference.applicationRootId !== applicationRootId ||
-          !flow ||
-          flowReference.releaseVersion !== flow.releaseVersion ||
-          flowReference.contentFingerprint !== flow.contentFingerprint ||
-          flowReference.resolutionFingerprint !== flow.resolutionFingerprint)
-      ) {
-        failures.push(
-          bindingFailure("vortex.definition.application_flow_binding_target", "broken_reference"),
-        );
-      }
-      if (
+        flow === undefined ||
+        flow.execution !== "interactive" ||
         !applicationPlacementIds.has(String(binding.controlId)) ||
         !eventIds.has(String(binding.eventId))
-      ) {
+      )
         failures.push(
           bindingFailure("vortex.definition.application_flow_binding_target", "broken_reference"),
         );
-      }
+      if (flow === undefined) continue;
+      // A form's submission may commit only the action its page declares.
       const pageCommitKeys = pageCommitActionKeysByPlacement.get(String(binding.controlId));
+      const committed = flowCommitActionKeys(flow as unknown as JsonObject);
       if (
-        flow &&
         binding.event === "form_submit" &&
         pageCommitKeys !== undefined &&
-        array(flow.nodes).some((node) => {
-          if (node.kind !== "action") return false;
-          const committed = flowCommitActionKey(object(node.target));
-          return (
-            committed !== undefined && (pageCommitKeys.size !== 1 || !pageCommitKeys.has(committed))
-          );
-        })
+        committed.some((key) => pageCommitKeys.size !== 1 || !pageCommitKeys.has(key))
       )
         failures.push(
           bindingFailure("vortex.definition.application_flow_binding_target", "scope_conflict"),
         );
-      const inputs = object(binding.inputs ?? {});
-      const boundEvent = eventsById.get(String(binding.eventId));
-      if (flow) {
-        const declaredInputs = object(flow.inputs ?? {});
-        for (const [key, inputDecl] of Object.entries(declaredInputs)) {
-          const decl = object(inputDecl);
-          const isRequired = decl.required !== false && decl.defaultValue === undefined;
-          if (isRequired && !(key in inputs)) {
-            failures.push(
-              bindingFailure("vortex.definition.application_flow_binding_inputs", "broken_reference"),
-            );
-            break;
-          }
-        }
-        for (const [key, boundInput] of Object.entries(inputs)) {
-          const bound = object(boundInput);
-          const decl = declaredInputs[key] ? object(declaredInputs[key]) : undefined;
-          if (!decl) {
-            failures.push(
-              bindingFailure("vortex.definition.application_flow_binding_inputs", "broken_reference"),
-            );
-            break;
-          }
-          if (
-            bound.type &&
-            decl.type &&
-            !flowTypesCompatible(String(bound.type), String(decl.type))
-          ) {
-            failures.push(
-              bindingFailure("vortex.definition.application_flow_binding_inputs", "invalid_value"),
-            );
-            break;
-          }
-          const value = object(bound.value);
-          if (
-            value.source === "literal" &&
-            (!flowLiteralMatchesType(value.value, String(bound.type)) ||
-              flowLiteralRecordTypeIds(value.value, String(bound.type)).some(
-                (recordTypeId) =>
-                  !array(decl.recordTypeIds).some(
-                    (allowed) => String(allowed) === recordTypeId,
-                  ),
-              ))
-          ) {
-            failures.push(
-              bindingFailure("vortex.definition.application_flow_binding_inputs", "invalid_value"),
-            );
-            break;
-          }
-          if (value.source === "context_record" || value.source === "context_field") {
-            const bindingContext = object(value.context);
-            const recordTypeId = String(bindingContext.recordTypeId ?? "");
-            let contextValid = records.has(recordTypeId);
-            if (bindingContext.kind === "page_subject") {
-              const availableSubjects = pageSubjectRecordTypesByPlacement.get(
-                String(binding.controlId),
-              );
-              contextValid =
-                contextValid &&
-                availableSubjects?.size === 1 &&
-                availableSubjects.has(recordTypeId);
-            }
-            if (
-              bindingContext.kind === "row" ||
-              bindingContext.kind === "selection"
-            ) {
-              const placement = applicationPlacements.get(String(bindingContext.controlId));
-              const placementQuery = placement
-                ? queries.get(String(placement.queryId))
-                : undefined;
-              contextValid =
-                contextValid &&
-                placementQuery !== undefined &&
-                String(object(placementQuery.recordType).recordTypeId) === recordTypeId;
-            }
-            if (bindingContext.kind === "form" || bindingContext.kind === "response") {
-              const availableSubjects = pageSubjectRecordTypesByPlacement.get(
-                String(bindingContext.formId),
-              );
-              contextValid =
-                applicationPlacementIds.has(String(bindingContext.formId)) &&
-                (bindingContext.kind === "response" && bindingContext.recordTypeId === undefined
-                  ? value.source !== "context_field"
-                  : contextValid &&
-                    availableSubjects?.size === 1 &&
-                    availableSubjects.has(recordTypeId));
-            }
-            if (bindingContext.kind === "related_record") {
-              const relationship = relationshipMap.get(String(bindingContext.relationshipId));
-              const relationshipRecordTypeId = relationshipRecordTypes.get(
-                String(bindingContext.relationshipId),
-              );
-              const availableSubjects = pageSubjectRecordTypesByPlacement.get(
-                String(binding.controlId),
-              );
-              const targetRecordTypeIds = relationship
-                ? object(relationship.toRecordType).recordTypeId
-                  ? [String(object(relationship.toRecordType).recordTypeId)]
-                  : array(relationship.toRecordTypes).map((target) =>
-                      String(object(target).recordTypeId),
-                    )
-                : [];
-              contextValid =
-                contextValid &&
-                targetRecordTypeIds.includes(recordTypeId) &&
-                relationship?.cardinality !== "many_to_many" &&
-                availableSubjects?.size === 1 &&
-                availableSubjects.has(String(relationshipRecordTypeId));
-            }
-            const allowedRecordTypes = (decl.recordTypeIds as string[] | undefined) ?? [];
-            if (
-              (String(bound.type) === "record_reference" ||
-                String(bound.type) === "record_reference_list") &&
-              !allowedRecordTypes.includes(recordTypeId)
-            )
-              contextValid = false;
-            if (value.source === "context_field") {
-              const fieldId = String(value.fieldId);
-              contextValid =
-                contextValid &&
-                !(
-                  bindingContext.kind === "selection" &&
-                  bindingContext.cardinality === "many"
-                ) &&
-                fieldRecordTypes.get(fieldId) === recordTypeId &&
-                flowTypeForField(allFields.get(fieldId)) === String(bound.type);
-            }
-            if (!contextValid) {
-              failures.push(
-                bindingFailure(
-                  "vortex.definition.application_flow_binding_context",
-                  "broken_reference",
-                ),
-              );
-              break;
-            }
-          }
-          if (
-            value.source === "form_input" &&
-            !applicationPlacementIds.has(String(value.formId))
-          ) {
-            failures.push(
-              bindingFailure(
-                "vortex.definition.application_flow_binding_context",
-                "broken_reference",
-              ),
-            );
-            break;
-          }
-          if (
-            value.source === "event_input" &&
-            !array(boundEvent?.carries).some((input) => String(input) === String(value.input))
-          ) {
-            failures.push(
-              bindingFailure(
-                "vortex.definition.application_flow_binding_inputs",
-                "broken_reference",
-              ),
-            );
-            break;
-          }
-        }
-        const declaredOutputs = object(flow.outputs ?? {});
-        const mappedOutputs = new Set<string>();
-        for (const mapping of Object.values(object(binding.results ?? {}))) {
-          const result = object(mapping);
-          const outputDeclaration = object(declaredOutputs[String(result.output)]);
-          if (
-            !outputDeclaration.type ||
-            !flowTypesCompatible(String(result.type), String(outputDeclaration.type)) ||
-            mappedOutputs.has(String(result.output))
-          ) {
-            failures.push(
-              bindingFailure("vortex.definition.application_flow_binding_inputs", "invalid_value"),
-            );
-            break;
-          }
-          mappedOutputs.add(String(result.output));
-        }
-        for (const [outputKey, declaration] of Object.entries(declaredOutputs)) {
-          if (object(declaration).required === true && !mappedOutputs.has(outputKey)) {
-            failures.push(
-              bindingFailure("vortex.definition.application_flow_binding_inputs", "broken_reference"),
-            );
-            break;
-          }
-        }
-      }
+      const inputs = object(flowReference.inputs ?? {});
+      if (Object.keys(inputs).some((name) => !Object.hasOwn(flow.inputs, name)))
+        failures.push(
+          bindingFailure("vortex.definition.application_flow_binding_inputs", "unknown_property"),
+        );
+      if (
+        Object.entries(flow.inputs).some(
+          ([name, declaration]) => declaration.required && !Object.hasOwn(inputs, name),
+        )
+      )
+        failures.push(
+          bindingFailure("vortex.definition.application_flow_binding_inputs", "required_value"),
+        );
     }
   }
   return failures;
@@ -6135,16 +5287,8 @@ const applicationRuleCodes = [
   "vortex.definition.workflow_child_acyclic",
   "vortex.definition.workflow_child_depth",
   "vortex.definition.workflow_child_reference",
-  "vortex.definition.application_flow_single_start",
-  "vortex.definition.application_flow_reachability",
-  "vortex.definition.application_flow_termination",
-  "vortex.definition.application_flow_acyclic",
-  "vortex.definition.application_flow_edge_endpoints",
-  "vortex.definition.application_flow_node_references",
-  "vortex.definition.application_flow_node_values",
   "vortex.definition.application_flow_binding_target",
   "vortex.definition.application_flow_binding_inputs",
-  "vortex.definition.application_flow_binding_context",
 ] as const;
 
 const connectionRuleCodes = [

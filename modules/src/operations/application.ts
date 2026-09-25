@@ -10,6 +10,8 @@ import {
   TABLE_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
+  defaultOperationFlowSource,
+  defaultSaveFlowSource,
   type ApplicationSourceDocumentV2,
   type PlatformBlockReleaseV2,
   type SourceBlockPropertyValueV2Contract,
@@ -102,64 +104,6 @@ const form = (title: string, inputs: Record<string, unknown>) =>
   placement(FORM_CONTAINER_BLOCK_RELEASE, { title: { kind: "text", value: title } }, {
     content: slot(inputs),
   });
-
-/** The outcomes every committing flow node settles into; each returns to the submitting form. */
-const flowOutcomes = ["committed", "validation", "refused", "conflict", "uncertain"] as const;
-
-/**
- * One current-user flow that commits a single action node and returns its settled outcome, the same
- * shape Service Desk uses to continue a form submission. The flow runs as the signed-in operator,
- * so the action's own permission, field policy and precondition decide the result.
- */
-const committingFlow = (
-  id: string,
-  name: string,
-  description: string,
-  target: JsonObject,
-  inputs: Record<string, { type: string; required: boolean }>,
-) => ({
-  id,
-  key: id,
-  name,
-  description,
-  run_as: "current_user",
-  inputs,
-  outputs: {},
-  variables: {},
-  nodes: [
-    { id: `start_${id}`, key: "start", kind: "start", outputs: inputs },
-    {
-      id: `run_${id}`,
-      key: "run_action",
-      kind: "action",
-      target,
-      inputs: Object.fromEntries(
-        Object.entries(inputs).map(([key, input]) => [
-          key,
-          { type: input.type, value: { source: "flow_input", input: key } },
-        ]),
-      ),
-      outputs: {},
-      results: {},
-    },
-    ...flowOutcomes.map((outcome) => ({
-      id: `return_${id}_${outcome}`,
-      key: `return_${outcome}`,
-      kind: "return",
-      results: {},
-      outcome,
-    })),
-  ],
-  edges: [
-    { id: `begin_${id}`, from_node: `start_${id}`, to_node: `run_${id}` },
-    ...flowOutcomes.map((outcome) => ({
-      id: `run_${id}_${outcome}`,
-      from_node: `run_${id}`,
-      to_node: `return_${id}_${outcome}`,
-      outcome,
-    })),
-  ],
-});
 
 const dashboardStates = ["normal", "loading", "empty", "refused", "failure", "recovery"];
 const listStates = ["normal", "loading", "empty", "refused", "access_ended", "failure", "recovery"];
@@ -460,24 +404,35 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
       shells: [],
       pages,
       theme,
+      // Each form commits through one flow with one task: the default Save of the incident form and
+      // a call of the incident.attach named action. The flows run as the signed-in operator, so the
+      // action's own permission, field policy and precondition decide the result.
       flows: [
-        committingFlow(
-          "operations_create_incident",
-          "Create incident",
-          "Creates the incident from the submitted Create incident form through the standard create action.",
-          { kind: "record_save", record_type: incidentRecordType, mode: "create" },
-          {},
-        ),
-        committingFlow(
-          "operations_attach_signal",
-          "Attach signal",
-          "Attaches the submitted alert signal to the current open incident through the bound incident.attach named action.",
-          { kind: "named_action", action: attachAction },
-          {
-            deduplication_key: { type: "text", required: true },
-            evidence: { type: "formatted_text", required: true },
-          },
-        ),
+        {
+          ...defaultSaveFlowSource({
+            id: "operations_create_incident",
+            key: "operations_create_incident",
+            description:
+              "Creates the incident from the submitted Create incident form through the one Save record task.",
+            recordType: incidentRecordType,
+            mode: "create",
+          }),
+          labels: { name: "Create incident" },
+        },
+        {
+          ...defaultOperationFlowSource({
+            id: "operations_attach_signal",
+            key: "operations_attach_signal",
+            description:
+              "Attaches the submitted alert signal to the current open incident through the bound incident.attach named action.",
+            operation: attachAction,
+            inputs: {
+              deduplication_key: { type: "text", required: true },
+              evidence: { type: "formatted_text", required: true },
+            },
+          }),
+          labels: { name: "Attach signal" },
+        },
       ],
       flow_bindings: [
         {
@@ -485,29 +440,19 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
           control: createForm,
           event_id: "form_submit_operations_new_incident",
           event: "form_submit",
-          flow: { kind: "application_owned", flow: "operations_create_incident" },
-          inputs: {},
-          results: {},
-          declared_effects: ["form_interaction", "change"],
+          flow: "operations_create_incident",
+          inputs: { values: { kind: "caller", name: "values" } },
         },
         {
           id: "form_binding_operations_incident_attach",
           control: attachForm,
           event_id: "form_submit_operations_incident_attach",
           event: "form_submit",
-          flow: { kind: "application_owned", flow: "operations_attach_signal" },
+          flow: "operations_attach_signal",
           inputs: {
-            deduplication_key: {
-              type: "text",
-              value: { source: "form_input", form: attachForm, input: "deduplication_key" },
-            },
-            evidence: {
-              type: "formatted_text",
-              value: { source: "form_input", form: attachForm, input: "evidence" },
-            },
+            deduplication_key: { kind: "caller", name: "deduplication_key" },
+            evidence: { kind: "caller", name: "evidence" },
           },
-          results: {},
-          declared_effects: ["form_interaction", "change"],
         },
       ],
     },

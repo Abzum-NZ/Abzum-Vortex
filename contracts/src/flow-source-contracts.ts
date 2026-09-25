@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { workflowValueTypeSchema } from "./catalogues";
 import { descriptionSchema, jsonValueSchema, retryPolicySchema } from "./common";
-import { definitionProvenanceEntrySchema } from "./definition-compilation-contracts";
+import { definitionProvenanceEntrySchema } from "./definition-provenance";
 import {
   flowContractVersion,
   flowExecutionKindSchema,

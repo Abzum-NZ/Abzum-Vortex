@@ -11,6 +11,7 @@ import { actionInputDefinitionV2Schema } from "./module-contracts-v2";
 import { moduleContractVersionPairV3Schema, moduleDraftV3Schema } from "./module-contracts-v3";
 import { moduleSourceDocumentSchema } from "./definition-source";
 import { descriptionSchema } from "./common";
+import { definitionProvenanceEntrySchema } from "./definition-provenance";
 import {
   actionIdSchema,
   actorIdSchema,
@@ -32,6 +33,8 @@ import {
   timestampSchema,
 } from "./identifiers";
 import { moduleVersionImpactHistoryEntryV3Schema } from "./version-impact";
+
+export { definitionProvenanceEntrySchema, type DefinitionProvenanceEntry } from "./definition-provenance";
 
 export const sourceIdentityKindSchema = z.enum([
   "root",
@@ -225,28 +228,6 @@ export const applicationCompilationRequestV2Schema = z
     draftMetadata: definitionDraftMetadataSchema,
   })
   .strict();
-
-const definitionPathSchema = z
-  .array(z.union([z.string(), z.number().int().nonnegative()]))
-  .max(100);
-export const definitionProvenanceEntrySchema = z
-  .object({
-    canonicalPath: definitionPathSchema,
-    origin: z.enum(["source", "resolved", "fixed_default", "system_metadata"]),
-    sourcePath: definitionPathSchema.optional(),
-    ruleCode: namespacedKeySchema.optional(),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    const tracesSource = value.origin === "source" || value.origin === "resolved";
-    if (tracesSource !== (value.sourcePath !== undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["sourcePath"],
-        message:
-          "Source and resolved provenance require a source path; defaults and system metadata do not",
-      });
-  });
 
 const compiledArtifactCommon = {
   definitionKey: namespacedKeySchema,
@@ -640,7 +621,6 @@ export type ApplicationToolPermissionMeaning = z.infer<
   typeof applicationToolPermissionMeaningSchema
 >;
 export type CompiledDefinitionArtifact = z.infer<typeof compiledDefinitionArtifactSchema>;
-export type DefinitionProvenanceEntry = z.infer<typeof definitionProvenanceEntrySchema>;
 export type PublishedDefinitionHistory = z.infer<typeof publishedDefinitionHistorySchema>;
 export type DefinitionPublicationHistoryEvidence = z.infer<
   typeof definitionPublicationHistoryEvidenceSchema
