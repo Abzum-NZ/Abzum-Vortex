@@ -105,21 +105,32 @@ begin
     field_bounds := vortex_access.resolve_record_read_field_bounds_internal(declaration);
   exception
     when others then
-      field_bounds := '[]'::jsonb;
+      field_bounds := '{}'::jsonb;
   end;
 
+  -- Those fields may drive the scan only when every row the scan examines is a
+  -- row the exact decision admits: an unconditioned all-records alternative
+  -- admits every active record, and a restricted plan examines only owned and
+  -- directly shared records, which its routes admit unless a saved condition
+  -- narrows them. Otherwise the scan also examines rows the reader cannot read,
+  -- whose every value is hidden, so no field is readable for the scan.
   return query
   select routes.restricted, routes.owner_account_id, routes.owner_group_ids,
     routes.shared_record_ids,
-    coalesce(
-      (
-        select pg_catalog.array_agg(field.value order by field.value)
-        from pg_catalog.jsonb_array_elements_text(
-          field_bounds -> 'readableFieldIds'
-        ) as field(value)
-      ),
-      array[]::text[]
-    )
+    case
+      when (field_bounds -> 'coversAllRecords') = 'true'::jsonb
+        or (routes.restricted and (field_bounds -> 'conditionFree') = 'true'::jsonb)
+      then coalesce(
+        (
+          select pg_catalog.array_agg(field.value order by field.value)
+          from pg_catalog.jsonb_array_elements_text(
+            field_bounds -> 'readableFieldIds'
+          ) as field(value)
+        ),
+        array[]::text[]
+      )
+      else array[]::text[]
+    end
   from vortex_access.resolve_record_read_scan_routes_internal(
     declaration, target_meta ->> 'ownershipMode'
   ) as routes;
@@ -137,4 +148,4 @@ revoke all on function vortex_record.plan_record_read_scan_internal(uuid)
     vortex_record_owner, vortex_module_owner;
 
 comment on function vortex_record.plan_record_read_scan_internal(uuid) is
-  'Private read-scan narrowing for the record query: builds the read declaration for one record type of the exact active installation and returns the owner account, owner groups and directly shared record identifiers a caller can be admitted through, or unrestricted, together with the exact fields every eligible read alternative is guaranteed to expose; any failure returns unrestricted with no readable fields and never widens what the exact per-row decision allows.';
+  'Private read-scan narrowing for the record query: builds the read declaration for one record type of the exact active installation and returns the owner account, owner groups and directly shared record identifiers a caller can be admitted through, or unrestricted, together with the fields every eligible read alternative is guaranteed to expose, kept only when every row the scan examines is one the exact decision admits; any failure returns unrestricted with no readable fields and never widens what the exact per-row decision allows.';

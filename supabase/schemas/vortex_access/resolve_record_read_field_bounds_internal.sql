@@ -8,6 +8,8 @@ security definer
 set search_path = ''
 as $function$
 declare
+  -- Nothing guaranteed and no exactness claim: the fail-closed answer.
+  nothing constant jsonb := '{"readableFieldIds":[],"coversAllRecords":false,"conditionFree":false}'::jsonb;
   ctx jsonb;
   checked_at timestamptz;
   decision_organization_id uuid;
@@ -21,11 +23,11 @@ declare
   route jsonb;
   catalogue_entry vortex_access.permission_catalogue_entries%rowtype;
   policy_readable text[];
-  route_intersection text[];
-  contribution_readable text[];
-  contribution_route_count integer;
-  guaranteed text[];
-  first_contribution boolean := true;
+  route_readable text[];
+  guaranteed text[] := array[]::text[];
+  first_route boolean := true;
+  covers_all_records boolean := false;
+  condition_free boolean := true;
   wants_share boolean := false;
   member_group_ids uuid[];
   share_row record;
@@ -55,7 +57,7 @@ begin
   -- An ineligible caller is admitted to no record, so it is guaranteed no
   -- field and nothing may be pushed.
   if eligibility ->> 'outcome' <> 'eligible' then
-    return pg_catalog.jsonb_build_object('readableFieldIds', '[]'::jsonb);
+    return nothing;
   end if;
 
   -- A direct-share route narrows its permission to the individual share's own
@@ -114,24 +116,33 @@ begin
         )
     loop
       if not share_seen then
-        share_intersection := share_row.readable_field_ids::text[];
+        share_intersection := array(
+          select pg_catalog.lower(field.value)
+          from pg_catalog.unnest(share_row.readable_field_ids::text[]) as field(value)
+        );
         share_seen := true;
       else
         share_intersection := array(
           select field.value
           from pg_catalog.unnest(share_intersection) as field(value)
-          where field.value = any (share_row.readable_field_ids::text[])
+          where field.value = any (
+            select pg_catalog.lower(shared.value)
+            from pg_catalog.unnest(share_row.readable_field_ids::text[]) as shared(value)
+          )
         );
       end if;
     end loop;
   end if;
 
-  -- A field is guaranteed only when every eligible alternative exposes it for
-  -- every record that alternative can admit. The intersection of each
-  -- alternative's own readable set is that guarantee. A direct-share route
-  -- contributes its permission's policy intersected with the current shares'
-  -- common bounds; with no current share it admits no record and contributes
-  -- nothing.
+  -- Each record is admitted by at least one (alternative, route) pair, and the
+  -- exact decision exposes the union of the fields of the pairs that admit it.
+  -- A field is therefore guaranteed on every admitted record only when every
+  -- pair that can admit a record exposes it: the intersection over every pair,
+  -- never a union within one alternative. An ownership, all-records or
+  -- relationship pair exposes its permission's policy; a direct-share pair
+  -- exposes that policy narrowed by the share, bounded here by the common
+  -- bounds of every current share, and with no current share it admits no
+  -- record and constrains nothing. Any unknown route fails closed.
   for candidate in
     select listed.value
     from pg_catalog.jsonb_array_elements(
@@ -182,7 +193,7 @@ begin
     -- A permission with no declared field policy contributes no field at all,
     -- so nothing is guaranteed for the whole record type.
     if catalogue_entry.field_policy is null then
-      return pg_catalog.jsonb_build_object('readableFieldIds', '[]'::jsonb);
+      return nothing;
     end if;
 
     select coalesce(pg_catalog.array_agg(pg_catalog.lower(field.value)), array[]::text[])
@@ -191,63 +202,70 @@ begin
       catalogue_entry.field_policy -> 'readableFieldIds'
     ) as field(value);
 
-    contribution_readable := array[]::text[];
-    contribution_route_count := 0;
     routes := candidate -> 'recordScope' -> 'routes';
     if pg_catalog.jsonb_typeof(routes) is distinct from 'array' then
-      return pg_catalog.jsonb_build_object('readableFieldIds', '[]'::jsonb);
+      return nothing;
     end if;
+
+    -- A saved condition narrows every route of its alternative, including an
+    -- all-records route, per record; the scan's table narrowing cannot apply it.
+    if (candidate -> 'recordScope') ? 'savedCondition' then
+      condition_free := false;
+    elsif exists (
+      select 1 from pg_catalog.jsonb_array_elements(routes) as listed_route(value)
+      where listed_route.value ->> 'kind' = 'all_records'
+    ) then
+      covers_all_records := true;
+    end if;
+
     for route in
       select listed_route.value
       from pg_catalog.jsonb_array_elements(routes) as listed_route(value)
     loop
-      if route ->> 'kind' = 'direct_share' then
-        if not share_seen then
-          continue;
-        end if;
-        route_intersection := array(
-          select shared.value
-          from pg_catalog.unnest(policy_readable) as shared(value)
-          where shared.value = any (share_intersection)
+      case route ->> 'kind'
+        when 'all_records', 'ownership', 'relationship' then
+          route_readable := policy_readable;
+        when 'direct_share' then
+          if not share_seen then
+            continue;
+          end if;
+          route_readable := array(
+            select shared.value
+            from pg_catalog.unnest(policy_readable) as shared(value)
+            where shared.value = any (share_intersection)
+          );
+        else
+          return nothing;
+      end case;
+
+      if first_route then
+        guaranteed := array(
+          select distinct field.value
+          from pg_catalog.unnest(route_readable) as field(value)
         );
-        contribution_readable := contribution_readable || route_intersection;
-        contribution_route_count := contribution_route_count + 1;
+        first_route := false;
       else
-        contribution_readable := contribution_readable || policy_readable;
-        contribution_route_count := contribution_route_count + 1;
+        guaranteed := array(
+          select field.value
+          from pg_catalog.unnest(guaranteed) as field(value)
+          where field.value = any (route_readable)
+        );
+      end if;
+      if pg_catalog.cardinality(guaranteed) = 0 then
+        return nothing;
       end if;
     end loop;
-
-    -- A contribution with no route that can admit a record constrains nothing.
-    if contribution_route_count = 0 then
-      continue;
-    end if;
-
-    contribution_readable := array(
-      select distinct value from pg_catalog.unnest(contribution_readable) as field(value)
-      order by value
-    );
-    if first_contribution then
-      guaranteed := contribution_readable;
-      first_contribution := false;
-    else
-      guaranteed := array(
-        select field.value
-        from pg_catalog.unnest(guaranteed) as field(value)
-        where field.value = any (contribution_readable)
-      );
-    end if;
-    if pg_catalog.cardinality(guaranteed) = 0 then
-      return pg_catalog.jsonb_build_object('readableFieldIds', '[]'::jsonb);
-    end if;
   end loop;
 
-  if first_contribution then
-    guaranteed := array[]::text[];
-  end if;
+  guaranteed := array(
+    select field.value from pg_catalog.unnest(guaranteed) as field(value)
+    order by field.value
+  );
 
   return pg_catalog.jsonb_build_object(
-    'readableFieldIds', pg_catalog.to_jsonb(guaranteed)
+    'readableFieldIds', pg_catalog.to_jsonb(guaranteed),
+    'coversAllRecords', covers_all_records,
+    'conditionFree', condition_free
   );
 end
 $function$;
@@ -259,4 +277,4 @@ grant execute on function vortex_access.resolve_record_read_field_bounds_interna
   to vortex_record_adapter;
 
 comment on function vortex_access.resolve_record_read_field_bounds_internal(jsonb) is
-  'Private whole-record-type field bounds for the fixed record query: from the caller''s own current eligible read alternatives it returns the exact fields every alternative is guaranteed to expose on every record it can admit, intersected with each current direct share''s own bounds, or an empty set when any alternative can withhold a field; it only decides which fields a scan may order or filter by and never decides access.';
+  'Private whole-record-type field bounds for the fixed record query: from the caller''s own current eligible read alternatives it returns the fields every alternative route is guaranteed to expose on every record it can admit (the intersection over every alternative and route, each direct-share route narrowed by every current share''s own bounds), whether an unconditioned all-records alternative admits every active record, and whether no alternative carries a saved condition; any unknown route or missing policy yields no fields. It only decides which fields a scan may order or filter by and never decides access.';

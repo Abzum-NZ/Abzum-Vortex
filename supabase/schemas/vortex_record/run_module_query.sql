@@ -209,9 +209,10 @@ begin
   end loop;
 
   -- The read-scan plan. Its access routes narrow candidate rows before the
-  -- budget is spent; its readable fields are exactly the fields this reader is
-  -- guaranteed to see for the whole record type. Only those fields may drive
-  -- the scan order, the pushed filter or the keyset cursor, because any other
+  -- budget is spent; its readable fields are the fields this reader is
+  -- guaranteed to see on every row the scan examines, and none when the scan
+  -- can examine a row the reader cannot read. Only those fields may drive the
+  -- scan order, the pushed filter or the keyset cursor, because any other
   -- field could be withheld and its value must not influence which rows are
   -- examined. A failure yields no readable fields, so nothing is pushed.
   select plan.* into access_plan
