@@ -1656,7 +1656,7 @@ function sourceResolvesIdentity(sourcePath: Path, positions: SourceContractPosit
   return (
     path === "root_alias" ||
     (typeof last === "string" && ID_FIELDS.has(last)) ||
-    /\/(?:custom_actions|carries|declared_fields|public_fields|select|group_by|component_order|relationships|record_types|allowed_child_blocks)\/#$/.test(
+    /\/(?:custom_actions|carries|declared_fields|filterable_fields|sortable_fields|public_fields|select|group_by|component_order|relationships|record_types|allowed_child_blocks)\/#$/.test(
       path,
     ) ||
     /\/(?:record_type|source_record_type|to_record_type|target|field|page|query|block|home_page|module|connection_type|workflow|node|relationship|amount_field|percentage_field|date_field|due_field|status_field|required_permission|dependency|extension_point|contributed_action)$/.test(
@@ -3434,7 +3434,9 @@ function compileModule(
     const qualified = `${definitionKey}:${recordKey}`;
     const projection = recordType.system_projection as JsonObject | undefined;
     // A system projection record type has no ordinary write path: its changes go only through the
-    // registered protected operation its actions target, so a standard write action refuses here.
+    // registered protected operation its actions target, so a standard write action refuses here at
+    // publication with its own registered code. The source contract deliberately admits the
+    // declaration so this stable refusal, not a generic shape failure, is what the author sees.
     if (
       projection !== undefined &&
       (recordType.standard_actions as string[]).some(
@@ -3611,9 +3613,10 @@ function compileModule(
     };
   });
   // Every effect-based Module named action also compiles to one `transaction` flow (#1062). A
-  // protected-operation action instead targets one registered platform-service operation; its one
-  // Call protected operation task, which passes the subject record's identity and revision
-  // automatically, arrives with execution (#1063), so it compiles to no flow here yet.
+  // protected-operation action instead targets one registered platform-service operation that
+  // takes the subject row's identity and expected revision automatically. Its execution is not
+  // built yet, so it compiles to no flow here, and the record runtime refuses to prepare it
+  // because its canonical action and system projection record type are not effect-based shapes.
   const usedFlowKeys = new Set(flows.map((flow) => String(flow.key)));
   const actionFlows = (body.actions as JsonObject[]).flatMap((action, actionIndex) => {
     if (action.protected_operation !== undefined) return [];

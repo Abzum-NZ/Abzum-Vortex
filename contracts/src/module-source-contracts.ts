@@ -1182,17 +1182,19 @@ export const moduleSourceActionInputSchema = z
 // Record types, actions and sharing conditions.
 // ---------------------------------------------------------------------------
 
-const registeredProtectedOperationKeys = Object.keys(
-  PLATFORM_SERVICE_OPERATIONS,
-) as [string, ...string[]];
+const systemRecordProtectedOperationKeys = Object.entries(PLATFORM_SERVICE_OPERATIONS)
+  .filter(([, operation]) => operation.descriptor.expectedRevision === "required")
+  .map(([key]) => key) as [string, ...string[]];
 
 /**
  * A registered protected operation a system projection record type action may target: exactly the
- * operations the platform-service catalogue registers. The operation stays the only write path over
- * its protected fact, so an action names it by its registered key and never by an identity, and the
- * registered operation re-checks the actor's current authority when it runs.
+ * platform-service catalogue operations that change one existing row at an expected revision, so
+ * the subject row's identity and revision always have somewhere to go. The operation stays the only
+ * write path over its protected fact, so an action names it by its registered key and never by an
+ * identity. The operation requires its own registered permission and re-checks the actor's current
+ * authority when it runs, in addition to the action's own permission.
  */
-export const moduleSourceProtectedOperationKeySchema = z.enum(registeredProtectedOperationKeys);
+export const moduleSourceProtectedOperationKeySchema = z.enum(systemRecordProtectedOperationKeys);
 
 /**
  * The system projection storage kind: the record type's typed fields project one registered
@@ -1224,6 +1226,20 @@ export const moduleSourceSystemProjectionSchema = z
         message: "Sortable fields must be unique",
       });
   });
+
+/**
+ * Field types whose values come from generated record storage (counters, relationship edges,
+ * relationship totals, stored files or child rows) rather than a column of a protected view, so a
+ * system projection record type cannot declare them.
+ */
+const systemProjectionRefusedFieldTypes: ReadonlySet<string> = new Set([
+  "reference_number",
+  "table",
+  "link",
+  "link_to_one_of_several",
+  "total",
+  "attachment",
+]);
 
 export const moduleSourceRecordTypeSchema = z
   .object({
@@ -1286,67 +1302,67 @@ export const moduleSourceRecordTypeSchema = z
     if (projection === undefined) return;
     // A system record type is a read-only projection of protected storage that includes the
     // organisation: its write path is the named protected operation, never a standard record
-    // command, so create, update, delete and restore are refused at publication.
+    // command. A standard create, update, delete or restore is refused at publication by the
+    // compiler with its own registered code (vortex.definition.system_record_write_refused), so
+    // the source shape deliberately admits the declaration for that refusal to report.
     if (value.storage_scope !== "organisation_shared")
       context.addIssue({
         code: "custom",
         path: ["storage_scope"],
         message: "A system projection record type is scoped to exactly one organisation",
       });
-    const refused = value.standard_actions.filter(
-      (action) =>
-        action === "create" ||
-        action === "update" ||
-        action === "soft_delete" ||
-        action === "restore",
-    );
-    if (refused.length > 0)
-      context.addIssue({
-        code: "custom",
-        path: ["standard_actions"],
-        message: "System projection record types refuse standard create, update, delete and restore",
-      });
     const fields = new Map(value.fields.map((field) => [field.key, field]));
-    if (!fields.has(projection.organization_field))
+    const organization = fields.get(projection.organization_field);
+    if (organization === undefined || organization.type !== "text" || !organization.required)
       context.addIssue({
         code: "custom",
         path: ["system_projection", "organization_field"],
-        message: "The organisation field must belong to the system projection record type",
+        message: "The organisation field must be a required text field of the record type",
       });
-    if (!fields.has(projection.revision_field))
+    const revision = fields.get(projection.revision_field);
+    if (revision === undefined || revision.type !== "whole_number" || !revision.required)
       context.addIssue({
         code: "custom",
         path: ["system_projection", "revision_field"],
-        message: "The revision field must belong to the system projection record type",
+        message: "The revision field must be a required whole-number field of the record type",
       });
-    for (const [index, key] of projection.filterable_fields.entries()) {
-      const field = fields.get(key);
-      if (field === undefined)
+    for (const [index, field] of value.fields.entries())
+      if (systemProjectionRefusedFieldTypes.has(field.type))
+        context.addIssue({
+          code: "custom",
+          path: ["fields", index, "type"],
+          message: "A system projection field is a read-only value of its protected view",
+        });
+    const filterable = new Set(projection.filterable_fields);
+    const sortable = new Set(projection.sortable_fields);
+    for (const [index, key] of projection.filterable_fields.entries())
+      if (!fields.get(key)?.filterable)
         context.addIssue({
           code: "custom",
           path: ["system_projection", "filterable_fields", index],
-          message: "A declared filterable field must belong to the record type",
+          message: "A declared filterable field must be a filterable field of the record type",
         });
-      else if (!field.filterable)
-        context.addIssue({
-          code: "custom",
-          path: ["system_projection", "filterable_fields", index],
-          message: "A declared filterable field must be filterable",
-        });
-    }
-    for (const [index, key] of projection.sortable_fields.entries()) {
-      const field = fields.get(key);
-      if (field === undefined)
+    for (const [index, key] of projection.sortable_fields.entries())
+      if (!fields.get(key)?.sortable)
         context.addIssue({
           code: "custom",
           path: ["system_projection", "sortable_fields", index],
-          message: "A declared sortable field must belong to the record type",
+          message: "A declared sortable field must be a sortable field of the record type",
         });
-      else if (!field.sortable)
+    // The declared lists are the closed set the query engine may use, so a field flagged
+    // filterable or sortable outside them would be an undeclared query capability.
+    for (const [index, field] of value.fields.entries()) {
+      if (field.filterable && !filterable.has(field.key))
         context.addIssue({
           code: "custom",
-          path: ["system_projection", "sortable_fields", index],
-          message: "A declared sortable field must be sortable",
+          path: ["fields", index, "filterable"],
+          message: "Every filterable system projection field must be declared filterable",
+        });
+      if (field.sortable && !sortable.has(field.key))
+        context.addIssue({
+          code: "custom",
+          path: ["fields", index, "sortable"],
+          message: "Every sortable system projection field must be declared sortable",
         });
     }
   });
