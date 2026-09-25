@@ -250,6 +250,15 @@ export {
 } from "./flow-effective-actor";
 
 export {
+  createDurableActorRequestService,
+  verifiedDurableActorContextSchema,
+  type DurableActorRequestDependencies,
+  type DurableActorRequestResult,
+  type DurableActorRequestScope,
+  type VerifiedDurableActorRequestContext,
+} from "./durable-actor-request";
+
+export {
   createInitialOperatingRoleGrantService,
   establishInitialOperatingRoleGrant,
   InitialOperatingRoleGrantError,
