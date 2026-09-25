@@ -249,7 +249,11 @@ const parseDraftFeedbackSupply = (
       ),
       warnings: Object.freeze(
         warnings.map((warning) =>
-          requireNonEmptyString(warning, "A draft-feedback warning must be non-empty text", location),
+          requireNonEmptyString(
+            warning,
+            "A draft-feedback warning must be non-empty text",
+            location,
+          ),
         ),
       ),
       ...(feedback.refusal === undefined

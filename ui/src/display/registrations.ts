@@ -175,7 +175,7 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       render: RecordDetailDisplay,
       parsePayload: RECORD_DETAIL_PAYLOAD_PARSER,
     }),
-    // Release 1.3.0 adds configured row behaviours to the Records table; the same parser reads them.
+    // Release 1.3.0 adds configured row behaviours; the same parser reads them.
     Object.freeze({
       metadata: TABLE_BLOCK_RELEASE_1_3_0,
       render: TableDisplay,
