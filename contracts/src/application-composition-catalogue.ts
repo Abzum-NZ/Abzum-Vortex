@@ -137,6 +137,15 @@ export const CONTAINER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.C
 /** Exact immutable metadata release for the heading block. */
 export const HEADING_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.HEADING_BLOCK_RELEASE);
 
+/**
+ * Exact immutable metadata release for the application navigation block. Its renderer draws the
+ * viewer's permission-filtered projected menu; the release refuses the public surface because the
+ * menu is per-person, so a public page never carries it.
+ */
+export const APPLICATION_NAVIGATION_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(
+  sources.APPLICATION_NAVIGATION_BLOCK_RELEASE,
+);
+
 /** Exact immutable metadata release for the form container block. */
 export const FORM_CONTAINER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.FORM_CONTAINER_BLOCK_RELEASE);
 
@@ -205,12 +214,18 @@ export const LAYOUT_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.f
   HEADING_BLOCK_RELEASE,
 ]);
 
-/** All thirty-four immutable platform block releases registered for the page builder. */
+/** The one immutable application navigation block release, placed in a shell's layout. */
+export const NAVIGATION_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
+  APPLICATION_NAVIGATION_BLOCK_RELEASE,
+]);
+
+/** All thirty-five immutable platform block releases registered for the page builder. */
 export const PLATFORM_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   ...DISPLAY_BLOCK_RELEASES,
   ...CONTROL_BLOCK_RELEASES,
   ...LAUNCHER_BLOCK_RELEASES,
   ...LAYOUT_BLOCK_RELEASES,
+  ...NAVIGATION_BLOCK_RELEASES,
 ]);
 
 /**

@@ -242,13 +242,22 @@ export {
 // Application Navigation (#861)
 export {
   ApplicationNavigation,
+  ApplicationNavigationBlock,
   NAVIGATION_STYLES_CSS,
   type ApplicationNavigationProps,
   type ProjectedNavigation,
   type ProjectedNavigationItem,
 } from "./navigation";
 
-// Full Platform Component Registry (Display + Controls + Launcher + Layout)
+// Application Navigation Registrations & Registry (#1009)
+export {
+  APPLICATION_NAVIGATION_BLOCK_RELEASE,
+  NAVIGATION_BLOCK_RELEASES,
+  NAVIGATION_COMPONENT_REGISTRATIONS,
+  createNavigationComponentRegistry,
+} from "./navigation";
+
+// Full Platform Component Registry (Display + Controls + Launcher + Layout + Navigation)
 export {
   ALL_PLATFORM_COMPONENT_REGISTRATIONS,
   createFullPlatformComponentRegistry,

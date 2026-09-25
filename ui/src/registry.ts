@@ -6,6 +6,7 @@ import {
   type BlockPropertyValueV2Contract,
   type ImmutablePlatformBlockCatalogueV2,
   type PlatformBlockReleaseV2,
+  type ProjectedNavigation,
 } from "@vortex/contracts";
 import { DefinitionRenderError, type Breakpoint } from "./definition-error";
 import type {
@@ -33,6 +34,20 @@ export type PlatformBlockRenderProps = Readonly<{
   displayEvents?: DisplayEventHandlers;
   controlData?: ProjectedControlData;
   controlEvents?: ControlEventHandlers;
+  /**
+   * The viewer's already permission-filtered application menu, projected by the server. It is the
+   * one shared `ProjectedNavigation` type; a block that renders the menu never filters, rebuilds or
+   * invents it. Absent evidence is an empty menu, never a guessed one.
+   */
+  projectedNavigation?: ProjectedNavigation;
+  /**
+   * Resolves one internal page identity to the address the shell routes on. Route composition owns
+   * the address shape, so navigation never invents one; a navigation block given a non-empty menu
+   * without a resolver is refused.
+   */
+  resolvePageHref?: (pageId: string) => string;
+  /** Exact internal page identity currently shown, for the current-page state. */
+  currentPageId?: string;
 }>;
 
 /**

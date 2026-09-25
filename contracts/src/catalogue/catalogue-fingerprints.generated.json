@@ -132,6 +132,10 @@
       "contentFingerprint": "sha256:7e97a0c5ef4df685b95829e8f1c749ba2be900d41ed555ccd13d433fb06a5063",
       "catalogueFingerprint": "sha256:ff7820a4efc56c4d5e1d46700ca22def367859d98ea1360b86178ff6f7ee4165"
     },
+    "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24:1.0.0": {
+      "contentFingerprint": "sha256:cb27f88ea3506a9f55390df8af14fd1b9b752a9e5534514c412687eae5aadb75",
+      "catalogueFingerprint": "sha256:a69b379337c0d0cf82beed9c4c08dff5e6d68cd5cb7cf35b312fc34d4936e498"
+    },
     "e9418c36-3234-4806-a05a-0f259482238d:1.0.0": {
       "contentFingerprint": "sha256:26cfa1e7aba67de07f8888b3bcc3e2e54e17d3231f820e1a120b4843d59b07f2",
       "catalogueFingerprint": "sha256:e9ca9db5b9cd8b388ea604ca60e619ffd7f3d229923f6c3b053f941e5552c8e3"
