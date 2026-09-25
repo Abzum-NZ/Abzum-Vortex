@@ -32,6 +32,7 @@ import {
   workflowNodeIdSchema,
 } from "./identifiers";
 import { versionRequirementSchema } from "./definitions";
+import { protectedOperationChannelSchema } from "./operation-contracts";
 
 /**
  * @deprecated The current-user node-and-edge flow and its per-surface bindings are replaced by
@@ -181,25 +182,14 @@ export const resolvedFlowTargetEvidenceSchema = z
   })
   .strict();
 
-export const frontendFlowReferenceSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("application_owned"),
-      applicationRootId: applicationRootIdSchema,
-      flowId: ruleIdSchema,
-      ...resolvedFlowTargetEvidenceSchema.shape,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("platform_managed"),
-      flowId: ruleIdSchema,
-      releaseVersion: stableDefinitionReleaseVersionSchema,
-      contentFingerprint: fingerprintSchema,
-      catalogueFingerprint: fingerprintSchema,
-    })
-    .strict(),
-]);
+export const frontendFlowReferenceSchema = z
+  .object({
+    kind: z.literal("application_owned"),
+    applicationRootId: applicationRootIdSchema,
+    flowId: ruleIdSchema,
+    ...resolvedFlowTargetEvidenceSchema.shape,
+  })
+  .strict();
 
 export const componentSemanticEventKindSchema = z.enum([
   "action",
@@ -345,17 +335,6 @@ export const flowTargetDependencySchema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
-
-/** Exact immutable authority for a platform-managed flow catalogue release. */
-export const platformManagedFlowDependencySchema = z
-  .object({
-    kind: z.literal("platform_flow"),
-    flowId: ruleIdSchema,
-    releaseVersion: stableDefinitionReleaseVersionSchema,
-    contentFingerprint: fingerprintSchema,
-    catalogueFingerprint: fingerprintSchema,
-  })
-  .strict();
 
 export const platformServiceOperationReleaseSchema = z
   .object({
@@ -572,14 +551,11 @@ export const flowNodeRunAsSchema = z.discriminatedUnion("kind", [
  * definition carries. It names one exact organisation, application release, flow node, protected
  * operation and effective actor, plus who may invoke it, on which surfaces, with which declared
  * inputs and until when. Editing, installing, copying or delegating a role never creates one.
+ *
+ * The surface is the same one channel vocabulary as the Activity source, so a binding's permitted
+ * surface and the recorded source of the operation it invokes never diverge.
  */
-export const flowExecutionBindingSurfaceSchema = z.enum([
-  "web",
-  "mcp",
-  "programmatic_interface",
-  "durable_workflow",
-  "system",
-]);
+export const flowExecutionBindingSurfaceSchema = protectedOperationChannelSchema;
 
 export const flowExecutionInvokerSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("system") }).strict(),
@@ -989,6 +965,9 @@ const protectedOperationConfirmedResults: readonly string[] = Object.values(
 const fixedActionTargetResults: Readonly<Partial<Record<string, readonly string[]>>> =
   currentUserFlowActionResults;
 
+// Removal point (#986): frontend flow routing analysis (the rule that every result routes to its own return node, and the graph checks below) is superseded by the one flow validator
+// (runtime/definition/src/flow-validation.ts, #985). It stays only while an old-shape definition can still
+// be published; #986 converts the shipped definitions to flows and deletes it in the same change.
 export type FlowRoutingNode = Readonly<{
   id: string;
   kind: string;
@@ -1738,21 +1717,12 @@ export const sourceTypedFlowInputBindingSchema = z
       });
   });
 
-export const sourceFrontendFlowReferenceSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("application_owned"),
-      flow: sourceAliasSchema,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("platform_managed"),
-      flow_id: ruleIdSchema,
-      release_version: stableDefinitionReleaseVersionSchema,
-    })
-    .strict(),
-]);
+export const sourceFrontendFlowReferenceSchema = z
+  .object({
+    kind: z.literal("application_owned"),
+    flow: sourceAliasSchema,
+  })
+  .strict();
 
 export const sourceComponentFlowBindingSchema = z
   .object({
@@ -2334,7 +2304,6 @@ export type ProtectedOperationOwner = z.infer<typeof protectedOperationOwnerSche
 export type ProtectedOperationReference = z.infer<typeof protectedOperationReferenceSchema>;
 export type ResolvedFlowTargetEvidence = z.infer<typeof resolvedFlowTargetEvidenceSchema>;
 export type FlowTargetDependency = z.infer<typeof flowTargetDependencySchema>;
-export type PlatformManagedFlowDependency = z.infer<typeof platformManagedFlowDependencySchema>;
 export type PlatformServiceOperationRelease = z.infer<
   typeof platformServiceOperationReleaseSchema
 >;

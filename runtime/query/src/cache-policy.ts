@@ -17,24 +17,33 @@ import { protectedQueryCommandSchema } from "./protected-query-contracts";
 
 /**
  * Query cache policy. Given a Query request that has already been permitted and
- * the exact definition, Access and Record versions read for this request, it
- * returns either one canonical bounded cache key with its expiry or a bypass.
+ * the exact definition and Access version read for this request, it returns
+ * either one canonical bounded cache key with its expiry or a bypass.
+ *
+ * A committed Record save no longer increments one shared per-record-type
+ * counter: freshness is bounded by the policy lifetime, and a save publishes a
+ * content-free post-commit invalidation notice instead. The Record types a
+ * query reads still scope the key, but no Record data version is part of it.
  *
  * It never reads a store, a clock or a database and never grants anything: a
  * hit still passes the current permission and field recheck that
  * `readThroughQueryCache` requires before reuse.
+ * A query that reads a read-time computed field (such as deadline-passed) always
+ * bypasses: its value changes with the clock and no data change, so no data-result
+ * cache entry may hold it.
  * Anything that cannot be established (a missing or repeated dependency, an
  * unproven authority window, sensitive fields, a shared-source result, or a
  * malformed input) bypasses, so the ordinary authorised query runs instead.
  */
 
-export const queryCacheKeyVersion = "v1";
+export const queryCacheKeyVersion = "v2";
 export const queryCacheMaxTtlSeconds = 3_600;
 export const queryCacheMaxRecordDependencies = 50;
 
 export const queryCacheBypassReasons = [
   "policy_invalid",
   "cache_not_allowed",
+  "read_time_fields",
   "sensitive_fields",
   "shared_source",
   "dependencies_unknown",
@@ -43,9 +52,14 @@ export const queryCacheBypassReasons = [
 ] as const;
 export type QueryCacheBypassReason = (typeof queryCacheBypassReasons)[number];
 
-const dependencySchema = z
-  .object({ recordTypeId: recordTypeIdSchema, dataVersion: revisionSchema })
-  .strict();
+/**
+ * The Record types a query reads. Only the identity is part of the key: with no
+ * shared per-record-type data version, reuse is bounded by the policy lifetime
+ * and a committed save publishes a content-free invalidation notice. A legacy
+ * input that still carries a `dataVersion` is accepted and ignored rather than
+ * failing the policy.
+ */
+const dependencySchema = z.object({ recordTypeId: recordTypeIdSchema });
 
 const pinnedReleaseSchema = z
   .object({
@@ -56,8 +70,8 @@ const pinnedReleaseSchema = z
   .strict();
 
 /**
- * The versioned context of one permitted Query request. `dependencies` may be
- * empty only when the caller could not establish them, which bypasses.
+ * The versioned context of one permitted Query request. `recordDependencies`
+ * may be empty only when the caller could not establish them, which bypasses.
  */
 export const queryCacheInputSchema = z
   .object({
@@ -78,12 +92,17 @@ export const queryCacheInputSchema = z
         application: pinnedReleaseSchema,
       })
       .strict(),
-    /** Every Record type the query reads, each at its current data version. */
+    /** Every Record type the query reads. */
     recordDependencies: z.array(dependencySchema).max(queryCacheMaxRecordDependencies),
     eligibility: z
       .object({
         /** True only when the Query declaration explicitly allows result caching. */
         cachingAllowed: z.boolean(),
+        /**
+         * True when any requested, filtered or sorted field is a read-time computed field, or a
+         * calculation that depends on one. Its value changes without a data change.
+         */
+        readTimeFieldsPresent: z.boolean(),
         /** True when any requested or filtered field is sensitive or its sensitivity is unknown. */
         sensitiveFieldsPresent: z.boolean(),
         /** True when any row can come from another organisation's shared source. */
@@ -108,7 +127,7 @@ export type QueryCacheInput = z.input<typeof queryCacheInputSchema>;
 export type QueryCacheDecision =
   | Readonly<{
       outcome: "cache";
-      /** `vortex:query:v1:<organisationId>:<sha256>`, at most 128 characters. */
+      /** `vortex:query:v2:<organisationId>:<sha256>`, at most 128 characters. */
       key: string;
       /** ISO instant at which reuse ends: the earliest of policy, authority and session limits. */
       expiresAt: string;
@@ -138,20 +157,18 @@ export const decideQueryCache = (input: unknown): QueryCacheDecision => {
   if (!parsed.success) return bypass("policy_invalid");
   const { request, scope, definition, recordDependencies, eligibility, lifetime } = parsed.data;
 
+  if (eligibility.readTimeFieldsPresent) return bypass("read_time_fields");
   if (!eligibility.cachingAllowed) return bypass("cache_not_allowed");
   if (eligibility.sensitiveFieldsPresent) return bypass("sensitive_fields");
   if (eligibility.sharedSourceOwnership !== "none") return bypass("shared_source");
   if (lower(request.moduleRootId) !== lower(definition.moduleRootId)) return bypass("policy_invalid");
 
-  const dependencies = recordDependencies
-    .map((dependency) => ({
-      recordTypeId: lower(dependency.recordTypeId),
-      dataVersion: dependency.dataVersion,
-    }))
-    .sort((left, right) => (left.recordTypeId < right.recordTypeId ? -1 : left.recordTypeId > right.recordTypeId ? 1 : 0));
+  const dependencyRecordTypeIds = recordDependencies
+    .map((dependency) => lower(dependency.recordTypeId))
+    .sort();
   if (
-    dependencies.length === 0 ||
-    new Set(dependencies.map((dependency) => dependency.recordTypeId)).size !== dependencies.length
+    dependencyRecordTypeIds.length === 0 ||
+    new Set(dependencyRecordTypeIds).size !== dependencyRecordTypeIds.length
   )
     return bypass("dependencies_unknown");
 
@@ -180,7 +197,7 @@ export const decideQueryCache = (input: unknown): QueryCacheDecision => {
           module: definition.module,
           application: definition.application,
         },
-        dependencies,
+        recordTypeDependencies: dependencyRecordTypeIds,
         // The request's own identifiers keep their exact spelling: the Query
         // result echoes them, so a hit must come from an identical request.
         query: {

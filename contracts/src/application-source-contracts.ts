@@ -1,7 +1,5 @@
 import { z } from "zod";
 import {
-  listArrangementKeys,
-  pageStateSchema,
   workflowNodeTypeKeys,
   workflowValueTypeSchema,
 } from "./catalogues";
@@ -131,22 +129,6 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
 };
 
 const sourceFilterSchema = z.union([z.null(), sourceConditionSchema]);
-const sourceCalendarMappingSchema = z.union([
-  z.object({ start: builderKeySchema, end: builderKeySchema }).strict(),
-  z
-    .object({
-      start: builderKeySchema,
-      duration_field: builderKeySchema,
-      duration_unit: z.enum(["minutes", "hours", "days"]),
-    })
-    .strict(),
-]);
-const sourceStandardPageReplacementSchema = z
-  .object({
-    standard_page: z.enum(["list", "detail", "create_form"]),
-    record_type: sourceQualifiedRecordTypeSchema,
-  })
-  .strict();
 type SourceNavigation =
   | { id: string; type: "heading"; label: string; children: SourceNavigation[] }
   | { id: string; type: "page"; label: string; page: string; permission: string }
@@ -181,12 +163,16 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
       .strict(),
   ]),
 );
+// Retired page settings (#1011): accepted as opaque, unused JSON so stored authored
+// sources keep their fingerprints and older sources still parse; never compiled.
+const retiredSourcePageSettingV2Schema = jsonValueSchema.optional();
+
 const sourcePageV2Common = {
   id: sourceAliasSchema,
   key: builderKeySchema,
   name: labelSchema,
-  states: z.array(pageStateSchema).min(1),
-  standard_page_replacement: sourceStandardPageReplacementSchema.optional(),
+  states: retiredSourcePageSettingV2Schema,
+  standard_page_replacement: retiredSourcePageSettingV2Schema,
 };
 
 const sourcePageV2Base = {
@@ -201,18 +187,10 @@ const sourceListPageV2Schema = z
     record_type: sourceQualifiedRecordTypeSchema,
     permission: namespacedKeySchema,
     query: builderKeySchema,
-    arrangements: z.array(z.enum(listArrangementKeys)).min(1),
-    calendar_mapping: sourceCalendarMappingSchema.optional(),
+    arrangements: retiredSourcePageSettingV2Schema,
+    calendar_mapping: retiredSourcePageSettingV2Schema,
   })
-  .strict()
-  .superRefine((value, context) => {
-    if (value.arrangements.includes("calendar") !== (value.calendar_mapping !== undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["calendar_mapping"],
-        message: "Calendar mapping is required exactly for a calendar arrangement",
-      });
-  });
+  .strict();
 
 const sourceGuidedFormStepV2Schema = z
   .object({ id: sourceAliasSchema, name: z.string().min(1).max(60), summary: z.boolean() })
