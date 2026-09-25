@@ -21,6 +21,9 @@ const focusIfConnected = (element: HTMLElement | null): void => {
   if (element !== null && element.isConnected) element.focus();
 };
 
+/** The one payload member both modal surfaces read: the projected open state. */
+type ModalSurfacePayload = Readonly<{ open: boolean }>;
+
 /**
  * Shared modal surface for dialogs and drawers, built on the native modal `<dialog>`: the
  * browser makes the rest of the page inert, moves focus into the surface and keeps Tab inside
@@ -29,9 +32,6 @@ const focusIfConnected = (element: HTMLElement | null): void => {
  * `open` value drives the declared `open` and `close` state operations, and the rendered surface
  * advertises exactly those declared operations for the placement's flow tasks.
  */
-/** The one payload member both modal surfaces read: the projected open state. */
-type ModalSurfacePayload = Readonly<{ open: boolean }>;
-
 export function ModalSurface<Values extends ModalSurfacePayload>({
   props,
   kind,

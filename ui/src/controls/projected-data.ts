@@ -141,7 +141,7 @@ export type ButtonData = ControlDataState<ButtonPayload>;
 export type TabsData = ControlDataState<TabsPayload>;
 export type DialogData = ControlDataState<DialogPayload>;
 export type DrawerData = ControlDataState<DrawerPayload>;
-export type FormData = ControlDataState<FormPayload>;
+export type FormContainerData = ControlDataState<FormPayload>;
 
 /**
  * Explicit, data-safe state for one control placement, parameterised by that block's own ready

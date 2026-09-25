@@ -467,8 +467,9 @@ function PlacementView({
   });
 
   // 5. Parse this placement's own runtime inputs with its own registration's parser, fail-closed.
-  //    A placement whose use is unavailable stays viewable but never receives an invocable callback,
-  //    which each block's own context enforces from the availability it already receives.
+  //    A placement whose use is unavailable stays viewable but never receives an invocable
+  //    callback, which each block's own context enforces from the availability it receives. The
+  //    parsed inputs are spread first, so the props every block always receives cannot be replaced.
   const availability = projectedAvailability(placement, currentLocation);
   const suppliedInputs = ownPlacementEntry(runtimeInputs, placementId);
   const parsedInputs: PlatformBlockRuntimeInputs =
@@ -546,6 +547,7 @@ function PlacementView({
     >
       {visible ? (
         <Component
+          {...parsedInputs}
           placementId={placementId}
           settings={placement.settings}
           slots={renderedSlots}
@@ -553,7 +555,6 @@ function PlacementView({
           metadata={metadata}
           themeOverrides={placement.themeOverrides}
           {...availability}
-          {...parsedInputs}
           {...(projectedNavigation === undefined ? {} : { projectedNavigation })}
           {...(resolvePageHref === undefined ? {} : { resolvePageHref })}
           {...(currentPageId === undefined ? {} : { currentPageId })}
@@ -753,7 +754,8 @@ export type PageLayoutRendererProps = Readonly<{
    * registration, so the renderer itself names no payload field, event or callback.
    */
   runtimeInputs?: RuntimeInputsByPlacement;
-  /** The viewer's permission-filtered application menu, threaded to every navigation placement in
+  /**
+   * The viewer's permission-filtered application menu, threaded to every navigation placement in
    * the resolved tree. It is server-projected viewer data, never an authored setting.
    */
   projectedNavigation?: ProjectedNavigation;
@@ -824,7 +826,11 @@ export function PageLayoutRenderer({
   validateProjectedAvailabilityTree(resolved.slot, location);
 
   if (runtimeInputs !== undefined)
-    assertRuntimeInputKeysArePlacements(collectPlacementIds(resolved.slot), runtimeInputs, location);
+    assertRuntimeInputKeysArePlacements(
+      collectPlacementIds(resolved.slot),
+      runtimeInputs,
+      location,
+    );
 
   const applicationTheme = theme ?? ("theme" in composition ? composition.theme : undefined);
   const applicationTokens = applicationTheme?.tokens ?? {};

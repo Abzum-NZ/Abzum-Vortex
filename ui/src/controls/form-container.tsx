@@ -26,6 +26,7 @@ import {
   useFormScope,
   type FormScope,
 } from "./form-context";
+import type { FormPayload } from "./projected-data";
 
 /**
  * A form container accepts its own projected data and declared callbacks, plus one supplied #591
@@ -58,7 +59,11 @@ const FIRST_FIELD_SELECTOR =
  * two fields with one key fail closed.
  */
 export function FormContainer(props: FormContainerProps): ReactElement {
-  const context = resolveControlContext<FormPayload>(props, ["form_ready", "form_submit", "form_reset"]);
+  const context = resolveControlContext<FormPayload>(props, [
+    "form_ready",
+    "form_submit",
+    "form_reset",
+  ]);
   if (useFormScope() !== undefined)
     throw new DefinitionRenderError(
       "INVALID_COMPOSITION",

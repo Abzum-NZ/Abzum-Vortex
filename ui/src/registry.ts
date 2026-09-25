@@ -45,11 +45,14 @@ export const EMPTY_RUNTIME_INPUTS: PlatformBlockRuntimeInputs = Object.freeze({}
  */
 export const noRuntimeInputs: PlatformComponentPayloadParser = (inputs, location) => {
   if (inputs === undefined) return EMPTY_RUNTIME_INPUTS;
-  const supplied =
-    typeof inputs === "object" && inputs !== null && !Array.isArray(inputs)
-      ? Object.keys(inputs)
-      : undefined;
-  if (supplied === undefined || supplied.length === 0) return EMPTY_RUNTIME_INPUTS;
+  if (typeof inputs !== "object" || inputs === null || Array.isArray(inputs))
+    throw new DefinitionRenderError(
+      "INVALID_COMPOSITION",
+      "Component runtime inputs must be an object",
+      location,
+    );
+  const supplied = Object.keys(inputs);
+  if (supplied.length === 0) return EMPTY_RUNTIME_INPUTS;
   throw new DefinitionRenderError(
     "INVALID_COMPOSITION",
     `This block accepts no runtime input, but '${supplied.join(", ")}' was supplied`,
@@ -64,14 +67,40 @@ export type RuntimeInputReader = (
 ) => unknown;
 
 /**
+ * Prop names every block always receives from the page renderer. A runtime input can never use one,
+ * so a supplied input cannot stand in for a placement's identity, settings, availability or the
+ * page-scoped viewer context.
+ */
+const RESERVED_RENDER_PROP_NAMES: ReadonlySet<string> = new Set([
+  "placementId",
+  "settings",
+  "slots",
+  "breakpoint",
+  "metadata",
+  "themeOverrides",
+  "availability",
+  "unavailableReason",
+  "projectedNavigation",
+  "resolvePageHref",
+  "currentPageId",
+]);
+
+/**
  * Builds a registration's parser from the exact inputs that block declares. An input that is absent
  * stays absent; an input this block does not declare is refused, so no field is over-shared with
- * another block. Each reader validates its own value and names it in the reported location.
+ * another block. Each reader validates its own value and names it in the reported location. A
+ * declared input may not reuse a prop name the renderer always supplies.
  */
 export function createPayloadParser(
   readers: Readonly<Record<string, RuntimeInputReader>>,
 ): PlatformComponentPayloadParser {
   const declared = Object.keys(readers);
+  for (const name of declared)
+    if (RESERVED_RENDER_PROP_NAMES.has(name))
+      throw new DefinitionRenderError(
+        "INVALID_COMPOSITION",
+        `Runtime input '${name}' reuses a prop every block always receives`,
+      );
   return (inputs, location) => {
     if (inputs === undefined) return EMPTY_RUNTIME_INPUTS;
     if (typeof inputs !== "object" || inputs === null || Array.isArray(inputs))

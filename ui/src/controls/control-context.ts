@@ -29,7 +29,7 @@ export type ControlContext<Values> = Readonly<{
   location: DefinitionRenderErrorLocation;
   /** Authored accessible name, read only through the declared metadata path. */
   accessibleName: string | undefined;
-  /** Ready values of this control's exact payload, or the last ready values kept while not ready. */
+  /** Ready values of this control's own payload, or the last ready values kept while not ready. */
   values: Values | undefined;
   /** The control's data or a submission it started is pending; it cannot be activated. */
   pending: boolean;

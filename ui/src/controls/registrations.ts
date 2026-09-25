@@ -147,10 +147,15 @@ const parseTypedFieldValues = (
   location: DefinitionRenderErrorLocation,
 ): Readonly<Record<string, TypedFieldValue>> => {
   const record = requireRecord(value, "Draft-feedback values must be an object", location);
-  const values: Record<string, TypedFieldValue> = {};
-  for (const [fieldKey, fieldValue] of Object.entries(record))
-    values[fieldKey] = parseTypedFieldValue(fieldValue, { ...location, propertyPath: [fieldKey] });
-  return Object.freeze(values);
+  // Own data properties only: a supplied "__proto__" key stays an ordinary field key.
+  return Object.freeze(
+    Object.fromEntries(
+      Object.entries(record).map(([fieldKey, fieldValue]) => [
+        fieldKey,
+        parseTypedFieldValue(fieldValue, { ...location, propertyPath: [fieldKey] }),
+      ]),
+    ),
+  );
 };
 
 /**

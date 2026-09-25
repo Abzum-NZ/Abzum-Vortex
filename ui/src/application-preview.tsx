@@ -308,6 +308,36 @@ const validatePreviewPlacements = (
   }
 };
 
+/**
+ * Runs each supplied placement's runtime inputs through that placement's own registration before
+ * rendering, so sample data or a simulation the block would refuse is shown as a preview outcome
+ * rather than failing the render.
+ */
+const validatePreviewRuntimeInputs = (
+  slot: PlacementSlotV2,
+  registry: PlatformComponentRegistry,
+  runtimeInputs: RuntimeInputsByPlacement,
+  location: DefinitionRenderErrorLocation,
+): void => {
+  for (const [placementId, placement] of Object.entries(slot.placements)) {
+    const placementLocation = {
+      ...location,
+      placementId,
+      blockId: placement.block.blockId,
+      releaseVersion: placement.block.releaseVersion,
+    };
+    if (Object.hasOwn(runtimeInputs, placementId))
+      registry
+        .get(placement.block.blockId, placement.block.releaseVersion)
+        ?.parsePayload(runtimeInputs[placementId], placementLocation);
+    for (const [slotKey, child] of Object.entries(placement.slots))
+      validatePreviewRuntimeInputs(child, registry, runtimeInputs, {
+        ...placementLocation,
+        slotKey,
+      });
+  }
+};
+
 const onlyKnownPlacements = (
   values: Readonly<Record<string, unknown>>,
   placementIds: ReadonlySet<string>,
@@ -392,21 +422,20 @@ export function ApplicationPreview({
   if (resolvedSlot !== undefined) collectPlacementIds(resolvedSlot, availablePlacementIds);
 
   // One generic runtime-input map per placement. The renderer hands each entry to the placement's
-  // own registration, which is the only thing that decides what that block accepts.
-  const runtimeInputs: RuntimeInputsByPlacement = {};
+  // own registration, which is the only thing that decides what that block accepts. A placement
+  // supplied the same input twice, such as both display and control sample data, is refused.
+  const runtimeInputs: Record<string, Readonly<Record<string, unknown>>> = {};
   const supply = (placementId: string, name: string, value: unknown): void => {
     if (value === undefined) return;
     const current: Readonly<Record<string, unknown>> = runtimeInputs[placementId] ?? {};
+    if (Object.hasOwn(current, name))
+      throw new DefinitionRenderError(
+        "INVALID_COMPOSITION",
+        `Placement '${placementId}' is supplied more than one preview '${name}' input`,
+        { ...location, placementId },
+      );
     runtimeInputs[placementId] = Object.freeze({ ...current, [name]: value });
   };
-  for (const [placementId, data] of Object.entries(
-    onlyKnownPlacements(artifact.displaySampleDataByPlacement, availablePlacementIds),
-  ))
-    supply(placementId, "data", data);
-  for (const [placementId, data] of Object.entries(
-    onlyKnownPlacements(artifact.controlSampleDataByPlacement, availablePlacementIds),
-  ))
-    supply(placementId, "data", data);
 
   // Only local simulations are wired: each callback reports the interaction and does nothing else.
   const displayHandlers = new Map<string, Partial<Record<DisplaySemanticEventName, () => void>>>();
@@ -425,8 +454,30 @@ export function ApplicationPreview({
         [interaction.event as ControlSemanticEventName]: handler,
       });
   }
-  for (const [placementId, events] of displayHandlers) supply(placementId, "events", events);
-  for (const [placementId, events] of controlHandlers) supply(placementId, "events", events);
+
+  try {
+    for (const [placementId, data] of Object.entries(
+      onlyKnownPlacements(artifact.displaySampleDataByPlacement, availablePlacementIds),
+    ))
+      supply(placementId, "data", data);
+    for (const [placementId, data] of Object.entries(
+      onlyKnownPlacements(artifact.controlSampleDataByPlacement, availablePlacementIds),
+    ))
+      supply(placementId, "data", data);
+    for (const [placementId, events] of displayHandlers) supply(placementId, "events", events);
+    for (const [placementId, events] of controlHandlers) supply(placementId, "events", events);
+    if (resolvedSlot !== undefined)
+      validatePreviewRuntimeInputs(resolvedSlot, registry, runtimeInputs, location);
+  } catch (error) {
+    renderFailure ??=
+      error instanceof DefinitionRenderError
+        ? error
+        : new DefinitionRenderError(
+            "INVALID_COMPOSITION",
+            "The preview sample data could not be read",
+            location,
+          );
+  }
 
   return (
     <div
