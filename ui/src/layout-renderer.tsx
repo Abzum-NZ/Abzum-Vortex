@@ -6,6 +6,7 @@ import type {
   GuidedFormPageCompositionV2,
   PageCompositionV2,
   PageDefinitionV2,
+  ProjectedNavigation,
 } from "@vortex/contracts";
 import {
   ALL_UI_STYLES_CSS,
@@ -365,6 +366,12 @@ export type PlacementRendererProps = Readonly<{
   placement: BlockPlacementV2Contract;
   breakpoint: Breakpoint;
   registry: PlatformComponentRegistry;
+  /** Permission-filtered application menu threaded to a navigation placement. */
+  projectedNavigation?: ProjectedNavigation | undefined;
+  /** Page-address resolver supplied by the shell; route composition owns the address shape. */
+  resolvePageHref?: ((pageId: string) => string) | undefined;
+  /** Internal page identity currently shown, for a navigation placement's current-page state. */
+  currentPageId?: string | undefined;
   className?: string;
   style?: CSSProperties;
   location?: DefinitionRenderErrorLocation;
@@ -422,6 +429,9 @@ function PlacementView({
   displayEvents,
   controlData,
   controlEvents,
+  projectedNavigation,
+  resolvePageHref,
+  currentPageId,
   themeScope = EMPTY_THEME_SCOPE,
   responsive = false,
 }: PlacementRendererProps & LiveLayoutMode): ReactElement {
@@ -521,6 +531,9 @@ function PlacementView({
           displayEvents={displayEvents}
           controlData={controlData}
           controlEvents={controlEvents}
+          projectedNavigation={projectedNavigation}
+          resolvePageHref={resolvePageHref}
+          currentPageId={currentPageId}
           themeScope={placementTheme.scope}
           responsive={responsive}
         />
@@ -579,6 +592,9 @@ function PlacementView({
           {...(placementEvents === undefined ? {} : { displayEvents: placementEvents })}
           {...(placementControlData === undefined ? {} : { controlData: placementControlData })}
           {...(placementControlEvents === undefined ? {} : { controlEvents: placementControlEvents })}
+          {...(projectedNavigation === undefined ? {} : { projectedNavigation })}
+          {...(resolvePageHref === undefined ? {} : { resolvePageHref })}
+          {...(currentPageId === undefined ? {} : { currentPageId })}
         />
       ) : null}
     </div>
@@ -594,6 +610,12 @@ export type PlacementSlotRendererProps = Readonly<{
   breakpoint: Breakpoint;
   registry: PlatformComponentRegistry;
   parentPlacementId?: string;
+  /** Permission-filtered application menu threaded to a navigation placement. */
+  projectedNavigation?: ProjectedNavigation | undefined;
+  /** Page-address resolver supplied by the shell; route composition owns the address shape. */
+  resolvePageHref?: ((pageId: string) => string) | undefined;
+  /** Internal page identity currently shown, for a navigation placement's current-page state. */
+  currentPageId?: string | undefined;
   className?: string;
   style?: CSSProperties;
   location?: DefinitionRenderErrorLocation;
@@ -645,6 +667,9 @@ function PlacementSlotView({
   displayEvents,
   controlData,
   controlEvents,
+  projectedNavigation,
+  resolvePageHref,
+  currentPageId,
   themeScope,
   responsive = false,
 }: PlacementSlotRendererProps & LiveLayoutMode): ReactElement {
@@ -714,6 +739,9 @@ function PlacementSlotView({
         displayEvents={displayEvents}
         controlData={controlData}
         controlEvents={controlEvents}
+        projectedNavigation={projectedNavigation}
+        resolvePageHref={resolvePageHref}
+        currentPageId={currentPageId}
         themeScope={themeScope}
         responsive={responsive}
       />
@@ -780,6 +808,15 @@ export type PageLayoutRendererProps = Readonly<{
   /** Control semantic callbacks keyed by stable placement identity. */
   controlEvents?: ControlEventsByPlacement;
   /**
+   * The viewer's permission-filtered application menu, threaded to every navigation placement in
+   * the resolved tree. It is server-projected viewer data, never an authored setting.
+   */
+  projectedNavigation?: ProjectedNavigation;
+  /** Page-address resolver supplied by the shell; route composition owns the address shape. */
+  resolvePageHref?: (pageId: string) => string;
+  /** Internal page identity currently shown, for a navigation placement's current-page state. */
+  currentPageId?: string;
+  /**
    * Resolved #594 application theme. Defaults to the materialised composition's theme;
    * without one the readable platform defaults apply.
    */
@@ -809,6 +846,9 @@ export function PageLayoutRenderer({
   displayEvents,
   controlData,
   controlEvents,
+  projectedNavigation,
+  resolvePageHref,
+  currentPageId,
   theme,
   themeMode,
   locale,
@@ -868,6 +908,9 @@ export function PageLayoutRenderer({
     displayEvents,
     controlData,
     controlEvents,
+    projectedNavigation,
+    resolvePageHref,
+    currentPageId,
     themeScope: { application: applicationTokens, inherited: applicationTokens },
   };
 

@@ -1847,6 +1847,40 @@
     "supportedEvents": [],
     "supportedStateOperations": []
   },
+  "APPLICATION_NAVIGATION_BLOCK_RELEASE": {
+    "blockId": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
+    "key": "platform.layout.application_navigation",
+    "releaseVersion": "1.0.0",
+    "name": "Application navigation",
+    "icon": "menu",
+    "paletteGroup": "layout",
+    "rendererKey": "platform.renderer.application_navigation",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "title",
+        "label": "Accessible name",
+        "help": "Accessible name for the navigation landmark",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 120
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content_or_bounded",
+      "publicSurface": "refused",
+      "accessibleName": "required",
+      "accessibleNamePropertyPath": [
+        "title"
+      ]
+    },
+    "supportedEvents": [],
+    "supportedStateOperations": []
+  },
   "FORM_CONTAINER_BLOCK_RELEASE": {
     "blockId": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
     "key": "platform.form.container",
