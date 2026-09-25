@@ -32,6 +32,7 @@ import {
   workflowNodeIdSchema,
 } from "./identifiers";
 import { versionRequirementSchema } from "./definitions";
+import { protectedOperationChannelSchema } from "./operation-contracts";
 
 /**
  * @deprecated The current-user node-and-edge flow and its per-surface bindings are replaced by
@@ -550,14 +551,11 @@ export const flowNodeRunAsSchema = z.discriminatedUnion("kind", [
  * definition carries. It names one exact organisation, application release, flow node, protected
  * operation and effective actor, plus who may invoke it, on which surfaces, with which declared
  * inputs and until when. Editing, installing, copying or delegating a role never creates one.
+ *
+ * The surface is the same one channel vocabulary as the Activity source, so a binding's permitted
+ * surface and the recorded source of the operation it invokes never diverge.
  */
-export const flowExecutionBindingSurfaceSchema = z.enum([
-  "web",
-  "mcp",
-  "programmatic_interface",
-  "durable_workflow",
-  "system",
-]);
+export const flowExecutionBindingSurfaceSchema = protectedOperationChannelSchema;
 
 export const flowExecutionInvokerSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("system") }).strict(),
