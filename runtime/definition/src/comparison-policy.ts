@@ -2295,8 +2295,7 @@ const placementSubtreeIsOptionalPresentationV2 = (placement: RecordValue): boole
     ),
   );
 
-const pageIsCompatibleAdditionV2 = (page: RecordValue): boolean =>
-  page.type !== "public" && page.standardPageReplacement === undefined;
+const pageIsCompatibleAdditionV2 = (page: RecordValue): boolean => page.type !== "public";
 
 const collectPlacementSlotV2 = (
   slotValue: unknown,
@@ -2706,8 +2705,6 @@ const comparePageV2 = (
     "publicFieldIds",
     "publicActionKey",
     "rateLimitPerMinute",
-    "calendarMapping",
-    "standardPageReplacement",
   ])
     pushChange(
       reasons,
@@ -2719,17 +2716,6 @@ const comparePageV2 = (
         : "existing_behavior_changed",
       "page",
       key === "accessPermissionKey" ? "permission" : "behavior",
-      id,
-    );
-  for (const key of ["states", "arrangements"])
-    pushChange(
-      reasons,
-      previous[key],
-      candidate[key],
-      "patch",
-      "presentation_changed",
-      "page",
-      "configuration",
       id,
     );
   const beforeComposition = asRecord(previous.composition);
@@ -2857,7 +2843,6 @@ export const normaliseApplicationContentV2 = (
     pages: sorted(
       (value.pages as RecordValue[]).map((page) => ({
         ...page,
-        states: sorted(page.states as unknown[]),
         ...(Array.isArray(page.publicFieldIds)
           ? { publicFieldIds: sorted(page.publicFieldIds as unknown[]) }
           : {}),
@@ -2882,7 +2867,6 @@ export const assertUnambiguousApplicationContentV2 = (content: unknown): void =>
   assertUnique(contentSlots, "slotId");
   for (const page of value.pages as RecordValue[]) {
     if (Array.isArray(page.steps)) assertUnique(page.steps as RecordValue[], "id");
-    assertUniqueValues(page.states as unknown[]);
     if (Array.isArray(page.publicFieldIds)) assertUniqueValues(page.publicFieldIds as unknown[]);
   }
 };
