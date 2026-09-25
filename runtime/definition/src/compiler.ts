@@ -1587,6 +1587,7 @@ const applicationSourceTransformPatterns = [
   /^body\/queries\/#\/sort\/#\/field$/,
   /^body\/queries\/#\/aggregates\/#\/field$/,
   /^body\/pages\/#\/(?:id|record_type|query|permission|commit_action|public_action|public_fields\/#)$/,
+  /^body\/experiences\/#\/page$/,
   /^body\/pages\/#\/layout\/(?:desktop|phone)\/component_order\/#$/,
   /^body\/pages\/#\/(?:blocks\/#|steps\/#\/blocks\/#)\/(?:id|block|query|view_permission|use_permission)$/,
   /^body\/pipelines\/#\/(?:id|record_type|stage_field)$/,
@@ -4383,6 +4384,14 @@ function compileApplication(
         };
       }),
       pages,
+      ...(body.experiences === undefined
+        ? {}
+        : {
+            experiences: (body.experiences as JsonObject[]).map((experience) => ({
+              state: experience.state,
+              pageId: pageId(String(experience.page)),
+            })),
+          }),
       roles: (body.roles as JsonObject[]).map((role) => {
         const authoredPermissionKeys = role.permissions as string[];
         const usesApplicationWildcard =

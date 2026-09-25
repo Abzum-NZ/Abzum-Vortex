@@ -18,10 +18,11 @@ import { DisplayStateContainer } from "./display-state-container";
  */
 export function TableDisplay(props: PlatformBlockRenderProps): ReactElement {
   const { placementId, availability } = props;
-  const { title, accessibleName, values, state, events } = resolveDisplayContext(
+  const { title, accessibleName, values, state, emptyMessage, events } = resolveDisplayContext(
     props,
     "table",
     (table) => table.rows.length === 0,
+    "No records to show",
   );
 
   return (
@@ -29,7 +30,7 @@ export function TableDisplay(props: PlatformBlockRenderProps): ReactElement {
       accessibleName={accessibleName}
       availability={availability}
       projectedData={state}
-      emptyMessage="No records to show"
+      emptyMessage={emptyMessage}
     >
       {values === undefined ? null : (
         <div

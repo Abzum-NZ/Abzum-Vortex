@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  applicationExperienceStateSchema,
   workflowNodeTypeKeys,
   workflowValueTypeSchema,
 } from "./catalogues";
@@ -129,6 +130,15 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
 };
 
 const sourceFilterSchema = z.union([z.null(), sourceConditionSchema]);
+/**
+ * The fixed set of application experience pages an application may declare: the page shown
+ * when an addressed page is refused or missing, when the application or its installation is
+ * temporarily unavailable, and when resolving it fails unexpectedly. A refused page and a
+ * missing page resolve to the same experience, so their surfaces stay indistinguishable.
+ */
+const sourceApplicationExperienceSchema = z
+  .object({ state: applicationExperienceStateSchema, page: builderKeySchema })
+  .strict();
 type SourceNavigation =
   | { id: string; type: "heading"; label: string; children: SourceNavigation[] }
   | { id: string; type: "page"; label: string; page: string; permission: string }
@@ -925,12 +935,28 @@ export const sourceApplicationBodyV2Schema = z
     platform_block_dependencies: sourcePlatformBlockDependenciesV2Schema,
     shells: z.array(sourceApplicationShellV2Schema).max(100),
     pages: z.array(sourcePageDefinitionV2Schema).min(1).max(100),
+    experiences: z.array(sourceApplicationExperienceSchema).max(3).optional(),
     theme: sourceApplicationThemeV2Schema,
     flows: z.array(sourceCurrentUserFlowSchema).max(100),
     flow_bindings: z.array(sourceComponentFlowBindingSchema).max(100),
   })
   .strict()
   .superRefine((value, context) => {
+    const experiences = value.experiences ?? [];
+    if (new Set(experiences.map((experience) => experience.state)).size !== experiences.length)
+      context.addIssue({
+        code: "custom",
+        path: ["experiences"],
+        message: "Each application experience state may be declared only once",
+      });
+    const sourcePageKeys = new Set(value.pages.map((page) => page.key));
+    for (const [experienceIndex, experience] of experiences.entries())
+      if (!sourcePageKeys.has(experience.page))
+        context.addIssue({
+          code: "custom",
+          path: ["experiences", experienceIndex, "page"],
+          message: "An application experience page must resolve inside the same application",
+        });
     const shellAliases = value.shells.map((shell) => shell.id);
     const shellKeys = value.shells.map((shell) => shell.key);
     if (new Set(shellAliases).size !== shellAliases.length)

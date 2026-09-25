@@ -187,6 +187,13 @@ export const workflowNodeTypeKeys = [
 
 export const fieldTypeSchema = z.enum(fieldTypeKeys);
 export const pageTypeSchema = z.enum(pageTypeKeys);
+/**
+ * The fixed application experience states. A page refused and a page missing share `not_found`,
+ * so their surfaces stay indistinguishable and never reveal why an address is unavailable.
+ */
+export const applicationExperienceStateKeys = ["not_found", "unavailable", "error"] as const;
+export const applicationExperienceStateSchema = z.enum(applicationExperienceStateKeys);
+export type ApplicationExperienceState = z.infer<typeof applicationExperienceStateSchema>;
 export const blockPaletteGroupSchema = z.enum(blockPaletteGroupKeys);
 export const blockSettingControlSchema = z.enum(blockSettingControlKeys);
 export const workflowNodeTypeSchema = z.enum(workflowNodeTypeKeys);

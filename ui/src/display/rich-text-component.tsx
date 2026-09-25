@@ -22,10 +22,11 @@ export function RichTextDisplay(props: PlatformBlockRenderProps): ReactElement {
           },
         }
       : props;
-  const { title, accessibleName, values, state, events } = resolveDisplayContext(
+  const { title, accessibleName, values, state, emptyMessage, events } = resolveDisplayContext(
     effectiveProps,
     "rich_text",
     (richText) => richText.document.blocks.length === 0,
+    "No content to show",
   );
 
   return (
@@ -33,7 +34,7 @@ export function RichTextDisplay(props: PlatformBlockRenderProps): ReactElement {
       accessibleName={accessibleName}
       availability={props.availability}
       projectedData={state}
-      emptyMessage="No content to show"
+      emptyMessage={emptyMessage}
     >
       {values === undefined ? null : (
         <div

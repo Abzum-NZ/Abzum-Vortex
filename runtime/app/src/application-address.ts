@@ -1,13 +1,16 @@
 import "server-only";
 
 import {
+  applicationExperienceStateSchema,
   applicationRootIdSchema,
+  applicationShellV2Schema,
   builderKeySchema,
   identityAuthorityIdSchema,
   identitySessionSchema,
   namespacedKeySchema,
   organizationAccessDeclarationSchema,
   organizationIdSchema,
+  pageDefinitionV2Schema,
   pageIdSchema,
   permissionIdSchema,
   revisionSchema,
@@ -52,6 +55,11 @@ const applicationCandidateSchema = z.object({
     key: builderKeySchema,
     accessPermissionKey: namespacedKeySchema,
   }).strict()).min(1).max(10_000),
+  experiences: z.array(z.object({
+    state: applicationExperienceStateSchema,
+    page: pageDefinitionV2Schema,
+  }).strict()).max(3).optional(),
+  shells: z.array(applicationShellV2Schema).max(100).optional(),
   roles: z.array(z.object({
     roleId: roleIdSchema,
     key: builderKeySchema,
@@ -78,6 +86,11 @@ export const permittedApplicationSchema = z.object({
   icon: z.string().trim().min(1).max(120),
   homePageKey: builderKeySchema,
   pageKeys: z.array(builderKeySchema).min(1).max(10_000),
+  experiences: z.array(z.object({
+    state: applicationExperienceStateSchema,
+    page: pageDefinitionV2Schema,
+  }).strict()).max(3).optional(),
+  shells: z.array(applicationShellV2Schema).max(100).optional(),
 }).strict();
 
 export const permittedApplicationsReadSchema = z.discriminatedUnion("kind", [
@@ -182,6 +195,8 @@ const permittedApplication = async (
         icon: candidate.icon,
         homePageKey,
         pageKeys: [...allowedPageKeys].sort(),
+        ...(candidate.experiences === undefined ? {} : { experiences: candidate.experiences }),
+        ...(candidate.shells === undefined ? {} : { shells: candidate.shells }),
       });
     },
   );

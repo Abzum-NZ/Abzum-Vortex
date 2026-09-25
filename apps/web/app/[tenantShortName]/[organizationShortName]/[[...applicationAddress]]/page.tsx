@@ -9,11 +9,44 @@ import {
   permittedApplicationsToListValues,
   type DisplaySemanticEvent,
 } from "@vortex/ui";
+import type { PermittedApplication } from "@vortex/app";
+import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { AuthShell } from "../../../auth/_components/auth-shell";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * The one fixed neutral state for an address that is refused or missing. It never names the
+ * application, a reason, or whether anything exists, so the two cases stay indistinguishable.
+ */
+const unavailableFallback = (
+  <AuthShell
+    eyebrow="Application access"
+    title="Application unavailable"
+    description="This application address cannot be opened from your current sign-in."
+  >
+    <Link href="/signed-in">Choose an organisation</Link>
+  </AuthShell>
+);
+
+/**
+ * Renders an application's own declared experience through the normal page renderer, and the
+ * fixed neutral state when the application declares none. A refused page and a missing page both
+ * use the `not_found` experience, so a refusal never reveals why it is unavailable.
+ */
+function ApplicationExperience({
+  application,
+  state,
+}: Readonly<{
+  application: PermittedApplication;
+  state: "not_found" | "unavailable" | "error";
+}>) {
+  const experience = application.experiences?.find((entry) => entry.state === state);
+  if (experience === undefined) return unavailableFallback;
+  return <ApplicationExperiencePage page={experience.page} shells={application.shells ?? []} />;
+}
 
 type ApplicationAddressPageProps = Readonly<{
   params: Promise<{
@@ -89,16 +122,7 @@ export default async function ApplicationAddressPage({ params }: ApplicationAddr
       </AuthShell>
     );
 
-  if (addressSegments.length > 2)
-    return (
-      <AuthShell
-        eyebrow="Application access"
-        title="Application unavailable"
-        description="This application address cannot be opened from your current sign-in."
-      >
-        <Link href="/signed-in">Choose an organisation</Link>
-      </AuthShell>
-    );
+  if (addressSegments.length > 2) return unavailableFallback;
 
   const resolved = await resolveApplicationAddress(
     identity.session,
@@ -119,14 +143,10 @@ export default async function ApplicationAddressPage({ params }: ApplicationAddr
     );
 
   if (resolved.kind === "unavailable")
-    return (
-      <AuthShell
-        eyebrow="Application access"
-        title="Application unavailable"
-        description="This application address cannot be opened from your current sign-in."
-      >
-        <Link href="/signed-in">Choose an organisation</Link>
-      </AuthShell>
+    return resolved.application === undefined ? (
+      unavailableFallback
+    ) : (
+      <ApplicationExperience application={resolved.application} state="not_found" />
     );
 
   if (resolved.kind === "organization_launcher") {

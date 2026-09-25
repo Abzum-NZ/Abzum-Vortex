@@ -12,7 +12,7 @@ import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-config
 import type { IdentitySession } from "@vortex/contracts";
 
 export type ApplicationAddressResult =
-  | Readonly<{ kind: "unavailable" }>
+  | Readonly<{ kind: "unavailable"; application?: PermittedApplication }>
   | Readonly<{ kind: "temporarily_unavailable" }>
   | Readonly<{
       kind: "organization_launcher";
@@ -66,7 +66,17 @@ export const resolveApplicationAddress = async (
   if (read.kind !== "available") return read;
 
   const resolved = resolvePermittedApplicationAddress(read, applicationKey, pageKey);
-  if (resolved.kind !== "available") return resolved;
+  if (resolved.kind !== "available") {
+    // Keep a resolvable application so the route can render that application's own
+    // not-found experience; an unknown or refused application stays undisclosed.
+    const application =
+      applicationKey === undefined
+        ? undefined
+        : read.applications.find((entry) => entry.key === applicationKey);
+    return application === undefined
+      ? { kind: "unavailable" }
+      : { kind: "unavailable", application };
+  }
   if (resolved.application === null) return { kind: "organization_launcher", read };
   return {
     kind: "application_page",

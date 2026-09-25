@@ -32,6 +32,7 @@ import {
   workflowIdSchema,
 } from "./identifiers";
 import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "./common";
+import { applicationExperienceStateSchema } from "./catalogues";
 import { permissionDeclarationSchema } from "./permissions";
 import {
   applicationShellV2Schema,
@@ -156,6 +157,16 @@ export const calendarMappingSchema = z.discriminatedUnion("kind", [
 // no longer emits them. Releases published before their removal still carry them and
 // their content fingerprints cover them, so they stay decodable as opaque, unused JSON.
 const retiredPageSettingV2Schema = jsonValueSchema.optional();
+
+/**
+ * One declared application experience page: a normal page rendered for a fixed state. A
+ * refused page and a missing page both resolve to `not_found`, so the two surfaces stay
+ * identical and never disclose why an address is unavailable.
+ */
+export const applicationExperienceV2Schema = z
+  .object({ state: applicationExperienceStateSchema, pageId: pageIdSchema })
+  .strict();
+export type ApplicationExperienceV2 = z.infer<typeof applicationExperienceV2Schema>;
 
 const pageV2Common = {
   pageId: pageIdSchema,
@@ -396,6 +407,7 @@ const applicationSharedContentSchema = z
       .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
     moduleBindings: z.array(moduleBindingSchema),
     navigation: z.array(navigationItemSchema),
+    experiences: z.array(applicationExperienceV2Schema).max(3).optional(),
     roles: z.array(applicationRoleSchema).min(1),
     queries: z.array(queryDefinitionSchema),
     pipelines: z.array(pipelineSchema),
@@ -421,6 +433,20 @@ export const applicationContentV2Schema = applicationSharedContentSchema
   })
   .strict()
   .superRefine((value, context) => {
+    const experiences = value.experiences ?? [];
+    if (new Set(experiences.map((experience) => experience.state)).size !== experiences.length)
+      context.addIssue({
+        code: "custom",
+        path: ["experiences"],
+        message: "Each application experience state may be declared only once",
+      });
+    for (const [experienceIndex, experience] of experiences.entries())
+      if (!value.pages.some((page) => page.pageId === experience.pageId))
+        context.addIssue({
+          code: "custom",
+          path: ["experiences", experienceIndex, "pageId"],
+          message: "An application experience page must resolve inside the same application",
+        });
     const shellIds = value.shells.map((shell) => shell.shellId);
     const shellKeys = value.shells.map((shell) => shell.key);
     if (new Set(shellIds).size !== shellIds.length)
