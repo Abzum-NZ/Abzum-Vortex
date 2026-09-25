@@ -11,28 +11,32 @@ type JsonObject = Record<string, unknown>;
 
 const sourceObject = authoredSource as unknown as JsonObject;
 const body = sourceObject.body as JsonObject;
-const pages = body.pages as Array<JsonObject>;
 
-const collectBlockIds = (value: unknown, result = new Set<string>()): Set<string> => {
+/** Every placed block release as `block_id@release_version`: one block can have several releases. */
+const collectBlockReleases = (value: unknown, result = new Set<string>()): Set<string> => {
   if (Array.isArray(value)) {
-    for (const item of value) collectBlockIds(item, result);
+    for (const item of value) collectBlockReleases(item, result);
   } else if (value !== null && typeof value === "object") {
     const item = value as JsonObject;
     const block = item.block as JsonObject | undefined;
-    if (block && typeof block.block_id === "string") result.add(block.block_id);
-    for (const child of Object.values(item)) collectBlockIds(child, result);
+    if (block && typeof block.block_id === "string" && typeof block.release_version === "string")
+      result.add(`${block.block_id}@${block.release_version}`);
+    for (const child of Object.values(item)) collectBlockReleases(child, result);
   }
   return result;
 };
 
-const releasesById = new Map<string, PlatformBlockReleaseV2>(
-  PLATFORM_BLOCK_RELEASES.map((release) => [release.blockId, release]),
+const releasesByKey = new Map<string, PlatformBlockReleaseV2>(
+  PLATFORM_BLOCK_RELEASES.map((release) => [
+    `${release.blockId}@${release.releaseVersion}`,
+    release,
+  ]),
 );
-const dependencies = [...collectBlockIds(pages)]
+const dependencies = [...collectBlockReleases(body)]
   .sort()
-  .map((blockId) => {
-    const release = releasesById.get(blockId);
-    if (!release) throw new TypeError(`Unregistered platform block release: ${blockId}`);
+  .map((releaseKey) => {
+    const release = releasesByKey.get(releaseKey);
+    if (!release) throw new TypeError(`Unregistered platform block release: ${releaseKey}`);
     return {
       kind: "platform_block" as const,
       block_id: release.blockId,
