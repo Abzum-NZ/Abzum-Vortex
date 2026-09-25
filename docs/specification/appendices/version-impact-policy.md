@@ -51,14 +51,14 @@ Components are matched by permanent identifiers, never labels or array positions
 | Collection | Identity | Ordering rule |
 |---|---|---|
 | Module dependencies and application module bindings | `moduleRootId` | Unordered. |
-| Record types, fields, relationships, permissions, actions, events, rules, extension points, saved sharing conditions | Their permanent identifiers | Unordered. |
+| Record types, fields, relationships, permissions, actions, events, flows, extension points, saved sharing conditions | Their permanent identifiers | Unordered. |
 | Action inputs | Key | Order is presentation-only patch. |
-| Action effects | Parent action plus sequence | Order is executable behaviour; any change is major. |
+| Action tasks | Parent action flow plus sequence | Order is executable behaviour; any change is major. |
 | Navigation items | Item identifier | Sibling order is patch; target, parent, access, or type change is major. |
-| Pages, roles, queries, blocks, pipelines, workflows, connections, interfaces, public addresses | Their permanent identifiers | Top-level collection order is irrelevant. |
+| Pages, roles, queries, blocks, pipelines, flows, connections, interfaces, public addresses | Their permanent identifiers | Top-level collection order is irrelevant. |
 | Page placements and guided steps | Placement or step identifier | Display order and pure geometry are patch. |
 | Query fields, grouping, aggregates, and sort | Declared sequence | Existing query output/ordering change is major. |
-| Workflow nodes and edges | Node identifier and edge tuple | Array order is irrelevant; graph or node behaviour change is major. |
+| Flow tasks and their order | Task identifier and declared sequence | Any task addition, removal, retype, reorder or configuration change is major. |
 | Pipeline stages | Stage key | Display order is patch; entry/exit work is executable order. |
 | Choice options and table columns | Stored value or column key | Reordering is patch; identity/value/type removal is major. |
 
@@ -76,7 +76,7 @@ Duplicate comparison identities are refused as `ambiguous_component_identity`; t
 | Permission | Label or description | Add | Remove; change key, record-type scope, action kind, named action, or administrative status |
 | Action | Label and input display order | Add; add optional input; widen an input constraint | Remove; key/subject/permission/sharing/precondition/effect change; required input; remove/narrow/change input |
 | Event | — | Add or add a carried field | Remove; key/record type/privacy choice or carried-field removal |
-| Rule | — | — | Add, remove, priority, condition, trigger, or effect change |
+| Rule flow | — | — | Add, remove, priority, condition, trigger, task order, or behaviour change |
 | Extension point | — | Add or widen accepted kinds | Remove, retarget, rename key, or narrow accepted kinds |
 | Saved sharing condition | Publication-test name/order only | Add | Remove or change record type, key, parameters, condition, declared fields, or test field/parameter values or expected result |
 
@@ -139,44 +139,43 @@ An input label or input display-order change is patch. Adding an optional input,
 | Block registration | Name, icon, palette, pure phone geometry | Add | Remove or change version, settings, children, live/public/security behaviour |
 | Pipeline | Stage label/display order | — | Add, remove, transition, target, gate, or entry/exit behaviour change |
 | Action/event | Same module policy | Same module policy | Same module policy |
-| Rule or workflow | Name only | — | Add, remove, graph, trigger, execution policy, value, or behaviour change |
+| Flow (rule, action, screen, background or durable) | Name only | — | Add, remove, task order, trigger, execution policy, value, or behaviour change |
 | Interface | Description, declared interface version, supported → deprecated notice | Add private interface/operation; add optional target-compatible input; widen output/error/limits | Partner/public exposure; removal; method/path/required input/input or output target binding/auth/access/target/duplicate change; narrowing or any other state transition |
 | Public address | — | — | Any add, removal, path, page, state, or rate-limit change |
 
 Changing a placed block's tagged setting value or reference is major unless the owning block contract explicitly classifies that literal as presentation-only. Conditions, expressions, filters, and executable values are major when changed because the comparator cannot prove their effect safely.
 
-## Workflow-node policy
+<a id="workflow-node-policy"></a>
 
-The governed [24-node catalogue](../09-workflows-and-pipelines.md#safe-workflow-node-catalogue) is generic. Adding a workflow or reachable node changes executable behaviour and is major. Removing, retyping, reconnecting, or changing any node is major. Node/edge array reorder alone is no change.
+## Flow-task policy
 
-| Node | Major configuration |
+The governed [task types in the shared registry](../09-workflows-and-pipelines.md#task-types-in-the-shared-registry) are generic. Adding a flow or reachable task changes executable behaviour and is major. Removing, retyping, reordering or reconfiguring any task is major; no task-list reorder is a no-change.
+
+| Task | Major configuration |
 |---|---|
-| Start | Common execution properties or outgoing graph |
-| Condition | Condition tree |
-| Decision table | Ordered decisions, conditions, and outputs |
-| Bounded loop | Query and maximum records |
-| Delay | Duration |
-| Wait until | Date/time field |
-| Start workflow | Target workflow |
-| Stop | Reason code |
-| Create record | Record type and values |
-| Change record | Record type, target record, and values |
-| Run action | Action, subject, and inputs |
-| Soft-delete record | Record type and target record |
-| Duplicate record | Record type and source record |
-| Add relationship | Relationship, subject, and target |
-| Copy relationships | Relationship set and source/target records |
-| Request form | Page, responder access, due time, timeout outcome, and outputs |
-| Query records | Query |
-| Set values | Target record and values |
-| Format value | Formatter and input |
-| Generate export | Query and maximum rows |
-| Attach file | Record, field, and file |
-| Move file | Record, field, and file |
-| Call connection | Binding, operation, and inputs |
+| If / Switch | Condition or formula tree, branch order and declared outcomes |
+| For each | Collection and maximum items |
+| Sequential | Ordered child task list |
+| Run flow | Target flow and typed input map |
+| Run background flow | Target durable flow and typed input map |
+| Stop | Declared outcome |
+| Parallel | Branch task lists |
+| Wait until | Declared time or date-time value |
+| Wait for a person | Form, assignee, due time, timeout outcome and outputs |
+| Save record / Create record / Set fields / Link records / Delete record / Restore record / Apply record changes | Record type, target record, relationship keys and field values |
+| Query records | Query and typed parameters |
+| Call protected operation | Operation and typed inputs |
+| Announce event | Event and record |
+| Call connection | Binding, operation and inputs |
 | Acknowledge message | Message key |
+| Export to file | Query and maximum rows |
+| Calculate / Format value | Formula or formatter and inputs |
+| Set values / Set variable | Target and values |
+| Require field / Warn / Refuse save | Field, condition and safe message |
+| Show message / Show form / Confirm | Form, safe message, defaults and declared outputs |
+| Navigate / Refresh / Open or close panel / Set filter | Semantic target and declared parameters |
 
-Every node's permission, timeout, retry, duplicate protection, activity key, and redaction policy is executable behaviour and therefore major when changed. Workflow-value source, literal, field, record, actor, time, or prior-node reference changes are also major.
+Every task's permission, timeout, retry, duplicate protection, activity key, and redaction policy is executable behaviour and therefore major when changed. Flow-value source, literal, field, record, actor, time, or prior-task reference changes are also major.
 
 ## Integrity, history, and confirmation
 
