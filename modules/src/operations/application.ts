@@ -369,12 +369,11 @@ const theme = {
  * its detail page. Each action runs as the operator, is gated by its own module permission and field
  * policy, and refuses a resolved or closed incident; Attach also refuses a signal whose
  * deduplication key does not match the incident's, so a repeated signal updates the one incident it
- * belongs to. One Runbooks page per spec 19 critical code
- * carries concrete operator steps keyed by the incident's `runbook_reference`. No workflow, schedule
- * or system path creates or changes an incident. Open alert signals are recorded by the alert sink,
- * but no record type or protected read model exposes them yet, so the open-signals page is honest
- * text rather than an unbound table. No page or action grants customer-content access, and no action
- * approves itself.
+ * belongs to. One Runbooks page per spec 19 critical code carries concrete operator steps keyed by
+ * the incident's `runbook_reference`. No workflow, schedule or system path creates or changes an
+ * incident. Open alert signals are recorded by the alert sink, but no record type or protected read
+ * model exposes them yet, so the open-signals page is honest text rather than an unbound table. No
+ * page or action grants customer-content access, and no action approves itself.
  */
 export const operationsApplication: ApplicationSourceDocumentV2 =
   applicationSourceDocumentV2Schema.parse({
