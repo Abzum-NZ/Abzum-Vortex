@@ -1,5 +1,6 @@
 import {
   builderKeySchema,
+  fieldIdSchema,
   richTextDocumentV2Schema,
   safeHttpsUrlSchema,
   timestampSchema,
@@ -229,6 +230,18 @@ const requireBuilderKey = (
   return parsed.success ? parsed.data : fail(message, location);
 };
 
+/** A row cell, column, detail field or sort key: a builder key or a declared field identity. */
+const requireFieldKey = (
+  value: unknown,
+  message: string,
+  location: DefinitionRenderErrorLocation,
+): string => {
+  const parsed = builderKeySchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  const field = fieldIdSchema.safeParse(value);
+  return field.success ? field.data : fail(message, location);
+};
+
 const requirePositiveInteger = (
   value: unknown,
   message: string,
@@ -368,7 +381,7 @@ const parseRows = (
       );
       const cells: Record<string, DisplayCellValue> = {};
       for (const [key, cell] of Object.entries(cellsRecord)) {
-        const cellKey = requireBuilderKey(key, `Invalid projected cell key '${key}'`, rowLocation);
+        const cellKey = requireFieldKey(key, `Invalid projected cell key '${key}'`, rowLocation);
         cells[cellKey] = parseCellValue(cell, { ...rowLocation, propertyPath: [cellKey] });
       }
       return Object.freeze({ recordId, cells: Object.freeze(cells) });
@@ -387,7 +400,7 @@ const parseColumns = (
       const columnLocation = { ...location, propertyPath: [`columns[${index}]`] };
       const record = requireRecord(item, "A projected column must be an object", columnLocation);
       requireExactKeys(record, ["key", "label"], columnLocation);
-      const key = requireBuilderKey(
+      const key = requireFieldKey(
         record.key,
         "A projected column requires a stable key",
         columnLocation,
@@ -497,7 +510,7 @@ const parseFields = (
       const fieldLocation = { ...location, propertyPath: [`fields[${index}]`] };
       const record = requireRecord(item, "A detail field must be an object", fieldLocation);
       requireExactKeys(record, ["key", "label", "value"], fieldLocation);
-      const key = requireBuilderKey(
+      const key = requireFieldKey(
         record.key,
         "A detail field requires a stable key",
         fieldLocation,
@@ -630,7 +643,7 @@ const parseProjectedValues = (
           "direction",
         ], location);
         const sortRecord = record.sort as Record<string, unknown>;
-        const columnKey = requireBuilderKey(
+        const columnKey = requireFieldKey(
           sortRecord.columnKey,
           "A projected sort requires a column key",
           location,
