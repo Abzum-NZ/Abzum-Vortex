@@ -27,6 +27,7 @@ import {
 } from "./identifiers";
 import { versionRequirementSchema } from "./definitions";
 import { protectedOperationChannelSchema } from "./operation-contracts";
+import { flowNodeRunAsSchema } from "./run-as-vocabulary";
 
 /**
  * The vocabulary Application flows share with the protected-operation, execution-binding and
@@ -426,16 +427,7 @@ export const protectedOperationDescriptorSchema = z
   });
 
 /** Current user always means the original verified initiator. Other modes name Access-owned bindings. */
-export const flowNodeRunAsSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("current_user") }).strict(),
-  z
-    .object({
-      kind: z.literal("specified_user"),
-      executionBindingId: containedComponentIdSchema,
-    })
-    .strict(),
-  z.object({ kind: z.literal("system"), executionBindingId: containedComponentIdSchema }).strict(),
-]);
+export { flowNodeRunAsSchema };
 
 /**
  * An execution binding is an Access-owned grant, separate from the editable run-as reference a

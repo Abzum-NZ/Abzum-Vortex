@@ -5,7 +5,6 @@ import {
   type RecordsTableColumnContract,
   type RecordsTableContract,
 } from "@vortex/contracts";
-import type { PlatformBlockRenderProps } from "../registry";
 import { DisplayCellView } from "./cell";
 import {
   BulkActionControl,
@@ -20,9 +19,15 @@ import {
   SearchControl,
   SelectAllControl,
   SelectionControl,
+  type DisplayRenderProps,
 } from "./controls";
 import { DisplayStateContainer } from "./display-state-container";
-import type { DisplayCellValue, DisplayColumn, DisplayRow } from "./projected-data";
+import type {
+  DisplayCellValue,
+  DisplayColumn,
+  DisplayRow,
+  TablePayload,
+} from "./projected-data";
 
 type RenderedColumn = Readonly<{
   key: string;
@@ -73,11 +78,7 @@ const sameFieldKey = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
 /** The filter control kind for a declared filterable field, from the column it is declared with. */
-const filterInputKind = (
-  contract: RecordsTableContract | undefined,
-  field: string,
-): FilterInputKind => {
-  const declared = contract?.columns.find((column) => sameFieldKey(column.field, field));
+const filterInputKind = (declared: RecordsTableColumnContract | undefined): FilterInputKind => {
   switch (declared?.format) {
     case "number":
     case "currency":
@@ -113,10 +114,14 @@ const rowShowsAction = (
  * selection mode and row behaviours as settings. Every control reports a declared data event; the
  * component never sorts, filters or pages the returned rows itself.
  */
-export function TableDisplay(props: PlatformBlockRenderProps): ReactElement {
+export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElement {
   const { placementId, availability } = props;
   const { title, accessibleName, values, state, emptyMessage, refusedMessage, errorMessage, events } =
-    resolveDisplayContext(props, "table", (table) => table.rows.length === 0, "No records to show");
+    resolveDisplayContext<TablePayload>(
+      props,
+      (table) => table.rows.length === 0,
+      "No records to show",
+    );
   const contract = readRecordsTableContract(props.settings);
   const columns = values === undefined ? [] : renderedColumns(contract, values.columns);
   const rows = values?.rows ?? [];
@@ -127,12 +132,18 @@ export function TableDisplay(props: PlatformBlockRenderProps): ReactElement {
 
   // Filter controls and the search box report their declared data events; sorting already does the
   // same. The host sends each to the Query engine and returns a new page, so the component never
-  // sorts, filters or searches the returned rows itself.
-  const filterFields = contract?.filterableFields ?? [];
-  const showFilters = events?.filter_changed !== undefined && filterFields.length > 0;
+  // sorts, filters or searches the returned rows itself. A filter is offered only for a configured
+  // filterable field the viewer can read: a field withheld from the projection has no rendered
+  // column, so it gets no control and its identity is never shown as a label.
+  const filterColumns =
+    contract === undefined
+      ? []
+      : contract.filterableFields.flatMap((field) => {
+          const column = columns.find((candidate) => sameFieldKey(candidate.key, field));
+          return column === undefined ? [] : [column];
+        });
+  const showFilters = events?.filter_changed !== undefined && filterColumns.length > 0;
   const showSearch = contract?.search === true && events?.search_changed !== undefined;
-  const filterLabel = (field: string): string =>
-    columns.find((column) => sameFieldKey(column.key, field))?.label ?? field;
 
   // Configured row behaviours: a row click, named row actions, bulk actions over the selection and
   // inline edit of permitted fields. Each declared control carries the stable identity of its own
@@ -210,12 +221,12 @@ export function TableDisplay(props: PlatformBlockRenderProps): ReactElement {
                   role="group"
                   aria-label={`Filters for ${accessibleName}`}
                 >
-                  {filterFields.map((field) => (
+                  {filterColumns.map((column) => (
                     <FilterControl
-                      key={field}
-                      field={field}
-                      label={filterLabel(field)}
-                      input={filterInputKind(contract, field)}
+                      key={column.key}
+                      field={column.key}
+                      label={column.label}
+                      input={filterInputKind(column.declared)}
                       events={events}
                     />
                   ))}

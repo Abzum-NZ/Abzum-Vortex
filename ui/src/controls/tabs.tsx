@@ -2,11 +2,15 @@
 
 import { useId, useRef, type KeyboardEvent, type ReactElement } from "react";
 import { DefinitionRenderError } from "../definition-error";
-import type { PlatformBlockRenderProps } from "../registry";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import type { TabsPayload } from "./projected-data";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import { useSeededState } from "./field-parts";
 
-export type TabsProps = PlatformBlockRenderProps;
+export type TabsProps = ControlRenderProps<TabsPayload>;
 
 /** Declared tab slots in order, each with its label property. */
 const TAB_SLOTS = [
@@ -25,7 +29,7 @@ type TabKey = (typeof TAB_SLOTS)[number]["key"];
  * slot key; only a change of tab emits the declared `tab_changed` event.
  */
 export function Tabs(props: TabsProps): ReactElement {
-  const context = resolveControlContext(props, "tabs", ["tab_changed"]);
+  const context = resolveControlContext<TabsPayload>(props, ["tab_changed"]);
   const settings = readControlSettings(props, context.location);
   const baseId = useId();
   const tabRefs = useRef<Partial<Record<TabKey, HTMLButtonElement | null>>>({});

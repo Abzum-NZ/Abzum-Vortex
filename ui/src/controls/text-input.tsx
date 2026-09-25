@@ -1,8 +1,12 @@
 "use client";
 
 import type { ChangeEvent, ReactElement } from "react";
-import type { PlatformBlockRenderProps } from "../registry";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import type { TextInputPayload } from "./projected-data";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import {
   describedBy,
   FieldLabelText,
@@ -14,7 +18,7 @@ import {
 } from "./field-parts";
 import { useFormField } from "./form-context";
 
-export type TextInputProps = PlatformBlockRenderProps;
+export type TextInputProps = ControlRenderProps<TextInputPayload>;
 
 const INPUT_TYPES = ["text", "email", "password", "tel", "url"] as const;
 
@@ -23,7 +27,7 @@ const INPUT_TYPES = ["text", "email", "password", "tel", "url"] as const;
  * typed string value and publishes that value to its enclosing form.
  */
 export function TextInput(props: TextInputProps): ReactElement {
-  const context = resolveControlContext(props, "text_input", ["field_changed"]);
+  const context = resolveControlContext<TextInputPayload>(props, ["field_changed"]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();

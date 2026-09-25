@@ -1,11 +1,11 @@
 "use client";
 
 import type { CSSProperties, ReactElement } from "react";
-import type { PlatformBlockRenderProps } from "../registry";
-import { readControlSettings } from "./control-context";
+import { readControlSettings, type ControlRenderProps } from "./control-context";
 import { ModalSurface } from "./modal-surface";
+import type { DrawerPayload } from "./projected-data";
 
-export type DrawerProps = PlatformBlockRenderProps;
+export type DrawerProps = ControlRenderProps<DrawerPayload>;
 
 type DrawerPlacement = "left" | "right" | "top" | "bottom";
 
@@ -41,7 +41,7 @@ export function Drawer(props: DrawerProps): ReactElement {
     releaseVersion: props.metadata.releaseVersion,
   }).choice<DrawerPlacement>("placement", "right");
   return (
-    <ModalSurface
+    <ModalSurface<DrawerPayload>
       props={props}
       kind="drawer"
       surfaceStyle={(size) => edgeStyle(placement, DRAWER_EXTENTS[size])}

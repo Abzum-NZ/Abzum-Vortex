@@ -17,20 +17,15 @@ import {
   type MaterialisedApplicationCompositionV2,
   type PlacementSlotV2,
 } from "./layout-renderer";
-import type { PlatformComponentRegistry } from "./registry";
-import {
-  parseProjectedDataByPlacement,
-  type DisplayEventsByPlacement,
-  type DisplaySemanticEventName,
-  type ProjectedDataByPlacement,
-} from "./display/projected-data";
+import type { PlatformComponentRegistry, RuntimeInputsByPlacement } from "./registry";
 import {
   CONTROL_EVENT_NAMES,
-  parseProjectedControlDataByPlacement,
-  type ControlEventsByPlacement,
   type ControlSemanticEventName,
-  type ProjectedControlDataByPlacement,
 } from "./controls/projected-data";
+import {
+  DISPLAY_EVENT_NAMES,
+  type DisplaySemanticEventName,
+} from "./display/projected-data";
 import type { ThemeMode } from "./theme";
 
 /**
@@ -95,19 +90,6 @@ export type ApplicationPreviewArtifact = Readonly<{
   outcomes: readonly ApplicationPreviewOutcome[];
   suppressedEffects: readonly FlowEffectKind[];
 }>;
-
-const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.freeze([
-  "refresh",
-  "row_clicked",
-  "row_action",
-  "selection_changed",
-  "filter_changed",
-  "search_changed",
-  "sort_changed",
-  "page_changed",
-  "bulk_action",
-  "inline_edit",
-]);
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -318,6 +300,36 @@ const validatePreviewPlacements = (
   }
 };
 
+/**
+ * Runs each supplied placement's runtime inputs through that placement's own registration before
+ * rendering, so sample data or a simulation the block would refuse is shown as a preview outcome
+ * rather than failing the render.
+ */
+const validatePreviewRuntimeInputs = (
+  slot: PlacementSlotV2,
+  registry: PlatformComponentRegistry,
+  runtimeInputs: RuntimeInputsByPlacement,
+  location: DefinitionRenderErrorLocation,
+): void => {
+  for (const [placementId, placement] of Object.entries(slot.placements)) {
+    const placementLocation = {
+      ...location,
+      placementId,
+      blockId: placement.block.blockId,
+      releaseVersion: placement.block.releaseVersion,
+    };
+    if (Object.hasOwn(runtimeInputs, placementId))
+      registry
+        .get(placement.block.blockId, placement.block.releaseVersion)
+        ?.parsePayload(runtimeInputs[placementId], placementLocation);
+    for (const [slotKey, child] of Object.entries(placement.slots))
+      validatePreviewRuntimeInputs(child, registry, runtimeInputs, {
+        ...placementLocation,
+        slotKey,
+      });
+  }
+};
+
 const onlyKnownPlacements = (
   values: Readonly<Record<string, unknown>>,
   placementIds: ReadonlySet<string>,
@@ -401,27 +413,21 @@ export function ApplicationPreview({
   const availablePlacementIds = new Set<string>();
   if (resolvedSlot !== undefined) collectPlacementIds(resolvedSlot, availablePlacementIds);
 
-  let projectedData: ProjectedDataByPlacement = {};
-  let controlData: ProjectedControlDataByPlacement = {};
-  try {
-    projectedData = parseProjectedDataByPlacement(
-      onlyKnownPlacements(artifact.displaySampleDataByPlacement, availablePlacementIds),
-      location,
-    );
-    controlData = parseProjectedControlDataByPlacement(
-      onlyKnownPlacements(artifact.controlSampleDataByPlacement, availablePlacementIds),
-      location,
-    );
-  } catch (error) {
-    renderFailure ??=
-      error instanceof DefinitionRenderError
-        ? error
-        : new DefinitionRenderError(
-            "INVALID_COMPOSITION",
-            "The preview sample data could not be read",
-            location,
-          );
-  }
+  // One generic runtime-input map per placement. The renderer hands each entry to the placement's
+  // own registration, which is the only thing that decides what that block accepts. A placement
+  // supplied the same input twice, such as both display and control sample data, is refused.
+  const runtimeInputs: Record<string, Readonly<Record<string, unknown>>> = {};
+  const supply = (placementId: string, name: string, value: unknown): void => {
+    if (value === undefined) return;
+    const current: Readonly<Record<string, unknown>> = runtimeInputs[placementId] ?? {};
+    if (Object.hasOwn(current, name))
+      throw new DefinitionRenderError(
+        "INVALID_COMPOSITION",
+        `Placement '${placementId}' is supplied more than one preview '${name}' input`,
+        { ...location, placementId },
+      );
+    runtimeInputs[placementId] = Object.freeze({ ...current, [name]: value });
+  };
 
   // Only local simulations are wired: each callback reports the interaction and does nothing else.
   const displayHandlers = new Map<string, Partial<Record<DisplaySemanticEventName, () => void>>>();
@@ -440,8 +446,30 @@ export function ApplicationPreview({
         [interaction.event as ControlSemanticEventName]: handler,
       });
   }
-  const displayEvents: DisplayEventsByPlacement = Object.fromEntries(displayHandlers);
-  const controlEvents: ControlEventsByPlacement = Object.fromEntries(controlHandlers);
+
+  try {
+    for (const [placementId, data] of Object.entries(
+      onlyKnownPlacements(artifact.displaySampleDataByPlacement, availablePlacementIds),
+    ))
+      supply(placementId, "data", data);
+    for (const [placementId, data] of Object.entries(
+      onlyKnownPlacements(artifact.controlSampleDataByPlacement, availablePlacementIds),
+    ))
+      supply(placementId, "data", data);
+    for (const [placementId, events] of displayHandlers) supply(placementId, "events", events);
+    for (const [placementId, events] of controlHandlers) supply(placementId, "events", events);
+    if (resolvedSlot !== undefined)
+      validatePreviewRuntimeInputs(resolvedSlot, registry, runtimeInputs, location);
+  } catch (error) {
+    renderFailure ??=
+      error instanceof DefinitionRenderError
+        ? error
+        : new DefinitionRenderError(
+            "INVALID_COMPOSITION",
+            "The preview sample data could not be read",
+            location,
+          );
+  }
 
   return (
     <div
@@ -480,10 +508,7 @@ export function ApplicationPreview({
           themeMode={themeMode}
           locale={locale}
           timeZone={timeZone}
-          projectedData={projectedData}
-          displayEvents={displayEvents}
-          controlData={controlData}
-          controlEvents={controlEvents}
+          runtimeInputs={runtimeInputs}
         />
       ) : (
         <div data-vortex-preview-unavailable="">

@@ -5,8 +5,11 @@ import { cellValueToText } from "../display/cell";
 import { DisplayHeader, RowActionControl } from "../display/controls";
 import { DisplayStateContainer } from "../display/display-state-container";
 import type { DisplayCellValue } from "../display/projected-data";
-import type { PlatformBlockRenderProps } from "../registry";
-import { readLauncherSettings, resolveLauncherListContext } from "./launcher-context";
+import {
+  readLauncherSettings,
+  resolveLauncherListContext,
+  type LauncherRenderProps,
+} from "./launcher-context";
 import { filterLauncherRows, useLauncherRowFilter } from "./view-filter-context";
 
 const cellText = (
@@ -24,7 +27,7 @@ const cellText = (
  * application's permanent identity, and destination safety remains the bound flow's decision
  * (#619). An enclosing view filter can only hide rows it already received.
  */
-export function ApplicationLauncher(props: PlatformBlockRenderProps): ReactElement {
+export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
   const filter = useLauncherRowFilter();
   const context = resolveLauncherListContext(props);
   const settings = readLauncherSettings(props, context.location);

@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 import type { BlockPropertyValueV2Contract, PlatformBlockReleaseV2 } from "@vortex/contracts";
-import type { DisplayRefusalReason, ProjectedDisplayData } from "./projected-data";
+import type { DisplayDataState, DisplayRefusalReason } from "./projected-data";
 
 /** Safe, data-free presentation text for fixed refusal reasons. */
 const REFUSAL_MESSAGES: Readonly<Record<DisplayRefusalReason, string>> = Object.freeze({
@@ -33,11 +33,12 @@ export function getAccessibleName(
   return undefined;
 }
 
-export type DisplayStateContainerProps = Readonly<{
+export type DisplayStateContainerProps<Values> = Readonly<{
   /** Accessible name for the affected component; the block palette name when none is authored. */
   accessibleName: string;
   availability: "available" | "unavailable";
-  projectedData: ProjectedDisplayData;
+  /** The state this block's own registration validated. */
+  projectedData: DisplayDataState<Values>;
   emptyMessage: string;
   /** Authored refused text shown in place of the fixed reason text. */
   refusedMessage?: string;
@@ -52,7 +53,7 @@ export type DisplayStateContainerProps = Readonly<{
  * whose use is unavailable keeps its permitted content with a fixed unavailable note;
  * its components receive no semantic callbacks.
  */
-export function DisplayStateContainer({
+export function DisplayStateContainer<Values>({
   accessibleName,
   availability,
   projectedData,
@@ -60,7 +61,7 @@ export function DisplayStateContainer({
   refusedMessage,
   errorMessage,
   children,
-}: DisplayStateContainerProps): ReactElement {
+}: DisplayStateContainerProps<Values>): ReactElement {
   if (projectedData.status === "loading") {
     return (
       <div

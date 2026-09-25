@@ -1,22 +1,22 @@
 import type { ReactElement } from "react";
-import type { PlatformBlockRenderProps } from "../registry";
 import { DisplayCellView } from "./cell";
-import { DisplayHeader, resolveDisplayContext } from "./controls";
+import { DisplayHeader, resolveDisplayContext, type DisplayRenderProps } from "./controls";
 import { DisplayStateContainer } from "./display-state-container";
+import type { SummaryPayload } from "./projected-data";
 
 /**
  * Shared browser-safe display component for labelled summary values.
  * Renders stable-keyed values inside a named region.
  * Never executes or fetches a Query.
  */
-export function SummaryValuesDisplay(props: PlatformBlockRenderProps): ReactElement {
+export function SummaryValuesDisplay(props: DisplayRenderProps<SummaryPayload>): ReactElement {
   const { placementId, availability } = props;
-  const { title, accessibleName, values, state, emptyMessage, events } = resolveDisplayContext(
-    props,
-    "summary_values",
-    (summary) => summary.values.length === 0,
-    "No values to show",
-  );
+  const { title, accessibleName, values, state, emptyMessage, events } =
+    resolveDisplayContext<SummaryPayload>(
+      props,
+      (summary) => summary.values.length === 0,
+      "No values to show",
+    );
 
   return (
     <DisplayStateContainer

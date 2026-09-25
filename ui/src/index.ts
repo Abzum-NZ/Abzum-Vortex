@@ -2,11 +2,19 @@ export const uiPackage = "@vortex/ui" as const;
 
 // Platform Component Registry
 export {
+  assertRuntimeInputKeysArePlacements,
+  createPayloadParser,
   createPlatformComponentRegistry,
+  EMPTY_RUNTIME_INPUTS,
+  noRuntimeInputs,
   type PlatformBlockRenderProps,
+  type PlatformBlockRuntimeInputs,
+  type PlatformComponentPayloadParser,
   type PlatformComponentRegistration,
   type PlatformComponentRenderer,
   type PlatformComponentRegistry,
+  type RuntimeInputReader,
+  type RuntimeInputsByPlacement,
 } from "./registry";
 
 // Definition & Render Errors
@@ -49,18 +57,23 @@ export {
   type ProjectedPageCapability,
 } from "./layout-renderer";
 
-// Projected Data & Events Contracts
+// Per-Block Display Payload & Event Contracts
 export {
-  assertProjectionKeysArePlacements,
+  DISPLAY_EVENT_NAMES,
+  parseDisplayData,
   parseDisplayEventHandlers,
-  parseDisplayEventsByPlacement,
-  parseProjectedDataByPlacement,
-  parseProjectedDisplayData,
+  parseGroupedPayload,
+  parseListPayload,
+  parseRecordDetailPayload,
+  parseRichTextPayload,
+  parseSummaryPayload,
+  parseTablePayload,
+  parseTextPayload,
   type DisplayCellValue,
   type DisplayColumn,
+  type DisplayDataState,
   type DisplayEventHandler,
   type DisplayEventHandlers,
-  type DisplayEventsByPlacement,
   type DisplayField,
   type DisplayGroup,
   type DisplayRefusalReason,
@@ -71,10 +84,20 @@ export {
   type DisplaySemanticEvent,
   type DisplaySemanticEventName,
   type DisplaySummaryValue,
-  type ProjectedDataByPlacement,
-  type ProjectedDisplayData,
-  type ProjectedDisplayValueKind,
-  type ProjectedDisplayValues,
+  type GroupedData,
+  type GroupedPayload,
+  type ListData,
+  type ListPayload,
+  type RecordDetailData,
+  type RecordDetailPayload,
+  type RichTextData,
+  type RichTextPayload,
+  type SummaryData,
+  type SummaryPayload,
+  type TableData,
+  type TablePayload,
+  type TextData,
+  type TextPayload,
 } from "./display";
 
 // Display Components & Views
@@ -93,6 +116,7 @@ export {
   formatIsoDate,
   getAccessibleName,
   richTextToPlainText,
+  type DisplayRenderProps,
   type DisplayStateContainerProps,
 } from "./display";
 
@@ -110,27 +134,61 @@ export {
   createDisplayComponentRegistry,
 } from "./display";
 
-// Control Projected Data & Events Contracts
+// Per-Block Control Payload & Event Contracts
 export {
-  assertControlProjectionKeysArePlacements,
   CONTROL_EVENT_NAMES,
+  parseBooleanInputPayload,
+  parseButtonPayload,
+  parseChoiceInputPayload,
+  parseControlData,
   parseControlEventHandlers,
-  parseControlEventsByPlacement,
-  parseProjectedControlData,
-  parseProjectedControlDataByPlacement,
+  parseDateInputPayload,
+  parseDialogPayload,
+  parseDrawerPayload,
+  parseFormPayload,
+  parseLinkInputPayload,
+  parseNumberInputPayload,
+  parseRichTextInputPayload,
+  parseTabsPayload,
+  parseTextInputPayload,
+  parseTypedFieldValue,
+  parseValidationPayload,
+  type BooleanInputData,
+  type BooleanInputPayload,
+  type ButtonData,
+  type ButtonPayload,
+  type ChoiceInputData,
+  type ChoiceInputPayload,
   type ChoiceOption,
+  type ControlDataState,
   type ControlEventHandler,
   type ControlEventHandlers,
-  type ControlEventsByPlacement,
+  type ControlRenderProps,
   type ControlSemanticEvent,
   type ControlSemanticEventName,
-  type ProjectedControlData,
-  type ProjectedControlDataByPlacement,
-  type ProjectedControlValueKind,
-  type ProjectedControlValues,
+  type DateInputData,
+  type DateInputPayload,
+  type DialogData,
+  type DialogPayload,
+  type DrawerData,
+  type DrawerPayload,
+  type FormContainerData,
+  type FormPayload,
+  type LinkInputData,
+  type LinkInputPayload,
+  type NumberInputData,
+  type NumberInputPayload,
+  type RichTextInputData,
+  type RichTextInputPayload,
+  type TabsData,
+  type TabsPayload,
+  type TextInputData,
+  type TextInputPayload,
   type TypedFieldValue,
   type TypedRecordReference,
   type TypedRichTextDocument,
+  type ValidationData,
+  type ValidationPayload,
 } from "./controls";
 
 // Form & Action Control Components
@@ -196,7 +254,7 @@ export {
   VALIDATION_MESSAGE_BLOCK_RELEASE,
 } from "./controls";
 
-// Launcher Projected Data & Binding Contracts
+// Launcher List Payload & Binding Contracts
 export {
   linkTilesToListValues,
   parsePermittedApplicationsLauncherProjection,
@@ -204,6 +262,7 @@ export {
   readLauncherSettings,
   resolveLauncherListContext,
   type LauncherListContext,
+  type LauncherRenderProps,
   type LauncherSettings,
   type LinkTileRow,
   type LinkTilesQueryBinding,

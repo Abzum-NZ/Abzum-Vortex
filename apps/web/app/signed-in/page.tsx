@@ -8,7 +8,7 @@ import {
   createThemeRootProps,
   type DisplayRow,
   type DisplaySemanticEvent,
-  type ProjectedDisplayValues,
+  type ListPayload,
 } from "@vortex/ui";
 import { signOut } from "../auth/actions";
 import { AuthShell } from "../auth/_components/auth-shell";
@@ -29,7 +29,7 @@ const organizationAddressPath = (entry: {
  */
 const organizationTileValues = (
   entries: readonly OrganizationLauncherEntry[],
-): ProjectedDisplayValues => {
+): ListPayload => {
   const rows = entries.map(
     (entry): DisplayRow => ({
       recordId: entry.organizationId,
@@ -123,8 +123,8 @@ export default async function SignedInPage() {
             breakpoint="desktop"
             metadata={APPLICATION_LAUNCHER_BLOCK_RELEASE}
             availability="available"
-            projectedData={{ status: "ready", values: organizationTileValues(launcher.entries) }}
-            displayEvents={{ row_action: openOrganization }}
+            data={{ status: "ready", values: organizationTileValues(launcher.entries) }}
+            events={{ row_action: openOrganization }}
           />
         </div>
       ) : null}

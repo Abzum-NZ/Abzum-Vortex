@@ -25,6 +25,7 @@ import {
   workflowRunIdSchema,
 } from "./identifiers";
 import { conditionNodeSchema } from "./module-contracts";
+import { workflowRunAsSchema } from "./run-as-vocabulary";
 
 export const workflowValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("literal"), value: jsonValueSchema }).strict(),
@@ -301,7 +302,7 @@ export const workflowDefinitionSchema = z
     key: builderKeySchema,
     name: z.string().min(1).max(120),
     trigger: workflowTriggerSchema,
-    runAs: z.enum(["initiating_person", "system_with_source_authority"]),
+    runAs: workflowRunAsSchema,
     nodes: z.array(workflowNodeSchema).min(1).max(100),
     edges: z.array(workflowEdgeSchema),
     maximumNestingDepth: z.number().int().min(1).max(5),

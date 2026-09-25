@@ -208,8 +208,8 @@ export function ApplicationNavigation({
  * the server already filtered for this viewer, in definition order, and never filters, fetches or
  * invents an item; an absent projection is an empty menu. The shell supplies the page-address
  * resolver, so route composition owns the address shape; a non-empty menu without one is refused
- * rather than linking to an invented address. Component data and semantic events are refused,
- * because a menu is navigation rather than a data surface.
+ * rather than linking to an invented address. Its registration refuses every supplied runtime
+ * input, because a menu is navigation rather than a data surface.
  */
 export function ApplicationNavigationBlock(props: PlatformBlockRenderProps): ReactElement {
   const location: DefinitionRenderErrorLocation = {
@@ -217,18 +217,6 @@ export function ApplicationNavigationBlock(props: PlatformBlockRenderProps): Rea
     blockId: props.metadata.blockId,
     releaseVersion: props.metadata.releaseVersion,
   };
-  if (
-    props.projectedData !== undefined ||
-    props.displayEvents !== undefined ||
-    props.controlData !== undefined ||
-    props.controlEvents !== undefined
-  )
-    throw new DefinitionRenderError(
-      "INVALID_COMPOSITION",
-      "The application navigation block does not accept component data or semantic events",
-      location,
-    );
-
   const label = getAccessibleName(props.settings, props.metadata);
   if (label === undefined)
     throw new DefinitionRenderError(

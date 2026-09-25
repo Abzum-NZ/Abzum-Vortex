@@ -1,5 +1,4 @@
 import type { ReactElement } from "react";
-import type { PlatformBlockRenderProps } from "../registry";
 import { DisplayCellView } from "./cell";
 import {
   DisplayHeader,
@@ -7,22 +6,24 @@ import {
   RowActionControl,
   rowName,
   SelectionControl,
+  type DisplayRenderProps,
 } from "./controls";
 import { DisplayStateContainer } from "./display-state-container";
+import type { GroupedPayload } from "./projected-data";
 
 /**
  * Shared browser-safe display component for grouped data.
  * Preserves stable group and record identities and declared semantic event names.
  * Never executes or fetches a Query.
  */
-export function GroupedDataDisplay(props: PlatformBlockRenderProps): ReactElement {
+export function GroupedDataDisplay(props: DisplayRenderProps<GroupedPayload>): ReactElement {
   const { placementId, availability } = props;
-  const { title, accessibleName, values, state, emptyMessage, events } = resolveDisplayContext(
-    props,
-    "grouped_data",
-    (grouped) => grouped.groups.length === 0,
-    "No groups to show",
-  );
+  const { title, accessibleName, values, state, emptyMessage, events } =
+    resolveDisplayContext<GroupedPayload>(
+      props,
+      (grouped) => grouped.groups.length === 0,
+      "No groups to show",
+    );
 
   return (
     <DisplayStateContainer

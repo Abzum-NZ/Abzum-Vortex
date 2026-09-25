@@ -1,8 +1,11 @@
 "use client";
 
 import type { ChangeEvent, ReactElement } from "react";
-import type { PlatformBlockRenderProps } from "../registry";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import {
   describedBy,
   FieldLabelText,
@@ -13,9 +16,9 @@ import {
   useSeededState,
 } from "./field-parts";
 import { useFormField } from "./form-context";
-import type { TypedRecordReference } from "./projected-data";
+import type { LinkInputPayload, TypedRecordReference } from "./projected-data";
 
-export type LinkInputProps = PlatformBlockRenderProps;
+export type LinkInputProps = ControlRenderProps<LinkInputPayload>;
 
 /**
  * A record-reference key is the exact `recordTypeId:recordId` pair of the linked record. It names
@@ -51,7 +54,7 @@ const parseReferenceKey = (
  * form; it never fetches or discloses the referenced record.
  */
 export function LinkInput(props: LinkInputProps): ReactElement {
-  const context = resolveControlContext(props, "link_input", ["field_changed"]);
+  const context = resolveControlContext<LinkInputPayload>(props, ["field_changed"]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();

@@ -1,8 +1,12 @@
 "use client";
 
 import type { ReactElement } from "react";
-import type { PlatformBlockRenderProps } from "../registry";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import type { BooleanInputPayload } from "./projected-data";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import {
   describedBy,
   FieldLabelText,
@@ -14,14 +18,14 @@ import {
 } from "./field-parts";
 import { useFormField } from "./form-context";
 
-export type BooleanInputProps = PlatformBlockRenderProps;
+export type BooleanInputProps = ControlRenderProps<BooleanInputPayload>;
 
 /**
  * Checkbox or switch emitting only its declared `field_changed` event with a typed boolean.
  * Both variants are native controls, so Space (and Enter for the switch button) toggles once.
  */
 export function BooleanInput(props: BooleanInputProps): ReactElement {
-  const context = resolveControlContext(props, "boolean_input", ["field_changed"]);
+  const context = resolveControlContext<BooleanInputPayload>(props, ["field_changed"]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();
