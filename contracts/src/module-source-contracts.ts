@@ -662,6 +662,7 @@ const sourceCalculationSettingsSchema = z
       "date",
       "date_time",
     ]),
+    evaluation: z.enum(["read_time", "stored"]).optional(),
     decimal_places: z.number().int().min(0).max(12).optional(),
     expression: sourceCalculationExpressionSchema,
   })
@@ -681,6 +682,12 @@ const sourceCalculationSettingsSchema = z
         code: "custom",
         path: ["result_type"],
         message: "Calculation result type must match its operation",
+      });
+    if (value.evaluation === "stored" && operation === "deadline_passed")
+      context.addIssue({
+        code: "custom",
+        path: ["evaluation"],
+        message: "A deadline-passed calculation uses the current time and is read-time",
       });
     if (
       value.decimal_places !== undefined &&

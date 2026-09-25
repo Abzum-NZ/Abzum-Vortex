@@ -33,6 +33,11 @@ import {
 } from "./identifiers";
 import { versionRequirementSchema } from "./definitions";
 
+/**
+ * @deprecated The current-user node-and-edge flow and its per-surface bindings are replaced by
+ * the one flow definition and `flowBindingSchema` (the flow id plus a typed input map) in
+ * `flow-contracts.ts`. Conversion and removal belong to #986 and #988; do not extend this format.
+ */
 export const applicationFlowBindingContractVersion = "1.0.0" as const;
 
 /**
@@ -176,25 +181,14 @@ export const resolvedFlowTargetEvidenceSchema = z
   })
   .strict();
 
-export const frontendFlowReferenceSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("application_owned"),
-      applicationRootId: applicationRootIdSchema,
-      flowId: ruleIdSchema,
-      ...resolvedFlowTargetEvidenceSchema.shape,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("platform_managed"),
-      flowId: ruleIdSchema,
-      releaseVersion: stableDefinitionReleaseVersionSchema,
-      contentFingerprint: fingerprintSchema,
-      catalogueFingerprint: fingerprintSchema,
-    })
-    .strict(),
-]);
+export const frontendFlowReferenceSchema = z
+  .object({
+    kind: z.literal("application_owned"),
+    applicationRootId: applicationRootIdSchema,
+    flowId: ruleIdSchema,
+    ...resolvedFlowTargetEvidenceSchema.shape,
+  })
+  .strict();
 
 export const componentSemanticEventKindSchema = z.enum([
   "action",
@@ -340,17 +334,6 @@ export const flowTargetDependencySchema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
-
-/** Exact immutable authority for a platform-managed flow catalogue release. */
-export const platformManagedFlowDependencySchema = z
-  .object({
-    kind: z.literal("platform_flow"),
-    flowId: ruleIdSchema,
-    releaseVersion: stableDefinitionReleaseVersionSchema,
-    contentFingerprint: fingerprintSchema,
-    catalogueFingerprint: fingerprintSchema,
-  })
-  .strict();
 
 export const platformServiceOperationReleaseSchema = z
   .object({
@@ -1733,21 +1716,12 @@ export const sourceTypedFlowInputBindingSchema = z
       });
   });
 
-export const sourceFrontendFlowReferenceSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("application_owned"),
-      flow: sourceAliasSchema,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("platform_managed"),
-      flow_id: ruleIdSchema,
-      release_version: stableDefinitionReleaseVersionSchema,
-    })
-    .strict(),
-]);
+export const sourceFrontendFlowReferenceSchema = z
+  .object({
+    kind: z.literal("application_owned"),
+    flow: sourceAliasSchema,
+  })
+  .strict();
 
 export const sourceComponentFlowBindingSchema = z
   .object({
@@ -2329,7 +2303,6 @@ export type ProtectedOperationOwner = z.infer<typeof protectedOperationOwnerSche
 export type ProtectedOperationReference = z.infer<typeof protectedOperationReferenceSchema>;
 export type ResolvedFlowTargetEvidence = z.infer<typeof resolvedFlowTargetEvidenceSchema>;
 export type FlowTargetDependency = z.infer<typeof flowTargetDependencySchema>;
-export type PlatformManagedFlowDependency = z.infer<typeof platformManagedFlowDependencySchema>;
 export type PlatformServiceOperationRelease = z.infer<
   typeof platformServiceOperationReleaseSchema
 >;
