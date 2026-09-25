@@ -40,14 +40,26 @@ begin
       message = 'Request access version is stale or unavailable';
   end if;
 
-  -- The grant is re-read for this exact operation and flow inside the protected
-  -- operation's own transaction, so a revocation between resolution and use
+  -- The organisation, its tenant, the application registration and the grant are
+  -- re-read for this exact operation and flow inside the protected operation's
+  -- own transaction, so a suspension or revocation between resolution and use
   -- refuses instead of running on the earlier read.
   if not exists (
     select 1
     from vortex_identity.organizations as organization
+    join vortex_identity.tenants as tenant
+      on tenant.tenant_id = organization.tenant_id
     where organization.organization_id = (checked ->> 'organizationId')::uuid
+      and organization.tenant_id = (checked ->> 'tenantId')::uuid
       and organization.state = 'active'
+      and tenant.state = 'active'
+  ) or not exists (
+    select 1
+    from vortex_access.permission_registrations as registration
+    where registration.organization_id = (checked ->> 'organizationId')::uuid
+      and registration.registration_kind = 'application'
+      and registration.registration_owner_id = (checked ->> 'applicationRootId')::uuid
+      and registration.state = 'active'
   ) or vortex_access.resolve_system_actor_grant_internal(
     (checked ->> 'systemActorId')::uuid,
     p_operation_key,
@@ -70,4 +82,4 @@ grant execute on function vortex_access.validated_durable_system_request_context
   to vortex_request;
 
 comment on function vortex_access.validated_durable_system_request_context(text, uuid) is
-  'Fails closed unless the request context is a system actor context on the durable_workflow channel for an application, its Access version is current and the system actor grant registry still holds an active grant for exactly this actor, operation, organisation, flow and application source.';
+  'Fails closed unless the request context is a system actor context on the durable_workflow channel for an application, its Access version is current, its organisation, tenant and application registration are active and the system actor grant registry still holds an active grant for exactly this actor, operation, organisation, flow and application source.';

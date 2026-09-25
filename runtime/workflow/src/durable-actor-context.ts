@@ -94,7 +94,15 @@ export const retainedRunAuthoritySchema = z
     state: z.enum(["running", "waiting", "completed", "cancelled", "refused", "withdrawn"]),
     /** The person that started the run. Required for `initiating_person`; correlation otherwise. */
     initiator: retainedRunInitiatorSchema.optional(),
-    nodes: z.array(retainedNodeSchema).min(1).max(100),
+    nodes: z
+      .array(retainedNodeSchema)
+      .min(1)
+      .max(100)
+      .refine(
+        (nodes) =>
+          new Set(nodes.map((node) => node.nodeId.toLowerCase())).size === nodes.length,
+        { message: "Each node of the retained release appears once" },
+      ),
   })
   .strict();
 
