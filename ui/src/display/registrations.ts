@@ -6,12 +6,14 @@ import {
   LIST_BLOCK_RELEASE_1_1_0,
   RECORD_DETAIL_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
+  RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
   RICH_TEXT_BLOCK_RELEASE,
   RICH_TEXT_BLOCK_RELEASE_1_1_0,
   SUMMARY_VALUES_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
   TABLE_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE_1_1_0,
+  TABLE_BLOCK_RELEASE_1_2_0,
   TEXT_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE_1_1_0,
 } from "@vortex/contracts";
@@ -62,6 +64,9 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
     Object.freeze({ metadata: RECORD_DETAIL_BLOCK_RELEASE_1_1_0, render: RecordDetailDisplay }),
     Object.freeze({ metadata: GROUPED_DATA_BLOCK_RELEASE_1_1_0, render: GroupedDataDisplay }),
     Object.freeze({ metadata: SUMMARY_VALUES_BLOCK_RELEASE_1_1_0, render: SummaryValuesDisplay }),
+    // Release 1.2.0 declares the data contract as settings; the same renderers read it.
+    Object.freeze({ metadata: TABLE_BLOCK_RELEASE_1_2_0, render: TableDisplay }),
+    Object.freeze({ metadata: RECORD_DETAIL_BLOCK_RELEASE_1_2_0, render: RecordDetailDisplay }),
   ]);
 
 /** Creates an immutable PlatformComponentRegistry populated with every display block release. */

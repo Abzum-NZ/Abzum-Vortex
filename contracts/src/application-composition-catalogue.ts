@@ -87,6 +87,20 @@ export const SUMMARY_VALUES_BLOCK_RELEASE_1_1_0: PlatformBlockReleaseV2 = releas
   sources.SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
 );
 
+/**
+ * Release 1.2.0 of the table and record detail blocks declares their data contract as settings
+ * (decision 5): the Records table maps columns, sorting, filtering, search, saved views, page size,
+ * selection, query parameters and its refused and error messages to fields of its bound query; the
+ * record detail maps its detail fields. Earlier releases stay published unchanged.
+ */
+export const TABLE_BLOCK_RELEASE_1_2_0: PlatformBlockReleaseV2 = release(
+  sources.TABLE_BLOCK_RELEASE_1_2_0,
+);
+
+export const RECORD_DETAIL_BLOCK_RELEASE_1_2_0: PlatformBlockReleaseV2 = release(
+  sources.RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
+);
+
 /** Exact immutable metadata release for the text input block. */
 export const TEXT_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.TEXT_INPUT_BLOCK_RELEASE);
 
@@ -150,7 +164,7 @@ export const LINK_TILES_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.
 /** Exact immutable metadata release for the view filter block. */
 export const VIEW_FILTER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.VIEW_FILTER_BLOCK_RELEASE);
 
-/** All fourteen immutable display block releases: the seven 1.0.0 releases and their 1.1.0 successors. */
+/** All sixteen immutable display block releases: the seven 1.0.0 releases, their 1.1.0 successors and the two 1.2.0 data-contract releases. */
 export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   TEXT_BLOCK_RELEASE,
   RICH_TEXT_BLOCK_RELEASE,
@@ -166,6 +180,8 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
   GROUPED_DATA_BLOCK_RELEASE_1_1_0,
   SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
+  TABLE_BLOCK_RELEASE_1_2_0,
+  RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
 ]);
 
 /** All thirteen immutable form, layout and action block releases. */
@@ -203,7 +219,7 @@ export const NAVIGATION_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Obje
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
 ]);
 
-/** All thirty-three immutable platform block releases registered for the page builder. */
+/** All thirty-five immutable platform block releases registered for the page builder. */
 export const PLATFORM_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   ...DISPLAY_BLOCK_RELEASES,
   ...CONTROL_BLOCK_RELEASES,

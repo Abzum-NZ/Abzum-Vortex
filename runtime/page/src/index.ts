@@ -51,6 +51,13 @@ export {
   type ProtectedReadModelResolution,
 } from "./protected-read-model-resolution";
 export {
+  buildRecordsTableQueryCommand,
+  createRecordsTableQueryResolver,
+  type RecordsTableQueryRequest,
+  type RecordsTableQueryResolution,
+  type RecordsTableQueryRunner,
+} from "./records-table-query";
+export {
   abandonPrivateFormDraftCommandSchema,
   createPrivateFormDraftCommandSchema,
   PrivateFormDraftError,
