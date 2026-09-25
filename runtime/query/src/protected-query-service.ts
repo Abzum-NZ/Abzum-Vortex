@@ -175,7 +175,9 @@ const pageReadSchema = z.discriminatedUnion("outcome", [
         .max(200),
       next: z
         .object({
-          sortKey: z.array(z.string().nullable()).min(1).max(20),
+          // Only values of fields the reader is guaranteed to see; empty when
+          // no declared sort field may be pushed, and the scan uses record identity.
+          sortKey: z.array(z.string().nullable()).max(20),
           recordId: recordIdSchema,
         })
         .strict()
