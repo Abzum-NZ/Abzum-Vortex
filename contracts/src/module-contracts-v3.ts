@@ -1,11 +1,20 @@
 import { z } from "zod";
-import { conditionNodeSchema, moduleDependencySchema } from "./module-contracts";
 import {
+  actionEffectSchema,
+  conditionNodeSchema,
+  moduleDependencySchema,
+} from "./module-contracts";
+import {
+  actionDefinitionV2Schema,
   actionInputDefinitionV2Schema,
   moduleContentV2Schema,
   moduleDraftV2Schema,
+  recordTypeDefinitionV2Schema,
 } from "./module-contracts-v2";
 import { moduleSourceContractVersion as moduleSourceContractVersionV3 } from "./module-source-contracts";
+import { protectedOperationReferenceSchema } from "./application-flow-bindings";
+import { PLATFORM_SERVICE_OPERATIONS } from "./platform-service-operation-catalogue";
+import { protectedReadModelKeySchema } from "./application-composition-v2";
 import { flowSchema } from "./flow-contracts";
 import { ruleGraphSchema } from "./rule-graph-contracts";
 import {
@@ -108,6 +117,183 @@ export const moduleContributionV3Schema = z
   });
 
 /**
+ * The canonical system projection storage kind: the record type's typed fields project one
+ * registered protected view and are read through the one query path. The canonical form resolves
+ * the organisation field, the revision field and the declared filterable and sortable fields to
+ * their permanent field identities.
+ */
+export const moduleSystemProjectionV3Schema = z
+  .object({
+    protectedView: protectedReadModelKeySchema,
+    organizationFieldId: fieldIdSchema,
+    revisionFieldId: fieldIdSchema,
+    filterableFieldIds: z.array(fieldIdSchema).max(500),
+    sortableFieldIds: z.array(fieldIdSchema).max(500),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.filterableFieldIds).size !== value.filterableFieldIds.length)
+      context.addIssue({
+        code: "custom",
+        path: ["filterableFieldIds"],
+        message: "Filterable field identities must be unique",
+      });
+    if (new Set(value.sortableFieldIds).size !== value.sortableFieldIds.length)
+      context.addIssue({
+        code: "custom",
+        path: ["sortableFieldIds"],
+        message: "Sortable field identities must be unique",
+      });
+  });
+
+/**
+ * Field types whose values come from generated record storage rather than a column of a protected
+ * view, which a system projection record type cannot declare (the source contract refuses the same).
+ */
+const systemProjectionRefusedFieldTypes: ReadonlySet<string> = new Set([
+  "reference_number",
+  "table",
+  "link",
+  "link_to_one_of_several",
+  "total",
+  "attachment",
+]);
+
+/**
+ * A canonical Module record type: the V2 record type extended with the optional system projection
+ * storage kind. A generated-table record type carries no `systemProjection`. A system projection
+ * record type is organisation scoped, refuses every standard write action, holds a required text
+ * organisation field and a required whole-number revision field, and its declared filterable and
+ * sortable fields are exactly its fields flagged filterable and sortable.
+ */
+export const recordTypeDefinitionV3Schema = recordTypeDefinitionV2Schema
+  .safeExtend({
+    systemProjection: moduleSystemProjectionV3Schema.optional(),
+  })
+  .superRefine((value, context) => {
+    const projection = value.systemProjection;
+    if (projection === undefined) return;
+    const invalid = (message: string, path: (string | number)[]) =>
+      context.addIssue({ code: "custom", path, message });
+    if (value.storageScope !== "organization_shared")
+      invalid("A system projection record type is scoped to exactly one organisation", [
+        "storageScope",
+      ]);
+    if (
+      value.standardActions.some(
+        (action) =>
+          action === "create" ||
+          action === "update" ||
+          action === "soft_delete" ||
+          action === "restore",
+      )
+    )
+      invalid("System projection record types refuse standard create, update, delete and restore", [
+        "standardActions",
+      ]);
+    const fields = new Map(value.fields.map((field) => [String(field.fieldId), field]));
+    const organization = fields.get(String(projection.organizationFieldId));
+    if (organization === undefined || organization.type !== "text" || !organization.required)
+      invalid("The organisation field must be a required text field of the record type", [
+        "systemProjection",
+        "organizationFieldId",
+      ]);
+    const revision = fields.get(String(projection.revisionFieldId));
+    if (revision === undefined || revision.type !== "whole_number" || !revision.required)
+      invalid("The revision field must be a required whole-number field of the record type", [
+        "systemProjection",
+        "revisionFieldId",
+      ]);
+    for (const [index, field] of value.fields.entries())
+      if (systemProjectionRefusedFieldTypes.has(field.type))
+        invalid("A system projection field is a read-only value of its protected view", [
+          "fields",
+          index,
+          "type",
+        ]);
+    const filterable = new Set(projection.filterableFieldIds.map(String));
+    const sortable = new Set(projection.sortableFieldIds.map(String));
+    for (const [index, fieldId] of projection.filterableFieldIds.entries())
+      if (!fields.get(String(fieldId))?.filterable)
+        invalid("A declared filterable field must be a filterable field of the record type", [
+          "systemProjection",
+          "filterableFieldIds",
+          index,
+        ]);
+    for (const [index, fieldId] of projection.sortableFieldIds.entries())
+      if (!fields.get(String(fieldId))?.sortable)
+        invalid("A declared sortable field must be a sortable field of the record type", [
+          "systemProjection",
+          "sortableFieldIds",
+          index,
+        ]);
+    for (const [index, field] of value.fields.entries()) {
+      if (field.filterable && !filterable.has(String(field.fieldId)))
+        invalid("Every filterable system projection field must be declared filterable", [
+          "fields",
+          index,
+          "filterable",
+        ]);
+      if (field.sortable && !sortable.has(String(field.fieldId)))
+        invalid("Every sortable system projection field must be declared sortable", [
+          "fields",
+          index,
+          "sortable",
+        ]);
+    }
+  });
+
+/**
+ * Whether a canonical protected-operation reference names a registered platform-service operation
+ * that changes one existing row at an expected revision: the only operations a system projection
+ * record type action may target, so the subject row's identity and revision always have somewhere
+ * to go. A Module- or application-owned operation is never a system record write path.
+ */
+export const isSystemRecordProtectedOperation = (
+  reference: z.infer<typeof protectedOperationReferenceSchema>,
+): boolean => {
+  const owner = reference.owner;
+  return (
+    owner.kind === "platform_service" &&
+    Object.values(PLATFORM_SERVICE_OPERATIONS).some(
+      (operation) =>
+        operation.release.serviceId === owner.serviceId &&
+        operation.release.operationId === reference.operationId &&
+        operation.descriptor.expectedRevision === "required",
+    )
+  );
+};
+
+/**
+ * A canonical Module action: the V2 action extended with an optional registered protected operation
+ * target. An action orders effects or targets one registered protected operation, never both. A
+ * protected-operation action declares no effects and no identity or revision inputs, because the
+ * subject record's identity and revision reach the operation automatically when it runs. It needs
+ * both its own permission and the operation's registered permission: the operation re-checks the
+ * actor's current authority in its owning service and never accepts an organisation or actor.
+ */
+export const actionDefinitionV3Schema = actionDefinitionV2Schema
+  .safeExtend({
+    effects: z.array(actionEffectSchema).max(10),
+    protectedOperation: protectedOperationReferenceSchema.optional(),
+  })
+  .superRefine((value, context) => {
+    const operation = value.protectedOperation;
+    if ((operation !== undefined) === value.effects.length > 0)
+      context.addIssue({
+        code: "custom",
+        path: ["protectedOperation"],
+        message: "An action targets either ordered effects or one registered protected operation",
+      });
+    if (operation !== undefined && !isSystemRecordProtectedOperation(operation))
+      context.addIssue({
+        code: "custom",
+        path: ["protectedOperation"],
+        message: "An action targets a registered platform-service operation on one existing row",
+      });
+  });
+
+/**
  * A Module's canonical content. `flows` is the one home of its behaviour (architecture decision 1):
  * every save rule is a flow with a `BeforeSave` trigger and `transaction` execution.
  *
@@ -117,12 +303,17 @@ export const moduleContributionV3Schema = z
  * every `BeforeSave` flow has exactly one rule of the same identity, record type and priority, and
  * no rule exists without its flow, so a save can never run without a rule its Module declares.
  */
-export const moduleContentV3Schema = moduleContentV2Schema.extend({
-  flows: z.array(flowSchema).max(100),
-  rules: z.array(ruleGraphSchema).max(100),
-  queries: z.array(moduleQueryDefinitionV3Schema).max(100).default([]),
-  contributions: z.array(moduleContributionV3Schema).max(100).optional(),
-});
+export const moduleContentV3Schema = z
+  .object({
+    ...moduleContentV2Schema.shape,
+    recordTypes: z.array(recordTypeDefinitionV3Schema).min(1).max(100),
+    actions: z.array(actionDefinitionV3Schema),
+    flows: z.array(flowSchema).max(100),
+    rules: z.array(ruleGraphSchema).max(100),
+    queries: z.array(moduleQueryDefinitionV3Schema).max(100).default([]),
+    contributions: z.array(moduleContributionV3Schema).max(100).optional(),
+  })
+  .strict();
 
 export const moduleDraftV3Schema = moduleDraftV2Schema
   .extend({
@@ -167,6 +358,23 @@ export const moduleDraftV3Schema = moduleDraftV2Schema
           "flows",
           draft.content.flows.findIndex((flow) => String(flow.id) === flowId),
         ]);
+    // A system projection record type has no ordinary write path, so every action on it targets a
+    // registered protected operation, and no other record type's action may target one.
+    const projections = new Set(
+      draft.content.recordTypes.flatMap((recordType) =>
+        recordType.systemProjection === undefined ? [] : [String(recordType.recordTypeId)],
+      ),
+    );
+    draft.content.actions.forEach((action, index) => {
+      if (
+        projections.has(String(action.subjectRecordTypeId)) !==
+        (action.protectedOperation !== undefined)
+      )
+        invalid(
+          "Exactly the actions of a system projection record type target a protected operation",
+          ["actions", index, "protectedOperation"],
+        );
+    });
   });
 
 export const moduleCanonicalDocumentV3Schema = z
@@ -180,6 +388,9 @@ export type ModuleContractVersionPairV3 = z.infer<typeof moduleContractVersionPa
 export type ModuleQuerySort = z.infer<typeof moduleQuerySortSchema>;
 export type ModuleQueryAggregate = z.infer<typeof moduleQueryAggregateSchema>;
 export type ModuleQueryDefinitionV3 = z.infer<typeof moduleQueryDefinitionV3Schema>;
+export type ModuleSystemProjectionV3 = z.infer<typeof moduleSystemProjectionV3Schema>;
+export type RecordTypeDefinitionV3 = z.infer<typeof recordTypeDefinitionV3Schema>;
+export type ActionDefinitionV3 = z.infer<typeof actionDefinitionV3Schema>;
 export type ModuleContributionV3 = z.infer<typeof moduleContributionV3Schema>;
 export type ModuleContentV3 = z.infer<typeof moduleContentV3Schema>;
 export type ModuleDraftV3 = z.infer<typeof moduleDraftV3Schema>;
