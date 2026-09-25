@@ -56,7 +56,7 @@ begin
     if (pg_catalog.length(definition)
         - pg_catalog.length(pg_catalog.replace(definition, account_select, '')))
         <> pg_catalog.length(account_select)
-      or pg_catalog.position(version_lock in definition) <> 0 then
+      or pg_catalog.strpos(definition, version_lock) <> 0 then
       raise exception using errcode = '55000',
         message = 'Account lifecycle lock order patch does not match exactly once',
         detail = procedure_id::text;

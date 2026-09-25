@@ -537,6 +537,13 @@ comment on function vortex_record.list_offboarding_owned_records_internal(
 -- The protected entry now serves both sections. Each section paginates over its
 -- own keyset, so a caller walks the application section and the shared section
 -- separately and sees every disclosed record exactly once.
+-- Replacing a function whose owner no longer holds EXECUTE on it is refused on a
+-- fresh database, because the earlier migration revoked it from the owner. Lend
+-- the owner EXECUTE for the replace; the revoke below removes it again, so the
+-- final ACL is unchanged.
+grant execute on function vortex_record.list_offboarding_owned_records(
+  uuid, text, uuid, text, uuid, uuid, integer
+) to vortex_record_adapter;
 create or replace function vortex_record.list_offboarding_owned_records(
   p_source_organization_account_id uuid,
   p_target_kind text,
