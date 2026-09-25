@@ -19,6 +19,7 @@ import {
   moduleCompilationOutputV3Schema,
   moduleCompilationRequestV3Schema,
   moduleSourceDocumentSchema,
+  sourceFlowCollectionSchema,
   ruleIdSchema,
   containedComponentIdSchema,
   recordTypeIdSchema,
@@ -68,6 +69,7 @@ import {
 import type { ApplicationCompositionResolutionV2 } from "./application-v2-resolution";
 import { validateApplicationSourceCatalogue } from "./application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
+import { compileFlowSources, type ResolvedFlowIdentity } from "./flow-compilation";
 
 type Path = (string | number)[];
 type JsonObject = Record<string, unknown>;
@@ -6293,6 +6295,61 @@ function compileApplicationV2Internal(
   return compileParsedApplicationV2Request(parsed.data, parseDefinitionCompilationContext(context));
 }
 
+/**
+ * Compiles the flows a module or application owns to permanent identities (#984), refusing an
+ * unresolved alias, an unregistered task or a reference outside the declared dependencies. The
+ * canonical flows and their manifest contribution are not part of either compilation output until
+ * #986 adds `flows` to the module and application contracts, and no strict source schema accepts
+ * `flow_sources` today, so this is inert until #986 wires the field and this result into the
+ * canonical output and provenance.
+ */
+function compileOwnedFlowSources(source: JsonObject, resolution: Resolution) {
+  const flowSources = asObject(source.body).flow_sources;
+  if (flowSources === undefined) return undefined;
+  const parsed = sourceFlowCollectionSchema.safeParse(flowSources);
+  if (!parsed.success) fail("vortex.definition.source_shape", "invalid_value");
+  const ownKey = String(source.key);
+  const owned = (kind: string, alias: string): ResolvedFlowIdentity => {
+    const split = alias.indexOf(":");
+    const definitionKey = split < 1 ? ownKey : alias.slice(0, split);
+    return {
+      identifier: resolution.id(definitionKey, kind, alias.slice(split + 1), "content"),
+      definitionKey,
+    };
+  };
+  const qualifiedRecord = (reference: string) =>
+    reference.includes(":") ? reference : `${ownKey}:${reference}`;
+  const recordOwner = (reference: string) => qualifiedRecord(reference).split(":")[0]!;
+  return compileFlowSources({
+    flows: parsed.data,
+    declaredDefinitionKeys: dependencyOrder(source).filter((key) => key !== ownKey),
+    resolver: {
+      definitionKey: ownKey,
+      flow: (alias) => owned("flow", alias),
+      recordType: (reference) => ({
+        identifier: resolution.recordType(qualifiedRecord(reference)).recordTypeId,
+        definitionKey: recordOwner(reference),
+      }),
+      field: (record, alias) => ({
+        identifier: resolution.field(qualifiedRecord(record), alias),
+        definitionKey: recordOwner(record),
+      }),
+      relationship: (record, alias) => ({
+        identifier: resolution.relationship(qualifiedRecord(record), alias),
+        definitionKey: recordOwner(record),
+      }),
+      action: (alias) => owned("action", alias),
+      permission: (alias) => owned("permission", alias),
+      query: (alias) => owned("query", alias),
+      page: (alias) => owned("page", alias),
+      form: (alias) => owned("form", alias),
+      connectionBinding: (alias) => owned("connection_binding", alias),
+      executionBinding: (alias) => owned("execution_binding", alias),
+      locate: (flowKey) => resolution.location("flow", flowKey),
+    },
+  });
+}
+
 function compileParsedApplicationV2Request(
   request: ParsedApplicationV2Request,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
@@ -6316,6 +6373,7 @@ function compileParsedApplicationV2Request(
         catalogueFailure.location,
       );
     const resolution = new Resolution(request.resolution, sourceObject);
+    compileOwnedFlowSources(sourceObject, resolution);
     const valueIndex = applicationModuleValueIndex(sourceObject, resolution, dependencyOutputs);
     const composition = materialiseApplicationCompositionV2(
       source,
@@ -6389,6 +6447,7 @@ function compileParsedModuleV3Request(
   const source = request.source as unknown as JsonObject;
   try {
     const resolution = new Resolution(request.resolution, source);
+    compileOwnedFlowSources(source, resolution);
     const definitionKey = request.source.key;
     const ruleKeys = new Map(request.source.body.rules.map((rule) => [rule.id, rule.key]));
     const localRecordKey = (alias: string): string => {
