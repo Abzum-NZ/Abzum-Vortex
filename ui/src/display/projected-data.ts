@@ -91,47 +91,72 @@ export type DisplayGroup = Readonly<{
   summary?: readonly DisplaySummaryValue[];
 }>;
 
-/** Closed per-component projected payload rendering the display component family. */
-export type ProjectedDisplayValues =
-  | Readonly<{ kind: "text"; value: DisplayCellValue }>
-  | Readonly<{ kind: "rich_text"; document: DisplayRichTextDocument }>
-  | Readonly<{
-      kind: "list";
-      rows: readonly DisplayRow[];
-      headingKey: string;
-      secondaryKey?: string;
-      selectedRecordIds?: readonly string[];
-      page?: number;
-      pageCount?: number;
-    }>
-  | Readonly<{
-      kind: "table";
-      columns: readonly DisplayColumn[];
-      rows: readonly DisplayRow[];
-      selectedRecordIds?: readonly string[];
-      sort?: Readonly<{ columnKey: string; direction: "ascending" | "descending" }>;
-      page?: number;
-      pageCount?: number;
-    }>
-  | Readonly<{ kind: "record_detail"; recordId: string; fields: readonly DisplayField[] }>
-  | Readonly<{ kind: "grouped_data"; groups: readonly DisplayGroup[] }>
-  | Readonly<{ kind: "summary_values"; values: readonly DisplaySummaryValue[] }>;
+/** The ready values a plain-text block renders. */
+export type TextPayload = Readonly<{ kind: "text"; value: DisplayCellValue }>;
 
-export type ProjectedDisplayValueKind = ProjectedDisplayValues["kind"];
+/** The ready values a structured rich-text block renders. */
+export type RichTextPayload = Readonly<{ kind: "rich_text"; document: DisplayRichTextDocument }>;
+
+/** The ready values a list block renders. */
+export type ListPayload = Readonly<{
+  kind: "list";
+  rows: readonly DisplayRow[];
+  headingKey: string;
+  secondaryKey?: string;
+  selectedRecordIds?: readonly string[];
+  page?: number;
+  pageCount?: number;
+}>;
+
+/** The ready values a table block renders. */
+export type TablePayload = Readonly<{
+  kind: "table";
+  columns: readonly DisplayColumn[];
+  rows: readonly DisplayRow[];
+  selectedRecordIds?: readonly string[];
+  sort?: Readonly<{ columnKey: string; direction: "ascending" | "descending" }>;
+  page?: number;
+  pageCount?: number;
+}>;
+
+/** The ready values a record-detail block renders. */
+export type RecordDetailPayload = Readonly<{
+  kind: "record_detail";
+  recordId: string;
+  fields: readonly DisplayField[];
+}>;
+
+/** The ready values a grouped-data block renders. */
+export type GroupedPayload = Readonly<{ kind: "grouped_data"; groups: readonly DisplayGroup[] }>;
+
+/** The ready values a summary-values block renders. */
+export type SummaryPayload = Readonly<{
+  kind: "summary_values";
+  values: readonly DisplaySummaryValue[];
+}>;
+
+export type TextData = DisplayDataState<TextPayload>;
+export type RichTextData = DisplayDataState<RichTextPayload>;
+export type ListData = DisplayDataState<ListPayload>;
+export type TableData = DisplayDataState<TablePayload>;
+export type RecordDetailData = DisplayDataState<RecordDetailPayload>;
+export type GroupedData = DisplayDataState<GroupedPayload>;
+export type SummaryData = DisplayDataState<SummaryPayload>;
 
 /** Fixed, data-free refusal reasons; a refused state never carries a value. */
 export type DisplayRefusalReason = "not_permitted" | "access_ended" | "not_found";
 
 /**
- * Explicit, data-safe state passed for one placement.
- * Only the `ready` state carries values; loading, empty, refused and error cannot leak data.
+ * Explicit, data-safe state for one placement, parameterised by that block's own ready values.
+ * Only the `ready` state carries values; loading, empty, refused and error cannot leak data. Each
+ * block names its own state type, so no closed union of every accepted payload exists centrally.
  */
-export type ProjectedDisplayData =
+export type DisplayDataState<Values> =
   | Readonly<{ status: "loading" }>
   | Readonly<{ status: "empty" }>
   | Readonly<{ status: "refused"; reason: DisplayRefusalReason }>
   | Readonly<{ status: "error" }>
-  | Readonly<{ status: "ready"; values: ProjectedDisplayValues }>;
+  | Readonly<{ status: "ready"; values: Values }>;
 
 /** Declared semantic event names this display family can emit. */
 export type DisplaySemanticEventName = Extract<
@@ -183,19 +208,14 @@ export type DisplayEventHandlers = Readonly<
   Partial<Record<DisplaySemanticEventName, DisplayEventHandler>>
 >;
 
-/** Permission-projected data keyed by stable placement identity. */
-export type ProjectedDataByPlacement = Readonly<Record<string, ProjectedDisplayData>>;
-
-/** Semantic callbacks keyed by stable placement identity. */
-export type DisplayEventsByPlacement = Readonly<Record<string, DisplayEventHandlers>>;
-
 const DISPLAY_REFUSAL_REASONS: readonly DisplayRefusalReason[] = [
   "not_permitted",
   "access_ended",
   "not_found",
 ];
 
-const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = [
+/** Every event name a display block accepts; each block further narrows this to its own binding. */
+export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.freeze([
   "refresh",
   "row_clicked",
   "row_action",
@@ -204,11 +224,12 @@ const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = [
   "page_changed",
   "bulk_action",
   "inline_edit",
-];
+]);
 
-const LOADING_STATE: ProjectedDisplayData = Object.freeze({ status: "loading" });
-const EMPTY_STATE: ProjectedDisplayData = Object.freeze({ status: "empty" });
-const ERROR_STATE: ProjectedDisplayData = Object.freeze({ status: "error" });
+// The data-free states carry no values, so one frozen instance serves every block's state type.
+const LOADING_STATE: DisplayDataState<never> = Object.freeze({ status: "loading" });
+const EMPTY_STATE: DisplayDataState<never> = Object.freeze({ status: "empty" });
+const ERROR_STATE: DisplayDataState<never> = Object.freeze({ status: "error" });
 const EMPTY_CELL: DisplayCellValue = Object.freeze({ kind: "empty" });
 const EMPTY_HANDLERS: DisplayEventHandlers = Object.freeze({});
 const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
@@ -674,121 +695,180 @@ const parseGroups = (
   );
 };
 
-const parseProjectedValues = (
+/** The ready values a plain-text block accepts. */
+export const parseTextPayload = (
   value: unknown,
-  location: DefinitionRenderErrorLocation,
-): ProjectedDisplayValues => {
+  location: DefinitionRenderErrorLocation = {},
+): TextPayload => {
   const record = requireRecord(value, "Projected display values must be an object", location);
-  switch (record.kind) {
-    case "text":
-      requireExactKeys(record, ["kind", "value"], location);
-      return Object.freeze({ kind: "text", value: parseCellValue(record.value, location) });
-    case "rich_text":
-      requireExactKeys(record, ["kind", "document"], location);
-      return Object.freeze({
-        kind: "rich_text",
-        document: parseRichTextDocument(record.document, location),
-      });
-    case "list": {
-      requireExactKeys(
-        record,
-        ["kind", "rows", "headingKey", "secondaryKey", "selectedRecordIds", "page", "pageCount"],
-        location,
-      );
-      const rows = parseRows(record.rows, location);
-      const selection = parseSelection(record.selectedRecordIds, rows, location);
-      const pagination = parsePagination(record.page, record.pageCount, location);
-      return Object.freeze({
-        kind: "list",
-        rows,
-        headingKey: requireBuilderKey(
-          record.headingKey,
-          "A projected list requires a heading key",
-          location,
-        ),
-        ...(record.secondaryKey === undefined
-          ? {}
-          : {
-              secondaryKey: requireBuilderKey(
-                record.secondaryKey,
-                "A projected list secondary key is invalid",
-                location,
-              ),
-            }),
-        ...(selection === undefined ? {} : { selectedRecordIds: selection }),
-        ...(pagination === undefined ? {} : pagination),
-      });
-    }
-    case "table": {
-      requireExactKeys(
-        record,
-        ["kind", "columns", "rows", "selectedRecordIds", "sort", "page", "pageCount"],
-        location,
-      );
-      const columns = parseColumns(record.columns, location);
-      const rows = parseRows(record.rows, location);
-      const selection = parseSelection(record.selectedRecordIds, rows, location);
-      const pagination = parsePagination(record.page, record.pageCount, location);
-      let sort: Readonly<{ columnKey: string; direction: "ascending" | "descending" }> | undefined;
-      if (record.sort !== undefined) {
-        requireExactKeys(requireRecord(record.sort, "Projected sort is invalid", location), [
-          "columnKey",
-          "direction",
-        ], location);
-        const sortRecord = record.sort as Record<string, unknown>;
-        const columnKey = requireFieldKey(
-          sortRecord.columnKey,
-          "A projected sort requires a column key",
-          location,
-        );
-        if (!columns.some((column) => column.key === columnKey))
-          fail(`Projected sort column '${columnKey}' is not a declared column`, location);
-        if (sortRecord.direction !== "ascending" && sortRecord.direction !== "descending")
-          fail("A projected sort direction must be ascending or descending", location);
-        sort = Object.freeze({ columnKey, direction: sortRecord.direction });
-      }
-      return Object.freeze({
-        kind: "table",
-        columns,
-        rows,
-        ...(selection === undefined ? {} : { selectedRecordIds: selection }),
-        ...(sort === undefined ? {} : { sort }),
-        ...(pagination === undefined ? {} : pagination),
-      });
-    }
-    case "record_detail":
-      requireExactKeys(record, ["kind", "recordId", "fields"], location);
-      return Object.freeze({
-        kind: "record_detail",
-        recordId: requireNonEmptyString(
-          record.recordId,
-          "A projected record detail requires a stable record identity",
-          location,
-        ),
-        fields: parseFields(record.fields, location),
-      });
-    case "grouped_data":
-      requireExactKeys(record, ["kind", "groups"], location);
-      return Object.freeze({ kind: "grouped_data", groups: parseGroups(record.groups, location) });
-    case "summary_values":
-      requireExactKeys(record, ["kind", "values"], location);
-      return Object.freeze({
-        kind: "summary_values",
-        values: parseSummaryValues(record.values, location),
-      });
-    default:
-      return fail(`Unknown projected display values kind '${String(record.kind)}'`, location);
+  if (record.kind !== "text")
+    return fail(`Expected 'text' projected values, got '${String(record.kind)}'`, location);
+  requireExactKeys(record, ["kind", "value"], location);
+  return Object.freeze({ kind: "text", value: parseCellValue(record.value, location) });
+};
+
+/** The ready values a structured rich-text block accepts. */
+export const parseRichTextPayload = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): RichTextPayload => {
+  const record = requireRecord(value, "Projected display values must be an object", location);
+  if (record.kind !== "rich_text")
+    return fail(`Expected 'rich_text' projected values, got '${String(record.kind)}'`, location);
+  requireExactKeys(record, ["kind", "document"], location);
+  return Object.freeze({
+    kind: "rich_text",
+    document: parseRichTextDocument(record.document, location),
+  });
+};
+
+/** The ready values a list block accepts. */
+export const parseListPayload = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): ListPayload => {
+  const record = requireRecord(value, "Projected display values must be an object", location);
+  if (record.kind !== "list")
+    return fail(`Expected 'list' projected values, got '${String(record.kind)}'`, location);
+  requireExactKeys(
+    record,
+    ["kind", "rows", "headingKey", "secondaryKey", "selectedRecordIds", "page", "pageCount"],
+    location,
+  );
+  const rows = parseRows(record.rows, location);
+  const selection = parseSelection(record.selectedRecordIds, rows, location);
+  const pagination = parsePagination(record.page, record.pageCount, location);
+  return Object.freeze({
+    kind: "list",
+    rows,
+    headingKey: requireBuilderKey(
+      record.headingKey,
+      "A projected list requires a heading key",
+      location,
+    ),
+    ...(record.secondaryKey === undefined
+      ? {}
+      : {
+          secondaryKey: requireBuilderKey(
+            record.secondaryKey,
+            "A projected list secondary key is invalid",
+            location,
+          ),
+        }),
+    ...(selection === undefined ? {} : { selectedRecordIds: selection }),
+    ...(pagination === undefined ? {} : pagination),
+  });
+};
+
+/** The ready values a table block accepts. */
+export const parseTablePayload = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): TablePayload => {
+  const record = requireRecord(value, "Projected display values must be an object", location);
+  if (record.kind !== "table")
+    return fail(`Expected 'table' projected values, got '${String(record.kind)}'`, location);
+  requireExactKeys(
+    record,
+    ["kind", "columns", "rows", "selectedRecordIds", "sort", "page", "pageCount"],
+    location,
+  );
+  const columns = parseColumns(record.columns, location);
+  const rows = parseRows(record.rows, location);
+  const selection = parseSelection(record.selectedRecordIds, rows, location);
+  const pagination = parsePagination(record.page, record.pageCount, location);
+  let sort: Readonly<{ columnKey: string; direction: "ascending" | "descending" }> | undefined;
+  if (record.sort !== undefined) {
+    const sortRecord = requireRecord(record.sort, "Projected sort is invalid", location);
+    requireExactKeys(sortRecord, ["columnKey", "direction"], location);
+    const columnKey = requireFieldKey(
+      sortRecord.columnKey,
+      "A projected sort requires a column key",
+      location,
+    );
+    if (!columns.some((column) => column.key === columnKey))
+      fail(`Projected sort column '${columnKey}' is not a declared column`, location);
+    if (sortRecord.direction !== "ascending" && sortRecord.direction !== "descending")
+      fail("A projected sort direction must be ascending or descending", location);
+    sort = Object.freeze({ columnKey, direction: sortRecord.direction });
   }
+  return Object.freeze({
+    kind: "table",
+    columns,
+    rows,
+    ...(selection === undefined ? {} : { selectedRecordIds: selection }),
+    ...(sort === undefined ? {} : { sort }),
+    ...(pagination === undefined ? {} : pagination),
+  });
+};
+
+/** The ready values a record-detail block accepts. */
+export const parseRecordDetailPayload = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): RecordDetailPayload => {
+  const record = requireRecord(value, "Projected display values must be an object", location);
+  if (record.kind !== "record_detail")
+    return fail(
+      `Expected 'record_detail' projected values, got '${String(record.kind)}'`,
+      location,
+    );
+  requireExactKeys(record, ["kind", "recordId", "fields"], location);
+  return Object.freeze({
+    kind: "record_detail",
+    recordId: requireNonEmptyString(
+      record.recordId,
+      "A projected record detail requires a stable record identity",
+      location,
+    ),
+    fields: parseFields(record.fields, location),
+  });
+};
+
+/** The ready values a grouped-data block accepts. */
+export const parseGroupedPayload = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): GroupedPayload => {
+  const record = requireRecord(value, "Projected display values must be an object", location);
+  if (record.kind !== "grouped_data")
+    return fail(
+      `Expected 'grouped_data' projected values, got '${String(record.kind)}'`,
+      location,
+    );
+  requireExactKeys(record, ["kind", "groups"], location);
+  return Object.freeze({ kind: "grouped_data", groups: parseGroups(record.groups, location) });
+};
+
+/** The ready values a summary-values block accepts. */
+export const parseSummaryPayload = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): SummaryPayload => {
+  const record = requireRecord(value, "Projected display values must be an object", location);
+  if (record.kind !== "summary_values")
+    return fail(
+      `Expected 'summary_values' projected values, got '${String(record.kind)}'`,
+      location,
+    );
+  requireExactKeys(record, ["kind", "values"], location);
+  return Object.freeze({
+    kind: "summary_values",
+    values: parseSummaryValues(record.values, location),
+  });
 };
 
 /**
- * Validates unknown projected data for one placement and returns its frozen fail-closed shape.
- * Throws a located definition error for any unknown, malformed or over-sharing input.
+ * Validates one block's unknown projected state and returns its frozen fail-closed shape. Only the
+ * `ready` state reaches that block's own payload parser, so every accepted shape stays the
+ * registration's own concern. Throws a located definition error for any unknown, malformed or
+ * over-sharing input.
  */
-export const parseProjectedDisplayData = (
+export const parseDisplayData = <Values>(
   value: unknown,
+  parseValues: (value: unknown, location: DefinitionRenderErrorLocation) => Values,
   location: DefinitionRenderErrorLocation = {},
-): ProjectedDisplayData => {
+): DisplayDataState<Values> => {
   const record = requireRecord(value, "Projected display data must be an object", location);
   switch (record.status) {
     case "loading":
@@ -814,7 +894,7 @@ export const parseProjectedDisplayData = (
       requireExactKeys(record, ["status", "values"], location);
       return Object.freeze({
         status: "ready",
-        values: parseProjectedValues(record.values, location),
+        values: parseValues(record.values, location),
       });
     default:
       return fail(
@@ -840,94 +920,4 @@ export const parseDisplayEventHandlers = (
     handlers[name as DisplaySemanticEventName] = handler as DisplayEventHandler;
   }
   return Object.freeze(handlers);
-};
-
-const parseKeyedRecords = <Value>(
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-  parse: (entry: unknown, entryLocation: DefinitionRenderErrorLocation) => Value,
-  message: string,
-): Readonly<Record<string, Value>> => {
-  if (value === undefined) return Object.freeze({});
-  const record = requireRecord(value, message, location);
-  // Own data properties only: a supplied "__proto__" key stays an ordinary (unknown) key.
-  return Object.freeze(
-    Object.fromEntries(
-      Object.entries(record).map(([placementId, entry]) => {
-        if (placementId.trim().length === 0)
-          fail("A display surface key must be a non-empty placement identity", location);
-        return [placementId, parse(entry, { ...location, placementId })] as const;
-      }),
-    ),
-  );
-};
-
-/** Validates unknown projection data keyed by stable placement identity. */
-export const parseProjectedDataByPlacement = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): ProjectedDataByPlacement =>
-  parseKeyedRecords(
-    value,
-    location,
-    (entry, entryLocation) => parseProjectedDisplayData(entry, entryLocation),
-    "Projected display data must be keyed by placement identity",
-  );
-
-/** Validates unknown semantic callbacks keyed by stable placement identity. */
-export const parseDisplayEventsByPlacement = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): DisplayEventsByPlacement =>
-  parseKeyedRecords(
-    value,
-    location,
-    (entry, entryLocation) => parseDisplayEventHandlers(entry, entryLocation),
-    "Display semantic callbacks must be keyed by placement identity",
-  );
-
-/**
- * Rejects projection or callback entries that do not name a placement in the resolved tree.
- * Absent entries are allowed; a supplied entry must resolve to an exact stable identity.
- */
-export const assertProjectionKeysArePlacements = (
-  placementIds: ReadonlySet<string>,
-  projectedData: unknown,
-  displayEvents: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): void => {
-  const dataKeys =
-    projectedData === undefined
-      ? []
-      : Object.keys(
-          requireRecord(
-            projectedData,
-            "Projected display data must be keyed by placement identity",
-            location,
-          ),
-        );
-  const eventKeys =
-    displayEvents === undefined
-      ? []
-      : Object.keys(
-          requireRecord(
-            displayEvents,
-            "Display semantic callbacks must be keyed by placement identity",
-            location,
-          ),
-        );
-  for (const placementId of dataKeys) {
-    if (!placementIds.has(placementId))
-      fail(`Projected data names unknown placement '${placementId}'`, {
-        ...location,
-        placementId,
-      });
-  }
-  for (const placementId of eventKeys) {
-    if (!placementIds.has(placementId))
-      fail(`Display events name unknown placement '${placementId}'`, {
-        ...location,
-        placementId,
-      });
-  }
 };

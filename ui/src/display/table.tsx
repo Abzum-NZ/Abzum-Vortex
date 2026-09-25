@@ -4,7 +4,6 @@ import {
   type RecordsTableColumnContract,
   type RecordsTableContract,
 } from "@vortex/contracts";
-import type { PlatformBlockRenderProps } from "../registry";
 import { DisplayCellView } from "./cell";
 import {
   BulkActionControl,
@@ -15,9 +14,10 @@ import {
   RowActionControl,
   rowName,
   SelectionControl,
+  type DisplayRenderProps,
 } from "./controls";
 import { DisplayStateContainer } from "./display-state-container";
-import type { DisplayCellValue, DisplayColumn } from "./projected-data";
+import type { DisplayCellValue, DisplayColumn, TablePayload } from "./projected-data";
 
 type RenderedColumn = Readonly<{
   key: string;
@@ -69,10 +69,14 @@ const columnAttributes = (
  * A Records table placement declares its columns, sortable fields and selection mode as settings.
  * Never executes or fetches a Query.
  */
-export function TableDisplay(props: PlatformBlockRenderProps): ReactElement {
+export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElement {
   const { placementId, availability } = props;
   const { title, accessibleName, values, state, emptyMessage, refusedMessage, errorMessage, events } =
-    resolveDisplayContext(props, "table", (table) => table.rows.length === 0, "No records to show");
+    resolveDisplayContext<TablePayload>(
+      props,
+      (table) => table.rows.length === 0,
+      "No records to show",
+    );
   const contract = readRecordsTableContract(props.settings);
   const columns = values === undefined ? [] : renderedColumns(contract, values.columns);
   const sortable = (column: RenderedColumn): boolean =>

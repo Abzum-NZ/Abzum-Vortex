@@ -1,10 +1,14 @@
 import type { ReactElement } from "react";
 import { readRecordDetailContract } from "@vortex/contracts";
-import type { PlatformBlockRenderProps } from "../registry";
 import { DisplayCellView } from "./cell";
-import { DisplayHeader, resolveDisplayContext, RowActionControl } from "./controls";
+import {
+  DisplayHeader,
+  resolveDisplayContext,
+  RowActionControl,
+  type DisplayRenderProps,
+} from "./controls";
 import { DisplayStateContainer } from "./display-state-container";
-import type { DisplayField } from "./projected-data";
+import type { DisplayField, RecordDetailPayload } from "./projected-data";
 
 /**
  * Shared browser-safe display component for record details.
@@ -12,12 +16,13 @@ import type { DisplayField } from "./projected-data";
  * detail fields shows exactly those fields in declared order; the projected fields supply their
  * values and any label the placement left unset. Never executes or fetches a Query.
  */
-export function RecordDetailDisplay(props: PlatformBlockRenderProps): ReactElement {
+export function RecordDetailDisplay(
+  props: DisplayRenderProps<RecordDetailPayload>,
+): ReactElement {
   const { placementId, availability } = props;
   const { title, accessibleName, values, state, emptyMessage, refusedMessage, errorMessage, events } =
-    resolveDisplayContext(
+    resolveDisplayContext<RecordDetailPayload>(
       props,
-      "record_detail",
       (detail) => detail.fields.length === 0,
       "No details to show",
     );

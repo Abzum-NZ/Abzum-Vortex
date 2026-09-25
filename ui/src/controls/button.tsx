@@ -2,11 +2,15 @@
 
 import { useId, type ReactElement } from "react";
 import { DefinitionRenderError } from "../definition-error";
-import type { PlatformBlockRenderProps } from "../registry";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import type { ButtonPayload } from "./projected-data";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import { useFormScope } from "./form-context";
 
-export type ButtonProps = PlatformBlockRenderProps;
+export type ButtonProps = ControlRenderProps<ButtonPayload>;
 
 type ButtonMode = "action" | "submit" | "reset";
 
@@ -23,7 +27,7 @@ export function Button(props: ButtonProps): ReactElement {
     releaseVersion: props.metadata.releaseVersion,
   });
   const mode = settings.choice<ButtonMode>("action_kind", "action");
-  const context = resolveControlContext(props, "button", mode === "action" ? ["action"] : []);
+  const context = resolveControlContext<ButtonPayload>(props, mode === "action" ? ["action"] : []);
   const variant = settings.choice<"primary" | "secondary" | "danger" | "ghost">(
     "variant",
     "primary",

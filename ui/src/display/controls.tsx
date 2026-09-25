@@ -1,30 +1,35 @@
 import { useState, type ReactElement } from "react";
-import { DefinitionRenderError } from "../definition-error";
 import type { PlatformBlockRenderProps } from "../registry";
 import { cellValueToText } from "./cell";
 import { getAccessibleName } from "./display-state-container";
 import type {
   DisplayCellValue,
+  DisplayDataState,
   DisplayEventHandler,
   DisplayEventHandlers,
   DisplayRow,
-  ProjectedDisplayData,
-  ProjectedDisplayValueKind,
-  ProjectedDisplayValues,
 } from "./projected-data";
 
-const EMPTY_STATE: ProjectedDisplayData = Object.freeze({ status: "empty" });
+const EMPTY_STATE: DisplayDataState<never> = Object.freeze({ status: "empty" });
+
+/**
+ * The props a display block's renderer receives: the base props every block has, plus this block's
+ * own `data` and `events`, which its own registration validated fail-closed. Both are optional
+ * because a block with no projection and no bound callback simply receives neither.
+ */
+export type DisplayRenderProps<Values> = PlatformBlockRenderProps &
+  Readonly<{ data?: DisplayDataState<Values>; events?: DisplayEventHandlers }>;
 
 /** Resolved presentation context shared by every display component. */
-export type DisplayContext<Kind extends ProjectedDisplayValueKind> = Readonly<{
+export type DisplayContext<Values> = Readonly<{
   /** Authored accessible name, read only through the declared metadata path. */
   title: string | undefined;
   /** Authored name, or the block's palette name when the optional name is absent. */
   accessibleName: string;
-  /** Ready values of this component's exact kind, or undefined for any other state. */
-  values: Extract<ProjectedDisplayValues, { kind: Kind }> | undefined;
+  /** Ready values of this component's exact payload, or undefined for any other state. */
+  values: Values | undefined;
   /** State passed to the state container; ready-but-empty content becomes the empty state. */
-  state: ProjectedDisplayData;
+  state: DisplayDataState<Values>;
   /** Authored empty message, or the block family's fixed neutral default. */
   emptyMessage: string;
   /** Authored refused text, when the release declares `refused_message` and it is set. */
@@ -36,34 +41,16 @@ export type DisplayContext<Kind extends ProjectedDisplayValueKind> = Readonly<{
 }>;
 
 /**
- * Resolves one display component's props. Ready values of another kind fail closed.
- * Absent projected data renders the empty state; the component never fetches its own data.
+ * Resolves one display component's props from the inputs its own registration validated. Absent
+ * projected data renders the empty state; the component never fetches its own data.
  */
-export function resolveDisplayContext<Kind extends ProjectedDisplayValueKind>(
-  props: PlatformBlockRenderProps,
-  kind: Kind,
-  isEmpty: (values: Extract<ProjectedDisplayValues, { kind: Kind }>) => boolean,
+export function resolveDisplayContext<Values>(
+  props: DisplayRenderProps<Values>,
+  isEmpty: (values: Values) => boolean,
   defaultEmptyMessage: string,
-): DisplayContext<Kind> {
-  const { projectedData, metadata, settings, placementId } = props;
-  if (props.controlData !== undefined || props.controlEvents !== undefined) {
-    throw new DefinitionRenderError(
-      "INVALID_COMPOSITION",
-      `Display block '${metadata.key}' does not accept control data or control events`,
-      { placementId, blockId: metadata.blockId, releaseVersion: metadata.releaseVersion },
-    );
-  }
-  let values: Extract<ProjectedDisplayValues, { kind: Kind }> | undefined;
-  if (projectedData?.status === "ready") {
-    if (projectedData.values.kind !== kind) {
-      throw new DefinitionRenderError(
-        "INVALID_COMPOSITION",
-        `Block '${metadata.key}' expected '${kind}' projected values, got '${projectedData.values.kind}'`,
-        { placementId, blockId: metadata.blockId, releaseVersion: metadata.releaseVersion },
-      );
-    }
-    values = projectedData.values as Extract<ProjectedDisplayValues, { kind: Kind }>;
-  }
+): DisplayContext<Values> {
+  const { data, metadata, settings } = props;
+  const values = data?.status === "ready" ? data.values : undefined;
   const title = getAccessibleName(settings, metadata);
   const authoredText = (key: string): string | undefined => {
     const value = settings[key];
@@ -83,13 +70,13 @@ export function resolveDisplayContext<Kind extends ProjectedDisplayValueKind>(
     accessibleName: title ?? metadata.name,
     values,
     state:
-      projectedData === undefined || (values !== undefined && isEmpty(values))
+      data === undefined || (values !== undefined && isEmpty(values))
         ? EMPTY_STATE
-        : projectedData,
+        : data,
     emptyMessage,
     refusedMessage: authoredText("refused_message"),
     errorMessage: authoredText("error_message"),
-    events: props.availability === "available" ? props.displayEvents : undefined,
+    events: props.availability === "available" ? props.events : undefined,
   };
 }
 

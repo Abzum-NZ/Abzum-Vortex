@@ -1,7 +1,6 @@
 "use client";
 
 import { useId, useState, type ChangeEvent, type ReactElement } from "react";
-import { DefinitionRenderError } from "../definition-error";
 import type { PlatformBlockRenderProps } from "../registry";
 import { readLauncherSettings } from "./launcher-context";
 import {
@@ -15,8 +14,8 @@ import {
  * Browser-safe local view filter. It narrows only the rows the launcher and tile placements in its
  * content slot already received, and never requests, broadens or re-queries data: it is bound to no
  * projected data, declares and emits no semantic event, and filtering is a pure function of those
- * placements' rows and the entered text. Any data or callbacks supplied to it fail closed, so a
- * binding cannot turn filtering into a wider read.
+ * placements' rows and the entered text. Its registration refuses every supplied runtime input, so
+ * a binding cannot turn filtering into a wider read.
  */
 export function ViewFilter(props: PlatformBlockRenderProps): ReactElement {
   const enclosing = useLauncherRowFilter();
@@ -28,17 +27,6 @@ export function ViewFilter(props: PlatformBlockRenderProps): ReactElement {
     blockId: metadata.blockId,
     releaseVersion: metadata.releaseVersion,
   };
-  if (
-    props.projectedData !== undefined ||
-    props.displayEvents !== undefined ||
-    props.controlData !== undefined ||
-    props.controlEvents !== undefined
-  )
-    throw new DefinitionRenderError(
-      "INVALID_COMPOSITION",
-      `View filter '${metadata.key}' never binds data or events; it narrows only its content's rows`,
-      location,
-    );
 
   const settings = readLauncherSettings(props, location);
   const label = settings.text("label") ?? metadata.name;
