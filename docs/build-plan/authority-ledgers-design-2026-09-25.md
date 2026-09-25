@@ -5,7 +5,7 @@
 **Issue:** [#1072](https://github.com/Abzum-NZ/Abzum-Vortex/issues/1072). It compares role continuity evidence and the five authority ledgers with a target of ordinary roles, role-carried delegation and tenant powers, and one assignment ledger. It then lists what can be removed without weakening any check.
 
 **Baseline:**
-- Live SQL on `main` after #1053 (required caller), #1048 (tenant actor from the request context) and #993/#1167 (contract-version helper). "Live" means the last definition of each function, including in-place `pg_get_functiondef` rewrites and the canonical files under `supabase/schemas/`.
+- Live SQL on `main` after #1053 (required caller), #1048 (tenant actor from the request context), #993/#1167 (contract-version helper) and #1070/#1129 (display-only role and Group changes). "Live" means the last definition of each function, including in-place `pg_get_functiondef` rewrites and the canonical files under `supabase/schemas/`.
 - [04 Access and permissions](../specification/04-access-and-permissions.md).
 - [Groups and privileged role activation](../specification/appendices/groups-and-privileged-access.md) and the [IAM application](../specification/appendices/iam-application.md), both as updated by the merged specification #1052.
 - [Architecture decisions](architecture-decisions-2026-09-25.md), Decision 11.
@@ -57,8 +57,9 @@ Abbreviations for the direct writers:
 - **AppInt** — `coordinate_application_access_without_stewardship_v1_internal`: the original `coordinate_application_access_change` body, renamed in `20260906033309`.
 - **StewAdopt** — `coordinate_organization_stewardship_adoption`.
 - **ConnCat** — `adopt_connection_administration_permission_catalogue`.
+- **RevMeta** — `revise_organization_role_metadata_for_administration`. Since #1129 (`20260925110000`) it appends one label/description revision directly, copying every fingerprint, continuity number and permission entry forward unchanged. It can therefore never change authority.
 
-The public `coordinate_organization_role_change` and `coordinate_application_access_change` are steward-check wrappers. They write nothing directly. So do their callers: `revise_organization_role_metadata_for_administration`, `retire_organization_role_for_administration` and `coordinate_private_organization_role_authority_change`.
+The public `coordinate_organization_role_change` and `coordinate_application_access_change` are steward-check wrappers. They write nothing directly. So do their callers `retire_organization_role_for_administration` and `coordinate_private_organization_role_authority_change`.
 
 ### 2.1 The nine source fingerprints
 
@@ -66,12 +67,12 @@ Every fingerprint is `text` in the form `sha256:` followed by 64 hex characters.
 
 | # | Column (table) | Meaning | Direct writers | Direct readers | Check it protects |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `source_content_fingerprint` (revisions) | exact published release content | RoleInt, AppInt, StewAdopt, ConnCat | `validate_organization_role_revision_evidence`; RoleInt's "acceptance must change evidence" comparison | an application role is bound to one exact release |
+| 1 | `source_content_fingerprint` (revisions) | exact published release content | RoleInt, AppInt, StewAdopt, ConnCat; RevMeta copies forward | `validate_organization_role_revision_evidence`; RoleInt's "acceptance must change evidence" comparison | an application role is bound to one exact release |
 | 2 | `source_resolution_fingerprint` (revisions) | resolved dependency set of that release | same | same | same, for bound modules |
 | 3 | `source_template_fingerprint` (revisions) | exact supplied role template | same | `application_access_current_state_matches_candidate`, RoleInt, AppInt | a template change is detected and needs acceptance |
 | 4 | `source_catalogue_fingerprint` (revisions) | exact permission catalogue revision | same | `validate_organization_role_revision_evidence`, RoleInt | acceptance names the catalogue it was made against |
 | 5 | `accepted_grant_fingerprint` (revisions) | the exact explicit acceptance decision | same (required on `accept_new_application_role` / `accept_application_role_revision`) | RoleInt only | an explicit acceptance must change accepted evidence (it cannot replay an older acceptance) |
-| 6 | `activation_policy_fingerprint` (revisions) | exact activation policy identity | same | `evaluate_permission_role_path_internal`, `validate_organization_role_activation_insert`, `protect_organization_role_activation`, `validate_organization_role_revision_evidence`, `coordinate_organization_role_activation_change`, `read_current_application_role_ids_for_launcher`, `read_organization_role_activation`, administration reads, `prepare_organization_role_metadata_change_for_administration`, `project_organization_role_change_summary` | an activation is bound to the exact policy it satisfied |
+| 6 | `activation_policy_fingerprint` (revisions) | exact activation policy identity | same | `evaluate_permission_role_path_internal`, `validate_organization_role_activation_insert`, `protect_organization_role_activation`, `validate_organization_role_revision_evidence`, `coordinate_organization_role_activation_change`, `read_current_application_role_ids_for_launcher`, `read_organization_role_activation`, administration reads, `project_organization_role_change_summary` | an activation is bound to the exact policy it satisfied |
 | 7–9 | `derived_source_content/resolution/template_fingerprint` (`organization_roles`) | where a custom role was copied from (copy provenance) | RoleInt, StewAdopt | `protect_organization_role_identity` (immutability only); returned in `derivedFromTemplate` in RoleInt's role result | **none**: no access decision reads them |
 
 Fingerprints 1–5 are acceptance provenance, and several of them feed the acceptance checks in RoleInt and AppInt. Fingerprint 6 is policy identity. Fingerprints 7–9 are display provenance only.
@@ -80,18 +81,18 @@ Fingerprints 1–5 are acceptance provenance, and several of them feed the accep
 
 | Item | Where | Check it protects | Direct writers | Direct readers |
 | --- | --- | --- | --- | --- |
-| `authority_continuity_revision` | `organization_role_revisions`; copied onto `organization_role_activations` | Newly accepted, added or restored authority never enters an existing activation window. Narrowing keeps the window (appendix: "authority continuity number"). | RoleInt, AppInt, StewAdopt, ConnCat; `coordinate_organization_role_activation_change` copies it onto activations | `evaluate_permission_role_path_internal`, `validate_organization_role_activation_insert`, `protect_organization_role_activation`, `validate_organization_role_revision_evidence`, `read_current_application_role_ids_for_launcher`, `read_organization_role_activation` |
+| `authority_continuity_revision` | `organization_role_revisions`; copied onto `organization_role_activations` | Newly accepted, added or restored authority never enters an existing activation window. Narrowing keeps the window (appendix: "authority continuity number"). | RoleInt, AppInt, StewAdopt, ConnCat (RevMeta copies forward); `coordinate_organization_role_activation_change` copies it onto activations | `evaluate_permission_role_path_internal`, `validate_organization_role_activation_insert`, `protect_organization_role_activation`, `validate_organization_role_revision_evidence`, `read_current_application_role_ids_for_launcher`, `read_organization_role_activation` |
 | `policy_continuity_revision` | same two tables | A policy change ends old requests and windows. Returning from policy A to B and back to A starts a new period instead of reviving old windows. | same | same |
-| `template_continuity_revision` | `organization_role_revisions` | Removing and restoring a template needs fresh acceptance. | RoleInt, AppInt, StewAdopt, ConnCat | `application_access_current_state_matches_candidate` |
+| `template_continuity_revision` | `organization_role_revisions` | Removing and restoring a template needs fresh acceptance. | RoleInt, AppInt, StewAdopt, ConnCat (RevMeta copies forward) | `application_access_current_state_matches_candidate` |
 | `permission_continuities` | table | An exact owner-qualified permission stays continuously `available` with the same meaning. A break or a meaning change needs re-acceptance. | AppInt, StewAdopt, ConnCat, `adopt_shipped_platform_permission_catalogue`, `adopt_security_and_support_operator_permission_catalogue`; guarded by the triggers `protect_permission_continuity` and `validate_permission_continuity_evidence` | `evaluate_permission_role_path_internal`, `organization_has_permanent_steward`, `evaluate_organization_permission_eligibility`, `validate_organization_role_activation_insert`, `coordinate_organization_role_activation_change`, application-access match/complete helpers, `validate_organization_delegation_bounded_permissions`, the catalogue exactness checks |
 | `application_role_template_continuities` | table | One supplied template stays continuously `available`. A missing template makes the role unavailable. | AppInt; guarded by the triggers `protect_application_role_template_continuity` and `validate_application_role_template_continuity_evidence` | `application_access_current_state_matches_candidate`, `application_access_current_transition_is_complete`, RoleInt, `list_application_role_templates_for_administration`, `read_application_role_template_for_administration` |
-| `organization_role_permission_entries.continuity_revision` + `meaning_fingerprint` | table | Each accepted entry is bound to the continuity and meaning it was accepted under. | RoleInt, AppInt, StewAdopt, ConnCat | `evaluate_permission_role_path_internal`, `organization_has_permanent_steward`, `validate_organization_role_activation_insert`, `validate_organization_role_revision_evidence`, `coordinate_organization_role_activation_change` |
+| `organization_role_permission_entries.continuity_revision` + `meaning_fingerprint` | table | Each accepted entry is bound to the continuity and meaning it was accepted under. | RoleInt, AppInt, StewAdopt, ConnCat (RevMeta copies forward) | `evaluate_permission_role_path_internal`, `organization_has_permanent_steward`, `validate_organization_role_activation_insert`, `validate_organization_role_revision_evidence`, `coordinate_organization_role_activation_change` |
 
 Role storage is also guarded by `protect_organization_role_identity`, `refuse_organization_role_history_mutation`, `validate_organization_role_revision_evidence`, `lock_role_and_refuse_sealed_permission_append` and `lock_role_before_revision_seal`.
 
-**Pending context, not edited here:**
-- Open PR #1129 (display-only role and Group renames) drops `prepare_organization_role_metadata_change_for_administration` and carries every fingerprint forward on a label or description revision. It changes no ledger.
-- #1167 (merged) moved the accepted contract version into `vortex_definition.accepted_contract_version(kind)`. It does not touch these ledgers.
+**Recent context:**
+- #1129 (merged, #1070) dropped `prepare_organization_role_metadata_change_for_administration`. A label or description revision now leaves the Access version unchanged and copies all evidence forward (RevMeta). It changes no ledger.
+- #1167 (merged, #993) moved the accepted contract version into `vortex_definition.accepted_contract_version(kind)`. It does not touch these ledgers.
 
 ---
 
@@ -101,7 +102,7 @@ Role storage is also guarded by `protect_organization_role_identity`, `refuse_or
 
 | Element | Direct writers | Direct readers |
 | --- | --- | --- |
-| `organization_role_assignments` | `coordinate_assignment_change_without_stewardship_v1_internal`, StewAdopt. The public `coordinate_organization_role_assignment_change`, `coordinate_private_organization_role_assignment_grant`, `revoke_organization_role_assignment_for_administration` and `compose_initial_operating_role_grant` all go through the public wrapper. | `evaluate_permission_role_path_internal`, `read_current_application_role_ids_for_launcher`, `organization_has_permanent_steward`, `coordinate_organization_role_activation_change`, `read_organization_role_assignment`, `read_organization_role_assignment_for_administration` and the list read, `prepare_organization_role_metadata_change_for_administration` |
+| `organization_role_assignments` | `coordinate_assignment_change_without_stewardship_v1_internal`, StewAdopt. The public `coordinate_organization_role_assignment_change`, `coordinate_private_organization_role_assignment_grant`, `revoke_organization_role_assignment_for_administration` and `compose_initial_operating_role_grant` all go through the public wrapper. | `evaluate_permission_role_path_internal`, `read_current_application_role_ids_for_launcher`, `organization_has_permanent_steward`, `coordinate_organization_role_activation_change`, `read_organization_role_assignment`, `read_organization_role_assignment_for_administration` and the list read |
 | `organization_role_activations` | `coordinate_organization_role_activation_change` (16 arguments since #1053; owner-only; its only live SQL caller is `deactivate_organization_role_activation_for_administration`) | `evaluate_permission_role_path_internal`, `read_current_application_role_ids_for_launcher`, `read_organization_role_activation`, `list_/read_organization_role_activation(s)_for_administration` |
 | `organization_role_activation_policy_revisions` | RoleInt | `coordinate_organization_role_activation_change`, `validate_organization_role_activation_insert`, `list_/read_organization_role(s)_for_administration`, `read_organization_role_activation_for_administration`, `project_organization_role_change_summary` |
 
@@ -280,7 +281,7 @@ Steps 1–2 are independent of each other and of the owner questions. Steps 3 an
 
 - No code, SQL, migration, test, build, database execution, hosted check, Kestra flow or deployment.
 - No permission or repository-protection change.
-- PR #1129 is pending context only.
+- No other lane's files are edited.
 - The commercial capability policy is untouched.
 
 ## 8. Acceptance mapping
