@@ -1011,5 +1011,301 @@
         "failed"
       ]
     }
+  },
+  "suspend_organization_account": {
+    "key": "suspend_organization_account",
+    "name": "Suspend organisation account",
+    "release": {
+      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
+      "operationId": "2e81afcb-1f09-4571-8b31-193ed04145b3",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
+        },
+        "operationId": "2e81afcb-1f09-4571-8b31-193ed04145b3"
+      },
+      "inputs": {
+        "organization_account_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected_revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "outputs": {
+        "organization_account_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "access_version": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "permission": {
+        "permissionId": "630a980c-0ff5-40b1-a329-7326a2122395",
+        "key": "platform.organization.accounts.manage"
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "conflict",
+        "validation",
+        "failed"
+      ]
+    }
+  },
+  "reactivate_organization_account": {
+    "key": "reactivate_organization_account",
+    "name": "Reactivate organisation account",
+    "release": {
+      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
+      "operationId": "7ce987cb-edb5-4a81-97f0-f38554c8a2b3",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
+        },
+        "operationId": "7ce987cb-edb5-4a81-97f0-f38554c8a2b3"
+      },
+      "inputs": {
+        "organization_account_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected_revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "outputs": {
+        "organization_account_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "access_version": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "permission": {
+        "permissionId": "630a980c-0ff5-40b1-a329-7326a2122395",
+        "key": "platform.organization.accounts.manage"
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "conflict",
+        "validation",
+        "failed"
+      ]
+    }
+  },
+  "close_organization_account": {
+    "key": "close_organization_account",
+    "name": "Close organisation account",
+    "release": {
+      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
+      "operationId": "9f940def-ca2a-4ba8-9b95-9a5c4d57d334",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
+        },
+        "operationId": "9f940def-ca2a-4ba8-9b95-9a5c4d57d334"
+      },
+      "inputs": {
+        "organization_account_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected_revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "outputs": {
+        "organization_account_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "access_version": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "permission": {
+        "permissionId": "630a980c-0ff5-40b1-a329-7326a2122395",
+        "key": "platform.organization.accounts.manage"
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "conflict",
+        "validation",
+        "failed"
+      ]
+    }
+  },
+  "create_organization_invitation": {
+    "key": "create_organization_invitation",
+    "name": "Create organisation invitation",
+    "release": {
+      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
+      "operationId": "81c1a18f-14fc-4c4f-a7fc-c5423a1a75fb",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
+        },
+        "operationId": "81c1a18f-14fc-4c4f-a7fc-c5423a1a75fb"
+      },
+      "inputs": {
+        "invited_email": {
+          "type": "text",
+          "required": true
+        },
+        "expires_at": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "outputs": {
+        "invitation_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "access_version": {
+          "type": "whole_number",
+          "required": true
+        },
+        "invitation_secret": {
+          "type": "text",
+          "required": false
+        }
+      },
+      "sensitiveOutputs": [
+        "invitation_secret"
+      ],
+      "permission": {
+        "permissionId": "c2e03f58-debe-478e-b1e0-a4a8b8f1b9cb",
+        "key": "platform.organization.invitations.manage"
+      },
+      "effect": "change",
+      "expectedRevision": "not_required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "validation",
+        "failed"
+      ]
+    }
+  },
+  "revoke_organization_invitation": {
+    "key": "revoke_organization_invitation",
+    "name": "Revoke organisation invitation",
+    "release": {
+      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
+      "operationId": "c73550e5-b9a7-4997-ad18-c6ec4b5b9dc4",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
+        },
+        "operationId": "c73550e5-b9a7-4997-ad18-c6ec4b5b9dc4"
+      },
+      "inputs": {
+        "invitation_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected_revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "outputs": {
+        "invitation_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "access_version": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "permission": {
+        "permissionId": "c2e03f58-debe-478e-b1e0-a4a8b8f1b9cb",
+        "key": "platform.organization.invitations.manage"
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "conflict",
+        "validation",
+        "failed"
+      ]
+    }
   }
 }

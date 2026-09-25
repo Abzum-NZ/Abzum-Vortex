@@ -1,25 +1,31 @@
 import "server-only";
 
+import { createHash, randomUUID } from "node:crypto";
 import {
   addOrganizationAdministrationMembershipCommandSchema,
   applicationRootIdSchema,
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   changeOrganizationAdministrationRoleAuthorityCommandSchema,
+  closeOrganizationAccountCommandSchema,
   createOrganizationAdministrationGroupCommandSchema,
+  createOrganizationInvitationForAdministrationCommandSchema,
   deactivateOrganizationAdministrationRoleActivationCommandSchema,
   findPlatformServiceOperation,
   identitySessionSchema,
   jsonValueSchema,
   organizationRuntimeSettingsSchema,
   organizationSelectionCandidateSchema,
+  reactivateOrganizationAccountCommandSchema,
   removeOrganizationAdministrationMembershipCommandSchema,
   renameOrganizationAdministrationGroupCommandSchema,
   retireOrganizationAdministrationGroupCommandSchema,
   retireOrganizationAdministrationRoleCommandSchema,
   revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
   revokeOrganizationAdministrationRoleAssignmentCommandSchema,
+  revokeOrganizationInvitationForAdministrationCommandSchema,
   reviseOrganizationAdministrationRoleMetadataCommandSchema,
   stableDefinitionReleaseVersionSchema,
+  suspendOrganizationAccountCommandSchema,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -58,11 +64,23 @@ export const protectedOperationIdentitySchema = z
 
 export type ProtectedOperationIdentity = z.infer<typeof protectedOperationIdentitySchema>;
 
+/**
+ * The identity of the claimed protected effect, when the caller has one. Passing it lets an
+ * operation derive a stable administration duplicate key, so a retry of the same effect stays
+ * idempotent at the database even when the flow run is repeated.
+ */
+export type ProtectedOperationEffectKey = Readonly<{
+  runId: string;
+  taskPath: string;
+  iteration: string;
+}>;
+
 export type ProtectedOperationExecutionRequest = Readonly<{
   operation: ProtectedOperationIdentity;
   session: IdentitySession;
   selection: OrganizationSelectionCandidate;
   inputs: Readonly<Record<string, unknown>>;
+  effectKey?: ProtectedOperationEffectKey;
 }>;
 
 /** A value a descriptor can declare for an input or output of a registered operation. */
@@ -101,6 +119,11 @@ export type ProtectedOperationExecutorDependencies = Readonly<{
     | "revokeRoleAssignment"
     | "deactivateRoleActivation"
     | "revokeDelegationAuthority"
+    | "suspendOrganizationAccount"
+    | "reactivateOrganizationAccount"
+    | "closeOrganizationAccount"
+    | "createOrganizationInvitation"
+    | "revokeOrganizationInvitation"
   >;
   runtimeSettings: Pick<
     ReturnType<typeof createOrganizationRuntimeSettingsAdministrationService>,
@@ -108,11 +131,38 @@ export type ProtectedOperationExecutorDependencies = Readonly<{
   >;
 }>;
 
+type ProtectedOperationCaller = Readonly<{
+  session: IdentitySession;
+  selection: OrganizationSelectionCandidate;
+  effectKey?: ProtectedOperationEffectKey;
+}>;
+
 type Operation = (
   services: ProtectedOperationExecutorDependencies,
-  caller: Readonly<{ session: IdentitySession; selection: OrganizationSelectionCandidate }>,
+  caller: ProtectedOperationCaller,
   inputs: Inputs,
 ) => Promise<HumanOrganizationRequestResult<Outputs> | "validation">;
+
+/**
+ * A stable administration duplicate key for one claimed effect: the same run, task path and
+ * iteration always derive the same key, so a repeated execution of one effect is idempotent at the
+ * database. With no claimed effect key a fresh key is generated; either way the caller never
+ * supplies it from input.
+ */
+const duplicateKeyFor = (
+  effectKey: ProtectedOperationEffectKey | undefined,
+  generate: () => string,
+): string => {
+  if (effectKey === undefined) return generate();
+  const bytes = createHash("sha256")
+    .update([effectKey.runId, effectKey.taskPath, effectKey.iteration].join("|"))
+    .digest()
+    .subarray(0, 16);
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
 
 /**
  * Builds one operation from the contract schema of the service command it feeds. `command` maps the
@@ -122,15 +172,21 @@ type Operation = (
 const operation =
   <Schema extends z.ZodType>(definition: {
     schema: Schema;
-    command: (inputs: Inputs, selection: OrganizationSelectionCandidate) => unknown;
+    command: (
+      inputs: Inputs,
+      selection: OrganizationSelectionCandidate,
+      effectKey: ProtectedOperationEffectKey | undefined,
+    ) => unknown;
     run: (
       services: ProtectedOperationExecutorDependencies,
-      caller: Readonly<{ session: IdentitySession; selection: OrganizationSelectionCandidate }>,
+      caller: ProtectedOperationCaller,
       command: z.output<Schema>,
     ) => Promise<HumanOrganizationRequestResult<Outputs>>;
   }): Operation =>
   async (services, caller, inputs) => {
-    const command = definition.schema.safeParse(definition.command(inputs, caller.selection));
+    const command = definition.schema.safeParse(
+      definition.command(inputs, caller.selection, caller.effectKey),
+    );
     if (!command.success) return "validation";
     return definition.run(services, caller, command.data);
   };
@@ -483,6 +539,112 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         }),
       ),
   }),
+  suspend_organization_account: operation({
+    schema: suspendOrganizationAccountCommandSchema,
+    command: (inputs, _selection, effectKey) => ({
+      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+      organizationAccountId: inputs.organization_account_id,
+      expectedRevision: inputs.expected_revision,
+    }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.suspendOrganizationAccount(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          organization_account_id: value.organizationAccountId,
+          revision: value.revision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
+  reactivate_organization_account: operation({
+    schema: reactivateOrganizationAccountCommandSchema,
+    command: (inputs, _selection, effectKey) => ({
+      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+      organizationAccountId: inputs.organization_account_id,
+      expectedRevision: inputs.expected_revision,
+    }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.reactivateOrganizationAccount(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          organization_account_id: value.organizationAccountId,
+          revision: value.revision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
+  close_organization_account: operation({
+    schema: closeOrganizationAccountCommandSchema,
+    command: (inputs, _selection, effectKey) => ({
+      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+      organizationAccountId: inputs.organization_account_id,
+      expectedRevision: inputs.expected_revision,
+    }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.closeOrganizationAccount(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          organization_account_id: value.organizationAccountId,
+          revision: value.revision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
+  create_organization_invitation: operation({
+    schema: createOrganizationInvitationForAdministrationCommandSchema,
+    command: (inputs, _selection, effectKey) => ({
+      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+      invitedEmail: inputs.invited_email,
+      expiresAt: inputs.expires_at,
+    }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.createOrganizationInvitation(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          invitation_id: value.invitationId,
+          revision: value.revision,
+          access_version: value.accessVersion,
+          ...(value.outcome === "accepted" ? { invitation_secret: value.invitationSecret } : {}),
+        }),
+      ),
+  }),
+  revoke_organization_invitation: operation({
+    schema: revokeOrganizationInvitationForAdministrationCommandSchema,
+    command: (inputs, _selection, effectKey) => ({
+      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+      invitationId: inputs.invitation_id,
+      expectedRevision: inputs.expected_revision,
+    }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.revokeOrganizationInvitation(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          invitation_id: value.invitationId,
+          revision: value.revision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
 } satisfies Record<PlatformServiceOperationKey, Operation>);
 
 /** A value of a declared type the executor does not carry yet is refused, never coerced. */
@@ -570,7 +732,11 @@ export const createProtectedOperationExecutor = (
 
         const result = await run(
           dependencies,
-          { session: session.data, selection: selection.data },
+          {
+            session: session.data,
+            selection: selection.data,
+            ...(request.effectKey === undefined ? {} : { effectKey: request.effectKey }),
+          },
           inputs,
         );
         if (result === "validation") return { outcome: "validation" };
