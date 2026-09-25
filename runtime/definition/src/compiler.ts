@@ -4457,7 +4457,17 @@ function compileApplication(
           rateLimitPerMinute: operation.rate_limit_per_minute,
           maximumRequestBytes: operation.maximum_request_bytes,
           duplicateProtection: operation.duplicate_protection,
-          target: operation.target,
+          // An interface operation names only an application-owned flow entry point; the flow it
+          // starts carries the work, so web, integrations and agents share one start path.
+          target: (() => {
+            const target = asObject(operation.target);
+            if (target.kind !== "flow")
+              fail("vortex.definition.application_interface_references", "broken_reference");
+            return {
+              kind: "flow" as const,
+              flowId: resolution.id(definitionKey, "flow", String(target.flow), "content"),
+            };
+          })(),
           errorCodes: operation.error_codes,
         })),
       })),
@@ -5296,6 +5306,22 @@ function compileApplicationToolBundle(
     ),
   );
   const applicationActionKeys = new Set(content.actions.map((action) => String(action.key)));
+  // A named action an Application flow already calls has its one flow tool, so a form commit to
+  // the same action never adds a second, action-targeted tool that would bypass the flow.
+  const flowCommittedOperationKeys = new Set<string>();
+  const collectFlowCommittedOperationKeys = (tasks: FlowDefinition["tasks"]): void => {
+    for (const task of tasks) {
+      if (task.type !== "operation.call") continue;
+      const value = (task as { properties?: Record<string, JsonObject> }).properties?.operation;
+      if (value?.kind === "literal" && typeof asObject(value.literal).value === "string")
+        flowCommittedOperationKeys.add(String(asObject(value.literal).value));
+    }
+  };
+  for (const flow of content.flows) {
+    collectFlowCommittedOperationKeys(flow.tasks);
+    collectFlowCommittedOperationKeys(flow.errors);
+    collectFlowCommittedOperationKeys(flow.finally);
+  }
   const pagesById = new Map(content.pages.map((page) => [String(page.pageId), page]));
   const tools = new Map<string, ApplicationToolDraft>();
   const add = (tool: ApplicationToolDraft): void => {
@@ -5325,6 +5351,7 @@ function compileApplicationToolBundle(
     allowStandardRecordAction: boolean,
   ): void => {
     const name = applicationToolName(applicationKey, "action", actionKey);
+    if (flowCommittedOperationKeys.has(actionKey)) return;
     const standard = /^(.+)\.([^.]+)\.([^.]+)$/.exec(actionKey);
     const standardAction = standard?.[3];
     if (
