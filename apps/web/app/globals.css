@@ -1,10 +1,6 @@
-:root {
-  --ink: #10211b;
-  --muted: #52615b;
-  --paper: #f3f0e8;
-  --lime: #d7ff54;
-  --line: rgba(16, 33, 27, 0.15);
-}
+/* The bootstrap landing, sign-in, organisation chooser and error pages read the theme
+   renderer's --vortex-* variables. The root layout mounts the registered platform theme's
+   values on <html>, so this stylesheet declares no palette of its own. */
 
 * {
   box-sizing: border-box;
@@ -14,15 +10,15 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background: var(--paper);
-  color: var(--ink);
+  background: var(--vortex-surface);
+  color: var(--vortex-text);
 }
 
 body {
   font-family: Arial, Helvetica, sans-serif;
   background-image:
-    linear-gradient(rgba(16, 33, 27, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(16, 33, 27, 0.035) 1px, transparent 1px);
+    linear-gradient(color-mix(in srgb, var(--vortex-text) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--vortex-text) 4%, transparent) 1px, transparent 1px);
   background-size: 32px 32px;
 }
 
@@ -52,7 +48,7 @@ main {
 .eyebrow > span {
   width: 34px;
   height: 3px;
-  background: var(--ink);
+  background: var(--vortex-text);
 }
 
 h1 {
@@ -64,7 +60,7 @@ h1 {
 }
 h1 em {
   color: transparent;
-  -webkit-text-stroke: 2px var(--ink);
+  -webkit-text-stroke: 2px var(--vortex-text);
   font-style: normal;
 }
 
@@ -73,7 +69,7 @@ h1 em {
   margin: 42px 0 28px;
   font-size: 22px;
   line-height: 1.5;
-  color: var(--muted);
+  color: var(--vortex-text-muted);
 }
 
 .status {
@@ -81,8 +77,8 @@ h1 em {
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  background: var(--ink);
-  color: white;
+  background: var(--vortex-primary);
+  color: var(--vortex-on-primary);
   border-radius: 999px;
   font-size: 13px;
 }
@@ -91,27 +87,27 @@ h1 em {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--lime);
-  box-shadow: 0 0 0 5px rgba(215, 255, 84, 0.14);
+  background: var(--vortex-accent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--vortex-accent) 18%, transparent);
 }
 
 .layers {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--vortex-border-color);
+  border-bottom: 1px solid var(--vortex-border-color);
 }
 .layers article {
   padding: 34px 34px 42px 0;
 }
 .layers article + article {
-  border-left: 1px solid var(--line);
+  border-left: 1px solid var(--vortex-border-color);
   padding-left: 34px;
 }
 .number {
   font-family: monospace;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--vortex-text-muted);
 }
 .layers h2 {
   margin: 48px 0 12px;
@@ -120,7 +116,7 @@ h1 em {
 }
 .layers p {
   margin: 0;
-  color: var(--muted);
+  color: var(--vortex-text-muted);
   line-height: 1.55;
 }
 
@@ -137,36 +133,36 @@ h1 em {
   margin: 0;
 }
 .section-label {
-  color: var(--muted);
+  color: var(--vortex-text-muted);
 }
 .service-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--vortex-border-color);
 }
 .service {
   display: flex;
   align-items: center;
   gap: 16px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--vortex-border-color);
   padding: 15px 6px;
   font-weight: 700;
   text-transform: capitalize;
 }
 .service:nth-child(odd) {
-  border-right: 1px solid var(--line);
+  border-right: 1px solid var(--vortex-border-color);
 }
 .service span {
   font-family: monospace;
   font-size: 10px;
-  color: var(--muted);
+  color: var(--vortex-text-muted);
 }
 
 footer {
   display: flex;
   justify-content: space-between;
   padding-top: 24px;
-  border-top: 1px solid var(--ink);
+  border-top: 1px solid var(--vortex-text);
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -189,16 +185,16 @@ a {
 .auth-card {
   width: min(100%, 520px);
   padding: clamp(28px, 6vw, 52px);
-  border: 1px solid var(--line);
-  background: rgba(243, 240, 232, 0.94);
-  box-shadow: 0 28px 80px rgba(16, 33, 27, 0.1);
+  border: 1px solid var(--vortex-border-color);
+  background: color-mix(in srgb, var(--vortex-surface) 94%, transparent);
+  box-shadow: 0 28px 80px color-mix(in srgb, var(--vortex-text) 10%, transparent);
   animation: auth-enter 240ms ease-out both;
 }
 
 .auth-wordmark {
   display: inline-block;
   margin-bottom: 52px;
-  color: var(--ink);
+  color: var(--vortex-text);
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.16em;
@@ -212,7 +208,7 @@ a {
 
 .auth-eyebrow {
   margin: 0 0 12px;
-  color: var(--muted);
+  color: var(--vortex-text-muted);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -228,7 +224,7 @@ a {
 
 .auth-heading > p:last-child {
   margin: 20px 0 0;
-  color: var(--muted);
+  color: var(--vortex-text-muted);
   font-size: 16px;
   line-height: 1.55;
 }
@@ -247,10 +243,10 @@ a {
 .auth-form input:not([type="hidden"]) {
   width: 100%;
   min-height: 50px;
-  border: 1px solid rgba(16, 33, 27, 0.3);
+  border: 1px solid var(--vortex-border-color);
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.5);
-  color: var(--ink);
+  background: color-mix(in srgb, var(--vortex-surface) 60%, transparent);
+  color: var(--vortex-text);
   font: inherit;
   padding: 0 14px;
   transition:
@@ -261,9 +257,9 @@ a {
 
 .auth-form input:focus-visible {
   outline: none;
-  border-color: var(--ink);
-  background: white;
-  box-shadow: 0 0 0 3px rgba(16, 33, 27, 0.12);
+  border-color: var(--vortex-text);
+  background: var(--vortex-surface);
+  box-shadow: 0 0 0 0.1875rem color-mix(in srgb, var(--vortex-focus-color) 35%, transparent);
 }
 
 .auth-submit {
@@ -273,10 +269,10 @@ a {
   width: 100%;
   min-height: 52px;
   margin-top: 18px;
-  border: 1px solid var(--ink);
+  border: 1px solid var(--vortex-primary);
   border-radius: 2px;
-  background: var(--ink);
-  color: white;
+  background: var(--vortex-primary);
+  color: var(--vortex-on-primary);
   cursor: pointer;
   font: inherit;
   font-size: 14px;
@@ -291,11 +287,11 @@ a {
 
 .auth-submit:hover:not(:disabled) {
   transform: translateY(-1px);
-  background: #1d382f;
+  background: color-mix(in srgb, var(--vortex-primary) 85%, black);
 }
 
 .auth-submit:focus-visible {
-  outline: 3px solid rgba(16, 33, 27, 0.24);
+  outline: 0.1875rem solid var(--vortex-focus-color);
   outline-offset: 3px;
 }
 
@@ -313,27 +309,27 @@ a {
 }
 
 .auth-hint {
-  color: var(--muted);
+  color: var(--vortex-text-muted);
 }
 
 .auth-message {
   margin-bottom: 16px;
-  border-left: 3px solid #9a3f2e;
-  background: rgba(154, 63, 46, 0.08);
+  border-left: 3px solid var(--vortex-danger);
+  background: color-mix(in srgb, var(--vortex-danger) 10%, transparent);
   padding: 10px 12px;
 }
 
 .auth-footer {
   margin-top: 28px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--vortex-border-color);
   padding-top: 22px;
-  color: var(--muted);
+  color: var(--vortex-text-muted);
   font-size: 13px;
 }
 
 .auth-footer a,
 .auth-choice-links a {
-  color: var(--ink);
+  color: var(--vortex-text);
   font-weight: 700;
   text-underline-offset: 3px;
 }
@@ -353,14 +349,15 @@ a {
   width: 58px;
   height: 58px;
   border-radius: 50%;
-  background: var(--lime);
-  color: var(--ink);
+  background: var(--vortex-primary);
+  color: var(--vortex-on-primary);
   font-size: 26px;
   font-weight: 900;
 }
 
 .auth-state-mark-error {
-  background: #f0c9c0;
+  background: color-mix(in srgb, var(--vortex-danger) 30%, var(--vortex-surface));
+  color: var(--vortex-danger-text);
 }
 
 .auth-choice-links {
@@ -371,14 +368,14 @@ a {
   display: flex;
   align-items: center;
   gap: 18px;
-  color: var(--muted);
+  color: var(--vortex-text-muted);
 }
 
 .auth-loading-mark {
   width: 24px;
   height: 24px;
-  border: 3px solid var(--line);
-  border-top-color: var(--ink);
+  border: 3px solid var(--vortex-border-color);
+  border-top-color: var(--vortex-text);
   background: transparent;
   animation: auth-spin 700ms linear infinite;
 }
@@ -424,7 +421,7 @@ a {
   }
   .layers article + article {
     border-left: 0;
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--vortex-border-color);
     padding-left: 0;
   }
   .services {

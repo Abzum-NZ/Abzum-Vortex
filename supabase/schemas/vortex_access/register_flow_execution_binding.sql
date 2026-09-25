@@ -296,7 +296,7 @@ begin
     end,
     array[p_execution_binding_id]::uuid[],
     array[]::uuid[],
-    'web',
+    vortex_context.channel(),
     authority.correlation_id,
     'completed'
   );
