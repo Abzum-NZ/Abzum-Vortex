@@ -70,7 +70,10 @@ export const typedFlowResultMappingSchema = z
 
 export const componentSemanticEventKindSchema = z.enum([
   "action",
+  "row_clicked",
   "row_action",
+  "bulk_action",
+  "inline_edit",
   "load",
   "refresh",
   "filter_changed",

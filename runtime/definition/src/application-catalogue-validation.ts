@@ -125,6 +125,17 @@ export function validateApplicationSourceCatalogue(
   );
   let pageRecordType: string | undefined;
 
+  // Flow bindings are matched by the placement alias and the event identity the setting declares,
+  // exactly as the compiler keys them; a flow is resolved by either its alias or its key.
+  const flowByReference = new Map<string, Body["flows"][number]>();
+  for (const flow of source.body.flows) {
+    flowByReference.set(flow.id, flow);
+    flowByReference.set(flow.key, flow);
+  }
+  const flowBindingByControlEvent = new Map<string, Body["flow_bindings"][number]>();
+  for (const binding of source.body.flow_bindings)
+    flowBindingByControlEvent.set(`${binding.control}\u0000${binding.event_id}`, binding);
+
   /**
    * A Records table or Record detail may map only fields its bound data source allows. Mapped
    * columns and detail fields must be selected by the bound query (or, for a detail with no query,
@@ -135,6 +146,7 @@ export function validateApplicationSourceCatalogue(
    */
   const validateDataContract = (
     placement: SourcePlacement,
+    placementAlias: string,
     settings: Readonly<Record<string, SourceValue>>,
     location: readonly Segment[],
   ): void => {
@@ -209,6 +221,65 @@ export function validateApplicationSourceCatalogue(
           (parameter.source === "page" && parameter.pageParameter === undefined)
         )
           report("vortex.definition.application_block_settings", "required_value", at("query_parameters"));
+      }
+
+      /**
+       * Every configured row behaviour must bind a flow: the placement and the behaviour's event
+       * identity must resolve to exactly one flow binding of the expected kind, and the bound flow
+       * must declare an input that accepts the context the surface supplies — the clicked row as a
+       * record reference, or the selected set as a record-reference list. No behaviour may share an
+       * event identity with another, because one control event can have only one flow binding.
+       */
+      const boundEventIds = new Map<string, string>();
+      const checkRowBehaviour = (
+        key: string,
+        eventId: string,
+        expectedEvent: string,
+        requiredInputType: "record_reference" | "record_reference_list",
+      ): void => {
+        const previous = boundEventIds.get(eventId);
+        if (previous !== undefined) {
+          report("vortex.definition.application_block_settings", "duplicate_key", at(key));
+          return;
+        }
+        boundEventIds.set(eventId, key);
+        const binding = flowBindingByControlEvent.get(`${placementAlias}\u0000${eventId}`);
+        if (binding === undefined) {
+          report("vortex.definition.application_block_references", "broken_reference", at(key));
+          return;
+        }
+        if (binding.event !== expectedEvent) {
+          report("vortex.definition.application_block_settings", "invalid_value", at(key));
+          return;
+        }
+        const flow = flowByReference.get(binding.flow);
+        if (flow === undefined) {
+          report("vortex.definition.application_block_references", "broken_reference", at(key));
+          return;
+        }
+        const accepts = Object.values(flow.inputs).some(
+          (input) => input.type === requiredInputType,
+        );
+        if (!accepts) report("vortex.definition.application_block_settings", "invalid_value", at(key));
+      };
+      const behaviours = table.rowBehaviours;
+      if (behaviours.rowClick !== undefined)
+        checkRowBehaviour("row_click", behaviours.rowClick.eventId, "row_clicked", "record_reference");
+      for (const action of behaviours.rowActions)
+        checkRowBehaviour("row_actions", action.eventId, "row_action", "record_reference");
+      for (const action of behaviours.bulkActions)
+        checkRowBehaviour("bulk_actions", action.eventId, "bulk_action", "record_reference_list");
+      if (behaviours.inlineEdit !== undefined) {
+        checkRowBehaviour("inline_edit", behaviours.inlineEdit.eventId, "inline_edit", "record_reference");
+        // An editable field must be one the bound query selects and one of the declared columns;
+        // a field that is never shown could never be edited in place.
+        const columnFields = new Set(table.columns.map((column) => column.field));
+        checkFields(
+          "inline_edit",
+          behaviours.inlineEdit.fields,
+          (field) => columnFields.has(field),
+          "invalid_value",
+        );
       }
     } else if (detail !== undefined)
       checkFields("detail_fields", detail.fields.map((entry) => entry.field), () => true, "invalid_value");
@@ -343,7 +414,7 @@ export function validateApplicationSourceCatalogue(
         report("vortex.definition.application_public_surface", "unsafe_content", location);
 
       validateSettings(placement.settings, release.properties, location);
-      validateDataContract(placement, placement.settings, location);
+      validateDataContract(placement, alias, placement.settings, location);
       validateAccessibleName(placement.settings, release, location);
       validateResponsive(placement, release, location);
 
