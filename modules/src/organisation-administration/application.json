@@ -196,6 +196,20 @@
         "record_type": "vortex.organisation_administration:organisation_notice",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_organisation_notice_submit",
+        "key": "vortex.app.organisation_administration.notice_submit",
+        "record_type": "vortex.organisation_administration:organisation_notice",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_organisation_privacy_request_submit",
+        "key": "vortex.app.organisation_administration.privacy_request_submit",
+        "record_type": "vortex.organisation_administration:privacy_request_case",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "public_addresses": [],
@@ -1310,12 +1324,46 @@
                             }
                           },
                           "slots": {}
+                        },
+                        "notice_submit": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Publish notice"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "submit"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
                         }
                       },
                       "order": {
                         "desktop": [
                           "notice_title_input",
-                          "notice_body_input"
+                          "notice_body_input",
+                          "notice_submit"
                         ]
                       }
                     }
@@ -1516,12 +1564,46 @@
                             }
                           },
                           "slots": {}
+                        },
+                        "privacy_submit": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Open privacy request"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "submit"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
                         }
                       },
                       "order": {
                         "desktop": [
                           "privacy_subject_input",
-                          "privacy_details_input"
+                          "privacy_details_input",
+                          "privacy_submit"
                         ]
                       }
                     }
@@ -1664,6 +1746,92 @@
         },
         "errors": [],
         "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_record_organisation_notice",
+        "key": "record_organisation_notice",
+        "labels": {
+          "name": "Record organisation notice"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "title": {
+            "type": "text",
+            "required": true
+          },
+          "body": {
+            "type": "text",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.organisation_administration.organisation_notice.record_notice"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_record_privacy_request",
+        "key": "record_privacy_request",
+        "labels": {
+          "name": "Record privacy request case"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "subject": {
+            "type": "text",
+            "required": true
+          },
+          "details": {
+            "type": "text",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.organisation_administration.privacy_request_case.record_privacy_request"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
       }
     ],
     "flow_bindings": [
@@ -1714,6 +1882,40 @@
           "default_application_root_id": {
             "kind": "caller",
             "name": "default_application_root_id"
+          }
+        }
+      },
+      {
+        "id": "binding_notice_form_submit",
+        "control": "notice_form",
+        "event_id": "event_organisation_notice_submit",
+        "event": "form_submit",
+        "flow": "flow_record_organisation_notice",
+        "inputs": {
+          "title": {
+            "kind": "caller",
+            "name": "title"
+          },
+          "body": {
+            "kind": "caller",
+            "name": "body"
+          }
+        }
+      },
+      {
+        "id": "binding_privacy_form_submit",
+        "control": "privacy_form",
+        "event_id": "event_organisation_privacy_request_submit",
+        "event": "form_submit",
+        "flow": "flow_record_privacy_request",
+        "inputs": {
+          "subject": {
+            "kind": "caller",
+            "name": "subject"
+          },
+          "details": {
+            "kind": "caller",
+            "name": "details"
           }
         }
       }
