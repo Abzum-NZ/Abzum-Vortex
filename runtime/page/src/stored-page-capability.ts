@@ -9,7 +9,10 @@ import {
   type ApplicationRootId,
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
+  type PermissionDeclaration,
   type PermissionRegistryEntryCandidate,
+  platformPermissionCatalogueOwnerId,
+  platformPermissionFor,
   PLATFORM_SERVICE_OPERATIONS,
   flowTaskChildLists,
   flowTaskRegistry,
@@ -82,28 +85,57 @@ export type StoredLinkTargetDeclaration =
 const sameUuid = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
+/**
+ * One resolved page requirement: an application or bound-Module permission from the release's
+ * prepared registration, or an exact platform administration permission from the shipped
+ * platform catalogue. The two carry different authority shapes, so they stay distinct until the
+ * declaration is built.
+ */
+type PagePermissionBinding =
+  | Readonly<{ kind: "definition"; entry: PermissionRegistryEntryCandidate }>
+  | Readonly<{ kind: "platform"; permission: PermissionDeclaration }>;
+
 const declaration = (
   operationKey: string,
   applicationRootId: ApplicationRootId,
-  entry: PermissionRegistryEntryCandidate,
-): OrganizationAccessDeclaration => ({
-  operationKey,
-  action: {
-    actionKind: entry.permission.actionKind,
-    ...(entry.permission.namedAction === undefined
-      ? {}
-      : { namedAction: entry.permission.namedAction }),
-  },
-  target: { kind: "application", applicationRootId },
-  requiredPermission: {
-    applicationRootId: entry.applicationRootId,
-    ownerKind: entry.ownerKind,
-    ownerId: entry.ownerId,
-    permissionId: entry.permission.permissionId,
-  },
-  recentAuthentication: { kind: "none" },
-  authority: { kind: "permission" },
-});
+  binding: PagePermissionBinding,
+): OrganizationAccessDeclaration =>
+  binding.kind === "platform"
+    ? {
+        operationKey,
+        action: {
+          actionKind: binding.permission.actionKind,
+          ...(binding.permission.namedAction === undefined
+            ? {}
+            : { namedAction: binding.permission.namedAction }),
+        },
+        target: { kind: "organization" },
+        requiredPermission: {
+          ownerKind: "platform",
+          ownerId: platformPermissionCatalogueOwnerId,
+          permissionId: binding.permission.permissionId,
+        },
+        recentAuthentication: { kind: "none" },
+        authority: { kind: "permission" },
+      }
+    : {
+        operationKey,
+        action: {
+          actionKind: binding.entry.permission.actionKind,
+          ...(binding.entry.permission.namedAction === undefined
+            ? {}
+            : { namedAction: binding.entry.permission.namedAction }),
+        },
+        target: { kind: "application", applicationRootId },
+        requiredPermission: {
+          applicationRootId: binding.entry.applicationRootId,
+          ownerKind: binding.entry.ownerKind,
+          ownerId: binding.entry.ownerId,
+          permissionId: binding.entry.permission.permissionId,
+        },
+        recentAuthentication: { kind: "none" },
+        authority: { kind: "permission" },
+      };
 
 /** Whether a placement's flow bindings reach an operation, and whether all of them resolve. */
 type PlacementOperationBinding = Readonly<{ required: boolean; bound: boolean }>;
@@ -308,14 +340,19 @@ export const createStoredPageCapabilityService = (
     if (pages.length !== 1 || pages[0] === undefined)
       throw new Error("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
     const page = pages[0];
-    const permission = (key: string) => {
+    // A page requirement names either an exact application or bound-Module permission from this
+    // release's prepared registration, or an exact platform administration permission from the
+    // shipped platform catalogue. Anything else fails this page closed.
+    const permission = (key: string): PagePermissionBinding => {
+      const platform = platformPermissionFor(key);
+      if (platform !== undefined) return { kind: "platform", permission: platform };
       const matches = registration.entries.filter((entry) => entry.permission.key === key);
       if (matches.length !== 1 || matches[0] === undefined)
         throw new Error("STORED_PAGE_PERMISSION_BINDING_UNAVAILABLE");
-      return matches[0];
+      return { kind: "definition", entry: matches[0] };
     };
     const operationBindings = placementOperationBindings(context);
-    const pageEntry = permission(page.accessPermissionKey);
+    const pagePermissionBinding = permission(page.accessPermissionKey);
     const resolved = resolvePageComposition(page, applicationRelease.content.shells);
     const placements: Record<string, unknown>[] =
       resolved.roots.kind === "page"
@@ -328,22 +365,26 @@ export const createStoredPageCapabilityService = (
       applicationReleaseRevision: releaseRevision,
       pagePermission: {
         permissionKey: page.accessPermissionKey,
-        declaration: declaration("application.page.discover", applicationRootId, pageEntry),
+        declaration: declaration(
+          "application.page.discover",
+          applicationRootId,
+          pagePermissionBinding,
+        ),
       },
       placements: Object.fromEntries(
         placements.map((placement) => {
           const placementId = String(placement.placementId);
           const viewPermissionKey = placement.viewPermissionKey as string | undefined;
           const usePermissionKey = placement.usePermissionKey as string | undefined;
-          const viewEntry =
+          const viewBinding =
             viewPermissionKey === undefined ? undefined : permission(viewPermissionKey);
-          const useEntry =
+          const useBinding =
             usePermissionKey === undefined ? undefined : permission(usePermissionKey);
           const operation = operationBindings.get(placementId.toLowerCase());
           return [
             placementId,
             {
-              ...(viewEntry === undefined || viewPermissionKey === undefined
+              ...(viewBinding === undefined || viewPermissionKey === undefined
                 ? {}
                 : {
                     viewPermission: {
@@ -351,11 +392,11 @@ export const createStoredPageCapabilityService = (
                       declaration: declaration(
                         "application.page.placement.view",
                         applicationRootId,
-                        viewEntry,
+                        viewBinding,
                       ),
                     },
                   }),
-              ...(useEntry === undefined || usePermissionKey === undefined
+              ...(useBinding === undefined || usePermissionKey === undefined
                 ? {}
                 : {
                     usePermission: {
@@ -363,7 +404,7 @@ export const createStoredPageCapabilityService = (
                       declaration: declaration(
                         "application.page.placement.use",
                         applicationRootId,
-                        useEntry,
+                        useBinding,
                       ),
                     },
                   }),

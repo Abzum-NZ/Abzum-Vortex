@@ -24,6 +24,7 @@ import {
   containedComponentIdSchema,
   recordTypeIdSchema,
   fieldIdSchema,
+  isPlatformPermissionKey,
   flowContractVersion,
   flowTaskMappingForActionEffect,
   normalizeExactDecimal,
@@ -4341,11 +4342,16 @@ function compileApplicationPagesV2(
       pageId: pageId(String(page.id)),
       key: page.key,
       name: page.name,
-      accessPermissionKey: resolution.exactOwnedReference(
-        "permission",
-        String(page.permission),
-        allowedPermissionOwners,
-      ),
+      // A page keeps its exact access permission key. An application or bound-Module permission is
+      // resolved against its owner; a platform administration permission is carried through as its
+      // exact catalogue key, which the runtime evaluates against the viewer's platform authority.
+      accessPermissionKey: isPlatformPermissionKey(String(page.permission))
+        ? String(page.permission)
+        : resolution.exactOwnedReference(
+            "permission",
+            String(page.permission),
+            allowedPermissionOwners,
+          ),
       composition: compiledComposition.composition,
     };
     if (page.type === "list") {
