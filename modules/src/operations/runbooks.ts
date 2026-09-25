@@ -123,7 +123,7 @@ export const operationsRunbooks: readonly OperationsRunbook[] = Object.freeze([
     steps: [
       "Identify the failed backup object and its requested expiry from the backup inventory alert.",
       "Confirm the independent encrypted copy, checksum and completion against the inventory; a job reporting success is not proof.",
-      "Re-run the backup and verify the new object appears in the inventory within the 48-hour retention window.",
+      "Re-run the hourly backup and verify the new object, its checksum and its requested expiry appear in the inventory.",
       "Treat the provider-managed copy as unavailable and prove recovery from the independent copy.",
       "Escalate to the owning role when no verified recovery point exists; acknowledge first when work has started.",
       "Record cause and follow-up work, and resolve only after a verified backup and inventory entry exist.",
@@ -169,6 +169,6 @@ export const runbookPageText = (runbook: OperationsRunbook): string =>
     ...runbook.steps.map((step, index) => `${index + 1}. ${step}`),
     "",
     `Bounded operator actions on the incident: ${operationsRunbookActionSet.join(", ")}.`,
-    "Attach a signal on any open incident; a re-attached signal updates the same incident.",
+    "Attach a repeated signal to the open incident with the same deduplication key: it updates that incident and never creates another.",
     "No action reads customer content and no action approves itself.",
   ].join("\n");

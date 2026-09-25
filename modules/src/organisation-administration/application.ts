@@ -10,8 +10,8 @@ import {
   TABS_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
-  platformServiceOperationBindingSource,
-  platformServiceOperationFlowSource,
+  defaultOperationFlowSource,
+  platformOperationKey,
   type ApplicationSourceDocumentV2,
   type PlatformBlockReleaseV2,
   type PlatformServiceOperationCatalogueEntry,
@@ -415,7 +415,6 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
       connection_bindings: [],
       interfaces: [],
       actions: [],
-      rules: [],
       events: [
         {
           id: settingsEventId,
@@ -682,13 +681,32 @@ export const organisationAdministrationApplication: ApplicationSourceDocumentV2 
         },
       ],
       theme,
-      flows: settingsOperations.map(platformServiceOperationFlowSource),
-      flow_bindings: settingsOperations.map((operation) =>
-        platformServiceOperationBindingSource(operation, {
-          control: controlAlias(operation),
-          form: formAlias(operation),
-          eventId: settingsEventId,
+      // One flow per operation, made of one Call protected operation task: the flow declares
+      // exactly the operation's typed inputs and returns its result, and nothing about the
+      // organisation, account or authority is an input because the owning service derives them
+      // from the request context. The button's binding fills each input from the form by name.
+      flows: settingsOperations.map((operation) => ({
+        ...defaultOperationFlowSource({
+          id: `flow_${operation.key}`,
+          key: operation.key,
+          operation: platformOperationKey(operation.key),
+          inputs: operation.descriptor.inputs,
+          returnsResult: true,
         }),
-      ),
+        labels: { name: operation.name },
+      })),
+      flow_bindings: settingsOperations.map((operation) => ({
+        id: `binding_${operation.key}`,
+        control: controlAlias(operation),
+        event_id: settingsEventId,
+        event: "action" as const,
+        flow: `flow_${operation.key}`,
+        inputs: Object.fromEntries(
+          Object.keys(operation.descriptor.inputs).map((name) => [
+            name,
+            { kind: "caller" as const, name },
+          ]),
+        ),
+      })),
     },
   });

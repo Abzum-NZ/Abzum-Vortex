@@ -18,8 +18,32 @@ workspace package and not an application data model.
 |---|---|
 | `config.toml` | Local Supabase services and ports. It contains no credential. |
 | `migrations/` | Immutable timestamped changes created with `pnpm db:new <name>`. |
+| `schemas/` | One canonical source file per function, under `<schema>/<function>.sql`. |
 | `seed.sql` | Synthetic Local and Testing data only. Production never applies it. |
 | `tests/` | pgTAP tests run with `pnpm db:test`. |
+
+## Canonical database-function source
+
+Each database function has one readable canonical source at `supabase/schemas/<schema>/<function>.sql`,
+holding the complete current `create or replace function` statement with its full body, its
+`comment on function` and its `grant`/`revoke` on that function, so a migration is never the only
+place its live definition can be found. [schemas/README.md](schemas/README.md) describes the layout.
+A function last installed before the convention gains its file when it is next changed or rebaselined.
+
+A migration that creates or changes a function carries the complete body, identical to the canonical
+file changed in the same commit. A signature change is an explicit `drop function` followed by a
+`create`. Migrations never read a stored definition (`pg_get_functiondef`, `prosrc` or
+`routine_definition`) and never patch one with `replace()`; the code a migration installs is stated
+in full. Correct a drifted function by publishing its complete body, not by editing live text.
+
+`pnpm boundaries` enforces the rule through `tooling/boundaries/sql-canonical.mjs`. It replays every
+migration in order and fails when a migration timestamped `20260925000000` or later reads a stored
+definition, patches one with `replace()`, creates a function inside another statement or without a
+lowercase schema-qualified name, or changes a signature without an explicit drop before it. It also
+fails when a function last installed by such a migration has no canonical file, and when a canonical
+file differs from the definition its function was last installed with, or describes a dropped
+function. Earlier migrations are historical: they are never reported. Every new migration is
+timestamped `20260925000000` or later, so the rule governs it.
 
 ## Optional local database operations
 

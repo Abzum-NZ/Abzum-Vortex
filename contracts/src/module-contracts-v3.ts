@@ -6,6 +6,7 @@ import {
   moduleDraftV2Schema,
 } from "./module-contracts-v2";
 import { moduleSourceContractVersion as moduleSourceContractVersionV3 } from "./module-source-contracts";
+import { flowSchema } from "./flow-contracts";
 import { ruleGraphSchema } from "./rule-graph-contracts";
 import {
   actionIdSchema,
@@ -106,15 +107,67 @@ export const moduleContributionV3Schema = z
       ]);
   });
 
+/**
+ * A Module's canonical content. `flows` is the one home of its behaviour (architecture decision 1):
+ * every save rule is a flow with a `BeforeSave` trigger and `transaction` execution.
+ *
+ * `rules` is not authored. It is the executable form of exactly those `BeforeSave` flows, derived
+ * from them by the compiler, because the database read that hands a save its rules and the
+ * before-save evaluator still read a rule graph. Until the flow interpreter replaces them (#1007),
+ * every `BeforeSave` flow has exactly one rule of the same identity, record type and priority, and
+ * no rule exists without its flow, so a save can never run without a rule its Module declares.
+ */
 export const moduleContentV3Schema = moduleContentV2Schema.extend({
+  flows: z.array(flowSchema).max(100),
   rules: z.array(ruleGraphSchema).max(100),
   queries: z.array(moduleQueryDefinitionV3Schema).max(100).default([]),
   contributions: z.array(moduleContributionV3Schema).max(100).optional(),
 });
 
-export const moduleDraftV3Schema = moduleDraftV2Schema.extend({
-  content: moduleContentV3Schema,
-});
+export const moduleDraftV3Schema = moduleDraftV2Schema
+  .extend({
+    content: moduleContentV3Schema,
+  })
+  .superRefine((draft, context) => {
+    const invalid = (message: string, path: (string | number)[]) =>
+      context.addIssue({ code: "custom", path: ["content", ...path], message });
+    const flowIds = new Set<string>();
+    const flowKeys = new Set<string>();
+    draft.content.flows.forEach((flow, index) => {
+      if (flowIds.has(flow.id)) invalid("Flow identities must be unique", ["flows", index, "id"]);
+      if (flowKeys.has(flow.key)) invalid("Flow keys must be unique", ["flows", index, "key"]);
+      flowIds.add(flow.id);
+      flowKeys.add(flow.key);
+    });
+    const beforeSave = new Map(
+      draft.content.flows.flatMap((flow) =>
+        flow.triggers.some((trigger) => trigger.type === "BeforeSave")
+          ? [[String(flow.id), flow] as const]
+          : [],
+      ),
+    );
+    const ruleIds = new Set<string>();
+    draft.content.rules.forEach((rule, index) => {
+      ruleIds.add(String(rule.ruleId));
+      const flow = beforeSave.get(String(rule.ruleId));
+      const trigger = flow?.triggers[0];
+      if (
+        flow === undefined ||
+        flow.triggers.length !== 1 ||
+        trigger?.type !== "BeforeSave" ||
+        trigger.recordTypeId !== rule.subjectRecordTypeId ||
+        trigger.priority !== rule.priority ||
+        flow.key !== rule.key
+      )
+        invalid("A rule is the executable form of exactly one BeforeSave flow", ["rules", index]);
+    });
+    for (const flowId of beforeSave.keys())
+      if (!ruleIds.has(flowId))
+        invalid("Every BeforeSave flow needs its executable rule", [
+          "flows",
+          draft.content.flows.findIndex((flow) => String(flow.id) === flowId),
+        ]);
+  });
 
 export const moduleCanonicalDocumentV3Schema = z
   .object({

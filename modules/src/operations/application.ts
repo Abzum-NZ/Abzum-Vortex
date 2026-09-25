@@ -10,6 +10,8 @@ import {
   TABLE_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
+  defaultOperationFlowSource,
+  defaultSaveFlowSource,
   type ApplicationSourceDocumentV2,
   type PlatformBlockReleaseV2,
   type SourceBlockPropertyValueV2Contract,
@@ -25,13 +27,45 @@ type JsonObject = Record<string, unknown>;
 const incidentRecordType = "vortex.operations.incidents:incident";
 const createAction = "vortex.operations.incidents.incident.create";
 const attachAction = "vortex.operations.incidents.incident.attach";
-const acknowledgeAction = "vortex.operations.incidents.incident.acknowledge";
-const escalateAction = "vortex.operations.incidents.incident.escalate";
-const resolveAction = "vortex.operations.incidents.incident.resolve";
 const incidentActionEventId = "event_operations_incident_action";
-const acknowledgeButton = "button_operations_incident_acknowledge";
-const escalateButton = "button_operations_incident_escalate";
-const resolveButton = "button_operations_incident_resolve";
+
+/**
+ * The bounded operator actions on an open incident. Each is one detail-page button, shown only to
+ * the holder of its own named-action permission, whose action event starts one flow of one Call
+ * protected operation task on that named action.
+ */
+const incidentOperations = [
+  {
+    action: "vortex.operations.incidents.incident.acknowledge",
+    button: "button_operations_incident_acknowledge",
+    flow: "operations_acknowledge_incident",
+    name: "Acknowledge incident",
+    label: "Acknowledge",
+    variant: "primary",
+    description:
+      "Acknowledges the current open incident through the bound incident.acknowledge named action.",
+  },
+  {
+    action: "vortex.operations.incidents.incident.escalate",
+    button: "button_operations_incident_escalate",
+    flow: "operations_escalate_incident",
+    name: "Escalate incident",
+    label: "Escalate",
+    variant: "danger",
+    description:
+      "Escalates the current open incident to its owning role through the bound incident.escalate named action.",
+  },
+  {
+    action: "vortex.operations.incidents.incident.resolve",
+    button: "button_operations_incident_resolve",
+    flow: "operations_resolve_incident",
+    name: "Resolve incident",
+    label: "Resolve",
+    variant: "secondary",
+    description:
+      "Resolves the current open incident through the bound incident.resolve named action.",
+  },
+] as const;
 
 const placementLayout = {
   visible: true,
@@ -129,64 +163,6 @@ const form = (title: string, inputs: Record<string, unknown>) =>
     content: slot(inputs),
   });
 
-/** The outcomes every committing flow node settles into; each returns to the submitting form. */
-const flowOutcomes = ["committed", "validation", "refused", "conflict", "uncertain"] as const;
-
-/**
- * One current-user flow that commits a single action node and returns its settled outcome, the same
- * shape Service Desk uses to continue a form submission. The flow runs as the signed-in operator,
- * so the action's own permission, field policy and precondition decide the result.
- */
-const committingFlow = (
-  id: string,
-  name: string,
-  description: string,
-  target: JsonObject,
-  inputs: Record<string, { type: string; required: boolean }>,
-) => ({
-  id,
-  key: id,
-  name,
-  description,
-  run_as: "current_user",
-  inputs,
-  outputs: {},
-  variables: {},
-  nodes: [
-    { id: `start_${id}`, key: "start", kind: "start", outputs: inputs },
-    {
-      id: `run_${id}`,
-      key: "run_action",
-      kind: "action",
-      target,
-      inputs: Object.fromEntries(
-        Object.entries(inputs).map(([key, input]) => [
-          key,
-          { type: input.type, value: { source: "flow_input", input: key } },
-        ]),
-      ),
-      outputs: {},
-      results: {},
-    },
-    ...flowOutcomes.map((outcome) => ({
-      id: `return_${id}_${outcome}`,
-      key: `return_${outcome}`,
-      kind: "return",
-      results: {},
-      outcome,
-    })),
-  ],
-  edges: [
-    { id: `begin_${id}`, from_node: `start_${id}`, to_node: `run_${id}` },
-    ...flowOutcomes.map((outcome) => ({
-      id: `run_${id}_${outcome}`,
-      from_node: `run_${id}`,
-      to_node: `return_${id}_${outcome}`,
-      outcome,
-    })),
-  ],
-});
-
 const dashboardStates = ["normal", "loading", "empty", "refused", "failure", "recovery"];
 const listStates = ["normal", "loading", "empty", "refused", "access_ended", "failure", "recovery"];
 const formStates = ["normal", "loading", "validation", "refused", "conflict", "failure", "recovery"];
@@ -283,7 +259,8 @@ const pages = [
           title: { kind: "text", value: "Incident" },
         }),
         // Attach runs on the open incident as its subject; operators without the attach
-        // permission never see the form, and the action refuses a resolved or closed incident.
+        // permission never see the form, and the action refuses a resolved or closed incident and
+        // a signal whose deduplication key does not match the incident's own.
         [attachForm]: {
           ...form("Attach a signal to this incident", {
             input_operations_attach_deduplication_key: textInput(
@@ -302,9 +279,12 @@ const pages = [
         // The bounded operator actions run on the open incident as their subject. Each button is
         // shown only to its own permission holder, and every action refuses a resolved or closed
         // incident in the module.
-        [acknowledgeButton]: actionButton("Acknowledge", "primary", acknowledgeAction),
-        [escalateButton]: actionButton("Escalate", "danger", escalateAction),
-        [resolveButton]: actionButton("Resolve", "secondary", resolveAction),
+        ...Object.fromEntries(
+          incidentOperations.map((operation) => [
+            operation.button,
+            actionButton(operation.label, operation.variant, operation.action),
+          ]),
+        ),
       }),
     },
     standard_page_replacement: { standard_page: "detail", record_type: incidentRecordType },
@@ -387,7 +367,9 @@ const theme = {
  * when a signed-in operator acts: Create incident commits the standard create action; Attach, and
  * the bounded Acknowledge, Escalate and Resolve actions, commit the incident's named actions from
  * its detail page. Each action runs as the operator, is gated by its own module permission and field
- * policy, and refuses a resolved or closed incident. One Runbooks page per spec 19 critical code
+ * policy, and refuses a resolved or closed incident; Attach also refuses a signal whose
+ * deduplication key does not match the incident's, so a repeated signal updates the one incident it
+ * belongs to. One Runbooks page per spec 19 critical code
  * carries concrete operator steps keyed by the incident's `runbook_reference`. No workflow, schedule
  * or system path creates or changes an incident. Open alert signals are recorded by the alert sink,
  * but no record type or protected read model exposes them yet, so the open-signals page is honest
@@ -439,9 +421,7 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
             "vortex.operations.incidents.incident.restore",
             "vortex.operations.incidents.incident.export",
             attachAction,
-            acknowledgeAction,
-            escalateAction,
-            resolveAction,
+            ...incidentOperations.map((operation) => operation.action),
           ],
         },
       ],
@@ -515,7 +495,6 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
       connection_bindings: [],
       interfaces: [],
       actions: [],
-      rules: [],
       events: [
         {
           id: "form_submit_operations_new_incident",
@@ -544,45 +523,46 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
       shells: [],
       pages,
       theme,
+      // Each form or operator button commits through one flow with one task: the default Save of
+      // the incident form, or a call of the incident's attach, acknowledge, escalate or resolve
+      // named action. The flows run as the signed-in operator, so the action's own permission,
+      // field policy and precondition decide the result.
       flows: [
-        committingFlow(
-          "operations_create_incident",
-          "Create incident",
-          "Creates the incident from the submitted Create incident form through the standard create action.",
-          { kind: "record_save", record_type: incidentRecordType, mode: "create" },
-          {},
-        ),
-        committingFlow(
-          "operations_attach_signal",
-          "Attach signal",
-          "Attaches the submitted alert signal to the current open incident through the bound incident.attach named action.",
-          { kind: "named_action", action: attachAction },
-          {
-            deduplication_key: { type: "text", required: true },
-            evidence: { type: "formatted_text", required: true },
-          },
-        ),
-        committingFlow(
-          "operations_acknowledge_incident",
-          "Acknowledge incident",
-          "Acknowledges the current open incident through the bound incident.acknowledge named action.",
-          { kind: "named_action", action: acknowledgeAction },
-          {},
-        ),
-        committingFlow(
-          "operations_escalate_incident",
-          "Escalate incident",
-          "Escalates the current open incident to its owning role through the bound incident.escalate named action.",
-          { kind: "named_action", action: escalateAction },
-          {},
-        ),
-        committingFlow(
-          "operations_resolve_incident",
-          "Resolve incident",
-          "Resolves the current open incident through the bound incident.resolve named action.",
-          { kind: "named_action", action: resolveAction },
-          {},
-        ),
+        {
+          ...defaultSaveFlowSource({
+            id: "operations_create_incident",
+            key: "operations_create_incident",
+            description:
+              "Creates the incident from the submitted Create incident form through the one Save record task.",
+            recordType: incidentRecordType,
+            mode: "create",
+          }),
+          labels: { name: "Create incident" },
+        },
+        {
+          ...defaultOperationFlowSource({
+            id: "operations_attach_signal",
+            key: "operations_attach_signal",
+            description:
+              "Attaches the submitted alert signal to the current open incident through the bound incident.attach named action.",
+            operation: attachAction,
+            inputs: {
+              deduplication_key: { type: "text", required: true },
+              evidence: { type: "formatted_text", required: true },
+            },
+          }),
+          labels: { name: "Attach signal" },
+        },
+        ...incidentOperations.map((operation) => ({
+          ...defaultOperationFlowSource({
+            id: operation.flow,
+            key: operation.flow,
+            description: operation.description,
+            operation: operation.action,
+            inputs: {},
+          }),
+          labels: { name: operation.name },
+        })),
       ],
       flow_bindings: [
         {
@@ -590,60 +570,31 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
           control: createForm,
           event_id: "form_submit_operations_new_incident",
           event: "form_submit",
-          flow: { kind: "application_owned", flow: "operations_create_incident" },
-          inputs: {},
-          results: {},
-          declared_effects: ["form_interaction", "change"],
+          flow: "operations_create_incident",
+          inputs: { values: { kind: "caller", name: "values" } },
         },
         {
           id: "form_binding_operations_incident_attach",
           control: attachForm,
           event_id: "form_submit_operations_incident_attach",
           event: "form_submit",
-          flow: { kind: "application_owned", flow: "operations_attach_signal" },
+          flow: "operations_attach_signal",
           inputs: {
-            deduplication_key: {
-              type: "text",
-              value: { source: "form_input", form: attachForm, input: "deduplication_key" },
-            },
-            evidence: {
-              type: "formatted_text",
-              value: { source: "form_input", form: attachForm, input: "evidence" },
-            },
+            deduplication_key: { kind: "caller", name: "deduplication_key" },
+            evidence: { kind: "caller", name: "evidence" },
           },
-          results: {},
-          declared_effects: ["form_interaction", "change"],
         },
-        {
-          id: "button_binding_operations_incident_acknowledge",
-          control: acknowledgeButton,
+        // Each operator button starts its own one-task flow with no inputs: the incident is the
+        // detail page's subject, and the named action's own permission, field policy and
+        // precondition decide the result.
+        ...incidentOperations.map((operation) => ({
+          id: `button_binding_${operation.flow}`,
+          control: operation.button,
           event_id: incidentActionEventId,
-          event: "action",
-          flow: { kind: "application_owned", flow: "operations_acknowledge_incident" },
+          event: "action" as const,
+          flow: operation.flow,
           inputs: {},
-          results: {},
-          declared_effects: ["change"],
-        },
-        {
-          id: "button_binding_operations_incident_escalate",
-          control: escalateButton,
-          event_id: incidentActionEventId,
-          event: "action",
-          flow: { kind: "application_owned", flow: "operations_escalate_incident" },
-          inputs: {},
-          results: {},
-          declared_effects: ["change"],
-        },
-        {
-          id: "button_binding_operations_incident_resolve",
-          control: resolveButton,
-          event_id: incidentActionEventId,
-          event: "action",
-          flow: { kind: "application_owned", flow: "operations_resolve_incident" },
-          inputs: {},
-          results: {},
-          declared_effects: ["change"],
-        },
+        })),
       ],
     },
   });

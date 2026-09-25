@@ -2,6 +2,7 @@ import { z } from "zod";
 import { correlationIdSchema } from "./common";
 import {
   actorIdSchema,
+  containedComponentIdSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
   revisionSchema,
@@ -31,6 +32,8 @@ export const organizationRoleActivationChangeCommandSchema = z.discriminatedUnio
       expectedRoleRevision: javascriptSafeRevisionSchema,
       requestedDurationSeconds: requestedDurationSecondsSchema,
       eligibilitySource: roleActivationEligibilitySourceSchema,
+      /** Set only from the verified flow execution binding that resolved the caller, never from input. */
+      invokingExecutionBindingId: containedComponentIdSchema.optional(),
       ...trustedChangeFields,
     })
     .strict(),

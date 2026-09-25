@@ -1,13 +1,17 @@
 import "server-only";
 
 import {
+  applicationExperienceStateSchema,
   applicationRootIdSchema,
+  applicationShellV2Schema,
   builderKeySchema,
   identityAuthorityIdSchema,
   identitySessionSchema,
+  isPresentationOnlyApplicationExperience,
   namespacedKeySchema,
   organizationAccessDeclarationSchema,
   organizationIdSchema,
+  pageDefinitionV2Schema,
   pageIdSchema,
   permissionIdSchema,
   revisionSchema,
@@ -52,6 +56,11 @@ const applicationCandidateSchema = z.object({
     key: builderKeySchema,
     accessPermissionKey: namespacedKeySchema,
   }).strict()).min(1).max(10_000),
+  experiences: z.array(z.object({
+    state: applicationExperienceStateSchema,
+    page: pageDefinitionV2Schema,
+  }).strict()).max(3).optional(),
+  shells: z.array(applicationShellV2Schema).max(100).optional(),
   roles: z.array(z.object({
     roleId: roleIdSchema,
     key: builderKeySchema,
@@ -80,6 +89,17 @@ export const permittedApplicationSchema = z.object({
   pageKeys: z.array(builderKeySchema).min(1).max(10_000),
 }).strict();
 
+/**
+ * One application experience page the viewer may be shown in place of a page they cannot open:
+ * the viewer may open that page itself, it is presentation-only, and it carries only the shell it
+ * renders in.
+ */
+export const applicationExperienceSchema = z.object({
+  state: applicationExperienceStateSchema,
+  page: pageDefinitionV2Schema,
+  shells: z.array(applicationShellV2Schema).max(1),
+}).strict();
+
 export const permittedApplicationsReadSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("available"),
@@ -95,6 +115,17 @@ export const permittedApplicationsReadSchema = z.discriminatedUnion("kind", [
 
 export type PermittedApplication = z.infer<typeof permittedApplicationSchema>;
 export type PermittedApplicationsRead = z.infer<typeof permittedApplicationsReadSchema>;
+export type ApplicationExperience = z.infer<typeof applicationExperienceSchema>;
+
+/**
+ * An addressed read: the permitted-applications read for one application key, plus the
+ * experience pages of that application when the viewer may open it. Experiences never enter
+ * `PermittedApplicationsRead`, so the launcher and organisation reads keep their exact shape.
+ */
+export type AddressedApplicationRead = Readonly<{
+  read: PermittedApplicationsRead;
+  experiences: readonly ApplicationExperience[];
+}>;
 
 type AddressRow = Readonly<{ address: unknown }>;
 type SourceRoleRow = Readonly<{ source_role_id: unknown }>;
@@ -109,7 +140,11 @@ const permittedApplication = async (
   session: IdentitySession,
   organizationId: z.infer<typeof organizationIdSchema>,
   candidate: ApplicationCandidate,
-): Promise<PermittedApplication | null | "temporarily_unavailable"> => {
+): Promise<
+  | Readonly<{ application: PermittedApplication; experiences: ApplicationExperience[] }>
+  | null
+  | "temporarily_unavailable"
+> => {
   const result = await requests.run(
     session,
     { organizationId, applicationRootId: candidate.applicationRootId },
@@ -175,14 +210,36 @@ const permittedApplication = async (
         : roleHome?.key;
       if (homePageKey === undefined) return null;
 
-      return permittedApplicationSchema.parse({
-        applicationRootId: candidate.applicationRootId,
-        key: candidate.key,
-        name: candidate.name,
-        icon: candidate.icon,
-        homePageKey,
-        pageKeys: [...allowedPageKeys].sort(),
-      });
+      // An experience page is offered only when the viewer may open that page itself and it is
+      // presentation-only, so it can never show gated, conditional or data-bound content.
+      const shells = candidate.shells ?? [];
+      const experiences = (candidate.experiences ?? [])
+        .filter((experience) =>
+          allowedPageKeys.has(experience.page.key) &&
+          isPresentationOnlyApplicationExperience(experience.page, shells))
+        .map((experience) => {
+          const composition = experience.page.composition;
+          const shellId = composition.shellKind === "application" ? composition.shellId : undefined;
+          return applicationExperienceSchema.parse({
+            state: experience.state,
+            page: experience.page,
+            shells: shellId === undefined
+              ? []
+              : shells.filter((shell) => sameUuid(shell.shellId, shellId)),
+          });
+        });
+
+      return {
+        application: permittedApplicationSchema.parse({
+          applicationRootId: candidate.applicationRootId,
+          key: candidate.key,
+          name: candidate.name,
+          icon: candidate.icon,
+          homePageKey,
+          pageKeys: [...allowedPageKeys].sort(),
+        }),
+        experiences,
+      };
     },
   );
   if (result.kind === "temporarily_unavailable") return "temporarily_unavailable";
@@ -203,6 +260,63 @@ export const readPermittedApplicationsAtAddress = async (
   organizationShortNameCandidate: string,
   identityAuthorityIdCandidate: IdentityAuthorityId,
   applicationKeyCandidate?: string,
+): Promise<PermittedApplicationsRead> =>
+  (await readAtAddress(
+    session,
+    tenantShortNameCandidate,
+    organizationShortNameCandidate,
+    identityAuthorityIdCandidate,
+    applicationKeyCandidate,
+  )).read;
+
+/**
+ * The addressed page read with the addressed application's experience pages. They are returned
+ * only while the viewer may open that application, so an unknown or refused application never
+ * discloses any of its content.
+ */
+export const readAddressedApplicationAtAddress = (
+  session: IdentitySession,
+  tenantShortNameCandidate: string,
+  organizationShortNameCandidate: string,
+  identityAuthorityIdCandidate: IdentityAuthorityId,
+  applicationKeyCandidate: string,
+): Promise<AddressedApplicationRead> =>
+  readAtAddress(
+    session,
+    tenantShortNameCandidate,
+    organizationShortNameCandidate,
+    identityAuthorityIdCandidate,
+    applicationKeyCandidate,
+  );
+
+const readAtAddress = async (
+  session: IdentitySession,
+  tenantShortNameCandidate: string,
+  organizationShortNameCandidate: string,
+  identityAuthorityIdCandidate: IdentityAuthorityId,
+  applicationKeyCandidate?: string,
+): Promise<AddressedApplicationRead> => {
+  let experiences: readonly ApplicationExperience[] = [];
+  const read = await readPermittedApplications(
+    session,
+    tenantShortNameCandidate,
+    organizationShortNameCandidate,
+    identityAuthorityIdCandidate,
+    applicationKeyCandidate,
+    (addressed) => {
+      experiences = addressed;
+    },
+  );
+  return { read, experiences: read.kind === "available" ? experiences : [] };
+};
+
+const readPermittedApplications = async (
+  session: IdentitySession,
+  tenantShortNameCandidate: string,
+  organizationShortNameCandidate: string,
+  identityAuthorityIdCandidate: IdentityAuthorityId,
+  applicationKeyCandidate: string | undefined,
+  receiveExperiences: (experiences: readonly ApplicationExperience[]) => void,
 ): Promise<PermittedApplicationsRead> => {
   const parsedSession = identitySessionSchema.safeParse(session);
   const tenantShortName = builderKeySchema.safeParse(tenantShortNameCandidate);
@@ -252,13 +366,14 @@ export const readPermittedApplicationsAtAddress = async (
         requests, parsedSession.data, read.organizationId, candidate,
       );
       if (permitted === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
+      if (permitted !== null) receiveExperiences(permitted.experiences);
       return permittedApplicationsReadSchema.parse({
         kind: "available",
         organizationId: read.organizationId,
         tenantShortName: read.tenantShortName,
         organizationShortName: read.organizationShortName,
         defaultApplicationRootId: null,
-        applications: permitted === null ? [] : [permitted],
+        applications: permitted === null ? [] : [permitted.application],
       });
     }
 
@@ -275,7 +390,7 @@ export const readPermittedApplicationsAtAddress = async (
         requests, parsedSession.data, read.organizationId, candidate,
       );
       if (permitted === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
-      if (permitted !== null) applications.push(permitted);
+      if (permitted !== null) applications.push(permitted.application);
     }
     const configuredDefault = defaultRead.value;
     const defaultApplicationRootId = configuredDefault !== null && applications.some((entry) =>

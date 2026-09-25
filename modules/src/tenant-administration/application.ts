@@ -245,7 +245,6 @@ export const tenantAdministrationApplication: ApplicationSourceDocumentV2 =
       connection_bindings: [],
       interfaces: [],
       actions: [],
-      rules: [],
       events: [],
       public_addresses: [],
       platform_block_dependencies: platformBlockDependencies,

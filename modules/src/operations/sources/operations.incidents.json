@@ -677,7 +677,7 @@
         "id": "perm_incident_attach",
         "key": "vortex.operations.incidents.incident.attach",
         "label": "Attach a signal to an incident",
-        "description": "Allows the named attach operation to record an alert signal deduplication key and its evidence on an open incident.",
+        "description": "Allows the named attach operation to record an alert signal and its evidence on the open incident whose deduplication key matches the signal's.",
         "record_type": "incident",
         "action_kind": "named",
         "named_action": "attach",
@@ -692,6 +692,7 @@
         "field_policy": {
           "readable_fields": [
             "state",
+            "deduplication_key",
             "attached_signal_key",
             "attached_signal_evidence",
             "attached_at"
@@ -814,11 +815,20 @@
           }
         ],
         "precondition": {
-          "field": "state",
-          "operator": "not_in",
-          "value": [
-            "resolved",
-            "closed"
+          "all": [
+            {
+              "field": "state",
+              "operator": "not_in",
+              "value": [
+                "resolved",
+                "closed"
+              ]
+            },
+            {
+              "field": "deduplication_key",
+              "operator": "equals",
+              "parameter": "deduplication_key"
+            }
           ]
         },
         "effects": [
@@ -999,7 +1009,7 @@
         "personal_or_sensitive_values_allowed": false
       }
     ],
-    "rules": [],
+    "flows": [],
     "extension_points": [
       {
         "id": "ext_incident_fields",

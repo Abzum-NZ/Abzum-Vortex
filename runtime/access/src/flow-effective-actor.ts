@@ -115,6 +115,12 @@ export const flowEffectiveActorRequestSchema = z
     expectedBindingRevision: revisionSchema.optional(),
     /** The effective actor's resolved state; anything but a confirmed `active` refuses. */
     effectiveActorState: flowEffectiveActorStateSchema.optional(),
+    /**
+     * The operation policy's required caller (an execution binding), resolved by trusted wiring
+     * from the operation's own stored policy. When present, only the node running under exactly
+     * that binding is effective; the run-as actor is checked, never the responder.
+     */
+    requiredCallerBindingId: containedComponentIdSchema.optional(),
   })
   .strict();
 
@@ -132,6 +138,7 @@ export const flowEffectiveActorRefusalReasonSchema = z.enum([
   "surface_not_permitted",
   "input_not_permitted",
   "operation_non_delegable",
+  "required_caller_not_satisfied",
   "actor_kind_mismatch",
   "actor_unavailable",
 ]);
@@ -332,8 +339,15 @@ export const resolveFlowEffectiveActor = (
       correlationId: correlationIdFrom(requestCandidate),
     };
 
-  const { initiator, node, binding, currentActor, expectedBindingRevision, effectiveActorState } =
-    parsed.data;
+  const {
+    initiator,
+    node,
+    binding,
+    currentActor,
+    expectedBindingRevision,
+    effectiveActorState,
+    requiredCallerBindingId,
+  } = parsed.data;
   const purpose = purposeOf(node);
   const refuse = (reasonCode: FlowEffectiveActorRefusalReason): FlowEffectiveActorResolution => ({
     outcome: "refused",
@@ -361,6 +375,8 @@ export const resolveFlowEffectiveActor = (
   // The original initiator is always the current user; never the preceding overridden actor. A
   // system-started flow has no human initiator, so Current user cannot invent one.
   if (node.runAs.kind === "current_user") {
+    // A required-caller policy is satisfied only by its named binding; Current user has none.
+    if (requiredCallerBindingId !== undefined) return refuse("required_caller_not_satisfied");
     if (initiatorIdentity.kind !== "organization_account")
       return refuse("current_user_unavailable");
     return {
@@ -399,6 +415,11 @@ export const resolveFlowEffectiveActor = (
   if (stored.state !== "active") return refuse("binding_revoked");
   if (!sameId(stored.executionBindingId, node.runAs.executionBindingId))
     return refuse("binding_scope_mismatch");
+  if (
+    requiredCallerBindingId !== undefined &&
+    !sameId(stored.executionBindingId, requiredCallerBindingId)
+  )
+    return refuse("required_caller_not_satisfied");
   if (expectedBindingRevision !== undefined && stored.revision !== expectedBindingRevision)
     return refuse("binding_revision_mismatch");
 
