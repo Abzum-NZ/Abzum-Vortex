@@ -2234,6 +2234,13 @@ $function$;
 
 reset role;
 
+-- The adapter replaces a function in vortex_record, which needs the schema CREATE
+-- privilege that only the schema owner can lend. Same temporary grant pattern as
+-- the earlier record migrations; revoked again below.
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+
 set local role vortex_record_adapter;
 
 create or replace function vortex_record.create_record_internal(
@@ -3108,6 +3115,10 @@ begin
 end
 $function$;
 
+reset role;
+
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
 reset role;
 
 commit;

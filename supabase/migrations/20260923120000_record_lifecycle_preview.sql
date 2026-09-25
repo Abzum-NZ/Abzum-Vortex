@@ -15,6 +15,11 @@
 
 begin;
 
+-- The postgres-created candidate reader is created in vortex_record and then handed
+-- to the adapter, so postgres and the adapter need the schema CREATE privilege that
+-- only the schema owner can lend. Revoked again before commit.
+set local role vortex_record_owner;
+grant create on schema vortex_record to postgres, vortex_record_adapter;
 reset role;
 
 create function vortex_access.check_record_lifecycle_preview_authority()
@@ -208,6 +213,10 @@ alter function vortex_record.read_record_lifecycle_preview_candidates_internal(
   text, uuid, uuid, uuid, timestamptz, uuid, integer
 ) owner to vortex_record_adapter;
 
+-- postgres does not inherit the adapter's privileges, so the privilege set-up of the
+-- adapter-owned function runs as its owner.
+set local role vortex_record_adapter;
+
 revoke all on function vortex_record.read_record_lifecycle_preview_candidates_internal(
   text, uuid, uuid, uuid, timestamptz, uuid, integer
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
@@ -219,6 +228,7 @@ comment on function vortex_record.read_record_lifecycle_preview_candidates_inter
   text, uuid, uuid, uuid, timestamptz, uuid, integer
 ) is 'Private adapter-owned, forced-RLS lifecycle candidate page and global-position projection for Record owner.';
 
+reset role;
 set local role vortex_record_owner;
 
 create function vortex_record.preview_record_lifecycle_candidates(
@@ -331,6 +341,10 @@ comment on function vortex_record.preview_record_lifecycle_candidates(
   uuid, uuid, timestamptz, uuid, integer
 ) is 'Protected read-only preview of record lifecycle policy and deterministic candidate records for #117 handoff; performs no mutation or deletion.';
 
+reset role;
+
+set local role vortex_record_owner;
+revoke create on schema vortex_record from postgres, vortex_record_adapter;
 reset role;
 
 commit;

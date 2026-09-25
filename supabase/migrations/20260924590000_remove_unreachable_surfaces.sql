@@ -29,7 +29,7 @@ immutable
 security invoker
 set search_path = ''
 as $function$
-  select pg_catalog.coalesce(
+  select coalesce(
     pg_catalog.char_length(p_value) between 1 and 80
     and p_value ~ '^[a-z0-9]+(?:[-_][a-z0-9]+)*$',
     false

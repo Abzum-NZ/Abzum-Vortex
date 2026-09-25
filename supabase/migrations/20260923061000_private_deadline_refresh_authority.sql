@@ -5,6 +5,13 @@
 
 begin;
 
+-- The postgres-owned bridges and the adapter functions below are created in
+-- vortex_record, so both need the schema CREATE privilege that only the schema
+-- owner can lend. Revoked again before commit.
+set local role vortex_record_owner;
+grant create on schema vortex_record to postgres, vortex_record_adapter;
+reset role;
+
 set local role vortex_record_owner;
 
 -- Resolve and lock the exact binding and actor. The immutable session-user
@@ -560,17 +567,27 @@ revoke all on function vortex_record.claim_record_deadline_refresh(uuid, uuid, u
 grant execute on function vortex_record.claim_record_deadline_refresh(uuid, uuid, uuid, timestamptz)
   to vortex_runtime;
 
+comment on function vortex_record.claim_record_deadline_refresh(uuid, uuid, uuid, timestamptz) is
+  'Private atomic due-row claim returning locked root, attribution, effect identity and calculation inputs; mutation follows in #558.';
+
+-- Comments belong to each function's owner, so they are set outside the adapter role.
+reset role;
+
+set local role vortex_record_owner;
 comment on function vortex_record.resolve_configured_deadline_actor_internal(uuid, uuid) is
   'Private adapter helper locking the active actor and binding it to the configured execution session role.';
+
+reset role;
+
 comment on function vortex_record.establish_deadline_system_context_internal(uuid, uuid) is
   'Private fixed-purpose bridge that revalidates deadline authority and establishes one exact System context.';
 comment on function vortex_record.claim_configured_deadline_due_row_internal(
   uuid, uuid, uuid, timestamptz
 ) is
   'Private fixed-purpose bridge that role-binds and locks one due row before establishing its exact System context.';
-comment on function vortex_record.claim_record_deadline_refresh(uuid, uuid, uuid, timestamptz) is
-  'Private atomic due-row claim returning locked root, attribution, effect identity and calculation inputs; mutation follows in #558.';
 
+set local role vortex_record_owner;
+revoke create on schema vortex_record from postgres, vortex_record_adapter;
 reset role;
 
 commit;

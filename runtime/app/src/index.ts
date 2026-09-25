@@ -110,6 +110,8 @@ export {
   type FlowResumeRequest,
   type FlowStartRequest,
   type FlowUnavailableNotice,
+  type NamedActionExecutionResult,
+  type NamedActionRecordPort,
 } from "./flow-orchestrator";
 
 export {
