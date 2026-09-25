@@ -66,6 +66,11 @@ import {
 type Runner = <Result>(
   operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
+/**
+ * Every tenant command reads its acting person from the transaction's bound request context
+ * (`vortex_identity.tenant_request_actor_id()`), never from `session`. A transaction with no bound
+ * human or federated context, such as the default runtime transaction, is refused.
+ */
 export type TenantGovernanceServiceDependencies = Readonly<{ runtimeTransaction?: Runner }>;
 
 type MutationRow = DatabaseRow & {
