@@ -16,6 +16,11 @@ import {
   type ProtectedQueryResult,
   type ProtectedQueryRow,
 } from "@vortex/query";
+import {
+  projectRecordsTableData,
+  type ProjectedComponentData,
+  type ProjectedTableValues,
+} from "./component-data-projection";
 
 /**
  * The one Query engine entry point a Records table reads through. The composition root supplies
@@ -43,6 +48,8 @@ export type RecordsTableQueryRequest = Readonly<{
   settings: Readonly<Record<string, BlockPropertyValueV2Contract>>;
   pageParameters?: Readonly<Record<string, JsonValue>>;
   continuationToken?: string;
+  /** Headings from the installed definition for declared columns that set no label (field identity to label). */
+  fieldLabels?: Readonly<Record<string, string>>;
 }>;
 
 /**
@@ -57,6 +64,8 @@ export type RecordsTableQueryResolution =
       fieldIds: readonly string[];
       pageSize: number;
       rows: readonly ProtectedQueryRow[];
+      /** The display payload projected from the rows and the declared contract; render this, never `rows`. */
+      display: ProjectedComponentData<ProjectedTableValues>;
       nextContinuationToken?: string;
     }>
   | Readonly<{ kind: "refused" }>
@@ -118,9 +127,18 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       const result = await runner.run(session, selection, built.command);
       if (result.kind === "temporarily_unavailable") return unavailable;
       if (result.kind !== "available" || result.value.outcome !== "completed") return refused;
+      const display = projectRecordsTableData(
+        {
+          settings: request.settings,
+          ...(request.fieldLabels === undefined ? {} : { fieldLabels: request.fieldLabels }),
+        },
+        result.value.rows,
+      );
+      if (display === undefined) return refused;
       return {
         kind: "available",
         fieldIds: built.fieldIds,
+        display,
         pageSize: built.command.pageSize,
         rows: result.value.rows,
         ...(result.value.nextContinuationToken === undefined
