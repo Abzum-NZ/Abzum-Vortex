@@ -84,7 +84,7 @@ creator/audit attribution.
 1. A person proves control of a supported sign-in method.
 2. The platform loads the identity's active organisation accounts and tenant-administrator assignments.
 3. If exactly one organisation account is active, the platform may open it directly. Otherwise it shows the organisation launcher.
-4. After an organisation is chosen, its permanent identifier appears in the tab's `/organizations/[organizationId]` address. That browser value is only an untrusted selection candidate. The server derives the identity, Identity Authority, tenant, organisation account, Access version, session times, and correlation identifier from live trusted state before protected work begins.
+4. After an organisation is chosen, the platform opens that organisation's default application at its ordinary address (see [Addresses and routing](07-applications-pages-and-themes.md#addresses-and-routing)); the `/{tenant_short_name}/{organisation_short_name}` prefix in the tab's address is only an untrusted selection candidate. The server derives the identity, Identity Authority, tenant, organisation account, Access version, session times, and correlation identifier from live trusted state before protected work begins.
 5. Leaving, suspending, or closing an organisation account affects only that organisation. Suspending or closing the cluster-local identity projection prevents entry to every account in that cluster. Environment-wide identity disablement and session revocation are protected Identity Authority operations delivered by [operational readiness](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171), not a meaning assigned to a cluster row.
 6. Removing access takes effect on the next request. Existing requests do not gain a grace period, and cached permission results are invalidated by the Access service's one live version for that organisation. Account activation, reactivation, suspension and closure change Identity state and that version together or change neither.
 
@@ -226,7 +226,7 @@ implements this behaviour using the standard Next.js
 
 The neutral launcher is a minimum safe projection of the organisations the current verified identity may enter. Each entry contains only the tenant and organisation display names and permanent organisation identifier, plus the organisation-account display name when one exists. It does not expose tenant or account identifiers, hierarchy, lifecycle state, logos, applications, roles, groups, permissions, commercial details, or another identity's account. Entries use display-name ordering with permanent identifiers as stable tie-breakers.
 
-No active account shows a neutral empty state; one active account redirects directly to its organisation address; several active accounts show the launcher. Identity or storage unavailability shows a retryable neutral state and does not pretend the account list is empty. An unknown, foreign, suspended, closed, or otherwise unavailable selection has one indistinguishable unavailable result.
+No active account shows a neutral empty state; one active account redirects directly to that organisation's default application address; several active accounts show the launcher. Identity or storage unavailability shows a retryable neutral state and does not pretend the account list is empty. An unknown, foreign, suspended, closed, or otherwise unavailable selection has one indistinguishable unavailable result.
 
 Organisation selection is address-scoped rather than stored as mutable global browser state. Two tabs may therefore hold two different organisation addresses for the same signed-in identity. Every protected request resolves its address candidate again and cannot inherit the other tab's organisation. Switching follows another organisation address and causes a new independently derived request context; organisation-specific caches and server state are never reused across it.
 
@@ -235,13 +235,13 @@ flowchart LR
     S[Verified server session] --> L[Identity safe launcher]
     L --> Z{Active accounts}
     Z -- None --> E[Neutral empty state]
-    Z -- One --> R[Redirect to organisation address]
+    Z -- One --> R[Redirect to default application address]
     Z -- Several --> C[Choose organisation]
-    C --> U[Untrusted organizationId in URL]
+    C --> U[Untrusted organisation address in URL]
     R --> U
     U --> A[Access resolves live tenant, account and version]
     A --> T[One protected database transaction]
-    T --> P[Organisation page]
+    T --> P[Default application landing page]
 ```
 
 An organisation-branded address may start a branded sign-in journey, but the address and branding never determine access. Switching organisations creates a new request context and clears organisation-specific browser and server state.
@@ -254,7 +254,7 @@ The organisation manages its complete role and permission catalogue, including a
 
 ## Administrative portals
 
-Tenant Administration and Organisation Administration are locked, system-installed Vortex applications. They use ordinary modules, records, pages, roles and workflows while calling narrowly protected identity, hierarchy, access, entitlement and data-handling operations. The engine does not contain special portal page logic.
+Tenant Administration and Organisation Administration are locked, system-installed Vortex applications. They use ordinary modules, records, pages, roles and workflows while calling narrowly protected identity, hierarchy, access, entitlement and data-handling operations. The engine does not contain special portal page logic. Like every application, each is reached through its own definition-led application address rather than a reserved administration route, and its administration agent tools come from its own application tool bundle.
 
 Their responsibilities are distinct: Tenant Administration presents tenant structure and organisation lifecycle; Organisation Administration presents organisation accounts, invitations and runtime settings; [IAM](appendices/iam-application.md) presents requests, approvals and grants for tenant-administrator assignments and organisation access. The administration applications do not add parallel role-grant surfaces. They consume the channel-neutral protected operations from [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) and [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40), and read through the [system record types](appendices/core-contract-boundary.md#system-modules) over the one query path, including the runtime settings from [#430](https://github.com/Abzum-NZ/Abzum-Vortex/issues/430); their rendered journeys remain [#72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72) and [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267).
 
