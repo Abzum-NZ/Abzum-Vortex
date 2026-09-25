@@ -96,14 +96,15 @@ export interface PrivateInvalidationSubscriber {
   /**
    * Declares that one placement reads one target identity. Registering the
    * same declaration again is counted, so each returned function removes only
-   * its own registration; the declaration and, once no other declaration of the
-   * same placement and record type remains, its convergence state are forgotten
-   * when the last registration is removed.
+   * its own registration; the declaration is forgotten when the last
+   * registration for it is removed.
    */
   registerWatch(watch: PrivateInvalidationPlacementWatch): () => void;
   /**
    * Consumes one received Broadcast message and reports the placements it made
-   * stale. A malformed, foreign-scope, duplicate or older message reports none.
+   * stale. A malformed or foreign-scope message reports none; a matching notice
+   * reports its placements stale every time it arrives, because it is only a
+   * signal to re-read and repeating it is harmless.
    */
   receive(message: unknown): readonly string[];
   /** Subscribes through the transport; idempotent. */
@@ -157,15 +158,12 @@ const scopeMatches = (
   envelope.applicationRootId.toLowerCase() === scope.applicationRootId.toLowerCase();
 
 /**
- * The convergence key is the placement and the record type, not the record: a
- * notice's `dataVersion` is the data version of its record type (see the query
- * cache dependency contract), so a newer version of one record type supersedes
- * every older notice the same placement received for that type, while a
- * different record type advances independently.
+ * The watch key is the placement, the record type and the optional record. A
+ * notice is no longer ordered by a shared per-record-type data version, so the
+ * subscriber does not keep a convergence version: every notice it accepts asks
+ * its placements to re-read, and the bounded server cache lifetime is what
+ * bounds how long any result may be reused.
  */
-const convergenceKey = (placementId: string, recordTypeId: string): string =>
-  JSON.stringify([placementId, recordTypeId.toLowerCase()]);
-
 const watchKey = (watch: PrivateInvalidationPlacementWatch): string =>
   JSON.stringify([
     watch.placementId,
@@ -234,7 +232,6 @@ export const createPrivateInvalidationSubscriber = (
     string,
     { readonly watch: PrivateInvalidationPlacementWatch; registrations: number }
   >();
-  const versions = new Map<string, number>();
   let stopSubscription: (() => void) | undefined;
 
   const receive = (message: unknown): readonly string[] => {
@@ -243,7 +240,6 @@ export const createPrivateInvalidationSubscriber = (
     const recordTypeKey = envelope.recordTypeId.toLowerCase();
     const noticeRecordKey = envelope.recordId?.toLowerCase();
     const stalePlacements = new Set<string>();
-    const advanced = new Map<string, number>();
     for (const { watch } of watches.values()) {
       if (watch.recordTypeId.toLowerCase() !== recordTypeKey) continue;
       if (
@@ -252,13 +248,9 @@ export const createPrivateInvalidationSubscriber = (
         watch.recordId.toLowerCase() !== noticeRecordKey
       )
         continue;
-      const key = convergenceKey(watch.placementId, watch.recordTypeId);
-      if (envelope.dataVersion <= (versions.get(key) ?? 0)) continue;
-      advanced.set(key, envelope.dataVersion);
       stalePlacements.add(watch.placementId);
     }
     if (stalePlacements.size === 0) return emptyStalePlacements;
-    for (const [key, version] of advanced) versions.set(key, version);
     const placementIds: readonly string[] = Object.freeze([...stalePlacements].sort());
     onStale(placementIds);
     return placementIds;
@@ -280,12 +272,6 @@ export const createPrivateInvalidationSubscriber = (
         entry.registrations -= 1;
         if (entry.registrations > 0) return;
         watches.delete(key);
-        const stillWatched = [...watches.values()].some(
-          ({ watch: other }) =>
-            other.placementId === watch.placementId &&
-            other.recordTypeId.toLowerCase() === watch.recordTypeId.toLowerCase(),
-        );
-        if (!stillWatched) versions.delete(convergenceKey(watch.placementId, watch.recordTypeId));
       };
     },
     receive,
