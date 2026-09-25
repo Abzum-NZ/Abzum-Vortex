@@ -4,7 +4,7 @@
 
 ## Application composition
 
-The locked [IAM application](appendices/iam-application.md) is an ordinary consumer of these application/page primitives. It supplies the single role-grant journey through user-linked records, forms, reviews and flows. Tenant and Organisation Administration may link to IAM but cannot offer competing grant controls; reusable IAM components still invoke the same governed actions. Its name and module names are never renderer or runtime conditions.
+The [IAM application](appendices/iam-application.md) is a [system application](#system-applications) and an ordinary consumer of these application/page primitives. It supplies the single role-grant journey through user-linked records, forms, reviews and flows. Tenant and Organisation Administration may link to IAM but cannot offer competing grant controls; reusable IAM components still invoke the same governed actions. Its name and module names are never renderer or runtime conditions.
 
 An **application** is a published experience for a defined group of people in one organisation. It selects [modules](05-modules-fields-and-relationships.md) and adds navigation, pages, forms, roles, behaviour, and a theme.
 
@@ -22,6 +22,10 @@ flowchart TD
 These application components, including exact Module bindings, are published together under the [application definition](03-composition-and-publication.md#definition-ownership-and-versions). The bound Modules remain independently versioned definitions; their record types, fields and relationships publish with the Module. A page or flow can have its own stable identifier and editing history without acquiring an independent live version.
 
 Installing, updating or withdrawing an application requires its declared application-management operation and current authorised scope; permission to manage roles or assignments alone does not authorise an application lifecycle change. The [Application engine](../build-plan/issue-64-application-runtime.md) supplies this protected operation binding and composes the current Access decision, exact affected scope, existing private lifecycle writer and Activity in the same transaction. It reuses the [Access administration transaction pattern](../build-plan/issue-40-protected-access-administration.md), preserves supplier and final-steward safeguards and exposes no unbound installation or withdrawal endpoint. The [consumer handoff](../build-plan/access-consumer-handoffs.md) keeps that concrete composition with its real operation owner; earlier Access foundations do not fabricate the missing caller or permission.
+
+### System applications
+
+**System applications** — [IAM](appendices/iam-application.md), Organisation Administration, Tenant Administration and the [Landing Zone](#landing-zone-application) — are platform packages installed when an organisation is created. They are ordinary definitions over system modules and consume the same application/page primitives as any other application, but they cannot be uninstalled. Their protected operations and operation bindings stay platform-owned. A person whose role grants the `platform.organization.system_applications.manage` [platform permission](appendices/application-packages.md#permissions) customises them through [extension fields](05-modules-fields-and-relationships.md#extension-points), theme, navigation, the organisation's own dependent applications, or an organisation-owned customised copy ([#1058](https://github.com/Abzum-NZ/Abzum-Vortex/issues/1058)) that replaces the system application's installation, never exists alongside it and receives platform fixes through compare-and-merge ([#721](https://github.com/Abzum-NZ/Abzum-Vortex/issues/721)). A customisation cannot add, remove or retarget a protected-operation binding. Platform upgrades never overwrite customisations, and the organisation always keeps a working way for its steward to manage access ([last-steward safeguard](appendices/iam-application.md#setup-and-removal)).
 
 ## Page-builder implementation handoff
 
@@ -108,7 +112,7 @@ A page or platform screen cannot ship a meaningful operation that exists only as
 
 ### Page and nested placement permissions
 
-Every page retains its required access permission. A nested placement may add
+Every page retains its required access permission. A page in a system application may additionally require an exact [platform administration permission](appendices/platform-permission-catalogue.md); it is enforced exactly like any other declared page requirement, and hidden navigation never replaces the server check. A nested placement may add
 an explicit view permission and use permission. Without an explicit view
 permission it inherits the page and every enclosing placement's view gates;
 an explicit permission can only narrow that inherited access. A refused parent
@@ -328,7 +332,7 @@ Every page and block follows [quality and acceptance](20-quality-and-acceptance.
 
 ## Landing Zone application
 
-The Landing Zone is an ordinary application that gives each person a personal start page inside one organisation. Vortex ships it alongside the other platform applications, and organisation provisioning installs it and marks it the organisation's default application through the same protected installation operation any application uses; provisioning supplies the authority and adds no separate installation path. An organisation may afterwards change or replace that default like any other application.
+The Landing Zone is an ordinary application and a [system application](#system-applications) that gives each person a personal start page inside one organisation. Vortex ships it alongside the other system applications, and organisation provisioning installs it and marks it the organisation's default application through the same protected installation operation any application uses; provisioning supplies the authority and adds no separate installation path. An organisation may afterwards choose another default application, but cannot uninstall the Landing Zone.
 
 Each person's tiles are records owned by their organisation account, in application-contained storage, under permissions whose only record scope is ownership; no permission in the application reads another person's tiles. A tile names an application, a page, a record or an external address and carries an open behaviour and a favourite flag and order.
 
