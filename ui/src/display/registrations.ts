@@ -15,6 +15,7 @@ import {
   TABLE_BLOCK_RELEASE_1_1_0,
   TABLE_BLOCK_RELEASE_1_2_0,
   TABLE_BLOCK_RELEASE_1_3_0,
+  TABLE_BLOCK_RELEASE_1_4_0,
   TEXT_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE_1_1_0,
 } from "@vortex/contracts";
@@ -178,6 +179,13 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
     // Release 1.3.0 adds configured row behaviours; the same parser reads them.
     Object.freeze({
       metadata: TABLE_BLOCK_RELEASE_1_3_0,
+      render: TableDisplay,
+      parsePayload: TABLE_PAYLOAD_PARSER,
+    }),
+    // Release 1.4.0 adds the interactive filter, search, sort, paging and selection controls and
+    // each action's declared capability; the same parser reads them.
+    Object.freeze({
+      metadata: TABLE_BLOCK_RELEASE_1_4_0,
       render: TableDisplay,
       parsePayload: TABLE_PAYLOAD_PARSER,
     }),

@@ -111,6 +111,18 @@ export const TABLE_BLOCK_RELEASE_1_3_0: PlatformBlockReleaseV2 = release(
   sources.TABLE_BLOCK_RELEASE_1_3_0,
 );
 
+/**
+ * Release 1.4.0 of the Records table adds the interactive controls (#1131): a `filter_changed`
+ * event for each configured filterable field and a `search_changed` event for the search box, so
+ * sorting, filtering, searching and paging all reach the Query engine as data events (#584)
+ * instead of being applied to the returned page. A declared row or bulk action may also name the
+ * record action capability it needs (update, delete or restore), so the renderer hides a row
+ * command the row's own per-row capabilities refuse. Earlier releases stay published unchanged.
+ */
+export const TABLE_BLOCK_RELEASE_1_4_0: PlatformBlockReleaseV2 = release(
+  sources.TABLE_BLOCK_RELEASE_1_4_0,
+);
+
 /** Exact immutable metadata release for the text input block. */
 export const TEXT_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.TEXT_INPUT_BLOCK_RELEASE);
 
@@ -174,7 +186,7 @@ export const LINK_TILES_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.
 /** Exact immutable metadata release for the view filter block. */
 export const VIEW_FILTER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.VIEW_FILTER_BLOCK_RELEASE);
 
-/** All seventeen immutable display block releases: the seven 1.0.0 releases, their 1.1.0 successors, the two 1.2.0 data-contract releases and the 1.3.0 row-behaviour table release. */
+/** All eighteen immutable display block releases: the seven 1.0.0 releases, their 1.1.0 successors, the two 1.2.0 data-contract releases, the 1.3.0 row-behaviour table release and the 1.4.0 interactive-controls table release. */
 export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   TEXT_BLOCK_RELEASE,
   RICH_TEXT_BLOCK_RELEASE,
@@ -193,6 +205,7 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   TABLE_BLOCK_RELEASE_1_2_0,
   RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
   TABLE_BLOCK_RELEASE_1_3_0,
+  TABLE_BLOCK_RELEASE_1_4_0,
 ]);
 
 /** All thirteen immutable form, layout and action block releases. */
@@ -230,7 +243,7 @@ export const NAVIGATION_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Obje
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
 ]);
 
-/** All thirty-six immutable platform block releases registered for the page builder. */
+/** All thirty-seven immutable platform block releases registered for the page builder. */
 export const PLATFORM_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   ...DISPLAY_BLOCK_RELEASES,
   ...CONTROL_BLOCK_RELEASES,

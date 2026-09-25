@@ -523,6 +523,10 @@ export const recordsTableColumnAlignments = ["start", "center", "end"] as const;
 export const recordsTableColumnPriorities = ["essential", "high", "medium", "low"] as const;
 export const recordsTableSelectionModes = ["none", "single", "multiple"] as const;
 
+/** The record action kinds a configured row or bulk action may require of the viewer. */
+export const recordsTableActionCapabilities = ["update", "delete", "restore"] as const;
+export type RecordsTableActionCapability = (typeof recordsTableActionCapabilities)[number];
+
 /**
  * One declared Records table column. `field` is the authored qualified field when read from a
  * source document and the canonical field identity when read from compiled settings.
@@ -553,11 +557,15 @@ export type RecordsDisplayMessages = Readonly<{
 /**
  * One named row action or bulk action. `eventId` is the stable identity of the flow binding the
  * command runs; it is unique across one placement's declared behaviours, so a click reaches
- * exactly one flow.
+ * exactly one flow. `capability`, when declared, names the record action the command needs: the
+ * renderer hides it for a row whose per-row capabilities do not include that kind. A command that
+ * declares no capability (an open, read or custom command) stays shown, and the server still
+ * re-checks every action it runs.
  */
 export type RecordsTableActionContract = Readonly<{
   eventId: string;
   label: string;
+  capability?: RecordsTableActionCapability;
 }>;
 
 /** A row click held as a binding to a flow; the bound flow decides what opening the row does. */
@@ -637,6 +645,15 @@ const settingField = (value: ComponentSettingValue | undefined): string | undefi
 const settingFlag = (value: ComponentSettingValue | undefined): boolean =>
   value?.kind === "boolean" && value.value;
 
+/** A choice setting read only when it names one of the allowed values; otherwise absent. */
+const settingOptionalChoice = <Choice extends string>(
+  value: ComponentSettingValue | undefined,
+  allowed: readonly Choice[],
+): Choice | undefined =>
+  value?.kind === "choice" && (allowed as readonly string[]).includes(value.value)
+    ? (value.value as Choice)
+    : undefined;
+
 const displayMessages = (settings: SettingsRecord): RecordsDisplayMessages => {
   const empty = settingText(settings["empty_message"]);
   const refused = settingText(settings["refused_message"]);
@@ -663,7 +680,12 @@ const readRowActionList = (
     if (action === undefined) return [];
     const eventId = settingEventId(action["event_id"]);
     const label = settingText(action["label"]);
-    return eventId === undefined || label === undefined ? [] : [{ eventId, label }];
+    if (eventId === undefined || label === undefined) return [];
+    const capability = settingOptionalChoice(
+      action["capability"],
+      recordsTableActionCapabilities,
+    );
+    return [{ eventId, label, ...(capability === undefined ? {} : { capability }) }];
   });
 
 /**

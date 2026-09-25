@@ -91,14 +91,6 @@ export type ApplicationPreviewArtifact = Readonly<{
   suppressedEffects: readonly FlowEffectKind[];
 }>;
 
-const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.freeze([
-  "refresh",
-  "row_action",
-  "selection_changed",
-  "sort_changed",
-  "page_changed",
-]);
-
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 

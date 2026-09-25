@@ -165,6 +165,8 @@ export type DisplaySemanticEventName = Extract<
   | "row_clicked"
   | "row_action"
   | "selection_changed"
+  | "filter_changed"
+  | "search_changed"
   | "sort_changed"
   | "page_changed"
   | "bulk_action"
@@ -187,6 +189,13 @@ export type DisplaySemanticEvent =
   | Readonly<{ event: "row_action"; eventId?: string; recordId: string }>
   | Readonly<{ event: "selection_changed"; recordId: string; selected: boolean }>
   | Readonly<{
+      event: "filter_changed";
+      /** The filterable field whose control changed; empty text clears that field's filter. */
+      field: string;
+      value: string;
+    }>
+  | Readonly<{ event: "search_changed"; query: string }>
+  | Readonly<{
       event: "sort_changed";
       columnKey: string;
       direction: "ascending" | "descending";
@@ -197,6 +206,8 @@ export type DisplaySemanticEvent =
       event: "inline_edit";
       eventId: string;
       recordId: string;
+      /** The record revision the editor read; a stale one is refused by the server. */
+      revision?: number;
       field: string;
       value: DisplayCellValue;
     }>;
@@ -220,6 +231,8 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "row_clicked",
   "row_action",
   "selection_changed",
+  "filter_changed",
+  "search_changed",
   "sort_changed",
   "page_changed",
   "bulk_action",
