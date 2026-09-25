@@ -1,4 +1,4 @@
-create or replace function vortex_module.read_application_address_candidates(
+create or replace function vortex_access.read_application_address_candidates(
   p_identity_id uuid,
   p_tenant_short_name text,
   p_organization_short_name text
@@ -204,10 +204,10 @@ begin
 end
 $function$;
 
-revoke all on function vortex_module.read_application_address_candidates(uuid, text, text)
+revoke all on function vortex_access.read_application_address_candidates(uuid, text, text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_module.read_application_address_candidates(uuid, text, text)
+grant execute on function vortex_access.read_application_address_candidates(uuid, text, text)
   to vortex_runtime;
 
-comment on function vortex_module.read_application_address_candidates(uuid, text, text) is
+comment on function vortex_access.read_application_address_candidates(uuid, text, text) is
   'Private App candidate read for one exact live human organisation address; only App may project metadata after current page Access decisions.';

@@ -24,6 +24,7 @@ export * from "./extension-contributions";
 export * from "./application-preview";
 export * from "./application-preview-composition";
 export * from "./validation";
+export * from "./builder-authority";
 export * from "./definition-store";
 export * from "./source-identities";
 export * from "./saved-condition-revisions";

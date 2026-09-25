@@ -21,6 +21,7 @@ import {
   type StoredDefinitionDraft,
 } from "@vortex/contracts";
 import type { RequestDatabaseTransaction } from "@vortex/db";
+import { BuilderAuthorityError, type BuilderAuthority } from "./builder-authority";
 import {
   DefinitionConsumerReadError,
   isLiveDefinitionSystemContext,
@@ -42,6 +43,14 @@ import { validateDefinitionSource } from "./validation";
  * services. It owns no storage, holds no authority of its own and never reads the caller's
  * request for identity or permission: every storage operation requires a live system session
  * context and runs over the caller's transaction, which must already be bound to that context.
+ *
+ * Builder authority is not optional. Creating, saving, restoring, preparing and publishing each
+ * require the builder permissions (`definition_drafts.manage` for a draft change,
+ * `definition_releases.manage` for publication, plus `system_applications.manage` for a system
+ * application), decided server-side by the required `BuilderAuthority` before anything is read or
+ * written. The authority is bound to the caller's own selected organisation, which must be the
+ * context's organisation. A refusal is thrown as the safe `BuilderAuthorityError` (a permission or
+ * recent-authentication refusal, never a validation error) so the transaction rolls back.
  *
  * Installation is deliberately outside this surface. No operation here accepts, reads or writes
  * an installation, so publishing or restoring an Application can only append a release or write a
@@ -252,7 +261,12 @@ const run = async <Value>(
     const code = serviceCode(error);
     const reason = code === undefined ? undefined : reasonByCode[code];
     if (reason === undefined) {
-      if (code !== undefined || error instanceof ApplicationLifecycleError) throw error;
+      if (
+        code !== undefined ||
+        error instanceof ApplicationLifecycleError ||
+        error instanceof BuilderAuthorityError
+      )
+        throw error;
       throw new ApplicationLifecycleError("APPLICATION_LIFECYCLE_FAILED");
     }
     const errorCode = dependencyCodeCatalogue[code!];
@@ -280,7 +294,7 @@ const correlationOf = (candidate: unknown): string => {
  * consumer read apply. The store itself reads its authority from the bound transaction, so the
  * lifecycle checks the supplied context here and compares every stored result against it.
  */
-const checkContext = (
+const checkSystemContext = (
   operation: ApplicationLifecycleOperation,
   candidate: unknown,
   options: RefusalOptions = {},
@@ -349,10 +363,28 @@ export type ApplicationLifecycleServices = Readonly<{
   publication: ReturnType<typeof createDatabaseDefinitionPublicationService>;
   history: ReturnType<typeof createDatabaseDefinitionHistoryService>;
   consumerRead: ReturnType<typeof createDatabaseDefinitionConsumerReadService>;
+  /** The caller's own builder authority; every draft change and publication requires it. */
+  authority: BuilderAuthority;
 }>;
 
 /** Composes the lifecycle over already-built Definition services. */
 export const createApplicationLifecycleService = (services: ApplicationLifecycleServices) => {
+  /**
+   * The live system context, and the same organisation the builder authority decides for. A
+   * context for another organisation is refused before any authority or storage is consulted.
+   */
+  const checkContext = (
+    operation: ApplicationLifecycleOperation,
+    candidate: unknown,
+    options: RefusalOptions = {},
+  ): CheckedContext => {
+    const checked = checkSystemContext(operation, candidate, options);
+    return checked.status === "ok" &&
+      checked.context.organizationId.toLowerCase() !== services.authority.organizationId.toLowerCase()
+      ? refuse(operation, "context_refused", checked.context.correlationId, options)
+      : checked;
+  };
+
   /**
    * Resolves an addressed root as an Application of the caller's organisation through the
    * kind-checked history read, so a Module root or another organisation's root is refused as not
@@ -548,10 +580,16 @@ export const createApplicationLifecycleService = (services: ApplicationLifecycle
 export const createDatabaseApplicationLifecycleService = (
   catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
   transaction: RequestDatabaseTransaction,
+  authority: BuilderAuthority,
 ) =>
   createApplicationLifecycleService({
-    store: createDefinitionStore(transaction),
-    publication: createDatabaseDefinitionPublicationService(catalogueDefinition, transaction),
-    history: createDatabaseDefinitionHistoryService(catalogueDefinition, transaction),
+    store: createDefinitionStore(transaction, authority),
+    publication: createDatabaseDefinitionPublicationService(
+      catalogueDefinition,
+      transaction,
+      authority,
+    ),
+    history: createDatabaseDefinitionHistoryService(catalogueDefinition, transaction, authority),
     consumerRead: createDatabaseDefinitionConsumerReadService(catalogueDefinition, transaction),
+    authority,
   });

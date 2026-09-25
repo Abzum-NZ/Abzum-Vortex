@@ -48,6 +48,12 @@ declare
   filter_types jsonb := '{}'::jsonb;
   filter_nulls jsonb := '{}'::jsonb;
   filter_expressions text[] := array[]::text[];
+  filter_field_columns jsonb := '{}'::jsonb;
+  filter_field_database_types jsonb := '{}'::jsonb;
+  filter_read_time_expressions jsonb := '{}'::jsonb;
+  filter_plan jsonb;
+  filter_predicate text;
+  filter_parameters jsonb := '[]'::jsonb;
   input_item jsonb;
   input_key text;
   input_value jsonb;
@@ -282,7 +288,8 @@ begin
     ) as referenced(value);
     foreach field_key in array filter_ids loop
       -- Field values are keyed by lowercase identifier; so must the tree be.
-      if field_key <> pg_catalog.lower(field_key) or not (fields_by_id ? field_key) then
+      if field_key <> pg_catalog.lower(field_key) or not (fields_by_id ? field_key)
+        or coalesce((fields_by_id -> field_key ->> 'filterable')::boolean, false) is not true then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
       end if;
       field_kind := fields_by_id -> field_key ->> 'type';
@@ -299,11 +306,11 @@ begin
         when field_kind = 'date' then 'date'
         when field_kind = 'date_time' then 'date_time'
         when field_kind = 'several_choices' then 'text_collection'
-        when field_kind in ('table', 'attachment') then 'opaque_json'
+        when field_kind in ('table', 'attachment', 'formatted_text') then 'opaque_json'
         when field_kind in ('link', 'link_to_one_of_several') then 'record_reference'
         when field_kind = 'link_to_person' then 'organization_account_reference'
         when field_kind in (
-          'text', 'long_text', 'formatted_text', 'choice', 'reference_number',
+          'text', 'long_text', 'choice', 'reference_number',
           'email_address', 'phone_number', 'web_address'
         ) then 'text'
         else null end;
@@ -318,6 +325,12 @@ begin
         raise exception using errcode = '55000',
           message = 'Record storage disagrees with the installed definition';
       end if;
+      filter_field_columns := filter_field_columns || pg_catalog.jsonb_build_object(
+        field_key, mapping_row.physical_column_token
+      );
+      filter_field_database_types := filter_field_database_types || pg_catalog.jsonb_build_object(
+        field_key, mapping_row.database_value_type
+      );
       filter_types := filter_types || pg_catalog.jsonb_build_object(field_key, semantic_type);
       filter_nulls := filter_nulls || pg_catalog.jsonb_build_object(field_key, null::jsonb);
       read_time_field := fields_by_id -> field_key ->> 'type' = 'calculation'
@@ -332,6 +345,9 @@ begin
         if read_time_sql is null then
           return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
         end if;
+        filter_read_time_expressions := filter_read_time_expressions || pg_catalog.jsonb_build_object(
+          field_key, read_time_sql
+        );
         filter_expressions := pg_catalog.array_append(filter_expressions, pg_catalog.format(
           '%L, %s', field_key, pg_catalog.format('pg_catalog.to_jsonb(%s)', read_time_sql)
         ));
@@ -419,6 +435,28 @@ begin
       perform vortex_access.evaluate_query_condition_internal(
         filter_condition, filter_types, filter_nulls, parameter_types, parameter_values, true
       );
+    exception when invalid_parameter_value then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+    end;
+  end if;
+
+  filter_predicate := 'true';
+  if filter_condition is not null then
+    begin
+      filter_plan := vortex_record.compile_query_filter_internal(
+        filter_condition,
+        filter_types,
+        filter_field_columns,
+        filter_field_database_types,
+        fields_by_id,
+        filter_read_time_expressions,
+        parameter_types,
+        parameter_values,
+        9,
+        0
+      );
+      filter_predicate := coalesce(filter_plan ->> 'predicate', 'true');
+      filter_parameters := coalesce(filter_plan -> 'parameters', '[]'::jsonb);
     exception when invalid_parameter_value then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
     end;
@@ -526,6 +564,7 @@ begin
      where stored.organisation_id = $1
        and stored.lifecycle_state = ''active''
        and %s
+       and (%s)
        and (%s)%s
      order by %s, stored.record_id asc
      limit $5',
@@ -548,6 +587,7 @@ begin
     case when catalogue_row.storage_scope = 'application_contained'
       then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
     access_sql,
+    filter_predicate,
     keyset_sql,
     pg_catalog.array_to_string(order_terms, ', ')
   );
@@ -555,7 +595,8 @@ begin
   for scan_record in execute scan_sql
     using context_organization_id, context_application_root_id, after_sort_key,
       after_record_id, scan_limit + 1, access_plan.owner_account_id,
-      access_plan.owner_group_ids, access_plan.shared_record_ids
+      access_plan.owner_group_ids, access_plan.shared_record_ids,
+      filter_parameters
   loop
     examined := examined + 1;
     if examined > scan_limit then
@@ -652,4 +693,4 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
   to vortex_request;
 
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb) is
-  'One bounded keyset page of rows readable through read_record for one installed Module query, with only the declared Record system values, or one refusal before any row is exposed; narrows the scan to the caller''s owner, owner-group and direct-share records where those routes have an exact table form, so a limited reader gets full pages, while read_record still decides every returned row; works out read-time fields, such as a deadline-passed calculation, inside the query at one statement timestamp in the organisation time zone, so no query is refused for freshness.';
+  'One bounded keyset page of rows readable through read_record for one installed Module query, with only the declared Record system values, or one refusal before any row is exposed; requires every filtered field to be declared filterable, pushes supported typed conditions into the candidate scan with bound values, narrows the scan to the caller''s owner, owner-group and direct-share records where those routes have an exact table form, and still decides every returned row through read_record; works out read-time fields, such as a deadline-passed calculation, inside the query at one statement timestamp in the organisation time zone, so no query is refused for freshness.';

@@ -24,6 +24,8 @@ import {
   containedComponentIdSchema,
   recordTypeIdSchema,
   fieldIdSchema,
+  flowContractVersion,
+  flowTaskMappingForActionEffect,
   normalizeExactDecimal,
   readModuleSourceRecordOwnershipMode,
   type ApplicationCompilationOutputV2,
@@ -38,6 +40,12 @@ import {
   type ModuleSourceDocument,
   type CompiledFlowSet,
   type FlowDefinition,
+  type FlowFormula,
+  type FlowReference,
+  type FlowInputDeclaration,
+  type FlowTask,
+  type FlowValue,
+  type JsonValue,
   type RuleGraph,
   type DefinitionCompilationRequest,
   type ApplicationSourceDocumentV2,
@@ -3031,6 +3039,315 @@ function fieldSettings(
   }
 }
 
+/**
+ * The task version every compiled named-action flow pins. A named action is compiled to a
+ * `transaction` flow (#1062); until #1063 runs it through the flow runner, the action's own
+ * execution path is unchanged and this flow is the compile-time home of its behaviour
+ * (architecture decision 1, 08 §Actions).
+ */
+const ACTION_FLOW_TASK_VERSION = "1.0.0" as const;
+
+/** The flow value type of a compiled Module action input. */
+function actionFlowInputType(inputType: string): FlowInputDeclaration["type"] {
+  // An action `number` input accepts any finite number, so it is a decimal, never a whole number.
+  if (inputType === "number") return "decimal_number";
+  if (inputType === "boolean") return "yes_no";
+  return inputType as FlowInputDeclaration["type"];
+}
+
+/** A text literal flow value, for identity, key and message properties. */
+const flowTextValue = (value: string): FlowValue => ({
+  kind: "literal",
+  literal: { type: "text", value },
+});
+
+const flowReferenceValue = (reference: FlowReference): FlowValue => ({ kind: "reference", reference });
+
+/**
+ * What an action value can read inside its compiled flow: the subject is the record the action
+ * runs on, so its fields are `{{ trigger.record.<field> }}` reads and the whole subject is the
+ * implicit typed `subjectInput` record input.
+ */
+type ActionFlowScope = Readonly<{
+  subjectFieldKeyById: ReadonlyMap<string, string>;
+  subjectInput: string;
+}>;
+
+const subjectFieldReference = (fieldId: unknown, scope: ActionFlowScope): FlowReference => {
+  const field = scope.subjectFieldKeyById.get(String(fieldId));
+  if (field === undefined) fail("vortex.definition.invalid_compilation_output", "invalid_value");
+  return { source: "trigger_record", field };
+};
+
+/**
+ * Lowers one compiled action value source to the flow value it means. Every dynamic source becomes
+ * a typed flow reference: an action input, a subject field, the subject record input, or the
+ * trusted run context's actor and time. Only a literal stays a value.
+ */
+function actionFlowValue(value: unknown, scope: ActionFlowScope): FlowValue {
+  const source = asObject(value);
+  switch (source.source) {
+    case "literal":
+      return { kind: "literal", literal: { type: "json", value: source.value as JsonValue } };
+    case "input":
+      return flowReferenceValue({ source: "input", name: String(source.inputKey) });
+    case "subject_field":
+      return flowReferenceValue(subjectFieldReference(source.fieldId, scope));
+    case "subject_record":
+      return flowReferenceValue({ source: "input", name: scope.subjectInput });
+    case "current_actor":
+      return flowReferenceValue({ source: "execution_actor" });
+    case "current_time":
+      return flowReferenceValue({ source: "execution_now" });
+    default:
+      return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+  }
+}
+
+/**
+ * The `field_values` property of a compiled action's record task: field id to flow value. A flow
+ * value is a single value, so the per-field map travels as JSON whose every entry is itself a
+ * flow value (a typed literal or typed reference), never an action value source. Typing the map
+ * itself needs a field-values-of-flow-values property, which #1063 adds with the one apply record
+ * changes call.
+ */
+const actionFlowFieldValues = (
+  values: Readonly<Record<string, unknown>>,
+  scope: ActionFlowScope,
+): FlowValue => ({
+  kind: "literal",
+  literal: {
+    type: "json",
+    value: Object.fromEntries(
+      Object.entries(values).map(([fieldId, value]) => [
+        fieldId,
+        actionFlowValue(value, scope) as unknown as JsonValue,
+      ]),
+    ),
+  },
+});
+
+/** One registered task of a compiled named-action flow, pinned to the registry task version. */
+const actionEffectTask = (
+  id: string,
+  type: string,
+  properties: Record<string, FlowValue>,
+): FlowTask => ({ id, type, version: ACTION_FLOW_TASK_VERSION, properties });
+
+/**
+ * Lowers a compiled action precondition to the flow formula the one flow evaluator reads. A
+ * subject field becomes a `trigger.record` read and an action parameter a declared input
+ * reference, so the flow names no value as text.
+ */
+function actionPreconditionFormula(node: unknown, scope: ActionFlowScope): FlowFormula {
+  const value = asObject(node);
+  if (value.kind === "all" || value.kind === "any") {
+    const children = (value.conditions as unknown[]).map((entry) =>
+      actionPreconditionFormula(entry, scope),
+    );
+    if (children.length === 1) return children[0]!;
+    return { op: value.kind === "all" ? "and" : "or", args: children };
+  }
+  if (value.kind === "not")
+    return { op: "not", arg: actionPreconditionFormula(value.condition, scope) };
+  const operand = (entry: unknown): FlowFormula => {
+    const source = asObject(entry);
+    if (source.source === "field")
+      return { op: "reference", reference: subjectFieldReference(source.fieldId, scope) };
+    if (source.source === "parameter")
+      return { op: "reference", reference: { source: "input", name: String(source.key) } };
+    return { op: "literal", type: "json", value: source.value as JsonValue };
+  };
+  const left = operand(value.left);
+  const rightOperand = (): FlowFormula => operand(value.right);
+  switch (String(value.operator)) {
+    case "equals":
+      return { op: "eq", left, right: rightOperand() };
+    case "not_equals":
+      return { op: "neq", left, right: rightOperand() };
+    case "greater_than":
+      return { op: "gt", left, right: rightOperand() };
+    case "greater_than_or_equal":
+      return { op: "gte", left, right: rightOperand() };
+    case "less_than":
+      return { op: "lt", left, right: rightOperand() };
+    case "less_than_or_equal":
+      return { op: "lte", left, right: rightOperand() };
+    case "contains":
+      return { op: "contains", left, right: rightOperand() };
+    case "not_contains":
+      return { op: "not", arg: { op: "contains", left, right: rightOperand() } };
+    case "in":
+    case "not_in": {
+      const authored = asObject(value.right);
+      const raw = authored.source === "value" ? authored.value : undefined;
+      const options = Array.isArray(raw)
+        ? raw.map(
+            (entry): FlowFormula => ({ op: "literal", type: "json", value: entry as JsonValue }),
+          )
+        : [rightOperand()];
+      const membership: FlowFormula = { op: "in", value: left, options };
+      return String(value.operator) === "not_in" ? { op: "not", arg: membership } : membership;
+    }
+    case "is_empty":
+      return { op: "is_empty", arg: left };
+    case "is_not_empty":
+      return { op: "is_not_empty", arg: left };
+    default:
+      return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+  }
+}
+
+/**
+ * Compiles one Module named action to its `transaction` flow (#1062): the action's own permanent
+ * identity, typed inputs (plus the implicit subject record input) and invocation permission. The
+ * precondition becomes an If task whose otherwise branch refuses, as the action refuses, and the
+ * ordered effects become the registry record, event and change tasks.
+ *
+ * Placement: the registry lets `record.set_fields` and `event.announce` run in a transaction on
+ * the record being saved, which for an action is its subject. It keeps `record.create`,
+ * `record.changes` and `record.delete` out of transactions, because architecture decision 1 lets a
+ * transaction flow change only the record being saved and every BeforeSave rule shares that run
+ * location. A named action's other-record changes are one apply record changes call (decision
+ * "Every record task calls one protected operation"), so how the registry admits them for action
+ * flows alone is #1063's, with execution. Likewise the flow validator accepts `trigger.record`
+ * reads only in a flow with a record trigger, while an action starts through its binding with its
+ * subject as the record being saved. These flows are therefore not passed through the flow
+ * validator yet; `flowSchema` still validates them.
+ */
+function compileActionFlow(
+  action: JsonObject,
+  canonicalAction: JsonObject,
+  flowKey: string,
+  namespace: string,
+  subjectFieldKeyById: ReadonlyMap<string, string>,
+  invocationPermissionId: FlowDefinition["invocationPermissionId"],
+): FlowDefinition {
+  const actionInputs: Record<string, FlowInputDeclaration> = {};
+  for (const input of canonicalAction.inputs as JsonObject[]) {
+    const recordTypes = (input.recordTypes as JsonObject[] | undefined) ?? [];
+    actionInputs[String(input.key)] = {
+      type: actionFlowInputType(String(input.type)),
+      required: input.required === true,
+      ...(recordTypes.length > 0
+        ? {
+            recordTypeIds: recordTypes.map((entry) =>
+              String(entry.recordTypeId),
+            ) as FlowInputDeclaration["recordTypeIds"],
+          }
+        : {}),
+    };
+  }
+  // The subject is `record`, as in the default Save flow, unless the action declares its own input
+  // of that name.
+  let subjectInput = "record";
+  for (let suffix = 1; Object.hasOwn(actionInputs, subjectInput); suffix += 1)
+    subjectInput = suffix === 1 ? "subject_record" : `subject_record_${suffix}`;
+  const subjectRecordTypeId = String(canonicalAction.subjectRecordTypeId);
+  const scope: ActionFlowScope = { subjectFieldKeyById, subjectInput };
+
+  const effectTasks: FlowTask[] = (canonicalAction.effects as JsonObject[]).map(
+    (effect, effectIndex) => {
+      const mapping =
+        flowTaskMappingForActionEffect[
+          String(effect.kind) as keyof typeof flowTaskMappingForActionEffect
+        ];
+      if (mapping === undefined || mapping.kind !== "task")
+        return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+      const id = `effect_${effectIndex + 1}`;
+      switch (effect.kind) {
+        case "set_field":
+          return actionEffectTask(id, mapping.type, {
+            values: actionFlowFieldValues({ [String(effect.fieldId)]: effect.value }, scope),
+          });
+        case "create_record":
+          return actionEffectTask(id, mapping.type, {
+            record_type: flowTextValue(String(asObject(effect.recordType).recordTypeId)),
+            values: actionFlowFieldValues(asObject(effect.values), scope),
+          });
+        case "copy_relationships":
+          return actionEffectTask(id, mapping.type, {
+            changes: {
+              kind: "literal",
+              literal: {
+                type: "json",
+                value: [
+                  {
+                    kind: "copy_relationships",
+                    relationshipIds: effect.relationshipIds as JsonValue,
+                    subject: flowReferenceValue({ source: "input", name: subjectInput }),
+                    target: flowReferenceValue({
+                      source: "input",
+                      name: String(effect.targetInputKey),
+                    }),
+                  } as unknown as JsonValue,
+                ],
+              },
+            },
+          });
+        case "soft_delete_subject":
+          return actionEffectTask(id, mapping.type, {
+            record_type: flowTextValue(subjectRecordTypeId),
+            record: flowReferenceValue({ source: "input", name: subjectInput }),
+          });
+        case "announce_event":
+          return actionEffectTask(id, mapping.type, {
+            event: flowTextValue(String(effect.eventKey)),
+          });
+        default:
+          return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+      }
+    },
+  );
+
+  const precondition = canonicalAction.precondition;
+  const tasks: FlowTask[] =
+    precondition === undefined
+      ? effectTasks
+      : [
+          {
+            id: "precondition",
+            type: "if",
+            condition: actionPreconditionFormula(precondition, scope),
+            then: effectTasks,
+            else: [
+              actionEffectTask("precondition_refused", "rule.refuse", {
+                reason: flowTextValue("precondition_not_met"),
+                message: flowTextValue("This action is not available for the record as it is now."),
+              }),
+            ],
+          },
+        ];
+
+  const label = String(action.label);
+  return {
+    contractVersion: flowContractVersion,
+    id: canonicalAction.actionId as unknown as FlowDefinition["id"],
+    key: flowKey,
+    ...(/\{\{|\{%/.test(label) ? {} : { description: label }),
+    labels: {},
+    namespace,
+    execution: "transaction",
+    runAs: { kind: "saver" },
+    ...(invocationPermissionId === undefined ? {} : { invocationPermissionId }),
+    inputs: {
+      [subjectInput]: {
+        type: "record_reference",
+        required: true,
+        recordTypeIds: [subjectRecordTypeId] as FlowInputDeclaration["recordTypeIds"],
+        description: "The record the action runs on.",
+      },
+      ...actionInputs,
+    },
+    variables: {},
+    triggers: [],
+    tasks,
+    outputs: {},
+    errors: [],
+    finally: [],
+  };
+}
+
 function compileModule(
   source: JsonObject,
   resolution: Resolution,
@@ -3209,6 +3526,44 @@ function compileModule(
         return { kind: "soft_delete_subject" };
       }),
     };
+  });
+  // Every Module named action also compiles to one `transaction` flow (#1062); the action's own
+  // execution path is unchanged until #1063 runs the flow.
+  const usedFlowKeys = new Set(flows.map((flow) => String(flow.key)));
+  const actionFlows = (body.actions as JsonObject[]).map((action, actionIndex) => {
+    const recordKey = String(action.record_type);
+    const subjectRecord = (body.record_types as JsonObject[]).find(
+      (candidate) => String(candidate.key) === recordKey,
+    );
+    const subjectFieldKeyById = new Map<string, string>();
+    for (const field of (subjectRecord?.fields as JsonObject[] | undefined) ?? [])
+      subjectFieldKeyById.set(
+        resolution.id(definitionKey, "field", String(field.id), `record:${recordKey}`),
+        String(field.key),
+      );
+    // The flow key is the action key's last segment, kept a builder key with room for a suffix
+    // that separates it from an authored flow or another action of the same name.
+    const keySegment = String(action.key).slice(String(action.key).lastIndexOf(".") + 1);
+    const baseKey = keySegment.slice(0, 32).replace(/_+$/, "");
+    let flowKey = baseKey;
+    for (let suffix = 1; usedFlowKeys.has(flowKey); suffix += 1) flowKey = `${baseKey}_${suffix}`;
+    usedFlowKeys.add(flowKey);
+    const canonicalAction = actions[actionIndex]! as unknown as JsonObject;
+    return compileActionFlow(
+      action,
+      canonicalAction,
+      flowKey,
+      definitionKey,
+      subjectFieldKeyById,
+      // An action with permission alternatives has no single invocation permission; a flow holds
+      // exactly one, so its binding keeps checking the alternatives (#1063).
+      canonicalAction.permissionKey === undefined
+        ? undefined
+        : (resolution.permission(
+            String(canonicalAction.permissionKey),
+            permissionOwners,
+          ) as FlowDefinition["invocationPermissionId"]),
+    );
   });
   const events = (body.events as JsonObject[]).map((event) => {
     const record = qualifiedForRecord(String(event.record_type));
@@ -3454,7 +3809,7 @@ function compileModule(
       permissions,
       actions,
       events,
-      flows,
+      flows: [...flows, ...actionFlows],
       rules,
       sharingConditions,
       extensionPoints: (body.extension_points as JsonObject[]).map((point) => ({
@@ -5745,6 +6100,25 @@ function compileParsedModuleV3Request(
         canonicalPath: ["content", "flows", ...entry.canonicalPath],
         ...(entry.sourcePath ? { sourcePath: ["body", "flows", ...entry.sourcePath] } : {}),
       });
+    // A compiled named action's flow shares the action's permanent identity, so every canonical
+    // leaf of it traces to the action declaration that produced it.
+    const actionIndexById = new Map(
+      (canonical.content.actions as unknown as JsonObject[]).map((action, index) => [
+        String(action.actionId),
+        index,
+      ]),
+    );
+    (canonical.content.flows as unknown as JsonObject[]).forEach((flow, canonicalIndex) => {
+      const actionIndex = actionIndexById.get(String(flow.id));
+      if (actionIndex === undefined) return;
+      for (const leaf of leafPaths(flow))
+        provenance.push({
+          canonicalPath: ["content", "flows", canonicalIndex, ...leaf],
+          origin: "source",
+          sourcePath: ["body", "actions", actionIndex, "id"],
+          ruleCode: TRANSFORM_RULE,
+        });
+    });
     rules.forEach((rule, canonicalIndex) => {
       for (const leaf of leafPaths(canonical.content.rules[canonicalIndex]))
         provenance.push({

@@ -209,7 +209,15 @@ begin
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
         'permissionId', '87c96495-c806-4692-9bc2-250ddb10613c'
       ),
-      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'recentAuthentication', case
+        when operation_name in (
+          'create_custom_from_template', 'accept_new_application_role',
+          'accept_application_role_revision'
+        ) then pg_catalog.jsonb_build_object(
+          'kind', 'primary', 'maximumAgeSeconds', 900
+        )
+        else pg_catalog.jsonb_build_object('kind', 'none')
+      end,
       'authority', pg_catalog.jsonb_build_object(
         'kind', 'delegated_management',
         'before', authority_before,
