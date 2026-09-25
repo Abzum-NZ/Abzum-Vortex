@@ -304,6 +304,7 @@ export function InlineEditCell({
       onChange={(event) => setText(event.currentTarget.value)}
       onBlur={commitText}
       onKeyDown={(event) => {
+        event.stopPropagation();
         if (event.key === "Enter") {
           event.preventDefault();
           commitText();

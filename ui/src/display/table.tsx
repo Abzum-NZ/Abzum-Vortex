@@ -98,7 +98,7 @@ export function TableDisplay(props: PlatformBlockRenderProps): ReactElement {
   const inlineFields = inlineEdit?.fields ?? [];
   const editable = (columnKey: string): boolean =>
     onInlineEdit !== undefined && inlineEventId !== undefined && inlineFields.includes(columnKey);
-  const showActionsColumn = declaredRowActions.length > 0 || events?.row_action !== undefined;
+  const showActionsColumn = events?.row_action !== undefined;
   const selectedRecordIds = values?.selectedRecordIds ?? [];
   const showBulkActions =
     selectable && declaredBulkActions.length > 0 && events?.bulk_action !== undefined;
@@ -191,27 +191,30 @@ export function TableDisplay(props: PlatformBlockRenderProps): ReactElement {
             <tbody>
               {values.rows.map((row) => {
                 const name = rowName(row, columns[0]?.key);
+                const activate = activateRow;
+                const rowInteraction =
+                  activate === undefined
+                    ? {}
+                    : {
+                        tabIndex: 0,
+                        onClick: () => activate(row.recordId),
+                        onKeyDown: (event: KeyboardEvent<HTMLTableRowElement>) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            activate(row.recordId);
+                          }
+                        },
+                      };
                 return (
                   <tr
                     key={row.recordId}
                     data-vortex-record-id={row.recordId}
                     className={
-                      activateRow === undefined
+                      activate === undefined
                         ? "vortex-table-row"
                         : "vortex-table-row vortex-table-row-clickable"
                     }
-                    {...(activateRow === undefined
-                      ? {}
-                      : {
-                          tabIndex: 0,
-                          onClick: () => activateRow(row.recordId),
-                          onKeyDown: (event: KeyboardEvent<HTMLTableRowElement>) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              activateRow(row.recordId);
-                            }
-                          },
-                        })}
+                    {...rowInteraction}
                   >
                     {!selectable ? null : (
                       <td className="vortex-table-cell-select">
