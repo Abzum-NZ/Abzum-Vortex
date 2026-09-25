@@ -16,8 +16,11 @@ begin;
 reset role;
 set local role vortex_record_owner;
 
--- One non-blocking monotonic source for invalidation notices. nextval takes no
--- row lock, so concurrent saves never wait on a version.
+-- One non-blocking monotonic source for invalidation notices. The protected
+-- publisher requires a positive `dataVersion` and `sequence` in every envelope,
+-- and the private helper's callers still receive a bigint. nextval takes no row
+-- lock and is not rolled back, so concurrent saves never wait on it; gaps are
+-- harmless because no reader orders or compares these values any more.
 create sequence vortex_record.record_invalidation_sequence as bigint
   minvalue 1
   maxvalue 9007199254740991
@@ -38,6 +41,13 @@ grant usage on schema vortex_invalidation to vortex_record_adapter;
 grant execute on function vortex_invalidation.publish_change_notice(
   uuid, uuid, uuid, uuid, bigint, text, bigint, bigint, uuid
 ) to vortex_record_adapter;
+
+-- Both functions are owned by the private adapter role. Replacing a function
+-- needs CREATE on its schema, which the adapter holds only while a migration
+-- installs its functions, as every earlier vortex_record function migration does.
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
 
 set local role vortex_record_adapter;
 
@@ -221,6 +231,7 @@ reset role;
 -- Record and operation paths no longer read or write the shared per-record-type
 -- counter, so the table is removed.
 set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
 drop table vortex_record.record_data_versions;
 reset role;
 
