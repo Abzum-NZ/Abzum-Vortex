@@ -1,4 +1,15 @@
+import { type PermissionId } from "./identifiers";
 import { type PermissionDeclaration } from "./permissions";
+
+/** A shipped declaration whose permanent identity is still a plain UUID literal before it is branded. */
+type ShippedPermission = Omit<PermissionDeclaration, "permissionId"> & {
+  readonly permissionId: string;
+};
+
+const brandPermission = (permission: ShippedPermission): PermissionDeclaration => ({
+  ...permission,
+  permissionId: permission.permissionId as PermissionId,
+});
 
 /**
  * The immutable shipped platform permission catalogue: the one source of the platform
@@ -15,7 +26,7 @@ export const platformPermissionCatalogueVersionV1 = "1.0.0";
 export const platformPermissionCatalogueVersionV1_0_1 = "1.0.1";
 export const platformPermissionCatalogueVersion = "1.4.0";
 
-const historicalPermissionsV1: readonly PermissionDeclaration[] = [
+const historicalPermissionsV1: readonly ShippedPermission[] = [
   {
     permissionId: "687d5649-62ee-43dd-b684-b8af3a5394c1",
     key: "platform.organization.permissions.read",
@@ -139,8 +150,8 @@ const historicalPermissionsV1: readonly PermissionDeclaration[] = [
  * the same meaning fingerprints, and no organisation can experience a continuity break
  * from this terminology change.
  */
-const historicalPermissionsV1_0_1: readonly PermissionDeclaration[] =
-  historicalPermissionsV1.map((permission) => {
+const historicalPermissionsV1_0_1: readonly ShippedPermission[] = historicalPermissionsV1.map(
+  (permission) => {
     if (permission.key === "platform.organization.groups.read")
       return {
         ...permission,
@@ -155,9 +166,10 @@ const historicalPermissionsV1_0_1: readonly PermissionDeclaration[] =
           "Manage Groups and memberships subject to delegated scope and permanent-steward safeguards.",
       };
     return permission;
-  });
+  },
+);
 
-const currentPermissions: readonly PermissionDeclaration[] = [
+const currentPermissions: readonly ShippedPermission[] = [
   ...historicalPermissionsV1_0_1,
   {
     permissionId: "7ecd3304-f16c-47d4-94db-0964980091ba",
@@ -243,16 +255,19 @@ const currentPermissions: readonly PermissionDeclaration[] = [
 ];
 
 /** The immutable `1.0.0` metadata: the initial platform catalogue release. */
-export const historicalPlatformPermissionsV1 = historicalPermissionsV1;
+export const historicalPlatformPermissionsV1: readonly PermissionDeclaration[] =
+  historicalPermissionsV1.map(brandPermission);
 
 /** The immutable `1.0.1` Group-facing metadata revision; identities and meanings are unchanged. */
-export const historicalPlatformPermissionsV1_0_1 = historicalPermissionsV1_0_1;
+export const historicalPlatformPermissionsV1_0_1: readonly PermissionDeclaration[] =
+  historicalPermissionsV1_0_1.map(brandPermission);
 
 /** The current additive catalogue, mirroring platform registration revision 6 (`1.4.0`). */
-export const currentPlatformPermissions = currentPermissions;
+export const currentPlatformPermissions: readonly PermissionDeclaration[] =
+  currentPermissions.map(brandPermission);
 
 const platformPermissionIndex: ReadonlyMap<string, PermissionDeclaration> = new Map(
-  currentPermissions.map((permission) => [permission.key, permission] as const),
+  currentPlatformPermissions.map((permission) => [permission.key, permission] as const),
 );
 
 /**
@@ -264,5 +279,4 @@ export const platformPermissionFor = (key: string): PermissionDeclaration | unde
   platformPermissionIndex.get(key);
 
 /** Whether a key names an exact permission in the currently shipped platform catalogue. */
-export const isPlatformPermissionKey = (key: string): boolean =>
-  platformPermissionIndex.has(key);
+export const isPlatformPermissionKey = (key: string): boolean => platformPermissionIndex.has(key);

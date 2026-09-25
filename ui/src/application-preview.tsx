@@ -94,9 +94,9 @@ export type ApplicationPreviewArtifact = Readonly<{
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const fail = (message: string, location: DefinitionRenderErrorLocation = {}): never => {
+function fail(message: string, location: DefinitionRenderErrorLocation = {}): never {
   throw new DefinitionRenderError("INVALID_COMPOSITION", message, location);
-};
+}
 
 const requireString = (value: unknown, message: string): string =>
   typeof value === "string" && value.length > 0 ? value : fail(message);

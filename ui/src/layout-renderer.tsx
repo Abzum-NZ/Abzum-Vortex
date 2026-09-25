@@ -1176,7 +1176,7 @@ function resolvePageCompositionSlot(options: {
       pageId === undefined ? {} : { pageId },
     );
 
-    const resolvedStep = stepMap[resolvedStepId];
+    const resolvedStep = stepMap[resolvedStepId as keyof typeof stepMap];
     if (resolvedStep === undefined)
       throw new DefinitionRenderError(
         "INVALID_COMPOSITION",
@@ -1196,7 +1196,7 @@ function resolvePageCompositionSlot(options: {
       shellId: shell.shellId,
     });
 
-    const stepSlotContent = stepMap[resolvedStepId];
+    const stepSlotContent = stepMap[resolvedStepId as keyof typeof stepMap];
     if (stepSlotContent === undefined)
       throw new DefinitionRenderError(
         "INVALID_COMPOSITION",

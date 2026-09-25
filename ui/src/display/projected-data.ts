@@ -247,17 +247,17 @@ const EMPTY_CELL: DisplayCellValue = Object.freeze({ kind: "empty" });
 const EMPTY_HANDLERS: DisplayEventHandlers = Object.freeze({});
 const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
 
-const fail = (
+function fail(
   message: string,
   location: DefinitionRenderErrorLocation,
   propertyPath?: readonly string[],
-): never => {
+): never {
   throw new DefinitionRenderError(
     "INVALID_COMPOSITION",
     message,
     propertyPath === undefined ? location : { ...location, propertyPath },
   );
-};
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

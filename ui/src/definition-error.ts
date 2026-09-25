@@ -1,6 +1,5 @@
 import type {
   ApplicationShellV2,
-  BlockCapabilitiesV2,
   BlockPlacementV2Contract,
   BlockPropertyValueV2Contract,
   PlatformBlockReleaseV2,
@@ -72,7 +71,7 @@ export class DefinitionRenderError extends Error {
  */
 export function validateAccessibleName(
   settings: Readonly<Record<string, BlockPropertyValueV2Contract>>,
-  capabilities: BlockCapabilitiesV2,
+  capabilities: PlatformBlockReleaseV2["capabilities"],
   location: DefinitionRenderErrorLocation = {},
 ): void {
   if (capabilities.accessibleName === "not_applicable") {
