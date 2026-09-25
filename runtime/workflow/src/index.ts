@@ -33,6 +33,19 @@ export {
 } from "./kestra-compiler";
 
 export {
+  planInstallationWorkflowActivation,
+  reconcileInstallationWorkflowWithdrawal,
+  installationWorkflowReadinessErrorCodes,
+  InstallationWorkflowReadinessError,
+  type AcceptedInstallationWorkflowStart,
+  type InstallationWorkflowActivationRequest,
+  type InstallationWorkflowExpectedCandidate,
+  type InstallationWorkflowInstallationIdentity,
+  type InstallationWorkflowReadinessErrorCode,
+  type InstallationWorkflowWithdrawalRequest,
+} from "./installation-workflow-readiness";
+
+export {
   parseApplicationKestraInstanceTarget,
   resolveApplicationKestraInstanceTarget,
   applicationKestraBaseUrlEnvironmentKey,
