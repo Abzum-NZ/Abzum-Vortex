@@ -2916,7 +2916,9 @@ function applicationPermissionSharingConditions(
  * not author its evaluation inherits read-time from its same-record dependencies. An authored
  * `stored` evaluation is kept, and publication refuses it when it depends on a read-time field.
  */
-function inheritReadTimeEvaluation<T extends { fieldId: string; type: unknown; settings: unknown }>(
+function inheritReadTimeEvaluation<
+  T extends { fieldId: string; type: unknown; settings: unknown },
+>(
   sourceFields: readonly JsonObject[],
   fields: readonly T[],
 ): T[] {
