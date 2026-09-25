@@ -1,7 +1,9 @@
 import "server-only";
 
 import {
+  addOrganizationAdministrationMembershipCommandSchema,
   applicationRootIdSchema,
+  assignOrganizationAdministrationRoleAssignmentCommandSchema,
   createOrganizationAdministrationGroupCommandSchema,
   deactivateOrganizationAdministrationRoleActivationCommandSchema,
   findPlatformServiceOperation,
@@ -84,9 +86,11 @@ export type ProtectedOperationExecutorDependencies = Readonly<{
     | "createGroup"
     | "renameGroup"
     | "retireGroup"
+    | "addGroupMembership"
     | "removeGroupMembership"
     | "reviseRoleMetadata"
     | "retireRole"
+    | "assignRoleAssignment"
     | "revokeRoleAssignment"
     | "deactivateRoleActivation"
     | "revokeDelegationAuthority"
@@ -183,6 +187,29 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         }),
       ),
   }),
+  add_group_membership: operation({
+    schema: addOrganizationAdministrationMembershipCommandSchema,
+    command: (inputs) => ({
+      membershipId: inputs.membership_id,
+      groupId: inputs.group_id,
+      organizationAccountId: inputs.organization_account_id,
+      startsAt: inputs.starts_at,
+      expiresAt: inputs.expires_at,
+    }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.addGroupMembership(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          membership_id: value.membership.membershipId,
+          revision: value.membership.revision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
   remove_group_membership: operation({
     schema: removeOrganizationAdministrationMembershipCommandSchema,
     command: (inputs) => ({
@@ -237,6 +264,33 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         (value) => ({
           role_id: value.role.roleId,
           revision: value.role.liveRevision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
+  assign_role_assignment: operation({
+    schema: assignOrganizationAdministrationRoleAssignmentCommandSchema,
+    command: (inputs) => ({
+      roleAssignmentId: inputs.role_assignment_id,
+      roleId: inputs.role_id,
+      expectedRoleRevision: inputs.expected_role_revision,
+      assigneeKind: inputs.assignee_kind,
+      organizationAccountId: inputs.organization_account_id,
+      groupId: inputs.group_id,
+      assignmentKind: inputs.assignment_kind,
+      startsAt: inputs.starts_at,
+      expiresAt: inputs.expires_at,
+    }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.assignRoleAssignment(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          role_assignment_id: value.assignment.roleAssignmentId,
+          revision: value.assignment.revision,
           access_version: value.accessVersion,
         }),
       ),

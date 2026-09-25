@@ -651,5 +651,160 @@
         "failed"
       ]
     }
+  },
+  "add_group_membership": {
+    "key": "add_group_membership",
+    "name": "Add group membership",
+    "release": {
+      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
+      "operationId": "368bb023-3059-48b9-82e2-45df9832e65d",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
+        },
+        "operationId": "368bb023-3059-48b9-82e2-45df9832e65d"
+      },
+      "inputs": {
+        "membership_id": {
+          "type": "text",
+          "required": true
+        },
+        "group_id": {
+          "type": "text",
+          "required": true
+        },
+        "organization_account_id": {
+          "type": "text",
+          "required": true
+        },
+        "starts_at": {
+          "type": "text",
+          "required": true
+        },
+        "expires_at": {
+          "type": "text",
+          "required": false
+        }
+      },
+      "outputs": {
+        "membership_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "access_version": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "permission": {
+        "permissionId": "6185dc64-464b-4776-97dc-c64a6f299550",
+        "key": "platform.organization.groups.manage"
+      },
+      "effect": "change",
+      "expectedRevision": "not_required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "validation",
+        "failed"
+      ]
+    }
+  },
+  "assign_role_assignment": {
+    "key": "assign_role_assignment",
+    "name": "Assign role",
+    "release": {
+      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
+      "operationId": "0913006c-ea2a-49a9-bff9-6e1d53c8f2db",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
+        },
+        "operationId": "0913006c-ea2a-49a9-bff9-6e1d53c8f2db"
+      },
+      "inputs": {
+        "role_assignment_id": {
+          "type": "text",
+          "required": true
+        },
+        "role_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected_role_revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "assignee_kind": {
+          "type": "choice",
+          "required": true
+        },
+        "organization_account_id": {
+          "type": "text",
+          "required": false
+        },
+        "group_id": {
+          "type": "text",
+          "required": false
+        },
+        "assignment_kind": {
+          "type": "choice",
+          "required": true
+        },
+        "starts_at": {
+          "type": "text",
+          "required": true
+        },
+        "expires_at": {
+          "type": "text",
+          "required": false
+        }
+      },
+      "outputs": {
+        "role_assignment_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "access_version": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "permission": {
+        "permissionId": "156d01f3-8f80-45fb-8fc8-b31c47dbb1df",
+        "key": "platform.organization.assignments.manage"
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "conflict",
+        "validation",
+        "failed"
+      ]
+    }
   }
 }

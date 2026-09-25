@@ -59,16 +59,20 @@ const entry = (definition: {
  * version and never written by hand; the publication catalogue recomputes both when it is created,
  * so a changed descriptor without regenerated fingerprints refuses instead of publishing.
  *
- * Only the terminal, metadata and settings operations the Access services already provide are
- * registered. Nothing here grants, assigns or activates access, so no flow can expand authority.
+ * Every operation the Access services already provide is registered, including the grant-side
+ * assign-role and add-membership operations. Registration never grants authority: each operation
+ * re-checks the current actor's authority and refuses any grant that exceeds the actor's own
+ * delegated scope inside its owning service transaction, so a flow can never expand access.
  */
 export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   create_group: entry(sources.create_group),
   rename_group: entry(sources.rename_group),
   retire_group: entry(sources.retire_group),
+  add_group_membership: entry(sources.add_group_membership),
   remove_group_membership: entry(sources.remove_group_membership),
   revise_role_metadata: entry(sources.revise_role_metadata),
   retire_role: entry(sources.retire_role),
+  assign_role_assignment: entry(sources.assign_role_assignment),
   revoke_role_assignment: entry(sources.revoke_role_assignment),
   deactivate_role_activation: entry(sources.deactivate_role_activation),
   revoke_delegation_authority: entry(sources.revoke_delegation_authority),

@@ -191,6 +191,16 @@ export const changeOrganizationAdministrationMembershipResultSchema = z
   })
   .strict();
 
+export const addOrganizationAdministrationMembershipCommandSchema = z
+  .object({
+    membershipId: membershipIdSchema,
+    groupId: groupIdSchema,
+    organizationAccountId: organizationAccountIdSchema,
+    startsAt: timestampSchema,
+    expiresAt: timestampSchema.optional(),
+  })
+  .strict();
+
 export const organizationAdministrationPermissionSchema = z
   .object({
     reference: organizationAccessExactPermissionSchema,
@@ -569,6 +579,20 @@ export const changeOrganizationAdministrationRoleAssignmentResultSchema = z
   .object({
     assignment: organizationAdministrationRoleAssignmentSchema,
     accessVersion: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+export const assignOrganizationAdministrationRoleAssignmentCommandSchema = z
+  .object({
+    roleAssignmentId: roleAssignmentIdSchema,
+    roleId: roleIdSchema,
+    expectedRoleRevision: javascriptSafeRevisionSchema,
+    assigneeKind: z.enum(["organization_account", "group"]),
+    organizationAccountId: organizationAccountIdSchema.optional(),
+    groupId: groupIdSchema.optional(),
+    assignmentKind: z.enum(["standing", "eligible"]),
+    startsAt: timestampSchema,
+    expiresAt: timestampSchema.optional(),
   })
   .strict();
 
@@ -954,4 +978,10 @@ export type DeactivateOrganizationAdministrationRoleActivationCommand = z.infer<
 >;
 export type ChangeOrganizationAdministrationRoleActivationResult = z.infer<
   typeof changeOrganizationAdministrationRoleActivationResultSchema
+>;
+export type AddOrganizationAdministrationMembershipCommand = z.infer<
+  typeof addOrganizationAdministrationMembershipCommandSchema
+>;
+export type AssignOrganizationAdministrationRoleAssignmentCommand = z.infer<
+  typeof assignOrganizationAdministrationRoleAssignmentCommandSchema
 >;
