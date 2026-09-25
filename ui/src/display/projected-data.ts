@@ -41,9 +41,29 @@ export type DisplayCellValue =
   | Readonly<{ kind: "rich_text"; document: DisplayRichTextDocument }>
   | Readonly<{ kind: "empty" }>;
 
-/** One permission-projected row addressed by its stable record identity. */
+/** The record action kinds a row may report as available to the viewer. */
+export const displayRowActionKinds = ["update", "delete", "restore"] as const;
+export type DisplayRowActionKind = (typeof displayRowActionKinds)[number];
+
+/**
+ * The per-row capabilities the Query engine decided for the viewer: the fields it may change on
+ * this row and the record actions it may take. They only hide controls; the server re-checks
+ * every change and action.
+ */
+export type DisplayRowCapabilities = Readonly<{
+  changeableFieldIds: readonly string[];
+  actions: readonly DisplayRowActionKind[];
+}>;
+
+/**
+ * One permission-projected row addressed by its stable record identity. A Records table row also
+ * carries the record revision an inline edit sends and its per-row capabilities; either is absent
+ * when the payload does not carry it, and is never inferred.
+ */
 export type DisplayRow = Readonly<{
   recordId: string;
+  revision?: number;
+  capabilities?: DisplayRowCapabilities;
   cells: Readonly<Record<string, DisplayCellValue>>;
 }>;
 
@@ -400,6 +420,33 @@ const parseCellValue = (
   }
 };
 
+const parseRowCapabilities = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): DisplayRowCapabilities => {
+  const record = requireRecord(value, "Row capabilities must be an object", location);
+  requireExactKeys(record, ["changeableFieldIds", "actions"], location);
+  const changeable = requireArray(
+    record.changeableFieldIds,
+    "Row capabilities require a changeable field list",
+    location,
+  ).map((fieldId) =>
+    requireFieldKey(fieldId, `Invalid changeable field '${String(fieldId)}'`, location),
+  );
+  if (new Set(changeable.map((fieldId) => fieldId.toLowerCase())).size !== changeable.length)
+    fail("Each changeable field is reported once", location);
+  const actions = requireArray(record.actions, "Row capabilities require an action list", location).map(
+    (action) =>
+      displayRowActionKinds.find((kind) => kind === action) ??
+      fail(`Unknown row action '${String(action)}'`, location),
+  );
+  if (new Set(actions).size !== actions.length) fail("Each row action is reported once", location);
+  return Object.freeze({
+    changeableFieldIds: Object.freeze(changeable),
+    actions: Object.freeze(actions),
+  });
+};
+
 const parseRows = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
@@ -410,7 +457,7 @@ const parseRows = (
     items.map((item, index) => {
       const rowLocation = { ...location, propertyPath: [`rows[${index}]`] };
       const record = requireRecord(item, "A projected row must be an object", rowLocation);
-      requireExactKeys(record, ["recordId", "cells"], rowLocation);
+      requireExactKeys(record, ["recordId", "revision", "capabilities", "cells"], rowLocation);
       const recordId = requireNonEmptyString(
         record.recordId,
         "A projected row requires a stable record identity",
@@ -429,7 +476,29 @@ const parseRows = (
         const cellKey = requireFieldKey(key, `Invalid projected cell key '${key}'`, rowLocation);
         cells[cellKey] = parseCellValue(cell, { ...rowLocation, propertyPath: [cellKey] });
       }
-      return Object.freeze({ recordId, cells: Object.freeze(cells) });
+      const revision =
+        record.revision === undefined
+          ? undefined
+          : requirePositiveInteger(
+              record.revision,
+              "A projected row revision must be a positive integer",
+              rowLocation,
+            );
+      if (revision !== undefined && !Number.isSafeInteger(revision))
+        fail("A projected row revision must be a safe integer", rowLocation);
+      const capabilities =
+        record.capabilities === undefined
+          ? undefined
+          : parseRowCapabilities(record.capabilities, {
+              ...rowLocation,
+              propertyPath: [`rows[${index}]`, "capabilities"],
+            });
+      return Object.freeze({
+        recordId,
+        ...(revision === undefined ? {} : { revision }),
+        ...(capabilities === undefined ? {} : { capabilities }),
+        cells: Object.freeze(cells),
+      });
     }),
   );
 };
