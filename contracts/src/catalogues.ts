@@ -93,10 +93,9 @@ export const actionInputValueTypes = {
 } as const satisfies Record<string, ValueType>;
 export type ActionInputValueType =
   (typeof actionInputValueTypes)[keyof typeof actionInputValueTypes];
-export const actionInputValueTypeKeys = Object.values(actionInputValueTypes) as readonly [
-  ActionInputValueType,
-  ...ActionInputValueType[],
-];
+export const actionInputValueTypeKeys = Object.values(
+  actionInputValueTypes,
+) as unknown as readonly [ActionInputValueType, ...ActionInputValueType[]];
 export const actionInputValueTypeSchema = z.enum(actionInputValueTypeKeys);
 
 /**

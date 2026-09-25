@@ -43,7 +43,7 @@ export function useSeededState<Value>(seed: Value): [Value, (next: Value) => voi
 }
 
 /** Fixed data-free note for a field that cannot currently be used. */
-export const inactiveNote = <Values>(context: ControlContext<Values>): string | undefined =>
+export const inactiveNote = <Values,>(context: ControlContext<Values>): string | undefined =>
   context.unavailable ? "Unavailable" : context.disabledReason;
 
 /**

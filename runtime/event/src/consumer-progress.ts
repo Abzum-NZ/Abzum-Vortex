@@ -274,7 +274,7 @@ export interface EventConsumerProgressRepository {
 export const createEventConsumerProgressRepository = (
   transaction: RuntimeDatabaseTransaction,
 ): EventConsumerProgressRepository =>
-  Object.freeze({
+  Object.freeze<EventConsumerProgressRepository>({
     async claim(inputCandidate) {
       const input = validateClaimInput(inputCandidate);
       try {

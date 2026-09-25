@@ -103,7 +103,7 @@ export const createDatabaseFlowStores = (): Readonly<{
   ledger: FlowEffectLedger;
 }> =>
   Object.freeze({
-    continuations: Object.freeze({
+    continuations: Object.freeze<FlowContinuationStore>({
       async issue(input) {
         const rows = await withRuntimeTransaction((transaction) =>
           transaction.query`
@@ -151,7 +151,7 @@ export const createDatabaseFlowStores = (): Readonly<{
         };
       },
     }),
-    ledger: Object.freeze({
+    ledger: Object.freeze<FlowEffectLedger>({
       async begin(key) {
         const rows = await withRuntimeTransaction((transaction) =>
           transaction.query`

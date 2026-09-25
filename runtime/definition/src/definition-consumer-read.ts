@@ -222,7 +222,7 @@ export const verifyDefinitionCatalogueDependencies = async (
       dependency.kind === "application_form" ||
       dependency.kind === "application_workflow" ||
       dependency.kind === "application_action" ||
-      (dependency.kind === "protected_operation" && dependency.operation.owner.kind !== "platform_service")
+      dependency.kind === "protected_operation"
     )
       continue;
     // A platform-theme dependency exists only in an Application manifest, and the sole
