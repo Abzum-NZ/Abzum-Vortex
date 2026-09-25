@@ -98,6 +98,16 @@ export {
   type PrivateFormDraftServiceDependencies,
 } from "./form-drafts-repository";
 export {
+  createPrivateFormContinuationAdapter,
+  type PrivateFormContinuationAdapter,
+  type PrivateFormContinuationDependencies,
+  type PrivateFormContinuationDraft,
+  type PrivateFormContinuationDraftDisposition,
+  type PrivateFormContinuationDraftPort,
+  type PrivateFormContinuationInput,
+  type PrivateFormContinuationResult,
+} from "./form-continuation";
+export {
   resolvePageTheme,
   resolvePlacementThemeTokens,
   type PlacementThemeResolutionContext,
