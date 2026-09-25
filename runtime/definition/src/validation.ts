@@ -5599,6 +5599,135 @@ function applicationFlowBindingEventRule(
   });
 }
 
+/** Block keys whose placements carry a control that submits or acts. */
+const formContainerBlockKey = "platform.form.container";
+const actionButtonBlockKey = "platform.action.button";
+
+/** The authored choice value of one block setting, defaulting a button's action kind to `action`. */
+const sourceBlockChoice = (placement: JsonObject, key: string, fallback?: string) => {
+  const setting = object(placement.settings)[key];
+  if (setting === undefined) return fallback;
+  return setting !== null && typeof setting === "object" ? String(object(setting).value) : undefined;
+};
+
+/** Whether one block setting is the boolean `true`. */
+const sourceBlockBoolean = (placement: JsonObject, key: string): boolean => {
+  const setting = object(placement.settings)[key];
+  return setting !== null && typeof setting === "object" && object(setting).value === true;
+};
+
+/** The registered key of a placement's exact block release, or undefined for an unknown release. */
+const sourceBlockKey = (placement: JsonObject): string | undefined => {
+  const block = object(placement.block);
+  return registeredBlockReleases.get(
+    `${String(block.block_id)}:${String(block.release_version)}`,
+  )?.key;
+};
+
+/** Whether a form container holds, at any depth, a button that submits the enclosing form. */
+const containsSubmitButton = (placement: JsonObject): boolean => {
+  for (const slotValue of Object.values(object(placement.slots))) {
+    for (const childValue of Object.values(object(object(slotValue).placements))) {
+      const child = object(childValue);
+      if (
+        sourceBlockKey(child) === actionButtonBlockKey &&
+        sourceBlockChoice(child, "action_kind") === "submit"
+      )
+        return true;
+      if (containsSubmitButton(child)) return true;
+    }
+  }
+  return false;
+};
+
+/**
+ * Refuses, before an Application publishes, a control that would render enabled but do nothing. A
+ * form container with a submit path (a Submit button, or a form or guided-form page that commits)
+ * needs a `form_submit` binding; an enabled action button needs an `action` binding. A form
+ * container without a submit path collects inputs for an action button and a disabled button
+ * cannot act, so both are presentation-only and need none.
+ */
+function applicationControlBindingRule(
+  context: PreparedValidationContext,
+): DefinitionRuleFailure[] {
+  return editSaveSources(context).flatMap((raw, index): DefinitionRuleFailure[] => {
+    const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(raw);
+    if (!parsed.success || !isV2ApplicationSource(parsed.data)) return [];
+    const source = parsed.data as ApplicationSourceDocumentV2;
+    const body = object(source.body);
+    const placedControls = new Map<string, JsonObject>();
+    const formPagePlacements = new Set<string>();
+    const visitControls = (slotValue: unknown, pageType: string | undefined): void => {
+      for (const [alias, placementValue] of Object.entries(object(object(slotValue).placements))) {
+        const placement = object(placementValue);
+        placedControls.set(alias, placement);
+        if (pageType === "form" || pageType === "guided_form") formPagePlacements.add(alias);
+        for (const childSlot of Object.values(object(placement.slots)))
+          visitControls(childSlot, pageType);
+      }
+    };
+    for (const shell of array(body.shells)) visitControls(shell.layout, undefined);
+    for (const page of array(body.pages)) {
+      const composition = object(page.composition);
+      const pageType = String(page.type);
+      if (composition.step_content !== undefined) {
+        for (const stepValue of Object.values(object(composition.step_content))) {
+          if (composition.shell_kind === "default") visitControls(stepValue, pageType);
+          else
+            for (const slot of Object.values(object(stepValue))) visitControls(slot, pageType);
+        }
+      } else if (composition.shell_kind === "default") {
+        visitControls(composition.main, pageType);
+      } else {
+        for (const slot of Object.values(object(composition.content))) visitControls(slot, pageType);
+      }
+    }
+    const boundEvents = new Map<string, Set<string>>();
+    for (const binding of array(body.flow_bindings)) {
+      const control = String(binding.control);
+      const events = boundEvents.get(control) ?? new Set<string>();
+      events.add(String(binding.event));
+      boundEvents.set(control, events);
+    }
+    const failures: DefinitionRuleFailure[] = [];
+    const reportUnboundControl = (alias: string): void => {
+      const placementKey = builderKeySchema.safeParse(alias);
+      const placementSegment = placementKey.success
+        ? [{ kind: "block" as const, key: placementKey.data }]
+        : [];
+      failures.push({
+        ruleCode: "vortex.definition.application_control_binding",
+        family: "required_value",
+        location: {
+          documentKind: "application",
+          documentKey: source.key,
+          segments: [{ kind: "application", key: source.key }, ...placementSegment],
+        },
+      });
+    };
+    for (const [alias, placement] of placedControls) {
+      const blockKey = sourceBlockKey(placement);
+      const events = boundEvents.get(alias);
+      if (blockKey === formContainerBlockKey) {
+        if (
+          (containsSubmitButton(placement) || formPagePlacements.has(alias)) &&
+          !(events?.has("form_submit") ?? false)
+        )
+          reportUnboundControl(alias);
+        continue;
+      }
+      if (blockKey !== actionButtonBlockKey) continue;
+      if (
+        sourceBlockChoice(placement, "action_kind", "action") === "action" &&
+        !sourceBlockBoolean(placement, "disabled") &&
+        !(events?.has("action") ?? false)
+      )
+        reportUnboundControl(alias);
+    }
+    return failures;
+  });
+}
+
 export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object.freeze([
   {
     ruleId: "vortex.definition.source_shape",
@@ -5653,6 +5782,15 @@ export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object
     requiredContext: ["source"],
     safeLocationFamily: "flow_binding",
     run: applicationFlowBindingEventRule,
+  },
+  {
+    ruleId: "vortex.definition.application_control_bindings",
+    emittedCodes: ["vortex.definition.application_control_binding"],
+    stage: "publish",
+    definitionKinds: ["application"],
+    requiredContext: ["source"],
+    safeLocationFamily: "block",
+    run: applicationControlBindingRule,
   },
   {
     ruleId: "vortex.definition.publication_context_required",

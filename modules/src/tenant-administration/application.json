@@ -129,7 +129,15 @@
     "connection_bindings": [],
     "interfaces": [],
     "actions": [],
-    "events": [],
+    "events": [
+      {
+        "id": "event_lifecycle_request_submit",
+        "key": "vortex.app.tenant_administration.lifecycle_request_submit",
+        "record_type": "vortex.tenant_administration:organization_lifecycle_request",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      }
+    ],
     "public_addresses": [],
     "platform_block_dependencies": [],
     "shells": [
@@ -549,11 +557,45 @@
                             }
                           },
                           "slots": {}
+                        },
+                        "request_submit": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Submit request"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "submit"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
                         }
                       },
                       "order": {
                         "desktop": [
-                          "request_reason"
+                          "request_reason",
+                          "request_submit"
                         ]
                       }
                     }
@@ -570,7 +612,61 @@
         }
       }
     ],
-    "flows": [],
-    "flow_bindings": []
+    "flows": [
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_submit_organization_lifecycle_request",
+        "key": "submit_organization_lifecycle_request",
+        "labels": {
+          "name": "Submit organisation lifecycle request"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "reason": {
+            "type": "text",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.tenant_administration.organization_lifecycle_request.submit"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
+      }
+    ],
+    "flow_bindings": [
+      {
+        "id": "binding_lifecycle_request_submit",
+        "control": "request_form",
+        "event_id": "event_lifecycle_request_submit",
+        "event": "form_submit",
+        "flow": "flow_submit_organization_lifecycle_request",
+        "inputs": {
+          "reason": {
+            "kind": "caller",
+            "name": "reason"
+          }
+        }
+      }
+    ]
   }
 }
