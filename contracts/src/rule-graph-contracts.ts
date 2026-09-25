@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ValueType } from "./catalogues";
 import { conditionMaximumNestingDepth, conditionMaximumOperandCount } from "./common";
 import {
   builderKeySchema,
@@ -50,7 +51,7 @@ export const ruleGraphValueTypeKeys = [
   "link_to_one_of_several",
   "link_to_person",
   "attachment",
-] as const;
+] as const satisfies readonly ValueType[];
 
 export const ruleGraphValueTypeSchema = z.enum(ruleGraphValueTypeKeys);
 export type RuleGraphValueType = z.infer<typeof ruleGraphValueTypeSchema>;

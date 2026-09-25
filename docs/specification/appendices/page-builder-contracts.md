@@ -202,7 +202,7 @@ Write the full HR JSON fixture set first, including the future workflow definiti
 
 ### Approvals are workflows, not custom code
 
-Leave submission emits an ordinary application event. The HR workflow resolves an eligible responder from declared relationships/roles, uses the generic `request_form` wait, branches on the validated response and invokes the named approve/refuse action. Request/response history and status are ordinary HR records. The generic action precondition repeats current responder eligibility and requester-versus-actor checks so a direct call cannot bypass them. No custom JavaScript, HR-specific route, approval node or privileged approval table is required.
+Leave submission emits an ordinary application event. The HR workflow resolves an eligible responder from declared relationships/roles, uses the durable **Wait for a person** task that Kestra runs, branches on the validated response and invokes the named approve/refuse action. Request/response history and status are ordinary HR records. Responder eligibility and the no-self-approval rule live in the workflow's human-task assignment, not in a named-action precondition. The approve/refuse action is granted only to the workflow's run-as actor, never to the Employee, Manager or HR administrator roles, so a direct call cannot bypass the wait; the response never enlarges the responder's own authority. No custom JavaScript, HR-specific route, approval node or privileged approval table is required.
 
 [Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34), [conditions #57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57) and [bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) must supply the generic actor-relative relationship/condition support already promised by section 4. Trusted current-account parameters come from the server, never from a form value purporting to identify the approver.
 
@@ -210,11 +210,10 @@ Leave submission emits an ordinary application event. The HR workflow resolves a
 flowchart LR
     S[Submit leave action] --> E[Ordinary application event]
     E --> W[HR workflow]
-    W --> R[Resolve eligible approver]
-    R --> F[Generic request-form wait]
+    W --> R[Resolve eligible responder]
+    R --> F[Wait for a person task]
     R -->|none eligible| P[Pending assignment]
-    F --> C[Recheck actor and no self-approval]
-    C --> A[Named approve or refuse action]
+    F --> A[Named approve or refuse action]
     A --> H[Ordinary record and event history]
 ```
 
@@ -224,8 +223,8 @@ Acceptance by a JSON value contract does not authorize every registered control 
 
 Reference traversal follows declared contract positions and discriminated value kinds. An explicitly literal value remains data even if it contains keys named `state`, `qualifiedKey`, `rootId` or `fieldId`. Do not infer platform authority or unresolved references from arbitrary object shape. Literal content still participates in schema validation, fingerprints and its owning component's version-impact policy. [#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258) corrects the delivered shape-based scanner before [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) expands the representation.
 
-## Component data and managed-flow bindings
+## Component data and flow bindings
 
 A data component binds a [configured data flow](frontend-rule-designer.md#component-data-flows), not a hidden fetch handler. Default Start → Query records → Return data can be extended with typed transforms, conditions and protected write nodes. Record identity, revisions, source/capability data and query pagination remain authoritative. The Data inspector exposes exact query/parameter/column maps and declared load/refresh/filter/sort/page events; rendering alone executes no writes.
 
-[Managed-flow locks](frontend-rule-designer.md#managed-and-application-owned-flows) are enforced by server-owned definition permissions. Customer configuration is limited to declared public inputs and typed extension slots; private graph internals are absent from client/editor/MCP projections. Node Run as settings reference independently authorised [execution bindings](frontend-rule-designer.md#node-execution-identity), not a client-supplied identity or role label. Effects and partial outcomes are shown truthfully in preview and live states.
+Flow configuration is enforced by server-owned definition permissions. Every flow has exactly one owner: the module or application release that contains it, so there are no hidden graph internals or separate extension slots. Node Run as settings reference independently authorised [execution bindings](frontend-rule-designer.md#node-execution-identity), not a client-supplied identity or role label. Effects and partial outcomes are shown truthfully in preview and live states.

@@ -19,6 +19,7 @@ import {
   moduleCompilationOutputV3Schema,
   moduleCompilationRequestV3Schema,
   moduleSourceDocumentSchema,
+  sourceFlowCollectionSchema,
   ruleIdSchema,
   containedComponentIdSchema,
   recordTypeIdSchema,
@@ -68,6 +69,7 @@ import {
 import type { ApplicationCompositionResolutionV2 } from "./application-v2-resolution";
 import { validateApplicationSourceCatalogue } from "./application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
+import { compileFlowSources, type ResolvedFlowIdentity } from "./flow-compilation";
 
 type Path = (string | number)[];
 type JsonObject = Record<string, unknown>;
@@ -1211,34 +1213,11 @@ function explicitSourceTargets(
       return leafPaths(valueAtPath(canonical, recordTypePath), recordTypePath);
     }
     if (
-      sourcePath[3] === "standard_page_replacement" &&
-      sourcePath[4] === "record_type" &&
-      sourcePath.length === 5
-    ) {
-      const recordTypePath = [...pageBase, "standardPageReplacement", "recordType"];
-      return leafPaths(valueAtPath(canonical, recordTypePath), recordTypePath);
-    }
-    if (
       sourcePath[3] === "public_fields" &&
       typeof sourcePath[4] === "number" &&
       sourcePath.length === 5
     )
       return [[...pageBase, "publicFieldIds", sourcePath[4]]];
-    if (sourcePath[3] === "calendar_mapping" && typeof sourcePath[4] === "string") {
-      const calendarKey: Readonly<Record<string, string>> = {
-        start: "startFieldId",
-        end: "endFieldId",
-        duration_field: "durationFieldId",
-      };
-      const key = calendarKey[sourcePath[4]];
-      if (key)
-        return [
-          [...pageBase, "calendarMapping", key],
-          ...(["end", "duration_field"].includes(String(sourcePath[4]))
-            ? [[...pageBase, "calendarMapping", "kind"] as Path]
-            : []),
-        ];
-    }
     const blockCoordinates =
       sourcePath[3] === "blocks" && typeof sourcePath[4] === "number"
         ? { canonical: [...pageBase, "blocks", sourcePath[4]] as Path, propertyIndex: 5 }
@@ -1608,8 +1587,6 @@ const applicationSourceTransformPatterns = [
   /^body\/queries\/#\/sort\/#\/field$/,
   /^body\/queries\/#\/aggregates\/#\/field$/,
   /^body\/pages\/#\/(?:id|record_type|query|permission|commit_action|public_action|public_fields\/#)$/,
-  /^body\/pages\/#\/standard_page_replacement\/record_type$/,
-  /^body\/pages\/#\/calendar_mapping\/(?:start|end|duration_field)$/,
   /^body\/pages\/#\/layout\/(?:desktop|phone)\/component_order\/#$/,
   /^body\/pages\/#\/(?:blocks\/#|steps\/#\/blocks\/#)\/(?:id|block|query|view_permission|use_permission)$/,
   /^body\/pipelines\/#\/(?:id|record_type|stage_field)$/,
@@ -2911,6 +2888,40 @@ function applicationPermissionSharingConditions(
   };
 }
 
+/**
+ * A calculation that uses a read-time calculation is itself read-time, so a calculation that does
+ * not author its evaluation inherits read-time from its same-record dependencies. An authored
+ * `stored` evaluation is kept, and publication refuses it when it depends on a read-time field.
+ */
+function inheritReadTimeEvaluation<
+  T extends { fieldId: string; type: unknown; settings: unknown },
+>(
+  sourceFields: readonly JsonObject[],
+  fields: readonly T[],
+): T[] {
+  const readTime = new Set<string>();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    fields.forEach((field, index) => {
+      if (field.type !== "calculation" || readTime.has(field.fieldId)) return;
+      const settings = asObject(field.settings);
+      const inherits =
+        asObject(sourceFields[index]?.settings).evaluation === undefined &&
+        (settings.dependencyFieldIds as string[]).some((fieldId) => readTime.has(fieldId));
+      if (settings.evaluation === "read_time" || inherits) {
+        readTime.add(field.fieldId);
+        changed = true;
+      }
+    });
+  }
+  return fields.map((field) =>
+    readTime.has(field.fieldId)
+      ? { ...field, settings: { ...asObject(field.settings), evaluation: "read_time" } }
+      : field,
+  );
+}
+
 function fieldSettings(
   field: JsonObject,
   qualifiedRecordType: string,
@@ -3145,8 +3156,15 @@ function fieldSettings(
           terminalStatusValues: expression.terminal_status_values,
         };
       }
+      const evaluation =
+        settings.evaluation === "read_time" || settings.evaluation === "stored"
+          ? settings.evaluation
+          : expression.operation === "deadline_passed"
+            ? "read_time"
+            : "stored";
       return {
         resultType: settings.result_type,
+        evaluation,
         ...(settings.decimal_places !== undefined
           ? { decimalPlaces: settings.decimal_places }
           : {}),
@@ -3242,7 +3260,7 @@ function compileModule(
     const qualified = `${definitionKey}:${recordKey}`;
     const valueContext = valueContextFor(qualified);
     const recordTypeId = resolution.id(definitionKey, "record_type", recordKey, "content");
-    const fields = (recordType.fields as JsonObject[]).map((field) => ({
+    const compiledFields = (recordType.fields as JsonObject[]).map((field) => ({
       fieldId: resolution.id(definitionKey, "field", String(field.id), `record:${recordKey}`),
       key: field.key,
       label: field.label,
@@ -3260,6 +3278,7 @@ function compileModule(
       type: field.type,
       settings: fieldSettings(field, qualified, resolution, permissionOwners, true, valueContext),
     }));
+    const fields = inheritReadTimeEvaluation(recordType.fields as JsonObject[], compiledFields);
     const relationships = (recordType.relationships as JsonObject[]).map((relationship) => ({
       relationshipId: resolution.id(
         definitionKey,
@@ -4154,45 +4173,15 @@ function compileApplicationPagesV2(
         String(page.permission),
         allowedPermissionOwners,
       ),
-      states: page.states,
       composition: compiledComposition.composition,
-      ...(page.standard_page_replacement
-        ? {
-            standardPageReplacement: {
-              standardPage: asObject(page.standard_page_replacement).standard_page,
-              recordType: resolution.recordType(
-                String(asObject(page.standard_page_replacement).record_type),
-              ),
-            },
-          }
-        : {}),
     };
     if (page.type === "list") {
       const record = String(page.record_type);
-      const mapping = page.calendar_mapping ? asObject(page.calendar_mapping) : undefined;
       return {
         ...base,
         type: "list",
         recordType: resolution.recordType(record),
         queryId: queryId(String(page.query)),
-        arrangements: page.arrangements,
-        ...(mapping
-          ? {
-              calendarMapping:
-                "end" in mapping
-                  ? {
-                      kind: "start_end",
-                      startFieldId: resolution.field(record, String(mapping.start)),
-                      endFieldId: resolution.field(record, String(mapping.end)),
-                    }
-                  : {
-                      kind: "start_duration",
-                      startFieldId: resolution.field(record, String(mapping.start)),
-                      durationFieldId: resolution.field(record, String(mapping.duration_field)),
-                      durationUnit: mapping.duration_unit,
-                    },
-            }
-          : {}),
       };
     }
     if (page.type === "dashboard") return { ...base, type: "dashboard" };
@@ -5161,15 +5150,6 @@ function compileApplicationFlowBindings(
   const rawBindings = body.flow_bindings as JsonObject[];
   const appVersion = root.exactVersion;
   const resolutionFingerprint = resolution.snapshot.fingerprint;
-  const managedFlow = (flowId: string, releaseVersion: string): JsonObject => {
-    const matches = catalogueEvidence.managedFlows.filter(
-      (candidate) =>
-        String(candidate.flowId) === flowId && String(candidate.releaseVersion) === releaseVersion,
-    );
-    if (matches.length !== 1)
-      fail("vortex.definition.missing_identity", "unresolved_reference");
-    return matches[0]!;
-  };
   const sourceFlow = (alias: string): JsonObject | undefined =>
     (body.flows as JsonObject[]).find(
       (flow) => String(flow.id) === alias || String(flow.key) === alias,
@@ -5195,32 +5175,20 @@ function compileApplicationFlowBindings(
     );
 
     const flowRef = asObject(binding.flow);
-    let compiledFlowRef: JsonObject;
-    if (flowRef.kind === "platform_managed") {
-      const evidence = managedFlow(String(flowRef.flow_id), String(flowRef.release_version));
-      compiledFlowRef = {
-        kind: "platform_managed",
-        flowId: flowRef.flow_id,
-        releaseVersion: flowRef.release_version,
-        contentFingerprint: evidence.contentFingerprint,
-        catalogueFingerprint: evidence.catalogueFingerprint,
-      };
-    } else {
-      const authoredFlow = sourceFlow(String(flowRef.flow));
-      if (authoredFlow === undefined)
-        fail("vortex.definition.missing_identity", "unresolved_reference");
-      compiledFlowRef = {
-        kind: "application_owned",
-        applicationRootId: root.rootId,
-        flowId: resolution.id(definitionKey, "flow", String(flowRef.flow), "content"),
-        releaseVersion: appVersion,
-        contentFingerprint: fingerprintCanonicalValue({
-          kind: "application_flow",
-          value: authoredFlow,
-        }),
-        resolutionFingerprint,
-      };
-    }
+    const authoredFlow = sourceFlow(String(flowRef.flow));
+    if (authoredFlow === undefined)
+      fail("vortex.definition.missing_identity", "unresolved_reference");
+    const compiledFlowRef: JsonObject = {
+      kind: "application_owned",
+      applicationRootId: root.rootId,
+      flowId: resolution.id(definitionKey, "flow", String(flowRef.flow), "content"),
+      releaseVersion: appVersion,
+      contentFingerprint: fingerprintCanonicalValue({
+        kind: "application_flow",
+        value: authoredFlow,
+      }),
+      resolutionFingerprint,
+    };
 
     const compileBindingContext = (ctx: JsonObject): JsonObject => {
       const kind = ctx.kind;
@@ -6272,6 +6240,61 @@ function compileApplicationV2Internal(
   return compileParsedApplicationV2Request(parsed.data, parseDefinitionCompilationContext(context));
 }
 
+/**
+ * Compiles the flows a module or application owns to permanent identities (#984), refusing an
+ * unresolved alias, an unregistered task or a reference outside the declared dependencies. The
+ * canonical flows and their manifest contribution are not part of either compilation output until
+ * #986 adds `flows` to the module and application contracts, and no strict source schema accepts
+ * `flow_sources` today, so this is inert until #986 wires the field and this result into the
+ * canonical output and provenance.
+ */
+function compileOwnedFlowSources(source: JsonObject, resolution: Resolution) {
+  const flowSources = asObject(source.body).flow_sources;
+  if (flowSources === undefined) return undefined;
+  const parsed = sourceFlowCollectionSchema.safeParse(flowSources);
+  if (!parsed.success) fail("vortex.definition.source_shape", "invalid_value");
+  const ownKey = String(source.key);
+  const owned = (kind: string, alias: string): ResolvedFlowIdentity => {
+    const split = alias.indexOf(":");
+    const definitionKey = split < 1 ? ownKey : alias.slice(0, split);
+    return {
+      identifier: resolution.id(definitionKey, kind, alias.slice(split + 1), "content"),
+      definitionKey,
+    };
+  };
+  const qualifiedRecord = (reference: string) =>
+    reference.includes(":") ? reference : `${ownKey}:${reference}`;
+  const recordOwner = (reference: string) => qualifiedRecord(reference).split(":")[0]!;
+  return compileFlowSources({
+    flows: parsed.data,
+    declaredDefinitionKeys: dependencyOrder(source).filter((key) => key !== ownKey),
+    resolver: {
+      definitionKey: ownKey,
+      flow: (alias) => owned("flow", alias),
+      recordType: (reference) => ({
+        identifier: resolution.recordType(qualifiedRecord(reference)).recordTypeId,
+        definitionKey: recordOwner(reference),
+      }),
+      field: (record, alias) => ({
+        identifier: resolution.field(qualifiedRecord(record), alias),
+        definitionKey: recordOwner(record),
+      }),
+      relationship: (record, alias) => ({
+        identifier: resolution.relationship(qualifiedRecord(record), alias),
+        definitionKey: recordOwner(record),
+      }),
+      action: (alias) => owned("action", alias),
+      permission: (alias) => owned("permission", alias),
+      query: (alias) => owned("query", alias),
+      page: (alias) => owned("page", alias),
+      form: (alias) => owned("form", alias),
+      connectionBinding: (alias) => owned("connection_binding", alias),
+      executionBinding: (alias) => owned("execution_binding", alias),
+      locate: (flowKey) => resolution.location("flow", flowKey),
+    },
+  });
+}
+
 function compileParsedApplicationV2Request(
   request: ParsedApplicationV2Request,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
@@ -6295,6 +6318,7 @@ function compileParsedApplicationV2Request(
         catalogueFailure.location,
       );
     const resolution = new Resolution(request.resolution, sourceObject);
+    compileOwnedFlowSources(sourceObject, resolution);
     const valueIndex = applicationModuleValueIndex(sourceObject, resolution, dependencyOutputs);
     const composition = materialiseApplicationCompositionV2(
       source,
@@ -6368,6 +6392,7 @@ function compileParsedModuleV3Request(
   const source = request.source as unknown as JsonObject;
   try {
     const resolution = new Resolution(request.resolution, source);
+    compileOwnedFlowSources(source, resolution);
     const definitionKey = request.source.key;
     const ruleKeys = new Map(request.source.body.rules.map((rule) => [rule.id, rule.key]));
     const localRecordKey = (alias: string): string => {
