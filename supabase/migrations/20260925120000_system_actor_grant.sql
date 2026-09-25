@@ -16,7 +16,15 @@
 -- binding's system-actor lifecycle is now read from the grant, replacing the
 -- fail-closed placeholder. The grant ships empty and has no runtime writer, so
 -- every system actor stays unauthorised until a separate, reviewed owner step
--- registers it. The deadline registry is removed separately (WR8).
+-- registers it. The deadline registry was already removed by #1067
+-- (20260925090000_retire_deadline_worker.sql), so no session_user role check
+-- remains.
+--
+-- Every function installed here is its complete body, identical to its canonical
+-- file under supabase/schemas/: read_flow_execution_binding_for_run is copied from
+-- its live definition (20260924040000; no later rewrite) and
+-- recover_consumer_occurrence_claim from its live definition (20260923110000; no
+-- later rewrite), each changing only its authority step.
 
 begin;
 
@@ -82,7 +90,7 @@ comment on table vortex_access.system_actor_grants is
 -- every flow of its organisation; the organisation and scope subject must match
 -- exactly. Returns 'active', 'revoked' or null (no grant). An active grant wins
 -- over a revoked one.
-create function vortex_access.resolve_system_actor_grant_internal(
+create or replace function vortex_access.resolve_system_actor_grant_internal(
   p_system_actor_id uuid,
   p_operation_key text,
   p_organization_id uuid,
@@ -131,10 +139,16 @@ revoke all on function vortex_access.resolve_system_actor_grant_internal(
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
+comment on function vortex_access.resolve_system_actor_grant_internal(
+  uuid, text, uuid, uuid, text
+) is
+  'Owner-only lookup of the one system actor grant for an exact actor, protected operation, organisation, optional flow and scope subject; returns active, revoked or null and never derives authority from the session role.';
+
 -- ============================================================================
 -- Flow execution binding runtime reader: a system actor's lifecycle now comes
 -- from the system actor grant. Complete live body of #838's function; the only
--- change is the system-actor branch.
+-- change is the system-actor branch, which, like the specified-person branch,
+-- is active only in an active organisation.
 -- ============================================================================
 create or replace function vortex_access.read_flow_execution_binding_for_run(
   p_execution_binding_id uuid,
@@ -246,7 +260,8 @@ begin
   else
     -- A system actor is active only while the one system actor grant registry
     -- holds an active grant for this actor, this protected operation and this
-    -- flow in this organisation; a missing or revoked grant fails closed.
+    -- flow in this organisation, and only in an active organisation; a missing
+    -- or revoked grant, or an organisation that is not active, fails closed.
     account_state := case
       when vortex_access.resolve_system_actor_grant_internal(
         current_binding.actor_system_actor_id,
@@ -254,7 +269,11 @@ begin
         current_binding.organization_id,
         current_binding.flow_id,
         null
-      ) = 'active' then 'active'
+      ) = 'active' and exists (
+        select 1 from vortex_identity.organizations as organization
+        where organization.organization_id = current_binding.organization_id
+          and organization.state = 'active'
+      ) then 'active'
       else 'closed'
     end;
   end if;
@@ -271,6 +290,19 @@ begin
 end
 $function$;
 
+revoke all on function vortex_access.read_flow_execution_binding_for_run(
+  uuid, uuid, uuid, text, uuid, uuid, text, uuid, uuid, text, uuid, uuid
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+grant execute on function vortex_access.read_flow_execution_binding_for_run(
+  uuid, uuid, uuid, text, uuid, uuid, text, uuid, uuid, text, uuid, uuid
+) to vortex_runtime;
+
+comment on function vortex_access.read_flow_execution_binding_for_run(
+  uuid, uuid, uuid, text, uuid, uuid, text, uuid, uuid, text, uuid, uuid
+) is
+  'Runtime-only, share-locked read of one exact current flow execution binding and its effective actor state; a system actor is active only under an active system actor grant in an active organisation.';
+
 -- ============================================================================
 -- Event delivery recovery: authority is the system actor grant scoped to the
 -- consumer, not a session-role comparison.
@@ -284,7 +316,7 @@ drop function vortex_event.recover_consumer_occurrence_claim(text, uuid, integer
 -- attribution is the granted system actor (never a separately supplied
 -- operator), and the caller's view of the failure count must still match so a
 -- stale decision is refused rather than silently applied.
-create function vortex_event.recover_consumer_occurrence_claim(
+create or replace function vortex_event.recover_consumer_occurrence_claim(
   p_consumer_key text,
   p_occurrence_id uuid,
   p_expected_failure_count integer,
