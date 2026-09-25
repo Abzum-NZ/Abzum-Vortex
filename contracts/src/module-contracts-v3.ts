@@ -1,11 +1,19 @@
 import { z } from "zod";
-import { conditionNodeSchema, moduleDependencySchema } from "./module-contracts";
 import {
+  actionEffectSchema,
+  conditionNodeSchema,
+  moduleDependencySchema,
+} from "./module-contracts";
+import {
+  actionDefinitionV2Schema,
   actionInputDefinitionV2Schema,
   moduleContentV2Schema,
   moduleDraftV2Schema,
+  recordTypeDefinitionV2Schema,
 } from "./module-contracts-v2";
 import { moduleSourceContractVersion as moduleSourceContractVersionV3 } from "./module-source-contracts";
+import { protectedOperationReferenceSchema } from "./application-flow-bindings";
+import { protectedReadModelKeySchema } from "./application-composition-v2";
 import { flowSchema } from "./flow-contracts";
 import { ruleGraphSchema } from "./rule-graph-contracts";
 import {
@@ -108,6 +116,109 @@ export const moduleContributionV3Schema = z
   });
 
 /**
+ * The canonical system projection storage kind: the record type's typed fields project one
+ * registered protected view and are read through the one query path. The canonical form resolves
+ * the organisation field, the revision field and the declared filterable and sortable fields to
+ * their permanent field identities.
+ */
+export const moduleSystemProjectionV3Schema = z
+  .object({
+    protectedView: protectedReadModelKeySchema,
+    organizationFieldId: fieldIdSchema,
+    revisionFieldId: fieldIdSchema,
+    filterableFieldIds: z.array(fieldIdSchema).max(500),
+    sortableFieldIds: z.array(fieldIdSchema).max(500),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.filterableFieldIds).size !== value.filterableFieldIds.length)
+      context.addIssue({
+        code: "custom",
+        path: ["filterableFieldIds"],
+        message: "Filterable field identities must be unique",
+      });
+    if (new Set(value.sortableFieldIds).size !== value.sortableFieldIds.length)
+      context.addIssue({
+        code: "custom",
+        path: ["sortableFieldIds"],
+        message: "Sortable field identities must be unique",
+      });
+  });
+
+/**
+ * A canonical Module record type: the V2 record type extended with the optional system projection
+ * storage kind. A generated-table record type carries no `systemProjection`, and a system
+ * projection record type refuses every standard write action.
+ */
+export const recordTypeDefinitionV3Schema = recordTypeDefinitionV2Schema
+  .safeExtend({
+    systemProjection: moduleSystemProjectionV3Schema.optional(),
+  })
+  .superRefine((value, context) => {
+    const projection = value.systemProjection;
+    if (projection === undefined) return;
+    const refused = value.standardActions.filter(
+      (action) =>
+        action === "create" ||
+        action === "update" ||
+        action === "soft_delete" ||
+        action === "restore",
+    );
+    if (refused.length > 0)
+      context.addIssue({
+        code: "custom",
+        path: ["standardActions"],
+        message: "System projection record types refuse standard create, update, delete and restore",
+      });
+    const fieldIds = new Set(value.fields.map((field) => String(field.fieldId)));
+    for (const [path, fieldId] of [
+      ["organizationFieldId", projection.organizationFieldId],
+      ["revisionFieldId", projection.revisionFieldId],
+    ] as const)
+      if (!fieldIds.has(String(fieldId)))
+        context.addIssue({
+          code: "custom",
+          path: [path],
+          message: "A system projection field must belong to the record type",
+        });
+    for (const [index, fieldId] of projection.filterableFieldIds.entries())
+      if (!fieldIds.has(String(fieldId)))
+        context.addIssue({
+          code: "custom",
+          path: ["filterableFieldIds", index],
+          message: "A declared filterable field must belong to the record type",
+        });
+    for (const [index, fieldId] of projection.sortableFieldIds.entries())
+      if (!fieldIds.has(String(fieldId)))
+        context.addIssue({
+          code: "custom",
+          path: ["sortableFieldIds", index],
+          message: "A declared sortable field must belong to the record type",
+        });
+  });
+
+/**
+ * A canonical Module action: the V2 action extended with an optional registered protected operation
+ * target. An action orders effects or targets one registered protected operation, never both. A
+ * protected-operation action declares no effects, because the subject record's identity and
+ * revision reach the operation automatically when it runs.
+ */
+export const actionDefinitionV3Schema = actionDefinitionV2Schema
+  .safeExtend({
+    effects: z.array(actionEffectSchema).max(10),
+    protectedOperation: protectedOperationReferenceSchema.optional(),
+  })
+  .superRefine((value, context) => {
+    const hasOperation = value.protectedOperation !== undefined;
+    if (hasOperation === (value.effects.length > 0))
+      context.addIssue({
+        code: "custom",
+        path: ["protectedOperation"],
+        message: "An action targets either ordered effects or one registered protected operation",
+      });
+  });
+
+/**
  * A Module's canonical content. `flows` is the one home of its behaviour (architecture decision 1):
  * every save rule is a flow with a `BeforeSave` trigger and `transaction` execution.
  *
@@ -117,12 +228,17 @@ export const moduleContributionV3Schema = z
  * every `BeforeSave` flow has exactly one rule of the same identity, record type and priority, and
  * no rule exists without its flow, so a save can never run without a rule its Module declares.
  */
-export const moduleContentV3Schema = moduleContentV2Schema.extend({
-  flows: z.array(flowSchema).max(100),
-  rules: z.array(ruleGraphSchema).max(100),
-  queries: z.array(moduleQueryDefinitionV3Schema).max(100).default([]),
-  contributions: z.array(moduleContributionV3Schema).max(100).optional(),
-});
+export const moduleContentV3Schema = z
+  .object({
+    ...moduleContentV2Schema.shape,
+    recordTypes: z.array(recordTypeDefinitionV3Schema).min(1).max(100),
+    actions: z.array(actionDefinitionV3Schema),
+    flows: z.array(flowSchema).max(100),
+    rules: z.array(ruleGraphSchema).max(100),
+    queries: z.array(moduleQueryDefinitionV3Schema).max(100).default([]),
+    contributions: z.array(moduleContributionV3Schema).max(100).optional(),
+  })
+  .strict();
 
 export const moduleDraftV3Schema = moduleDraftV2Schema
   .extend({
@@ -180,6 +296,9 @@ export type ModuleContractVersionPairV3 = z.infer<typeof moduleContractVersionPa
 export type ModuleQuerySort = z.infer<typeof moduleQuerySortSchema>;
 export type ModuleQueryAggregate = z.infer<typeof moduleQueryAggregateSchema>;
 export type ModuleQueryDefinitionV3 = z.infer<typeof moduleQueryDefinitionV3Schema>;
+export type ModuleSystemProjectionV3 = z.infer<typeof moduleSystemProjectionV3Schema>;
+export type RecordTypeDefinitionV3 = z.infer<typeof recordTypeDefinitionV3Schema>;
+export type ActionDefinitionV3 = z.infer<typeof actionDefinitionV3Schema>;
 export type ModuleContributionV3 = z.infer<typeof moduleContributionV3Schema>;
 export type ModuleContentV3 = z.infer<typeof moduleContentV3Schema>;
 export type ModuleDraftV3 = z.infer<typeof moduleDraftV3Schema>;
