@@ -99,8 +99,12 @@ const placementCodes: Readonly<
 type Context = {
   readonly resolver: FlowCompilationResolver;
   readonly location: DefinitionValidationLocation | undefined;
+  /** The definitions this definition declares as dependencies. */
+  readonly declared: ReadonlySet<string>;
   /** Definitions other than the compiled one that these flows reach. */
   readonly reached: Set<string>;
+  /** Whether the flow runs inside a save transaction. */
+  readonly transaction: boolean;
   /** Canonical paths whose value, or whose key, is a resolved identity, with their source path. */
   readonly resolved: { canonicalPath: Path; sourcePath: Path }[];
   /** The one record type every record trigger of the flow names, when they agree. */
@@ -120,7 +124,11 @@ const resolveAt = (
   path: Path,
   sourcePath: Path = path,
 ): string => {
-  if (identity.definitionKey !== ctx.resolver.definitionKey) ctx.reached.add(identity.definitionKey);
+  if (identity.definitionKey !== ctx.resolver.definitionKey) {
+    if (!ctx.declared.has(identity.definitionKey))
+      throw refusal(ctx, "vortex.definition.missing_definition", "unresolved_reference");
+    ctx.reached.add(identity.definitionKey);
+  }
   ctx.resolved.push({ canonicalPath: path, sourcePath });
   return identity.identifier;
 };
@@ -205,16 +213,20 @@ const resolveTriggers = (ctx: Context, source: SourceFlow): unknown[] =>
   });
 
 /**
- * The record type a field-values property is written against: the task's own record type, or
- * the record type every record trigger of the flow names. Nothing else is inferred.
+ * The record type a field-values property is written against: the task's own record type or,
+ * for a task that changes only the record being saved in a save transaction, the record type
+ * every record trigger of the flow names. Nothing else is inferred, so values for any other
+ * record must name their record type.
  */
 const fieldValuesRecordType = (
   ctx: Context,
   properties: Readonly<Record<string, FlowValue>>,
+  savedRecord: boolean,
 ): string => {
   const named = properties.record_type;
   if (named !== undefined) return aliasOf(ctx, named);
-  if (ctx.triggerRecordType !== undefined) return ctx.triggerRecordType;
+  if (savedRecord && ctx.transaction && ctx.triggerRecordType !== undefined)
+    return ctx.triggerRecordType;
   throw refusal(ctx, "vortex.definition.trigger_record_required", "required_value");
 };
 
@@ -238,6 +250,7 @@ const resolveProperty = (
   type: string,
   value: FlowValue,
   properties: Readonly<Record<string, FlowValue>>,
+  savedRecord: boolean,
   path: Path,
 ): FlowValue => {
   const identity = (resolve: (alias: string) => ResolvedFlowIdentity) =>
@@ -280,7 +293,7 @@ const resolveProperty = (
         throw refusal(ctx, "vortex.definition.workflow_node_values", "invalid_value");
       const entries = Object.entries(literal);
       if (entries.length === 0) return value;
-      const record = fieldValuesRecordType(ctx, properties);
+      const record = fieldValuesRecordType(ctx, properties, savedRecord);
       const resolved: Record<string, unknown> = {};
       for (const [alias, fieldValue] of entries) {
         const field = ctx.resolver.field(record, alias);
@@ -296,6 +309,12 @@ const resolveProperty = (
       }
       return { kind: "literal", literal: { type: "json", value: resolved as JsonValue } };
     }
+    case "record_change_list":
+      // A literal change list names record types and fields that have no declared shape to
+      // resolve here, so it is refused rather than kept with readable aliases.
+      if (value.kind === "literal")
+        throw refusal(ctx, "vortex.definition.workflow_node_values", "invalid_value");
+      return value;
     default:
       return value;
   }
@@ -375,11 +394,14 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
           : undefined;
         if (declared === undefined)
           throw refusal(ctx, "vortex.definition.workflow_node_values", "unknown_property");
-        properties[name] = resolveProperty(ctx, declared.type, value, node.properties, [
-          ...path,
-          "properties",
-          name,
-        ]);
+        properties[name] = resolveProperty(
+          ctx,
+          declared.type,
+          value,
+          node.properties,
+          definition.transactionScope === "saved_record",
+          [...path, "properties", name],
+        );
       }
       return { ...node, properties };
     }
@@ -474,7 +496,9 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
     const ctx: Context = {
       resolver,
       location,
+      declared,
       reached,
+      transaction: source.execution === "transaction",
       resolved: [],
       triggerRecordType: triggerRecordType(source),
     };
@@ -536,10 +560,6 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
       resolved: ctx.resolved,
     });
   });
-
-  const outside = [...reached].filter((key) => !declared.has(key));
-  if (outside.length > 0)
-    throw new DefinitionCompilationError("vortex.definition.missing_definition", "unresolved_reference");
 
   compiled.sort((left, right) => compareCanonicalStrings(left.flow.id, right.flow.id));
   const provenance = compiled.flatMap(({ flow, sourceIndex, resolved }, canonicalIndex) =>
