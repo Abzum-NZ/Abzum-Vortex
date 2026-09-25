@@ -2799,6 +2799,7 @@ export const compareApplicationContentsV2 = (
     (before, after) =>
       compareSimpleComponent(reasons, "platform_block_dependency", after.blockId, before, after),
     () => "major",
+    (item) => item.blockId,
   );
   compareShellsV2(reasons, previous.shells as RecordValue[], candidate.shells as RecordValue[]);
   compareKeyed(
