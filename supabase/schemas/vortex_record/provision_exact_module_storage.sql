@@ -339,9 +339,13 @@ begin
       end if;
     end loop;
 
+    -- Only a field this Module itself introduced can prove a removed field. A
+    -- field another Module contributed keeps its retained lineage and never
+    -- refuses this Module's own storage.
     if exists (
       select 1 from vortex_record.field_storage_mappings as mapping
       where mapping.storage_contract_id = storage_id and mapping.state = 'active'
+        and mapping.introduced_by_module_root_id = p_module_root_id
         and mapping.introduced_at_release_revision <= p_module_release_revision
         and not exists (
           select 1 from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
