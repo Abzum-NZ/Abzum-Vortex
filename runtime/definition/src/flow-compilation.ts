@@ -2,13 +2,10 @@ import {
   compiledFlowSetSchema,
   flowSchema,
   flowTaskRegistry,
-  validateFlowTaskPlacement,
   type CompiledFlowSet,
   type DefinitionProvenanceEntry,
   type DefinitionValidationLocation,
   type FlowDefinition,
-  type FlowSource,
-  type FlowTaskPlacementIssue,
   type FlowTaskTypeKey,
   type FlowValue,
   type JsonValue,
@@ -20,6 +17,7 @@ import {
   DefinitionCompilationError,
   type DefinitionCompilerRefusalCode,
 } from "./compilation-error";
+import { flowIssueLocation, validateFlow, validateFlowSet } from "./flow-validation";
 
 /**
  * Compiles the flows one module or application owns from readable aliases to permanent
@@ -34,7 +32,9 @@ import {
  *
  * Release evidence appears once. The result lists each other definition the flows reach in one
  * dependency manifest contribution; no flow, task or reference carries a release, version or
- * fingerprint. The full flow validator (#985) is separate and reads the canonical result.
+ * fingerprint. The one flow validator (`flow-validation.ts`, #985) checks every flow's structure,
+ * run locations, typed references, outputs and error handling before it is resolved, and the
+ * resolved set's calls between flows after; the first issue is refused with its located node.
  */
 
 type Path = (string | number)[];
@@ -83,18 +83,6 @@ const resolutionRule = "vortex.definition.immutable_resolution";
 const transformRule = "vortex.definition.semantic_transform";
 const systemRule = "vortex.definition.system_metadata";
 const defaultRule = "vortex.definition.fixed_execution_default";
-
-const placementCodes: Readonly<
-  Record<FlowTaskPlacementIssue["code"], readonly [DefinitionCompilerRefusalCode, Refusal]>
-> = {
-  unknown_task_type: ["vortex.definition.unsupported_workflow_node", "unsupported_choice"],
-  unsupported_task_version: ["vortex.definition.incompatible_version", "incompatible_version"],
-  wrong_run_location: ["vortex.definition.workflow_node_references", "invalid_value"],
-  unknown_property: ["vortex.definition.workflow_node_values", "unknown_property"],
-  missing_property: ["vortex.definition.workflow_node_values", "required_value"],
-  saved_record_target: ["vortex.definition.workflow_node_values", "invalid_value"],
-  refusal_not_possible: ["vortex.definition.workflow_node_values", "invalid_value"],
-};
 
 type Context = {
   readonly resolver: FlowCompilationResolver;
@@ -503,12 +491,15 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
       triggerRecordType: triggerRecordType(source),
     };
 
-    // Every task must exist in the registry, at its pinned version, where the flow runs it.
-    const placement = validateFlowTaskPlacement(source as unknown as FlowSource)[0];
-    if (placement !== undefined) {
-      const [code, family] = placementCodes[placement.code];
-      throw refusal(ctx, code, family);
-    }
+    // Structure, run locations, typed references, outputs and error handling, in one pass. The
+    // sibling flows let Run flow check its target's inputs and outputs by readable alias.
+    const invalid = validateFlow(source, { siblingFlows: input.flows })[0];
+    if (invalid !== undefined)
+      throw new DefinitionCompilationError(
+        invalid.ruleCode,
+        invalid.family,
+        flowIssueLocation(location, invalid),
+      );
 
     // The flow's readable key must name the same permanent flow as its owner alias.
     const flowIdentity = resolver.flow(source.id);
@@ -562,6 +553,16 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
   });
 
   compiled.sort((left, right) => compareCanonicalStrings(left.flow.id, right.flow.id));
+  // Calls between the flows: no cycle, a bounded depth, and transaction flows calling only their own kind.
+  const called = validateFlowSet(compiled.map(({ flow }) => flow))[0];
+  if (called !== undefined) {
+    const caller = compiled.find(({ flow }) => flow.id === called.flowId);
+    throw new DefinitionCompilationError(
+      called.ruleCode,
+      called.family,
+      caller === undefined ? undefined : resolver.locate?.(input.flows[caller.sourceIndex]!.key),
+    );
+  }
   const provenance = compiled.flatMap(({ flow, sourceIndex, resolved }, canonicalIndex) =>
     flowProvenance(flow, input.flows[sourceIndex]!, resolved, canonicalIndex, sourceIndex),
   );

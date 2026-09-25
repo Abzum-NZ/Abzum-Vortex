@@ -2907,6 +2907,10 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
   return failures;
 }
 
+// Removal point (#986): the frontend flow routing block that starts here and the workflow reachability checks in validateWorkflow are superseded by the one flow validator
+// (runtime/definition/src/flow-validation.ts, #985). It stays only while an old-shape definition can still
+// be published; #986 converts the shipped definitions to flows and deletes it in the same change.
+
 function flowTypesCompatible(actual: string, expected: string): boolean {
   return actual === expected;
 }

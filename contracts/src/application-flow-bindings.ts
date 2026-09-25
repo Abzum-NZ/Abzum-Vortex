@@ -967,6 +967,9 @@ const protectedOperationConfirmedResults: readonly string[] = Object.values(
 const fixedActionTargetResults: Readonly<Partial<Record<string, readonly string[]>>> =
   currentUserFlowActionResults;
 
+// Removal point (#986): frontend flow routing analysis (the rule that every result routes to its own return node, and the graph checks below) is superseded by the one flow validator
+// (runtime/definition/src/flow-validation.ts, #985). It stays only while an old-shape definition can still
+// be published; #986 converts the shipped definitions to flows and deletes it in the same change.
 export type FlowRoutingNode = Readonly<{
   id: string;
   kind: string;
