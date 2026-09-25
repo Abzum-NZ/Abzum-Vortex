@@ -1,0 +1,576 @@
+{
+  "source_contract_version": "2.0.0",
+  "root_alias": "app_tenant_administration",
+  "key": "vortex.app.tenant_administration",
+  "kind": "application",
+  "body": {
+    "name": "Tenant Administration",
+    "description": "Tenant structure and organisation lifecycle for a tenant administrator, entirely definition-led.",
+    "icon": "building-2",
+    "home_page": "tenant_overview",
+    "module_bindings": [
+      {
+        "module": "vortex.tenant_administration",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        },
+        "purpose": "primary"
+      }
+    ],
+    "permissions": [
+      {
+        "id": "app_permission_open",
+        "key": "application.tenant_administration.open",
+        "label": "Open Tenant Administration",
+        "description": "Allows opening the Tenant Administration application.",
+        "action_kind": "named",
+        "named_action": "open",
+        "administrative": false
+      },
+      {
+        "id": "app_permission_manage",
+        "key": "application.tenant_administration.manage",
+        "label": "Manage Tenant Administration",
+        "description": "Allows managing Tenant Administration definition-level administration.",
+        "action_kind": "manage",
+        "administrative": true
+      }
+    ],
+    "roles": [
+      {
+        "id": "role_tenant_administrator",
+        "key": "tenant_administrator",
+        "name": "Tenant administrator",
+        "home_page": "tenant_overview",
+        "permissions": [
+          "application.tenant_administration.open",
+          "vortex.tenant_administration.organization_lifecycle_request.create",
+          "vortex.tenant_administration.organization_lifecycle_request.read",
+          "vortex.tenant_administration.organization_lifecycle_request.update",
+          "vortex.tenant_administration.organization_lifecycle_request.soft_delete",
+          "vortex.tenant_administration.organization_lifecycle_request.restore",
+          "vortex.tenant_administration.organization_lifecycle_request.export",
+          "vortex.tenant_administration.organization_lifecycle_request.submit"
+        ]
+      }
+    ],
+    "navigation": [
+      {
+        "id": "nav_tenant",
+        "type": "heading",
+        "label": "Tenant",
+        "children": [
+          {
+            "id": "nav_overview",
+            "type": "page",
+            "label": "Overview",
+            "page": "tenant_overview",
+            "permission": "application.tenant_administration.open"
+          },
+          {
+            "id": "nav_structure",
+            "type": "page",
+            "label": "Tenant structure",
+            "page": "tenant_structure",
+            "permission": "application.tenant_administration.open"
+          },
+          {
+            "id": "nav_requests",
+            "type": "page",
+            "label": "Lifecycle requests",
+            "page": "organization_lifecycle_requests",
+            "permission": "vortex.tenant_administration.organization_lifecycle_request.read"
+          }
+        ]
+      },
+      {
+        "id": "nav_access",
+        "type": "heading",
+        "label": "Access",
+        "children": [
+          {
+            "id": "nav_administrators",
+            "type": "page",
+            "label": "Tenant administrators",
+            "page": "tenant_administrators",
+            "permission": "application.tenant_administration.open"
+          }
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "id": "qry_lifecycle_requests",
+        "key": "organization_lifecycle_requests",
+        "record_type": "vortex.tenant_administration:organization_lifecycle_request",
+        "select": [
+          "subject_display_name",
+          "change_kind",
+          "requested_display_name",
+          "requested_parent_reference",
+          "state"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "subject_display_name",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      }
+    ],
+    "workflows": [],
+    "pipelines": [],
+    "connection_bindings": [],
+    "interfaces": [],
+    "actions": [],
+    "events": [],
+    "public_addresses": [],
+    "platform_block_dependencies": [],
+    "shells": [
+      {
+        "id": "shell_tenant_administration",
+        "key": "tenant_administration_shell",
+        "name": "Tenant administration shell",
+        "layout": {
+          "placements": {
+            "shell_root": {
+              "block": {
+                "block_id": "a3b7065b-47ef-4c92-93d1-59300f8b059c",
+                "release_version": "1.0.0"
+              },
+              "settings": {
+                "title": {
+                  "kind": "text",
+                  "value": "Tenant administration"
+                }
+              },
+              "theme_overrides": {},
+              "responsive": {
+                "desktop": {
+                  "visible": true,
+                  "width": {
+                    "kind": "fill"
+                  },
+                  "height": {
+                    "kind": "content"
+                  }
+                }
+              },
+              "slots": {
+                "tab_one": {
+                  "placements": {},
+                  "order": {
+                    "desktop": []
+                  }
+                }
+              }
+            }
+          },
+          "order": {
+            "desktop": [
+              "shell_root"
+            ]
+          }
+        },
+        "content_slots": [
+          {
+            "id": "slot_primary",
+            "key": "primary",
+            "label": "Primary",
+            "required": true,
+            "allowed_child_categories": [
+              "content",
+              "data",
+              "figures",
+              "record",
+              "actions",
+              "input",
+              "layout"
+            ],
+            "parent_placement": "shell_root",
+            "parent_slot": "tab_one"
+          }
+        ]
+      }
+    ],
+    "pages": [
+      {
+        "id": "page_tenant_overview",
+        "key": "tenant_overview",
+        "name": "Tenant overview",
+        "type": "dashboard",
+        "permission": "application.tenant_administration.open",
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "failure",
+          "recovery"
+        ],
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_tenant_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "overview_text": {
+                  "block": {
+                    "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Tenant overview"
+                    },
+                    "text": {
+                      "kind": "text",
+                      "value": "Review tenant structure and organisation lifecycle requests. Protected tenant structure and the organisation's role assignment ledger are read live on their own pages; nothing is copied into application records. A tenant administrator listing is not yet available."
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                }
+              },
+              "order": {
+                "desktop": [
+                  "overview_text"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_tenant_structure",
+        "key": "tenant_structure",
+        "name": "Tenant structure",
+        "type": "dashboard",
+        "permission": "application.tenant_administration.open",
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "failure",
+          "recovery"
+        ],
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_tenant_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "structure_region": {
+                  "block": {
+                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Tenant structure"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "read_model": "tenant_structure"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "structure_region"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_tenant_administrators",
+        "key": "tenant_administrators",
+        "name": "Tenant administrators",
+        "type": "dashboard",
+        "permission": "application.tenant_administration.open",
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "failure",
+          "recovery"
+        ],
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_tenant_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "administrators_text": {
+                  "block": {
+                    "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Tenant administrators"
+                    },
+                    "text": {
+                      "kind": "text",
+                      "value": "A tenant administrator listing is not yet available: no protected read model provides one. The role assignment ledger below is not that list; it is the organisation's role assignment ledger, including revoked and expired entries, read live from protected Access. Granting and revoking tenant-administrator access runs through IAM, never from this application."
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                },
+                "administrators_region": {
+                  "block": {
+                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Role assignment ledger"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "read_model": "effective_assignments"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "administrators_text",
+                  "administrators_region"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_organization_lifecycle_requests",
+        "key": "organization_lifecycle_requests",
+        "name": "Organisation lifecycle requests",
+        "type": "list",
+        "record_type": "vortex.tenant_administration:organization_lifecycle_request",
+        "permission": "vortex.tenant_administration.organization_lifecycle_request.read",
+        "query": "organization_lifecycle_requests",
+        "arrangements": [
+          "table",
+          "summary"
+        ],
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "access_ended",
+          "failure",
+          "recovery"
+        ],
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_tenant_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "requests_table": {
+                  "block": {
+                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Organisation lifecycle requests"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "query": "organization_lifecycle_requests"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "requests_table"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_record_lifecycle_request",
+        "key": "record_lifecycle_request",
+        "name": "Submit organisation lifecycle request",
+        "type": "form",
+        "record_type": "vortex.tenant_administration:organization_lifecycle_request",
+        "permission": "vortex.tenant_administration.organization_lifecycle_request.submit",
+        "commit_action": "vortex.tenant_administration.organization_lifecycle_request.submit",
+        "states": [
+          "normal",
+          "loading",
+          "validation",
+          "refused",
+          "conflict",
+          "failure",
+          "recovery"
+        ],
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_tenant_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "request_form": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Submit organisation lifecycle request"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "request_reason": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "reason"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Reason"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "multiline": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "request_reason"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "order": {
+                "desktop": [
+                  "request_form"
+                ]
+              }
+            }
+          }
+        }
+      }
+    ],
+    "flows": [],
+    "flow_bindings": []
+  }
+}
