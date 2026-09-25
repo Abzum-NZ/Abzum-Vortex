@@ -68,10 +68,15 @@ export type ProtectedQueryCacheContext = Readonly<{
   recordDependencies: QueryCacheInput["recordDependencies"];
   /**
    * True only when a published declaration explicitly allows result caching.
-   * None exists yet, and a query whose fields depend on a deadline calculation
-   * cannot prove freshness from data versions, so either case reports false.
+   * None exists yet, so this reports false until one does.
    */
   cachingAllowed: boolean;
+  /**
+   * True when any requested, filtered or sorted field is a read-time computed
+   * field, or a calculation that depends on one. Such a query always bypasses
+   * the cache, because its result changes with the clock and no data change.
+   */
+  readTimeFieldsPresent: boolean;
   /** True when any requested or filtered field is personal data or its classification is unknown. */
   sensitiveFieldsPresent: boolean;
   sharedSourceOwnership: QueryCacheInput["eligibility"]["sharedSourceOwnership"];
@@ -416,6 +421,7 @@ const planCache = async (
       recordDependencies: context.recordDependencies,
       eligibility: {
         cachingAllowed: context.cachingAllowed,
+        readTimeFieldsPresent: context.readTimeFieldsPresent,
         sensitiveFieldsPresent: context.sensitiveFieldsPresent,
         sharedSourceOwnership: context.sharedSourceOwnership,
       },

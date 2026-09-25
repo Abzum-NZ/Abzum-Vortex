@@ -20,6 +20,11 @@ import {
 } from "@vortex/contracts";
 import { compareCanonicalStrings } from "./canonical-json";
 
+// Removal point (#1007): this compiler resolves the source node-and-edge shape that
+// `before-save-flow-rules.ts` lowers a `BeforeSave` flow into. `compiler.ts` calls it to build the
+// canonical rule every Module publishes in `content.rules`, so it stays until #1007 replaces the
+// rule-graph evaluator and the database read of `content.rules`.
+
 type Path = Array<string | number>;
 type Provenance = DefinitionProvenanceEntry[];
 

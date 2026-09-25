@@ -417,14 +417,6 @@
                                    "key":  "service_desk_overview",
                                    "name":  "Service overview",
                                    "type":  "dashboard",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "permission":  "application.service_desk.open",
                                    "composition":  {
                                                        "shell_kind":  "default",
@@ -473,27 +465,9 @@
                                    "key":  "service_desk_cases",
                                    "name":  "Case queue",
                                    "type":  "list",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.service_desk.cases:case",
                                    "permission":  "vortex.service_desk.cases.case.read",
                                    "query":  "service_desk_open_cases",
-                                   "arrangements":  [
-                                                        "table",
-                                                        "board",
-                                                        "calendar",
-                                                        "summary"
-                                                    ],
-                                   "calendar_mapping":  {
-                                                            "start":  "resolution_due_at",
-                                                            "end":  "resolution_due_at"
-                                                        },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -535,26 +509,13 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "list",
-                                                                     "record_type":  "vortex.service_desk.cases:case"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_sd_case_detail",
                                    "key":  "service_desk_case_detail",
                                    "name":  "Case detail",
                                    "type":  "detail",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-"validation",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.service_desk.cases:case",
                                    "permission":  "vortex.service_desk.cases.case.read",
                                    "composition":  {
@@ -813,26 +774,13 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "detail",
-                                                                     "record_type":  "vortex.service_desk.cases:case"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_sd_new_case",
                                    "key":  "service_desk_new_case",
                                    "name":  "New case",
                                    "type":  "form",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "validation",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.service_desk.cases:case",
                                    "permission":  "vortex.service_desk.cases.case.create",
                                    "commit_action":  "vortex.service_desk.cases.case.create",
@@ -955,32 +903,16 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "create_form",
-                                                                     "record_type":  "vortex.service_desk.cases:case"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_sd_knowledge",
                                    "key":  "service_desk_knowledge",
                                    "name":  "Knowledge",
                                    "type":  "list",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.service_desk.knowledge:article",
                                    "permission":  "vortex.service_desk.knowledge.article.read",
                                    "query":  "service_desk_knowledge",
-                                   "arrangements":  [
-                                                        "table",
-                                                        "summary"
-                                                    ],
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1022,25 +954,13 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "list",
-                                                                     "record_type":  "vortex.service_desk.knowledge:article"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_sd_article",
                                    "key":  "service_desk_article",
                                    "name":  "Knowledge article",
                                    "type":  "detail",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.service_desk.knowledge:article",
                                    "permission":  "vortex.service_desk.knowledge.article.read",
                                    "composition":  {
@@ -1118,24 +1038,13 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "detail",
-                                                                     "record_type":  "vortex.service_desk.knowledge:article"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_sd_public_article",
                                    "key":  "service_desk_public_article",
                                    "name":  "Public knowledge article",
                                    "type":  "public",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "not_found",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.service_desk.knowledge:article",
                                    "permission":  "application.service_desk.open",
                                    "public_fields":  [
@@ -1193,20 +1102,9 @@
                                    "key":  "service_desk_service_levels",
                                    "name":  "Service levels",
                                    "type":  "list",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.service_desk.sla:service_level",
                                    "permission":  "vortex.service_desk.sla.service_level.read",
                                    "query":  "service_desk_service_levels",
-                                   "arrangements":  [
-                                                        "table"
-                                                    ],
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1248,11 +1146,7 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "list",
-                                                                     "record_type":  "vortex.service_desk.sla:service_level"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_sd_case_edit",
@@ -1262,15 +1156,6 @@
                                    "record_type":  "vortex.service_desk.cases:case",
                                    "permission":  "vortex.service_desk.cases.case.update",
                                    "commit_action":  "vortex.service_desk.cases.case.update",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "validation",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1399,18 +1284,6 @@
                                    "type":  "detail",
                                    "record_type":  "vortex.service_desk.sla:service_level",
                                    "permission":  "vortex.service_desk.sla.service_level.read",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "detail",
-                                                                     "record_type":  "vortex.service_desk.sla:service_level"
-                                                                 },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1496,21 +1369,6 @@
                                    "record_type":  "vortex.crm.organisations:company",
                                    "permission":  "vortex.crm.organisations.company.read",
                                    "query":  "service_desk_customers",
-                                   "arrangements":  [
-                                                        "table"
-                                                    ],
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "list",
-                                                                     "record_type":  "vortex.crm.organisations:company"
-                                                                 },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1561,18 +1419,6 @@
                                    "type":  "detail",
                                    "record_type":  "vortex.crm.organisations:company",
                                    "permission":  "vortex.crm.organisations.company.read",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "detail",
-                                                                     "record_type":  "vortex.crm.organisations:company"
-                                                                 },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1623,21 +1469,6 @@
                                    "record_type":  "vortex.crm.people:contact",
                                    "permission":  "vortex.crm.people.contact.read",
                                    "query":  "service_desk_requesters",
-                                   "arrangements":  [
-                                                        "table"
-                                                    ],
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "list",
-                                                                     "record_type":  "vortex.crm.people:contact"
-                                                                 },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1688,18 +1519,6 @@
                                    "type":  "detail",
                                    "record_type":  "vortex.crm.people:contact",
                                    "permission":  "vortex.crm.people.contact.read",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "detail",
-                                                                     "record_type":  "vortex.crm.people:contact"
-                                                                 },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -2536,778 +2355,344 @@
 
                             ],
                  "flows":  [
-    {
-        "id": "sd_form_flow_0",
-        "key": "sd_form_flow_0",
-        "name": "Continue New case",
-        "description": "Continue the declared form submission using its current Application action.",
-        "run_as": "current_user",
-        "inputs": {},
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_0",
-                "key": "start",
-                "kind": "start",
-                "outputs": {}
-            },
-            {
-                "id": "continue_0",
-                "key": "continue_form",
-                "kind": "action",
-                "target": {
-                    "kind": "record_save",
-                    "record_type": "vortex.service_desk.cases:case",
-                    "mode": "create"
-                },
-                "inputs": {},
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_0_0",
-                "key": "return_0",
-                "kind": "return",
-                "results": {},
-                "outcome": "committed"
-            },
-            {
-                "id": "return_0_1",
-                "key": "return_1",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_0_2",
-                "key": "return_2",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            },
-            {
-                "id": "return_0_3",
-                "key": "return_3",
-                "kind": "return",
-                "results": {},
-                "outcome": "conflict"
-            },
-            {
-                "id": "return_0_4",
-                "key": "return_4",
-                "kind": "return",
-                "results": {},
-                "outcome": "uncertain"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_0",
-                "from_node": "start_0",
-                "to_node": "continue_0"
-            },
-            {
-                "id": "route_0_0",
-                "from_node": "continue_0",
-                "to_node": "return_0_0",
-                "outcome": "committed"
-            },
-            {
-                "id": "route_0_1",
-                "from_node": "continue_0",
-                "to_node": "return_0_1",
-                "outcome": "validation"
-            },
-            {
-                "id": "route_0_2",
-                "from_node": "continue_0",
-                "to_node": "return_0_2",
-                "outcome": "refused"
-            },
-            {
-                "id": "route_0_3",
-                "from_node": "continue_0",
-                "to_node": "return_0_3",
-                "outcome": "conflict"
-            },
-            {
-                "id": "route_0_4",
-                "from_node": "continue_0",
-                "to_node": "return_0_4",
-                "outcome": "uncertain"
-            }
-        ]
-    },
-    {
-        "id": "sd_form_flow_1",
-        "key": "sd_form_flow_1",
-        "name": "Continue Edit case",
-        "description": "Continue the declared form submission using its current Application action.",
-        "run_as": "current_user",
-        "inputs": {},
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_1",
-                "key": "start",
-                "kind": "start",
-                "outputs": {}
-            },
-            {
-                "id": "continue_1",
-                "key": "continue_form",
-                "kind": "action",
-                "target": {
-                    "kind": "record_save",
-                    "record_type": "vortex.service_desk.cases:case",
-                    "mode": "update"
-                },
-                "inputs": {},
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_1_0",
-                "key": "return_0",
-                "kind": "return",
-                "results": {},
-                "outcome": "committed"
-            },
-            {
-                "id": "return_1_1",
-                "key": "return_1",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_1_2",
-                "key": "return_2",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            },
-            {
-                "id": "return_1_3",
-                "key": "return_3",
-                "kind": "return",
-                "results": {},
-                "outcome": "conflict"
-            },
-            {
-                "id": "return_1_4",
-                "key": "return_4",
-                "kind": "return",
-                "results": {},
-                "outcome": "uncertain"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_1",
-                "from_node": "start_1",
-                "to_node": "continue_1"
-            },
-            {
-                "id": "route_1_0",
-                "from_node": "continue_1",
-                "to_node": "return_1_0",
-                "outcome": "committed"
-            },
-            {
-                "id": "route_1_1",
-                "from_node": "continue_1",
-                "to_node": "return_1_1",
-                "outcome": "validation"
-            },
-            {
-                "id": "route_1_2",
-                "from_node": "continue_1",
-                "to_node": "return_1_2",
-                "outcome": "refused"
-            },
-            {
-                "id": "route_1_3",
-                "from_node": "continue_1",
-                "to_node": "return_1_3",
-                "outcome": "conflict"
-            },
-            {
-                "id": "route_1_4",
-                "from_node": "continue_1",
-                "to_node": "return_1_4",
-                "outcome": "uncertain"
-            }
-        ]
-    },
-    {
-        "id": "sd_named_action_case_resolve",
-        "key": "sd_named_action_case_resolve",
-        "name": "Resolve case",
-        "description": "Resolves the current case with the submitted resolution through the bound case.resolve named action.",
-        "run_as": "current_user",
-        "inputs": {
-            "resolution": {
-                "type": "formatted_text",
-                "required": true
-            }
-        },
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_sd_named_action_case_resolve",
-                "key": "start",
-                "kind": "start",
-                "outputs": {
-                    "resolution": {
-                        "type": "formatted_text",
-                        "required": true
-                    }
-                }
-            },
-            {
-                "id": "run_sd_named_action_case_resolve",
-                "key": "run_action",
-                "kind": "action",
-                "target": {
-                    "kind": "named_action",
-                    "action": "vortex.service_desk.cases.case.resolve"
-                },
-                "inputs": {
-                    "resolution": {
-                        "type": "formatted_text",
-                        "value": {
-                            "source": "flow_input",
-                            "input": "resolution"
-                        }
-                    }
-                },
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_sd_named_action_case_resolve_committed",
-                "key": "return_committed",
-                "kind": "return",
-                "results": {},
-                "outcome": "committed"
-            },
-            {
-                "id": "return_sd_named_action_case_resolve_validation",
-                "key": "return_validation",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_sd_named_action_case_resolve_refused",
-                "key": "return_refused",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            },
-            {
-                "id": "return_sd_named_action_case_resolve_conflict",
-                "key": "return_conflict",
-                "kind": "return",
-                "results": {},
-                "outcome": "conflict"
-            },
-            {
-                "id": "return_sd_named_action_case_resolve_uncertain",
-                "key": "return_uncertain",
-                "kind": "return",
-                "results": {},
-                "outcome": "uncertain"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_sd_named_action_case_resolve",
-                "from_node": "start_sd_named_action_case_resolve",
-                "to_node": "run_sd_named_action_case_resolve"
-            },
-            {
-                "id": "run_sd_named_action_case_resolve_committed",
-                "from_node": "run_sd_named_action_case_resolve",
-                "to_node": "return_sd_named_action_case_resolve_committed",
-                "outcome": "committed"
-            },
-            {
-                "id": "run_sd_named_action_case_resolve_validation",
-                "from_node": "run_sd_named_action_case_resolve",
-                "to_node": "return_sd_named_action_case_resolve_validation",
-                "outcome": "validation"
-            },
-            {
-                "id": "run_sd_named_action_case_resolve_refused",
-                "from_node": "run_sd_named_action_case_resolve",
-                "to_node": "return_sd_named_action_case_resolve_refused",
-                "outcome": "refused"
-            },
-            {
-                "id": "run_sd_named_action_case_resolve_conflict",
-                "from_node": "run_sd_named_action_case_resolve",
-                "to_node": "return_sd_named_action_case_resolve_conflict",
-                "outcome": "conflict"
-            },
-            {
-                "id": "run_sd_named_action_case_resolve_uncertain",
-                "from_node": "run_sd_named_action_case_resolve",
-                "to_node": "return_sd_named_action_case_resolve_uncertain",
-                "outcome": "uncertain"
-            }
-        ]
-    },
-    {
-        "id": "sd_named_action_case_public_comment",
-        "key": "sd_named_action_case_public_comment",
-        "name": "Add public comment",
-        "description": "Adds a customer-visible comment to the current case through the bound case.add_public_comment named action.",
-        "run_as": "current_user",
-        "inputs": {
-            "body": {
-                "type": "formatted_text",
-                "required": true
-            }
-        },
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_sd_named_action_case_public_comment",
-                "key": "start",
-                "kind": "start",
-                "outputs": {
-                    "body": {
-                        "type": "formatted_text",
-                        "required": true
-                    }
-                }
-            },
-            {
-                "id": "run_sd_named_action_case_public_comment",
-                "key": "run_action",
-                "kind": "action",
-                "target": {
-                    "kind": "named_action",
-                    "action": "vortex.service_desk.cases.case.add_public_comment"
-                },
-                "inputs": {
-                    "body": {
-                        "type": "formatted_text",
-                        "value": {
-                            "source": "flow_input",
-                            "input": "body"
-                        }
-                    }
-                },
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_sd_named_action_case_public_comment_committed",
-                "key": "return_committed",
-                "kind": "return",
-                "results": {},
-                "outcome": "committed"
-            },
-            {
-                "id": "return_sd_named_action_case_public_comment_validation",
-                "key": "return_validation",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_sd_named_action_case_public_comment_refused",
-                "key": "return_refused",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            },
-            {
-                "id": "return_sd_named_action_case_public_comment_conflict",
-                "key": "return_conflict",
-                "kind": "return",
-                "results": {},
-                "outcome": "conflict"
-            },
-            {
-                "id": "return_sd_named_action_case_public_comment_uncertain",
-                "key": "return_uncertain",
-                "kind": "return",
-                "results": {},
-                "outcome": "uncertain"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_sd_named_action_case_public_comment",
-                "from_node": "start_sd_named_action_case_public_comment",
-                "to_node": "run_sd_named_action_case_public_comment"
-            },
-            {
-                "id": "run_sd_named_action_case_public_comment_committed",
-                "from_node": "run_sd_named_action_case_public_comment",
-                "to_node": "return_sd_named_action_case_public_comment_committed",
-                "outcome": "committed"
-            },
-            {
-                "id": "run_sd_named_action_case_public_comment_validation",
-                "from_node": "run_sd_named_action_case_public_comment",
-                "to_node": "return_sd_named_action_case_public_comment_validation",
-                "outcome": "validation"
-            },
-            {
-                "id": "run_sd_named_action_case_public_comment_refused",
-                "from_node": "run_sd_named_action_case_public_comment",
-                "to_node": "return_sd_named_action_case_public_comment_refused",
-                "outcome": "refused"
-            },
-            {
-                "id": "run_sd_named_action_case_public_comment_conflict",
-                "from_node": "run_sd_named_action_case_public_comment",
-                "to_node": "return_sd_named_action_case_public_comment_conflict",
-                "outcome": "conflict"
-            },
-            {
-                "id": "run_sd_named_action_case_public_comment_uncertain",
-                "from_node": "run_sd_named_action_case_public_comment",
-                "to_node": "return_sd_named_action_case_public_comment_uncertain",
-                "outcome": "uncertain"
-            }
-        ]
-    },
-    {
-        "id": "sd_named_action_article_publish",
-        "key": "sd_named_action_article_publish",
-        "name": "Publish article",
-        "description": "Publishes the current knowledge article through the bound article.publish named action.",
-        "run_as": "current_user",
-        "inputs": {},
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_sd_named_action_article_publish",
-                "key": "start",
-                "kind": "start",
-                "outputs": {}
-            },
-            {
-                "id": "run_sd_named_action_article_publish",
-                "key": "run_action",
-                "kind": "action",
-                "target": {
-                    "kind": "named_action",
-                    "action": "vortex.service_desk.knowledge.article.publish"
-                },
-                "inputs": {},
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_sd_named_action_article_publish_committed",
-                "key": "return_committed",
-                "kind": "return",
-                "results": {},
-                "outcome": "committed"
-            },
-            {
-                "id": "return_sd_named_action_article_publish_validation",
-                "key": "return_validation",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_sd_named_action_article_publish_refused",
-                "key": "return_refused",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            },
-            {
-                "id": "return_sd_named_action_article_publish_conflict",
-                "key": "return_conflict",
-                "kind": "return",
-                "results": {},
-                "outcome": "conflict"
-            },
-            {
-                "id": "return_sd_named_action_article_publish_uncertain",
-                "key": "return_uncertain",
-                "kind": "return",
-                "results": {},
-                "outcome": "uncertain"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_sd_named_action_article_publish",
-                "from_node": "start_sd_named_action_article_publish",
-                "to_node": "run_sd_named_action_article_publish"
-            },
-            {
-                "id": "run_sd_named_action_article_publish_committed",
-                "from_node": "run_sd_named_action_article_publish",
-                "to_node": "return_sd_named_action_article_publish_committed",
-                "outcome": "committed"
-            },
-            {
-                "id": "run_sd_named_action_article_publish_validation",
-                "from_node": "run_sd_named_action_article_publish",
-                "to_node": "return_sd_named_action_article_publish_validation",
-                "outcome": "validation"
-            },
-            {
-                "id": "run_sd_named_action_article_publish_refused",
-                "from_node": "run_sd_named_action_article_publish",
-                "to_node": "return_sd_named_action_article_publish_refused",
-                "outcome": "refused"
-            },
-            {
-                "id": "run_sd_named_action_article_publish_conflict",
-                "from_node": "run_sd_named_action_article_publish",
-                "to_node": "return_sd_named_action_article_publish_conflict",
-                "outcome": "conflict"
-            },
-            {
-                "id": "run_sd_named_action_article_publish_uncertain",
-                "from_node": "run_sd_named_action_article_publish",
-                "to_node": "return_sd_named_action_article_publish_uncertain",
-                "outcome": "uncertain"
-            }
-        ]
-    },
-    {
-        "id": "sd_named_action_service_level_pause",
-        "key": "sd_named_action_service_level_pause",
-        "name": "Pause service level",
-        "description": "Pauses the current service level through the bound service_level.pause named action.",
-        "run_as": "current_user",
-        "inputs": {},
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_sd_named_action_service_level_pause",
-                "key": "start",
-                "kind": "start",
-                "outputs": {}
-            },
-            {
-                "id": "run_sd_named_action_service_level_pause",
-                "key": "run_action",
-                "kind": "action",
-                "target": {
-                    "kind": "named_action",
-                    "action": "vortex.service_desk.sla.service_level.pause"
-                },
-                "inputs": {},
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_sd_named_action_service_level_pause_committed",
-                "key": "return_committed",
-                "kind": "return",
-                "results": {},
-                "outcome": "committed"
-            },
-            {
-                "id": "return_sd_named_action_service_level_pause_validation",
-                "key": "return_validation",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_sd_named_action_service_level_pause_refused",
-                "key": "return_refused",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            },
-            {
-                "id": "return_sd_named_action_service_level_pause_conflict",
-                "key": "return_conflict",
-                "kind": "return",
-                "results": {},
-                "outcome": "conflict"
-            },
-            {
-                "id": "return_sd_named_action_service_level_pause_uncertain",
-                "key": "return_uncertain",
-                "kind": "return",
-                "results": {},
-                "outcome": "uncertain"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_sd_named_action_service_level_pause",
-                "from_node": "start_sd_named_action_service_level_pause",
-                "to_node": "run_sd_named_action_service_level_pause"
-            },
-            {
-                "id": "run_sd_named_action_service_level_pause_committed",
-                "from_node": "run_sd_named_action_service_level_pause",
-                "to_node": "return_sd_named_action_service_level_pause_committed",
-                "outcome": "committed"
-            },
-            {
-                "id": "run_sd_named_action_service_level_pause_validation",
-                "from_node": "run_sd_named_action_service_level_pause",
-                "to_node": "return_sd_named_action_service_level_pause_validation",
-                "outcome": "validation"
-            },
-            {
-                "id": "run_sd_named_action_service_level_pause_refused",
-                "from_node": "run_sd_named_action_service_level_pause",
-                "to_node": "return_sd_named_action_service_level_pause_refused",
-                "outcome": "refused"
-            },
-            {
-                "id": "run_sd_named_action_service_level_pause_conflict",
-                "from_node": "run_sd_named_action_service_level_pause",
-                "to_node": "return_sd_named_action_service_level_pause_conflict",
-                "outcome": "conflict"
-            },
-            {
-                "id": "run_sd_named_action_service_level_pause_uncertain",
-                "from_node": "run_sd_named_action_service_level_pause",
-                "to_node": "return_sd_named_action_service_level_pause_uncertain",
-                "outcome": "uncertain"
-            }
-        ]
-    }
-],
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "sd_form_flow_0",
+                         "key": "sd_form_flow_0",
+                         "description": "Saves the submitted form as a new record through the one Save record task.",
+                         "labels": {
+                             "name": "Continue New case"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "values": {
+                                 "type": "json",
+                                 "required": true
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "save",
+                                 "type": "record.save",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "record_type": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.service_desk.cases:case"
+                                         }
+                                     },
+                                     "values": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "values"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "recordTypeIds": [
+                                     "vortex.service_desk.cases:case"
+                                 ],
+                                 "value": {
+                                     "kind": "reference",
+                                     "reference": {
+                                         "source": "task_output",
+                                         "task": "save",
+                                         "key": "record"
+                                     }
+                                 }
+                             }
+                         }
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "sd_form_flow_1",
+                         "key": "sd_form_flow_1",
+                         "description": "Saves the submitted form onto the record being edited through the one Save record task.",
+                         "labels": {
+                             "name": "Continue Edit case"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "recordTypeIds": [
+                                     "vortex.service_desk.cases:case"
+                                 ],
+                                 "required": true
+                             },
+                             "values": {
+                                 "type": "json",
+                                 "required": true
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "save",
+                                 "type": "record.save",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "record_type": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.service_desk.cases:case"
+                                         }
+                                     },
+                                     "record": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "record"
+                                         }
+                                     },
+                                     "values": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "values"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "recordTypeIds": [
+                                     "vortex.service_desk.cases:case"
+                                 ],
+                                 "value": {
+                                     "kind": "reference",
+                                     "reference": {
+                                         "source": "task_output",
+                                         "task": "save",
+                                         "key": "record"
+                                     }
+                                 }
+                             }
+                         }
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "sd_named_action_case_resolve",
+                         "key": "sd_named_action_case_resolve",
+                         "description": "Resolves the current case with the submitted resolution through the bound case.resolve named action.",
+                         "labels": {
+                             "name": "Resolve case"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "resolution": {
+                                 "type": "formatted_text",
+                                 "required": true
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "call",
+                                 "type": "operation.call",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "operation": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.service_desk.cases.case.resolve"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "sd_named_action_case_public_comment",
+                         "key": "sd_named_action_case_public_comment",
+                         "description": "Adds a customer-visible comment to the current case through the bound case.add_public_comment named action.",
+                         "labels": {
+                             "name": "Add public comment"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "body": {
+                                 "type": "formatted_text",
+                                 "required": true
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "call",
+                                 "type": "operation.call",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "operation": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.service_desk.cases.case.add_public_comment"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "sd_named_action_article_publish",
+                         "key": "sd_named_action_article_publish",
+                         "description": "Publishes the current knowledge article through the bound article.publish named action.",
+                         "labels": {
+                             "name": "Publish article"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {},
+                         "tasks": [
+                             {
+                                 "id": "call",
+                                 "type": "operation.call",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "operation": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.service_desk.knowledge.article.publish"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "sd_named_action_service_level_pause",
+                         "key": "sd_named_action_service_level_pause",
+                         "description": "Pauses the current service level through the bound service_level.pause named action.",
+                         "labels": {
+                             "name": "Pause service level"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {},
+                         "tasks": [
+                             {
+                                 "id": "call",
+                                 "type": "operation.call",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "operation": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.service_desk.sla.service_level.pause"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     }
+                 ],
                  "flow_bindings":  [
-                                       {
-                                           "id":  "form_binding_0",
-                                           "control":  "form_3",
-                                           "event_id":  "form_submit_0",
-                                           "event":  "form_submit",
-                                           "flow":  {
-                                                        "kind":  "application_owned",
-                                                        "flow":  "sd_form_flow_0"
-                                                    },
-                                           "inputs":  {
-
-                                                      },
-                                           "results":  {
-
-                                                       },
-                                           "declared_effects":  [
-                                                                    "form_interaction",
-                                                                    "change"
-                                                                ]
-                                       },
-                                       {
-                                           "id":  "form_binding_1",
-                                           "control":  "form_service_desk_case_edit",
-                                           "event_id":  "form_submit_1",
-                                           "event":  "form_submit",
-                                           "flow":  {
-                                                        "kind":  "application_owned",
-                                                        "flow":  "sd_form_flow_1"
-                                                    },
-                                           "inputs":  {
-
-                                                      },
-                                           "results":  {
-
-                                                       },
-                                           "declared_effects":  [
-                                                                    "form_interaction",
-                                                                    "change"
-                                                                ]
-                                       },
-    {
-        "id": "form_binding_sd_case_resolve",
-        "control": "form_sd_case_resolve",
-        "event_id": "form_submit_sd_case_resolve",
-        "event": "form_submit",
-        "flow": {
-            "kind": "application_owned",
-            "flow": "sd_named_action_case_resolve"
-        },
-        "inputs": {
-            "resolution": {
-                "type": "formatted_text",
-                "value": {
-                    "source": "form_input",
-                    "form": "form_sd_case_resolve",
-                    "input": "resolution"
-                }
-            }
-        },
-        "results": {},
-        "declared_effects": [
-            "form_interaction",
-            "change"
-        ]
-    },
-    {
-        "id": "form_binding_sd_case_public_comment",
-        "control": "form_sd_case_public_comment",
-        "event_id": "form_submit_sd_case_public_comment",
-        "event": "form_submit",
-        "flow": {
-            "kind": "application_owned",
-            "flow": "sd_named_action_case_public_comment"
-        },
-        "inputs": {
-            "body": {
-                "type": "formatted_text",
-                "value": {
-                    "source": "form_input",
-                    "form": "form_sd_case_public_comment",
-                    "input": "body"
-                }
-            }
-        },
-        "results": {},
-        "declared_effects": [
-            "form_interaction",
-            "change"
-        ]
-    },
-    {
-        "id": "action_binding_sd_article_publish",
-        "control": "action_sd_article_publish",
-        "event_id": "event_sd_article_publish",
-        "event": "action",
-        "flow": {
-            "kind": "application_owned",
-            "flow": "sd_named_action_article_publish"
-        },
-        "inputs": {},
-        "results": {},
-        "declared_effects": [
-            "change"
-        ]
-    },
-    {
-        "id": "action_binding_sd_service_level_pause",
-        "control": "action_sd_service_level_pause",
-        "event_id": "event_sd_service_level_pause",
-        "event": "action",
-        "flow": {
-            "kind": "application_owned",
-            "flow": "sd_named_action_service_level_pause"
-        },
-        "inputs": {},
-        "results": {},
-        "declared_effects": [
-            "change"
-        ]
-    }
-                                   ]
+                     {
+                         "id": "form_binding_0",
+                         "control": "form_3",
+                         "event_id": "form_submit_0",
+                         "event": "form_submit",
+                         "flow": "sd_form_flow_0",
+                         "inputs": {
+                             "values": {
+                                 "kind": "caller",
+                                 "name": "values"
+                             }
+                         }
+                     },
+                     {
+                         "id": "form_binding_1",
+                         "control": "form_service_desk_case_edit",
+                         "event_id": "form_submit_1",
+                         "event": "form_submit",
+                         "flow": "sd_form_flow_1",
+                         "inputs": {
+                             "values": {
+                                 "kind": "caller",
+                                 "name": "values"
+                             },
+                             "record": {
+                                 "kind": "caller",
+                                 "name": "record"
+                             }
+                         }
+                     },
+                     {
+                         "id": "form_binding_sd_case_resolve",
+                         "control": "form_sd_case_resolve",
+                         "event_id": "form_submit_sd_case_resolve",
+                         "event": "form_submit",
+                         "flow": "sd_named_action_case_resolve",
+                         "inputs": {
+                             "resolution": {
+                                 "kind": "caller",
+                                 "name": "resolution"
+                             }
+                         }
+                     },
+                     {
+                         "id": "form_binding_sd_case_public_comment",
+                         "control": "form_sd_case_public_comment",
+                         "event_id": "form_submit_sd_case_public_comment",
+                         "event": "form_submit",
+                         "flow": "sd_named_action_case_public_comment",
+                         "inputs": {
+                             "body": {
+                                 "kind": "caller",
+                                 "name": "body"
+                             }
+                         }
+                     },
+                     {
+                         "id": "action_binding_sd_article_publish",
+                         "control": "action_sd_article_publish",
+                         "event_id": "event_sd_article_publish",
+                         "event": "action",
+                         "flow": "sd_named_action_article_publish",
+                         "inputs": {}
+                     },
+                     {
+                         "id": "action_binding_sd_service_level_pause",
+                         "control": "action_sd_service_level_pause",
+                         "event_id": "event_sd_service_level_pause",
+                         "event": "action",
+                         "flow": "sd_named_action_service_level_pause",
+                         "inputs": {}
+                     }
+                 ]
              }
 }

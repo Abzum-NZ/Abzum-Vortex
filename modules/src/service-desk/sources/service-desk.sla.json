@@ -661,7 +661,7 @@
         "personal_or_sensitive_values_allowed": false
       }
     ],
-    "rules": [],
+    "flows": [],
     "extension_points": [
       {
         "id": "ext_sla_fields",

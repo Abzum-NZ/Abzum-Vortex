@@ -922,23 +922,37 @@ const compareSimpleComponent = (
   );
 };
 
-const compareCurrentUserFlow = (
+/**
+ * A flow is compared as one component. Its description and labels are text for builders; every
+ * other part of it is behaviour, so a change to any of them is a major change until the flow
+ * version-impact policy classifies task by task.
+ */
+const compareFlow = (
   reasons: VersionImpactReason[],
   previous: RecordValue,
   candidate: RecordValue,
 ): void => {
-  const flowId = candidate.flowId;
-  for (const key of ["name", "description"] as const)
-    pushChange(
-      reasons,
-      previous[key],
-      candidate[key],
-      "patch",
-      key === "description" ? "definition_text_changed" : "presentation_changed",
-      "flow",
-      key,
-      flowId,
-    );
+  const flowId = candidate.id;
+  pushChange(
+    reasons,
+    previous.description,
+    candidate.description,
+    "patch",
+    "definition_text_changed",
+    "flow",
+    "description",
+    flowId,
+  );
+  pushChange(
+    reasons,
+    previous.labels,
+    candidate.labels,
+    "patch",
+    "presentation_changed",
+    "flow",
+    "configuration",
+    flowId,
+  );
   pushChange(
     reasons,
     previous.key,
@@ -949,7 +963,22 @@ const compareCurrentUserFlow = (
     "key",
     flowId,
   );
-  for (const key of ["runAs", "inputs", "outputs", "variables"] as const)
+  for (const key of [
+    "namespace",
+    "execution",
+    "runAs",
+    "invocationPermissionId",
+    "inputs",
+    "variables",
+    "triggers",
+    "tasks",
+    "outputs",
+    "errors",
+    "finally",
+    "retry",
+    "timeout",
+    "concurrency",
+  ] as const)
     pushChange(
       reasons,
       previous[key],
@@ -960,26 +989,6 @@ const compareCurrentUserFlow = (
       "behavior",
       flowId,
     );
-  compareKeyed(
-    reasons,
-    previous.nodes as RecordValue[],
-    candidate.nodes as RecordValue[],
-    "nodeId",
-    "flow_node",
-    (left, right) =>
-      compareSimpleComponent(reasons, "flow_node", right.nodeId, left, right, ["label"]),
-    () => "major",
-  );
-  compareKeyed(
-    reasons,
-    previous.edges as RecordValue[],
-    candidate.edges as RecordValue[],
-    "edgeId",
-    "flow_edge",
-    (left, right) =>
-      compareSimpleComponent(reasons, "flow_edge", right.edgeId, left, right),
-    () => "major",
-  );
 };
 
 export const compareModuleContents = (
@@ -1063,6 +1072,14 @@ export const compareModuleContents = (
     "rule",
     (left, right) => compareSimpleComponent(reasons, "rule", right.ruleId, left, right),
     () => "major",
+  );
+  compareKeyed(
+    reasons,
+    previous.flows as RecordValue[],
+    candidate.flows as RecordValue[],
+    "id",
+    "flow",
+    (left, right) => compareFlow(reasons, left, right),
   );
   compareKeyed(
     reasons,
@@ -1404,9 +1421,9 @@ const compareApplicationSharedContent = (
     reasons,
     previous.flows as RecordValue[],
     candidate.flows as RecordValue[],
-    "flowId",
+    "id",
     "flow",
-    (left, right) => compareCurrentUserFlow(reasons, left, right),
+    (left, right) => compareFlow(reasons, left, right),
   );
   const flowBindingKey = (item: RecordValue) => String(item.bindingId);
   const previousFlowBindings = (previous.flowBindings as RecordValue[]).map((b) => ({
@@ -1426,6 +1443,26 @@ const compareApplicationSharedContent = (
     (left, right) =>
       compareSimpleComponent(reasons, "flow_binding", right._flowBindingKey, left, right),
     () => "major",
+  );
+  compareKeyed(
+    reasons,
+    (previous.experiences as RecordValue[] | undefined) ?? [],
+    (candidate.experiences as RecordValue[] | undefined) ?? [],
+    "state",
+    "application",
+    (left, right) =>
+      pushChange(
+        reasons,
+        left.pageId,
+        right.pageId,
+        "patch",
+        "presentation_changed",
+        "application",
+        "configuration",
+        right.state,
+      ),
+    () => "patch",
+    (item) => item.state,
   );
   pushChange(
     reasons,
@@ -1966,6 +2003,8 @@ export const normaliseModuleContent = <T extends ModuleContent | ModuleContentV2
       "eventId",
     ),
     rules: sorted(value.rules as unknown[], "ruleId"),
+    // Superseded Module contents carry no flows.
+    ...(value.flows === undefined ? {} : { flows: sorted(value.flows as unknown[], "id") }),
     sharingConditions: sorted(
       (value.sharingConditions as RecordValue[]).map((condition) => {
         const normalised: RecordValue = {
@@ -2009,32 +2048,10 @@ export const normaliseModuleContent = <T extends ModuleContent | ModuleContentV2
 /** Canonical ordering for the definition-wide fields every Application release shares. */
 const normaliseApplicationSharedContent = (content: ApplicationContentV2): RecordValue => {
   const value = asRecord(structuredClone(content));
-  for (const flow of value.flows as RecordValue[]) {
-    delete flow.releaseVersion;
-    delete flow.contentFingerprint;
-    delete flow.resolutionFingerprint;
-    for (const node of flow.nodes as RecordValue[]) {
-      const target = node.target as RecordValue | undefined;
-      if (target === undefined) continue;
-      delete target.contentFingerprint;
-      delete target.resolutionFingerprint;
-      delete target.catalogueFingerprint;
-      const operation = target.operation as RecordValue | undefined;
-      const owner = operation?.owner as RecordValue | undefined;
-      if (!(target.kind === "protected_operation" && owner?.kind === "platform_service"))
-        delete target.releaseVersion;
-    }
-  }
-  for (const binding of value.flowBindings as RecordValue[]) {
-    const flow = binding.flow as RecordValue;
-    delete flow.contentFingerprint;
-    delete flow.catalogueFingerprint;
-    delete flow.resolutionFingerprint;
-    if (flow.kind === "application_owned") delete flow.releaseVersion;
-  }
   return {
     ...value,
     moduleBindings: sorted(value.moduleBindings as unknown[], "moduleRootId"),
+    experiences: sorted((value.experiences as unknown[] | undefined) ?? [], "state"),
     roles: sorted(
       (value.roles as RecordValue[]).map((role) => ({
         ...role,
@@ -2082,14 +2099,7 @@ const normaliseApplicationSharedContent = (content: ApplicationContentV2): Recor
       "interfaceId",
     ),
     publicAddresses: sorted(value.publicAddresses as unknown[], "addressId"),
-    flows: sorted(
-      (value.flows as RecordValue[]).map((flow) => ({
-        ...flow,
-        nodes: sorted(flow.nodes as unknown[], "nodeId"),
-        edges: sorted(flow.edges as unknown[], "edgeId"),
-      })),
-      "flowId",
-    ),
+    flows: sorted(value.flows as unknown[], "id"),
     flowBindings: sorted(
       value.flowBindings as RecordValue[],
       "bindingId",
@@ -2153,6 +2163,7 @@ export const assertUnambiguousModuleContent = (content: unknown): void => {
   ] as const)
     assertUnique(value[collection] as RecordValue[], key);
   assertUnique(value.permissions as RecordValue[], "key");
+  if (value.flows !== undefined) assertUnique(value.flows as RecordValue[], "id");
   if (value.contributions !== undefined)
     assertUnique(value.contributions as RecordValue[], "contributionId");
   if (value.queries !== undefined) {
@@ -2212,7 +2223,7 @@ const assertUnambiguousApplicationSharedContent = (content: unknown): void => {
     ["connectionBindings", "bindingId"],
     ["interfaces", "interfaceId"],
     ["publicAddresses", "addressId"],
-    ["flows", "flowId"],
+    ["flows", "id"],
   ] as const)
     assertUnique(value[collection] as RecordValue[], key);
   assertUnique(value.permissions as RecordValue[], "key");
@@ -2224,10 +2235,6 @@ const assertUnambiguousApplicationSharedContent = (content: unknown): void => {
   for (const workflow of value.workflows as RecordValue[]) {
     assertUnique(workflow.nodes as RecordValue[], "nodeId");
     assertUniqueWorkflowEdges(workflow.edges as RecordValue[]);
-  }
-  for (const flow of value.flows as RecordValue[]) {
-    assertUnique(flow.nodes as RecordValue[], "nodeId");
-    assertUnique(flow.edges as RecordValue[], "edgeId");
   }
   const flowBindings = value.flowBindings as RecordValue[];
   const flowBindingKeys = flowBindings.map(
@@ -2295,8 +2302,7 @@ const placementSubtreeIsOptionalPresentationV2 = (placement: RecordValue): boole
     ),
   );
 
-const pageIsCompatibleAdditionV2 = (page: RecordValue): boolean =>
-  page.type !== "public" && page.standardPageReplacement === undefined;
+const pageIsCompatibleAdditionV2 = (page: RecordValue): boolean => page.type !== "public";
 
 const collectPlacementSlotV2 = (
   slotValue: unknown,
@@ -2706,8 +2712,6 @@ const comparePageV2 = (
     "publicFieldIds",
     "publicActionKey",
     "rateLimitPerMinute",
-    "calendarMapping",
-    "standardPageReplacement",
   ])
     pushChange(
       reasons,
@@ -2719,17 +2723,6 @@ const comparePageV2 = (
         : "existing_behavior_changed",
       "page",
       key === "accessPermissionKey" ? "permission" : "behavior",
-      id,
-    );
-  for (const key of ["states", "arrangements"])
-    pushChange(
-      reasons,
-      previous[key],
-      candidate[key],
-      "patch",
-      "presentation_changed",
-      "page",
-      "configuration",
       id,
     );
   const beforeComposition = asRecord(previous.composition);
@@ -2857,7 +2850,6 @@ export const normaliseApplicationContentV2 = (
     pages: sorted(
       (value.pages as RecordValue[]).map((page) => ({
         ...page,
-        states: sorted(page.states as unknown[]),
         ...(Array.isArray(page.publicFieldIds)
           ? { publicFieldIds: sorted(page.publicFieldIds as unknown[]) }
           : {}),
@@ -2880,9 +2872,10 @@ export const assertUnambiguousApplicationContentV2 = (content: unknown): void =>
     return slots;
   });
   assertUnique(contentSlots, "slotId");
+  if (Array.isArray(value.experiences))
+    assertUnique(value.experiences as RecordValue[], "state");
   for (const page of value.pages as RecordValue[]) {
     if (Array.isArray(page.steps)) assertUnique(page.steps as RecordValue[], "id");
-    assertUniqueValues(page.states as unknown[]);
     if (Array.isArray(page.publicFieldIds)) assertUniqueValues(page.publicFieldIds as unknown[]);
   }
 };

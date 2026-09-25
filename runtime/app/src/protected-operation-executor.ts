@@ -1,11 +1,15 @@
 import "server-only";
 
 import {
+  addOrganizationAdministrationMembershipCommandSchema,
   applicationRootIdSchema,
+  assignOrganizationAdministrationRoleAssignmentCommandSchema,
+  changeOrganizationAdministrationRoleAuthorityCommandSchema,
   createOrganizationAdministrationGroupCommandSchema,
   deactivateOrganizationAdministrationRoleActivationCommandSchema,
   findPlatformServiceOperation,
   identitySessionSchema,
+  jsonValueSchema,
   organizationRuntimeSettingsSchema,
   organizationSelectionCandidateSchema,
   removeOrganizationAdministrationMembershipCommandSchema,
@@ -17,6 +21,7 @@ import {
   reviseOrganizationAdministrationRoleMetadataCommandSchema,
   stableDefinitionReleaseVersionSchema,
   type IdentitySession,
+  type JsonValue,
   type OrganizationSelectionCandidate,
   type PlatformServiceOperationKey,
   type ProtectedOperationDescriptor,
@@ -61,7 +66,7 @@ export type ProtectedOperationExecutionRequest = Readonly<{
 }>;
 
 /** A value a descriptor can declare for an input or output of a registered operation. */
-export type ProtectedOperationValue = string | number;
+export type ProtectedOperationValue = JsonValue;
 
 /**
  * The safe results the executor itself can report. `conflict` is not reported separately: the
@@ -84,9 +89,15 @@ export type ProtectedOperationExecutorDependencies = Readonly<{
     | "createGroup"
     | "renameGroup"
     | "retireGroup"
+    | "addGroupMembership"
     | "removeGroupMembership"
     | "reviseRoleMetadata"
     | "retireRole"
+    | "createCustomRole"
+    | "createCustomRoleFromTemplate"
+    | "acceptApplicationRoleTemplate"
+    | "acceptApplicationRoleRevision"
+    | "assignRoleAssignment"
     | "revokeRoleAssignment"
     | "deactivateRoleActivation"
     | "revokeDelegationAuthority"
@@ -123,6 +134,10 @@ const operation =
     if (!command.success) return "validation";
     return definition.run(services, caller, command.data);
   };
+
+/** A blank optional text input, as an empty form field submits it, is the same as an absent one. */
+const optionalText = (value: ProtectedOperationValue | undefined) =>
+  typeof value === "string" && value.trim() === "" ? undefined : value;
 
 const mapAvailable = <Value>(
   result: HumanOrganizationRequestResult<Value>,
@@ -183,6 +198,28 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         }),
       ),
   }),
+  add_group_membership: operation({
+    schema: addOrganizationAdministrationMembershipCommandSchema,
+    command: (inputs) => ({
+      groupId: inputs.group_id,
+      organizationAccountId: inputs.organization_account_id,
+      startsAt: inputs.starts_at,
+      expiresAt: optionalText(inputs.expires_at),
+    }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.addGroupMembership(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          membership_id: value.membership.membershipId,
+          revision: value.membership.revision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
   remove_group_membership: operation({
     schema: removeOrganizationAdministrationMembershipCommandSchema,
     command: (inputs) => ({
@@ -237,6 +274,100 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         (value) => ({
           role_id: value.role.roleId,
           revision: value.role.liveRevision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
+  create_custom_role: operation({
+    schema: changeOrganizationAdministrationRoleAuthorityCommandSchema,
+    command: (inputs) => ({ evidence: inputs.evidence }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.createCustomRole(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          role_id: value.role.roleId,
+          revision: value.role.liveRevision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
+  create_custom_role_from_template: operation({
+    schema: changeOrganizationAdministrationRoleAuthorityCommandSchema,
+    command: (inputs) => ({ evidence: inputs.evidence }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.createCustomRoleFromTemplate(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          role_id: value.role.roleId,
+          revision: value.role.liveRevision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
+  accept_application_role_template: operation({
+    schema: changeOrganizationAdministrationRoleAuthorityCommandSchema,
+    command: (inputs) => ({ evidence: inputs.evidence }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.acceptApplicationRoleTemplate(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          role_id: value.role.roleId,
+          revision: value.role.liveRevision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
+  accept_application_role_revision: operation({
+    schema: changeOrganizationAdministrationRoleAuthorityCommandSchema,
+    command: (inputs) => ({ evidence: inputs.evidence }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.acceptApplicationRoleRevision(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          role_id: value.role.roleId,
+          revision: value.role.liveRevision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
+  assign_role_assignment: operation({
+    schema: assignOrganizationAdministrationRoleAssignmentCommandSchema,
+    command: (inputs) => ({
+      roleId: inputs.role_id,
+      expectedRoleRevision: inputs.expected_role_revision,
+      assigneeKind: inputs.assignee_kind,
+      organizationAccountId: optionalText(inputs.organization_account_id),
+      groupId: optionalText(inputs.group_id),
+      assignmentKind: inputs.assignment_kind,
+      startsAt: inputs.starts_at,
+      expiresAt: optionalText(inputs.expires_at),
+    }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.assignRoleAssignment(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          role_assignment_id: value.assignment.roleAssignmentId,
+          revision: value.assignment.revision,
           access_version: value.accessVersion,
         }),
       ),
@@ -358,6 +489,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
 const valueMatches = (type: string, value: unknown): value is ProtectedOperationValue => {
   if (type === "text" || type === "choice") return typeof value === "string";
   if (type === "whole_number") return typeof value === "number" && Number.isSafeInteger(value);
+  if (type === "json") return jsonValueSchema.safeParse(value).success;
   return false;
 };
 

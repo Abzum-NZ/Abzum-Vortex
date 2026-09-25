@@ -7,11 +7,11 @@ import {
   connectionTypeSourceDocumentSchema,
   platformBlockReferenceV2Schema,
   platformBlockReleaseV2Schema,
+  platformThemeTokenRolesV2,
   PLATFORM_SERVICE_OPERATION_RELEASES,
   PLATFORM_SERVICE_OPERATIONS,
   platformIdSchema,
   platformThemeReleaseV2Schema,
-  platformManagedFlowDependencySchema,
   platformServiceOperationReleaseSchema,
   stableDefinitionReleaseVersionSchema,
   type ApplicationCompositionCatalogueSnapshotV2,
@@ -22,13 +22,18 @@ import {
   type PlatformId,
   type PlatformBlockReleaseV2,
   type PlatformThemeReleaseV2,
-  type PlatformManagedFlowDependency,
+  type PlatformThemeTokenRoleV2,
   type PlatformServiceOperationRelease,
   type SemanticVersion,
 } from "@vortex/contracts";
 import { compare } from "semver";
 import { z } from "zod";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
+import {
+  platformBlockReleaseFingerprints,
+  platformServiceOperationReleaseFingerprints,
+  platformThemeReleaseFingerprints,
+} from "./catalogue-release-fingerprints";
 import { compileDefinitionSet } from "./validation";
 import type {
   DefinitionPublicationCatalogue,
@@ -44,7 +49,6 @@ export type PlatformConnectionTypeReleaseDefinition = Readonly<{
 export type ImmutableDefinitionPublicationCatalogueDefinition = Readonly<{
   connectionTypeReleases: readonly PlatformConnectionTypeReleaseDefinition[];
   applicationCompositionV2?: ApplicationCompositionCatalogueDefinitionV2;
-  platformManagedFlowReleases?: readonly PlatformManagedFlowDependency[];
   platformServiceOperationReleases?: readonly PlatformServiceOperationRelease[];
 }>;
 
@@ -124,10 +128,6 @@ const catalogueDefinitionSchema = z
   .object({
     connectionTypeReleases: z.array(connectionTypeReleaseDefinitionSchema).max(10_000),
     applicationCompositionV2: applicationCompositionCatalogueDefinitionV2Schema.optional(),
-    platformManagedFlowReleases: z
-      .array(platformManagedFlowDependencySchema)
-      .max(10_000)
-      .optional(),
     platformServiceOperationReleases: z
       .array(platformServiceOperationReleaseSchema)
       .max(10_000)
@@ -198,6 +198,31 @@ const ensureUniqueApplicationCompositionReleases = (
 };
 
 /**
+ * A platform theme release is complete only when it maps every role in the shared
+ * token-role vocabulary with the kind that vocabulary requires, and marks each colour pair
+ * with exactly the declared colour role (none where the vocabulary declares none). An
+ * incomplete or mismarked release refuses here instead of publishing a theme that would
+ * leave the renderer or the readability checks on another convention.
+ */
+const ensurePlatformThemeReleasesCoverEveryRole = (
+  definition: ApplicationCompositionCatalogueDefinitionV2 | undefined,
+): void => {
+  if (definition === undefined) return;
+  const roles: readonly PlatformThemeTokenRoleV2[] = platformThemeTokenRolesV2;
+  for (const release of definition.platformThemeReleases) {
+    for (const role of roles) {
+      const token = release.tokens[role.key];
+      if (
+        token === undefined ||
+        token.kind !== role.kind ||
+        (token.kind === "color_pair" && token.role !== role.colorRole)
+      )
+        duplicate();
+    }
+  }
+};
+
+/**
  * The registered platform-service operations are published exactly as registered: each release's
  * content fingerprint must be the canonical-JSON SHA-256 of its descriptor and its catalogue
  * fingerprint that of its identity and content, so a descriptor edited without a new release
@@ -205,20 +230,13 @@ const ensureUniqueApplicationCompositionReleases = (
  */
 const ensureRegisteredPlatformServiceOperationsAuthentic = (): void => {
   for (const { release, descriptor } of Object.values(PLATFORM_SERVICE_OPERATIONS)) {
-    const contentFingerprint = fingerprintCanonicalValue(descriptor);
+    const expected = platformServiceOperationReleaseFingerprints(release, descriptor);
     if (
       descriptor.operation.owner.kind !== "platform_service" ||
       descriptor.operation.owner.serviceId !== release.serviceId ||
       descriptor.operation.operationId !== release.operationId ||
-      release.contentFingerprint !== contentFingerprint ||
-      release.catalogueFingerprint !==
-        fingerprintCanonicalValue({
-          kind: "platform_service_operation",
-          serviceId: release.serviceId,
-          operationId: release.operationId,
-          releaseVersion: release.releaseVersion,
-          contentFingerprint,
-        })
+      release.contentFingerprint !== expected.contentFingerprint ||
+      release.catalogueFingerprint !== expected.catalogueFingerprint
     )
       duplicate();
   }
@@ -275,29 +293,10 @@ const compileConnectionTypeRelease = (
 const materialisePlatformBlockReleaseV2 = (
   definition: PlatformBlockReleaseDefinitionV2,
 ): PlatformBlockReleaseV2 => {
-  const content = {
-    name: definition.name,
-    icon: definition.icon,
-    paletteGroup: definition.paletteGroup,
-    rendererKey: definition.rendererKey,
-    properties: definition.properties,
-    slots: definition.slots,
-    capabilities: definition.capabilities,
-    supportedEvents: definition.supportedEvents,
-    supportedStateOperations: definition.supportedStateOperations,
-  };
-  const contentFingerprint = fingerprintCanonicalValue(content);
   return deepFreeze(
     platformBlockReleaseV2Schema.parse({
       ...definition,
-      contentFingerprint,
-      catalogueFingerprint: fingerprintCanonicalValue({
-        kind: "platform_block",
-        blockId: definition.blockId,
-        key: definition.key,
-        releaseVersion: definition.releaseVersion,
-        contentFingerprint,
-      }),
+      ...platformBlockReleaseFingerprints(definition),
     }),
   );
 };
@@ -305,17 +304,10 @@ const materialisePlatformBlockReleaseV2 = (
 const materialisePlatformThemeReleaseV2 = (
   definition: PlatformThemeReleaseDefinitionV2,
 ): PlatformThemeReleaseV2 => {
-  const contentFingerprint = fingerprintCanonicalValue(definition.tokens);
   return deepFreeze(
     platformThemeReleaseV2Schema.parse({
       ...definition,
-      contentFingerprint,
-      catalogueFingerprint: fingerprintCanonicalValue({
-        kind: "platform_theme",
-        catalogueThemeId: definition.catalogueThemeId,
-        releaseVersion: definition.releaseVersion,
-        contentFingerprint,
-      }),
+      ...platformThemeReleaseFingerprints(definition),
     }),
   );
 };
@@ -333,11 +325,7 @@ export const createImmutableDefinitionPublicationCatalogue = (
   const definition = parsed.success ? parsed.data : duplicate();
   ensureUniqueConnectionTypeReleases(definition.connectionTypeReleases);
   ensureUniqueApplicationCompositionReleases(definition.applicationCompositionV2);
-  const managedFlowReleases = definition.platformManagedFlowReleases ?? [];
-  const managedFlowIdentities = new Set(
-    managedFlowReleases.map((release) => `${release.flowId}:${release.releaseVersion}`),
-  );
-  if (managedFlowIdentities.size !== managedFlowReleases.length) duplicate();
+  ensurePlatformThemeReleasesCoverEveryRole(definition.applicationCompositionV2);
   ensureRegisteredPlatformServiceOperationsAuthentic();
   const operationReleases = [
     ...PLATFORM_SERVICE_OPERATION_RELEASES,
@@ -380,12 +368,6 @@ export const createImmutableDefinitionPublicationCatalogue = (
       release,
     ]),
   );
-  const managedFlowsByIdentity = new Map(
-    managedFlowReleases.map((release) => [
-      `${release.flowId}:${release.releaseVersion}`,
-      deepFreeze({ ...release }),
-    ]),
-  );
   const operationsByIdentity = new Map(
     operationReleases.map((release) => [
       `${release.serviceId}:${release.operationId}:${release.releaseVersion}`,
@@ -404,8 +386,6 @@ export const createImmutableDefinitionPublicationCatalogue = (
       connectionsByIdentity.get(`${rootId}:${releaseVersion}`),
     readPlatformBlockReleaseV2,
     readPlatformThemeReleaseV2,
-    readPlatformManagedFlowRelease: async (flowId: string, releaseVersion: string) =>
-      managedFlowsByIdentity.get(`${flowId}:${releaseVersion}`),
     readPlatformServiceOperationRelease: async (
       serviceId: string,
       operationId: string,

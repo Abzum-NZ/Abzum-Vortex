@@ -958,88 +958,95 @@
         "personal_or_sensitive_values_allowed": false
       }
     ],
-    "rules": [
+    "flows": [
       {
+        "contractVersion": "1.0.0",
         "id": "rule_lead_reason",
         "key": "unqualified_reason_required",
-        "record_type": "lead",
-        "profile": "before_save",
-        "graph_version": "1.0.0",
-        "priority": 100,
-        "inputs": [],
-        "variables": [],
-        "nodes": [
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
           {
-            "id": "start",
-            "node_version": "1.0.0",
-            "type": "start",
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "lead",
             "operations": [
-              "create",
-              "update"
-            ]
-          },
+              {
+                "kind": "create"
+              },
+              {
+                "kind": "update"
+              }
+            ],
+            "priority": 100
+          }
+        ],
+        "tasks": [
           {
             "id": "unqualified_without_reason",
-            "node_version": "1.0.0",
-            "type": "condition",
+            "type": "if",
             "condition": {
-              "kind": "all",
-              "conditions": [
+              "op": "and",
+              "args": [
                 {
-                  "kind": "comparison",
-                  "operator": "equals",
+                  "op": "eq",
                   "left": {
-                    "source": "current_field",
-                    "field": "status"
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "status"
+                    }
                   },
                   "right": {
-                    "source": "literal",
-                    "value": {
-                      "type": "choice",
-                      "value": "unqualified"
-                    }
+                    "op": "literal",
+                    "type": "choice",
+                    "value": "unqualified"
                   }
                 },
                 {
-                  "kind": "comparison",
-                  "operator": "is_empty",
-                  "left": {
-                    "source": "current_field",
-                    "field": "unqualified_reason"
+                  "op": "is_empty",
+                  "arg": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "unqualified_reason"
+                    }
                   }
                 }
               ]
-            }
-          },
-          {
-            "id": "refuse_without_reason",
-            "node_version": "1.0.0",
-            "type": "refuse",
-            "code": "unqualified_reason_required",
-            "message": "Give the reason this lead was unqualified.",
-            "field": "unqualified_reason"
-          },
-          {
-            "id": "finish",
-            "node_version": "1.0.0",
-            "type": "finish"
-          }
-        ],
-        "edges": [
-          {
-            "from": "start",
-            "port": "next",
-            "to": "unqualified_without_reason"
-          },
-          {
-            "from": "unqualified_without_reason",
-            "port": "true",
-            "to": "refuse_without_reason"
-          },
-          {
-            "from": "unqualified_without_reason",
-            "port": "false",
-            "to": "finish"
+            },
+            "then": [
+              {
+                "id": "refuse_without_reason",
+                "type": "rule.refuse",
+                "version": "1.0.0",
+                "properties": {
+                  "reason": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "unqualified_reason_required"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "Give the reason this lead was unqualified."
+                    }
+                  },
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "lead.unqualified_reason"
+                    }
+                  }
+                }
+              }
+            ]
           }
         ]
       }
