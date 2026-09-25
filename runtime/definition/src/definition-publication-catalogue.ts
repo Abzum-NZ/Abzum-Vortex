@@ -5,6 +5,9 @@ import {
   applicationCompositionPolicyV2Schema,
   connectionTypeIdSchema,
   connectionTypeSourceDocumentSchema,
+  customComponentPlacementAllowedV2,
+  customComponentReleaseV2Schema,
+  namespacedKeySchema,
   platformBlockReferenceV2Schema,
   platformBlockReleaseV2Schema,
   platformThemeTokenRolesV2,
@@ -14,11 +17,14 @@ import {
   platformThemeReleaseV2Schema,
   platformServiceOperationReleaseSchema,
   stableDefinitionReleaseVersionSchema,
+  validateCustomComponentReleaseV2,
   type ApplicationCompositionCatalogueSnapshotV2,
   type ApplicationCompositionPolicyV2,
   type BlockId,
   type ConnectionTypeId,
   type ConnectionTypeSourceDocument,
+  type CustomComponentPlacementContextV2,
+  type CustomComponentReleaseV2,
   type PlatformId,
   type PlatformBlockReleaseV2,
   type PlatformThemeReleaseV2,
@@ -62,10 +68,19 @@ export type PlatformThemeReleaseDefinitionV2 = Omit<
   "contentFingerprint" | "catalogueFingerprint"
 >;
 
+export type CustomComponentReleaseDefinitionV2 = PlatformBlockReleaseDefinitionV2 &
+  Readonly<{ customComponent: CustomComponentReleaseV2 }>;
+
 export type ApplicationCompositionCatalogueDefinitionV2 = Readonly<{
   compositionPolicy: ApplicationCompositionPolicyV2;
   platformBlockReleases: readonly PlatformBlockReleaseDefinitionV2[];
   platformThemeReleases: readonly PlatformThemeReleaseDefinitionV2[];
+  /**
+   * Custom component releases owned by a customer application or module release. They are joined
+   * with the platform block releases at materialisation and carry the same placement identity
+   * shape, with the custom-component payload on top.
+   */
+  customComponentReleases?: readonly CustomComponentReleaseDefinitionV2[];
 }>;
 
 export type ApplicationCompositionCatalogueSelectionV2 = Readonly<{
@@ -77,6 +92,12 @@ export type ApplicationCompositionCatalogueSelectionV2 = Readonly<{
     catalogueThemeId: PlatformId;
     releaseVersion: SemanticVersion;
   }>;
+  /**
+   * The placing application's key and exact bound module releases. A selected custom component
+   * release is returned only when this context may place it, so an unrelated application never
+   * receives a custom component it does not own or bind.
+   */
+  customComponentPlacement?: CustomComponentPlacementContextV2;
 }>;
 
 export interface ApplicationCompositionCatalogueV2 {
@@ -116,11 +137,16 @@ const platformThemeReleaseDefinitionV2Schema = z
   .extend({ releaseVersion: stableDefinitionReleaseVersionSchema })
   .strict();
 
+const customComponentReleaseDefinitionV2Schema = platformBlockReleaseDefinitionV2Schema.extend({
+  customComponent: customComponentReleaseV2Schema,
+});
+
 const applicationCompositionCatalogueDefinitionV2Schema = z
   .object({
     compositionPolicy: applicationCompositionPolicyV2Schema,
     platformBlockReleases: z.array(platformBlockReleaseDefinitionV2Schema),
     platformThemeReleases: z.array(platformThemeReleaseDefinitionV2Schema),
+    customComponentReleases: z.array(customComponentReleaseDefinitionV2Schema).max(10_000).optional(),
   })
   .strict();
 
@@ -194,6 +220,23 @@ const ensureUniqueApplicationCompositionReleases = (
     const versionKey = `${release.catalogueThemeId}:${release.releaseVersion}`;
     if (themeVersions.has(versionKey)) duplicate();
     themeVersions.add(versionKey);
+  }
+  // A custom component release joins the same identity space as the platform blocks, and its
+  // typed properties, typed events, data contract, accessible name and bundle manifest must be
+  // complete here: an untyped property or event refuses before it is ever publishable.
+  for (const release of definition.customComponentReleases ?? []) {
+    const id = String(release.blockId);
+    const versionKey = `${id}:${release.releaseVersion}`;
+    if (
+      blockVersions.has(versionKey) ||
+      (keysById.has(id) && keysById.get(id) !== release.key) ||
+      (idsByKey.has(release.key) && idsByKey.get(release.key) !== id)
+    )
+      duplicate();
+    blockVersions.add(versionKey);
+    keysById.set(id, release.key);
+    idsByKey.set(release.key, id);
+    if (validateCustomComponentReleaseV2(release).length > 0) duplicate();
   }
 };
 
@@ -353,9 +396,10 @@ export const createImmutableDefinitionPublicationCatalogue = (
     connectionTypes.map((release) => [`${release.rootId}:${release.releaseVersion}`, release]),
   );
   const composition = definition.applicationCompositionV2;
-  const blockReleasesV2 = (composition?.platformBlockReleases ?? []).map(
-    materialisePlatformBlockReleaseV2,
-  );
+  const blockReleasesV2 = [
+    ...(composition?.platformBlockReleases ?? []).map(materialisePlatformBlockReleaseV2),
+    ...(composition?.customComponentReleases ?? []).map(materialisePlatformBlockReleaseV2),
+  ];
   const themeReleasesV2 = (composition?.platformThemeReleases ?? []).map(
     materialisePlatformThemeReleaseV2,
   );
@@ -404,6 +448,22 @@ export const createImmutableDefinitionPublicationCatalogue = (
               releaseVersion: stableDefinitionReleaseVersionSchema,
             })
             .strict(),
+          customComponentPlacement: z
+            .object({
+              applicationKey: namespacedKeySchema,
+              boundModuleReleases: z
+                .array(
+                  z
+                    .object({
+                      moduleKey: namespacedKeySchema,
+                      releaseVersion: stableDefinitionReleaseVersionSchema,
+                    })
+                    .strict(),
+                )
+                .max(1_000),
+            })
+            .strict()
+            .optional(),
         })
         .strict()
         .safeParse(selection);
@@ -419,6 +479,16 @@ export const createImmutableDefinitionPublicationCatalogue = (
         ),
       );
       if (selectedBlocks.some((release) => release === undefined)) return undefined;
+      // A custom component is returned only to the application that owns it or that binds the
+      // exact owning module release; any other application never receives it, so its placement is
+      // refused rather than silently allowed.
+      for (const release of selectedBlocks as PlatformBlockReleaseV2[]) {
+        const custom = release.customComponent;
+        if (custom === undefined) continue;
+        const context = parsedSelection.data.customComponentPlacement;
+        if (context === undefined || !customComponentPlacementAllowedV2(custom.owner, context))
+          return undefined;
+      }
       const selectedTheme = await readPlatformThemeReleaseV2(
         parsedSelection.data.platformTheme.catalogueThemeId,
         parsedSelection.data.platformTheme.releaseVersion,

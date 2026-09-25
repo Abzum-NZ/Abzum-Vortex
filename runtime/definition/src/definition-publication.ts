@@ -4,6 +4,7 @@ import {
   applicationCompilationRequestV2Schema,
   applicationCompositionCatalogueSnapshotV2Schema,
   assertModuleContractPair,
+  customComponentPlacementAllowedV2,
   definitionCompilationOutputSchema,
   definitionPublicationConfirmationSchema,
   definitionResolutionSnapshotV3Schema,
@@ -196,6 +197,13 @@ export interface DefinitionPublicationCatalogue {
       platformTheme: Readonly<{
         catalogueThemeId: PlatformId;
         releaseVersion: SemanticVersion;
+      }>;
+      customComponentPlacement?: Readonly<{
+        applicationKey: string;
+        boundModuleReleases: readonly Readonly<{
+          moduleKey: string;
+          releaseVersion: string;
+        }>[];
       }>;
     }>,
   ): Promise<ApplicationCompositionCatalogueSnapshotV2 | undefined>;
@@ -597,8 +605,16 @@ const findPinned = <Kind extends ExactDefinitionDependency["kind"]>(
 const resolveApplicationCompositionV2 = async (
   source: ApplicationSourceDocumentV2,
   catalogue: DefinitionPublicationCatalogue,
+  modules: readonly ResolvableModuleRelease[],
   pinned?: readonly ExactDefinitionDependency[],
 ): Promise<ApplicationCompositionCatalogueSnapshotV2> => {
+  const customComponentPlacement = {
+    applicationKey: source.key,
+    boundModuleReleases: modules.map((module) => ({
+      moduleKey: module.key,
+      releaseVersion: module.releaseVersion,
+    })),
+  };
   const selection = {
     platformBlocks: source.body.platform_block_dependencies.map((dependency) => ({
       blockId: dependency.block_id,
@@ -608,12 +624,24 @@ const resolveApplicationCompositionV2 = async (
       catalogueThemeId: source.body.theme.base.catalogue_theme_id,
       releaseVersion: source.body.theme.base.release_version,
     },
+    customComponentPlacement,
   };
   const candidate = await catalogue.readApplicationCompositionCatalogueSnapshotV2(selection);
   if (candidate === undefined) return refuse("DEFINITION_DEPENDENCY_MISSING");
   const parsed = applicationCompositionCatalogueSnapshotV2Schema.safeParse(candidate);
   if (!parsed.success) return refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
   const snapshot = parsed.data;
+  // A custom component is placeable only by its owning application or by an application that binds
+  // the exact owning module release; the catalogue already filters, and this re-checks the returned
+  // snapshot so a substituted catalogue can never introduce a foreign component.
+  for (const release of snapshot.platformBlocks.releases) {
+    const custom = release.customComponent;
+    if (
+      custom !== undefined &&
+      !customComponentPlacementAllowedV2(custom.owner, customComponentPlacement)
+    )
+      return refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+  }
   const fingerprint = fingerprintCanonicalValue({
     contractVersion: snapshot.contractVersion,
     platformBlocks: snapshot.platformBlocks,
@@ -734,6 +762,7 @@ const resolveDependencies = async (
     compositionV2 = await resolveApplicationCompositionV2(
       candidate.draft.source,
       catalogue,
+      modules,
       pinned,
     );
 

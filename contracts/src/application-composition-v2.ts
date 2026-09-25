@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { blockPaletteGroupSchema, type BlockPaletteGroup } from "./catalogues";
+import {
+  blockPaletteGroupSchema,
+  workflowValueTypeSchema,
+  type BlockPaletteGroup,
+} from "./catalogues";
 import { labelSchema, safeHttpsUrlSchema } from "./common";
 import {
   sourceAliasSchema,
@@ -1013,6 +1017,222 @@ export const componentStateOperationKindSchema = z.enum([
   "close",
 ]);
 
+/**
+ * The owner of a custom component release: the exact application or module release that bundles
+ * it. A custom component belongs to exactly one owning release; only that application, or an
+ * application that binds the owning module, may place it (application packages appendix,
+ * "Custom components").
+ */
+export const customComponentOwnerV2Schema = z
+  .object({
+    kind: z.enum(["application", "module"]),
+    definitionKey: namespacedKeySchema,
+    releaseVersion: semanticVersionSchema,
+  })
+  .strict();
+
+/** One typed value a custom component event carries. A payload field always declares a type. */
+export const customComponentEventPayloadFieldV2Schema = z
+  .object({
+    key: builderKeySchema,
+    label: labelSchema,
+    type: workflowValueTypeSchema,
+    required: z.boolean(),
+  })
+  .strict();
+
+/**
+ * One declared custom component event. An event carries a typed payload; an undeclared or untyped
+ * payload field is refused, because the renderer validates every incoming message against this
+ * declaration and drops anything else (it never trusts the component's origin).
+ */
+export const customComponentEventV2Schema = z
+  .object({
+    key: builderKeySchema,
+    label: labelSchema,
+    payload: z.array(customComponentEventPayloadFieldV2Schema).max(50),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.payload.map((field) => field.key)).size !== value.payload.length)
+      context.addIssue({
+        code: "custom",
+        path: ["payload"],
+        message: "Event payload field keys must be unique",
+      });
+  });
+
+/**
+ * The typed data contract a custom component reads: the values the renderer may send it, each
+ * with a declared value type. Every value is treated as disclosed to the package's publisher, so
+ * the contract is closed and typed rather than free-form.
+ */
+export const customComponentDataContractV2Schema = z
+  .object({
+    values: z
+      .array(
+        z
+          .object({
+            key: builderKeySchema,
+            label: labelSchema,
+            type: workflowValueTypeSchema,
+            required: z.boolean(),
+          })
+          .strict(),
+      )
+      .max(200),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.values.map((entry) => entry.key)).size !== value.values.length)
+      context.addIssue({
+        code: "custom",
+        path: ["values"],
+        message: "Data-contract value keys must be unique",
+      });
+  });
+
+/** A relative module entry file inside the bundle, with no absolute or parent path. */
+const customComponentEntryFileSchema = z
+  .string()
+  .min(1)
+  .max(500)
+  .regex(/^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*\.(?:m?js)$/, "Use a relative JavaScript module path")
+  .refine((value) => !value.split("/").includes(".."), "Use a relative path without parent steps");
+
+/** A registrable host a custom component bundle may load from, never a URL or a scheme. */
+const customComponentHostSchema = z
+  .string()
+  .min(1)
+  .max(253)
+  .regex(/^[a-z0-9.-]+$/, "Use a bare lowercase host name");
+
+/**
+ * The bundle manifest of a custom component: the Subresource Integrity digest the bootstrap
+ * document verifies, the relative entry file it loads, and the external hosts the sandboxed frame
+ * may reach. The digest is the release's immutable content address (application packages
+ * appendix, "Custom components").
+ */
+export const customComponentBundleV2Schema = z
+  .object({
+    digest: z
+      .string()
+      .regex(/^sha384-[A-Za-z0-9+/]+={0,2}$/, "Use a base64 SHA-384 Subresource Integrity digest"),
+    entryFile: customComponentEntryFileSchema,
+    allowedHosts: z.array(customComponentHostSchema).max(50),
+  })
+  .strict();
+
+/**
+ * The custom-component-specific part of a release: its owning release, its typed declared events,
+ * its typed data contract, the accessible text alternative the host renders and its bundle
+ * manifest. The release's own `properties`, `capabilities.accessibleName` and
+ * `supportedStateOperations` carry the rest of the component contract.
+ */
+export const customComponentReleaseV2Schema = z
+  .object({
+    owner: customComponentOwnerV2Schema,
+    events: z.array(customComponentEventV2Schema).max(50),
+    dataContract: customComponentDataContractV2Schema,
+    textAlternative: labelSchema,
+    bundle: customComponentBundleV2Schema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.events.map((event) => event.key)).size !== value.events.length)
+      context.addIssue({
+        code: "custom",
+        path: ["events"],
+        message: "Custom component event keys must be unique",
+      });
+  });
+
+export type CustomComponentOwnerV2 = z.infer<typeof customComponentOwnerV2Schema>;
+export type CustomComponentReleaseV2 = z.infer<typeof customComponentReleaseV2Schema>;
+
+/** A setting or event a custom component release failed to type or complete. */
+export type CustomComponentReleaseFailure = Readonly<{
+  family: Extract<
+    DefinitionRuleFailureFamily,
+    "required_value" | "invalid_value" | "unsafe_content" | "unsupported_choice" | "duplicate_key"
+  >;
+  path: readonly (string | number)[];
+}>;
+
+/**
+ * Judges a custom component release as built-in component releases are judged: every property is a
+ * closed typed declaration (already guaranteed by `blockPropertySchemaV2Schema`), every event
+ * carries a typed payload, the accessible name resolves through declared text properties, and the
+ * bundle manifest is complete. An untyped property or event refuses here, before publication.
+ */
+export const validateCustomComponentReleaseV2 = (
+  release: Readonly<{
+    properties: readonly BlockPropertySchemaV2Contract[];
+    capabilities: Readonly<{
+      accessibleName: "not_applicable" | "required" | "optional";
+      accessibleNamePropertyPath?: readonly string[];
+    }>;
+    customComponent: CustomComponentReleaseV2;
+  }>,
+): CustomComponentReleaseFailure[] => {
+  const failures: CustomComponentReleaseFailure[] = [];
+  const report = (
+    family: CustomComponentReleaseFailure["family"],
+    path: readonly (string | number)[],
+  ): void => {
+    failures.push({ family, path });
+  };
+  const custom = release.customComponent;
+  if (release.capabilities.accessibleName !== "not_applicable") {
+    const propertyPath = release.capabilities.accessibleNamePropertyPath ?? [];
+    let properties: readonly BlockPropertySchemaV2Contract[] = release.properties;
+    for (const [index, key] of propertyPath.entries()) {
+      const property = properties.find((candidate) => candidate.key === key);
+      const last = index === propertyPath.length - 1;
+      if (property === undefined || (last ? property.kind !== "text" : property.kind !== "group")) {
+        report("invalid_value", ["capabilities", "accessibleNamePropertyPath", index]);
+        break;
+      }
+      if (property.kind === "group") properties = property.properties;
+    }
+  }
+  for (const [index, event] of custom.events.entries())
+    for (const [fieldIndex, field] of event.payload.entries())
+      if (field.type === undefined)
+        report("required_value", ["customComponent", "events", index, "payload", fieldIndex, "type"]);
+  if (custom.bundle.entryFile.length === 0)
+    report("required_value", ["customComponent", "bundle", "entryFile"]);
+  return failures;
+};
+
+/**
+ * The context in which one application release places custom components: the placing application's
+ * key and the exact module releases it binds. A custom component is placeable only by its owning
+ * application, or by an application that binds the owning module release.
+ */
+export type CustomComponentPlacementContextV2 = Readonly<{
+  applicationKey: string;
+  boundModuleReleases: readonly Readonly<{ moduleKey: string; releaseVersion: string }>[];
+}>;
+
+/**
+ * True when the placing application may place the custom component: it owns the component, or it
+ * binds the exact module release that owns it. Any other application is refused, so a custom
+ * component never leaks into an unrelated application.
+ */
+export const customComponentPlacementAllowedV2 = (
+  owner: CustomComponentOwnerV2,
+  context: CustomComponentPlacementContextV2,
+): boolean => {
+  if (owner.definitionKey === context.applicationKey) return true;
+  if (owner.kind !== "module") return false;
+  return context.boundModuleReleases.some(
+    (binding) =>
+      binding.moduleKey === owner.definitionKey &&
+      binding.releaseVersion === owner.releaseVersion,
+  );
+};
+
 /** One immutable, platform-owned block release used by validation and renderer lookup. */
 export const platformBlockReleaseV2Schema = z
   .object({
@@ -1032,9 +1252,21 @@ export const platformBlockReleaseV2Schema = z
     supportedEvents: z.array(componentSemanticEventKindSchema),
     /** State operations a flow may apply to the component. */
     supportedStateOperations: z.array(componentStateOperationKindSchema),
+    /**
+     * Present only on a custom component release: the owning application or module release, its
+     * typed declared events, data contract, text alternative and bundle manifest. A platform block
+     * release carries none, and a custom component release carries no built-in semantic events.
+     */
+    customComponent: customComponentReleaseV2Schema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
+    if (value.customComponent !== undefined && value.supportedEvents.length > 0)
+      context.addIssue({
+        code: "custom",
+        path: ["supportedEvents"],
+        message: "A custom component declares its own events, not built-in semantic events",
+      });
     if (new Set(value.supportedEvents).size !== value.supportedEvents.length)
       context.addIssue({
         code: "custom",
