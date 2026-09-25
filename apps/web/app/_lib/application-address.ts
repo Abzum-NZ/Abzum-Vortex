@@ -2,8 +2,10 @@ import "server-only";
 
 import {
   isReservedTenantSegment,
-  readPermittedApplicationsAtAddress,
+  readAddressedApplicationAtAddress,
   resolvePermittedApplicationAddress,
+  type AddressedApplicationRead,
+  type ApplicationExperience,
   type PermittedApplication,
   type PermittedApplicationsRead,
 } from "@vortex/app";
@@ -12,7 +14,14 @@ import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-config
 import type { IdentitySession } from "@vortex/contracts";
 
 export type ApplicationAddressResult =
-  | Readonly<{ kind: "unavailable"; application?: PermittedApplication }>
+  | Readonly<{
+      kind: "unavailable";
+      /**
+       * The addressed application's own not-found page, present only when the viewer may open
+       * that application. A refused page and a missing page of it both carry the same page.
+       */
+      experience?: ApplicationExperience;
+    }>
   | Readonly<{ kind: "temporarily_unavailable" }>
   | Readonly<{
       kind: "organization_launcher";
@@ -31,14 +40,14 @@ const loadAddressedApplicationAtAddress = async (
   tenantShortName: string,
   organizationShortName: string,
   applicationKey: string,
-): Promise<PermittedApplicationsRead> => {
+): Promise<AddressedApplicationRead> => {
   let authorityId;
   try {
     authorityId = getIdentityAuthorityConfiguration().authorityId;
   } catch {
-    return { kind: "temporarily_unavailable" };
+    return { read: { kind: "temporarily_unavailable" }, experiences: [] };
   }
-  return readPermittedApplicationsAtAddress(
+  return readAddressedApplicationAtAddress(
     session,
     tenantShortName,
     organizationShortName,
@@ -58,24 +67,25 @@ export const resolveApplicationAddress = async (
 
   // An addressed page request resolves only the named application. The launcher
   // keeps the full permitted list so it can still show every application.
-  const read = applicationKey === undefined
-    ? await loadPermittedApplicationsAtAddress(session, tenantShortName, organizationShortName)
+  const addressed: AddressedApplicationRead = applicationKey === undefined
+    ? {
+        read: await loadPermittedApplicationsAtAddress(
+          session, tenantShortName, organizationShortName,
+        ),
+        experiences: [],
+      }
     : await loadAddressedApplicationAtAddress(
         session, tenantShortName, organizationShortName, applicationKey,
       );
+  const read = addressed.read;
   if (read.kind !== "available") return read;
 
   const resolved = resolvePermittedApplicationAddress(read, applicationKey, pageKey);
   if (resolved.kind !== "available") {
-    // Keep a resolvable application so the route can render that application's own
-    // not-found experience; an unknown or refused application stays undisclosed.
-    const application =
-      applicationKey === undefined
-        ? undefined
-        : read.applications.find((entry) => entry.key === applicationKey);
-    return application === undefined
-      ? { kind: "unavailable" }
-      : { kind: "unavailable", application };
+    // Experiences are carried only for an application the viewer may open, so an unknown or
+    // refused application falls back to the neutral page and discloses nothing about itself.
+    const experience = addressed.experiences.find((entry) => entry.state === "not_found");
+    return experience === undefined ? { kind: "unavailable" } : { kind: "unavailable", experience };
   }
   if (resolved.application === null) return { kind: "organization_launcher", read };
   return {

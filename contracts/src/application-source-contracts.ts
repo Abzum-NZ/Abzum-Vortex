@@ -139,6 +139,25 @@ const sourceFilterSchema = z.union([z.null(), sourceConditionSchema]);
 const sourceApplicationExperienceSchema = z
   .object({ state: applicationExperienceStateSchema, page: builderKeySchema })
   .strict();
+/** Placement bindings that gate, condition or load data; none may appear on an experience page. */
+const sourceExperienceGatedPlacementKeys = [
+  "view_permission",
+  "use_permission",
+  "visibility_condition",
+  "query",
+  "read_model",
+] as const;
+const declaresGatedSourcePlacement = (value: unknown): boolean => {
+  if (Array.isArray(value)) return value.some(declaresGatedSourcePlacement);
+  if (value === null || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  if (
+    "block" in record &&
+    sourceExperienceGatedPlacementKeys.some((key) => record[key] !== undefined)
+  )
+    return true;
+  return Object.values(record).some(declaresGatedSourcePlacement);
+};
 type SourceNavigation =
   | { id: string; type: "heading"; label: string; children: SourceNavigation[] }
   | { id: string; type: "page"; label: string; page: string; permission: string }
@@ -949,14 +968,34 @@ export const sourceApplicationBodyV2Schema = z
         path: ["experiences"],
         message: "Each application experience state may be declared only once",
       });
-    const sourcePageKeys = new Set(value.pages.map((page) => page.key));
-    for (const [experienceIndex, experience] of experiences.entries())
-      if (!sourcePageKeys.has(experience.page))
+    for (const [experienceIndex, experience] of experiences.entries()) {
+      const page = value.pages.find((candidate) => candidate.key === experience.page);
+      if (page === undefined) {
         context.addIssue({
           code: "custom",
           path: ["experiences", experienceIndex, "page"],
           message: "An application experience page must resolve inside the same application",
         });
+        continue;
+      }
+      // Shown before any placement authority or data is projected, so presentation-only.
+      const composition = page.composition;
+      const shellAlias = composition.shell_kind === "application" ? composition.shell : undefined;
+      const shell =
+        shellAlias === undefined
+          ? undefined
+          : value.shells.find((candidate) => candidate.id === shellAlias);
+      if (
+        declaresGatedSourcePlacement(composition) ||
+        (shell !== undefined && declaresGatedSourcePlacement(shell.layout))
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["experiences", experienceIndex, "page"],
+          message:
+            "An application experience page must be presentation-only: no permission-gated, conditional or data-bound placements",
+        });
+    }
     const shellAliases = value.shells.map((shell) => shell.id);
     const shellKeys = value.shells.map((shell) => shell.key);
     if (new Set(shellAliases).size !== shellAliases.length)

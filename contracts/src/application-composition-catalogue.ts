@@ -54,6 +54,39 @@ export const GROUPED_DATA_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(source
 /** Exact immutable metadata release for the summary values display block. */
 export const SUMMARY_VALUES_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.SUMMARY_VALUES_BLOCK_RELEASE);
 
+/**
+ * Release 1.1.0 of each display block adds an optional authored `empty_message` shown in place of
+ * the block family's fixed neutral empty text. The 1.0.0 releases stay published unchanged, so an
+ * application pinned to them keeps its exact published behaviour.
+ */
+export const TEXT_BLOCK_RELEASE_1_1_0: PlatformBlockReleaseV2 = release(
+  sources.TEXT_BLOCK_RELEASE_1_1_0,
+);
+
+export const RICH_TEXT_BLOCK_RELEASE_1_1_0: PlatformBlockReleaseV2 = release(
+  sources.RICH_TEXT_BLOCK_RELEASE_1_1_0,
+);
+
+export const LIST_BLOCK_RELEASE_1_1_0: PlatformBlockReleaseV2 = release(
+  sources.LIST_BLOCK_RELEASE_1_1_0,
+);
+
+export const TABLE_BLOCK_RELEASE_1_1_0: PlatformBlockReleaseV2 = release(
+  sources.TABLE_BLOCK_RELEASE_1_1_0,
+);
+
+export const RECORD_DETAIL_BLOCK_RELEASE_1_1_0: PlatformBlockReleaseV2 = release(
+  sources.RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
+);
+
+export const GROUPED_DATA_BLOCK_RELEASE_1_1_0: PlatformBlockReleaseV2 = release(
+  sources.GROUPED_DATA_BLOCK_RELEASE_1_1_0,
+);
+
+export const SUMMARY_VALUES_BLOCK_RELEASE_1_1_0: PlatformBlockReleaseV2 = release(
+  sources.SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
+);
+
 /** Exact immutable metadata release for the text input block. */
 export const TEXT_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.TEXT_INPUT_BLOCK_RELEASE);
 
@@ -108,7 +141,7 @@ export const LINK_TILES_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.
 /** Exact immutable metadata release for the view filter block. */
 export const VIEW_FILTER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.VIEW_FILTER_BLOCK_RELEASE);
 
-/** All seven immutable display block releases. */
+/** All fourteen immutable display block releases: the seven 1.0.0 releases and their 1.1.0 successors. */
 export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   TEXT_BLOCK_RELEASE,
   RICH_TEXT_BLOCK_RELEASE,
@@ -117,6 +150,13 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   RECORD_DETAIL_BLOCK_RELEASE,
   GROUPED_DATA_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
+  TEXT_BLOCK_RELEASE_1_1_0,
+  RICH_TEXT_BLOCK_RELEASE_1_1_0,
+  LIST_BLOCK_RELEASE_1_1_0,
+  TABLE_BLOCK_RELEASE_1_1_0,
+  RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
+  GROUPED_DATA_BLOCK_RELEASE_1_1_0,
+  SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
 ]);
 
 /** All thirteen immutable form, layout and action block releases. */
@@ -149,7 +189,7 @@ export const LAYOUT_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.f
   HEADING_BLOCK_RELEASE,
 ]);
 
-/** All twenty-five immutable platform block releases registered for the page builder. */
+/** All thirty-two immutable platform block releases registered for the page builder. */
 export const PLATFORM_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   ...DISPLAY_BLOCK_RELEASES,
   ...CONTROL_BLOCK_RELEASES,

@@ -9,7 +9,6 @@ import {
   permittedApplicationsToListValues,
   type DisplaySemanticEvent,
 } from "@vortex/ui";
-import type { PermittedApplication } from "@vortex/app";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { AuthShell } from "../../../auth/_components/auth-shell";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
@@ -30,23 +29,6 @@ const unavailableFallback = (
     <Link href="/signed-in">Choose an organisation</Link>
   </AuthShell>
 );
-
-/**
- * Renders an application's own declared experience through the normal page renderer, and the
- * fixed neutral state when the application declares none. A refused page and a missing page both
- * use the `not_found` experience, so a refusal never reveals why it is unavailable.
- */
-function ApplicationExperience({
-  application,
-  state,
-}: Readonly<{
-  application: PermittedApplication;
-  state: "not_found" | "unavailable" | "error";
-}>) {
-  const experience = application.experiences?.find((entry) => entry.state === state);
-  if (experience === undefined) return unavailableFallback;
-  return <ApplicationExperiencePage page={experience.page} shells={application.shells ?? []} />;
-}
 
 type ApplicationAddressPageProps = Readonly<{
   params: Promise<{
@@ -143,10 +125,15 @@ export default async function ApplicationAddressPage({ params }: ApplicationAddr
     );
 
   if (resolved.kind === "unavailable")
-    return resolved.application === undefined ? (
+    // A refused page and a missing page of an application the viewer may open both show that
+    // application's own not-found page; everything else shows the fixed neutral fallback.
+    return resolved.experience === undefined ? (
       unavailableFallback
     ) : (
-      <ApplicationExperience application={resolved.application} state="not_found" />
+      <ApplicationExperiencePage
+        page={resolved.experience.page}
+        shells={resolved.experience.shells}
+      />
     );
 
   if (resolved.kind === "organization_launcher") {

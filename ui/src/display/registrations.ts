@@ -1,12 +1,19 @@
 import {
   DISPLAY_BLOCK_RELEASES,
   GROUPED_DATA_BLOCK_RELEASE,
+  GROUPED_DATA_BLOCK_RELEASE_1_1_0,
   LIST_BLOCK_RELEASE,
+  LIST_BLOCK_RELEASE_1_1_0,
   RECORD_DETAIL_BLOCK_RELEASE,
+  RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
   RICH_TEXT_BLOCK_RELEASE,
+  RICH_TEXT_BLOCK_RELEASE_1_1_0,
   SUMMARY_VALUES_BLOCK_RELEASE,
+  SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
   TABLE_BLOCK_RELEASE,
+  TABLE_BLOCK_RELEASE_1_1_0,
   TEXT_BLOCK_RELEASE,
+  TEXT_BLOCK_RELEASE_1_1_0,
 } from "@vortex/contracts";
 import {
   createPlatformComponentRegistry,
@@ -47,9 +54,17 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
     Object.freeze({ metadata: RECORD_DETAIL_BLOCK_RELEASE, render: RecordDetailDisplay }),
     Object.freeze({ metadata: GROUPED_DATA_BLOCK_RELEASE, render: GroupedDataDisplay }),
     Object.freeze({ metadata: SUMMARY_VALUES_BLOCK_RELEASE, render: SummaryValuesDisplay }),
+    // Release 1.1.0 adds the optional authored empty message; the same renderer serves both.
+    Object.freeze({ metadata: TEXT_BLOCK_RELEASE_1_1_0, render: PlainTextDisplay }),
+    Object.freeze({ metadata: RICH_TEXT_BLOCK_RELEASE_1_1_0, render: RichTextDisplay }),
+    Object.freeze({ metadata: LIST_BLOCK_RELEASE_1_1_0, render: ListDisplay }),
+    Object.freeze({ metadata: TABLE_BLOCK_RELEASE_1_1_0, render: TableDisplay }),
+    Object.freeze({ metadata: RECORD_DETAIL_BLOCK_RELEASE_1_1_0, render: RecordDetailDisplay }),
+    Object.freeze({ metadata: GROUPED_DATA_BLOCK_RELEASE_1_1_0, render: GroupedDataDisplay }),
+    Object.freeze({ metadata: SUMMARY_VALUES_BLOCK_RELEASE_1_1_0, render: SummaryValuesDisplay }),
   ]);
 
-/** Creates an immutable PlatformComponentRegistry populated with the seven display components. */
+/** Creates an immutable PlatformComponentRegistry populated with every display block release. */
 export function createDisplayComponentRegistry(): PlatformComponentRegistry {
   return createPlatformComponentRegistry(DISPLAY_COMPONENT_REGISTRATIONS);
 }

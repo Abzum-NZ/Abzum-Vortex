@@ -168,6 +168,41 @@ export const applicationExperienceV2Schema = z
   .strict();
 export type ApplicationExperienceV2 = z.infer<typeof applicationExperienceV2Schema>;
 
+/** Placement bindings that gate, condition or load data; none may appear on an experience page. */
+const experienceGatedPlacementKeys = [
+  "viewPermissionKey",
+  "usePermissionKey",
+  "visibilityCondition",
+  "queryId",
+  "readModel",
+] as const;
+
+const declaresGatedPlacement = (value: unknown): boolean => {
+  if (Array.isArray(value)) return value.some(declaresGatedPlacement);
+  if (value === null || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  if ("block" in record && experienceGatedPlacementKeys.some((key) => record[key] !== undefined))
+    return true;
+  return Object.values(record).some(declaresGatedPlacement);
+};
+
+/**
+ * An experience page is shown in place of a page the viewer cannot open, before any placement
+ * authority or data is projected for it, so it must be presentation-only: neither the page nor
+ * the application shell it uses may hold a placement with a view or use permission, a visibility
+ * condition, a query or a read model.
+ */
+export function isPresentationOnlyApplicationExperience(
+  page: Readonly<{ composition: Readonly<{ shellKind: string; shellId?: string }> }>,
+  shells: readonly Readonly<{ shellId: string; layout: unknown }>[],
+): boolean {
+  const composition = page.composition;
+  if (declaresGatedPlacement(composition)) return false;
+  if (composition.shellKind !== "application") return true;
+  const shell = shells.find((candidate) => candidate.shellId === composition.shellId);
+  return shell !== undefined && !declaresGatedPlacement(shell.layout);
+}
+
 const pageV2Common = {
   pageId: pageIdSchema,
   key: builderKeySchema,
@@ -440,13 +475,22 @@ export const applicationContentV2Schema = applicationSharedContentSchema
         path: ["experiences"],
         message: "Each application experience state may be declared only once",
       });
-    for (const [experienceIndex, experience] of experiences.entries())
-      if (!value.pages.some((page) => page.pageId === experience.pageId))
+    for (const [experienceIndex, experience] of experiences.entries()) {
+      const page = value.pages.find((candidate) => candidate.pageId === experience.pageId);
+      if (page === undefined)
         context.addIssue({
           code: "custom",
           path: ["experiences", experienceIndex, "pageId"],
           message: "An application experience page must resolve inside the same application",
         });
+      else if (!isPresentationOnlyApplicationExperience(page, value.shells))
+        context.addIssue({
+          code: "custom",
+          path: ["experiences", experienceIndex, "pageId"],
+          message:
+            "An application experience page must be presentation-only: no permission-gated, conditional or data-bound placements",
+        });
+    }
     const shellIds = value.shells.map((shell) => shell.shellId);
     const shellKeys = value.shells.map((shell) => shell.key);
     if (new Set(shellIds).size !== shellIds.length)
