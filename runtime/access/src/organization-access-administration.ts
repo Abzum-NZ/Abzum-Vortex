@@ -532,6 +532,11 @@ export const createOrganizationAccessAdministrationService = (
       return { kind: "unavailable" };
     }
     if (!expectedOperations.includes(evidence.candidate.operation)) return { kind: "unavailable" };
+    // A new role starts at revision 1; an accepted revision advances the reviewed live revision.
+    const expectedLiveRevision =
+      "expectedRoleRevision" in evidence.candidate
+        ? evidence.candidate.expectedRoleRevision + 1
+        : 1;
     let activityId: string;
     try {
       activityId = activityIdSchema.parse(newActivityId());
@@ -541,6 +546,9 @@ export const createOrganizationAccessAdministrationService = (
 
     return mapRecordedRefusal(
       requests.runChange(session, candidate, async (transaction, scope) => {
+        // The evidence names its organisation; it must be the one the request context selected.
+        if (!sameUuid(evidence.candidate.organizationId, scope.organizationId))
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
         const row = requireOne(
           await transaction.query<RoleChangeRow>`
             select outcome, organization_id, role_summary, access_version
@@ -562,7 +570,8 @@ export const createOrganizationAccessAdministrationService = (
           row.outcome !== "completed" ||
           !parsed.success ||
           parsed.data.accessVersion !== scope.accessVersion + 1 ||
-          !sameUuid(parsed.data.role.roleId, evidence.candidate.roleId)
+          !sameUuid(parsed.data.role.roleId, evidence.candidate.roleId) ||
+          parsed.data.role.liveRevision !== expectedLiveRevision
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
         return parsed.data;
