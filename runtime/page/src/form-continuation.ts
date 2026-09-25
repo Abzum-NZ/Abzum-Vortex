@@ -74,13 +74,15 @@ export type PrivateFormContinuationResult =
   | Readonly<{ kind: "draft_unavailable" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
+/** The draft scope names exactly the paused form: its form and, when bound, its flow and node. */
 const sameScope = (
   scope: PrivateFormDraftScope,
   target: FormContinuationRequest["target"],
 ): boolean =>
   target.awaiting === "form" &&
   scope.formId === target.formId &&
-  (scope.flowId === undefined || scope.flowId === target.flowId);
+  (scope.flowId === undefined || scope.flowId === target.flowId) &&
+  (scope.nodeId === undefined || scope.nodeId === target.nodeId);
 
 /** The flow reported the submission final: nothing is left to review, reconcile or retry. */
 const isFinalSubmission = (outcome: FormContinuationOutcome): boolean =>
@@ -122,6 +124,12 @@ export const createPrivateFormContinuationAdapter = (
       return { kind: "draft_unavailable" };
     const stored = read.value.draft;
     if (stored.draftId !== input.draft.draftId) return { kind: "draft_unavailable" };
+    // A draft made against another installed release never answers this one.
+    if (
+      stored.applicationRootId !== input.target.installation.applicationRootId ||
+      stored.installationReleaseRevision !== input.target.installation.installationReleaseRevision
+    )
+      return { kind: "draft_unavailable" };
     if (stored.revision !== input.draft.expectedRevision) return { kind: "stale_draft" };
 
     const evidence = { draftId: stored.draftId, revision: stored.revision };

@@ -120,7 +120,8 @@ export const createFormContinuationService = (
         receipt: { runId: response.runId, committedEffects: response.committedEffects },
         target,
         continuation: response.continuation,
-        expiresAt: response.expiresAt,
+        // The store may return its own timestamp text; the contract carries one ISO form.
+        expiresAt: new Date(response.expiresAt).toISOString(),
         intents: [...response.intents],
         unavailable: [...response.unavailable],
       } as FormContinuationOutcome;
