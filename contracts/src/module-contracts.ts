@@ -5,7 +5,13 @@ import {
   jsonValueSchema,
   labelSchema,
 } from "./common";
-import { personalDataClassSchema, publicDisplaySchema, searchPrioritySchema } from "./catalogues";
+import {
+  actionInputValueTypes,
+  personalDataClassSchema,
+  publicDisplaySchema,
+  searchPrioritySchema,
+  sharingParameterValueTypeSchema,
+} from "./catalogues";
 import {
   actionIdSchema,
   applicationRootIdSchema,
@@ -717,7 +723,7 @@ const actionInputBase = {
 const textActionInputSchema = z
   .object({
     ...actionInputBase,
-    type: z.literal("text"),
+    type: z.literal(actionInputValueTypes.text),
     validation: z
       .object({
         minimumLength: z.number().int().min(0).optional(),
@@ -731,7 +737,7 @@ const textActionInputSchema = z
 const formattedTextActionInputSchema = z
   .object({
     ...actionInputBase,
-    type: z.literal("formatted_text"),
+    type: z.literal(actionInputValueTypes.formatted_text),
     validation: z
       .object({
         allowedBlocks: z
@@ -746,7 +752,7 @@ const formattedTextActionInputSchema = z
 const numberActionInputSchema = z
   .object({
     ...actionInputBase,
-    type: z.literal("number"),
+    type: z.literal(actionInputValueTypes.number),
     validation: z
       .object({ minimum: z.number().finite().optional(), maximum: z.number().finite().optional() })
       .strict()
@@ -756,7 +762,7 @@ const numberActionInputSchema = z
 const dateActionInputSchema = z
   .object({
     ...actionInputBase,
-    type: z.literal("date"),
+    type: z.literal(actionInputValueTypes.date),
     validation: z
       .object({
         earliest: z
@@ -775,7 +781,7 @@ const dateActionInputSchema = z
 const dateTimeActionInputSchema = z
   .object({
     ...actionInputBase,
-    type: z.literal("date_time"),
+    type: z.literal(actionInputValueTypes.date_time),
     validation: z
       .object({
         earliest: z.string().datetime({ offset: true }).optional(),
@@ -790,20 +796,20 @@ export const actionInputDefinitionSchema = z
     textActionInputSchema,
     formattedTextActionInputSchema,
     numberActionInputSchema,
-    z.object({ ...actionInputBase, type: z.literal("boolean") }).strict(),
+    z.object({ ...actionInputBase, type: z.literal(actionInputValueTypes.boolean) }).strict(),
     dateActionInputSchema,
     dateTimeActionInputSchema,
     z
       .object({
         ...actionInputBase,
-        type: z.literal("record_reference"),
+        type: z.literal(actionInputValueTypes.record_reference),
         recordTypes: z.array(recordTypeReferenceSchema).min(1).max(20),
       })
       .strict(),
     z
       .object({
         ...actionInputBase,
-        type: z.literal("organization_account_reference"),
+        type: z.literal(actionInputValueTypes.organization_account_reference),
       })
       .strict(),
   ])
@@ -1021,14 +1027,7 @@ export const savedSharingConditionSchema = z
       z
         .object({
           key: builderKeySchema,
-          type: z.enum([
-            "text",
-            "number",
-            "boolean",
-            "date",
-            "date_time",
-            "organization_account_reference",
-          ]),
+          type: sharingParameterValueTypeSchema,
         })
         .strict(),
     ),
