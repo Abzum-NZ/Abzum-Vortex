@@ -5580,9 +5580,13 @@ function applicationProvenanceV2(
       const placement = asObject(
         valueAtPath(canonical, canonicalPath.slice(0, placementsIndex + 2)),
       );
-      const blockId = String(asObject(placement.block).blockId);
+      const block = asObject(placement.block);
+      const blockId = String(block.blockId);
+      const releaseVersion = String(block.releaseVersion);
       const dependencyIndex = source.body.platform_block_dependencies.findIndex(
-        (dependency) => String(dependency.block_id) === blockId,
+        (dependency) =>
+          String(dependency.block_id) === blockId &&
+          String(dependency.release_version) === releaseVersion,
       );
       if (dependencyIndex < 0)
         fail("vortex.definition.application_dependency_manifest", "broken_reference");

@@ -1,3 +1,475 @@
+-- #1212: list cursors never expose or depend on hidden field values.
+--
+-- A list query's 500-row budget cursor used to carry the sort key of the last
+-- row it examined, which can be a row the reader cannot read, and #1082's
+-- filter pushdown let caller filters over hidden fields decide which row that
+-- was. Either is a weak oracle on hidden values.
+--
+-- This migration adds one field-bounds planner in vortex_access that returns
+-- the fields a reader is guaranteed to see for the whole record type, and uses
+-- it so run_module_query pushes a filter or a sort into the candidate scan only
+-- for those fields, and only when every row the scan examines is one the exact
+-- decision admits (an unconditioned all-records alternative, or a restricted
+-- owner/share plan with no saved condition); otherwise nothing is pushed and the
+-- scan orders by record identity. A filter on a possibly-withheld field is
+-- evaluated per row, and the keyset cursor carries only readable sort values and
+-- a record identity. Every statement below is identical to the canonical file
+-- supabase/schemas/<schema>/<function>.sql changed in this commit.
+
+begin;
+create or replace function vortex_access.resolve_record_read_field_bounds_internal(
+  p_declaration jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  -- Nothing guaranteed and no exactness claim: the fail-closed answer.
+  nothing constant jsonb := '{"readableFieldIds":[],"coversAllRecords":false,"conditionFree":false}'::jsonb;
+  ctx jsonb;
+  checked_at timestamptz;
+  decision_organization_id uuid;
+  account_id uuid;
+  binding jsonb;
+  eligibility jsonb;
+  candidate jsonb;
+  permission_value jsonb;
+  source_value jsonb;
+  routes jsonb;
+  route jsonb;
+  catalogue_entry vortex_access.permission_catalogue_entries%rowtype;
+  policy_readable text[];
+  route_readable text[];
+  guaranteed text[] := array[]::text[];
+  first_route boolean := true;
+  covers_all_records boolean := false;
+  condition_free boolean := true;
+  wants_share boolean := false;
+  member_group_ids uuid[];
+  share_row record;
+  share_intersection text[];
+  share_seen boolean := false;
+begin
+  -- The planner only knows how to reason about a record read; anything else is
+  -- a caller error, never a wider grant.
+  if p_declaration is null
+    or pg_catalog.jsonb_typeof(p_declaration) <> 'object'
+    or p_declaration -> 'action' ->> 'actionKind' is distinct from 'read'
+    or (p_declaration -> 'action') ? 'namedAction' then
+    raise exception using errcode = '22023',
+      message = 'Record read field-bounds declaration is invalid';
+  end if;
+
+  ctx := vortex_access.validated_human_request_context();
+  checked_at := pg_catalog.clock_timestamp();
+  decision_organization_id := (ctx ->> 'organizationId')::uuid;
+  account_id := (ctx ->> 'organizationAccountId')::uuid;
+  binding := p_declaration -> 'recordBinding';
+
+  eligibility := vortex_access.evaluate_organization_record_permission_eligibility_internal(
+    p_declaration, ctx, checked_at
+  );
+
+  -- An ineligible caller is admitted to no record, so it is guaranteed no
+  -- field and nothing may be pushed.
+  if eligibility ->> 'outcome' <> 'eligible' then
+    return nothing;
+  end if;
+
+  -- A direct-share route narrows its permission to the individual share's own
+  -- readable fields, which are current rows rather than a static declaration.
+  -- When any eligible alternative can match through such a route, take the
+  -- intersection of every current share's own bounds once, so a field that a
+  -- share withholds is never treated as visible.
+  select exists (
+    select 1
+    from pg_catalog.jsonb_array_elements(
+      coalesce(eligibility -> 'eligiblePermissions', '[]'::jsonb)
+    ) as listed(value)
+    cross join lateral pg_catalog.jsonb_array_elements(
+      coalesce(listed.value -> 'recordScope' -> 'routes', '[]'::jsonb)
+    ) as listed_route(value)
+    where listed_route.value ->> 'kind' = 'direct_share'
+  ) into wants_share;
+
+  if wants_share then
+    -- The groups the caller belongs to now: an active group and a live,
+    -- started, unexpired membership, exactly as the share tests require.
+    select coalesce(pg_catalog.array_agg(distinct membership.group_id), array[]::uuid[])
+    into member_group_ids
+    from vortex_access.organization_group_memberships as membership
+    join vortex_access.organization_groups as organization_group
+      on organization_group.organization_id = membership.organization_id
+      and organization_group.group_id = membership.group_id
+      and organization_group.state = 'active'
+    where membership.organization_id = decision_organization_id
+      and membership.organization_account_id = account_id
+      and membership.state = 'live'
+      and membership.starts_at <= checked_at
+      and (membership.expires_at is null or membership.expires_at > checked_at);
+
+    for share_row in
+      select share.readable_field_ids
+      from vortex_access.organization_direct_record_shares as share
+      where share.organization_id = decision_organization_id
+        and share.storage_scope = binding ->> 'storageScope'
+        and share.application_root_id is not distinct from case
+          when binding ->> 'storageScope' = 'application_contained'
+            then (p_declaration -> 'target' ->> 'applicationRootId')::uuid
+          else null::uuid
+        end
+        and share.module_root_id = (binding ->> 'moduleRootId')::uuid
+        and share.record_type_id = (binding ->> 'recordTypeId')::uuid
+        and share.storage_contract_id = (binding ->> 'storageContractId')::uuid
+        and share.state = 'active'
+        and share.starts_at <= checked_at
+        and (share.expires_at is null or share.expires_at > checked_at)
+        and (
+          (share.recipient_kind = 'organization_account'
+            and share.organization_account_id = account_id)
+          or (share.recipient_kind = 'group'
+            and share.group_id = any (member_group_ids))
+        )
+    loop
+      if not share_seen then
+        share_intersection := array(
+          select pg_catalog.lower(field.value)
+          from pg_catalog.unnest(share_row.readable_field_ids::text[]) as field(value)
+        );
+        share_seen := true;
+      else
+        share_intersection := array(
+          select field.value
+          from pg_catalog.unnest(share_intersection) as field(value)
+          where field.value = any (
+            select pg_catalog.lower(shared.value)
+            from pg_catalog.unnest(share_row.readable_field_ids::text[]) as shared(value)
+          )
+        );
+      end if;
+    end loop;
+  end if;
+
+  -- Each record is admitted by at least one (alternative, route) pair, and the
+  -- exact decision exposes the union of the fields of the pairs that admit it.
+  -- A field is therefore guaranteed on every admitted record only when every
+  -- pair that can admit a record exposes it: the intersection over every pair,
+  -- never a union within one alternative. An ownership, all-records or
+  -- relationship pair exposes its permission's policy; a direct-share pair
+  -- exposes that policy narrowed by the share, bounded here by the common
+  -- bounds of every current share, and with no current share it admits no
+  -- record and constrains nothing. Any unknown route fails closed.
+  for candidate in
+    select listed.value
+    from pg_catalog.jsonb_array_elements(
+      coalesce(eligibility -> 'eligiblePermissions', '[]'::jsonb)
+    ) as listed(value)
+  loop
+    permission_value := candidate -> 'permission';
+    source_value := candidate -> 'source';
+
+    select entry.*
+    into catalogue_entry
+    from vortex_access.permission_catalogue_entries as entry
+    join vortex_access.permission_registrations as registration
+      on registration.organization_id = entry.organization_id
+      and registration.registration_kind = entry.registration_kind
+      and registration.registration_owner_id = entry.registration_owner_id
+      and registration.revision = entry.registration_revision
+      and registration.state = 'active'
+    where entry.organization_id = decision_organization_id
+      and entry.application_root_id = (permission_value ->> 'applicationRootId')::uuid
+      and entry.owner_kind = permission_value ->> 'ownerKind'
+      and entry.owner_id = (permission_value ->> 'ownerId')::uuid
+      and entry.permission_id = (permission_value ->> 'permissionId')::uuid;
+
+    -- The eligibility decision just used this exact permission; a missing or
+    -- superseded catalogue entry is an internal inconsistency, not a refusal
+    -- that silently widens what may be pushed.
+    if not found then
+      raise exception using errcode = '22023',
+        message = 'Record read field bounds found no catalogue entry';
+    end if;
+
+    if catalogue_entry.source_kind is distinct from (source_value ->> 'kind')
+      or catalogue_entry.source_definition_key is distinct from (source_value ->> 'definitionKey')
+      or catalogue_entry.source_root_id is distinct from (source_value ->> 'rootId')::uuid
+      or catalogue_entry.source_version is distinct from (source_value ->> 'releaseVersion')
+      or catalogue_entry.source_revision is distinct from (source_value ->> 'releaseRevision')::bigint
+      or catalogue_entry.source_validation_contract_version
+        is distinct from (source_value ->> 'validationContractVersion')
+      or catalogue_entry.source_content_fingerprint
+        is distinct from (source_value ->> 'contentFingerprint')
+      or catalogue_entry.source_resolution_fingerprint
+        is distinct from (source_value ->> 'resolutionFingerprint') then
+      raise exception using errcode = '22023',
+        message = 'Record read field bounds found a superseded permission source';
+    end if;
+
+    -- A permission with no declared field policy contributes no field at all,
+    -- so nothing is guaranteed for the whole record type.
+    if catalogue_entry.field_policy is null then
+      return nothing;
+    end if;
+
+    select coalesce(pg_catalog.array_agg(pg_catalog.lower(field.value)), array[]::text[])
+    into policy_readable
+    from pg_catalog.jsonb_array_elements_text(
+      catalogue_entry.field_policy -> 'readableFieldIds'
+    ) as field(value);
+
+    routes := candidate -> 'recordScope' -> 'routes';
+    if pg_catalog.jsonb_typeof(routes) is distinct from 'array' then
+      return nothing;
+    end if;
+
+    -- A saved condition narrows every route of its alternative, including an
+    -- all-records route, per record; the scan's table narrowing cannot apply it.
+    if (candidate -> 'recordScope') ? 'savedCondition' then
+      condition_free := false;
+    elsif exists (
+      select 1 from pg_catalog.jsonb_array_elements(routes) as listed_route(value)
+      where listed_route.value ->> 'kind' = 'all_records'
+    ) then
+      covers_all_records := true;
+    end if;
+
+    for route in
+      select listed_route.value
+      from pg_catalog.jsonb_array_elements(routes) as listed_route(value)
+    loop
+      case route ->> 'kind'
+        when 'all_records', 'ownership', 'relationship' then
+          route_readable := policy_readable;
+        when 'direct_share' then
+          if not share_seen then
+            continue;
+          end if;
+          route_readable := array(
+            select shared.value
+            from pg_catalog.unnest(policy_readable) as shared(value)
+            where shared.value = any (share_intersection)
+          );
+        else
+          return nothing;
+      end case;
+
+      if first_route then
+        guaranteed := array(
+          select distinct field.value
+          from pg_catalog.unnest(route_readable) as field(value)
+        );
+        first_route := false;
+      else
+        guaranteed := array(
+          select field.value
+          from pg_catalog.unnest(guaranteed) as field(value)
+          where field.value = any (route_readable)
+        );
+      end if;
+      if pg_catalog.cardinality(guaranteed) = 0 then
+        return nothing;
+      end if;
+    end loop;
+  end loop;
+
+  guaranteed := array(
+    select field.value from pg_catalog.unnest(guaranteed) as field(value)
+    order by field.value
+  );
+
+  return pg_catalog.jsonb_build_object(
+    'readableFieldIds', pg_catalog.to_jsonb(guaranteed),
+    'coversAllRecords', covers_all_records,
+    'conditionFree', condition_free
+  );
+end
+$function$;
+
+revoke all on function vortex_access.resolve_record_read_field_bounds_internal(jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_module_owner;
+grant execute on function vortex_access.resolve_record_read_field_bounds_internal(jsonb)
+  to vortex_record_adapter;
+
+comment on function vortex_access.resolve_record_read_field_bounds_internal(jsonb) is
+  'Private whole-record-type field bounds for the fixed record query: from the caller''s own current eligible read alternatives it returns the fields every alternative route is guaranteed to expose on every record it can admit (the intersection over every alternative and route, each direct-share route narrowed by every current share''s own bounds), whether an unconditioned all-records alternative admits every active record, and whether no alternative carries a saved condition; any unknown route or missing policy yields no fields. It only decides which fields a scan may order or filter by and never decides access.';
+
+
+-- The plan now also returns the readable fields. Its row type changes, so the
+-- function is dropped before it is recreated.
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+
+drop function vortex_record.plan_record_read_scan_internal(uuid);
+create or replace function vortex_record.plan_record_read_scan_internal(
+  p_record_type_id uuid
+)
+returns table (
+  restricted boolean,
+  owner_account_id uuid,
+  owner_group_ids uuid[],
+  shared_record_ids uuid[],
+  readable_field_ids text[]
+)
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
+  context_value jsonb;
+  context_application_root_id uuid;
+  plan jsonb;
+  target_meta jsonb;
+  required_permissions jsonb;
+  declaration jsonb;
+  field_bounds jsonb;
+begin
+  -- Narrowing only. Any refusal or failure here leaves the scan unrestricted,
+  -- so the exact per-row decision, which raises or refuses for the same cause,
+  -- is the only thing that decides what a caller reads.
+  if p_record_type_id is null or p_record_type_id = nil_uuid then
+    raise exception using errcode = '22023',
+      message = 'Record adapter selector is invalid';
+  end if;
+
+  context_value := vortex_access.validated_human_request_context();
+  if not (context_value ? 'applicationRootId') then
+    raise exception using errcode = '42501',
+      message = 'Record adapter requires an application context';
+  end if;
+  context_application_root_id := (context_value ->> 'applicationRootId')::uuid;
+
+  plan := vortex_record.resolve_installation_access_plan_internal(
+    vortex_module.read_current_active_installation()
+  );
+  if (plan ->> 'organizationId')::uuid is distinct from (context_value ->> 'organizationId')::uuid
+    or (plan ->> 'applicationRootId')::uuid is distinct from context_application_root_id then
+    raise exception using errcode = '42501',
+      message = 'Record adapter requires an application context';
+  end if;
+
+  target_meta := plan -> 'recordTypes' -> pg_catalog.lower(p_record_type_id::text);
+  if target_meta is null then
+    raise exception using errcode = '55000',
+      message = 'Record type is not part of the active installation';
+  end if;
+
+  -- The declaration the record loader builds for a read: every record-scoped
+  -- read permission declared for this exact record type by the context
+  -- Application or the record type's own Module, in canonical order.
+  select pg_catalog.jsonb_agg(
+    pg_catalog.jsonb_build_object(
+      'applicationRootId', context_application_root_id,
+      'ownerKind', declared.value ->> 'ownerKind',
+      'ownerId', (declared.value ->> 'ownerId')::uuid,
+      'permissionId', declared.key::uuid
+    )
+    order by declared.value ->> 'ownerKind' collate "C", declared.key collate "C"
+  )
+  into required_permissions
+  from pg_catalog.jsonb_each(plan -> 'permissions') as declared(key, value)
+  where pg_catalog.lower(declared.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
+    and declared.value ->> 'actionKind' = 'read'
+    and (declared.value ->> 'namedAction') is null
+    and (
+      (declared.value ->> 'ownerKind') = 'application'
+      or (declared.value ->> 'ownerId')::uuid = (target_meta ->> 'moduleRootId')::uuid
+    );
+
+  if required_permissions is null then
+    return query select false, null::uuid, array[]::uuid[], array[]::uuid[],
+      array[]::text[];
+    return;
+  end if;
+
+  declaration := pg_catalog.jsonb_build_object(
+    'operationKey', 'record.read',
+    'action', pg_catalog.jsonb_build_object('actionKind', 'read'),
+    'target', pg_catalog.jsonb_build_object(
+      'kind', 'application', 'applicationRootId', context_application_root_id
+    ),
+    'requiredPermissions', required_permissions,
+    'recordBinding', pg_catalog.jsonb_build_object(
+      'moduleRootId', (target_meta ->> 'moduleRootId')::uuid,
+      'recordTypeId', p_record_type_id,
+      'storageContractId', (target_meta ->> 'storageContractId')::uuid,
+      'storageScope', target_meta ->> 'storageScope'
+    ),
+    'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+    'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+  );
+
+  -- The fields this reader is guaranteed to see on every record the read
+  -- decision admits. Any failure yields no fields, so the scan pushes neither
+  -- an order nor a filter on a value it cannot prove is visible.
+  begin
+    field_bounds := vortex_access.resolve_record_read_field_bounds_internal(declaration);
+  exception
+    when others then
+      field_bounds := '{}'::jsonb;
+  end;
+
+  -- Those fields may drive the scan only when every row the scan examines is a
+  -- row the exact decision admits: an unconditioned all-records alternative
+  -- admits every active record, and a restricted plan examines only owned and
+  -- directly shared records, which its routes admit unless a saved condition
+  -- narrows them. Otherwise the scan also examines rows the reader cannot read,
+  -- whose every value is hidden, so no field is readable for the scan.
+  return query
+  select routes.restricted, routes.owner_account_id, routes.owner_group_ids,
+    routes.shared_record_ids,
+    case
+      when (field_bounds -> 'coversAllRecords') = 'true'::jsonb
+        or (routes.restricted and (field_bounds -> 'conditionFree') = 'true'::jsonb)
+      then coalesce(
+        (
+          select pg_catalog.array_agg(field.value order by field.value)
+          from pg_catalog.jsonb_array_elements_text(
+            field_bounds -> 'readableFieldIds'
+          ) as field(value)
+        ),
+        array[]::text[]
+      )
+      else array[]::text[]
+    end
+  from vortex_access.resolve_record_read_scan_routes_internal(
+    declaration, target_meta ->> 'ownershipMode'
+  ) as routes;
+  return;
+exception
+  when others then
+    return query select false, null::uuid, array[]::uuid[], array[]::uuid[],
+      array[]::text[];
+    return;
+end
+$function$;
+
+revoke all on function vortex_record.plan_record_read_scan_internal(uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_module_owner;
+
+comment on function vortex_record.plan_record_read_scan_internal(uuid) is
+  'Private read-scan narrowing for the record query: builds the read declaration for one record type of the exact active installation and returns the owner account, owner groups and directly shared record identifiers a caller can be admitted through, or unrestricted, together with the fields every eligible read alternative is guaranteed to expose, kept only when every row the scan examines is one the exact decision admits; any failure returns unrestricted with no readable fields and never widens what the exact per-row decision allows.';
+
+
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
 create or replace function vortex_record.run_module_query(
   p_module_root_id uuid,
   p_query_id uuid,
@@ -750,3 +1222,11 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
 
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb) is
   'One bounded keyset page of rows readable through read_record for one installed Module query, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows the scan to the caller''s owner, owner-group and direct-share records where those routes have an exact table form, and still decides every returned row through read_record; works out read-time fields, such as a deadline-passed calculation, inside the query at one statement timestamp in the organisation time zone, so no query is refused for freshness.';
+
+
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+
+commit;

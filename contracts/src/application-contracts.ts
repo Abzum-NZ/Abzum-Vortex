@@ -601,24 +601,23 @@ export const applicationContentV2Schema = applicationSharedContentSchema
         message: "Placement identities must be unique across the application",
       });
 
-    const manifest = new Map(
-      value.platformBlockDependencies.map((dependency) => [
-        String(dependency.blockId),
-        dependency.releaseVersion,
-      ]),
+    const manifest = new Set(
+      value.platformBlockDependencies.map(
+        (dependency) => `${dependency.blockId}@${dependency.releaseVersion}`,
+      ),
     );
     const used = new Set<string>();
     for (const [, placement] of placementEntries) {
-      const blockId = String(placement.block.blockId);
-      used.add(blockId);
-      if (manifest.get(blockId) !== placement.block.releaseVersion)
+      const identity = `${placement.block.blockId}@${placement.block.releaseVersion}`;
+      used.add(identity);
+      if (!manifest.has(identity))
         context.addIssue({
           code: "custom",
           path: ["platformBlockDependencies"],
           message: "Every placement must match one exact platform-block dependency",
         });
     }
-    if ([...manifest.keys()].some((blockId) => !used.has(blockId)))
+    if ([...manifest].some((identity) => !used.has(identity)))
       context.addIssue({
         code: "custom",
         path: ["platformBlockDependencies"],

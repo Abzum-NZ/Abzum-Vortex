@@ -14,9 +14,12 @@ import {
 /**
  * What a continuation token carries: the exact actor, installation, query,
  * release and inputs it was issued for, and the last keyset position the
- * database reader reached. The position may belong to a row the caller cannot
- * read (a scan budget can end on one), so the whole payload is encrypted as
- * well as authenticated: the token is opaque, not merely tamper-evident.
+ * database reader reached. The sort key holds only values of fields the reader
+ * is guaranteed to see, so it never carries a hidden field value; the record
+ * identifier may still name a row the reader cannot read, so the whole payload
+ * is encrypted as well as authenticated: the token is opaque, not merely
+ * tamper-evident. An empty sort key is valid when the reader may not safely
+ * order on any declared sort field, and the scan then orders by record identity.
  */
 export const queryContinuationSchema = z
   .object({
@@ -28,8 +31,11 @@ export const queryContinuationSchema = z
     queryId: queryIdSchema,
     moduleReleaseRevision: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
     inputFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-    /** Exact typed sort values as canonical database text; never parsed as numbers here. */
-    sortKey: z.array(z.string().max(16_384).nullable()).min(1).max(20),
+    /**
+     * Exact typed values of the readable sort fields, as canonical database
+     * text; never parsed as numbers here. Empty when none may be pushed.
+     */
+    sortKey: z.array(z.string().max(16_384).nullable()).max(20),
     recordId: recordIdSchema,
   })
   .strict();

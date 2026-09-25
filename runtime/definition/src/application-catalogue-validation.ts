@@ -101,7 +101,7 @@ export function validateApplicationSourceCatalogue(
 
   const manifest = new Map<string, Body["platform_block_dependencies"][number]>();
   for (const dependency of source.body.platform_block_dependencies) {
-    manifest.set(String(dependency.block_id), dependency);
+    manifest.set(`${dependency.block_id}@${dependency.release_version}`, dependency);
     const release = registeredReleases.get(
       `${dependency.block_id}:${dependency.release_version}`,
     );
@@ -381,11 +381,10 @@ export function validateApplicationSourceCatalogue(
       }
 
       const blockId = String(placement.block.block_id);
-      const dependency = manifest.get(blockId);
-      if (
-        dependency === undefined ||
-        dependency.release_version !== placement.block.release_version
-      )
+      const dependency = manifest.get(
+        `${placement.block.block_id}@${placement.block.release_version}`,
+      );
+      if (dependency === undefined)
         report("vortex.definition.application_dependency_manifest", "broken_reference", location);
       const release = registeredReleases.get(`${blockId}:${placement.block.release_version}`);
       if (release === undefined) {

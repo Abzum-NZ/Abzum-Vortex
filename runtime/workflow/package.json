@@ -16,7 +16,8 @@
     "@vortex/event": "workspace:*",
     "@vortex/record": "workspace:*",
     "@vortex/rule": "workspace:*",
-    "server-only": "0.0.1"
+    "server-only": "0.0.1",
+    "zod": "4.6.5"
   },
   "vortex": {
     "tier": 7,

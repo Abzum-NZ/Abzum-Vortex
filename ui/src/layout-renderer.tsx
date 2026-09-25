@@ -132,8 +132,8 @@ const validatePlacementDependencies = (
   dependencies: ApplicationContentV2["platformBlockDependencies"],
   location: DefinitionRenderErrorLocation,
 ): void => {
-  const releases = new Map(
-    dependencies.map((dependency) => [dependency.blockId, dependency.releaseVersion]),
+  const releases = new Set(
+    dependencies.map((dependency) => `${dependency.blockId}@${dependency.releaseVersion}`),
   );
   const visit = (current: PlacementSlotV2, currentLocation: DefinitionRenderErrorLocation): void => {
     for (const [placementId, placement] of Object.entries(current.placements)) {
@@ -143,7 +143,9 @@ const validatePlacementDependencies = (
         blockId: placement.block.blockId,
         releaseVersion: placement.block.releaseVersion,
       };
-      if (releases.get(placement.block.blockId) !== placement.block.releaseVersion) {
+      if (
+        !releases.has(`${placement.block.blockId}@${placement.block.releaseVersion}`)
+      ) {
         throw new DefinitionRenderError(
           "MISMATCHED_RELEASE",
           `Placement '${placementId}' does not match the materialised platform-block dependency manifest`,
@@ -1001,16 +1003,17 @@ const validateMaterialisedDependencies = (
   composition: MaterialisedApplicationCompositionV2,
   registry: PlatformComponentRegistry,
 ): void => {
-  const seenBlockIds = new Set<string>();
+  const seenBlockReleases = new Set<string>();
   for (const dependency of composition.platformBlockDependencies) {
-    if (seenBlockIds.has(dependency.blockId)) {
+    const identity = `${dependency.blockId}@${dependency.releaseVersion}`;
+    if (seenBlockReleases.has(identity)) {
       throw new DefinitionRenderError(
         "INVALID_COMPOSITION",
-        `Materialised composition repeats platform block dependency '${dependency.blockId}'`,
+        `Materialised composition repeats platform block dependency '${identity}'`,
         { blockId: dependency.blockId, releaseVersion: dependency.releaseVersion },
       );
     }
-    seenBlockIds.add(dependency.blockId);
+    seenBlockReleases.add(identity);
     const registration = registry.get(dependency.blockId, dependency.releaseVersion);
     if (registration === undefined) {
       throw new DefinitionRenderError(

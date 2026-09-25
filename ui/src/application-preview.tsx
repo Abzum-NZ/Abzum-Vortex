@@ -273,8 +273,8 @@ const validatePreviewPlacements = (
   dependencies: MaterialisedApplicationCompositionV2["platformBlockDependencies"],
   location: DefinitionRenderErrorLocation,
 ): void => {
-  const releases = new Map(
-    dependencies.map((dependency) => [dependency.blockId, dependency.releaseVersion]),
+  const releases = new Set(
+    dependencies.map((dependency) => `${dependency.blockId}@${dependency.releaseVersion}`),
   );
   for (const [placementId, placement] of Object.entries(slot.placements)) {
     const placementLocation = {
@@ -283,7 +283,7 @@ const validatePreviewPlacements = (
       blockId: placement.block.blockId,
       releaseVersion: placement.block.releaseVersion,
     };
-    if (releases.get(placement.block.blockId) !== placement.block.releaseVersion)
+    if (!releases.has(`${placement.block.blockId}@${placement.block.releaseVersion}`))
       throw new DefinitionRenderError(
         "MISMATCHED_RELEASE",
         `Placement '${placementId}' does not match the draft's platform-block dependency manifest`,

@@ -49,7 +49,7 @@ const manifestSubject = (dependency: ExactDefinitionDependency): string =>
   dependency.kind === "platform_theme"
     ? `${dependency.kind}:${dependency.catalogueThemeId}`
     : dependency.kind === "platform_block"
-      ? `${dependency.kind}:${dependency.blockId}`
+      ? `${dependency.kind}:${dependency.blockId}@${dependency.releaseVersion}`
       : dependency.kind === "application_flow"
           ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}`
           : dependency.kind === "application_flow_node"
@@ -225,7 +225,9 @@ const exactApplicationDependenciesMatch = (
     [
       ...moduleSubjects.map((entry) => `module:${entry!.key}`),
       ...connectionSubjects.map((entry) => `connection_type:${entry!.key}`),
-      ...blockDependencies.map((entry) => `platform_block:${entry.blockId}`),
+      ...blockDependencies.map(
+        (entry) => `platform_block:${entry.blockId}@${entry.releaseVersion}`,
+      ),
       `platform_theme:${base.catalogueThemeId}`,
     ],
     manifest

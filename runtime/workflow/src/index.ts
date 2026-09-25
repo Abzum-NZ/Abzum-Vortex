@@ -59,6 +59,25 @@ export {
   type KestraInstanceTargetErrorCode,
 } from "./kestra-instance";
 
+export {
+  canonicalDurableEnvelopePayload,
+  durableActorRefusalReasons,
+  durableEnvelopeClockSkewMs,
+  durableEnvelopeMaximumLifetimeMs,
+  requireDurableActorForOperation,
+  resolveDurableActorContext,
+  retainedRunAuthoritySchema,
+  retainedRunInitiatorSchema,
+  signDurableEnvelope,
+  type DurableActorContextDependencies,
+  type DurableActorContextResolution,
+  type DurableActorPolicy,
+  type DurableActorPurpose,
+  type DurableActorRefusalReason,
+  type RetainedRunAuthority,
+  type VerifiedDurableActorContext,
+} from "./durable-actor-context";
+
 export const WorkflowService = Object.freeze({
   key: "workflow",
   boundary: "@vortex/workflow",
