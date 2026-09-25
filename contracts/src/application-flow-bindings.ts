@@ -413,6 +413,12 @@ export const protectedOperationDescriptorSchema = z
           path: ["sensitiveOutputs"],
           message: "A sensitive output must be one of the operation's declared outputs",
         });
+      else if (Object.hasOwn(value.outputs, `${name}_issued`))
+        context.addIssue({
+          code: "custom",
+          path: ["sensitiveOutputs"],
+          message: "A sensitive output's issued marker must not be a declared output",
+        });
   });
 
 /** Current user always means the original verified initiator. Other modes name Access-owned bindings. */

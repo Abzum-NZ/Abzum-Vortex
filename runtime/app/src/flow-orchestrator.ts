@@ -268,10 +268,36 @@ const redactSensitiveOutputs = (
 ): Record<string, JsonValue> => {
   if (sensitive.length === 0) return { ...outputs };
   const stored: Record<string, JsonValue> = {};
-  for (const name of sensitive) stored[`${name}_issued`] = true;
   for (const [name, value] of Object.entries(outputs))
     if (!sensitive.includes(name)) stored[name] = value;
+  for (const name of sensitive) if (Object.hasOwn(outputs, name)) stored[`${name}_issued`] = true;
   return stored;
+};
+
+/** The raw sensitive values of one result, as they appear inside serialized JSON. */
+const sensitiveValues = (
+  outputs: Readonly<Record<string, JsonValue>>,
+  sensitive: readonly string[],
+): string[] =>
+  sensitive
+    .filter((name) => Object.hasOwn(outputs, name))
+    .map((name) => {
+      const value = outputs[name];
+      const text = JSON.stringify(value) ?? "";
+      return typeof value === "string" ? text.slice(1, -1) : text;
+    })
+    .filter((text) => text.length > 0);
+
+/** Whether a candidate that is about to leave memory carries any held sensitive value. */
+const carriesSensitive = (candidate: unknown, sensitive: readonly string[]): boolean => {
+  if (sensitive.length === 0) return false;
+  let text: string;
+  try {
+    text = JSON.stringify(candidate) ?? "";
+  } catch {
+    return true;
+  }
+  return sensitive.some((value) => text.includes(value));
 };
 
 export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencies) => {
@@ -303,6 +329,11 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     carriedMilliseconds: number;
     segmentStart: number;
     unavailable: FlowUnavailableNotice[];
+    /**
+     * The raw values of declared sensitive outputs this segment received, held in memory only, so
+     * nothing that carries one is stored or handed to another protected operation.
+     */
+    sensitive: string[];
   }>;
 
   const elapsedMilliseconds = (run: Run): number =>
@@ -393,6 +424,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       : Object.fromEntries(
           Object.entries(call.flowInputs).map(([name, value]) => [name, value.value]),
         );
+    // A sensitive value is shown to the person once; it is never passed on to another effect.
+    if (carriesSensitive(inputs, run.sensitive)) return { outcome: "validation" };
 
     const key = {
       runId: state.runId,
@@ -430,14 +463,12 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     const outcome: FlowTaskOutcome = executed.outcome;
     const outputs: Record<string, JsonValue> =
       executed.outcome === "committed" ? { result: { ...executed.outputs } } : {};
+    const sensitive = entry.descriptor.sensitiveOutputs ?? [];
+    if (executed.outcome === "committed")
+      run.sensitive.push(...sensitiveValues(executed.outputs, sensitive));
     const storedOutputs: Record<string, JsonValue> =
       executed.outcome === "committed"
-        ? {
-            result: redactSensitiveOutputs(
-              executed.outputs,
-              entry.descriptor.sensitiveOutputs ?? [],
-            ),
-          }
+        ? { result: redactSensitiveOutputs(executed.outputs, sensitive) }
         : {};
     try {
       await dependencies.ledger.complete(key, outcome, storedOutputs);
@@ -455,6 +486,9 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     const token = newToken();
     let stored: Awaited<ReturnType<FlowContinuationStore["issue"]>>;
     try {
+      // A run holding a sensitive value (in a task output, variable or intent) is never stored, so
+      // it ends here instead of waiting for the person.
+      if (carriesSensitive(step.state, run.sensitive)) throw new Error("FLOW_RUN_HOLDS_SENSITIVE");
       stored = await dependencies.continuations.issue({
         tokenHash: sha256(token),
         runId: step.state.runId,
@@ -516,7 +550,9 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     flowId: string,
-  ): Promise<Omit<Run, "carriedMilliseconds" | "segmentStart" | "unavailable"> | undefined> => {
+  ): Promise<
+    Omit<Run, "carriedMilliseconds" | "segmentStart" | "unavailable" | "sensitive"> | undefined
+  > => {
     // An expired session is not a verified initiator, on a start or on any resume.
     if (!(Date.parse(session.accessTokenExpiresAt) > now().valueOf())) return undefined;
     const release = await dependencies.resolveRelease(selection.organizationId, flowId);
@@ -576,6 +612,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           carriedMilliseconds: 0,
           segmentStart: clock(),
           unavailable: [],
+          sensitive: [],
         };
         const first = startFlowRun(
           {
@@ -643,6 +680,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           carriedMilliseconds: stored.elapsedMilliseconds,
           segmentStart: clock(),
           unavailable: [],
+          sensitive: [],
         };
         const resume: FlowRunResume =
           answer.kind === "confirmed"

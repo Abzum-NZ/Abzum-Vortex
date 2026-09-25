@@ -2582,7 +2582,7 @@
               "operation": {
                 "kind": "literal",
                 "literal": {
-                  "kind": "text",
+                  "type": "text",
                   "value": "platform.suspend_organization_account"
                 }
               }
@@ -2637,7 +2637,7 @@
               "operation": {
                 "kind": "literal",
                 "literal": {
-                  "kind": "text",
+                  "type": "text",
                   "value": "platform.reactivate_organization_account"
                 }
               }
@@ -2692,7 +2692,7 @@
               "operation": {
                 "kind": "literal",
                 "literal": {
-                  "kind": "text",
+                  "type": "text",
                   "value": "platform.close_organization_account"
                 }
               }
@@ -2747,7 +2747,7 @@
               "operation": {
                 "kind": "literal",
                 "literal": {
-                  "kind": "text",
+                  "type": "text",
                   "value": "platform.create_organization_invitation"
                 }
               }
@@ -2802,7 +2802,7 @@
               "operation": {
                 "kind": "literal",
                 "literal": {
-                  "kind": "text",
+                  "type": "text",
                   "value": "platform.revoke_organization_invitation"
                 }
               }
