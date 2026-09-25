@@ -8,7 +8,10 @@ import {
   type NavigationItem,
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
+  type PermissionDeclaration,
   type PermissionRegistryEntryCandidate,
+  platformPermissionCatalogueOwnerId,
+  platformPermissionFor,
   type ProjectedNavigation,
   type ProjectedNavigationItem,
   type SelectedOrganizationScope,
@@ -165,28 +168,57 @@ export const createAuthenticatedNavigationProjectionService = <Command>(
 const sameUuid = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
+/**
+ * One resolved navigation requirement: an application or bound-Module permission from the
+ * release's prepared registration, or an exact platform administration permission from the
+ * shipped platform catalogue. The two carry different authority shapes, so they stay distinct
+ * until the declaration is built.
+ */
+type NavigationPermissionBindingValue =
+  | Readonly<{ kind: "definition"; entry: PermissionRegistryEntryCandidate }>
+  | Readonly<{ kind: "platform"; permission: PermissionDeclaration }>;
+
 const declaration = (
   operationKey: string,
   applicationRootId: ApplicationRootId,
-  entry: PermissionRegistryEntryCandidate,
-): OrganizationAccessDeclaration => ({
-  operationKey,
-  action: {
-    actionKind: entry.permission.actionKind,
-    ...(entry.permission.namedAction === undefined
-      ? {}
-      : { namedAction: entry.permission.namedAction }),
-  },
-  target: { kind: "application", applicationRootId },
-  requiredPermission: {
-    applicationRootId: entry.applicationRootId,
-    ownerKind: entry.ownerKind,
-    ownerId: entry.ownerId,
-    permissionId: entry.permission.permissionId,
-  },
-  recentAuthentication: { kind: "none" },
-  authority: { kind: "permission" },
-});
+  binding: NavigationPermissionBindingValue,
+): OrganizationAccessDeclaration =>
+  binding.kind === "platform"
+    ? {
+        operationKey,
+        action: {
+          actionKind: binding.permission.actionKind,
+          ...(binding.permission.namedAction === undefined
+            ? {}
+            : { namedAction: binding.permission.namedAction }),
+        },
+        target: { kind: "organization" },
+        requiredPermission: {
+          ownerKind: "platform",
+          ownerId: platformPermissionCatalogueOwnerId,
+          permissionId: binding.permission.permissionId,
+        },
+        recentAuthentication: { kind: "none" },
+        authority: { kind: "permission" },
+      }
+    : {
+        operationKey,
+        action: {
+          actionKind: binding.entry.permission.actionKind,
+          ...(binding.entry.permission.namedAction === undefined
+            ? {}
+            : { namedAction: binding.entry.permission.namedAction }),
+        },
+        target: { kind: "application", applicationRootId },
+        requiredPermission: {
+          applicationRootId: binding.entry.applicationRootId,
+          ownerKind: binding.entry.ownerKind,
+          ownerId: binding.entry.ownerId,
+          permissionId: binding.entry.permission.permissionId,
+        },
+        recentAuthentication: { kind: "none" },
+        authority: { kind: "permission" },
+      };
 
 export type StoredNavigationProjectionDependencies = HumanOrganizationRequestDependencies &
   Readonly<{
@@ -233,11 +265,13 @@ export const createStoredNavigationProjectionService = (
   const requests = createHumanOrganizationRequestService(requestDependencies);
 
   const load = (): FixedAuthenticatedNavigationProjection => {
-    const permission = (key: string): PermissionRegistryEntryCandidate => {
+    const permission = (key: string): NavigationPermissionBindingValue => {
+      const platform = platformPermissionFor(key);
+      if (platform !== undefined) return { kind: "platform", permission: platform };
       const matches = registration.entries.filter((entry) => entry.permission.key === key);
       if (matches.length !== 1 || matches[0] === undefined)
         throw new Error("STORED_NAVIGATION_PERMISSION_BINDING_UNAVAILABLE");
-      return matches[0];
+      return { kind: "definition", entry: matches[0] };
     };
     const permissionBindings = Object.fromEntries(
       collectNavigationPermissionKeys(applicationRelease.content.navigation).map((permissionKey) => [

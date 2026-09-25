@@ -14,10 +14,13 @@ import {
   pageDefinitionV2Schema,
   pageIdSchema,
   permissionIdSchema,
+  platformPermissionCatalogueOwnerId,
+  platformPermissionFor,
   revisionSchema,
   roleIdSchema,
   type IdentityAuthorityId,
   type IdentitySession,
+  type OrganizationAccessDeclaration,
 } from "@vortex/contracts";
 import {
   createHumanOrganizationRequestService,
@@ -170,28 +173,53 @@ const permittedApplication = async (
         throw new Error("APPLICATION_PAGE_ADDRESS_UNAVAILABLE");
 
       for (const page of candidate.pages) {
-        const matches = candidate.permissions.filter(
-          (entry) => entry.key === page.accessPermissionKey,
-        );
-        if (matches.length !== 1 || matches[0] === undefined)
-          throw new Error("APPLICATION_PAGE_PERMISSION_UNAVAILABLE");
-        const permission = matches[0];
-        const declaration = organizationAccessDeclarationSchema.parse({
-          operationKey: "application.page.discover",
-          action: {
-            actionKind: permission.actionKind,
-            ...(permission.namedAction === null ? {} : { namedAction: permission.namedAction }),
-          },
-          target: { kind: "application", applicationRootId: candidate.applicationRootId },
-          requiredPermission: {
-            applicationRootId: permission.applicationRootId,
-            ownerKind: permission.ownerKind,
-            ownerId: permission.ownerId,
-            permissionId: permission.permissionId,
-          },
-          recentAuthentication: { kind: "none" },
-          authority: { kind: "permission" },
-        });
+        // A page requirement names either a permission from this application's own catalogue or
+        // an exact platform administration permission from the shipped platform catalogue. A
+        // platform permission is organisation-scoped, so its declaration targets the organisation.
+        const platformDeclaration = platformPermissionFor(page.accessPermissionKey);
+        let declaration: OrganizationAccessDeclaration;
+        if (platformDeclaration !== undefined) {
+          declaration = organizationAccessDeclarationSchema.parse({
+            operationKey: "application.page.discover",
+            action: {
+              actionKind: platformDeclaration.actionKind,
+              ...(platformDeclaration.namedAction === undefined
+                ? {}
+                : { namedAction: platformDeclaration.namedAction }),
+            },
+            target: { kind: "organization" },
+            requiredPermission: {
+              ownerKind: "platform",
+              ownerId: platformPermissionCatalogueOwnerId,
+              permissionId: platformDeclaration.permissionId,
+            },
+            recentAuthentication: { kind: "none" },
+            authority: { kind: "permission" },
+          });
+        } else {
+          const matches = candidate.permissions.filter(
+            (entry) => entry.key === page.accessPermissionKey,
+          );
+          if (matches.length !== 1 || matches[0] === undefined)
+            throw new Error("APPLICATION_PAGE_PERMISSION_UNAVAILABLE");
+          const permission = matches[0];
+          declaration = organizationAccessDeclarationSchema.parse({
+            operationKey: "application.page.discover",
+            action: {
+              actionKind: permission.actionKind,
+              ...(permission.namedAction === null ? {} : { namedAction: permission.namedAction }),
+            },
+            target: { kind: "application", applicationRootId: candidate.applicationRootId },
+            requiredPermission: {
+              applicationRootId: permission.applicationRootId,
+              ownerKind: permission.ownerKind,
+              ownerId: permission.ownerId,
+              permissionId: permission.permissionId,
+            },
+            recentAuthentication: { kind: "none" },
+            authority: { kind: "permission" },
+          });
+        }
         const decision = await runOrganizationAccessOperation(
           transaction, scope, declaration, async () => true,
         );
