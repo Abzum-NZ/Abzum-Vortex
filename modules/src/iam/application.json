@@ -38,15 +38,6 @@
         "administrative": false
       },
       {
-        "id": "perm_app_iam_review",
-        "key": "application.iam.review",
-        "label": "Review access",
-        "description": "Allows recording access review decisions.",
-        "action_kind": "named",
-        "named_action": "review",
-        "administrative": false
-      },
-      {
         "id": "perm_app_iam_manage",
         "key": "application.iam.manage",
         "label": "Manage IAM",
@@ -77,13 +68,9 @@
         "id": "role_iam_reviewer",
         "key": "iam_reviewer",
         "name": "IAM reviewer",
-        "home_page": "iam_reviews",
+        "home_page": "iam_overview",
         "permissions": [
-          "application.iam.open",
-          "application.iam.review",
-          "vortex.iam.core.access_request.read_reviewed",
-          "vortex.iam.core.access_review.read_assigned",
-          "vortex.iam.core.access_review.update_assigned"
+          "application.iam.open"
         ]
       },
       {
@@ -94,7 +81,6 @@
         "permissions": [
           "application.iam.open",
           "application.iam.request",
-          "application.iam.review",
           "application.iam.manage",
           "vortex.iam.core.access_request.create",
           "vortex.iam.core.access_request.read",
@@ -107,19 +93,7 @@
           "vortex.iam.core.access_request_item.update",
           "vortex.iam.core.access_request_item.soft_delete",
           "vortex.iam.core.access_request_item.restore",
-          "vortex.iam.core.access_request_item.export",
-          "vortex.iam.core.access_review.create",
-          "vortex.iam.core.access_review.read",
-          "vortex.iam.core.access_review.update",
-          "vortex.iam.core.access_review.soft_delete",
-          "vortex.iam.core.access_review.restore",
-          "vortex.iam.core.access_review.export",
-          "vortex.iam.core.access_review_response.create",
-          "vortex.iam.core.access_review_response.read",
-          "vortex.iam.core.access_review_response.update",
-          "vortex.iam.core.access_review_response.soft_delete",
-          "vortex.iam.core.access_review_response.restore",
-          "vortex.iam.core.access_review_response.export"
+          "vortex.iam.core.access_request_item.export"
         ]
       }
     ],
@@ -191,13 +165,6 @@
             "label": "Access Requests",
             "page": "iam_access_requests",
             "permission": "application.iam.open"
-          },
-          {
-            "id": "nav_iam_reviews",
-            "type": "page",
-            "label": "Reviews",
-            "page": "iam_reviews",
-            "permission": "application.iam.review"
           }
         ]
       },
@@ -242,29 +209,6 @@
         "sort": [
           {
             "field": "request_number",
-            "direction": "descending"
-          }
-        ],
-        "page_size": 50,
-        "relationship_hops": 0
-      },
-      {
-        "id": "qry_iam_reviews",
-        "key": "iam_reviews",
-        "record_type": "vortex.iam.core:access_review",
-        "select": [
-          "review_number",
-          "request",
-          "decision",
-          "reviewer",
-          "decided_at"
-        ],
-        "filter": null,
-        "group_by": [],
-        "aggregates": [],
-        "sort": [
-          {
-            "field": "review_number",
             "direction": "descending"
           }
         ],
@@ -320,7 +264,7 @@
                   },
                   "text": {
                     "kind": "text",
-                    "value": "Access requests and reviews describe intent and decisions. Only protected Access determines current people, roles, groups and assignments; those views read live protected Access data and are never copied into records."
+                    "value": "Access requests describe intent; approval decisions are made by workflows. Only protected Access determines current people, roles, groups and assignments; those views read live protected Access data and are never copied into records."
                   }
                 },
                 "theme_overrides": {},
@@ -3260,249 +3204,6 @@
             "order": {
               "desktop": [
                 "iam_access_request_edit_form"
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": "page_iam_reviews",
-        "key": "iam_reviews",
-        "name": "Reviews",
-        "type": "list",
-        "record_type": "vortex.iam.core:access_review",
-        "permission": "application.iam.review",
-        "query": "iam_reviews",
-        "arrangements": [
-          "table"
-        ],
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "failure",
-          "recovery"
-        ],
-        "composition": {
-          "shell_kind": "default",
-          "main": {
-            "placements": {
-              "iam_reviews_list": {
-                "block": {
-                  "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Reviews"
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {},
-                "query": "iam_reviews"
-              }
-            },
-            "order": {
-              "desktop": [
-                "iam_reviews_list"
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": "page_iam_review_detail",
-        "key": "iam_review_detail",
-        "name": "Review",
-        "type": "detail",
-        "record_type": "vortex.iam.core:access_review",
-        "permission": "application.iam.review",
-        "states": [
-          "normal",
-          "loading",
-          "not_found",
-          "refused",
-          "failure",
-          "recovery"
-        ],
-        "composition": {
-          "shell_kind": "default",
-          "main": {
-            "placements": {
-              "iam_review_detail_body": {
-                "block": {
-                  "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Review"
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {}
-              }
-            },
-            "order": {
-              "desktop": [
-                "iam_review_detail_body"
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": "page_iam_review_comments",
-        "key": "iam_review_comments",
-        "name": "Review comments",
-        "type": "form",
-        "record_type": "vortex.iam.core:access_review",
-        "permission": "application.iam.review",
-        "commit_action": "vortex.iam.core.access_review.update",
-        "states": [
-          "normal",
-          "loading",
-          "validation",
-          "refused",
-          "conflict",
-          "failure",
-          "recovery"
-        ],
-        "composition": {
-          "shell_kind": "default",
-          "main": {
-            "placements": {
-              "iam_review_comments_form": {
-                "block": {
-                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Review comments"
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {
-                  "content": {
-                    "placements": {
-                      "iam_review_comments_text": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "comments"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Comments"
-                          },
-                          "multiline": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "iam_review_comments_submit": {
-                        "block": {
-                          "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "label": {
-                            "kind": "text",
-                            "value": "Save comments"
-                          },
-                          "action_kind": {
-                            "kind": "choice",
-                            "value": "submit"
-                          },
-                          "variant": {
-                            "kind": "choice",
-                            "value": "primary"
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      }
-                    },
-                    "order": {
-                      "desktop": [
-                        "iam_review_comments_text",
-                        "iam_review_comments_submit"
-                      ]
-                    }
-                  }
-                }
-              }
-            },
-            "order": {
-              "desktop": [
-                "iam_review_comments_form"
               ]
             }
           }
