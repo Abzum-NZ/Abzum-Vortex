@@ -222,7 +222,7 @@ from vortex_record.record_lifecycle_command_receipts as stored;
 -- The lifecycle effect journal follows its command to the one receipt table.
 alter table vortex_record.record_lifecycle_command_effects
   add column command_kind text not null default 'record_lifecycle',
-  add constraint record_lifecycle_command_effects_kind_valid check (
+  add constraint record_lifecycle_command_effects_command_kind_valid check (
     command_kind = 'record_lifecycle'
   ),
   drop constraint record_lifecycle_command_effects_receipt_fk,

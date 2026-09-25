@@ -25,7 +25,11 @@
 -- catalogue scope. Registration grants nobody access: the coordinator creates
 -- no assignment and preserves final-steward and continuity safeguards.
 
+-- The postgres-owned Activity composer below is created in vortex_module, which
+-- needs the schema CREATE privilege that only the schema owner can lend. Revoked
+-- again at the end of this migration.
 set local role vortex_module_owner;
+grant create on schema vortex_module to postgres;
 
 create function vortex_module.read_application_installation_bindings(
   p_application_root_id uuid
@@ -402,3 +406,7 @@ comment on function vortex_access.change_application_installation_access(
   uuid, uuid, text, jsonb
 ) is
   'Authority-checked Application permission registration change for installation; derives actor and correlation from validated human context and grants no access.';
+
+set local role vortex_module_owner;
+revoke create on schema vortex_module from postgres;
+reset role;

@@ -1,3 +1,9 @@
+-- The postgres-owned function is replaced in vortex_module, which needs the schema
+-- CREATE privilege that only the schema owner can lend. Revoked again below.
+set local role vortex_module_owner;
+grant create on schema vortex_module to postgres;
+reset role;
+
 create or replace function vortex_module.read_application_address_candidates(
   p_identity_id uuid,
   p_tenant_short_name text,
@@ -211,3 +217,7 @@ grant execute on function vortex_module.read_application_address_candidates(uuid
 
 comment on function vortex_module.read_application_address_candidates(uuid, text, text) is
   'Private App candidate read for one exact live human organisation address; only App may project metadata after current page Access decisions.';
+
+set local role vortex_module_owner;
+revoke create on schema vortex_module from postgres;
+reset role;

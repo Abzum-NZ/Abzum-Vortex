@@ -770,7 +770,9 @@ begin
 end
 $block$;
 
-grant create on schema vortex_record to vortex_record_inventory;
+-- USAGE lets the inventory role resolve the schema-qualified name when it sets the
+-- privileges on the function it creates; it is lent only for this transaction.
+grant usage, create on schema vortex_record to vortex_record_inventory;
 grant create on schema vortex_record to vortex_record_adapter;
 reset role;
 set local role vortex_record_inventory;
@@ -954,7 +956,7 @@ comment on function vortex_record.finalize_account_deletion_fence(uuid) is
 reset role;
 set local role vortex_record_owner;
 revoke create on schema vortex_record from vortex_record_adapter;
-revoke create on schema vortex_record from vortex_record_inventory;
+revoke usage, create on schema vortex_record from vortex_record_inventory;
 reset role;
 
 commit;

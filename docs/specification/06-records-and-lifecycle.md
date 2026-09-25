@@ -233,6 +233,12 @@ correction names the mutation whose value needs correcting.
 
 ### Writer variants to be retired
 
+Retired by #1063: `save_named_action_set_announce`, `save_named_action_set_fields_internal` and
+`save_named_action_effects_with_relationship_totals`. A named action is a `transaction` flow whose
+record tasks the flow runner collects and applies in one `apply_record_changes` call (through its
+request-role entry `apply_action_record_changes`), keeping the `named_action` receipt and
+fingerprint, the action's own field rules, Activity and Events.
+
 The one engine retires the overlapping entry points, cloned writers, receipt
 ledgers and helpers below. No new record writer variant or named-action effect
 kind may be added until the engine lands.
@@ -244,9 +250,8 @@ Base save:
 
 Named-action writers:
 
-- `prepare_named_action_set_announce`, `save_named_action_set_announce`, `save_named_action_set_announce_with_relationship_totals`.
-- `prepare_named_action_relationship_totals`, `prepare_named_action_command_totals`, `save_named_action_effects_with_relationship_totals`.
-- `save_named_action_set_fields_internal`, `change_record_by_named_action_internal`, `insert_named_action_record_internal`, `write_named_action_relationship_value_internal`.
+- `prepare_named_action_set_announce`, `prepare_named_action_relationship_totals`, `prepare_named_action_command_totals`.
+- `change_record_by_named_action_internal`, `insert_named_action_record_internal`, `write_named_action_relationship_value_internal`. `apply_record_changes` still calls each of them for a named action's own authority, so they are retired with the action-scoped facts loaders, not before.
 - `apply_named_action_create_patch_internal`, `apply_named_action_copy_patch_internal`, `apply_named_action_relationship_copies_internal`, `apply_named_action_delete_patch_internal`.
 
 Lifecycle and ownership entry points:
