@@ -42,8 +42,8 @@ export type PlatformBlockRenderProps = Readonly<{
   projectedNavigation?: ProjectedNavigation;
   /**
    * Resolves one internal page identity to the address the shell routes on. Route composition owns
-   * the address shape, so navigation never invents one; when the shell supplies no resolver the
-   * internal identity is used unchanged.
+   * the address shape, so navigation never invents one; a navigation block given a non-empty menu
+   * without a resolver is refused.
    */
   resolvePageHref?: (pageId: string) => string;
   /** Exact internal page identity currently shown, for the current-page state. */

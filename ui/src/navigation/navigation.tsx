@@ -207,9 +207,9 @@ export function ApplicationNavigation({
  * Registered renderer for the application navigation block. It draws the one `ProjectedNavigation`
  * the server already filtered for this viewer, in definition order, and never filters, fetches or
  * invents an item; an absent projection is an empty menu. The shell supplies the page-address
- * resolver, so route composition owns the address shape; without one the internal page identity is
- * used unchanged. Component data and semantic events are refused, because a menu is navigation
- * rather than a data surface.
+ * resolver, so route composition owns the address shape; a non-empty menu without one is refused
+ * rather than linking to an invented address. Component data and semantic events are refused,
+ * because a menu is navigation rather than a data surface.
  */
 export function ApplicationNavigationBlock(props: PlatformBlockRenderProps): ReactElement {
   const location: DefinitionRenderErrorLocation = {
@@ -237,11 +237,21 @@ export function ApplicationNavigationBlock(props: PlatformBlockRenderProps): Rea
       location,
     );
 
+  const navigation = props.projectedNavigation ?? [];
+  const resolvePageHref = props.resolvePageHref;
+  if (resolvePageHref === undefined && navigation.length > 0)
+    throw new DefinitionRenderError(
+      "INVALID_COMPOSITION",
+      "The application navigation block requires the shell's page-address resolver",
+      location,
+    );
+
   return (
     <ApplicationNavigation
-      navigation={props.projectedNavigation ?? []}
+      navigation={navigation}
       label={label}
-      resolvePageHref={props.resolvePageHref ?? ((pageId: string) => pageId)}
+      // Only reachable with an empty menu, which renders no page link.
+      resolvePageHref={resolvePageHref ?? (() => "")}
       {...(props.currentPageId === undefined ? {} : { currentPageId: props.currentPageId })}
       breakpoint={props.breakpoint}
     />
