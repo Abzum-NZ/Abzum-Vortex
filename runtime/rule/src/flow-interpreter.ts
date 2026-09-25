@@ -64,7 +64,8 @@ export type FlowFailureCode =
   | "server_time_limit"
   | "output_unresolved"
   | "task_refused"
-  | "resume_mismatch";
+  | "resume_mismatch"
+  | "continuation_unavailable";
 
 export type FlowFailure = Readonly<{
   outcome: FlowFailureOutcome;
@@ -134,6 +135,8 @@ export type FlowRunState = Readonly<{
   activations: readonly Activation[];
   /** Protected operations started so far in this run, across every resume. */
   protectedOperations: number;
+  /** Protected tasks that reported `committed`, so the host can tell a change from a no-op. */
+  committedEffects: number;
   steps: number;
   /** Non-blocking intents gathered since the last suspension. */
   pendingIntents: readonly FlowInterfaceIntent[];
@@ -778,6 +781,7 @@ export const startFlowRun = (start: FlowRunStart, library: FlowLibrary): FlowRun
     ...(start.actor === undefined ? {} : { actor: start.actor }),
     activations: [],
     protectedOperations: 0,
+    committedEffects: 0,
     steps: 0,
     pendingIntents: [],
   };
@@ -822,6 +826,7 @@ export const resumeFlowRun = (
       resume.outcome === "committed" ||
       resume.outcome === "background_pending";
     if (succeeded) {
+      if (resume.outcome === "committed") machine.state.committedEffects += 1;
       replaceTop(
         machine,
         storeTaskOutputs(activation, awaiting.taskId, {
