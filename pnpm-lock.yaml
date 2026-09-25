@@ -231,6 +231,9 @@ importers:
       '@vortex/module':
         specifier: workspace:*
         version: link:../module
+      '@vortex/rule':
+        specifier: workspace:*
+        version: link:../rule
       '@vortex/theme':
         specifier: workspace:*
         version: link:../theme

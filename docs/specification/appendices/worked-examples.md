@@ -258,7 +258,7 @@ The validator and later engine tests prove:
 
 - Every file listed by the fixture manifest exists, and no definition file is unlisted.
 - Every root, version, module dependency, record type, field, relationship, action, permission, role, option, page, block, query, event, workflow node, pipeline transition, connection operation, and interface operation resolves.
-- Every field uses one of the twenty-two field types with its required settings.
+- Every field uses one of the twenty-one field types with its required settings.
 - Every relationship names an existing compatible target and declared module dependency.
 - Every workflow uses only registered safe nodes; arbitrary code, SQL, shell, network, and file access are absent.
 - Every public field is approved by both its field definition and public operation.
@@ -271,6 +271,6 @@ The validator and later engine tests prove:
 
 ## HR example: editable application and workflow-only approvals
 
-[HR composition and approved policy](page-builder-contracts.md#hr-example-policy) add Employees, Departments, Positions and Leave Requests as a normal Vortex application. This does not replace existing CRM/Service Desk coverage. Employee/private, manager/direct-report and HR-administrator access are editable definitions. No self-approval is allowed; no eligible approver leaves the request pending.
+[HR composition and approved policy](page-builder-contracts.md#hr-example-policy) add Employees, Departments, Positions and Leave Requests as a normal Vortex application. This does not replace existing CRM/Service Desk coverage. The Employee record links to the People system record type through an ordinary link, and organisation-wide person details such as department, job title, manager and cost centre are organisation-added fields on that system record type, so the example builds no second people directory. Employee/private, manager/direct-report and HR-administrator access are editable definitions. No self-approval is allowed; no eligible approver leaves the request pending.
 
 The HR workflow uses the existing human-input node, conditions and named actions; no custom code or privileged business approval mechanism is added. [#251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251) writes the complete JSON dependency set before live UI work, then proves generic module/page editing. [#254](https://github.com/Abzum-NZ/Abzum-Vortex/issues/254) verifies approval execution and later integrations when their executors exist.

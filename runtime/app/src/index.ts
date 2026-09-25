@@ -130,6 +130,27 @@ export {
   type ProtectedOperationValue,
 } from "./protected-operation-executor";
 
+export {
+  createFlowOrchestrator,
+  flowContinuationLifetimeSeconds,
+  type FlowOrchestrator,
+  type FlowOrchestratorDependencies,
+  type FlowOrchestratorResponse,
+  type FlowRelease,
+  type FlowResumeRequest,
+  type FlowStartRequest,
+  type FlowUnavailableNotice,
+} from "./flow-orchestrator";
+
+export {
+  createDatabaseFlowStores,
+  type FlowContinuationBinding,
+  type FlowContinuationStore,
+  type FlowEffectClaim,
+  type FlowEffectKey,
+  type FlowEffectLedger,
+} from "./flow-continuation-store";
+
 export const AppService = Object.freeze({
   key: "app",
   boundary: "@vortex/app",
@@ -143,4 +164,6 @@ export const AppService = Object.freeze({
   createInstalledRuntimeContextLoader,
   createIdentityDisablementCoordinator,
   createProtectedOperationExecutor,
+  createFlowOrchestrator,
+  createDatabaseFlowStores,
 });
