@@ -325,12 +325,12 @@ const parseGrantAuthority = (candidate: unknown): EventDispatcherGrantAuthority 
 };
 
 /**
- * Resolves the dispatcher's system actor from storage. The runtime function
- * returns the granted actor only when exactly one active system actor grant
- * exists for the fixed dispatcher operation and, when the grant names an
- * organisation, that organisation is active; every other answer, a missing
- * function, or an unusable result refuses closed. The actor is read from the
- * grant, never from the request.
+ * Resolves the dispatcher's system actor from storage for the fixed
+ * `dispatch_event_occurrences` operation. The runtime function returns the
+ * granted actor only when exactly one active system actor grant exists and,
+ * when the grant names an organisation, that organisation is active; every
+ * other answer, a missing function, or an unusable result refuses closed. The
+ * actor is read from the grant, never from the request.
  */
 export const createEventDispatcherGrantReader = (
   run: EventDispatcherTransactionRunner,
