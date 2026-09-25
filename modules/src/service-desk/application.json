@@ -419,8 +419,10 @@
                                    "type":  "dashboard",
                                    "permission":  "application.service_desk.open",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_service_desk",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "content_0":  {
                                                                                                          "block":  {
@@ -457,6 +459,7 @@
                                                                                                   "content_0"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -469,8 +472,10 @@
                                    "permission":  "vortex.service_desk.cases.case.read",
                                    "query":  "service_desk_open_cases",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_service_desk",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "content_1":  {
                                                                                                          "block":  {
@@ -576,6 +581,7 @@
                                                                                                   "content_1"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -587,8 +593,10 @@
                                    "record_type":  "vortex.service_desk.cases:case",
                                    "permission":  "vortex.service_desk.cases.case.read",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_service_desk",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
         "form_sd_case_public_comment": {
             "block": {
@@ -944,6 +952,7 @@
                                                                                                   "form_sd_case_public_comment"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -956,8 +965,10 @@
                                    "permission":  "vortex.service_desk.cases.case.create",
                                    "commit_action":  "vortex.service_desk.cases.case.create",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_service_desk",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "form_3":  {
                                                                                                       "block":  {
@@ -1073,6 +1084,7 @@
                                                                                                   "form_3"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -1085,8 +1097,10 @@
                                    "permission":  "vortex.service_desk.knowledge.article.read",
                                    "query":  "service_desk_knowledge",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_service_desk",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "content_4":  {
                                                                                                          "block":  {
@@ -1171,6 +1185,7 @@
                                                                                                   "content_4"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -1182,8 +1197,10 @@
                                    "record_type":  "vortex.service_desk.knowledge:article",
                                    "permission":  "vortex.service_desk.knowledge.article.read",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_service_desk",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
         "action_sd_article_publish": {
             "block": {
@@ -1309,6 +1326,7 @@
                                                                                                   "action_sd_article_publish"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -1328,8 +1346,10 @@
                                                      ],
                                    "rate_limit_per_minute":  60,
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_service_desk_public",
+                                                       "content":  {
+                                                                   "slot_public":  {
                                                                     "placements":  {
                                                                                        "content_6":  {
                                                                                                          "block":  {
@@ -1406,6 +1426,7 @@
                                                                                                   "content_6"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -1418,8 +1439,10 @@
                                    "permission":  "vortex.service_desk.sla.service_level.read",
                                    "query":  "service_desk_service_levels",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_service_desk",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "content_7":  {
                                                                                                          "block":  {
@@ -1497,6 +1520,7 @@
                                                                                                   "content_7"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -1509,8 +1533,10 @@
                                    "permission":  "vortex.service_desk.cases.case.update",
                                    "commit_action":  "vortex.service_desk.cases.case.update",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_service_desk",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "form_service_desk_case_edit":  {
                                                                                                                            "block":  {
@@ -1626,6 +1652,7 @@
                                                                                                   "form_service_desk_case_edit"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -1637,8 +1664,10 @@
                                    "record_type":  "vortex.service_desk.sla:service_level",
                                    "permission":  "vortex.service_desk.sla.service_level.read",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_service_desk",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
         "action_sd_service_level_pause": {
             "block": {
@@ -1750,6 +1779,7 @@
                                                                                                   "action_sd_service_level_pause"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -1762,8 +1792,10 @@
                                    "permission":  "vortex.crm.organisations.company.read",
                                    "query":  "service_desk_customers",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_service_desk",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "list_sd_customers":  {
                                                                                                                  "block":  {
@@ -1834,6 +1866,7 @@
                                                                                                   "list_sd_customers"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -1845,8 +1878,10 @@
                                    "record_type":  "vortex.crm.organisations:company",
                                    "permission":  "vortex.crm.organisations.company.read",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_service_desk",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "detail_sd_customer":  {
                                                                                                                   "block":  {
@@ -1965,6 +2000,7 @@
                                                                                                   "detail_sd_customer"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -1977,8 +2013,10 @@
                                    "permission":  "vortex.crm.people.contact.read",
                                    "query":  "service_desk_requesters",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_service_desk",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "list_sd_requesters":  {
                                                                                                                   "block":  {
@@ -2049,6 +2087,7 @@
                                                                                                   "list_sd_requesters"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -2060,8 +2099,10 @@
                                    "record_type":  "vortex.crm.people:contact",
                                    "permission":  "vortex.crm.people.contact.read",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_service_desk",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "detail_sd_requester":  {
                                                                                                                    "block":  {
@@ -2173,6 +2214,7 @@
                                                                                                   "detail_sd_requester"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                }
@@ -2967,7 +3009,356 @@
 
                                                  ],
                  "shells":  [
+                            {
 
+                            "id":  "shell_service_desk",
+                            "key":  "service_desk_shell",
+                            "name":  "Service Desk shell",
+                            "layout":  {
+
+                                        "placements":  {
+
+                                                        "shell_root":  {
+
+                                                                        "block":  {
+
+                                                                                   "block_id":  "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                                                                   "release_version":  "1.0.0"
+                                                                                   },
+                                                                        "settings":  {
+
+                                                                                      "direction":  {
+
+                                                                                                     "kind":  "choice",
+                                                                                                     "value":  "row"
+                                                                                                     },
+                                                                                      "gap":  {
+
+                                                                                               "kind":  "choice",
+                                                                                               "value":  "medium"
+                                                                                               }
+                                                                                      },
+                                                                        "theme_overrides":  {
+
+                                                                                             },
+                                                                        "responsive":  {
+
+                                                                                        "desktop":  {
+
+                                                                                                     "visible":  true,
+                                                                                                     "width":  {
+
+                                                                                                                "kind":  "fill"
+                                                                                                                },
+                                                                                                     "height":  {
+
+                                                                                                                 "kind":  "content"
+                                                                                                                 }
+                                                                                                     }
+                                                                                        },
+                                                                        "slots":  {
+
+                                                                                   "header":  {
+
+                                                                                               "placements":  {
+
+                                                                                                               "shell_heading":  {
+
+                                                                                                                                  "block":  {
+
+                                                                                                                                             "block_id":  "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                                                                                                                                             "release_version":  "1.0.0"
+                                                                                                                                             },
+                                                                                                                                  "settings":  {
+
+                                                                                                                                                "text":  {
+
+                                                                                                                                                          "kind":  "text",
+                                                                                                                                                          "value":  "Service Desk"
+                                                                                                                                                          },
+                                                                                                                                                "level":  {
+
+                                                                                                                                                           "kind":  "choice",
+                                                                                                                                                           "value":  "one"
+                                                                                                                                                           }
+                                                                                                                                                },
+                                                                                                                                  "theme_overrides":  {
+
+                                                                                                                                                       },
+                                                                                                                                  "responsive":  {
+
+                                                                                                                                                  "desktop":  {
+
+                                                                                                                                                               "visible":  true,
+                                                                                                                                                               "width":  {
+
+                                                                                                                                                                          "kind":  "fill"
+                                                                                                                                                                          },
+                                                                                                                                                               "height":  {
+
+                                                                                                                                                                           "kind":  "content"
+                                                                                                                                                                           }
+                                                                                                                                                               }
+                                                                                                                                                  },
+                                                                                                                                  "slots":  {
+
+                                                                                                                                             }
+                                                                                                                                  }
+                                                                                                               },
+                                                                                               "order":  {
+
+                                                                                                          "desktop":  [
+
+                                                                                                                       "shell_heading"
+                                                                                                                       ]
+                                                                                                          }
+                                                                                               },
+                                                                                   "menu":  {
+
+                                                                                             "placements":  {
+
+                                                                                                             "shell_navigation":  {
+
+                                                                                                                                   "block":  {
+
+                                                                                                                                              "block_id":  "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
+                                                                                                                                              "release_version":  "1.0.0"
+                                                                                                                                              },
+                                                                                                                                   "settings":  {
+
+                                                                                                                                                 "title":  {
+
+                                                                                                                                                            "kind":  "text",
+                                                                                                                                                            "value":  "Service Desk"
+                                                                                                                                                            }
+                                                                                                                                                 },
+                                                                                                                                   "theme_overrides":  {
+
+                                                                                                                                                        },
+                                                                                                                                   "responsive":  {
+
+                                                                                                                                                   "desktop":  {
+
+                                                                                                                                                                "visible":  true,
+                                                                                                                                                                "width":  {
+
+                                                                                                                                                                           "kind":  "fill"
+                                                                                                                                                                           },
+                                                                                                                                                                "height":  {
+
+                                                                                                                                                                            "kind":  "content"
+                                                                                                                                                                            }
+                                                                                                                                                                }
+                                                                                                                                                   },
+                                                                                                                                   "slots":  {
+
+                                                                                                                                              }
+                                                                                                                                   }
+                                                                                                             },
+                                                                                             "order":  {
+
+                                                                                                        "desktop":  [
+
+                                                                                                                     "shell_navigation"
+                                                                                                                     ]
+                                                                                                        }
+                                                                                             },
+                                                                                   "content":  {
+
+                                                                                                "placements":  {
+
+                                                                                                                },
+                                                                                                "order":  {
+
+                                                                                                           "desktop":  [
+
+                                                                                                                        ]
+                                                                                                           }
+                                                                                                }
+                                                                                   }
+                                                                        }
+                                                        },
+                                        "order":  {
+
+                                                   "desktop":  [
+
+                                                                "shell_root"
+                                                                ]
+                                                   }
+                                        },
+                            "content_slots":  [
+
+                                               {
+
+                                               "id":  "slot_primary",
+                                               "key":  "primary",
+                                               "label":  "Primary",
+                                               "required":  true,
+                                               "allowed_child_categories":  [
+
+                                                                             "content",
+                                                                             "data",
+                                                                             "figures",
+                                                                             "record",
+                                                                             "actions",
+                                                                             "input",
+                                                                             "layout"
+                                                                             ],
+                                               "parent_placement":  "shell_root",
+                                               "parent_slot":  "content"
+                                               }
+                                               ]
+                            },
+                            {
+
+                            "id":  "shell_service_desk_public",
+                            "key":  "service_desk_public_shell",
+                            "name":  "Service Desk public shell",
+                            "layout":  {
+
+                                        "placements":  {
+
+                                                        "shell_public_root":  {
+
+                                                                               "block":  {
+
+                                                                                          "block_id":  "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                                                                          "release_version":  "1.0.0"
+                                                                                          },
+                                                                               "settings":  {
+
+                                                                                             "direction":  {
+
+                                                                                                            "kind":  "choice",
+                                                                                                            "value":  "column"
+                                                                                                            },
+                                                                                             "gap":  {
+
+                                                                                                      "kind":  "choice",
+                                                                                                      "value":  "medium"
+                                                                                                      }
+                                                                                             },
+                                                                               "theme_overrides":  {
+
+                                                                                                    },
+                                                                               "responsive":  {
+
+                                                                                               "desktop":  {
+
+                                                                                                            "visible":  true,
+                                                                                                            "width":  {
+
+                                                                                                                       "kind":  "fill"
+                                                                                                                       },
+                                                                                                            "height":  {
+
+                                                                                                                        "kind":  "content"
+                                                                                                                        }
+                                                                                                            }
+                                                                                               },
+                                                                               "slots":  {
+
+                                                                                          "header":  {
+
+                                                                                                      "placements":  {
+
+                                                                                                                      "shell_public_heading":  {
+
+                                                                                                                                                "block":  {
+
+                                                                                                                                                           "block_id":  "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                                                                                                                                                           "release_version":  "1.0.0"
+                                                                                                                                                           },
+                                                                                                                                                "settings":  {
+
+                                                                                                                                                              "text":  {
+
+                                                                                                                                                                        "kind":  "text",
+                                                                                                                                                                        "value":  "Service Desk"
+                                                                                                                                                                        },
+                                                                                                                                                              "level":  {
+
+                                                                                                                                                                         "kind":  "choice",
+                                                                                                                                                                         "value":  "one"
+                                                                                                                                                                         }
+                                                                                                                                                              },
+                                                                                                                                                "theme_overrides":  {
+
+                                                                                                                                                                     },
+                                                                                                                                                "responsive":  {
+
+                                                                                                                                                                "desktop":  {
+
+                                                                                                                                                                             "visible":  true,
+                                                                                                                                                                             "width":  {
+
+                                                                                                                                                                                        "kind":  "fill"
+                                                                                                                                                                                        },
+                                                                                                                                                                             "height":  {
+
+                                                                                                                                                                                         "kind":  "content"
+                                                                                                                                                                                         }
+                                                                                                                                                                             }
+                                                                                                                                                                },
+                                                                                                                                                "slots":  {
+
+                                                                                                                                                           }
+                                                                                                                                                }
+                                                                                                                      },
+                                                                                                      "order":  {
+
+                                                                                                                 "desktop":  [
+
+                                                                                                                              "shell_public_heading"
+                                                                                                                              ]
+                                                                                                                 }
+                                                                                                      },
+                                                                                          "content":  {
+
+                                                                                                       "placements":  {
+
+                                                                                                                       },
+                                                                                                       "order":  {
+
+                                                                                                                  "desktop":  [
+
+                                                                                                                               ]
+                                                                                                                  }
+                                                                                                       }
+                                                                                          }
+                                                                               }
+                                                        },
+                                        "order":  {
+
+                                                   "desktop":  [
+
+                                                                "shell_public_root"
+                                                                ]
+                                                   }
+                                        },
+                            "content_slots":  [
+
+                                               {
+
+                                               "id":  "slot_public",
+                                               "key":  "public",
+                                               "label":  "Public content",
+                                               "required":  true,
+                                               "allowed_child_categories":  [
+
+                                                                             "content",
+                                                                             "data",
+                                                                             "figures",
+                                                                             "record",
+                                                                             "actions",
+                                                                             "input",
+                                                                             "layout"
+                                                                             ],
+                                               "parent_placement":  "shell_public_root",
+                                               "parent_slot":  "content"
+                                               }
+                                               ]
+                            }
                             ],
                  "flows":  [
                      {
