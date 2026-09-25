@@ -21,7 +21,6 @@ import {
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
-import { deriveEarliestPendingDeadlineTransitionV2 } from "./deadline-transitions";
 import {
   calculateLockedRelationshipTotalSave,
   type CalculateRelationshipTotalSaveResult,
@@ -416,33 +415,6 @@ const calculateGeneratedValues = (
   return calculated.success ? calculated : undefined;
 };
 
-/** Each mutated record's next pending deadline, derived from its final values. */
-const dueTransitionsFor = (
-  preparation: LockedRelationshipTotalPreparation,
-  mutations: readonly RelationshipTotalParentMutation[],
-  settings: RuntimeSettings,
-) =>
-  mutations.map((mutation) => {
-    const record = preparation.records.find(
-      (candidate) =>
-        candidate.recordId === mutation.recordId &&
-        candidate.recordType.recordTypeId === mutation.recordTypeId,
-    );
-    if (record === undefined) throw new Error("RECORD_LIFECYCLE_RESULT_INVALID");
-    const dueTransition = deriveEarliestPendingDeadlineTransitionV2({
-      recordType: record.recordType,
-      finalAuthoritativeFieldValues: { ...record.existingValues, ...mutation.finalValues },
-      // A date deadline cannot have been calculated without the organisation
-      // time zone; UTC is inert for the date-time-only path, as in the save.
-      organizationTimeZone: settings?.timeZone ?? "UTC",
-    });
-    return {
-      recordTypeId: mutation.recordTypeId,
-      recordId: mutation.recordId,
-      dueTransition: dueTransition ?? null,
-    };
-  });
-
 /** The restored record's complete generated-value mutation at its locked revision. */
 const restoredRootMutation = (
   preparation: LockedRelationshipTotalPreparation,
@@ -507,7 +479,6 @@ export const performProtectedRecordDelete = async (
 
   const { preparation } = prepared;
   let parentMutations: readonly RelationshipTotalParentMutation[] = [];
-  let dueTransitions: ReturnType<typeof dueTransitionsFor> = [];
   // The deleted root is only the evaluator's required anchor; it is never
   // written, so a delete without affected parents needs no calculation.
   if (preparation.records.some((record) => record.recordKey !== "root")) {
@@ -516,7 +487,6 @@ export const performProtectedRecordDelete = async (
     if (calculated === undefined)
       return refuseCalculation(command.recordId, preparation.correlationId);
     parentMutations = calculated.parentMutations;
-    dueTransitions = dueTransitionsFor(preparation, parentMutations, settings);
   }
 
   const finalized = parseDatabaseOutcome(
@@ -527,8 +497,7 @@ export const performProtectedRecordDelete = async (
           ${command.recordTypeId}::uuid,
           ${command.recordId}::uuid,
           ${command.expectedConcurrencyNumber}::bigint,
-          ${JSON.stringify(parentMutations)}::text::jsonb,
-          ${JSON.stringify(dueTransitions)}::text::jsonb
+          ${JSON.stringify(parentMutations)}::text::jsonb
         ) as result
       `,
     ).result,
@@ -664,7 +633,10 @@ export const createRecordDeleteService = (dependencies: RecordDeleteServiceDepen
         restoredRootMutation(preparation, calculated.sourceFinalValues),
         ...calculated.parentMutations,
       ];
-      const dueTransitions = dueTransitionsFor(preparation, mutations, settings);
+      const mutations = [
+        restoredRootMutation(preparation, calculated.sourceFinalValues),
+        ...calculated.parentMutations,
+      ];
 
       const finalized = parseDatabaseOutcome(
         one(
@@ -674,8 +646,7 @@ export const createRecordDeleteService = (dependencies: RecordDeleteServiceDepen
               ${command.recordTypeId}::uuid,
               ${command.recordId}::uuid,
               ${command.expectedConcurrencyNumber}::bigint,
-              ${JSON.stringify(mutations)}::text::jsonb,
-              ${JSON.stringify(dueTransitions)}::text::jsonb
+              ${JSON.stringify(mutations)}::text::jsonb
             ) as result
           `,
         ).result,
