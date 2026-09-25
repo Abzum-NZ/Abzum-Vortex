@@ -2174,6 +2174,50 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
     });
     return valid;
   };
+  /**
+   * Every field of one record type that the engines must work out when a record is read. A
+   * deadline-passed calculation is read-time by its expression, and any calculation that
+   * depends on a read-time calculation is itself read-time. Stored values may never depend on
+   * one, so publication refuses a calculation declared `stored` in this set, and a total whose
+   * aggregate source or filter reads it. Content without an evaluation is classified here.
+   */
+  const readTimeFieldIdsFor = (recordFields: readonly JsonObject[]): ReadonlySet<string> => {
+    const fieldById = new Map(recordFields.map((field) => [String(field.fieldId), field] as const));
+    const classification = new Map<string, boolean>();
+    const isReadTime = (fieldId: string, visiting: ReadonlySet<string>): boolean => {
+      const cached = classification.get(fieldId);
+      if (cached !== undefined) return cached;
+      const field = fieldById.get(fieldId);
+      if (!field || field.type !== "calculation" || visiting.has(fieldId)) return false;
+      const settings = object(field.settings);
+      const expression = object(settings.expression);
+      const nextVisiting = new Set(visiting).add(fieldId);
+      const readTime =
+        expression.kind === "deadline_passed" ||
+        settings.evaluation === "read_time" ||
+        array(settings.dependencyFieldIds).some((dependency) =>
+          isReadTime(String(dependency), nextVisiting),
+        );
+      classification.set(fieldId, readTime);
+      return readTime;
+    };
+    const result = new Set<string>();
+    for (const field of recordFields) {
+      const fieldId = String(field.fieldId);
+      if (isReadTime(fieldId, new Set())) result.add(fieldId);
+    }
+    return result;
+  };
+  const conditionReadsReadTime = (
+    value: unknown,
+    readTimeFieldIds: ReadonlySet<string>,
+  ): boolean => {
+    let found = false;
+    walkValues(value, (entry) => {
+      if (entry.source === "field" && readTimeFieldIds.has(String(entry.fieldId))) found = true;
+    });
+    return found;
+  };
 
   for (const output of moduleOutputs) {
     const moduleV2 = "validationContractVersion" in output;
@@ -2286,6 +2330,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
             failure(output, "vortex.definition.module_relationship_references", "broken_reference"),
           );
       }
+      const readTimeFieldIds = readTimeFieldIdsFor(array(record.fields));
       for (const field of array(record.fields)) {
         const settings = object(field.settings);
         const moduleFieldValueType = (candidate: JsonObject | undefined) =>
@@ -2338,6 +2383,8 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
               (["decimal_number", "money"].includes(String(settings.resultType))
                 ? settings.decimalPlaces !== undefined
                 : settings.decimalPlaces === undefined));
+          if (settings.evaluation === "stored" && readTimeFieldIds.has(String(field.fieldId)))
+            valid = false;
           if (expression.kind === "join_text")
             valid =
               valid &&
@@ -2463,10 +2510,19 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
           const currencyValid =
             settings.currency === undefined ||
             (settings.operation === "sum" && aggregateResultType === "money");
+          const aggregateReadTimeFieldIds = aggregateRelationship
+            ? readTimeFieldIdsFor(array(aggregateRelationship.sourceRecord.fields))
+            : new Set<string>();
+          const readTimeDependent =
+            (settings.fieldId !== undefined &&
+              aggregateReadTimeFieldIds.has(String(settings.fieldId))) ||
+            (settings.filter !== undefined &&
+              conditionReadsReadTime(settings.filter, aggregateReadTimeFieldIds));
           valid =
             aggregateRelationship !== undefined &&
             reachesCurrentRecord &&
             filterValid &&
+            !readTimeDependent &&
             currencyValid &&
             (settings.operation === "count"
               ? settings.fieldId === undefined
