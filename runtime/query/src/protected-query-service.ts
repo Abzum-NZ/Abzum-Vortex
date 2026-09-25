@@ -431,6 +431,9 @@ const planCache = async (
   declared: ResolvedInputs,
   cache: QueryCache,
 ): Promise<CachePlan | undefined> => {
+  // A search match is decided per row over the values readable when the page was read, which the
+  // hit recheck does not re-evaluate, so a searched page always bypasses the cache.
+  if (command.search !== undefined) return undefined;
   const context = await isolated(transaction, async () => {
     const resolved = await cache.resolveContext(transaction, scope, command, {
       moduleReleaseRevision: declared.moduleReleaseRevision,

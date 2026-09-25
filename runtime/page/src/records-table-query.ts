@@ -96,9 +96,45 @@ const lowerUnique = (values: readonly string[]): string[] => [
 ];
 
 /**
- * One `filter_changed` value as a typed condition over its field. A text-like field matches a
- * substring, while a number, date or yes/no field must equal the value the control reports; an
- * unparsable value yields undefined so the command is refused rather than filtered loosely.
+ * A number filter value as the engine compares it: a safe integer as a JSON number, which matches
+ * whole-number and decimal fields alike, and any other plain decimal as canonical decimal text (no
+ * exponent, no leading or trailing zeros), which is how the engine carries a decimal field's value.
+ * Anything else is undefined, so the command is refused rather than filtered loosely.
+ */
+const numberFilterValue = (raw: string): number | string | undefined => {
+  const match = /^(-?)([0-9]+)(?:\.([0-9]+))?$/.exec(raw.trim());
+  if (match === null) return undefined;
+  const sign = match[1] ?? "";
+  const whole = (match[2] ?? "").replace(/^0+(?=[0-9])/, "");
+  const fraction = (match[3] ?? "").replace(/0+$/, "");
+  if (fraction !== "") return `${sign}${whole}.${fraction}`;
+  const value = Number(whole);
+  if (!Number.isSafeInteger(value)) return undefined;
+  return sign === "-" && value !== 0 ? -value : value;
+};
+
+const ISO_CALENDAR_DAY = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/;
+
+/** The UTC start of a calendar day and of the next one, or undefined for an invalid date. */
+const utcDayBounds = (raw: string): readonly [string, string] | undefined => {
+  const match = ISO_CALENDAR_DAY.exec(raw);
+  if (match === null) return undefined;
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const start = new Date(Date.UTC(year, month, day));
+  if (start.getUTCFullYear() !== year || start.getUTCMonth() !== month || start.getUTCDate() !== day)
+    return undefined;
+  const end = new Date(Date.UTC(year, month, day + 1));
+  return [start.toISOString(), end.toISOString()];
+};
+
+/**
+ * One `filter_changed` value as a typed condition over its field, chosen by the column's declared
+ * format, which is also what picks the filter control. A text-like field matches a substring; a
+ * number, date or yes/no field must equal the value the control reports; a date-and-time field
+ * matches the whole reported calendar day, taken in UTC. An unparsable value yields undefined so the
+ * command is refused rather than filtered loosely.
  */
 const filterConditionFor = (
   format: RecordsDisplayFormat,
@@ -110,10 +146,10 @@ const filterConditionFor = (
     case "number":
     case "currency":
     case "percent": {
-      const value = Number(raw);
-      return Number.isFinite(value)
-        ? { kind: "comparison", operator: "equals", left, right: { source: "value", value } }
-        : undefined;
+      const value = numberFilterValue(raw);
+      return value === undefined
+        ? undefined
+        : { kind: "comparison", operator: "equals", left, right: { source: "value", value } };
     }
     case "boolean":
       return raw === "true" || raw === "false"
@@ -125,8 +161,31 @@ const filterConditionFor = (
           }
         : undefined;
     case "date":
-    case "date_time":
-      return { kind: "comparison", operator: "equals", left, right: { source: "value", value: raw } };
+      return utcDayBounds(raw) === undefined
+        ? undefined
+        : { kind: "comparison", operator: "equals", left, right: { source: "value", value: raw } };
+    case "date_time": {
+      const bounds = utcDayBounds(raw);
+      return bounds === undefined
+        ? undefined
+        : {
+            kind: "all",
+            conditions: [
+              {
+                kind: "comparison",
+                operator: "greater_than_or_equal",
+                left,
+                right: { source: "value", value: bounds[0] },
+              },
+              {
+                kind: "comparison",
+                operator: "less_than",
+                left,
+                right: { source: "value", value: bounds[1] },
+              },
+            ],
+          };
+    }
     default:
       return {
         kind: "comparison",

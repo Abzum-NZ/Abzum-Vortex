@@ -83,7 +83,12 @@ export const protectedQueryCommandSchema = z
     /** The viewer's search text, matched only over fields the installed record type marks searchable. */
     search: z.string().min(1).max(200).optional(),
     /**
-     * The fields the bound component declares sortable, filterable and searchable. The service
+     * The fields the bound component declares sortable, filterable and searchable. The server-side
+     * caller builds them from the installed component's published contract (for a Records table,
+     * runtime/page's buildRecordsTableQueryCommand) and never takes them from the browser. They
+     * only narrow: whatever a caller supplies, no field the record type does not itself declare
+     * sortable, filterable or searchable ever decides a result, and no row is returned through a
+     * field the reader cannot see on it. The service
      * refuses a user sort or filter outside these sets; the engine additionally intersects every
      * accepted field with the installed record type's own sortable/filterable/search-priority
      * flags and the guaranteed-readable projection. An empty searchable set means the component

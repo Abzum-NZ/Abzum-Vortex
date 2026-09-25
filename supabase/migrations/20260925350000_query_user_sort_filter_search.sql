@@ -139,6 +139,7 @@ declare
   user_filter jsonb;
   user_filter_ids text[] := array[]::text[];
   user_search text;
+  user_search_folded text;
   effective_sort jsonb;
   effective_sort_is_user boolean := false;
   search_candidate_ids text[] := array[]::text[];
@@ -267,6 +268,7 @@ begin
   if user_search is not null and pg_catalog.length(user_search) > 200 then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
+  user_search_folded := pg_catalog.lower(user_search);
 
   foreach system_key in array system_field_keys loop
     system_expressions := pg_catalog.array_append(system_expressions, pg_catalog.format('%L, %s', system_key,
@@ -873,14 +875,26 @@ begin
           -- A search term matches only through a searchable field this row exposes
           -- to the reader; a field the reader cannot see never decides a match, so
           -- a hidden value can neither satisfy a search nor be inferred from one.
+          -- Only a text or number value, or the text members of a list value, is
+          -- searched; a structured value's JSON keys and identifiers never match.
           if user_search is not null then
             search_matches := false;
             foreach field_key in array search_field_ids loop
-              if readable_values ? field_key
-                and pg_catalog.strpos(
-                  pg_catalog.lower(coalesce(readable_values ->> field_key, '')),
-                  pg_catalog.lower(user_search)
-                ) > 0 then
+              if readable_values ? field_key and (
+                (pg_catalog.jsonb_typeof(readable_values -> field_key) in ('string', 'number')
+                  and pg_catalog.strpos(
+                    pg_catalog.lower(readable_values ->> field_key), user_search_folded
+                  ) > 0)
+                or (pg_catalog.jsonb_typeof(readable_values -> field_key) = 'array'
+                  and exists (
+                    select 1
+                    from pg_catalog.jsonb_array_elements(readable_values -> field_key) as member(value)
+                    where pg_catalog.jsonb_typeof(member.value) = 'string'
+                      and pg_catalog.strpos(
+                        pg_catalog.lower(member.value #>> '{}'), user_search_folded
+                      ) > 0
+                  ))
+              ) then
                 search_matches := true;
                 exit;
               end if;
