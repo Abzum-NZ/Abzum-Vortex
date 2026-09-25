@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   applicationRootIdSchema,
   builderKeySchema,
+  containedComponentIdSchema,
   delegationAuthorityIdSchema,
   groupIdSchema,
   membershipIdSchema,
@@ -259,7 +260,7 @@ export const organizationAdministrationRoleAssignmentPolicySchema = z.discrimina
       maximumActivationDurationSeconds: javascriptSafeRevisionSchema,
       reasonRequired: z.boolean(),
       recentAuthentication: roleRecentAuthenticationRequirementSchema,
-      independentApprovalRequired: z.boolean(),
+      requiredCallerExecutionBindingId: containedComponentIdSchema.optional(),
     })
     .strict(),
 ]);
@@ -714,7 +715,7 @@ export const organizationAdministrationRoleActivationPolicySchema = z
     maximumActivationDurationSeconds: javascriptSafeRevisionSchema,
     reasonRequired: z.boolean(),
     recentAuthentication: roleRecentAuthenticationRequirementSchema,
-    independentApprovalRequired: z.boolean(),
+    requiredCallerExecutionBindingId: containedComponentIdSchema.optional(),
   })
   .strict();
 

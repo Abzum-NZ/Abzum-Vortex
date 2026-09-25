@@ -8,11 +8,13 @@ import {
   identityAuthorityIdSchema,
   identitySessionSchema,
   organizationSelectionCandidateSchema,
+  protectedOperationChannelSchema,
   selectedOrganizationScopeSchema,
   sessionContextSchema,
   type IdentityAuthorityId,
   type IdentitySession,
   type OrganizationSelectionCandidate,
+  type ProtectedOperationChannel,
   type SelectedOrganizationScope,
   type ServiceTelemetryPort,
   type SessionContext,
@@ -43,6 +45,11 @@ export type HumanOrganizationRequestResult<Result> =
 
 export type HumanOrganizationRequestDependencies = Readonly<{
   identityAuthorityId: IdentityAuthorityId;
+  /**
+   * The channel this trusted entry point reached the protected operation through. It defaults to
+   * `web`; a caller of the service never supplies it from request input.
+   */
+  channel?: ProtectedOperationChannel;
   resolvedRequestTransaction?: ResolvedRequestTransactionRunner;
   clock?: () => Date;
   correlationId?: () => string;
@@ -91,6 +98,9 @@ export const createHumanOrganizationRequestService = (
   dependencies: HumanOrganizationRequestDependencies,
 ) => {
   const configuredAuthority = identityAuthorityIdSchema.parse(dependencies.identityAuthorityId);
+  const configuredChannel: ProtectedOperationChannel = protectedOperationChannelSchema.parse(
+    dependencies.channel ?? "web",
+  );
   const runTransaction = dependencies.resolvedRequestTransaction ?? withResolvedRequestTransaction;
   const clock = dependencies.clock ?? (() => new Date());
   const newCorrelationId = dependencies.correlationId ?? randomUUID;
@@ -238,7 +248,7 @@ export const createHumanOrganizationRequestService = (
             correlationId,
           });
           if (prepare !== undefined) await prepare(transaction, scope);
-          return { context, scope };
+          return { context, scope, channel: configuredChannel };
         },
         (transaction, scope) => operation(transaction, scope, issuedAt),
       );
