@@ -1,4 +1,9 @@
 import type { ReactElement } from "react";
+import {
+  readRecordsTableContract,
+  type RecordsTableColumnContract,
+  type RecordsTableContract,
+} from "@vortex/contracts";
 import type { PlatformBlockRenderProps } from "../registry";
 import { DisplayCellView } from "./cell";
 import {
@@ -10,20 +15,64 @@ import {
   SelectionControl,
 } from "./controls";
 import { DisplayStateContainer } from "./display-state-container";
+import type { DisplayColumn } from "./projected-data";
+
+type RenderedColumn = Readonly<{
+  key: string;
+  label: string;
+  declared: RecordsTableColumnContract | undefined;
+}>;
+
+/**
+ * The columns to render. A placement that declares a data contract shows exactly its declared
+ * columns in declared order; the projected columns only supply labels for fields the placement
+ * left unlabelled. A placement without a contract renders the projected columns as before.
+ */
+const renderedColumns = (
+  contract: RecordsTableContract | undefined,
+  projected: readonly DisplayColumn[],
+): readonly RenderedColumn[] => {
+  if (contract === undefined)
+    return projected.map((column) => ({ key: column.key, label: column.label, declared: undefined }));
+  const labels = new Map(projected.map((column) => [column.key, column.label]));
+  return contract.columns.map((column) => ({
+    key: column.field,
+    label: column.label ?? labels.get(column.field) ?? column.field,
+    declared: column,
+  }));
+};
+
+/** Declared presentation of one column, exposed as data attributes and an inline alignment. */
+const columnAttributes = (
+  column: RenderedColumn,
+): {
+  "data-vortex-column-width"?: string;
+  "data-vortex-column-priority"?: string;
+  style?: { textAlign: "start" | "center" | "end" };
+} =>
+  column.declared === undefined
+    ? {}
+    : {
+        "data-vortex-column-width": column.declared.width,
+        "data-vortex-column-priority": column.declared.priority,
+        style: { textAlign: column.declared.alignment },
+      };
 
 /**
  * Shared browser-safe display component for tabular data.
  * Renders only declared columns and permitted rows, preserving stable identities and declared events.
+ * A Records table placement declares its columns, sortable fields and selection mode as settings.
  * Never executes or fetches a Query.
  */
 export function TableDisplay(props: PlatformBlockRenderProps): ReactElement {
   const { placementId, availability } = props;
-  const { title, accessibleName, values, state, emptyMessage, events } = resolveDisplayContext(
-    props,
-    "table",
-    (table) => table.rows.length === 0,
-    "No records to show",
-  );
+  const { title, accessibleName, values, state, emptyMessage, refusedMessage, errorMessage, events } =
+    resolveDisplayContext(props, "table", (table) => table.rows.length === 0, "No records to show");
+  const contract = readRecordsTableContract(props.settings);
+  const columns = values === undefined ? [] : renderedColumns(contract, values.columns);
+  const sortable = (column: RenderedColumn): boolean =>
+    contract === undefined || contract.sortableFields.includes(column.key);
+  const selectable = events?.selection_changed !== undefined && contract?.selectionMode !== "none";
 
   return (
     <DisplayStateContainer
@@ -31,6 +80,8 @@ export function TableDisplay(props: PlatformBlockRenderProps): ReactElement {
       availability={availability}
       projectedData={state}
       emptyMessage={emptyMessage}
+      {...(refusedMessage === undefined ? {} : { refusedMessage })}
+      {...(errorMessage === undefined ? {} : { errorMessage })}
     >
       {values === undefined ? null : (
         <div
@@ -42,21 +93,22 @@ export function TableDisplay(props: PlatformBlockRenderProps): ReactElement {
           <table className="vortex-table" aria-label={accessibleName}>
             <thead>
               <tr className="vortex-table-header-row">
-                {events?.selection_changed === undefined ? null : (
+                {!selectable ? null : (
                   <th scope="col" className="vortex-table-col-select">
                     <span className="vortex-sr-only">Selected</span>
                   </th>
                 )}
-                {values.columns.map((column) => {
+                {columns.map((column) => {
                   const direction =
                     values.sort?.columnKey === column.key ? values.sort.direction : undefined;
-                  const onSort = events?.sort_changed;
+                  const onSort = sortable(column) ? events?.sort_changed : undefined;
                   return (
                     <th
                       key={column.key}
                       scope="col"
                       aria-sort={direction ?? "none"}
                       className="vortex-table-header-cell"
+                      {...columnAttributes(column)}
                     >
                       {onSort === undefined ? (
                         column.label
@@ -92,14 +144,14 @@ export function TableDisplay(props: PlatformBlockRenderProps): ReactElement {
             </thead>
             <tbody>
               {values.rows.map((row) => {
-                const name = rowName(row, values.columns[0]?.key);
+                const name = rowName(row, columns[0]?.key);
                 return (
                   <tr
                     key={row.recordId}
                     data-vortex-record-id={row.recordId}
                     className="vortex-table-row"
                   >
-                    {events?.selection_changed === undefined ? null : (
+                    {!selectable ? null : (
                       <td className="vortex-table-cell-select">
                         <SelectionControl
                           row={row}
@@ -109,8 +161,12 @@ export function TableDisplay(props: PlatformBlockRenderProps): ReactElement {
                         />
                       </td>
                     )}
-                    {values.columns.map((column) => (
-                      <td key={column.key} className="vortex-table-cell">
+                    {columns.map((column) => (
+                      <td
+                        key={column.key}
+                        className="vortex-table-cell"
+                        {...columnAttributes(column)}
+                      >
                         <DisplayCellView value={row.cells[column.key] ?? { kind: "empty" }} />
                       </td>
                     ))}

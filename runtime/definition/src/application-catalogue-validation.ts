@@ -1,6 +1,8 @@
 import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
   builderKeySchema,
+  readRecordDetailContract,
+  readRecordsTableContract,
   validateComponentSettings,
   type ApplicationSourceDocumentV2,
   type BlockPropertySchemaV2Contract,
@@ -111,6 +113,88 @@ export function validateApplicationSourceCatalogue(
     )
       report("vortex.definition.application_dependency_manifest", "incompatible_version");
   }
+
+  // The data source of a Records table or Record detail is its placement's bound query, matched
+  // by the query's authored id exactly as the compiler resolves it.
+  const queriesById = new Map(source.body.queries.map((query) => [query.id, query]));
+  let pageRecordType: string | undefined;
+
+  /**
+   * A Records table or Record detail may map only fields its bound data source allows. Mapped
+   * columns and detail fields must be selected by the bound query (or, for a detail with no query,
+   * belong to its page's record type); default sort, sortable and filterable fields must also be
+   * orderable: a grouped or aggregating query exposes only its grouping fields. Every refusal
+   * names the placement and the setting that carries the field.
+   */
+  const validateDataContract = (
+    placement: SourcePlacement,
+    settings: Readonly<Record<string, SourceValue>>,
+    location: readonly Segment[],
+  ): void => {
+    const table = readRecordsTableContract(settings);
+    const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
+    if (table === undefined && detail === undefined) return;
+    const at = (key: string): Segment[] => [...location, ...keySegment("setting", key)];
+    const query = placement.query === undefined ? undefined : queriesById.get(placement.query);
+    if (placement.query !== undefined && query === undefined) return; // refused by the source contract
+    if (table !== undefined && query === undefined)
+      report("vortex.definition.application_block_references", "required_value", location);
+
+    let readable: ReadonlySet<string> | undefined;
+    let orderable: ReadonlySet<string> | undefined;
+    if (query !== undefined) {
+      const qualified = (alias: string): string => `${query.record_type}.${alias}`;
+      readable = new Set(query.select.map(qualified));
+      orderable =
+        query.group_by.length > 0 || query.aggregates.length > 0
+          ? new Set(query.group_by.map(qualified))
+          : readable;
+    }
+    const mapped = (field: string): boolean =>
+      readable !== undefined
+        ? readable.has(field)
+        : pageRecordType !== undefined && field.startsWith(`${pageRecordType}.`);
+
+    const checkFields = (
+      key: string,
+      fields: readonly string[],
+      allowed: (field: string) => boolean,
+      unallowedFamily: DefinitionRuleFailure["family"],
+    ): void => {
+      const seen = new Set<string>();
+      for (const field of fields) {
+        if (seen.has(field)) report("vortex.definition.application_block_settings", "duplicate_key", at(key));
+        seen.add(field);
+        if (!mapped(field))
+          report("vortex.definition.application_block_settings", "broken_reference", at(key));
+        else if (!allowed(field))
+          report("vortex.definition.application_block_settings", unallowedFamily, at(key));
+      }
+    };
+    const orders = (field: string): boolean => orderable?.has(field) ?? true;
+
+    if (table !== undefined) {
+      checkFields("columns", table.columns.map((column) => column.field), () => true, "invalid_value");
+      if (table.defaultSort !== undefined)
+        checkFields("default_sort", [table.defaultSort.field], orders, "unsupported_choice");
+      checkFields("sortable_fields", table.sortableFields, orders, "unsupported_choice");
+      checkFields("filterable_fields", table.filterableFields, orders, "unsupported_choice");
+      const inputs = new Set<string>();
+      for (const parameter of table.parameters) {
+        // An Application query declares no inputs, so no input name can be bound to it.
+        report("vortex.definition.application_block_settings", "unknown_property", at("query_parameters"));
+        if (inputs.has(parameter.input))
+          report("vortex.definition.application_block_settings", "duplicate_key", at("query_parameters"));
+        inputs.add(parameter.input);
+        if (
+          (parameter.source === "fixed" && parameter.fixedValue === undefined) ||
+          (parameter.source === "page" && parameter.pageParameter === undefined)
+        )
+          report("vortex.definition.application_block_settings", "required_value", at("query_parameters"));
+      }
+    } else if (detail !== undefined)
+      checkFields("detail_fields", detail.fields.map((entry) => entry.field), () => true, "invalid_value");
+  };
 
   const settingPathSegments = (path: readonly (string | number)[]): Segment[] =>
     path.flatMap((part) => (typeof part === "string" ? keySegment("setting", part) : []));
@@ -241,6 +325,7 @@ export function validateApplicationSourceCatalogue(
         report("vortex.definition.application_public_surface", "unsafe_content", location);
 
       validateSettings(placement.settings, release.properties, location);
+      validateDataContract(placement, placement.settings, location);
       validateAccessibleName(placement.settings, release, location);
       validateResponsive(placement, release, location);
 
@@ -364,6 +449,7 @@ export function validateApplicationSourceCatalogue(
   };
 
   for (const page of source.body.pages) {
+    pageRecordType = "record_type" in page ? page.record_type : undefined;
     const scope = keySegment("page", page.key);
     const publicSurface = page.type === "public";
     const pageSlot = (slot: SourceSlot) =>

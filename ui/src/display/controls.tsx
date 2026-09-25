@@ -25,6 +25,10 @@ export type DisplayContext<Kind extends ProjectedDisplayValueKind> = Readonly<{
   state: ProjectedDisplayData;
   /** Authored empty message, or the block family's fixed neutral default. */
   emptyMessage: string;
+  /** Authored refused text, when the release declares `refused_message` and it is set. */
+  refusedMessage: string | undefined;
+  /** Authored error text, when the release declares `error_message` and it is set. */
+  errorMessage: string | undefined;
   /** Semantic callbacks; always absent while the placement's use is unavailable. */
   events: DisplayEventHandlers | undefined;
 }>;
@@ -59,6 +63,12 @@ export function resolveDisplayContext<Kind extends ProjectedDisplayValueKind>(
     values = projectedData.values as Extract<ProjectedDisplayValues, { kind: Kind }>;
   }
   const title = getAccessibleName(settings, metadata);
+  const authoredText = (key: string): string | undefined => {
+    const value = settings[key];
+    return value !== undefined && value.kind === "text" && value.value.trim().length > 0
+      ? value.value.trim()
+      : undefined;
+  };
   const authoredEmptyMessage = settings["empty_message"];
   const emptyMessage =
     authoredEmptyMessage !== undefined &&
@@ -75,6 +85,8 @@ export function resolveDisplayContext<Kind extends ProjectedDisplayValueKind>(
         ? EMPTY_STATE
         : projectedData,
     emptyMessage,
+    refusedMessage: authoredText("refused_message"),
+    errorMessage: authoredText("error_message"),
     events: props.availability === "available" ? props.displayEvents : undefined,
   };
 }
