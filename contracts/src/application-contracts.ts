@@ -8,12 +8,10 @@ import {
   versionRequirementSchema,
 } from "./definitions";
 import type { ResolveRecordTypeReferences } from "./definitions";
-import { listArrangementSchema, pageStateSchema } from "./catalogues";
 import {
   actionDefinitionSchema,
   conditionNodeSchema,
   eventDefinitionSchema,
-  ruleDefinitionSchema,
 } from "./module-contracts";
 import { workflowDefinitionSchema } from "./automation-contracts";
 import { interfaceDefinitionSchema } from "./integration-contracts";
@@ -33,7 +31,7 @@ import {
   semanticVersionSchema,
   workflowIdSchema,
 } from "./identifiers";
-import { labelSchema, safeHttpsUrlSchema } from "./common";
+import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "./common";
 import { permissionDeclarationSchema } from "./permissions";
 import {
   applicationShellV2Schema,
@@ -153,20 +151,19 @@ export const calendarMappingSchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-export const standardPageReplacementSchema = z
-  .object({
-    standardPage: z.enum(["list", "detail", "create_form"]),
-    recordType: recordTypeReferenceSchema,
-  })
-  .strict();
+// Retired page settings (#1011): page-level states and standard page replacement, and
+// list arrangements and calendar mapping, were compiled but never rendered. The compiler
+// no longer emits them. Releases published before their removal still carry them and
+// their content fingerprints cover them, so they stay decodable as opaque, unused JSON.
+const retiredPageSettingV2Schema = jsonValueSchema.optional();
 
 const pageV2Common = {
   pageId: pageIdSchema,
   key: builderKeySchema,
   name: labelSchema,
   accessPermissionKey: namespacedKeySchema,
-  states: z.array(pageStateSchema).min(1),
-  standardPageReplacement: standardPageReplacementSchema.optional(),
+  states: retiredPageSettingV2Schema,
+  standardPageReplacement: retiredPageSettingV2Schema,
 };
 
 const pageV2Base = {
@@ -180,19 +177,10 @@ const listPageV2Schema = z
     type: z.literal("list"),
     recordType: recordTypeReferenceSchema,
     queryId: queryIdSchema,
-    arrangements: z.array(listArrangementSchema).min(1),
-    calendarMapping: calendarMappingSchema.optional(),
+    arrangements: retiredPageSettingV2Schema,
+    calendarMapping: retiredPageSettingV2Schema,
   })
-  .strict()
-  .superRefine((value, context) => {
-    const usesCalendar = value.arrangements.includes("calendar");
-    if (usesCalendar !== (value.calendarMapping !== undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["calendarMapping"],
-        message: "Calendar mapping is required exactly when the calendar arrangement is enabled",
-      });
-  });
+  .strict();
 
 const guidedFormStepV2Schema = z
   .object({
@@ -413,7 +401,6 @@ const applicationSharedContentSchema = z
     pipelines: z.array(pipelineSchema),
     permissions: z.array(permissionDeclarationSchema),
     actions: z.array(actionDefinitionSchema),
-    rules: z.array(ruleDefinitionSchema),
     events: z.array(eventDefinitionSchema),
     workflows: z.array(workflowDefinitionSchema),
     connectionBindings: z.array(applicationConnectionBindingSchema),
@@ -670,7 +657,6 @@ export type PublishedApplicationDefinitionV2 = z.infer<
   typeof publishedApplicationDefinitionV2Schema
 >;
 export type PublishedApplicationDefinition = z.infer<typeof publishedApplicationDefinitionSchema>;
-export type StandardPageReplacement = z.infer<typeof standardPageReplacementSchema>;
 export type ApplicationRole = z.infer<typeof applicationRoleSchema>;
 export type Pipeline = z.infer<typeof pipelineSchema>;
 export type ApplicationConnectionBinding = z.infer<typeof applicationConnectionBindingSchema>;

@@ -125,7 +125,6 @@
                                                        "vortex.crm.opportunities.opportunity.soft_delete",
                                                        "vortex.crm.opportunities.opportunity.restore",
                                                        "vortex.crm.opportunities.opportunity.export",
-                                                       "vortex.crm.opportunities.opportunity.approve_discount",
                                                        "vortex.crm.opportunities.opportunity.mark_won",
                                                        "vortex.crm.activities.activity.create",
                                                        "vortex.crm.activities.activity.read",
@@ -182,7 +181,6 @@
                                                        "vortex.crm.opportunities.opportunity_contact.soft_delete",
                                                        "vortex.crm.opportunities.opportunity_contact.restore",
                                                        "vortex.crm.opportunities.opportunity_contact.export",
-                                                       "vortex.crm.opportunities.opportunity.approve_discount",
                                                        "vortex.crm.opportunities.opportunity.mark_won",
                                                        "vortex.crm.activities.activity.create",
                                                        "vortex.crm.activities.activity.read",
@@ -462,14 +460,6 @@
                                    "key":  "crm_dashboard",
                                    "name":  "CRM overview",
                                    "type":  "dashboard",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "permission":  "application.crm.open",
                                    "composition":  {
                                                        "shell_kind":  "default",
@@ -518,21 +508,9 @@
                                    "key":  "crm_companies",
                                    "name":  "Companies",
                                    "type":  "list",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.crm.organisations:company",
                                    "permission":  "vortex.crm.organisations.company.read",
                                    "query":  "crm_companies",
-                                   "arrangements":  [
-                                                        "table",
-                                                        "summary"
-                                                    ],
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -574,31 +552,16 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "list",
-                                                                     "record_type":  "vortex.crm.organisations:company"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_crm_contacts",
                                    "key":  "crm_contacts",
                                    "name":  "Contacts",
                                    "type":  "list",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.crm.people:contact",
                                    "permission":  "vortex.crm.people.contact.read",
                                    "query":  "crm_contacts",
-                                   "arrangements":  [
-                                                        "table"
-                                                    ],
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -640,32 +603,16 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "list",
-                                                                     "record_type":  "vortex.crm.people:contact"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_crm_leads",
                                    "key":  "crm_leads",
                                    "name":  "Leads",
                                    "type":  "list",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.crm.people:lead",
                                    "permission":  "vortex.crm.people.lead.read",
                                    "query":  "crm_leads",
-                                   "arrangements":  [
-                                                        "table",
-                                                        "board"
-                                                    ],
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -707,38 +654,16 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "list",
-                                                                     "record_type":  "vortex.crm.people:lead"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_crm_opportunities",
                                    "key":  "crm_opportunities",
                                    "name":  "Opportunities",
                                    "type":  "list",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.crm.opportunities:opportunity",
                                    "permission":  "vortex.crm.opportunities.opportunity.read",
                                    "query":  "crm_pipeline",
-                                   "arrangements":  [
-                                                        "table",
-                                                        "board",
-                                                        "calendar",
-                                                        "summary"
-                                                    ],
-                                   "calendar_mapping":  {
-                                                            "start":  "expected_close_date",
-                                                            "end":  "expected_close_date"
-                                                        },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -780,37 +705,16 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "list",
-                                                                     "record_type":  "vortex.crm.opportunities:opportunity"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_crm_activities",
                                    "key":  "crm_activities",
                                    "name":  "Activities",
                                    "type":  "list",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.crm.activities:activity",
                                    "permission":  "vortex.crm.activities.activity.read",
                                    "query":  "crm_activities",
-                                   "arrangements":  [
-                                                        "table",
-                                                        "calendar"
-                                                    ],
-                                   "calendar_mapping":  {
-                                                            "start":  "due_at",
-                                                            "duration_field":  "duration_minutes",
-                                                            "duration_unit":  "minutes"
-                                                        },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -852,26 +756,13 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "list",
-                                                                     "record_type":  "vortex.crm.activities:activity"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_crm_qualify",
                                    "key":  "crm_qualify_lead",
                                    "name":  "Qualify lead",
                                    "type":  "guided_form",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "validation",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.crm.people:lead",
                                    "permission":  "vortex.crm.people.lead.convert",
                                    "commit_action":  "vortex.crm.people.lead.convert",
@@ -1452,22 +1343,9 @@
                                    "key":  "crm_shared_cases",
                                    "name":  "Shared cases",
                                    "type":  "list",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "empty",
-                                                  "refused",
-                                                  "access_ended",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "record_type":  "vortex.service_desk.cases:case",
                                    "permission":  "application.crm.shared_cases.read",
                                    "query":  "crm_shared_cases",
-                                   "arrangements":  [
-                                                        "table",
-                                                        "board"
-                                                    ],
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1519,15 +1397,6 @@
                                    "record_type":  "vortex.crm.organisations:company",
                                    "permission":  "vortex.crm.organisations.company.create",
                                    "commit_action":  "vortex.crm.organisations.company.create",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "validation",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1647,11 +1516,7 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "create_form",
-                                                                     "record_type":  "vortex.crm.organisations:company"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_crm_company_edit",
@@ -1661,15 +1526,6 @@
                                    "record_type":  "vortex.crm.organisations:company",
                                    "permission":  "vortex.crm.organisations.company.update",
                                    "commit_action":  "vortex.crm.organisations.company.update",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "validation",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1799,15 +1655,6 @@
                                    "record_type":  "vortex.crm.people:contact",
                                    "permission":  "vortex.crm.people.contact.create",
                                    "commit_action":  "vortex.crm.people.contact.create",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "validation",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -1927,11 +1774,7 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "create_form",
-                                                                     "record_type":  "vortex.crm.people:contact"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_crm_contact_edit",
@@ -1941,15 +1784,6 @@
                                    "record_type":  "vortex.crm.people:contact",
                                    "permission":  "vortex.crm.people.contact.update",
                                    "commit_action":  "vortex.crm.people.contact.update",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "validation",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -2079,15 +1913,6 @@
                                    "record_type":  "vortex.crm.people:lead",
                                    "permission":  "vortex.crm.people.lead.create",
                                    "commit_action":  "vortex.crm.people.lead.create",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "validation",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -2207,11 +2032,7 @@
                                                                                               ]
                                                                               }
                                                                 }
-                                                   },
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "create_form",
-                                                                     "record_type":  "vortex.crm.people:lead"
-                                                                 }
+                                                   }
                                },
                                {
                                    "id":  "page_crm_lead_edit",
@@ -2221,15 +2042,6 @@
                                    "record_type":  "vortex.crm.people:lead",
                                    "permission":  "vortex.crm.people.lead.update",
                                    "commit_action":  "vortex.crm.people.lead.update",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "validation",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -2358,19 +2170,6 @@
                                    "type":  "detail",
                                    "record_type":  "vortex.crm.organisations:company",
                                    "permission":  "vortex.crm.organisations.company.read",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "validation",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "detail",
-                                                                     "record_type":  "vortex.crm.organisations:company"
-                                                                 },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -2542,18 +2341,6 @@
                                    "type":  "detail",
                                    "record_type":  "vortex.crm.people:contact",
                                    "permission":  "vortex.crm.people.contact.read",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "detail",
-                                                                     "record_type":  "vortex.crm.people:contact"
-                                                                 },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -2603,18 +2390,6 @@
                                    "type":  "detail",
                                    "record_type":  "vortex.crm.people:lead",
                                    "permission":  "vortex.crm.people.lead.read",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "detail",
-                                                                     "record_type":  "vortex.crm.people:lead"
-                                                                 },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -2664,18 +2439,6 @@
                                    "type":  "detail",
                                    "record_type":  "vortex.crm.opportunities:opportunity",
                                    "permission":  "vortex.crm.opportunities.opportunity.read",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "detail",
-                                                                     "record_type":  "vortex.crm.opportunities:opportunity"
-                                                                 },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -2760,18 +2523,6 @@
                                    "type":  "detail",
                                    "record_type":  "vortex.crm.activities:activity",
                                    "permission":  "vortex.crm.activities.activity.read",
-                                   "states":  [
-                                                  "normal",
-                                                  "loading",
-                                                  "refused",
-                                                  "conflict",
-                                                  "failure",
-                                                  "recovery"
-                                              ],
-                                   "standard_page_replacement":  {
-                                                                     "standard_page":  "detail",
-                                                                     "record_type":  "vortex.crm.activities:activity"
-                                                                 },
                                    "composition":  {
                                                        "shell_kind":  "default",
                                                        "main":  {
@@ -3745,9 +3496,6 @@
                  "actions":  [
 
                              ],
-                 "rules":  [
-
-                           ],
                  "events":  [
                                 {
                                     "id":  "form_submit_crm_company_merge",

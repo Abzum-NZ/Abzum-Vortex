@@ -4,7 +4,7 @@
 
 ## Application composition
 
-The locked [IAM application](appendices/iam-application.md) is an ordinary consumer of these application/page primitives. It supplies the single role-grant journey through user-linked records, forms, reviews and workflows. Tenant and Organisation Administration may link to IAM but cannot offer competing grant controls; reusable IAM components still invoke the same governed actions. Its name and module names are never renderer or runtime conditions.
+The locked [IAM application](appendices/iam-application.md) is an ordinary consumer of these application/page primitives. It supplies the single role-grant journey through user-linked records, forms, reviews and flows. Tenant and Organisation Administration may link to IAM but cannot offer competing grant controls; reusable IAM components still invoke the same governed actions. Its name and module names are never renderer or runtime conditions.
 
 An **application** is a published experience for a defined group of people in one organisation. It selects [modules](05-modules-fields-and-relationships.md) and adds navigation, pages, forms, roles, behaviour, and a theme.
 
@@ -15,21 +15,21 @@ flowchart TD
     NAV --> PAGE[Pages]
     PAGE --> BLOCK[Registered blocks]
     APP --> ROLE[Application roles]
-    APP --> BEHAVIOUR[Rules, events, workflows and pipelines]
+    APP --> BEHAVIOUR[Flows: rules, actions and events]
     APP --> THEME[Theme]
 ```
 
-These application components, including exact Module bindings, are published together under the [application definition](03-composition-and-publication.md#definition-ownership-and-versions). The bound Modules remain independently versioned definitions; their record types, fields and relationships publish with the Module. A page or workflow can have its own stable identifier and editing history without acquiring an independent live version.
+These application components, including exact Module bindings, are published together under the [application definition](03-composition-and-publication.md#definition-ownership-and-versions). The bound Modules remain independently versioned definitions; their record types, fields and relationships publish with the Module. A page or flow can have its own stable identifier and editing history without acquiring an independent live version.
 
 Installing, updating or withdrawing an application requires its declared application-management operation and current authorised scope; permission to manage roles or assignments alone does not authorise an application lifecycle change. The [Application engine](../build-plan/issue-64-application-runtime.md) supplies this protected operation binding and composes the current Access decision, exact affected scope, existing private lifecycle writer and Activity in the same transaction. It reuses the [Access administration transaction pattern](../build-plan/issue-40-protected-access-administration.md), preserves supplier and final-steward safeguards and exposes no unbound installation or withdrawal endpoint. The [consumer handoff](../build-plan/access-consumer-handoffs.md) keeps that concrete composition with its real operation owner; earlier Access foundations do not fabricate the missing caller or permission.
 
 ## Page-builder implementation handoff
 
-**Engines first.** By the end of Phase 6, an authorised person can open an installed file-defined application, navigate its pages, read permitted records, create and edit records, invoke a declared action and see its theme and page states. The renderer, Query, Record, Access and current-person flow services supply this functionality before the visual designer. Durable workflows, delegated execution, sharing and MCP follow through their owning tasks. The later designer and MCP authoring tools change the same definitions through the same protected operations; they introduce no second renderer, save path or workflow engine.
+**Engines first.** By the end of Phase 6, an authorised person can open an installed file-defined application, navigate its pages, read permitted records, create and edit records, invoke a declared action and see its theme and page states. The renderer, Query, Record, Access and current-person flow services supply this functionality before the visual designer. Durable flows, delegated execution, sharing and MCP follow through their owning tasks. The later designer and MCP authoring tools change the same definitions through the same protected operations; they introduce no second renderer, save path or flow engine.
 
 The existing [HTML prototype](../build-plan/app-designer-html-prototype.md) is a design reference, not a separate completion gate. Implement application composition, page editing, component-to-flow configuration and release controls in the shipping designer. Reuse one application draft and the same revision-checked semantic operations for people and later MCP clients; meaningful authoring cannot depend on private editor state or pointer-only controls.
 
-The App Designer is a canvas-first workspace with four areas: application-wide navigation, a contextual searchable palette, the working canvas, and a selection inspector. The navigation contains Application, Modules, Pages, Navigation, Frontend flows, Background workflows, Roles & access, Connections and Appearance. Page components drag from the palette into page composition; flow nodes drag into a positionable graph and connect through labelled ports. Equivalent click, keyboard and semantic MCP operations are required. The [prototype layout direction](../build-plan/app-designer-html-prototype.md) establishes the dark editor chrome; this does not override the theme of the application being authored.
+The App Designer is a canvas-first workspace with four areas: application-wide navigation, a contextual searchable palette, the working canvas, and a selection inspector. The navigation contains Application, Modules, Pages, Navigation, Flows, Roles & access, Connections and Appearance. Flows are one list, and each flow shows a run-location badge for its execution kind (`interactive`, `transaction`, `background` or `durable`). Page components drag from the palette into page composition; a flow's ordered tasks and their branches are edited in the shared Frontend Rule Designer and drawn like Kestra's topology view, where position is presentation only. Equivalent click, keyboard and semantic MCP operations are required. The [prototype layout direction](../build-plan/app-designer-html-prototype.md) establishes the dark editor chrome; this does not override the theme of the application being authored.
 
 The architecture review and approved HR example establish the generic builder scope. Use the existing Fluid integration map when adapting useful UI in [#65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65), retaining compatible licences, accessibility, package ownership and semantic-operation boundaries. The implementation follows [Page builder contracts](appendices/page-builder-contracts.md#draft-preview-publication-and-activation); prototype persistence, sample data and parallel engines are not runtime implementations. No additional prototype or consultation approval is required to implement the bounded issue.
 
@@ -52,7 +52,7 @@ An application records:
 - Exact bindings to independently published Modules, whose record types declare organisation-shared or application-contained row scope. Row scope does not change definition ownership or publication.
 - Navigation tree, reusable shells with named content slots, and pages.
 - Application role templates. Live organisation assignments are managed separately through [Access](04-access-and-permissions.md#one-organisation-managed-catalogue).
-- Actions, rules, events, workflows, and pipelines.
+- Actions, rules, event reactions and other flows, and process pipelines.
 - Theme and allowed organisation-level theme adjustments.
 - Public addresses and programmable interfaces.
 - Default landing page and empty, denied, not-found, and error experiences.
@@ -78,7 +78,7 @@ A link declares an open behaviour of replace or new page. Replace uses a client-
 
 Every published application produces one permission-filtered description of what the current person can see and do. The web interface renders it, and the governed [MCP surfaces](12-connections-and-interfaces.md#governed-mcp-access) expose the same meaning: as WebMCP tools inside the person's open page, and through the remote MCP server to an authorised external client. Each application's tools come from its [application tool bundle](12-connections-and-interfaces.md#application-tool-bundles), which is compiled into the application release. This description is derived from the published application, page, form, query, action and access contracts; builders do not maintain a second agent-specific definition.
 
-Data components bind versioned Frontend Flows that may call module-exposed queries and return declared viewer-safe outputs. Load and refresh are read-only only when their configured flow is read-only; a deliberate changing node is permitted on its named semantic event. Rendering, prefetch, cache revalidation and automatic retry never manufacture an invocation or repeat a write.
+Data components bind versioned flows that may call module-exposed queries and return declared viewer-safe outputs. Load and refresh are read-only only when their configured flow is read-only; a deliberate changing task is permitted on its named semantic event. Rendering, prefetch, cache revalidation and automatic retry never manufacture an invocation or repeat a write.
 
 ```mermaid
 flowchart LR
@@ -104,7 +104,7 @@ The map covers every meaningful interface capability:
 
 Discoverability and invocability are separate. A page, field, choice or control the person may not discover is absent. A control the person may see but cannot currently invoke remains in the semantic resource with `availability: unavailable` and a safe fixed explanation, but it is absent from invocable MCP tool choices. The client-facing entry never exposes an internal permission key, role name or private value. A direct invocation is still refused by the central access decision. Layout coordinates, colours, animation frames and decorative content are not business capabilities and are not copied into the semantic map.
 
-A page or platform screen cannot ship a meaningful operation that exists only as handwritten click behaviour. Configurable application actions bind to application-owned [Frontend Flows](appendices/frontend-rule-designer.md#pages-compose-flows-define-actions); their nodes delegate to stable platform operations. Form input and ordinary browser behaviour remain generic registered capabilities. Keyboard submission, web action controls and MCP invoke the same declared action binding, not separate save paths.
+A page or platform screen cannot ship a meaningful operation that exists only as handwritten click behaviour. Configurable application actions bind to application-owned [flows](appendices/frontend-rule-designer.md#pages-compose-flows-define-actions); their tasks delegate to stable platform operations. Form input and ordinary browser behaviour remain generic registered capabilities. Keyboard submission, web action controls and MCP invoke the same declared flow binding, not separate save paths.
 
 ### Page and nested placement permissions
 
@@ -158,17 +158,19 @@ than introducing a general privileged runner for page code.
 
 ### Configure flows while composing pages
 
-The App Builder lists Pages and Frontend Flows within the same application. Dropping an action component opens an Action inspector to choose a quick one-node flow, select an existing compatible flow, or create/edit a custom flow in the shared Frontend Rule Designer. A Submit button can default to Save form only when its exact form and commit operation are unambiguous. A message button can simply show a popup and finish without saving. The [complete authoring and execution rules](appendices/frontend-rule-designer.md#configure-a-component-without-leaving-the-app-builder) also cover reusable flows, keyboard submission, record gestures, revision checks and MCP authoring.
+The App Builder lists Pages and Flows within the same application. Dropping an action component opens an Action inspector to choose a quick one-task flow, select an existing compatible flow, or create/edit a custom flow in the shared Frontend Rule Designer. A Submit button can default to Save form only when its exact form and commit operation are unambiguous. A message button can simply show a popup and finish without saving. The [complete authoring and execution rules](appendices/frontend-rule-designer.md#configure-a-component-without-leaving-the-app-builder) also cover reusable flows, keyboard submission, record gestures, revision checks and MCP authoring.
 
 ## Addresses and routing
 
-Two route families coexist. Platform account and administration routes keep their own reserved first segments, including `/organizations/{organizationId}` for platform-level organisation administration; they are not rewritten onto application addresses. The definition-led runtime application route is `/{tenant_short_name}/{organisation_short_name}/{application_key}/{page_key}`. The server resolves the tenant within the addressed cluster, then the organisation within that tenant, then its exact application registration and page. It never chooses an organisation from its short name alone or from the person's current membership. Tenant short names are permanent and unique within their cluster; organisation short names are permanent and unique only within their tenant, as specified in [People and organisations](02-people-organisations-and-sign-in.md#tenant-and-organisation-hierarchy).
+Two route families coexist. Platform account and bootstrap routes keep their own reserved first segments; they are not rewritten onto application addresses. The definition-led runtime application route is `/{tenant_short_name}/{organisation_short_name}/{application_key}/{page_key}`. Administration applications are reached through their ordinary addresses in that same definition-led family, never through a reserved administration route. The server resolves the tenant within the addressed cluster, then the organisation within that tenant, then its exact application registration and page. It never chooses an organisation from its short name alone or from the person's current membership. Tenant short names are permanent and unique within their cluster; organisation short names are permanent and unique only within their tenant, as specified in [People and organisations](02-people-organisations-and-sign-in.md#tenant-and-organisation-hierarchy).
 
-Tenant short names occupy the first segment and cannot use a platform-reserved first segment. This restriction does not apply to organisation short names in the second segment. The reserved segments are every platform first segment actually served — currently `auth`, `health`, `organizations` and `signed-in` — plus `signin` and `api`; adding a platform route and reserving its first segment are one change. Unknown tenant/organisation combinations fail closed. Route resolution never grants membership, application entry or record access.
+Tenant short names occupy the first segment and cannot use a platform-reserved first segment. This restriction does not apply to organisation short names in the second segment. The reserved segments are every platform first segment actually served — currently `auth`, `health`, `organizations` and `signed-in` — plus `signin` and `api`; adding a platform route and reserving its first segment are one change. The `organizations` segment is reserved only for the compatibility redirect from `/organizations/{organizationId}` to the organisation's default application address; it is not an administration route. Unknown tenant/organisation combinations fail closed. Route resolution never grants membership, application entry or record access.
+
+The only hand-written screens are the bootstrap screens: sign-in, registration, recovery and confirmation, session ended, the organisation chooser, error pages, and the designer workspace (Studio). They are platform screens rather than application definitions, so they cannot be selected by a tenant short name. Every other screen — including Tenant Administration, Organisation Administration and IAM — is an ordinary published application page reached through its own application address. Bootstrap screens remain bound by the [semantic interface map](#semantic-interface-map) rule that no page or platform screen ships a meaningful operation existing only as handwritten click behaviour.
 
 An organisation-branded address may change presentation but never proves membership or grants access. The platform accepts an address only after its exact ownership and routing target have been verified, and an unknown address fails closed. Organisation subdomains and wildcard-domain routing are not part of the first release.
 
-An organisation may mark at most one active application registration as its default application. Its address `/{tenant_short_name}/{organisation_short_name}` without an application segment opens that application at its landing page when the current person may open it; otherwise it shows the organisation's application launcher, which lists only the applications that person may currently open. An application address without a page segment opens that application's landing page under the same checks. Marking a default is part of the protected application-lifecycle operation and grants nobody access. The neutral pre-organisation launcher is unchanged.
+An organisation may mark at most one active application registration as its default application. Its address `/{tenant_short_name}/{organisation_short_name}` without an application segment opens that application at its landing page when the current person may open it; otherwise it shows the organisation's application launcher, which lists only the applications that person may currently open. An application address without a page segment opens that application's landing page under the same checks. After choosing an organisation, a person arrives at that default application address. Marking a default is part of the protected application-lifecycle operation and grants nobody access. The neutral pre-organisation launcher is unchanged.
 
 ## Core UI continuity and motion
 
@@ -230,7 +232,7 @@ The application supports six page types:
 | Guided form | Coordinate input and configured operations through two to twenty steps.  |
 | Public      | Show approved public content or submit one narrowly defined public form. |
 
-A list can use table, board, calendar, or summary arrangement. Board movement invokes its bound frontend flow, whose operation node calls the named action and rechecks its permission. Each calendar page explicitly selects start/end fields or a start field plus a whole-number duration field and unit; it never guesses missing duration meaning.
+A list can use table, board, calendar, or summary arrangement. Board movement invokes its bound flow, whose task calls the named action and rechecks its permission. Each calendar page explicitly selects start/end fields or a start field plus a whole-number duration field and unit; it never guesses missing duration meaning.
 
 Page states are normal, loading, empty, not found, validation, refused, access ended, conflict, failure, and recovery. Access ended is distinct from an ordinary empty result: previously shared values disappear immediately and the affected component explains that its source grant no longer permits the view.
 
@@ -238,7 +240,7 @@ The ordinary list, detail, search-result, report, dashboard-block, and action co
 
 ## Page composition
 
-Pages compose registered blocks through reusable application-contained shells and declared named slots. The complete normative structure, setting schemas, responsive inheritance, related-record contexts, form/operation bindings and Fluid adapter are specified in [Page builder contracts](appendices/page-builder-contracts.md). [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) and [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) deliver the missing code contracts before the canvas.
+Pages compose registered blocks through reusable application-contained shells and declared named slots. The complete normative structure, setting schemas, responsive inheritance, related-record contexts, form/flow bindings and Fluid adapter are specified in [Page builder contracts](appendices/page-builder-contracts.md). [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) and [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) deliver the missing code contracts before the canvas.
 
 ```mermaid
 flowchart TD
@@ -250,7 +252,7 @@ flowchart TD
     SLOT --> TREE[Ordered nested registered blocks]
     TREE --> SETTINGS[Schema-validated values]
     TREE --> DATA[Typed query and related-record contexts]
-    TREE --> OP[Typed form and operation bindings]
+    TREE --> OP[Typed form and flow bindings]
 ```
 
 All page types use the same block composition model. Layouts may use a twelve-column grid, stack, row or shell. Height follows content unless a registered block permits bounded resizing. Desktop/tablet/phone overrides inherit explicitly; one validated ordering structure determines each slot's reading order.
@@ -269,13 +271,13 @@ These published roles are reusable templates. Registering the application regist
 
 ## Forms and guided forms
 
-- A form commits through one typed operation binding: a named [application action](08-forms-actions-rules-and-events.md), or a closed protected platform operation in an authorised administration application. [Binding contracts](appendices/page-builder-contracts.md#forms-actions-and-semantic-controls) define inputs, validation, confirmation and outcomes.
+- A form commits through one typed flow binding: the exact flow id plus a typed input map, defaulting to a generated one-task flow whose task calls [apply record changes](09-workflows-and-pipelines.md#task-types-in-the-shared-registry). An authorised administration form binds a flow whose protected-operation task calls a closed platform operation. A form never binds a lower-level operation directly. [Binding contracts](appendices/page-builder-contracts.md#forms-actions-and-semantic-controls) define inputs, validation, confirmation and outcomes.
 - A guided form has two to twenty reachable steps and at least one reachable completion outcome. It may use a summary and a single final commit, or explicitly sequence several protected operations as defined by its bound flow.
 - A guided-form draft is private to the person, form, subject, application, and organisation.
 - The browser and an authorised MCP client may update the same draft only through its current revision. A stale update is refused instead of overwriting newer person or agent input.
 - Drafts do not create business records, appear in queries, or announce events.
 - An untouched draft is removed after thirty days unless [privacy and retention](14-activity-privacy-and-retention.md) sets a shorter organisation policy.
-- Each configured protected operation revalidates and commits within its own short owning-service transaction. Earlier committed steps remain committed if a later step refuses or fails. Work requiring durable waits, autonomous retry or cross-session recovery starts a [workflow](09-workflows-and-pipelines.md); interactive sequencing alone does not require one.
+- Each configured protected operation revalidates and commits within its own short owning-service transaction. Earlier committed steps remain committed if a later step refuses or fails. Work requiring durable waits, autonomous retry or cross-session recovery starts a durable [flow](09-workflows-and-pipelines.md); interactive sequencing alone does not require one.
 
 These are target form and flow semantics. The private form-draft runtime remains owned by [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68), its typed flow bindings by [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), and the protected Record and Query execution/receipt boundaries by [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) and [#54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54). Existing Definition drafts and the delivered Activity foundation do not constitute those runtimes.
 
@@ -316,6 +318,7 @@ Every page and block follows [quality and acceptance](20-quality-and-acceptance.
 - Moving a board card without the named action permission is refused by the server.
 - A fixture page has a defined desktop layout and phone order.
 - A hidden page remains inaccessible through a copied address.
+- The only hand-written screens are the listed bootstrap screens; opening Tenant Administration, Organisation Administration or IAM uses that application's ordinary definition-led address, never a reserved administration route.
 - An authorised MCP client sees the same discoverable navigation, form fields, choices and actions as the semantic web interface; view-refused content is absent from both, and a discoverable-unavailable control is non-invocable on both.
 - A form completed through MCP and the same form completed through the web interface produce the same validation, save, activity and error outcome.
 - Internal navigation preserves the application shell and shows immediate destination feedback without a full document reload.

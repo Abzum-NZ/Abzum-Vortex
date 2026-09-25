@@ -1353,15 +1353,6 @@ const compareApplicationSharedContent = (
   );
   compareKeyed(
     reasons,
-    previous.rules as RecordValue[],
-    candidate.rules as RecordValue[],
-    "ruleId",
-    "rule",
-    (left, right) => compareSimpleComponent(reasons, "rule", right.ruleId, left, right),
-    () => "major",
-  );
-  compareKeyed(
-    reasons,
     previous.events as RecordValue[],
     candidate.events as RecordValue[],
     "eventId",
@@ -2055,7 +2046,6 @@ const normaliseApplicationSharedContent = (content: ApplicationContentV2): Recor
     permissions: sorted(value.permissions as unknown[], "permissionId"),
     pipelines: sorted(value.pipelines as unknown[], "pipelineId"),
     actions: sorted((value.actions as RecordValue[]).map(normaliseAction), "actionId"),
-    rules: sorted(value.rules as unknown[], "ruleId"),
     events: sorted(
       (value.events as RecordValue[]).map((event) => ({
         ...event,
@@ -2217,7 +2207,6 @@ const assertUnambiguousApplicationSharedContent = (content: unknown): void => {
     ["permissions", "permissionId"],
     ["pipelines", "pipelineId"],
     ["actions", "actionId"],
-    ["rules", "ruleId"],
     ["events", "eventId"],
     ["workflows", "workflowId"],
     ["connectionBindings", "bindingId"],
@@ -2306,8 +2295,7 @@ const placementSubtreeIsOptionalPresentationV2 = (placement: RecordValue): boole
     ),
   );
 
-const pageIsCompatibleAdditionV2 = (page: RecordValue): boolean =>
-  page.type !== "public" && page.standardPageReplacement === undefined;
+const pageIsCompatibleAdditionV2 = (page: RecordValue): boolean => page.type !== "public";
 
 const collectPlacementSlotV2 = (
   slotValue: unknown,
@@ -2717,8 +2705,6 @@ const comparePageV2 = (
     "publicFieldIds",
     "publicActionKey",
     "rateLimitPerMinute",
-    "calendarMapping",
-    "standardPageReplacement",
   ])
     pushChange(
       reasons,
@@ -2730,17 +2716,6 @@ const comparePageV2 = (
         : "existing_behavior_changed",
       "page",
       key === "accessPermissionKey" ? "permission" : "behavior",
-      id,
-    );
-  for (const key of ["states", "arrangements"])
-    pushChange(
-      reasons,
-      previous[key],
-      candidate[key],
-      "patch",
-      "presentation_changed",
-      "page",
-      "configuration",
       id,
     );
   const beforeComposition = asRecord(previous.composition);
@@ -2846,7 +2821,6 @@ export const normaliseApplicationContentV2 = (
     pipelines: common.pipelines,
     permissions: common.permissions,
     actions: common.actions,
-    rules: common.rules,
     events: common.events,
     workflows: common.workflows,
     connectionBindings: common.connectionBindings,
@@ -2869,7 +2843,6 @@ export const normaliseApplicationContentV2 = (
     pages: sorted(
       (value.pages as RecordValue[]).map((page) => ({
         ...page,
-        states: sorted(page.states as unknown[]),
         ...(Array.isArray(page.publicFieldIds)
           ? { publicFieldIds: sorted(page.publicFieldIds as unknown[]) }
           : {}),
@@ -2894,7 +2867,6 @@ export const assertUnambiguousApplicationContentV2 = (content: unknown): void =>
   assertUnique(contentSlots, "slotId");
   for (const page of value.pages as RecordValue[]) {
     if (Array.isArray(page.steps)) assertUnique(page.steps as RecordValue[], "id");
-    assertUniqueValues(page.states as unknown[]);
     if (Array.isArray(page.publicFieldIds)) assertUniqueValues(page.publicFieldIds as unknown[]);
   }
 };

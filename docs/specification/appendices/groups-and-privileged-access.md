@@ -18,11 +18,11 @@ A role containing a permission marked administrative is always classified as pri
 
 For newly configured privileged operational roles, recommend activation-required access. An authorised administrator can deliberately retain standing access where required; the UI must make that choice and its consequences visible. Role names, copied templates, record fields and client-supplied flags cannot select or weaken the policy.
 
-An activation policy defines the finite maximum activation duration, whether a reason is required, required recent authentication and whether an independent approval is required. These are explicit organisation settings, not hardcoded universal durations. An incomplete policy cannot enable activation. The governed IAM workflow selects the reviewers and presents the policy, while protected Access facts hold the policy revision and enforce its requirements. No new general-purpose approval engine belongs in core.
+An activation policy defines the finite maximum activation duration, whether a reason is required, and required recent authentication. These are explicit organisation settings, not hardcoded universal durations. An incomplete policy cannot enable activation. The protected Access facts hold the policy revision and enforce those preconditions; a protected operation checks only current authority and the declared preconditions, never an approval field or an approver check. No new general-purpose approval engine belongs in core. When an organisation wants an approval step, it builds a Kestra flow with a wait-for-a-person task that then calls the activation operation; if that approval must be unavoidable, the operation's policy names the published flow that is its only permitted caller.
 
 For the initial closed contract, a standing-access role has no activation-policy reference and accepts standing assignments only. An activation-required role pins a complete immutable activation-policy identity, revision and fingerprint and accepts eligible assignments only. A standard role may also deliberately select activation-required policy; privileged classification and assignment policy remain separate. Changing the policy cannot grandfather incompatible assignments into active use or convert them automatically. This avoids an unused activation policy for the standing minimum steward.
 
-The assignment itself has an immutable kind, `standing` or `eligible`; it does not pin the activation-policy continuity number. Changes to activation duration, reason, authentication or approval requirements leave compatible eligibility in place. Old requests and activation windows fail the changed policy-period check, while a fresh activation must satisfy the new exact policy. Eligibility still grants no permission.
+The assignment itself has an immutable kind, `standing` or `eligible`; it does not pin the activation-policy continuity number. Changes to activation duration, reason or authentication requirements leave compatible eligibility in place. Old requests and activation windows fail the changed policy-period check, while a fresh activation must satisfy the new exact policy. Eligibility still grants no permission.
 
 Changing between standing and activation-required makes incompatible assignments dormant, without converting or rewriting them. Returning deliberately to an earlier mode may make a still-current matching-kind assignment usable again only after the protected policy change reviews the [complete affected-assignment manifest](data-contracts.md#permission-and-role-contracts). Standing use may then resume under current role permissions; eligibility still requires a fresh activation. Revoked or expired assignments do not resume. Every mode change, including a return, pins the exact proposed role/policy revision and all non-revoked direct-account and Group assignments, including scheduled and naturally expired rows; their current revisions bind assignment kind and time bounds. The protected transaction refuses a missing, extra or stale entry under the existing governance and role locks. A combined permission expansion and mode change reuses one manifest and one check. Same-mode policy-detail edits require normal protected policy authority but no assignment regrant, rewrite or separate assignment manifest.
 
@@ -75,8 +75,10 @@ flowchart TD
     DIRECT --> REQUEST[Request activation in IAM]
     GROUP --> REQUEST
     REQUEST --> CHECK[Check current role, policy and eligibility]
-    CHECK --> REVIEW[Independent approval when required]
-    REVIEW --> AUTH[Recheck required recent authentication at activation]
+    CHECK --> FLOW{Organisation approval flow configured?}
+    FLOW -- Yes --> WAIT[Wait for a person]
+    FLOW -- No --> AUTH[Recheck required recent authentication at activation]
+    WAIT --> AUTH
     AUTH --> ACTIVE[Time-limited activation for this account]
     ACTIVE --> ACCESS[Normal role, record and field access checks]
     ACTIVE --> END[Expiry, deactivation or revocation]
@@ -85,9 +87,9 @@ flowchart TD
 
 ## Activation and immediate loss of access
 
-Activation is requested by the beneficiary through the currently authenticated organisation account. The server selects that beneficiary; a form cannot activate another person's role by supplying an account identifier. Bind the request to the exact role, accepted permission evidence, eligibility assignment, policy revision, requested duration and originating membership when group-derived. Independent approval, when required, cannot be supplied by the beneficiary themselves and must remain within the approver's current delegated scope.
+Activation is requested by the beneficiary through the currently authenticated organisation account. The server selects that beneficiary; a form cannot activate another person's role by supplying an account identifier. Bind the request to the exact role, accepted permission evidence, eligibility assignment, policy revision, requested duration and originating membership when group-derived. The protected operation checks only current authority and the declared preconditions; it performs no approver check. An organisation that wants approval places a wait-for-a-person step in a Kestra flow that then calls the operation, and it may make that flow the operation's only permitted caller.
 
-Pending, refused, cancelled or stale requests grant nothing. Approval is not activation until the protected operation succeeds. Check recent-authentication evidence at activation, after any approval wait, using [verified evidence #276](https://github.com/Abzum-NZ/Abzum-Vortex/issues/276); token refresh, token issue time or an authentication-strength label alone is not recent MFA. A policy without independent approval still uses the governed IAM action and protected checks, not a fabricated approval record.
+Pending, refused, cancelled or stale requests grant nothing. A human response inside an organisation's flow is not activation; activation exists only when the protected operation succeeds. Check recent-authentication evidence at activation, after any workflow wait, using [verified evidence #276](https://github.com/Abzum-NZ/Abzum-Vortex/issues/276); token refresh, token issue time or an authentication-strength label alone is not recent MFA. The governed IAM action and protected checks are the same whether or not the organisation wraps them in an approval flow; core consumes no approval evidence and checks no approver.
 
 Protected activation evidence identifies one account, role, the historical role revision used at activation, its authority continuity number, exact eligibility and policy evidence, originating membership when applicable, start, finite expiry and revocation. Eligibility and originating membership are pinned by exact identity and current revision. The end cannot exceed the requested/policy duration or known eligibility and membership end times. Do not copy the permission set into every activation; bind the accepted role authority so newly added permissions cannot enter an existing activation silently.
 
@@ -97,7 +99,7 @@ An account may have several independently authorised activation windows for the 
 
 The initial [activation composition in #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) activates or terminally revokes one such window. Its command binds the reviewed role revision and exact eligibility/membership revisions, not a caller-supplied policy or permission snapshot. The database derives the policy and authority evidence and samples time after acquiring the existing organisation/source locks. Requested duration is explicit; the resulting end is the earliest permitted by that request, current policy and source expiry. A source expiring while the operation waits cannot supply a new activation. Revocation remains possible after expiry or source inactivity and preserves the original activation evidence. Each change advances Access once using `role_activation_changed`; eligibility assignments themselves remain unchanged.
 
-The private composition is not an approval or authentication decision. Before exposing it, [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) must bind the authenticated beneficiary and recheck the required reason, recent authentication and independent approval inside its protected invocation. [IAM #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) presents those requests through ordinary records and workflows. There is no additional core request store or granting screen in this slice.
+The private composition is not an authentication decision. Before exposing it, [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) must bind the authenticated beneficiary and recheck the required reason and recent authentication inside its protected invocation. [IAM #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) presents those requests through ordinary records and workflows. There is no additional core request store or granting screen in this slice.
 
 ### Retained permissions during role review
 
@@ -147,7 +149,7 @@ flowchart TD
     NEW --> FRESH
 ```
 
-Users can end their own activation; authorised administrators can revoke it immediately. These reductions do not wait for approval. Requests and review history remain visible as ordinary IAM records under their normal permissions, separately from whether access is effective now.
+Users can end their own activation; authorised administrators can revoke it immediately. These reductions take effect at once and do not wait for any workflow. Requests and review history remain visible as ordinary IAM records under their normal permissions, separately from whether access is effective now.
 
 Permitted administrators can inspect the retained [activation ledger](../../build-plan/issue-40-protected-access-administration.md). It distinguishes the beneficiary, current role label, historical role revision, exact eligibility-source references, fixed activation window and safe policy settings used at activation. Revoked or expired facts remain inspectable when their underlying authority changes. Its active-window label is descriptive, not a claim that access remains effective; only the current Access decision establishes that.
 
@@ -170,7 +172,7 @@ flowchart LR
 
 The existing [permanent-steward invariant](../04-access-and-permissions.md#initial-organisation-stewardship) remains explicit. At least one nominated active account retains the exact direct, non-expiring minimum management role and delegation, plus the required IAM operating role after setup. Those narrowly scoped recovery/management roles permit standing access. They grant no unrelated business-data use.
 
-This is not a bypass flag on arbitrary assignments. A change that would make the final qualifying steward activation-only, remove its management application or require approval from a nonexistent approver is refused unless a qualifying replacement is established atomically. Ordinary privileged operational roles can use PIM without making the organisation unable to administer itself. Never infer this exception from a name, tenant status or first sign-in.
+This is not a bypass flag on arbitrary assignments. A change that would make the final qualifying steward activation-only, remove its management application, or otherwise leave the organisation unable to administer itself is refused unless a qualifying replacement is established atomically. Ordinary privileged operational roles can use PIM without making the organisation unable to administer itself. Never infer this exception from a name, tenant status or first sign-in.
 
 ## Current Group contract
 
