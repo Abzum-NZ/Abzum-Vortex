@@ -1,10 +1,7 @@
 import { z } from "zod";
 import { correlationIdSchema } from "./common";
 import { applicationSourceDocumentV2Schema, moduleSourceDocumentSchema } from "./definition-source";
-import {
-  flowTargetDependencySchema,
-  platformManagedFlowDependencySchema,
-} from "./application-flow-bindings";
+import { flowTargetDependencySchema } from "./application-flow-bindings";
 import {
   actorIdSchema,
   applicationRootIdSchema,
@@ -196,7 +193,6 @@ export const exactDefinitionDependencySchema = z.discriminatedUnion("kind", [
     })
     .strict(),
   flowTargetDependencySchema,
-  platformManagedFlowDependencySchema,
 ]);
 
 const dependencyManifestSchema = z
@@ -211,9 +207,7 @@ const dependencyManifestSchema = z
           ? `${entry.kind}:${entry.catalogueThemeId}`
           : entry.kind === "platform_block"
             ? `${entry.kind}:${entry.blockId}`
-            : entry.kind === "platform_flow"
-              ? `${entry.kind}:${entry.flowId}`
-              : entry.kind === "application_flow"
+            : entry.kind === "application_flow"
                 ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}`
                 : entry.kind === "application_flow_node"
                   ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}:${entry.nodeId}`

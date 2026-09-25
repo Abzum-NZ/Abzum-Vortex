@@ -3,6 +3,7 @@ import { correlationIdSchema, descriptionSchema, labelSchema } from "./common";
 import {
   actorIdSchema,
   builderKeySchema,
+  containedComponentIdSchema,
   fingerprintSchema,
   organizationIdSchema,
   revisionSchema,
@@ -78,7 +79,7 @@ export const organizationRoleNewActivationPolicySchema = z
       .max(Number.MAX_SAFE_INTEGER),
     reasonRequired: z.boolean(),
     recentAuthentication: roleRecentAuthenticationRequirementSchema,
-    independentApprovalRequired: z.boolean(),
+    requiredCallerExecutionBindingId: containedComponentIdSchema.optional(),
   })
   .strict();
 

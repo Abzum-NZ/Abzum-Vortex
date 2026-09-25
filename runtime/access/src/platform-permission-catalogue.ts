@@ -9,7 +9,7 @@ import { fingerprintCanonicalValue } from "@vortex/definition";
 export const platformPermissionCatalogueOwnerId = "cabe121e-0baf-4084-9471-cce915d460a8";
 export const platformPermissionCatalogueVersionV1 = "1.0.0";
 export const platformPermissionCatalogueVersionV1_0_1 = "1.0.1";
-export const platformPermissionCatalogueVersion = "1.3.0";
+export const platformPermissionCatalogueVersion = "1.4.0";
 
 const historicalPermissionsV1 = [
   {
@@ -199,6 +199,42 @@ const currentPermissions = [
     actionKind: "manage" as const,
     administrative: true,
   },
+  {
+    permissionId: "0548c061-b1a9-48e5-a04a-eb1d0dae0644",
+    key: "platform.organization.definition_drafts.manage",
+    label: "Manage definition drafts",
+    description:
+      "Create and change module and application drafts, including flows, placements and role templates, without publication or installation authority.",
+    actionKind: "manage" as const,
+    administrative: true,
+  },
+  {
+    permissionId: "dfdd5aba-2b85-4169-b570-92be284e7b5c",
+    key: "platform.organization.definition_releases.manage",
+    label: "Manage definition releases",
+    description:
+      "Publish module and application drafts as immutable releases without receiving installation or business-record authority.",
+    actionKind: "manage" as const,
+    administrative: true,
+  },
+  {
+    permissionId: "d1be247f-094d-47c1-a38d-762290868c91",
+    key: "platform.organization.custom_code.manage",
+    label: "Manage custom code",
+    description:
+      "Required in addition to the application-management permission to install, upgrade or uninstall packages that bundle custom components or scripts.",
+    actionKind: "manage" as const,
+    administrative: true,
+  },
+  {
+    permissionId: "eaade6fd-7390-44d2-a7ef-343324c7384a",
+    key: "platform.organization.system_applications.manage",
+    label: "Manage system applications",
+    description:
+      "Change system application definitions, including extension fields, theme, navigation and dependent applications, without uninstallation authority.",
+    actionKind: "manage" as const,
+    administrative: true,
+  },
 ];
 
 const buildCatalogue = (
@@ -230,9 +266,10 @@ export const platformPermissionCatalogueV1_0_1 = buildCatalogue(
 );
 
 /**
- * Current additive catalogue, mirroring platform registration revision 5 (1.3.0): its
+ * Current additive catalogue, mirroring platform registration revision 6 (1.4.0): its
  * fingerprint equals that revision's catalogue fingerprint. Historical permission
- * identities and meanings remain unchanged.
+ * identities and meanings remain unchanged; 1.4.0 adds only the four builder permissions
+ * to the 1.3.0 set. Registering them grants nobody authority.
  */
 export const platformPermissionCatalogue = buildCatalogue(
   platformPermissionCatalogueVersion,

@@ -103,12 +103,13 @@ export type DisplayRefusalReason = "not_permitted" | "access_ended" | "not_found
 
 /**
  * Explicit, data-safe state passed for one placement.
- * Only the `ready` state carries values; loading, empty and refused cannot leak data.
+ * Only the `ready` state carries values; loading, empty, refused and error cannot leak data.
  */
 export type ProjectedDisplayData =
   | Readonly<{ status: "loading" }>
   | Readonly<{ status: "empty" }>
   | Readonly<{ status: "refused"; reason: DisplayRefusalReason }>
+  | Readonly<{ status: "error" }>
   | Readonly<{ status: "ready"; values: ProjectedDisplayValues }>;
 
 /** Declared semantic event names this display family can emit. */
@@ -162,6 +163,7 @@ const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = [
 
 const LOADING_STATE: ProjectedDisplayData = Object.freeze({ status: "loading" });
 const EMPTY_STATE: ProjectedDisplayData = Object.freeze({ status: "empty" });
+const ERROR_STATE: ProjectedDisplayData = Object.freeze({ status: "error" });
 const EMPTY_CELL: DisplayCellValue = Object.freeze({ kind: "empty" });
 const EMPTY_HANDLERS: DisplayEventHandlers = Object.freeze({});
 const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
@@ -699,6 +701,9 @@ export const parseProjectedDisplayData = (
         return fail("A refused display state must use a fixed refusal reason", location);
       return Object.freeze({ status: "refused", reason: reason as DisplayRefusalReason });
     }
+    case "error":
+      requireExactKeys(record, ["status"], location);
+      return ERROR_STATE;
     case "ready":
       requireExactKeys(record, ["status", "values"], location);
       return Object.freeze({

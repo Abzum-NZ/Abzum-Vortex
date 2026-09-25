@@ -18,10 +18,11 @@ import { DisplayStateContainer } from "./display-state-container";
  */
 export function ListDisplay(props: PlatformBlockRenderProps): ReactElement {
   const { placementId, availability } = props;
-  const { title, accessibleName, values, state, events } = resolveDisplayContext(
+  const { title, accessibleName, values, state, emptyMessage, events } = resolveDisplayContext(
     props,
     "list",
     (list) => list.rows.length === 0,
+    "No items to show",
   );
 
   return (
@@ -29,7 +30,7 @@ export function ListDisplay(props: PlatformBlockRenderProps): ReactElement {
       accessibleName={accessibleName}
       availability={availability}
       projectedData={state}
-      emptyMessage="No items to show"
+      emptyMessage={emptyMessage}
     >
       {values === undefined ? null : (
         <section

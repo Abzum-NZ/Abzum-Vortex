@@ -19,10 +19,13 @@ import {
   moduleCompilationOutputV3Schema,
   moduleCompilationRequestV3Schema,
   moduleSourceDocumentSchema,
+  sourceFlowCollectionSchema,
   ruleIdSchema,
   containedComponentIdSchema,
   recordTypeIdSchema,
   fieldIdSchema,
+  flowContractVersion,
+  flowTaskMappingForActionEffect,
   normalizeExactDecimal,
   readModuleSourceRecordOwnershipMode,
   type ApplicationCompilationOutputV2,
@@ -35,6 +38,14 @@ import {
   type ModuleCompilationOutputV3,
   type ModuleCompilationRequestV3,
   type ModuleSourceDocument,
+  type CompiledFlowSet,
+  type FlowDefinition,
+  type FlowFormula,
+  type FlowReference,
+  type FlowInputDeclaration,
+  type FlowTask,
+  type FlowValue,
+  type JsonValue,
   type RuleGraph,
   type DefinitionCompilationRequest,
   type ApplicationSourceDocumentV2,
@@ -68,6 +79,14 @@ import {
 import type { ApplicationCompositionResolutionV2 } from "./application-v2-resolution";
 import { validateApplicationSourceCatalogue } from "./application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
+import { compileFlowSources, type ResolvedFlowIdentity } from "./flow-compilation";
+import { isBeforeSaveFlow, lowerBeforeSaveFlow } from "./before-save-flow-rules";
+import {
+  findOperationCallIssue,
+  namedActionInputs,
+  platformOperationLookup,
+} from "./flow-operation-calls";
+import { flowIssueLocation } from "./flow-validation";
 
 type Path = (string | number)[];
 type JsonObject = Record<string, unknown>;
@@ -187,7 +206,6 @@ const sourceCollectionIdKeys: Readonly<Record<string, string>> = Object.freeze({
   relationships: "relationshipId",
   permissions: "permissionId",
   actions: "actionId",
-  rules: "ruleId",
   events: "eventId",
   extension_points: "extensionPointId",
   sharing_conditions: "conditionId",
@@ -207,10 +225,6 @@ const sourceCollectionIdKeys: Readonly<Record<string, string>> = Object.freeze({
   interfaces: "interfaceId",
   operations: "operationId",
   public_addresses: "addressId",
-  flows: "flowId",
-  flow_nodes: "nodeId",
-  flow_edges: "edgeId",
-  flow_bindings: "bindingId",
 });
 
 const directSourceKeyMap: Readonly<Record<string, string>> = Object.freeze({
@@ -446,38 +460,6 @@ function sourceToCanonicalPath(
     sourcePath[6] === "relationships"
   )
     mapped[6] = "relationshipIds";
-  if (
-    source.kind === "application" &&
-    sourcePath[0] === "body" &&
-    sourcePath[1] === "flows"
-  ) {
-    const leaf = sourcePath.at(-1);
-    const recordTypesIndex = sourcePath.lastIndexOf("record_types");
-    if (recordTypesIndex >= 0) mapped[recordTypesIndex] = "recordTypeIds";
-    if (sourcePath[3] === "nodes" && sourcePath[5] === "target") {
-      if (leaf === "module") mapped[mapped.length - 1] = "moduleRootId";
-      if (leaf === "version") mapped[mapped.length - 1] = "moduleReleaseVersion";
-      if (leaf === "form") mapped[mapped.length - 1] = "formId";
-      if (leaf === "continuation_event") mapped[mapped.length - 1] = "continuationEventId";
-    }
-    if (sourcePath[3] === "edges") {
-      if (leaf === "from_node") mapped[mapped.length - 1] = "fromNodeId";
-      if (leaf === "to_node") mapped[mapped.length - 1] = "toNodeId";
-    }
-  }
-  if (
-    source.kind === "application" &&
-    sourcePath[0] === "body" &&
-    sourcePath[1] === "flow_bindings"
-  ) {
-    const leaf = sourcePath.at(-1);
-    if (sourcePath[3] === "control") mapped[mapped.length - 1] = "controlId";
-    if (sourcePath[3] === "flow" && leaf === "flow") mapped[mapped.length - 1] = "flowId";
-    if (sourcePath[3] === "event") mapped[mapped.length - 1] = "event";
-    if (leaf === "record_type") mapped[mapped.length - 1] = "recordTypeId";
-    if (leaf === "control") mapped[mapped.length - 1] = "controlId";
-    if (leaf === "form") mapped[mapped.length - 1] = "formId";
-  }
   return resolveDynamicMapPath(source, canonical, sourcePath, mapped);
 }
 
@@ -522,11 +504,6 @@ function conditionRootPaths(
     fixedRoots.push({
       sourceRoot: ["body", "actions", first, "precondition"],
       canonicalRoot: ["content", "actions", first, "precondition"],
-    });
-  if (collection === "rules")
-    fixedRoots.push({
-      sourceRoot: ["body", "rules", first, "condition"],
-      canonicalRoot: ["content", "rules", first, "condition"],
     });
   if (collection === "sharing_conditions")
     fixedRoots.push({
@@ -607,19 +584,6 @@ function conditionRootPaths(
       sourceRoot: ["body", "workflows", first, "trigger", "condition"],
       canonicalRoot: ["content", "workflows", first, "trigger", "condition"],
     });
-  if (
-    collection === "flows" &&
-    sourcePath[3] === "nodes" &&
-    typeof sourcePath[4] === "number"
-  ) {
-    const flow = (asObject(source.body).flows as JsonObject[])[first];
-    const node = flow ? (flow.nodes as JsonObject[])[sourcePath[4]] : undefined;
-    if (node?.kind === "start")
-      fixedRoots.push({
-        sourceRoot: ["body", "flows", first, "nodes", sourcePath[4], "entry_condition"],
-        canonicalRoot: ["content", "flows", first, "nodes", sourcePath[4], "entryCondition"],
-      });
-  }
   if (collection === "pages") {
     if (sourcePath[3] === "blocks" && typeof sourcePath[4] === "number")
       fixedRoots.push({
@@ -866,73 +830,6 @@ function permissionFieldPolicyTargets(
   ];
 }
 
-function applicationFlowSourceTargets(
-  source: JsonObject,
-  sourcePath: Path,
-): Path[] | undefined {
-  if (source.kind !== "application" || sourcePath[0] !== "body") return undefined;
-  if (sourcePath[1] === "flows" && typeof sourcePath[2] === "number") {
-    const flowBase: Path = ["content", "flows", sourcePath[2]];
-    if (
-      ["inputs", "outputs", "variables"].includes(String(sourcePath[3])) &&
-      typeof sourcePath[4] === "string" &&
-      sourcePath[5] === "record_types" &&
-      typeof sourcePath[6] === "number"
-    )
-      return [
-        [
-          ...flowBase,
-          sourcePath[3],
-          sourcePath[4],
-          "recordTypeIds",
-          sourcePath[6],
-        ],
-      ];
-    if (
-      sourcePath[3] === "nodes" &&
-      typeof sourcePath[4] === "number" &&
-      sourcePath[5] === "outputs" &&
-      typeof sourcePath[6] === "string" &&
-      sourcePath[7] === "record_types" &&
-      typeof sourcePath[8] === "number"
-    )
-      return [
-        [
-          ...flowBase,
-          "nodes",
-          sourcePath[4],
-          "outputs",
-          sourcePath[6],
-          "recordTypeIds",
-          sourcePath[8],
-        ],
-      ];
-    if (
-      sourcePath[3] === "nodes" &&
-      typeof sourcePath[4] === "number" &&
-      sourcePath[5] === "target"
-    ) {
-      const targetBase: Path = [...flowBase, "nodes", sourcePath[4], "target"];
-      if (sourcePath[6] === "version") return [[...targetBase, "moduleReleaseVersion"]];
-      if (sourcePath.length === 7 && sourcePath[6] === "form")
-        return [[...targetBase, "applicationRootId"], [...targetBase, "formId"]];
-      if (sourcePath.length === 7 && sourcePath[6] === "workflow")
-        return [[...targetBase, "applicationRootId"], [...targetBase, "workflowId"]];
-    }
-  }
-  if (
-    sourcePath[1] === "flow_bindings" &&
-    typeof sourcePath[2] === "number" &&
-    sourcePath[3] === "flow" &&
-    sourcePath.length === 5 &&
-    sourcePath[4] === "flow"
-  ) {
-    const targetBase: Path = ["content", "flowBindings", sourcePath[2], "flow"];
-    return [[...targetBase, "applicationRootId"], [...targetBase, "flowId"]];
-  }
-  return undefined;
-}
-
 function explicitSourceTargets(
   source: JsonObject,
   canonical: unknown,
@@ -940,8 +837,6 @@ function explicitSourceTargets(
   positions: SourceContractPositions,
   resolution: Resolution,
 ): Path[] | undefined {
-  const flowTargets = applicationFlowSourceTargets(source, sourcePath);
-  if (flowTargets) return flowTargets;
   const fieldPolicyTargets = permissionFieldPolicyTargets(
     source,
     canonical,
@@ -1216,34 +1111,11 @@ function explicitSourceTargets(
       return leafPaths(valueAtPath(canonical, recordTypePath), recordTypePath);
     }
     if (
-      sourcePath[3] === "standard_page_replacement" &&
-      sourcePath[4] === "record_type" &&
-      sourcePath.length === 5
-    ) {
-      const recordTypePath = [...pageBase, "standardPageReplacement", "recordType"];
-      return leafPaths(valueAtPath(canonical, recordTypePath), recordTypePath);
-    }
-    if (
       sourcePath[3] === "public_fields" &&
       typeof sourcePath[4] === "number" &&
       sourcePath.length === 5
     )
       return [[...pageBase, "publicFieldIds", sourcePath[4]]];
-    if (sourcePath[3] === "calendar_mapping" && typeof sourcePath[4] === "string") {
-      const calendarKey: Readonly<Record<string, string>> = {
-        start: "startFieldId",
-        end: "endFieldId",
-        duration_field: "durationFieldId",
-      };
-      const key = calendarKey[sourcePath[4]];
-      if (key)
-        return [
-          [...pageBase, "calendarMapping", key],
-          ...(["end", "duration_field"].includes(String(sourcePath[4]))
-            ? [[...pageBase, "calendarMapping", "kind"] as Path]
-            : []),
-        ];
-    }
     const blockCoordinates =
       sourcePath[3] === "blocks" && typeof sourcePath[4] === "number"
         ? { canonical: [...pageBase, "blocks", sourcePath[4]] as Path, propertyIndex: 5 }
@@ -1501,13 +1373,12 @@ function explicitSourceTargets(
       permissions: "permissions",
       actions: "actions",
       events: "events",
-      rules: "rules",
       extension_points: "extensionPoints",
     };
     const canonicalCollection = collectionMap[collection];
     if (canonicalCollection) {
       const targetKey =
-        collection === "actions" || collection === "rules" ? "subjectRecordTypeId" : "recordTypeId";
+        collection === "actions" ? "subjectRecordTypeId" : "recordTypeId";
       return [["content", canonicalCollection, sourcePath[2], targetKey]];
     }
   }
@@ -1613,8 +1484,7 @@ const applicationSourceTransformPatterns = [
   /^body\/queries\/#\/sort\/#\/field$/,
   /^body\/queries\/#\/aggregates\/#\/field$/,
   /^body\/pages\/#\/(?:id|record_type|query|permission|commit_action|public_action|public_fields\/#)$/,
-  /^body\/pages\/#\/standard_page_replacement\/record_type$/,
-  /^body\/pages\/#\/calendar_mapping\/(?:start|end|duration_field)$/,
+  /^body\/experiences\/#\/page$/,
   /^body\/pages\/#\/layout\/(?:desktop|phone)\/component_order\/#$/,
   /^body\/pages\/#\/(?:blocks\/#|steps\/#\/blocks\/#)\/(?:id|block|query|view_permission|use_permission)$/,
   /^body\/pipelines\/#\/(?:id|record_type|stage_field)$/,
@@ -1648,17 +1518,6 @@ const applicationSourceTransformPatterns = [
   /^body\/rules\/#\/effect\/(?:field|message|component|workflow|reason_code)$/,
   /^body\/rules\/#\/effect\/value(?:\/.*)?$/,
   /^body\/pipelines\/#\/stages\/#\/(?:entry_actions|exit_actions)\/#$/,
-  /^body\/flows\/#\/id$/,
-  /^body\/flows\/#\/(?:inputs|outputs|variables)\/[^/]+\/(?:record_types\/#|default_value(?:\/.*)?)$/,
-  /^body\/flows\/#\/nodes\/#\/outputs\/[^/]+\/record_types\/#$/,
-  /^body\/flows\/#\/nodes\/#\/id$/,
-  /^body\/flows\/#\/nodes\/#\/target\/(?:module|version(?:\/.*)?|query|form|continuation_event|workflow|action|release_version)$/,
-  /^body\/flows\/#\/nodes\/#\/(?:inputs|results)\/[^/]+\/(?:type|output|value\/(?:source|node|input|variable|value)(?:\/.*)?)$/,
-  /^body\/flows\/#\/nodes\/#\/results\/[^/]+\/(?:source|node|input|variable|value)(?:\/.*)?$/,
-  /^body\/flows\/#\/edges\/#\/(?:id|from_node|to_node)$/,
-  /^body\/flow_bindings\/#\/(?:id|control|event_id)$/,
-  /^body\/flow_bindings\/#\/flow\/(?:flow|flow_id|release_version)$/,
-  /^body\/flow_bindings\/#\/inputs\/[^/]+\/value\/(?:control|form|record_type|relationship|field)(?:\/.*)?$/,
 ] as const;
 
 const connectionSourceTransformPatterns = [
@@ -1689,7 +1548,6 @@ const conditionSourcePathPatterns = [
   "body/workflows/#/trigger/condition",
   "body/pages/#/blocks/#/visibility_condition",
   "body/pages/#/steps/#/blocks/#/visibility_condition",
-  "body/flows/#/nodes/#/entry_condition",
 ].map(conditionSourcePathPattern);
 const workflowConditionNodePathPattern = conditionSourcePathPattern(
   "body/workflows/#/nodes/#/config",
@@ -1789,18 +1647,6 @@ function sourceResolvesIdentity(sourcePath: Path, positions: SourceContractPosit
   );
 }
 
-function applicationFlowSourceResolvesIdentity(sourcePath: Path): boolean {
-  const path = sourcePath.map((segment) => (typeof segment === "number" ? "#" : segment)).join("/");
-  return (
-    /^body\/flows\/#\/(?:id|(?:inputs|outputs|variables)\/[^/]+\/record_types\/#)$/.test(path) ||
-    /^body\/flows\/#\/nodes\/#\/outputs\/[^/]+\/record_types\/#$/.test(path) ||
-    /^body\/flows\/#\/nodes\/#\/(?:id|target\/(?:module|version(?:\/.*)?|query|form|continuation_event|workflow)|(?:inputs|results)\/[^/]+\/value\/node)$/.test(path) ||
-    /^body\/flows\/#\/edges\/#\/(?:id|from_node|to_node)$/.test(path) ||
-    /^body\/flow_bindings\/#\/(?:id|control|event_id|flow\/flow)$/.test(path) ||
-    /^body\/flow_bindings\/#\/inputs\/[^/]+\/value\/(?:control|form|record_type|relationship|field)$/.test(path)
-  );
-}
-
 function recordScopeSourceResolvesIdentity(sourcePath: Path): boolean {
   const normalized = sourcePath.map((segment) => (typeof segment === "number" ? "#" : segment));
   const path = normalized.join("/");
@@ -1841,10 +1687,6 @@ function isFixedWorkflowDefaultPath(path: Path): boolean {
     /\.nodes\.\d+\.(?:timeoutSeconds|duplicateProtection|activityKey|redaction)$/.test(joined) ||
     /\.nodes\.\d+\.retry\./.test(joined)
   );
-}
-
-function isFixedApplicationFlowDefaultPath(path: Path): boolean {
-  return /^content\.flowBindings\.\d+\.contractVersion$/.test(path.join("."));
 }
 
 type SourceProvenanceMapping = {
@@ -1888,8 +1730,7 @@ function provenanceFor(
     const resolved =
       sourceResolvesIdentity(sourcePath, positions) ||
       recordScopeSourceResolvesIdentity(sourcePath) ||
-      fieldPolicySourceResolvesIdentity(sourcePath) ||
-      applicationFlowSourceResolvesIdentity(sourcePath);
+      fieldPolicySourceResolvesIdentity(sourcePath);
     const transformTargets = explicitTargets
       ? explicitTargets.map((target) =>
           applicationTypedValueTarget(sourceObject, sourcePath, target, canonicalLeafSet),
@@ -1953,13 +1794,7 @@ function provenanceFor(
       canonicalPath.at(-1) === "publishedRevision" ||
       canonicalPath.at(-1) === "contractFingerprint";
     const isFixedWorkflowDefault = isFixedWorkflowDefaultPath(canonicalPath);
-    const isFixedApplicationFlowDefault = isFixedApplicationFlowDefaultPath(canonicalPath);
-    if (
-      isSystem ||
-      isPublicationMetadata ||
-      isFixedWorkflowDefault ||
-      isFixedApplicationFlowDefault
-    ) {
+    if (isSystem || isPublicationMetadata || isFixedWorkflowDefault) {
       entries.push({
         canonicalPath,
         origin: isSystem || isPublicationMetadata ? "system_metadata" : "fixed_default",
@@ -2145,8 +1980,6 @@ class Resolution {
       connection_binding: "connection",
       interface: "interface",
       flow: "flow",
-      flow_node: "flow_node",
-      flow_edge: "flow_edge",
       flow_binding: "flow_binding",
     };
     const segments = [...this.sourceLocation.segments];
@@ -2257,43 +2090,6 @@ class Resolution {
         this.location("permission", key),
       );
     return unique[0]!;
-  }
-
-  ownedIdentity(
-    ownerRootId: string,
-    identifier: string,
-    kinds: readonly string[],
-  ): { definitionKey: string; kind: string; alias: string; identifier: string } {
-    const definitions = this.snapshot.definitions.filter(
-      (definition) => String(definition.rootId) === String(ownerRootId),
-    );
-    if (definitions.length !== 1)
-      fail("vortex.definition.missing_definition", "unresolved_reference");
-    const matches = this.snapshot.identities.filter(
-      (identity) =>
-        String(identity.identifier) === String(identifier) &&
-        identity.definitionKey === definitions[0]!.key &&
-        kinds.includes(identity.kind),
-    );
-    const unique = [
-      ...new Set(
-        matches.map(
-          (identity) =>
-            `${identity.kind}:${identity.componentOwner}:${String(identity.identifier)}`,
-        ),
-      ),
-    ];
-    if (unique.length === 0)
-      fail("vortex.definition.missing_identity", "unresolved_reference");
-    if (unique.length > 1)
-      fail("vortex.definition.ambiguous_identity", "unresolved_reference");
-    const match = matches[0]!;
-    return {
-      definitionKey: match.definitionKey,
-      kind: match.kind,
-      alias: match.alias,
-      identifier: String(match.identifier),
-    };
   }
 
   exactOwnedReference(
@@ -2916,6 +2712,40 @@ function applicationPermissionSharingConditions(
   };
 }
 
+/**
+ * A calculation that uses a read-time calculation is itself read-time, so a calculation that does
+ * not author its evaluation inherits read-time from its same-record dependencies. An authored
+ * `stored` evaluation is kept, and publication refuses it when it depends on a read-time field.
+ */
+function inheritReadTimeEvaluation<
+  T extends { fieldId: string; type: unknown; settings: unknown },
+>(
+  sourceFields: readonly JsonObject[],
+  fields: readonly T[],
+): T[] {
+  const readTime = new Set<string>();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    fields.forEach((field, index) => {
+      if (field.type !== "calculation" || readTime.has(field.fieldId)) return;
+      const settings = asObject(field.settings);
+      const inherits =
+        asObject(sourceFields[index]?.settings).evaluation === undefined &&
+        (settings.dependencyFieldIds as string[]).some((fieldId) => readTime.has(fieldId));
+      if (settings.evaluation === "read_time" || inherits) {
+        readTime.add(field.fieldId);
+        changed = true;
+      }
+    });
+  }
+  return fields.map((field) =>
+    readTime.has(field.fieldId)
+      ? { ...field, settings: { ...asObject(field.settings), evaluation: "read_time" } }
+      : field,
+  );
+}
+
 function fieldSettings(
   field: JsonObject,
   qualifiedRecordType: string,
@@ -3150,8 +2980,15 @@ function fieldSettings(
           terminalStatusValues: expression.terminal_status_values,
         };
       }
+      const evaluation =
+        settings.evaluation === "read_time" || settings.evaluation === "stored"
+          ? settings.evaluation
+          : expression.operation === "deadline_passed"
+            ? "read_time"
+            : "stored";
       return {
         resultType: settings.result_type,
+        evaluation,
         ...(settings.decimal_places !== undefined
           ? { decimalPlaces: settings.decimal_places }
           : {}),
@@ -3202,6 +3039,315 @@ function fieldSettings(
   }
 }
 
+/**
+ * The task version every compiled named-action flow pins. A named action is compiled to a
+ * `transaction` flow (#1062); until #1063 runs it through the flow runner, the action's own
+ * execution path is unchanged and this flow is the compile-time home of its behaviour
+ * (architecture decision 1, 08 §Actions).
+ */
+const ACTION_FLOW_TASK_VERSION = "1.0.0" as const;
+
+/** The flow value type of a compiled Module action input. */
+function actionFlowInputType(inputType: string): FlowInputDeclaration["type"] {
+  // An action `number` input accepts any finite number, so it is a decimal, never a whole number.
+  if (inputType === "number") return "decimal_number";
+  if (inputType === "boolean") return "yes_no";
+  return inputType as FlowInputDeclaration["type"];
+}
+
+/** A text literal flow value, for identity, key and message properties. */
+const flowTextValue = (value: string): FlowValue => ({
+  kind: "literal",
+  literal: { type: "text", value },
+});
+
+const flowReferenceValue = (reference: FlowReference): FlowValue => ({ kind: "reference", reference });
+
+/**
+ * What an action value can read inside its compiled flow: the subject is the record the action
+ * runs on, so its fields are `{{ trigger.record.<field> }}` reads and the whole subject is the
+ * implicit typed `subjectInput` record input.
+ */
+type ActionFlowScope = Readonly<{
+  subjectFieldKeyById: ReadonlyMap<string, string>;
+  subjectInput: string;
+}>;
+
+const subjectFieldReference = (fieldId: unknown, scope: ActionFlowScope): FlowReference => {
+  const field = scope.subjectFieldKeyById.get(String(fieldId));
+  if (field === undefined) fail("vortex.definition.invalid_compilation_output", "invalid_value");
+  return { source: "trigger_record", field };
+};
+
+/**
+ * Lowers one compiled action value source to the flow value it means. Every dynamic source becomes
+ * a typed flow reference: an action input, a subject field, the subject record input, or the
+ * trusted run context's actor and time. Only a literal stays a value.
+ */
+function actionFlowValue(value: unknown, scope: ActionFlowScope): FlowValue {
+  const source = asObject(value);
+  switch (source.source) {
+    case "literal":
+      return { kind: "literal", literal: { type: "json", value: source.value as JsonValue } };
+    case "input":
+      return flowReferenceValue({ source: "input", name: String(source.inputKey) });
+    case "subject_field":
+      return flowReferenceValue(subjectFieldReference(source.fieldId, scope));
+    case "subject_record":
+      return flowReferenceValue({ source: "input", name: scope.subjectInput });
+    case "current_actor":
+      return flowReferenceValue({ source: "execution_actor" });
+    case "current_time":
+      return flowReferenceValue({ source: "execution_now" });
+    default:
+      return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+  }
+}
+
+/**
+ * The `field_values` property of a compiled action's record task: field id to flow value. A flow
+ * value is a single value, so the per-field map travels as JSON whose every entry is itself a
+ * flow value (a typed literal or typed reference), never an action value source. Typing the map
+ * itself needs a field-values-of-flow-values property, which #1063 adds with the one apply record
+ * changes call.
+ */
+const actionFlowFieldValues = (
+  values: Readonly<Record<string, unknown>>,
+  scope: ActionFlowScope,
+): FlowValue => ({
+  kind: "literal",
+  literal: {
+    type: "json",
+    value: Object.fromEntries(
+      Object.entries(values).map(([fieldId, value]) => [
+        fieldId,
+        actionFlowValue(value, scope) as unknown as JsonValue,
+      ]),
+    ),
+  },
+});
+
+/** One registered task of a compiled named-action flow, pinned to the registry task version. */
+const actionEffectTask = (
+  id: string,
+  type: string,
+  properties: Record<string, FlowValue>,
+): FlowTask => ({ id, type, version: ACTION_FLOW_TASK_VERSION, properties });
+
+/**
+ * Lowers a compiled action precondition to the flow formula the one flow evaluator reads. A
+ * subject field becomes a `trigger.record` read and an action parameter a declared input
+ * reference, so the flow names no value as text.
+ */
+function actionPreconditionFormula(node: unknown, scope: ActionFlowScope): FlowFormula {
+  const value = asObject(node);
+  if (value.kind === "all" || value.kind === "any") {
+    const children = (value.conditions as unknown[]).map((entry) =>
+      actionPreconditionFormula(entry, scope),
+    );
+    if (children.length === 1) return children[0]!;
+    return { op: value.kind === "all" ? "and" : "or", args: children };
+  }
+  if (value.kind === "not")
+    return { op: "not", arg: actionPreconditionFormula(value.condition, scope) };
+  const operand = (entry: unknown): FlowFormula => {
+    const source = asObject(entry);
+    if (source.source === "field")
+      return { op: "reference", reference: subjectFieldReference(source.fieldId, scope) };
+    if (source.source === "parameter")
+      return { op: "reference", reference: { source: "input", name: String(source.key) } };
+    return { op: "literal", type: "json", value: source.value as JsonValue };
+  };
+  const left = operand(value.left);
+  const rightOperand = (): FlowFormula => operand(value.right);
+  switch (String(value.operator)) {
+    case "equals":
+      return { op: "eq", left, right: rightOperand() };
+    case "not_equals":
+      return { op: "neq", left, right: rightOperand() };
+    case "greater_than":
+      return { op: "gt", left, right: rightOperand() };
+    case "greater_than_or_equal":
+      return { op: "gte", left, right: rightOperand() };
+    case "less_than":
+      return { op: "lt", left, right: rightOperand() };
+    case "less_than_or_equal":
+      return { op: "lte", left, right: rightOperand() };
+    case "contains":
+      return { op: "contains", left, right: rightOperand() };
+    case "not_contains":
+      return { op: "not", arg: { op: "contains", left, right: rightOperand() } };
+    case "in":
+    case "not_in": {
+      const authored = asObject(value.right);
+      const raw = authored.source === "value" ? authored.value : undefined;
+      const options = Array.isArray(raw)
+        ? raw.map(
+            (entry): FlowFormula => ({ op: "literal", type: "json", value: entry as JsonValue }),
+          )
+        : [rightOperand()];
+      const membership: FlowFormula = { op: "in", value: left, options };
+      return String(value.operator) === "not_in" ? { op: "not", arg: membership } : membership;
+    }
+    case "is_empty":
+      return { op: "is_empty", arg: left };
+    case "is_not_empty":
+      return { op: "is_not_empty", arg: left };
+    default:
+      return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+  }
+}
+
+/**
+ * Compiles one Module named action to its `transaction` flow (#1062): the action's own permanent
+ * identity, typed inputs (plus the implicit subject record input) and invocation permission. The
+ * precondition becomes an If task whose otherwise branch refuses, as the action refuses, and the
+ * ordered effects become the registry record, event and change tasks.
+ *
+ * Placement: the registry lets `record.set_fields` and `event.announce` run in a transaction on
+ * the record being saved, which for an action is its subject. It keeps `record.create`,
+ * `record.changes` and `record.delete` out of transactions, because architecture decision 1 lets a
+ * transaction flow change only the record being saved and every BeforeSave rule shares that run
+ * location. A named action's other-record changes are one apply record changes call (decision
+ * "Every record task calls one protected operation"), so how the registry admits them for action
+ * flows alone is #1063's, with execution. Likewise the flow validator accepts `trigger.record`
+ * reads only in a flow with a record trigger, while an action starts through its binding with its
+ * subject as the record being saved. These flows are therefore not passed through the flow
+ * validator yet; `flowSchema` still validates them.
+ */
+function compileActionFlow(
+  action: JsonObject,
+  canonicalAction: JsonObject,
+  flowKey: string,
+  namespace: string,
+  subjectFieldKeyById: ReadonlyMap<string, string>,
+  invocationPermissionId: FlowDefinition["invocationPermissionId"],
+): FlowDefinition {
+  const actionInputs: Record<string, FlowInputDeclaration> = {};
+  for (const input of canonicalAction.inputs as JsonObject[]) {
+    const recordTypes = (input.recordTypes as JsonObject[] | undefined) ?? [];
+    actionInputs[String(input.key)] = {
+      type: actionFlowInputType(String(input.type)),
+      required: input.required === true,
+      ...(recordTypes.length > 0
+        ? {
+            recordTypeIds: recordTypes.map((entry) =>
+              String(entry.recordTypeId),
+            ) as FlowInputDeclaration["recordTypeIds"],
+          }
+        : {}),
+    };
+  }
+  // The subject is `record`, as in the default Save flow, unless the action declares its own input
+  // of that name.
+  let subjectInput = "record";
+  for (let suffix = 1; Object.hasOwn(actionInputs, subjectInput); suffix += 1)
+    subjectInput = suffix === 1 ? "subject_record" : `subject_record_${suffix}`;
+  const subjectRecordTypeId = String(canonicalAction.subjectRecordTypeId);
+  const scope: ActionFlowScope = { subjectFieldKeyById, subjectInput };
+
+  const effectTasks: FlowTask[] = (canonicalAction.effects as JsonObject[]).map(
+    (effect, effectIndex) => {
+      const mapping =
+        flowTaskMappingForActionEffect[
+          String(effect.kind) as keyof typeof flowTaskMappingForActionEffect
+        ];
+      if (mapping === undefined || mapping.kind !== "task")
+        return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+      const id = `effect_${effectIndex + 1}`;
+      switch (effect.kind) {
+        case "set_field":
+          return actionEffectTask(id, mapping.type, {
+            values: actionFlowFieldValues({ [String(effect.fieldId)]: effect.value }, scope),
+          });
+        case "create_record":
+          return actionEffectTask(id, mapping.type, {
+            record_type: flowTextValue(String(asObject(effect.recordType).recordTypeId)),
+            values: actionFlowFieldValues(asObject(effect.values), scope),
+          });
+        case "copy_relationships":
+          return actionEffectTask(id, mapping.type, {
+            changes: {
+              kind: "literal",
+              literal: {
+                type: "json",
+                value: [
+                  {
+                    kind: "copy_relationships",
+                    relationshipIds: effect.relationshipIds as JsonValue,
+                    subject: flowReferenceValue({ source: "input", name: subjectInput }),
+                    target: flowReferenceValue({
+                      source: "input",
+                      name: String(effect.targetInputKey),
+                    }),
+                  } as unknown as JsonValue,
+                ],
+              },
+            },
+          });
+        case "soft_delete_subject":
+          return actionEffectTask(id, mapping.type, {
+            record_type: flowTextValue(subjectRecordTypeId),
+            record: flowReferenceValue({ source: "input", name: subjectInput }),
+          });
+        case "announce_event":
+          return actionEffectTask(id, mapping.type, {
+            event: flowTextValue(String(effect.eventKey)),
+          });
+        default:
+          return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+      }
+    },
+  );
+
+  const precondition = canonicalAction.precondition;
+  const tasks: FlowTask[] =
+    precondition === undefined
+      ? effectTasks
+      : [
+          {
+            id: "precondition",
+            type: "if",
+            condition: actionPreconditionFormula(precondition, scope),
+            then: effectTasks,
+            else: [
+              actionEffectTask("precondition_refused", "rule.refuse", {
+                reason: flowTextValue("precondition_not_met"),
+                message: flowTextValue("This action is not available for the record as it is now."),
+              }),
+            ],
+          },
+        ];
+
+  const label = String(action.label);
+  return {
+    contractVersion: flowContractVersion,
+    id: canonicalAction.actionId as unknown as FlowDefinition["id"],
+    key: flowKey,
+    ...(/\{\{|\{%/.test(label) ? {} : { description: label }),
+    labels: {},
+    namespace,
+    execution: "transaction",
+    runAs: { kind: "saver" },
+    ...(invocationPermissionId === undefined ? {} : { invocationPermissionId }),
+    inputs: {
+      [subjectInput]: {
+        type: "record_reference",
+        required: true,
+        recordTypeIds: [subjectRecordTypeId] as FlowInputDeclaration["recordTypeIds"],
+        description: "The record the action runs on.",
+      },
+      ...actionInputs,
+    },
+    variables: {},
+    triggers: [],
+    tasks,
+    outputs: {},
+    errors: [],
+    finally: [],
+  };
+}
+
 function compileModule(
   source: JsonObject,
   resolution: Resolution,
@@ -3209,6 +3355,7 @@ function compileModule(
   savedConditionRevisions: readonly JsonObject[],
   dependencyOutputs: readonly DefinitionCompilationOutput[],
   rules: readonly RuleGraph[],
+  flows: readonly FlowDefinition[],
 ) {
   const body = asObject(source.body);
   const definitionKey = String(source.key);
@@ -3247,7 +3394,7 @@ function compileModule(
     const qualified = `${definitionKey}:${recordKey}`;
     const valueContext = valueContextFor(qualified);
     const recordTypeId = resolution.id(definitionKey, "record_type", recordKey, "content");
-    const fields = (recordType.fields as JsonObject[]).map((field) => ({
+    const compiledFields = (recordType.fields as JsonObject[]).map((field) => ({
       fieldId: resolution.id(definitionKey, "field", String(field.id), `record:${recordKey}`),
       key: field.key,
       label: field.label,
@@ -3265,6 +3412,7 @@ function compileModule(
       type: field.type,
       settings: fieldSettings(field, qualified, resolution, permissionOwners, true, valueContext),
     }));
+    const fields = inheritReadTimeEvaluation(recordType.fields as JsonObject[], compiledFields);
     const relationships = (recordType.relationships as JsonObject[]).map((relationship) => ({
       relationshipId: resolution.id(
         definitionKey,
@@ -3378,6 +3526,44 @@ function compileModule(
         return { kind: "soft_delete_subject" };
       }),
     };
+  });
+  // Every Module named action also compiles to one `transaction` flow (#1062); the action's own
+  // execution path is unchanged until #1063 runs the flow.
+  const usedFlowKeys = new Set(flows.map((flow) => String(flow.key)));
+  const actionFlows = (body.actions as JsonObject[]).map((action, actionIndex) => {
+    const recordKey = String(action.record_type);
+    const subjectRecord = (body.record_types as JsonObject[]).find(
+      (candidate) => String(candidate.key) === recordKey,
+    );
+    const subjectFieldKeyById = new Map<string, string>();
+    for (const field of (subjectRecord?.fields as JsonObject[] | undefined) ?? [])
+      subjectFieldKeyById.set(
+        resolution.id(definitionKey, "field", String(field.id), `record:${recordKey}`),
+        String(field.key),
+      );
+    // The flow key is the action key's last segment, kept a builder key with room for a suffix
+    // that separates it from an authored flow or another action of the same name.
+    const keySegment = String(action.key).slice(String(action.key).lastIndexOf(".") + 1);
+    const baseKey = keySegment.slice(0, 32).replace(/_+$/, "");
+    let flowKey = baseKey;
+    for (let suffix = 1; usedFlowKeys.has(flowKey); suffix += 1) flowKey = `${baseKey}_${suffix}`;
+    usedFlowKeys.add(flowKey);
+    const canonicalAction = actions[actionIndex]! as unknown as JsonObject;
+    return compileActionFlow(
+      action,
+      canonicalAction,
+      flowKey,
+      definitionKey,
+      subjectFieldKeyById,
+      // An action with permission alternatives has no single invocation permission; a flow holds
+      // exactly one, so its binding keeps checking the alternatives (#1063).
+      canonicalAction.permissionKey === undefined
+        ? undefined
+        : (resolution.permission(
+            String(canonicalAction.permissionKey),
+            permissionOwners,
+          ) as FlowDefinition["invocationPermissionId"]),
+    );
   });
   const events = (body.events as JsonObject[]).map((event) => {
     const record = qualifiedForRecord(String(event.record_type));
@@ -3623,6 +3809,7 @@ function compileModule(
       permissions,
       actions,
       events,
+      flows: [...flows, ...actionFlows],
       rules,
       sharingConditions,
       extensionPoints: (body.extension_points as JsonObject[]).map((point) => ({
@@ -4159,45 +4346,15 @@ function compileApplicationPagesV2(
         String(page.permission),
         allowedPermissionOwners,
       ),
-      states: page.states,
       composition: compiledComposition.composition,
-      ...(page.standard_page_replacement
-        ? {
-            standardPageReplacement: {
-              standardPage: asObject(page.standard_page_replacement).standard_page,
-              recordType: resolution.recordType(
-                String(asObject(page.standard_page_replacement).record_type),
-              ),
-            },
-          }
-        : {}),
     };
     if (page.type === "list") {
       const record = String(page.record_type);
-      const mapping = page.calendar_mapping ? asObject(page.calendar_mapping) : undefined;
       return {
         ...base,
         type: "list",
         recordType: resolution.recordType(record),
         queryId: queryId(String(page.query)),
-        arrangements: page.arrangements,
-        ...(mapping
-          ? {
-              calendarMapping:
-                "end" in mapping
-                  ? {
-                      kind: "start_end",
-                      startFieldId: resolution.field(record, String(mapping.start)),
-                      endFieldId: resolution.field(record, String(mapping.end)),
-                    }
-                  : {
-                      kind: "start_duration",
-                      startFieldId: resolution.field(record, String(mapping.start)),
-                      durationFieldId: resolution.field(record, String(mapping.duration_field)),
-                      durationUnit: mapping.duration_unit,
-                    },
-            }
-          : {}),
       };
     }
     if (page.type === "dashboard") return { ...base, type: "dashboard" };
@@ -4271,10 +4428,7 @@ function compileApplication(
   dependencyOutputs: readonly DefinitionCompilationOutput[],
   compositionV2: MaterialisedApplicationCompositionV2,
   valueIndex: ApplicationModuleValueIndex,
-  catalogueEvidence: Readonly<{
-    managedFlows: readonly JsonObject[];
-    platformOperations: readonly JsonObject[];
-  }> = { managedFlows: [], platformOperations: [] },
+  flows: readonly FlowDefinition[],
 ) {
   const body = asObject(source.body);
   const definitionKey = String(source.key);
@@ -4399,6 +4553,14 @@ function compileApplication(
         };
       }),
       pages,
+      ...(body.experiences === undefined
+        ? {}
+        : {
+            experiences: (body.experiences as JsonObject[]).map((experience) => ({
+              state: experience.state,
+              pageId: pageId(String(experience.page)),
+            })),
+          }),
       roles: (body.roles as JsonObject[]).map((role) => {
         const authoredPermissionKeys = role.permissions as string[];
         const usesApplicationWildcard =
@@ -4529,61 +4691,6 @@ function compileApplication(
               return { kind: "announce_event", eventKey: effect.event };
             return { kind: "soft_delete_subject" };
           }),
-        };
-      }),
-      rules: (body.rules as JsonObject[]).map((rule) => {
-        const record = String(rule.record_type);
-        const localField = (alias: string) => resolution.field(record, alias);
-        const valueContext = valueIndex.record(record)?.moduleV2
-          ? valueIndex.context(record)
-          : undefined;
-        const effect = asObject(rule.effect);
-        const effectField =
-          effect.kind === "set_value"
-            ? valueIndex.fieldById(localField(String(effect.field)))?.field
-            : undefined;
-        const compiledEffect =
-          effect.kind === "set_value"
-            ? {
-                kind: "set_value",
-                fieldId: localField(String(effect.field)),
-                value: valueContext
-                  ? normaliseModuleFieldValueV2(effectField, effect.value, valueContext)
-                  : effect.value,
-              }
-            : effect.kind === "require"
-              ? { kind: "require", fieldId: localField(String(effect.field)) }
-              : effect.kind === "show_or_hide"
-                ? {
-                    kind: "show_or_hide",
-                    componentId: resolution.id(
-                      definitionKey,
-                      "block_placement",
-                      String(effect.component),
-                    ),
-                    visibility: effect.visibility,
-                  }
-                : effect.kind === "warn"
-                  ? { kind: "warn", messageKey: effect.message }
-                  : effect.kind === "start_background_work"
-                    ? {
-                        kind: "start_background_work",
-                        workflowId: resolution.id(
-                          definitionKey,
-                          "workflow",
-                          String(effect.workflow),
-                          "content",
-                        ),
-                      }
-                    : { kind: "refuse", reasonCode: effect.reason_code };
-        return {
-          ruleId: resolution.id(definitionKey, "rule", String(rule.id), "content"),
-          key: rule.key,
-          subjectRecordTypeId: resolution.recordType(record).recordTypeId,
-          trigger: rule.trigger,
-          condition: condition(rule.condition, localField, valueContext),
-          priority: rule.priority,
-          effect: compiledEffect,
         };
       }),
       events: (body.events as JsonObject[]).map((event) => {
@@ -4718,681 +4825,49 @@ function compileApplication(
       })),
       theme: compositionV2.theme,
       homePageId: pageId(String(body.home_page)),
-      flows: compileApplicationFlows(
-        source,
-        resolution,
-        valueIndex,
-        dependencyOutputs,
-        catalogueEvidence,
-      ),
-      flowBindings: compileApplicationFlowBindings(source, resolution, catalogueEvidence),
+      flows,
+      flowBindings: compileApplicationFlowBindings(source, resolution, flows),
     },
   });
   return canonical;
 }
 
-function compileApplicationFlows(
-  source: JsonObject,
-  resolution: Resolution,
-  valueIndex: ApplicationModuleValueIndex,
-  dependencyOutputs: readonly DefinitionCompilationOutput[],
-  catalogueEvidence: Readonly<{
-    managedFlows: readonly JsonObject[];
-    platformOperations: readonly JsonObject[];
-  }>,
-): JsonObject[] {
-  const body = asObject(source.body);
-  const definitionKey = String(source.key);
-  const rawFlows = body.flows as JsonObject[];
-  const appRoot = resolution.definition(definitionKey, "application");
-  const appVersion = appRoot.exactVersion;
-  const resolutionFingerprint = resolution.snapshot.fingerprint;
-  const sourceByKey = <Value extends JsonObject>(
-    values: readonly Value[],
-    key: string,
-  ): Value | undefined =>
-    values.find((value) => String(value.key) === key || String(value.id) === key);
-  const findPlacement = (alias: string): JsonObject | undefined => {
-    const visit = (value: unknown): JsonObject | undefined => {
-      if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
-      const object = value as JsonObject;
-      const placements = object.placements;
-      if (placements !== null && typeof placements === "object" && !Array.isArray(placements)) {
-        const candidate = (placements as JsonObject)[alias];
-        if (candidate !== undefined) return asObject(candidate);
-      }
-      for (const child of Object.values(object)) {
-        const match = visit(child);
-        if (match !== undefined) return match;
-      }
-      return undefined;
-    };
-    return visit(body);
-  };
-  const targetContentFingerprint = (kind: string, value: unknown): string =>
-    fingerprintCanonicalValue({ kind, value });
-  const moduleQuery = (moduleRootId: string, queryId: string): JsonObject => {
-    const outputs = dependencyOutputs.filter((candidate) => candidate.kind === "module");
-    const matches = outputs.flatMap((candidate) => {
-      if (String(candidate.artifact.rootId) !== String(moduleRootId)) return [];
-      const queries = candidate.canonical.content.queries as readonly JsonObject[];
-      return queries.filter((query) => String(query.queryId) === queryId);
-    });
-    if (matches.length !== 1) fail("vortex.definition.missing_identity", "unresolved_reference");
-    return matches[0]!;
-  };
-  const catalogueOperation = (
-    serviceId: string,
-    operationId: string,
-    releaseVersion: string,
-  ): JsonObject => {
-    const matches = catalogueEvidence.platformOperations.filter(
-      (candidate) =>
-        String(candidate.serviceId) === serviceId &&
-        String(candidate.operationId) === operationId &&
-        String(candidate.releaseVersion) === releaseVersion,
-    );
-    if (matches.length !== 1)
-      fail("vortex.definition.missing_identity", "unresolved_reference");
-    return matches[0]!;
-  };
-  const compileProtectedOperation = (
-    reference: JsonObject,
-    selectedReleaseVersion: unknown,
-  ): JsonObject => {
-    const operation = asObject(reference);
-    const owner = asObject(operation.owner);
-    const operationId = String(operation.operationId);
-    if (owner.kind === "platform_service") {
-      const evidence = catalogueOperation(
-        String(owner.serviceId),
-        operationId,
-        String(selectedReleaseVersion),
-      );
-      return {
-        operation,
-        releaseVersion: evidence.releaseVersion,
-        contentFingerprint: evidence.contentFingerprint,
-        resolutionFingerprint,
-        catalogueFingerprint: evidence.catalogueFingerprint,
-      };
-    }
-    const ownerRootId = String(
-      owner.kind === "application" ? owner.applicationRootId : owner.moduleRootId,
-    );
-    const identity = resolution.ownedIdentity(ownerRootId, operationId, ["action"]);
-    const rawOwner = identity.definitionKey === definitionKey
-      ? (body.actions as JsonObject[]).find(
-          (action) => String(action.id) === identity.alias || String(action.key) === identity.alias,
-        )
-      : dependencyOutputs.find(
-          (candidate) =>
-            candidate.kind === "module" && candidate.artifact.definitionKey === identity.definitionKey,
-        )?.canonical;
-    const ownerOutput = dependencyOutputs.find(
-      (candidate) =>
-        candidate.kind === "module" && candidate.artifact.definitionKey === identity.definitionKey,
-    );
-    const content = rawOwner === undefined ? operation : asObject(rawOwner);
-    const action = identity.definitionKey === definitionKey
-      ? content
-      : ((asObject(content).content as JsonObject).actions as readonly JsonObject[]).find(
-          (candidate) => String(candidate.actionId) === operationId,
-        );
-    return {
-      operation,
-      releaseVersion:
-        identity.definitionKey === definitionKey
-          ? appVersion
-          : resolution.definition(identity.definitionKey, "module").exactVersion,
-      contentFingerprint: targetContentFingerprint(
-        "protected_operation",
-        action ?? { operationId, ownerRootId },
-      ),
-      resolutionFingerprint:
-        identity.definitionKey === definitionKey
-          ? resolutionFingerprint
-          : ownerOutput?.resolutionFingerprint ?? resolutionFingerprint,
-    };
-  };
-  return rawFlows.map((flow) => {
-    const flowId = resolution.id(definitionKey, "flow", String(flow.id), "content");
-    const flowScope = `flow:${flow.key}`;
-
-    const compileFlowValueDeclaration = (decl: JsonObject): JsonObject => ({
-      type: decl.type,
-      required: Boolean(decl.required),
-      ...(decl.record_types
-        ? {
-            recordTypeIds: (decl.record_types as string[]).map(
-              (rt) => resolution.recordType(rt).recordTypeId,
-            ),
-          }
-        : {}),
-    });
-
-    const compileFlowVariableDeclaration = (decl: JsonObject): JsonObject => ({
-      key: decl.key,
-      ...(decl.name ? { name: decl.name } : {}),
-      type: decl.type,
-      ...(decl.record_types
-        ? {
-            recordTypeIds: (decl.record_types as string[]).map(
-              (rt) => resolution.recordType(rt).recordTypeId,
-            ),
-          }
-        : {}),
-      ...(decl.default_value !== undefined
-        ? { defaultValue: decl.default_value }
-        : {}),
-    });
-
-    const compileNodeInputValue = (value: JsonObject): JsonObject => {
-      if (value.source === "literal") return { source: "literal", value: value.value };
-      if (value.source === "flow_input") return { source: "flow_input", input: value.input };
-      if (value.source === "flow_variable") return { source: "flow_variable", variable: value.variable };
-      if (value.source === "node_output") {
-        const nodeId = resolution.id(definitionKey, "flow_node", String(value.node), flowScope);
-        return { source: "node_output", nodeId, output: value.output };
-      }
-      return { source: "current_organization_account_id" };
-    };
-
-    const compileNodeInputBinding = (binding: JsonObject): JsonObject => ({
-      type: binding.type,
-      value: compileNodeInputValue(asObject(binding.value)),
-    });
-
-    const compileNode = (node: JsonObject): JsonObject => {
-      const nodeId = resolution.id(definitionKey, "flow_node", String(node.id), flowScope);
-      const base = {
-        nodeId,
-        key: node.key,
-        kind: node.kind,
-        ...(node.label ? { label: node.label } : {}),
-      };
-
-      if (node.kind === "start") {
-        return {
-          ...base,
-          runAs: { kind: "current_user" },
-          ...(node.entry_condition
-            ? {
-                entryCondition: condition(
-                  node.entry_condition,
-                  (reference) => qualifiedField(resolution, reference),
-                  valueIndex.context(),
-                ),
-              }
-            : {}),
-          outputs: objectFromUniqueEntries(
-            Object.entries(asObject(node.outputs ?? {})).map(([k, v]) => [
-              k,
-              compileFlowValueDeclaration(asObject(v)),
-            ]),
-          ),
-        };
-      }
-
-      if (node.kind === "query") {
-        const target = asObject(node.target);
-        let compiledTarget: JsonObject;
-        if (target.kind === "application_query") {
-          const query = sourceByKey(body.queries as JsonObject[], String(target.query));
-          if (query === undefined)
-            fail("vortex.definition.missing_identity", "unresolved_reference");
-          const queryId = resolution.id(definitionKey, "query", String(target.query), "content");
-          compiledTarget = {
-            kind: "application_query",
-            applicationRootId: appRoot.rootId,
-            releaseVersion: appVersion,
-            queryId,
-            contentFingerprint: targetContentFingerprint("application_query", query),
-            resolutionFingerprint,
-          };
-        } else {
-          const moduleKey = String(target.module);
-          const requirement = target.version as Parameters<typeof compatibleVersion>[0];
-          const modDef = resolution.definition(moduleKey, "module");
-          const queryId = resolution.id(moduleKey, "query", String(target.query), "content");
-          const query = moduleQuery(String(modDef.rootId), queryId);
-          const moduleOutput = dependencyOutputs.find(
-            (candidate) =>
-              candidate.kind === "module" && String(candidate.artifact.rootId) === String(modDef.rootId),
-          );
-          compiledTarget = {
-            kind: "query",
-            moduleRootId: modDef.rootId,
-            moduleReleaseVersion: exactVersion(resolution, moduleKey, "module", requirement),
-            queryId,
-            declaredRequirement: requirement,
-            contentFingerprint: targetContentFingerprint("module_query", query),
-            resolutionFingerprint: moduleOutput?.resolutionFingerprint ?? resolutionFingerprint,
-          };
-        }
-        return {
-          ...base,
-          target: compiledTarget,
-          runAs: { kind: "current_user" },
-          inputs: objectFromUniqueEntries(
-            Object.entries(asObject(node.inputs ?? {})).map(([k, v]) => [
-              k,
-              compileNodeInputBinding(asObject(v)),
-            ]),
-          ),
-          outputs: objectFromUniqueEntries(
-            Object.entries(asObject(node.outputs ?? {})).map(([k, v]) => [
-              k,
-              compileFlowValueDeclaration(asObject(v)),
-            ]),
-          ),
-          results: node.results ?? {},
-        };
-      }
-
-      if (node.kind === "action") {
-        const target = asObject(node.target);
-        let compiledTarget: JsonObject;
-        if (target.kind === "protected_operation") {
-          const evidence = compileProtectedOperation(
-            asObject(target.operation),
-            target.release_version,
-          );
-          compiledTarget = {
-            kind: "protected_operation",
-            ...evidence,
-          };
-        } else if (target.kind === "form_continuation") {
-          const form = findPlacement(String(target.form));
-          if (form === undefined) fail("vortex.definition.missing_identity", "unresolved_reference");
-          compiledTarget = {
-            kind: "form_continuation",
-            applicationRootId: appRoot.rootId,
-            formId: resolution.id(definitionKey, "block_placement", String(target.form)),
-            continuationEventId: resolution.id(
-              definitionKey,
-              "event",
-              String(target.continuation_event),
-              "content",
-            ),
-            releaseVersion: appVersion,
-            contentFingerprint: targetContentFingerprint("application_form", form),
-            resolutionFingerprint,
-          };
-        } else if (target.kind === "durable_workflow_start") {
-          const workflow = sourceByKey(body.workflows as JsonObject[], String(target.workflow));
-          if (workflow === undefined)
-            fail("vortex.definition.missing_identity", "unresolved_reference");
-          compiledTarget = {
-            kind: "durable_workflow_start",
-            applicationRootId: appRoot.rootId,
-            workflowId: resolution.id(definitionKey, "workflow", String(target.workflow), "content"),
-            releaseVersion: appVersion,
-            contentFingerprint: targetContentFingerprint("application_workflow", workflow),
-            resolutionFingerprint,
-          };
-        } else if (target.kind === "record_save") {
-          const qualified = String(target.record_type);
-          const split = qualified.lastIndexOf(":");
-          if (split < 1) fail("vortex.definition.missing_identity", "unresolved_reference");
-          const moduleKey = qualified.slice(0, split);
-          const record = resolution.recordType(qualified);
-          const moduleOutput = dependencyOutputs.find(
-            (candidate) =>
-              candidate.kind === "module" &&
-              String(candidate.artifact.rootId) === String(record.moduleRootId),
-          );
-          compiledTarget = {
-            kind: "record_save",
-            applicationRootId: appRoot.rootId,
-            moduleRootId: record.moduleRootId,
-            recordTypeId: record.recordTypeId,
-            mode: target.mode,
-            releaseVersion: resolution.definition(moduleKey, "module").exactVersion,
-            contentFingerprint: targetContentFingerprint("record_save", {
-              recordTypeId: record.recordTypeId,
-              mode: target.mode,
-            }),
-            resolutionFingerprint: moduleOutput?.resolutionFingerprint ?? resolutionFingerprint,
-          };
-        } else if (target.kind === "named_action") {
-          // A named action is authored by its bound Module action's published key and resolves to
-          // that Module's protected operation, so it carries exactly the same permanent identity,
-          // release evidence and manifest entry as an authored protected operation.
-          const moduleAction = valueIndex.action(String(target.action));
-          if (moduleAction === undefined)
-            fail("vortex.definition.missing_identity", "unresolved_reference");
-          const actionId = String(moduleAction.action.actionId);
-          const owners = dependencyOutputs.filter(
-            (candidate) =>
-              candidate.kind === "module" &&
-              ((asObject(candidate.canonical.content).actions as JsonObject[] | undefined) ?? []).some(
-                (candidateAction) => String(candidateAction.actionId) === actionId,
-              ),
-          );
-          if (owners.length !== 1)
-            fail("vortex.definition.missing_identity", "unresolved_reference");
-          compiledTarget = {
-            kind: "protected_operation",
-            ...compileProtectedOperation(
-              {
-                owner: { kind: "module", moduleRootId: String(owners[0]!.artifact.rootId) },
-                operationId: actionId,
-              },
-              undefined,
-            ),
-          };
-        } else {
-          const action = sourceByKey(body.actions as JsonObject[], String(target.action));
-          if (action === undefined)
-            fail("vortex.definition.missing_identity", "unresolved_reference");
-          const actionId = resolution.id(definitionKey, "action", String(target.action), "content");
-          compiledTarget = {
-            kind: "application_action",
-            actionKey: target.action,
-            applicationRootId: appRoot.rootId,
-            actionId,
-            releaseVersion: appVersion,
-            contentFingerprint: targetContentFingerprint("application_action", action),
-            resolutionFingerprint,
-          };
-        }
-        return {
-          ...base,
-          target: compiledTarget,
-          runAs: { kind: "current_user" },
-          inputs: objectFromUniqueEntries(
-            Object.entries(asObject(node.inputs ?? {})).map(([k, v]) => [
-              k,
-              compileNodeInputBinding(asObject(v)),
-            ]),
-          ),
-          outputs: objectFromUniqueEntries(
-            Object.entries(asObject(node.outputs ?? {})).map(([k, v]) => [
-              k,
-              compileFlowValueDeclaration(asObject(v)),
-            ]),
-          ),
-          results: node.results ?? {},
-        };
-      }
-
-      if (node.kind === "transform") {
-        return {
-          ...base,
-          inputs: objectFromUniqueEntries(
-            Object.entries(asObject(node.inputs ?? {})).map(([k, v]) => [
-              k,
-              compileNodeInputBinding(asObject(v)),
-            ]),
-          ),
-          outputs: objectFromUniqueEntries(
-            Object.entries(asObject(node.outputs ?? {})).map(([k, v]) => [
-              k,
-              compileFlowValueDeclaration(asObject(v)),
-            ]),
-          ),
-          results: node.results ?? {},
-        };
-      }
-
-      return {
-        ...base,
-        results: objectFromUniqueEntries(
-          Object.entries(asObject(node.results ?? {})).map(([k, v]) => [
-            k,
-            compileNodeInputValue(asObject(v)),
-          ]),
-        ),
-        outcome: node.outcome ?? "completed",
-      };
-    };
-
-    const nodes = (flow.nodes as JsonObject[]).map(compileNode);
-    const nodeByAlias = new Map(
-      (flow.nodes as JsonObject[]).map((n, idx) => [
-        String(n.id),
-        String(nodes[idx].nodeId),
-      ]),
-    );
-
-    const edges = (flow.edges as JsonObject[]).map((edge) => {
-      const edgeId = resolution.id(definitionKey, "flow_edge", String(edge.id), flowScope);
-      const fromNodeId = nodeByAlias.get(String(edge.from_node));
-      const toNodeId = nodeByAlias.get(String(edge.to_node));
-      if (fromNodeId === undefined || toNodeId === undefined)
-        fail("vortex.definition.missing_identity", "unresolved_reference");
-      return {
-        edgeId,
-        fromNodeId,
-        toNodeId,
-        ...(edge.outcome ? { outcome: edge.outcome } : {}),
-      };
-    });
-
-    const inputs = objectFromUniqueEntries(
-      Object.entries(asObject(flow.inputs ?? {})).map(([k, v]) => [
-        k,
-        compileFlowValueDeclaration(asObject(v)),
-      ]),
-    );
-    const outputs = objectFromUniqueEntries(
-      Object.entries(asObject(flow.outputs ?? {})).map(([k, v]) => [
-        k,
-        compileFlowValueDeclaration(asObject(v)),
-      ]),
-    );
-    const variables = objectFromUniqueEntries(
-      Object.entries(asObject(flow.variables ?? {})).map(([k, v]) => [
-        k,
-        compileFlowVariableDeclaration(asObject(v)),
-      ]),
-    );
-
-    return {
-      flowId,
-      key: flow.key,
-      name: flow.name,
-      releaseVersion: appVersion,
-      contentFingerprint: targetContentFingerprint("application_flow", flow),
-      resolutionFingerprint,
-      ...(flow.description ? { description: flow.description } : {}),
-      runAs: "current_user",
-      inputs,
-      outputs,
-      variables,
-      nodes,
-      edges,
-    };
-  });
-}
-
+/**
+ * The Application's bindings of component events to flows: the flow's permanent identity and its
+ * typed input map. A binding starts an interactive flow, names only inputs the flow declares, and
+ * supplies every input the flow requires, so a mismatch is refused here instead of when the
+ * control is used. Values the invoking surface supplies are `caller` inputs the surface fills by
+ * the same name.
+ */
 function compileApplicationFlowBindings(
   source: JsonObject,
   resolution: Resolution,
-  catalogueEvidence: Readonly<{
-    managedFlows: readonly JsonObject[];
-    platformOperations: readonly JsonObject[];
-  }>,
+  flows: readonly FlowDefinition[],
 ): JsonObject[] {
   const body = asObject(source.body);
   const definitionKey = String(source.key);
-  const root = resolution.definition(definitionKey, "application");
-  const rawBindings = body.flow_bindings as JsonObject[];
-  const appVersion = root.exactVersion;
-  const resolutionFingerprint = resolution.snapshot.fingerprint;
-  const managedFlow = (flowId: string, releaseVersion: string): JsonObject => {
-    const matches = catalogueEvidence.managedFlows.filter(
-      (candidate) =>
-        String(candidate.flowId) === flowId && String(candidate.releaseVersion) === releaseVersion,
-    );
-    if (matches.length !== 1)
-      fail("vortex.definition.missing_identity", "unresolved_reference");
-    return matches[0]!;
-  };
-  const sourceFlow = (alias: string): JsonObject | undefined =>
-    (body.flows as JsonObject[]).find(
-      (flow) => String(flow.id) === alias || String(flow.key) === alias,
-    );
-
-  return rawBindings.map((binding) => {
-    const bindingId = resolution.id(
-      definitionKey,
-      "flow_binding",
-      String(binding.id),
-      "content",
-    );
-    const controlId = resolution.id(
-      definitionKey,
-      "block_placement",
-      String(binding.control),
-    );
-    const eventId = resolution.id(
-      definitionKey,
-      "event",
-      String(binding.event_id),
-      "content",
-    );
-
-    const flowRef = asObject(binding.flow);
-    let compiledFlowRef: JsonObject;
-    if (flowRef.kind === "platform_managed") {
-      const evidence = managedFlow(String(flowRef.flow_id), String(flowRef.release_version));
-      compiledFlowRef = {
-        kind: "platform_managed",
-        flowId: flowRef.flow_id,
-        releaseVersion: flowRef.release_version,
-        contentFingerprint: evidence.contentFingerprint,
-        catalogueFingerprint: evidence.catalogueFingerprint,
-      };
-    } else {
-      const authoredFlow = sourceFlow(String(flowRef.flow));
-      if (authoredFlow === undefined)
-        fail("vortex.definition.missing_identity", "unresolved_reference");
-      compiledFlowRef = {
-        kind: "application_owned",
-        applicationRootId: root.rootId,
-        flowId: resolution.id(definitionKey, "flow", String(flowRef.flow), "content"),
-        releaseVersion: appVersion,
-        contentFingerprint: fingerprintCanonicalValue({
-          kind: "application_flow",
-          value: authoredFlow,
-        }),
-        resolutionFingerprint,
-      };
-    }
-
-    const compileBindingContext = (ctx: JsonObject): JsonObject => {
-      const kind = ctx.kind;
-      if (kind === "page_subject") {
-        return {
-          kind: "page_subject",
-          recordTypeId: resolution.recordType(String(ctx.record_type)).recordTypeId,
-        };
-      }
-      if (kind === "related_record") {
-        const recordType = resolution.recordType(String(ctx.record_type)).recordTypeId;
-        const [relationshipRecord, relationshipAlias] = splitMember(
-          String(ctx.relationship),
-          "vortex.definition.qualified_field_required",
-        );
-        const relId = resolution.relationship(relationshipRecord, relationshipAlias);
-        return {
-          kind: "related_record",
-          relationshipId: relId,
-          recordTypeId: recordType,
-        };
-      }
-      if (kind === "row") {
-        const cId = resolution.id(definitionKey, "block_placement", String(ctx.control));
-        return {
-          kind: "row",
-          controlId: cId,
-          recordTypeId: resolution.recordType(String(ctx.record_type)).recordTypeId,
-        };
-      }
-      if (kind === "selection") {
-        const cId = resolution.id(definitionKey, "block_placement", String(ctx.control));
-        return {
-          kind: "selection",
-          controlId: cId,
-          recordTypeId: resolution.recordType(String(ctx.record_type)).recordTypeId,
-          cardinality: ctx.cardinality,
-        };
-      }
-      if (kind === "form") {
-        const fId = resolution.id(definitionKey, "block_placement", String(ctx.form));
-        return {
-          kind: "form",
-          formId: fId,
-          recordTypeId: resolution.recordType(String(ctx.record_type)).recordTypeId,
-        };
-      }
-      const fId = resolution.id(definitionKey, "block_placement", String(ctx.form));
-      return {
-        kind: "response",
-        formId: fId,
-        ...(ctx.record_type || ctx.recordTypeId
-          ? {
-              recordTypeId: resolution.recordType(String(ctx.record_type)).recordTypeId,
-            }
-          : {}),
-      };
-    };
-
-    const compileBindingInputValue = (value: JsonObject): JsonObject => {
-      if (value.source === "literal") return { source: "literal", value: value.value };
-      if (value.source === "context_record") {
-        return {
-          source: "context_record",
-          context: compileBindingContext(asObject(value.context)),
-        };
-      }
-      if (value.source === "context_field") {
-        const ctx = asObject(value.context);
-        const compiledCtx = compileBindingContext(ctx);
-        const fieldId = resolution.field(String(ctx.record_type), String(value.field));
-        return {
-          source: "context_field",
-          context: compiledCtx,
-          fieldId,
-        };
-      }
-      if (value.source === "form_input") {
-        const formId = resolution.id(definitionKey, "block_placement", String(value.form));
-        return {
-          source: "form_input",
-          formId,
-          input: value.input,
-        };
-      }
-      if (value.source === "event_input") return { source: "event_input", input: value.input };
-      return { source: "current_organization_account_id" };
-    };
-
-    const inputs = objectFromUniqueEntries(
-      Object.entries(asObject(binding.inputs ?? {})).map(([k, v]) => {
-        const inp = asObject(v);
-        return [
-          k,
-          {
-            type: inp.type,
-            value: compileBindingInputValue(asObject(inp.value)),
-          },
-        ];
-      }),
-    );
-
+  const flowsById = new Map(flows.map((flow) => [String(flow.id), flow]));
+  return (body.flow_bindings as JsonObject[]).map((binding) => {
+    const flowId = resolution.id(definitionKey, "flow", String(binding.flow), "content");
+    const flow = flowsById.get(flowId);
+    const location = resolution.location("flow_binding", String(binding.id));
+    if (flow === undefined)
+      fail("vortex.definition.application_flow_binding_target", "broken_reference", location);
+    if (flow.execution !== "interactive")
+      fail("vortex.definition.application_flow_binding_target", "invalid_value", location);
+    const inputs = asObject(binding.inputs ?? {});
+    for (const name of Object.keys(inputs))
+      if (!Object.hasOwn(flow.inputs, name))
+        fail("vortex.definition.application_flow_binding_inputs", "unknown_property", location);
+    for (const [name, declared] of Object.entries(flow.inputs))
+      if (declared.required && !Object.hasOwn(inputs, name))
+        fail("vortex.definition.application_flow_binding_inputs", "required_value", location);
     return {
-      contractVersion: "1.0.0",
-      bindingId,
-      controlId,
-      eventId,
+      bindingId: resolution.id(definitionKey, "flow_binding", String(binding.id), "content"),
+      controlId: resolution.id(definitionKey, "block_placement", String(binding.control)),
+      eventId: resolution.id(definitionKey, "event", String(binding.event_id), "content"),
       event: binding.event,
-      flow: compiledFlowRef,
-      inputs,
-      results: binding.results ?? {},
-      declaredEffects: binding.declaredEffects ?? binding.declared_effects,
+      flow: { flowId, inputs },
     };
   });
 }
@@ -5912,11 +5387,72 @@ function v2SpecialSourceTargets(
   return undefined;
 }
 
-function applicationProvenanceV2(
+/**
+ * The provenance of an Application's flows and flow bindings. The generic pass owns the rest of
+ * the content; the flow compiler supplies each flow's exact paths, and a binding's identities
+ * are resolved from its aliases while its typed input map is the same value in source and output.
+ */
+function applicationFlowProvenance(
   source: ApplicationSourceDocumentV2,
-  canonical: unknown,
-  resolution: Resolution,
+  canonical: ApplicationDraftV2,
+  flowSet: CompiledFlowSet,
 ): DefinitionProvenanceEntry[] {
+  const entries: DefinitionProvenanceEntry[] = flowSet.provenance.map((entry) => ({
+    ...entry,
+    canonicalPath: ["content", "flows", ...entry.canonicalPath],
+    ...(entry.sourcePath ? { sourcePath: ["body", "flows", ...entry.sourcePath] } : {}),
+  }));
+  canonical.content.flowBindings.forEach((binding, index) => {
+    const authored = source.body.flow_bindings[index]!;
+    const canonicalBase: Path = ["content", "flowBindings", index];
+    const sourceBase: Path = ["body", "flow_bindings", index];
+    const resolved = (canonicalPath: Path, sourcePath: Path) =>
+      entries.push({
+        canonicalPath: [...canonicalBase, ...canonicalPath],
+        origin: "resolved",
+        sourcePath: [...sourceBase, ...sourcePath],
+        ruleCode: RESOLUTION_RULE,
+      });
+    resolved(["bindingId"], ["id"]);
+    resolved(["controlId"], ["control"]);
+    resolved(["eventId"], ["event_id"]);
+    resolved(["flow", "flowId"], ["flow"]);
+    entries.push({
+      canonicalPath: [...canonicalBase, "event"],
+      origin: "source",
+      sourcePath: [...sourceBase, "event"],
+    });
+    for (const leaf of leafPaths(binding.flow.inputs)) {
+      const sourceValue = valueAtPath(authored.inputs, leaf);
+      const canonicalValue = valueAtPath(binding.flow.inputs, leaf);
+      entries.push({
+        canonicalPath: [...canonicalBase, "flow", "inputs", ...leaf],
+        origin: "source",
+        sourcePath: [...sourceBase, "inputs", ...leaf],
+        ...(canonicalJson(sourceValue) === canonicalJson(canonicalValue)
+          ? {}
+          : { ruleCode: TRANSFORM_RULE }),
+      });
+    }
+  });
+  return entries;
+}
+
+function applicationProvenanceV2(
+  fullSource: ApplicationSourceDocumentV2,
+  fullCanonical: ApplicationDraftV2,
+  resolution: Resolution,
+  flowSet: CompiledFlowSet,
+): DefinitionProvenanceEntry[] {
+  // The generic pass below sees the content without its flows and bindings, which are traced above.
+  const source: ApplicationSourceDocumentV2 = {
+    ...fullSource,
+    body: { ...fullSource.body, flows: [], flow_bindings: [] },
+  };
+  const canonical = {
+    ...fullCanonical,
+    content: { ...fullCanonical.content, flows: [], flowBindings: [] },
+  };
   const sourceObject = source as unknown as JsonObject;
   const positions = sourceContractPositions(sourceObject);
   const sourceLeaves = leafPaths(source).filter(
@@ -6020,52 +5556,6 @@ function applicationProvenanceV2(
       });
       continue;
     }
-    if (
-      canonicalPath[0] === "content" &&
-      canonicalPath[1] === "flows" &&
-      typeof canonicalPath[2] === "number" &&
-      ["releaseVersion", "contentFingerprint", "resolutionFingerprint"].includes(
-        String(canonicalPath.at(-1)),
-      )
-    ) {
-      entries.push({
-        canonicalPath,
-        origin: "resolved",
-        sourcePath: ["body", "flows", canonicalPath[2], "id"],
-        ruleCode: RESOLUTION_RULE,
-      });
-      continue;
-    }
-    if (
-      canonicalPath[0] === "content" &&
-      canonicalPath[1] === "flows" &&
-      typeof canonicalPath[2] === "number" &&
-      canonicalPath[3] === "nodes" &&
-      typeof canonicalPath[4] === "number" &&
-      canonicalPath.includes("target")
-    ) {
-      entries.push({
-        canonicalPath,
-        origin: "resolved",
-        sourcePath: ["body", "flows", canonicalPath[2], "nodes", canonicalPath[4], "id"],
-        ruleCode: RESOLUTION_RULE,
-      });
-      continue;
-    }
-    if (
-      canonicalPath[0] === "content" &&
-      canonicalPath[1] === "flowBindings" &&
-      typeof canonicalPath[2] === "number" &&
-      canonicalPath.includes("flow")
-    ) {
-      entries.push({
-        canonicalPath,
-        origin: "resolved",
-        sourcePath: ["body", "flow_bindings", canonicalPath[2], "id"],
-        ruleCode: RESOLUTION_RULE,
-      });
-      continue;
-    }
     const placementsIndex = canonicalPath.lastIndexOf("placements");
     if (placementsIndex >= 0 && canonicalPath.includes("settings")) {
       const placement = asObject(
@@ -6087,7 +5577,7 @@ function applicationProvenanceV2(
     }
     fail("vortex.definition.invalid_compilation_output", "invalid_value");
   }
-  return entries;
+  return [...entries, ...applicationFlowProvenance(fullSource, fullCanonical, flowSet)];
 }
 
 type ApplicationToolDraft = ApplicationToolBundleInput["tools"][number];
@@ -6152,21 +5642,6 @@ function compileApplicationToolBundle(
       output.canonical.content.actions.map(
         (action) =>
           [String(action.key), { moduleRootId: String(output.artifact.rootId), action }] as const,
-      ),
-    ),
-  );
-  const moduleQueriesById = new Map(
-    boundModuleOutputs.flatMap((output) =>
-      output.canonical.content.queries.map(
-        (query) =>
-          [
-            `${String(output.artifact.rootId)}:${String(query.queryId)}`,
-            {
-              moduleRootId: String(output.artifact.rootId),
-              moduleKey: String(output.artifact.definitionKey),
-              query,
-            },
-          ] as const,
       ),
     ),
   );
@@ -6253,38 +5728,30 @@ function compileApplicationToolBundle(
       addCommittedAction(page.name, String(page.publicActionKey), false);
   }
 
-  for (const flow of content.flows) {
+  // A flow's record reads name only this Application's own queries, which have their own tools
+  // below, so a flow contributes exactly its own entry point.
+  for (const flow of content.flows)
     add({
       name: applicationToolName(applicationKey, "flow", String(flow.key)),
-      ...applicationToolDescription(flow.description, flow.name),
-      inputSchema: { kind: "flow_inputs", inputs: flow.inputs },
-      operation: { kind: "flow", key: flow.key, flowId: flow.flowId },
+      ...applicationToolDescription(flow.description, flow.labels.name),
+      inputSchema: {
+        kind: "flow_inputs",
+        inputs: Object.fromEntries(
+          Object.entries(flow.inputs).map(([name, declaration]) => [
+            name,
+            {
+              type: declaration.type,
+              required: declaration.required,
+              ...(declaration.recordTypeIds === undefined
+                ? {}
+                : { recordTypeIds: declaration.recordTypeIds }),
+            },
+          ]),
+        ),
+      },
+      operation: { kind: "flow", key: flow.key, flowId: ruleIdSchema.parse(String(flow.id)) },
       permission: { discover: "page_access", use: "delegated_operations" },
     });
-    for (const node of flow.nodes) {
-      if (node.kind !== "query" || node.target.kind !== "query") continue;
-      const moduleQuery = moduleQueriesById.get(
-        `${String(node.target.moduleRootId)}:${String(node.target.queryId)}`,
-      );
-      if (moduleQuery === undefined) continue;
-      add({
-        name: applicationToolName(
-          applicationKey,
-          "query",
-          `${moduleQuery.moduleKey}.${String(moduleQuery.query.key)}`,
-        ),
-        ...applicationToolDescription(moduleQuery.query.description, moduleQuery.query.label),
-        inputSchema: { kind: "module_inputs", inputs: moduleQuery.query.inputs },
-        operation: {
-          kind: "query",
-          owner: { kind: "module", moduleRootId: moduleQuery.moduleRootId },
-          key: moduleQuery.query.key,
-          queryId: moduleQuery.query.queryId,
-        },
-        permission: { discover: "page_access", use: "none" },
-      });
-    }
-  }
 
   for (const query of content.queries)
     add({
@@ -6332,13 +5799,106 @@ function compileApplicationV2Internal(
   return compileParsedApplicationV2Request(parsed.data, parseDefinitionCompilationContext(context));
 }
 
+/**
+ * Compiles the flows a module or application owns to permanent identities (#984), refusing an
+ * unresolved alias, an unregistered task or a reference outside the declared dependencies. The
+ * canonical flows go into the definition's content and their provenance into its provenance; the
+ * dependency manifest contribution only ever names definitions the source already declares, so
+ * the definition's own resolved dependencies stay the one record of exact releases.
+ */
+function compileOwnedFlowSources(source: JsonObject, resolution: Resolution) {
+  const parsed = sourceFlowCollectionSchema.safeParse(asObject(source.body).flows);
+  if (!parsed.success) fail("vortex.definition.source_shape", "invalid_value");
+  const ownKey = String(source.key);
+  const owned = (kind: string, alias: string): ResolvedFlowIdentity => {
+    const split = alias.indexOf(":");
+    const definitionKey = split < 1 ? ownKey : alias.slice(0, split);
+    return {
+      identifier: resolution.id(definitionKey, kind, alias.slice(split + 1), "content"),
+      definitionKey,
+    };
+  };
+  const qualifiedRecord = (reference: string) =>
+    reference.includes(":") ? reference : `${ownKey}:${reference}`;
+  const recordOwner = (reference: string) => qualifiedRecord(reference).split(":")[0]!;
+  return compileFlowSources({
+    flows: parsed.data,
+    declaredDefinitionKeys: dependencyOrder(source).filter((key) => key !== ownKey),
+    resolver: {
+      definitionKey: ownKey,
+      flow: (alias) => owned("flow", alias),
+      recordType: (reference) => ({
+        identifier: resolution.recordType(qualifiedRecord(reference)).recordTypeId,
+        definitionKey: recordOwner(reference),
+      }),
+      field: (record, alias) => ({
+        identifier: resolution.field(qualifiedRecord(record), alias),
+        definitionKey: recordOwner(record),
+      }),
+      relationship: (record, alias) => ({
+        identifier: resolution.relationship(qualifiedRecord(record), alias),
+        definitionKey: recordOwner(record),
+      }),
+      action: (alias) => owned("action", alias),
+      permission: (alias) => owned("permission", alias),
+      query: (alias) => owned("query", alias),
+      page: (alias) => owned("page", alias),
+      // A form is the page placement that holds it.
+      form: (alias) => owned("block_placement", alias),
+      connectionBinding: (alias) => owned("connection_binding", alias),
+      executionBinding: (alias) => owned("execution_binding", alias),
+      locate: (flowKey) => resolution.location("flow", flowKey),
+    },
+  });
+}
+
+/**
+ * Compiles the flows a definition owns and proves that every operation they call exists: a
+ * registered platform-service operation, or a named action of this definition or of a Module it
+ * declares as a dependency. A flow that calls anything else is refused here, on the task.
+ */
+function compileCheckedFlowSources(
+  source: JsonObject,
+  resolution: Resolution,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+) {
+  const flowSet = compileOwnedFlowSources(source, resolution);
+  const actions = new Map<string, ReturnType<typeof namedActionInputs>>();
+  const remember = (candidates: unknown) => {
+    for (const action of (Array.isArray(candidates) ? candidates : []) as JsonObject[])
+      actions.set(
+        String(action.key),
+        namedActionInputs(
+          (Array.isArray(action.inputs) ? (action.inputs as JsonObject[]) : []).map((input) => ({
+            key: String(input.key),
+            required: input.required === true,
+          })),
+        ),
+      );
+  };
+  remember(asObject(source.body).actions);
+  for (const output of dependencyOutputs)
+    if (output.kind === "module") remember(output.canonical.content.actions);
+  const issue = findOperationCallIssue(
+    flowSet.flows,
+    // Only an Application pins a platform operation's release in its manifest, so only an
+    // Application may call one.
+    (key) =>
+      (source.kind === "application" ? platformOperationLookup(key) : undefined) ??
+      actions.get(key),
+  );
+  if (issue !== undefined)
+    throw new DefinitionCompilationError(
+      issue.ruleCode,
+      issue.family,
+      flowIssueLocation(resolution.location("flow", issue.flowKey), { taskId: issue.taskId }),
+    );
+  return flowSet;
+}
+
 function compileParsedApplicationV2Request(
   request: ParsedApplicationV2Request,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
-  catalogueEvidence: Readonly<{
-    managedFlows: readonly JsonObject[];
-    platformOperations: readonly JsonObject[];
-  }> = { managedFlows: [], platformOperations: [] },
 ): ApplicationCompilationOutputV2 {
   const source = request.source;
   const sourceObject = source as unknown as JsonObject;
@@ -6355,6 +5915,7 @@ function compileParsedApplicationV2Request(
         catalogueFailure.location,
       );
     const resolution = new Resolution(request.resolution, sourceObject);
+    const flowSet = compileCheckedFlowSources(sourceObject, resolution, dependencyOutputs);
     const valueIndex = applicationModuleValueIndex(sourceObject, resolution, dependencyOutputs);
     const composition = materialiseApplicationCompositionV2(
       source,
@@ -6369,7 +5930,7 @@ function compileParsedApplicationV2Request(
         dependencyOutputs,
         composition,
         valueIndex,
-        catalogueEvidence,
+        flowSet.flows,
       ),
     );
     const ownDefinition = resolution.definition(source.key, "application");
@@ -6386,7 +5947,7 @@ function compileParsedApplicationV2Request(
       validationContractVersion: "2.0.0",
       canonical,
       artifact,
-      provenance: applicationProvenanceV2(source, canonical, resolution),
+      provenance: applicationProvenanceV2(source, canonical, resolution, flowSet),
       dependencyOrder: dependencyOrder(sourceObject),
       resolvedDependencies: resolvedDependencies(sourceObject, resolution),
       resolutionFingerprint: request.resolution.fingerprint,
@@ -6428,8 +5989,14 @@ function compileParsedModuleV3Request(
   const source = request.source as unknown as JsonObject;
   try {
     const resolution = new Resolution(request.resolution, source);
+    const flowSet = compileCheckedFlowSources(source, resolution, dependencyOutputs);
     const definitionKey = request.source.key;
-    const ruleKeys = new Map(request.source.body.rules.map((rule) => [rule.id, rule.key]));
+    // Every BeforeSave flow is lowered to the executable rule the save transaction reads until
+    // the flow interpreter replaces it. A flow that cannot be lowered refuses here, located on it.
+    const ruleSources = request.source.body.flows.flatMap((flow, sourceIndex) =>
+      isBeforeSaveFlow(flow) ? [{ flow, sourceIndex }] : [],
+    );
+    const ruleKeys = new Map(ruleSources.map(({ flow }) => [flow.id, flow.key]));
     const localRecordKey = (alias: string): string => {
       const record = request.source.body.record_types.find(
         (record) => record.id === alias || record.key === alias,
@@ -6442,30 +6009,40 @@ function compileParsedModuleV3Request(
       if (key === undefined) fail("vortex.definition.missing_identity", "unresolved_reference");
       return resolution.id(definitionKey, kind, alias, `rule:${key}`);
     };
-    const rules = request.source.body.rules
-      .map((rule, sourceIndex) => ({
-        sourceIndex,
-        ...compileRuleGraph(rule, {
-          ruleId: (alias) =>
-            ruleIdSchema.parse(resolution.id(definitionKey, "rule", alias, "content")),
-          nodeId: (ruleAlias, alias) =>
-            containedComponentIdSchema.parse(nestedId("rule_node", ruleAlias, alias)),
-          inputId: (ruleAlias, alias) =>
-            containedComponentIdSchema.parse(nestedId("rule_input", ruleAlias, alias)),
-          variableId: (ruleAlias, alias) =>
-            containedComponentIdSchema.parse(nestedId("rule_variable", ruleAlias, alias)),
-          localRecordTypeId: (alias) =>
-            recordTypeIdSchema.parse(
-              resolution.recordType(`${definitionKey}:${alias}`).recordTypeId,
-            ),
-          localFieldId: (record, field) =>
-            fieldIdSchema.parse(
-              resolution.field(`${definitionKey}:${localRecordKey(record)}`, field),
-            ),
-          qualifiedRecordTypeId: (reference) =>
-            recordTypeIdSchema.parse(resolution.recordType(reference).recordTypeId),
-        }),
-      }))
+    const rules = ruleSources
+      .map(({ flow, sourceIndex }) => {
+        const lowered = lowerBeforeSaveFlow(flow);
+        if (!lowered.ok)
+          throw new DefinitionCompilationError(
+            lowered.refusal.ruleCode,
+            lowered.refusal.family,
+            flowIssueLocation(resolution.location("flow", flow.key), lowered.refusal),
+          );
+        return {
+          sourceIndex,
+          ...compileRuleGraph(lowered.graph, {
+            // A rule is the executable form of its flow, so it keeps the flow's own identity.
+            ruleId: (alias) =>
+              ruleIdSchema.parse(resolution.id(definitionKey, "flow", alias, "content")),
+            nodeId: (ruleAlias, alias) =>
+              containedComponentIdSchema.parse(nestedId("rule_node", ruleAlias, alias)),
+            inputId: (ruleAlias, alias) =>
+              containedComponentIdSchema.parse(nestedId("rule_input", ruleAlias, alias)),
+            variableId: (ruleAlias, alias) =>
+              containedComponentIdSchema.parse(nestedId("rule_variable", ruleAlias, alias)),
+            localRecordTypeId: (alias) =>
+              recordTypeIdSchema.parse(
+                resolution.recordType(`${definitionKey}:${alias}`).recordTypeId,
+              ),
+            localFieldId: (record, field) =>
+              fieldIdSchema.parse(
+                resolution.field(`${definitionKey}:${localRecordKey(record)}`, field),
+              ),
+            qualifiedRecordTypeId: (reference) =>
+              recordTypeIdSchema.parse(resolution.recordType(reference).recordTypeId),
+          }),
+        };
+      })
       .sort(
         (a, b) =>
           a.graph.priority - b.graph.priority ||
@@ -6479,23 +6056,49 @@ function compileParsedModuleV3Request(
         (request.savedConditionRevisions ?? []) as unknown as JsonObject[],
         dependencyOutputs,
         rules.map(({ graph }) => graph),
+        flowSet.flows,
       ),
     );
-    // Existing provenance owns the unchanged Module field model. Graph translation
-    // supplies its exact paths, including reordered nodes and permanent references.
+    // Existing provenance owns the unchanged Module field model. The flow compiler supplies the
+    // exact paths of the flows, and each derived rule traces to the flow it is the executable
+    // form of, so neither is described twice.
     const provenance = provenanceFor(
-      { ...source, body: { ...request.source.body, rules: [] } },
-      { ...canonical, content: { ...canonical.content, rules: [] } },
+      { ...source, body: { ...request.source.body, flows: [] } },
+      { ...canonical, content: { ...canonical.content, flows: [], rules: [] } },
       resolution,
     );
-    rules.forEach((rule, canonicalIndex) => {
-      for (const entry of rule.provenance)
+    for (const entry of flowSet.provenance)
+      provenance.push({
+        ...entry,
+        canonicalPath: ["content", "flows", ...entry.canonicalPath],
+        ...(entry.sourcePath ? { sourcePath: ["body", "flows", ...entry.sourcePath] } : {}),
+      });
+    // A compiled named action's flow shares the action's permanent identity, so every canonical
+    // leaf of it traces to the action declaration that produced it.
+    const actionIndexById = new Map(
+      (canonical.content.actions as unknown as JsonObject[]).map((action, index) => [
+        String(action.actionId),
+        index,
+      ]),
+    );
+    (canonical.content.flows as unknown as JsonObject[]).forEach((flow, canonicalIndex) => {
+      const actionIndex = actionIndexById.get(String(flow.id));
+      if (actionIndex === undefined) return;
+      for (const leaf of leafPaths(flow))
         provenance.push({
-          ...entry,
-          canonicalPath: ["content", "rules", canonicalIndex, ...entry.canonicalPath],
-          ...(entry.sourcePath
-            ? { sourcePath: ["body", "rules", rule.sourceIndex, ...entry.sourcePath] }
-            : {}),
+          canonicalPath: ["content", "flows", canonicalIndex, ...leaf],
+          origin: "source",
+          sourcePath: ["body", "actions", actionIndex, "id"],
+          ruleCode: TRANSFORM_RULE,
+        });
+    });
+    rules.forEach((rule, canonicalIndex) => {
+      for (const leaf of leafPaths(canonical.content.rules[canonicalIndex]))
+        provenance.push({
+          canonicalPath: ["content", "rules", canonicalIndex, ...leaf],
+          origin: "source",
+          sourcePath: ["body", "flows", rule.sourceIndex, "key"],
+          ruleCode: TRANSFORM_RULE,
         });
     });
     const ownDefinition = resolution.definition(definitionKey, "module");
@@ -6566,10 +6169,6 @@ type DispatchableCompilationRequest =
 export function compileParsedDefinition(
   request: ApplicationCompilationRequestV2,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
-  catalogueEvidence?: Readonly<{
-    managedFlows: readonly JsonObject[];
-    platformOperations: readonly JsonObject[];
-  }>,
 ): ApplicationCompilationOutputV2;
 export function compileParsedDefinition(
   request: ModuleCompilationRequestV3,
@@ -6582,10 +6181,6 @@ export function compileParsedDefinition(
 export function compileParsedDefinition(
   request: DispatchableCompilationRequest,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
-  catalogueEvidence?: Readonly<{
-    managedFlows: readonly JsonObject[];
-    platformOperations: readonly JsonObject[];
-  }>,
 ): DefinitionCompilationOutput {
   assertDependencyOutputLimits(dependencyOutputs);
   const explicitKind = explicitCompilationKind(request);
@@ -6595,7 +6190,6 @@ export function compileParsedDefinition(
     return compileParsedApplicationV2Request(
       request as ParsedApplicationV2Request,
       dependencyOutputs,
-      catalogueEvidence,
     );
   return compileParsedConnectionRequest(request as ParsedConnectionRequest);
 }

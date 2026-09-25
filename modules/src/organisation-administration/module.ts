@@ -550,7 +550,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
         },
       ],
       events: [],
-      rules: [],
+      flows: [],
       extension_points: [],
       sharing_conditions: [],
       queries: [],

@@ -6,16 +6,20 @@ import {
 import { DISPLAY_COMPONENT_REGISTRATIONS } from "./display/registrations";
 import { CONTROL_COMPONENT_REGISTRATIONS } from "./controls/registrations";
 import { LAUNCHER_COMPONENT_REGISTRATIONS } from "./launcher/registrations";
+import { LAYOUT_COMPONENT_REGISTRATIONS } from "./layout/registrations";
+import { NAVIGATION_COMPONENT_REGISTRATIONS } from "./navigation/registrations";
 
-/** All twenty-three platform component registrations combining display, control and launcher families. */
+/** Every platform component registration, combining the display, control, launcher, layout and navigation families. */
 export const ALL_PLATFORM_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistration[] =
   Object.freeze([
     ...DISPLAY_COMPONENT_REGISTRATIONS,
     ...CONTROL_COMPONENT_REGISTRATIONS,
     ...LAUNCHER_COMPONENT_REGISTRATIONS,
+    ...LAYOUT_COMPONENT_REGISTRATIONS,
+    ...NAVIGATION_COMPONENT_REGISTRATIONS,
   ]);
 
-/** Creates an immutable PlatformComponentRegistry populated with all 23 display, control and launcher components. */
+/** Creates an immutable PlatformComponentRegistry populated with every display, control, launcher, layout and navigation release. */
 export function createFullPlatformComponentRegistry(): PlatformComponentRegistry {
   return createPlatformComponentRegistry(ALL_PLATFORM_COMPONENT_REGISTRATIONS);
 }

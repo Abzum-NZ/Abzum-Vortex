@@ -17,10 +17,11 @@ import { DisplayStateContainer } from "./display-state-container";
  */
 export function GroupedDataDisplay(props: PlatformBlockRenderProps): ReactElement {
   const { placementId, availability } = props;
-  const { title, accessibleName, values, state, events } = resolveDisplayContext(
+  const { title, accessibleName, values, state, emptyMessage, events } = resolveDisplayContext(
     props,
     "grouped_data",
     (grouped) => grouped.groups.length === 0,
+    "No groups to show",
   );
 
   return (
@@ -28,7 +29,7 @@ export function GroupedDataDisplay(props: PlatformBlockRenderProps): ReactElemen
       accessibleName={accessibleName}
       availability={availability}
       projectedData={state}
-      emptyMessage="No groups to show"
+      emptyMessage={emptyMessage}
     >
       {values === undefined ? null : (
         <section

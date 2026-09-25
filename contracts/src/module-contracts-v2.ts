@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { personalDataClassSchema, publicDisplaySchema, searchPrioritySchema } from "./catalogues";
+import {
+  actionInputValueTypes,
+  personalDataClassSchema,
+  publicDisplaySchema,
+  searchPrioritySchema,
+  sharingParameterValueTypeV2Schema,
+} from "./catalogues";
 import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "./common";
 import { recordTypeReferenceSchema } from "./definitions";
 import { parseExactDecimal } from "./exact-decimal";
@@ -302,6 +308,14 @@ const calculationExpressionV2Schema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
+/**
+ * Whether a calculated field is worked out when the record is read (`read_time`) or stored and
+ * refreshed by the owning save (`stored`). The deadline-passed form uses the current time and is
+ * therefore always read-time; a stored field may never use the current time. A calculation that
+ * uses a read-time calculation is itself read-time, and publication refuses one declared `stored`.
+ */
+export const moduleCalculationEvaluationV2Schema = z.enum(["read_time", "stored"]);
+
 const calculationSettingsV2Schema = z
   .object({
     resultType: z.enum([
@@ -313,12 +327,19 @@ const calculationSettingsV2Schema = z
       "date",
       "date_time",
     ]),
+    evaluation: moduleCalculationEvaluationV2Schema.optional(),
     decimalPlaces: z.number().int().min(0).max(12).optional(),
     expression: calculationExpressionV2Schema,
     dependencyFieldIds: z.array(fieldIdSchema).min(1),
   })
   .strict()
   .superRefine((value, context) => {
+    if (value.evaluation === "stored" && value.expression.kind === "deadline_passed")
+      context.addIssue({
+        code: "custom",
+        path: ["evaluation"],
+        message: "A deadline-passed calculation uses the current time and is read-time",
+      });
     const valid =
       (value.expression.kind === "join_text" && value.resultType === "text") ||
       (value.expression.kind === "condition" && value.resultType === "yes_no") ||
@@ -669,7 +690,7 @@ export const actionInputDefinitionV2Schema = z
     z
       .object({
         ...actionInputBaseV2,
-        type: z.literal("text"),
+        type: z.literal(actionInputValueTypes.text),
         validation: z
           .object({
             minimumLength: z.number().int().min(0).optional(),
@@ -683,7 +704,7 @@ export const actionInputDefinitionV2Schema = z
     z
       .object({
         ...actionInputBaseV2,
-        type: z.literal("formatted_text"),
+        type: z.literal(actionInputValueTypes.formatted_text),
         validation: z
           .object({
             allowedBlocks: z.array(formattedTextAllowedBlockV2Schema).min(1),
@@ -696,7 +717,7 @@ export const actionInputDefinitionV2Schema = z
     z
       .object({
         ...actionInputBaseV2,
-        type: z.literal("number"),
+        type: z.literal(actionInputValueTypes.number),
         validation: z
           .object({
             minimum: z.number().finite().optional(),
@@ -709,22 +730,22 @@ export const actionInputDefinitionV2Schema = z
     z
       .object({
         ...actionInputBaseV2,
-        type: z.literal("decimal_number"),
+        type: z.literal(actionInputValueTypes.decimal_number),
         validation: exactActionInputValidationV2Schema.optional(),
       })
       .strict(),
     z
       .object({
         ...actionInputBaseV2,
-        type: z.literal("money"),
+        type: z.literal(actionInputValueTypes.money),
         validation: exactActionInputValidationV2Schema.optional(),
       })
       .strict(),
-    z.object({ ...actionInputBaseV2, type: z.literal("boolean") }).strict(),
+    z.object({ ...actionInputBaseV2, type: z.literal(actionInputValueTypes.boolean) }).strict(),
     z
       .object({
         ...actionInputBaseV2,
-        type: z.literal("date"),
+        type: z.literal(actionInputValueTypes.date),
         validation: z
           .object({ earliest: z.iso.date().optional(), latest: z.iso.date().optional() })
           .strict()
@@ -734,7 +755,7 @@ export const actionInputDefinitionV2Schema = z
     z
       .object({
         ...actionInputBaseV2,
-        type: z.literal("date_time"),
+        type: z.literal(actionInputValueTypes.date_time),
         validation: z
           .object({
             earliest: z.iso.datetime({ offset: true }).optional(),
@@ -747,11 +768,16 @@ export const actionInputDefinitionV2Schema = z
     z
       .object({
         ...actionInputBaseV2,
-        type: z.literal("record_reference"),
+        type: z.literal(actionInputValueTypes.record_reference),
         recordTypes: z.array(recordTypeReferenceSchema).min(1).max(20),
       })
       .strict(),
-    z.object({ ...actionInputBaseV2, type: z.literal("organization_account_reference") }).strict(),
+    z
+      .object({
+        ...actionInputBaseV2,
+        type: z.literal(actionInputValueTypes.organization_account_reference),
+      })
+      .strict(),
   ])
   .superRefine((value, context) => {
     if (
@@ -875,16 +901,7 @@ const sharingConditionPublicationTestV1Schema =
 const sharingConditionParameterV2Schema = z
   .object({
     ...sharingConditionParameterV1Schema.shape,
-    type: z.enum([
-      "text",
-      "number",
-      "decimal_number",
-      "money",
-      "boolean",
-      "date",
-      "date_time",
-      "organization_account_reference",
-    ]),
+    type: sharingParameterValueTypeV2Schema,
   })
   .strict();
 const sharingConditionPublicationTestV2Schema = z

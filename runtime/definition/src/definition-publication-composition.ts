@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { BuilderAuthority } from "./builder-authority";
 import { createImmutableDefinitionPublicationCatalogue } from "./definition-publication-catalogue";
 import { createDatabaseDefinitionPublicationRepository } from "./definition-publication-repository";
 import { createDefinitionPublicationService } from "./definition-publication";
@@ -10,8 +11,10 @@ import type { RequestDatabaseTransaction } from "@vortex/db";
 export const createDatabaseDefinitionPublicationService = (
   catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
   transaction: RequestDatabaseTransaction,
+  authority: BuilderAuthority,
 ) =>
   createDefinitionPublicationService(
     createDatabaseDefinitionPublicationRepository(transaction),
     createImmutableDefinitionPublicationCatalogue(catalogueDefinition),
+    authority,
   );
