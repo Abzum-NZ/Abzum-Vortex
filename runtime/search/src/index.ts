@@ -26,6 +26,21 @@ export {
 } from "./document-store";
 
 export {
+  permittedSearchCandidates,
+  permittedSearchLimits,
+  permittedSearchRefusalReasonCodes,
+  type PermittedSearchAccessContext,
+  type PermittedSearchCandidate,
+  type PermittedSearchCurrentRead,
+  type PermittedSearchCurrentReadRequest,
+  type PermittedSearchDependencies,
+  type PermittedSearchInput,
+  type PermittedSearchRefusalReasonCode,
+  type PermittedSearchRequest,
+  type PermittedSearchResult,
+} from "./permitted-search";
+
+export {
   consumeSearchEvents,
   createSearchEventConsumer,
   planSearchRebuildPage,
