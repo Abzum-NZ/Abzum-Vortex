@@ -982,8 +982,8 @@ export const TABS_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "a3b7065b-47ef-4c92-93d1-59300f8b059c",
   key: "platform.layout.tabs",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:107bba6981db81be9585ed16c57d29d50d3bcef48810235eeba1d8df924d07a3",
-  catalogueFingerprint: "sha256:19edb22edb15c9ef54a8377f97b075b2c621d6a656fd0a016032ce5b8fb39770",
+  contentFingerprint: "sha256:3dd3e78d528ff6b8c5addf7e3974b36d44f48222c919a5fd6e5b0f3cfcf39a5d",
+  catalogueFingerprint: "sha256:f6392c7de7ede3c5ef39368b999c81fabcc1b26df1170a35dfbe894636f4d456",
   name: "Tabs",
   icon: "folder",
   paletteGroup: "layout",
@@ -1096,7 +1096,7 @@ export const TABS_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleNamePropertyPath: ["title"],
   },
   supportedEvents: ["tab_changed"],
-  supportedStateOperations: [],
+  supportedStateOperations: ["select_tab"],
 });
 
 /** Exact immutable metadata release for the dialog block. */
@@ -1104,8 +1104,8 @@ export const DIALOG_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "651460f1-5fce-4443-bc9d-4dd4b6ae8a8b",
   key: "platform.layout.dialog",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:9da43dc5edce454f5f6f0c2c1d9e100bdc252519191231c1e16a902b289cef92",
-  catalogueFingerprint: "sha256:1fc71ce1c40f2a8432259a2bcf4ad377f2d03e28c2cc1db8b9cdf0fabeeb54a4",
+  contentFingerprint: "sha256:28152388001af9ae4b3c413758dccb9130037c2351779fc74e86ebccb2b0abf6",
+  catalogueFingerprint: "sha256:c88813c84891dea27835598c2643be933498e43e4ca1c7636705707ffe8d7d73",
   name: "Dialog",
   icon: "message-square",
   paletteGroup: "layout",
@@ -1173,7 +1173,7 @@ export const DIALOG_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleNamePropertyPath: ["title"],
   },
   supportedEvents: ["action"],
-  supportedStateOperations: [],
+  supportedStateOperations: ["open", "close"],
 });
 
 /** Exact immutable metadata release for the drawer block. */
@@ -1181,8 +1181,8 @@ export const DRAWER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "a399ff74-5716-4411-bca8-c5ab87ec2e7d",
   key: "platform.layout.drawer",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:305e6b3de43c94e360a90fbc86e02938d60d53399f57b9c9a431fc98bba5c90d",
-  catalogueFingerprint: "sha256:83ef7426a8e7ee035acbca068db7eca1857be2234e257f5f437b348ea2b6b0df",
+  contentFingerprint: "sha256:a879ded51d1b1e46506b497c9b837166123ddfa2d3728830469c1ed1b216cf31",
+  catalogueFingerprint: "sha256:e0bf34948b8082fe307b3983bf0f4bb767f1c720bfe2fb9368df87044f12ae3a",
   name: "Drawer",
   icon: "sidebar",
   paletteGroup: "layout",
@@ -1275,7 +1275,7 @@ export const DRAWER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleNamePropertyPath: ["title"],
   },
   supportedEvents: ["action"],
-  supportedStateOperations: [],
+  supportedStateOperations: ["open", "close"],
 });
 
 /** Exact immutable metadata release for the general container block. */
@@ -1431,8 +1431,8 @@ export const FORM_CONTAINER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
   blockId: "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
   key: "platform.form.container",
   releaseVersion: "1.0.0",
-  contentFingerprint: "sha256:4b3a94e0581297a06a3b9f52a6a5b854c326d28f5c26138d493b27f0f4aca655",
-  catalogueFingerprint: "sha256:94122c2189ac6f000ea43594900920ddf081fee7eb1a29b0f74838492ff8907b",
+  contentFingerprint: "sha256:4b2132dcc09accfe645ce90eaf9dc992a63759fc56e488b643438b4b5ade0045",
+  catalogueFingerprint: "sha256:04a85b70a2d3348c97604d0f6dc3f6beec6857f1c203d1febaa5143ec03ba1f2",
   name: "Form container",
   icon: "edit-3",
   paletteGroup: "input",
@@ -1466,7 +1466,7 @@ export const FORM_CONTAINER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release({
     accessibleNamePropertyPath: ["title"],
   },
   supportedEvents: ["form_ready", "form_submit", "form_reset"],
-  supportedStateOperations: [],
+  supportedStateOperations: ["set_value", "reset"],
 });
 
 /** Exact immutable metadata release for the link input block. */
