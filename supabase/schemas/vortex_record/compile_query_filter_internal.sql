@@ -23,6 +23,7 @@ declare
   child_result jsonb;
   child_predicates text[] := array[]::text[];
   child_parameter_offset integer;
+  all_exact boolean := true;
   parameter_values jsonb := '[]'::jsonb;
   operand_entry jsonb;
   operand_source text;
@@ -91,6 +92,8 @@ begin
     for child_item in
       select item.value from pg_catalog.jsonb_array_elements(p_condition -> 'conditions') as item(value)
     loop
+      -- Each child numbers its own values from the next free position, and
+      -- every value it bound is kept so later positions stay aligned.
       child_parameter_offset := p_parameter_offset + pg_catalog.jsonb_array_length(parameter_values);
       child_result := vortex_record.compile_query_filter_internal(
         child_item,
@@ -104,18 +107,37 @@ begin
         p_parameter_sql_parameter,
         child_parameter_offset
       );
-      parameter_values := coalesce(child_result -> 'parameters', parameter_values);
+      parameter_values := parameter_values || coalesce(child_result -> 'parameters', '[]'::jsonb);
       if child_result ->> 'predicate' is null then
-        return pg_catalog.jsonb_build_object(
-          'predicate', null,
-          'parameters', parameter_values
-        );
+        -- Every alternative of an "any" must be known to narrow it. Leaving a
+        -- child out of an "all" only widens the candidates, so the others
+        -- still apply, but the result is no longer exact.
+        if node_kind = 'any' then
+          return pg_catalog.jsonb_build_object(
+            'predicate', null,
+            'exact', false,
+            'parameters', parameter_values
+          );
+        end if;
+        all_exact := false;
+        continue;
+      end if;
+      if (child_result ->> 'exact')::boolean is not true then
+        all_exact := false;
       end if;
       child_predicates := pg_catalog.array_append(child_predicates, child_result ->> 'predicate');
     end loop;
+    if pg_catalog.cardinality(child_predicates) = 0 then
+      return pg_catalog.jsonb_build_object(
+        'predicate', null,
+        'exact', false,
+        'parameters', parameter_values
+      );
+    end if;
     return pg_catalog.jsonb_build_object(
       'predicate', '(' || pg_catalog.array_to_string(child_predicates,
         case when node_kind = 'all' then ' and ' else ' or ' end) || ')',
+      'exact', all_exact,
       'parameters', parameter_values
     );
   elsif node_kind = 'not' then
@@ -134,14 +156,19 @@ begin
       p_parameter_sql_parameter,
       p_parameter_offset
     );
-    if child_result ->> 'predicate' is null then
+    -- Negating a wider predicate would drop rows, so only an exact child is
+    -- negated.
+    if child_result ->> 'predicate' is null
+      or (child_result ->> 'exact')::boolean is not true then
       return pg_catalog.jsonb_build_object(
         'predicate', null,
+        'exact', false,
         'parameters', coalesce(child_result -> 'parameters', parameter_values)
       );
     end if;
     return pg_catalog.jsonb_build_object(
-      'predicate', '(not (' || child_result ->> 'predicate' || '))',
+      'predicate', '(not (' || (child_result ->> 'predicate') || '))',
+      'exact', true,
       'parameters', coalesce(child_result -> 'parameters', parameter_values)
     );
   elsif node_kind is distinct from 'comparison' then
@@ -299,6 +326,7 @@ begin
     end if;
     return pg_catalog.jsonb_build_object(
       'predicate', '(' || predicate_sql || ')',
+      'exact', true,
       'parameters', parameter_values
     );
   end if;
@@ -509,10 +537,10 @@ begin
           '(%s::uuid is not distinct from %s::uuid)', left_sql, right_sql
         )
         when 'record_reference' then pg_catalog.format(
-          '(lower(%s) is not distinct from lower(%s))', left_sql, right_sql
+          '(pg_catalog.lower(%s) is not distinct from pg_catalog.lower(%s))', left_sql, right_sql
         )
         when 'organization_account_reference' then pg_catalog.format(
-          '(lower(%s) is not distinct from lower(%s))', left_sql, right_sql
+          '(pg_catalog.lower(%s) is not distinct from pg_catalog.lower(%s))', left_sql, right_sql
         )
         else pg_catalog.format('(%s is not distinct from %s)', left_sql, right_sql)
       end;
@@ -524,7 +552,7 @@ begin
       contains_sql := pg_catalog.format('pg_catalog.strpos(%s, %s) > 0', left_sql, right_sql);
     else
       contains_sql := pg_catalog.format(
-        'exists (select 1 from pg_catalog.jsonb_array_elements(case when jsonb_typeof(%s) = ''array'' then %s else ''[]''::jsonb end) as item(value) where item.value is not null and item.value <> ''null''::jsonb and (item.value #>> ''{}'') = %s)',
+        'exists (select 1 from pg_catalog.jsonb_array_elements(case when pg_catalog.jsonb_typeof(%s) = ''array'' then %s else ''[]''::jsonb end) as item(value) where item.value is not null and item.value <> ''null''::jsonb and (item.value #>> ''{}'') = %s)',
         left_array_sql, left_array_sql, right_sql
       );
     end if;
@@ -559,10 +587,10 @@ begin
           '(%s::uuid is not distinct from (item.value #>> ''{}'')::uuid)', left_sql
         )
         when 'record_reference' then pg_catalog.format(
-          '(lower(%s) is not distinct from lower(item.value #>> ''{}''))', left_sql
+          '(pg_catalog.lower(%s) is not distinct from pg_catalog.lower(item.value #>> ''{}''))', left_sql
         )
         when 'organization_account_reference' then pg_catalog.format(
-          '(lower(%s) is not distinct from lower(item.value #>> ''{}''))', left_sql
+          '(pg_catalog.lower(%s) is not distinct from pg_catalog.lower(item.value #>> ''{}''))', left_sql
         )
         else pg_catalog.format(
           '(%s is not distinct from (item.value #>> ''{}''))', left_sql
@@ -570,7 +598,7 @@ begin
       end;
     end if;
     in_sql := pg_catalog.format(
-      'exists (select 1 from pg_catalog.jsonb_array_elements(case when jsonb_typeof(%s) = ''array'' then %s else ''[]''::jsonb end) as item(value) where item.value is not null and item.value <> ''null''::jsonb and %s)',
+      'exists (select 1 from pg_catalog.jsonb_array_elements(case when pg_catalog.jsonb_typeof(%s) = ''array'' then %s else ''[]''::jsonb end) as item(value) where item.value is not null and item.value <> ''null''::jsonb and %s)',
       right_array_sql, right_array_sql, element_sql
     );
     predicate_sql := case when operator_value = 'in' then in_sql
@@ -608,6 +636,7 @@ begin
 
   return pg_catalog.jsonb_build_object(
     'predicate', '(' || predicate_sql || ')',
+    'exact', true,
     'parameters', parameter_values
   );
 end
@@ -617,11 +646,8 @@ revoke all on function vortex_record.compile_query_filter_internal(
   jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, integer, integer
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_module_owner;
-grant execute on function vortex_record.compile_query_filter_internal(
-  jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, integer, integer
-) to vortex_record_adapter;
 
 comment on function vortex_record.compile_query_filter_internal(
   jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, integer, integer
 ) is
-  'Compiles one validated typed query condition into a SQL predicate and bound parameter array; unsupported but valid subtrees return no predicate so the protected row check remains authoritative.';
+  'Compiles one validated typed query condition into a candidate-scan predicate over catalogue columns, with every value bound through one JSON parameter array; the predicate admits every row the condition engine admits, and is marked exact only when it admits no other row; a subtree it cannot express adds no condition, so the per-row condition and read_record stay authoritative; owner-only.';
