@@ -2178,7 +2178,8 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
    * Every field of one record type that the engines must work out when a record is read. A
    * deadline-passed calculation is read-time by its expression, and any calculation that
    * depends on a read-time calculation is itself read-time. Stored values may never depend on
-   * one, so publication refuses a stored calculation or total in this set.
+   * one, so publication refuses a calculation declared `stored` in this set, and a total whose
+   * aggregate source or filter reads it. Content without an evaluation is classified here.
    */
   const readTimeFieldIdsFor = (recordFields: readonly JsonObject[]): ReadonlySet<string> => {
     const fieldById = new Map(recordFields.map((field) => [String(field.fieldId), field] as const));
@@ -2382,13 +2383,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
               (["decimal_number", "money"].includes(String(settings.resultType))
                 ? settings.decimalPlaces !== undefined
                 : settings.decimalPlaces === undefined));
-          const declaredEvaluation =
-            settings.evaluation === "read_time" || settings.evaluation === "stored"
-              ? settings.evaluation
-              : expression.kind === "deadline_passed"
-                ? "read_time"
-                : "stored";
-          if (declaredEvaluation === "stored" && readTimeFieldIds.has(String(field.fieldId)))
+          if (settings.evaluation === "stored" && readTimeFieldIds.has(String(field.fieldId)))
             valid = false;
           if (expression.kind === "join_text")
             valid =

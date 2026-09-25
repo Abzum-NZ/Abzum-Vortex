@@ -305,7 +305,8 @@ const calculationExpressionV2Schema = z.discriminatedUnion("kind", [
 /**
  * Whether a calculated field is worked out when the record is read (`read_time`) or stored and
  * refreshed by the owning save (`stored`). The deadline-passed form uses the current time and is
- * therefore always read-time; a stored field may never use the current time.
+ * therefore always read-time; a stored field may never use the current time. A calculation that
+ * uses a read-time calculation is itself read-time, and publication refuses one declared `stored`.
  */
 export const moduleCalculationEvaluationV2Schema = z.enum(["read_time", "stored"]);
 
