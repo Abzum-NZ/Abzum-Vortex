@@ -24,9 +24,11 @@ type RenderedColumn = Readonly<{
 }>;
 
 /**
- * The columns to render. A placement that declares a data contract shows exactly its declared
- * columns in declared order; the projected columns only supply labels for fields the placement
- * left unlabelled. A placement without a contract renders the projected columns as before.
+ * The columns to render. A placement that declares a data contract shows its declared columns in
+ * declared order, but only those the permission projection supplies: a column whose field the
+ * viewer cannot read is withheld from the projection and never rendered, not even as a heading.
+ * The projected column supplies the label a declared column left unset. A placement without a
+ * contract renders the projected columns as before.
  */
 const renderedColumns = (
   contract: RecordsTableContract | undefined,
@@ -35,11 +37,12 @@ const renderedColumns = (
   if (contract === undefined)
     return projected.map((column) => ({ key: column.key, label: column.label, declared: undefined }));
   const labels = new Map(projected.map((column) => [column.key, column.label]));
-  return contract.columns.map((column) => ({
-    key: column.field,
-    label: column.label ?? labels.get(column.field) ?? column.field,
-    declared: column,
-  }));
+  return contract.columns.flatMap((column): RenderedColumn[] => {
+    const projectedLabel = labels.get(column.field);
+    return projectedLabel === undefined
+      ? []
+      : [{ key: column.field, label: column.label ?? projectedLabel, declared: column }];
+  });
 };
 
 /** Declared presentation of one column, exposed as data attributes and an inline alignment. */

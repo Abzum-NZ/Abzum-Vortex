@@ -10,7 +10,12 @@ import {
   type QueryId,
 } from "@vortex/contracts";
 import type { HumanOrganizationRequestResult } from "@vortex/access";
-import type { ProtectedQueryCommand, ProtectedQueryResult, ProtectedQueryRow } from "@vortex/query";
+import {
+  protectedQueryCommandSchema,
+  type ProtectedQueryCommand,
+  type ProtectedQueryResult,
+  type ProtectedQueryRow,
+} from "@vortex/query";
 
 /**
  * The one Query engine entry point a Records table reads through. The composition root supplies
@@ -28,7 +33,9 @@ export type RecordsTableQueryRunner = Readonly<{
 /**
  * One Records table read. The module, query and compiled settings come from the installed release
  * the request already resolved; `pageParameters` are the values the current page supplies for
- * parameters the table declares as taken from the page.
+ * parameters the table declares as taken from the page. The Query engine runs installed Module
+ * queries, so `moduleRootId` and `queryId` must name the exact query the placement is bound to;
+ * a caller never substitutes another query for one it cannot resolve.
  */
 export type RecordsTableQueryRequest = Readonly<{
   moduleRootId: ModuleRootId;
@@ -61,7 +68,8 @@ const unavailable = Object.freeze({ kind: "unavailable" as const });
 /**
  * Builds the Query engine command a declared Records table needs: exactly its declared columns,
  * its declared page size and its declared query inputs. Returns undefined when the placement
- * declares no data contract or a page-supplied input is missing.
+ * declares no data contract, a page-supplied input is missing or the command is not one the
+ * Query engine accepts (for example a column that is not a field identity).
  */
 export const buildRecordsTableQueryCommand = (
   request: RecordsTableQueryRequest,
@@ -80,20 +88,18 @@ export const buildRecordsTableQueryCommand = (
     if (value === undefined) return undefined;
     inputValues[parameter.input] = value;
   }
-  return {
-    fieldIds,
-    command: {
-      moduleRootId: request.moduleRootId,
-      queryId: request.queryId,
-      inputValues,
-      requestedFieldIds: fieldIds,
-      requestedSystemFieldKeys: [],
-      pageSize: contract.pageSize,
-      ...(request.continuationToken === undefined
-        ? {}
-        : { continuationToken: request.continuationToken }),
-    } as ProtectedQueryCommand,
-  };
+  const command = protectedQueryCommandSchema.safeParse({
+    moduleRootId: request.moduleRootId,
+    queryId: request.queryId,
+    inputValues,
+    requestedFieldIds: fieldIds,
+    requestedSystemFieldKeys: [],
+    pageSize: contract.pageSize,
+    ...(request.continuationToken === undefined
+      ? {}
+      : { continuationToken: request.continuationToken }),
+  });
+  return command.success ? { fieldIds, command: command.data } : undefined;
 };
 
 /**

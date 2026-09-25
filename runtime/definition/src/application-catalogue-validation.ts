@@ -123,8 +123,9 @@ export function validateApplicationSourceCatalogue(
    * A Records table or Record detail may map only fields its bound data source allows. Mapped
    * columns and detail fields must be selected by the bound query (or, for a detail with no query,
    * belong to its page's record type); default sort, sortable and filterable fields must also be
-   * orderable: a grouped or aggregating query exposes only its grouping fields. Every refusal
-   * names the placement and the setting that carries the field.
+   * orderable: a grouped or aggregating query exposes only its grouping fields. A default sort
+   * must be the bound query's leading sort, the order the Query engine actually applies. Every
+   * refusal names the placement and the setting that carries the field.
    */
   const validateDataContract = (
     placement: SourcePlacement,
@@ -175,8 +176,19 @@ export function validateApplicationSourceCatalogue(
 
     if (table !== undefined) {
       checkFields("columns", table.columns.map((column) => column.field), () => true, "invalid_value");
-      if (table.defaultSort !== undefined)
+      if (table.defaultSort !== undefined) {
         checkFields("default_sort", [table.defaultSort.field], orders, "unsupported_choice");
+        // The Query engine applies the bound query's declared sort and takes no sort input, so a
+        // default sort other than the query's leading sort would be declared yet never applied.
+        const leading = query?.sort[0];
+        if (
+          query !== undefined &&
+          leading !== undefined &&
+          (`${query.record_type}.${leading.field}` !== table.defaultSort.field ||
+            leading.direction !== table.defaultSort.direction)
+        )
+          report("vortex.definition.application_block_settings", "unsupported_choice", at("default_sort"));
+      }
       checkFields("sortable_fields", table.sortableFields, orders, "unsupported_choice");
       checkFields("filterable_fields", table.filterableFields, orders, "unsupported_choice");
       const inputs = new Set<string>();
