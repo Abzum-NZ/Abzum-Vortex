@@ -12,9 +12,11 @@ import {
   type RuleGraphValueType,
 } from "@vortex/contracts";
 
-// Removal point (#986): rule-graph validation is superseded by the one flow validator
-// (runtime/definition/src/flow-validation.ts, #985). It stays only while an old-shape definition can still
-// be published; #986 converts the shipped definitions to flows and deletes it in the same change.
+// Removal point (#1007): rule-graph validation judges the executable rule graph each `BeforeSave`
+// flow is lowered to (`before-save-flow-rules.ts`). It also checks the value types of the fields the
+// rule reads, which the one flow validator (`flow-validation.ts`, #985) leaves to the evaluator. It
+// stays until the flow interpreter replaces the rule-graph evaluator and the database read of
+// `content.rules`, and #1007 deletes it in the same change.
 
 export const ruleGraphValidationCodes = Object.freeze({
   topology: "vortex.definition.rule_graph_topology",
