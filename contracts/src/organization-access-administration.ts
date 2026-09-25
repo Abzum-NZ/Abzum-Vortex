@@ -25,6 +25,7 @@ import {
   organizationAccessActionSchema,
   organizationAccessExactPermissionSchema,
 } from "./organization-access-decision";
+import { preparedOrganizationRoleChangeSchema } from "./organization-role-changes";
 
 const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 
@@ -388,6 +389,12 @@ export const retireOrganizationAdministrationRoleCommandSchema = z
   .object({
     roleId: roleIdSchema,
     expectedRoleRevision: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+export const changeOrganizationAdministrationRoleAuthorityCommandSchema = z
+  .object({
+    evidence: preparedOrganizationRoleChangeSchema,
   })
   .strict();
 
@@ -915,6 +922,9 @@ export type ReviseOrganizationAdministrationRoleMetadataCommand = z.infer<
 >;
 export type RetireOrganizationAdministrationRoleCommand = z.infer<
   typeof retireOrganizationAdministrationRoleCommandSchema
+>;
+export type ChangeOrganizationAdministrationRoleAuthorityCommand = z.infer<
+  typeof changeOrganizationAdministrationRoleAuthorityCommandSchema
 >;
 export type ChangeOrganizationAdministrationRoleResult = z.infer<
   typeof changeOrganizationAdministrationRoleResultSchema

@@ -60,9 +60,13 @@ const entry = (definition: {
  * so a changed descriptor without regenerated fingerprints refuses instead of publishing.
  *
  * Every operation the Access services already provide is registered, including the grant-side
- * assign-role and add-membership operations. Registration never grants authority: each operation
- * re-checks the current actor's authority and refuses any grant that exceeds the actor's own
- * delegated scope inside its owning service transaction, so a flow can never expand access.
+ * assign-role and add-membership operations and the create-custom-role and accept-application-role
+ * template operations. Registration never grants authority: each operation re-checks the current
+ * actor's authority and refuses any grant that exceeds the actor's own delegated scope inside its
+ * owning service transaction, so a flow can never expand access. The role-creation and
+ * template-acceptance operations carry already-prepared role-change evidence, which the owning
+ * service re-verifies before the database re-applies the affected-assignment review, the explicit
+ * acceptance evidence and the permanent-steward safeguard.
  */
 export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   create_group: entry(sources.create_group),
@@ -72,6 +76,10 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   remove_group_membership: entry(sources.remove_group_membership),
   revise_role_metadata: entry(sources.revise_role_metadata),
   retire_role: entry(sources.retire_role),
+  create_custom_role: entry(sources.create_custom_role),
+  create_custom_role_from_template: entry(sources.create_custom_role_from_template),
+  accept_application_role_template: entry(sources.accept_application_role_template),
+  accept_application_role_revision: entry(sources.accept_application_role_revision),
   assign_role_assignment: entry(sources.assign_role_assignment),
   revoke_role_assignment: entry(sources.revoke_role_assignment),
   deactivate_role_activation: entry(sources.deactivate_role_activation),
