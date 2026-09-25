@@ -17,16 +17,16 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import { assertDestinationFingerprint, assertSafeIntegerRevision } from "./connection-instance-state";
 
 /**
- * Typed administration commands over the existing `vortex_connection.*_internal`
- * writers. The organisation, the `platform.organization.connections.manage`
- * authority and every application grant are re-checked inside those SQL writers
- * from the validated request context on every direct call; nothing in a command
- * is accepted as authority. This module validates shape, applies the command and
- * returns a safe outcome.
+ * Typed administration commands over the request-callable
+ * `vortex_connection.*_for_administration` writers. Each writer accepts only a human request
+ * context, and the `*_internal` writer it delegates to re-checks the organisation, the
+ * `platform.organization.connections.manage` authority, the expected revision and every
+ * application grant from that context on every direct call. Nothing in a command is accepted as
+ * authority: the organisation is always the request context's own. This module validates shape,
+ * applies the command and returns a safe outcome.
  *
- * Secrets are write-only. They reach the injected server-only secret store and
- * nowhere else: they are never returned, logged, placed in an error or copied into
- * activity.
+ * Secrets are write-only. They reach the injected server-only secret store and nowhere else: they
+ * are never returned, logged, placed in an error or copied into activity.
  */
 
 /** Server-only secret boundary supplied by trusted wiring. It never reads a secret back. */
@@ -43,7 +43,6 @@ export interface ConnectionSecretStore {
 const maximumSecretLength = 16384;
 
 type CommandBase = Readonly<{
-  organizationId: OrganizationId;
   connectionInstanceId: ConnectionInstanceId;
   administratorActivityId: string;
 }>;
@@ -128,15 +127,25 @@ const refusalForFailure = (error: unknown): ConnectionAdministrationRefusalCode 
       ? (error as { readonly code?: unknown }).code
       : undefined;
   if (code === "42501") return "not_authorized";
-  if (code === "P0002") return "connection_unavailable";
-  if (code === "22023") return "invalid_parameters";
+  // Missing, foreign or stale connection; a missing or foreign application; a duplicate
+  // registration. The writers make these indistinguishable, and so does this code.
+  if (code === "P0002" || code === "23503" || code === "23505") return "connection_unavailable";
+  if (code === "22023" || code === "22003") return "invalid_parameters";
   return "administration_unavailable";
 };
 
-type RevisionRow = DatabaseRow & { readonly revision: unknown };
+type WriteRow = DatabaseRow & { readonly revision: unknown; readonly organization_id: unknown };
 
-const readRevision = (rows: readonly RevisionRow[]): number =>
-  assertSafeIntegerRevision(rows.length === 1 ? rows[0]?.revision : undefined, "Connection administration");
+/** Reads the writer's single row: the new revision and the request context's organisation. */
+const readWrite = (
+  rows: readonly WriteRow[],
+): Readonly<{ revision: number; organizationId: OrganizationId }> => {
+  const row = rows.length === 1 ? rows[0] : undefined;
+  return {
+    revision: assertSafeIntegerRevision(row?.revision, "Connection administration"),
+    organizationId: organizationIdSchema.parse(row?.organization_id),
+  };
+};
 
 const applied = (
   command: ConnectionAdministrationCommand["command"],
@@ -180,7 +189,6 @@ const commandIsValid = (input: ConnectionAdministrationCommand): boolean => {
   if (
     input === null ||
     typeof input !== "object" ||
-    !organizationIdSchema.safeParse(input.organizationId).success ||
     !connectionInstanceIdSchema.safeParse(input.connectionInstanceId).success ||
     !activityIdSchema.safeParse(input.administratorActivityId).success
   ) {
@@ -235,14 +243,106 @@ async function writeSecret(
   }
 }
 
+async function applyCommand(
+  transaction: RequestDatabaseTransaction,
+  secretStore: ConnectionSecretStore,
+  input: ConnectionAdministrationCommand,
+): Promise<ConnectionAdministrationResult> {
+  switch (input.command) {
+    case "configure": {
+      const rows = await transaction.query<WriteRow>`
+        select
+          vortex_connection.register_connection_instance_for_administration(
+            ${input.connectionInstanceId}::uuid,
+            ${input.connectionTypeId}::uuid,
+            ${input.connectionTypeVersion}::text,
+            ${input.destinationKey}::text,
+            ${input.destinationFingerprint}::text,
+            ${input.administratorActivityId}::uuid,
+            ${input.tokenExpiresAt ?? null}::timestamptz
+          ) as revision,
+          vortex_context.organization_id() as organization_id
+      `;
+      const { revision, organizationId } = readWrite(rows);
+      await writeSecret(secretStore, organizationId, input.connectionInstanceId, input.secret);
+      return applied(input.command, input.connectionInstanceId, revision);
+    }
+    case "health_check": {
+      const rows = await transaction.query<WriteRow>`
+        select
+          vortex_connection.record_connection_health_check_for_administration(
+            ${input.connectionInstanceId}::uuid,
+            ${input.expectedRevision}::bigint,
+            ${input.healthOutcome}::text,
+            ${input.administratorActivityId}::uuid
+          ) as revision,
+          vortex_context.organization_id() as organization_id
+      `;
+      return applied(input.command, input.connectionInstanceId, readWrite(rows).revision);
+    }
+    case "disable": {
+      const rows = await transaction.query<WriteRow>`
+        select
+          vortex_connection.revoke_connection_instance_for_administration(
+            ${input.connectionInstanceId}::uuid,
+            ${input.expectedRevision}::bigint,
+            ${input.administratorActivityId}::uuid
+          ) as revision,
+          vortex_context.organization_id() as organization_id
+      `;
+      return applied(input.command, input.connectionInstanceId, readWrite(rows).revision);
+    }
+    case "application_grant": {
+      if (input.change === "grant") {
+        await transaction.query`
+          select vortex_connection.grant_connection_application_for_administration(
+            ${input.connectionInstanceId}::uuid,
+            ${input.applicationRootId}::uuid,
+            ${input.administratorActivityId}::uuid
+          )
+        `;
+      } else {
+        await transaction.query`
+          select vortex_connection.revoke_connection_application_for_administration(
+            ${input.connectionInstanceId}::uuid,
+            ${input.applicationRootId}::uuid,
+            ${input.administratorActivityId}::uuid
+          )
+        `;
+      }
+      return applied(input.command, input.connectionInstanceId);
+    }
+    case "rotate_credential": {
+      // The writer locks the row, checks organisation, administrator and expected revision and
+      // advances the revision, so concurrent rotations and token refreshes serialise there; the
+      // secret is stored only after that check succeeds, under the context's organisation.
+      const rows = await transaction.query<WriteRow>`
+        select
+          vortex_connection.reauthorize_connection_instance_for_administration(
+            ${input.connectionInstanceId}::uuid,
+            ${input.expectedRevision}::bigint,
+            ${input.administratorActivityId}::uuid,
+            ${input.destinationFingerprint ?? null}::text,
+            ${input.tokenExpiresAt ?? null}::timestamptz
+          ) as revision,
+          vortex_context.organization_id() as organization_id
+      `;
+      const { revision, organizationId } = readWrite(rows);
+      await writeSecret(secretStore, organizationId, input.connectionInstanceId, input.secret);
+      return applied(input.command, input.connectionInstanceId, revision);
+    }
+  }
+}
+
 /**
- * Applies one administration command inside the caller's runtime transaction.
+ * Applies one administration command inside the caller's human request transaction.
  *
- * `configure` and `rotate_credential` store the secret last, after the SQL writer's
- * organisation, administrator and revision checks succeed, so a connection without a
- * stored secret is never active. When only the secret write fails the command is
- * refused with `secret_store_unavailable`; the caller must roll its transaction back on
- * any refusal. Every failure is returned as a fixed safe refusal and never throws.
+ * The command runs behind a savepoint. Any failure, including a refused SQL writer or a secret
+ * store failure after a successful write, rolls back to that savepoint, so a refused command
+ * leaves no connection change or Activity behind and the caller's transaction stays usable.
+ * `configure` and `rotate_credential` store the secret last, after the SQL writer's organisation,
+ * administrator and revision checks succeed, so a connection is never changed without its secret.
+ * Every failure is returned as a fixed safe refusal and never throws.
  */
 export async function administerConnection(
   transaction: RequestDatabaseTransaction,
@@ -252,83 +352,22 @@ export async function administerConnection(
   if (!commandIsValid(input)) return refuse("invalid_parameters");
 
   try {
-    switch (input.command) {
-      case "configure": {
-        await transaction.query`
-          select vortex_connection.register_connection_instance_internal(
-            ${input.connectionInstanceId},
-            ${input.organizationId},
-            ${input.connectionTypeId},
-            ${input.connectionTypeVersion},
-            ${input.destinationKey},
-            ${input.destinationFingerprint},
-            ${input.administratorActivityId},
-            ${input.tokenExpiresAt ?? null}
-          )
-        `;
-        await writeSecret(secretStore, input.organizationId, input.connectionInstanceId, input.secret);
-        return applied(input.command, input.connectionInstanceId, 1);
-      }
-      case "health_check": {
-        const rows = await transaction.query<RevisionRow>`
-          select vortex_connection.record_connection_health_check_internal(
-            ${input.connectionInstanceId},
-            ${input.expectedRevision},
-            ${input.healthOutcome},
-            ${input.administratorActivityId}
-          ) as revision
-        `;
-        return applied(input.command, input.connectionInstanceId, readRevision(rows));
-      }
-      case "disable": {
-        const rows = await transaction.query<RevisionRow>`
-          select vortex_connection.revoke_connection_instance_internal(
-            ${input.connectionInstanceId},
-            ${input.expectedRevision},
-            ${input.administratorActivityId}
-          ) as revision
-        `;
-        return applied(input.command, input.connectionInstanceId, readRevision(rows));
-      }
-      case "application_grant": {
-        if (input.change === "grant") {
-          await transaction.query`
-            select vortex_connection.grant_connection_application_internal(
-              ${input.connectionInstanceId},
-              ${input.applicationRootId},
-              ${input.administratorActivityId}
-            )
-          `;
-        } else {
-          await transaction.query`
-            select vortex_connection.revoke_connection_application_internal(
-              ${input.connectionInstanceId},
-              ${input.applicationRootId},
-              ${input.administratorActivityId}
-            )
-          `;
-        }
-        return applied(input.command, input.connectionInstanceId);
-      }
-      case "rotate_credential": {
-        // The writer locks the row, checks organisation, administrator and expected revision
-        // and advances the revision, so concurrent rotations and token refreshes serialise
-        // there; the secret is stored only after that check succeeds.
-        const rows = await transaction.query<RevisionRow>`
-          select vortex_connection.reauthorize_connection_instance_internal(
-            ${input.connectionInstanceId},
-            ${input.expectedRevision},
-            ${input.administratorActivityId},
-            ${input.destinationFingerprint ?? null},
-            ${input.tokenExpiresAt ?? null}
-          ) as revision
-        `;
-        const revision = readRevision(rows);
-        await writeSecret(secretStore, input.organizationId, input.connectionInstanceId, input.secret);
-        return applied(input.command, input.connectionInstanceId, revision);
-      }
-    }
+    await transaction.query`savepoint connection_administration`;
+  } catch {
+    return refuse("administration_unavailable");
+  }
+
+  try {
+    const result = await applyCommand(transaction, secretStore, input);
+    await transaction.query`release savepoint connection_administration`;
+    return result;
   } catch (error) {
+    try {
+      await transaction.query`rollback to savepoint connection_administration`;
+      await transaction.query`release savepoint connection_administration`;
+    } catch {
+      // The caller's transaction is no longer usable; its runner rolls it back.
+    }
     return refuse(refusalForFailure(error));
   }
 }
