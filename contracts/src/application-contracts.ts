@@ -31,7 +31,7 @@ import {
   semanticVersionSchema,
   workflowIdSchema,
 } from "./identifiers";
-import { labelSchema, safeHttpsUrlSchema } from "./common";
+import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "./common";
 import { permissionDeclarationSchema } from "./permissions";
 import {
   applicationShellV2Schema,
@@ -151,11 +151,19 @@ export const calendarMappingSchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
+// Retired page settings (#1011): page-level states and standard page replacement, and
+// list arrangements and calendar mapping, were compiled but never rendered. The compiler
+// no longer emits them. Releases published before their removal still carry them and
+// their content fingerprints cover them, so they stay decodable as opaque, unused JSON.
+const retiredPageSettingV2Schema = jsonValueSchema.optional();
+
 const pageV2Common = {
   pageId: pageIdSchema,
   key: builderKeySchema,
   name: labelSchema,
   accessPermissionKey: namespacedKeySchema,
+  states: retiredPageSettingV2Schema,
+  standardPageReplacement: retiredPageSettingV2Schema,
 };
 
 const pageV2Base = {
@@ -169,6 +177,8 @@ const listPageV2Schema = z
     type: z.literal("list"),
     recordType: recordTypeReferenceSchema,
     queryId: queryIdSchema,
+    arrangements: retiredPageSettingV2Schema,
+    calendarMapping: retiredPageSettingV2Schema,
   })
   .strict();
 

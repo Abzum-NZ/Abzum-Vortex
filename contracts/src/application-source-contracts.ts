@@ -163,10 +163,16 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
       .strict(),
   ]),
 );
+// Retired page settings (#1011): accepted as opaque, unused JSON so stored authored
+// sources keep their fingerprints and older sources still parse; never compiled.
+const retiredSourcePageSettingV2Schema = jsonValueSchema.optional();
+
 const sourcePageV2Common = {
   id: sourceAliasSchema,
   key: builderKeySchema,
   name: labelSchema,
+  states: retiredSourcePageSettingV2Schema,
+  standard_page_replacement: retiredSourcePageSettingV2Schema,
 };
 
 const sourcePageV2Base = {
@@ -181,6 +187,8 @@ const sourceListPageV2Schema = z
     record_type: sourceQualifiedRecordTypeSchema,
     permission: namespacedKeySchema,
     query: builderKeySchema,
+    arrangements: retiredSourcePageSettingV2Schema,
+    calendar_mapping: retiredSourcePageSettingV2Schema,
   })
   .strict();
 
