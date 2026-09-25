@@ -439,9 +439,49 @@
                 "requests_table": {
                   "block": {
                     "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.0.0"
+                    "release_version": "1.2.0"
                   },
                   "settings": {
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {"kind":"field_reference","field":"vortex.tenant_administration:organization_lifecycle_request.subject_display_name"},
+                            "label": {"kind":"text","value":"Organisation"}
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {"kind":"field_reference","field":"vortex.tenant_administration:organization_lifecycle_request.change_kind"},
+                            "label": {"kind":"text","value":"Requested change"}
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {"kind":"field_reference","field":"vortex.tenant_administration:organization_lifecycle_request.requested_display_name"},
+                            "label": {"kind":"text","value":"Requested display name"}
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {"kind":"field_reference","field":"vortex.tenant_administration:organization_lifecycle_request.requested_parent_reference"},
+                            "label": {"kind":"text","value":"Requested parent organisation"}
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {"kind":"field_reference","field":"vortex.tenant_administration:organization_lifecycle_request.state"},
+                            "label": {"kind":"text","value":"State"}
+                          }
+                        }
+                      ]
+                    },
                     "title": {
                       "kind": "text",
                       "value": "Organisation lifecycle requests"
