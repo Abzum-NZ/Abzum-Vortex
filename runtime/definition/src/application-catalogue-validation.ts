@@ -1,6 +1,7 @@
 import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
   builderKeySchema,
+  validateComponentSettings,
   type ApplicationSourceDocumentV2,
   type BlockPropertySchemaV2Contract,
   type DefinitionRuleFailure,
@@ -24,11 +25,6 @@ type SourceSlot = Body["shells"][number]["layout"];
 type SourcePlacement = SourceSlot["placements"][string];
 type SourceLayout = SourcePlacement["responsive"]["desktop"];
 type SourceValue = SourceBlockPropertyValueV2Contract;
-type RichTextDocument = Extract<SourceValue, { kind: "rich_text" }>["value"];
-type RichTextInline = Extract<
-  RichTextDocument["blocks"][number],
-  { kind: "paragraph" }
->["children"][number];
 
 export const applicationCatalogueRuleCodes = [
   "vortex.definition.application_dependency_manifest",
@@ -42,112 +38,12 @@ type CatalogueRuleCode = (typeof applicationCatalogueRuleCodes)[number];
 
 const maximumLocationSegments = 12;
 
-/**
- * Undeclared setting names that would carry markup, script, styling, data access or component
- * code. Any undeclared setting is refused; these are refused as unsafe content rather than as a
- * merely unknown property.
- */
-const executableSettingKeys: ReadonlySet<string> = new Set([
-  "class",
-  "class_name",
-  "classes",
-  "code",
-  "component",
-  "component_code",
-  "css",
-  "dangerously_set_inner_html",
-  "handler",
-  "html",
-  "inner_html",
-  "jsx",
-  "markup",
-  "raw_html",
-  "rpc",
-  "script",
-  "source_code",
-  "sql",
-  "style",
-  "styles",
-  "tsx",
-]);
-
-const executableSettingKey = (key: string): boolean =>
-  executableSettingKeys.has(key) || /^on_[a-z]/.test(key);
-
-/**
- * Syntax that marks authored text as markup, script, styling or a data-access statement rather
- * than prose. Each pattern needs structural syntax, so ordinary sentences such as "Select a
- * department from the list" or "Delete from list" remain valid text.
- */
-const unsafeTextPatterns: readonly RegExp[] = Object.freeze([
-  // Raw HTML, XML or JSX: an element, closing tag, comment or declaration opener.
-  /<[/!?]?[a-z]/i,
-  /&(?:lt|#0*60|#x0*3c);\s*[/!?]?[a-z]/i,
-  // Script-bearing addresses and inline handlers.
-  /\b(?:javascript|vbscript|livescript)\s*:/i,
-  /\bdata\s*:\s*(?:text\/html|[a-z]+\/[a-z.+-]*script)/i,
-  /\bon[a-z]+\s*=\s*["'`{]/i,
-  // Script execution and JSX escape hatches.
-  /\b(?:eval|setTimeout|setInterval)\(/,
-  /\bnew Function\(/,
-  /\b(?:document|window)\.(?:cookie|write|writeln|location|open|eval)\b/,
-  /\([\w\s,]*\)\s*=>\s*\{/,
-  /\bdangerouslySetInnerHTML\b/i,
-  // Arbitrary CSS and class names.
-  /\b(?:style|class|className)\s*=\s*["'{]/i,
-  /@(?:import\s+(?:url\s*\(|["'])|media\s*(?:\(|screen\b|print\b)|font-face\s*\{|keyframes\s+[\w-]+\s*\{)/i,
-  /:\s*expression\s*\(/i,
-  /\{\s*[a-z-]+\s*:\s*[^;{}]+;/i,
-  // SQL statements.
-  /\bunion\s+(?:all\s+)?select\b/i,
-  /'\s*(?:or|and)\s+(?:'[^']*'|\d+)\s*=\s*(?:'[^']*'|\d+)/i,
-  /\bselect\s+(?:\*|[\w."]+(?:\s*,\s*[\w."]+)+)\s+from\s+[\w."]+/i,
-  /\binsert\s+into\s+[\w."]+\s*(?:\([\w\s,."]+\)\s*)?(?:values\s*\(|select\b)/i,
-  /\bupdate\s+[\w."]+\s+set\s+[\w."]+\s*=/i,
-  /\bdelete\s+from\s+[\w."]+\s*(?:;|where\s+[\w."]+\s*(?:[=<>!]|\b(?:in|is|like)\b))/i,
-  /\b(?:drop|truncate)\s+table\s+(?:if\s+exists\s+)?[\w."]+\s*(?:;|--|\bcascade\b|\brestrict\b)/i,
-  /\balter\s+table\s+[\w."]+\s+(?:add|drop|alter|rename|enable|disable|owner)\b/i,
-  /\bcreate\s+(?:or\s+replace\s+)?(?:table\s+[\w."]+\s*\(\s*[\w"]+\s+[\w"]+|(?:function|procedure)\s+[\w."]+\s*\([^)]*\)\s*(?:returns|language|as)\b|view\s+[\w."]+\s+as\s+select\b)/i,
-  /\bexec(?:ute)?\s+(?:procedure\s+[\w."]+|immediate\s+["'])/i,
-  /\bpg_(?:sleep|read_file|ls_dir|read_binary_file)\s*\(/i,
-  // Remote procedure calls outside the governed operation model.
-  /\/rpc\//i,
-  /\.\s*rpc\s*\(/i,
-  /\bjson-?rpc\b/i,
-  /\bgrpcs?:\/\//i,
-]);
-
-const unsafeText = (text: string): boolean =>
-  unsafeTextPatterns.some((pattern) => pattern.test(text));
-
 const keySegment = (kind: Segment["kind"], key: string): Segment[] =>
   builderKeySchema.safeParse(key).success ? [{ kind, key }] : [];
 
 const effectiveLayouts = (responsive: SourcePlacement["responsive"]): SourceLayout[] => {
   const tablet = responsive.tablet ?? responsive.desktop;
   return [responsive.desktop, tablet, responsive.phone ?? tablet];
-};
-
-const richTextViolations = (
-  document: RichTextDocument,
-): Readonly<{ kinds: ReadonlySet<string>; unsafe: boolean }> => {
-  const kinds = new Set<string>();
-  let unsafe = false;
-  const visit = (inline: RichTextInline): void => {
-    if (inline.kind === "text") {
-      if (unsafeText(inline.text)) unsafe = true;
-      return;
-    }
-    kinds.add(inline.kind);
-    if (inline.kind === "link" && unsafeText(inline.address)) unsafe = true;
-    for (const child of inline.children) visit(child);
-  };
-  for (const block of document.blocks) {
-    kinds.add(block.kind);
-    const children = "children" in block ? block.children : block.items.flat();
-    for (const child of children) visit(child);
-  }
-  return { kinds, unsafe };
 };
 
 /** Exact registered releases keyed by permanent block identity and release version. */
@@ -216,71 +112,20 @@ export function validateApplicationSourceCatalogue(
       report("vortex.definition.application_dependency_manifest", "incompatible_version");
   }
 
-  const validateValue = (
-    value: SourceValue,
-    schema: BlockPropertySchemaV2Contract,
-    location: readonly Segment[],
-  ): void => {
-    if (value.kind !== schema.kind) {
-      report("vortex.definition.application_block_settings", "invalid_value", location);
-      return;
-    }
-    if (value.kind === "text" && schema.kind === "text") {
-      if (value.value.length < schema.minLength || value.value.length > schema.maxLength)
-        report("vortex.definition.application_block_settings", "invalid_value", location);
-      if (unsafeText(value.value))
-        report("vortex.definition.application_block_settings", "unsafe_content", location);
-    } else if (value.kind === "number" && schema.kind === "number") {
-      if (
-        (schema.integer && !Number.isInteger(value.value)) ||
-        (schema.minimum !== undefined && value.value < schema.minimum) ||
-        (schema.maximum !== undefined && value.value > schema.maximum)
-      )
-        report("vortex.definition.application_block_settings", "invalid_value", location);
-    } else if (value.kind === "choice" && schema.kind === "choice") {
-      if (!schema.options.some((option) => option.key === value.value))
-        report("vortex.definition.application_block_settings", "unsupported_choice", location);
-    } else if (value.kind === "rich_text" && schema.kind === "rich_text") {
-      const allowed = new Set<string>(schema.allowedElements);
-      const used = richTextViolations(value.value);
-      if ([...used.kinds].some((kind) => !allowed.has(kind)))
-        report("vortex.definition.application_block_settings", "unsupported_choice", location);
-      if (used.unsafe)
-        report("vortex.definition.application_block_settings", "unsafe_content", location);
-    } else if (value.kind === "url") {
-      if (unsafeText(value.value))
-        report("vortex.definition.application_block_settings", "unsafe_content", location);
-    } else if (value.kind === "group" && schema.kind === "group") {
-      validateSettings(value.properties, schema.properties, location);
-    } else if (value.kind === "list" && schema.kind === "list") {
-      if (value.items.length < schema.minimumItems)
-        report("vortex.definition.application_block_settings", "too_few_items", location);
-      if (value.items.length > schema.maximumItems)
-        report("vortex.definition.application_block_settings", "too_many_items", location);
-      for (const item of value.items) validateValue(item, schema.item, location);
-    }
-  };
+  const settingPathSegments = (path: readonly (string | number)[]): Segment[] =>
+    path.flatMap((part) => (typeof part === "string" ? keySegment("setting", part) : []));
 
   const validateSettings = (
     authored: Readonly<Record<string, SourceValue>>,
     declarations: readonly BlockPropertySchemaV2Contract[],
     location: readonly Segment[],
   ): void => {
-    const byKey = new Map(declarations.map((declaration) => [declaration.key, declaration]));
-    for (const key of Object.keys(authored))
-      if (!byKey.has(key))
-        report(
-          "vortex.definition.application_block_settings",
-          executableSettingKey(key) ? "unsafe_content" : "unknown_property",
-          [...location, ...keySegment("setting", key)],
-        );
-    for (const declaration of declarations) {
-      const settingLocation = [...location, ...keySegment("setting", declaration.key)];
-      const value = authored[declaration.key];
-      if (value !== undefined) validateValue(value, declaration, settingLocation);
-      else if (declaration.required && declaration.defaultValue === undefined)
-        report("vortex.definition.application_block_settings", "required_value", settingLocation);
-    }
+    for (const failure of validateComponentSettings(authored, declarations))
+      report(
+        "vortex.definition.application_block_settings",
+        failure.family,
+        [...location, ...settingPathSegments(failure.path)],
+      );
   };
 
   /** A required accessible name must exist after defaults; a supplied name must be real text. */
