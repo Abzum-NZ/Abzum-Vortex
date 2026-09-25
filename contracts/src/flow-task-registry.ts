@@ -64,7 +64,9 @@ export type FlowTaskEffectClass = z.infer<typeof flowTaskEffectClassSchema>;
 /**
  * How a task compiles to a Kestra flow when it is placed in a durable flow. Customer text is never
  * emitted as template text in any mode (the compiler's rules in decision 1).
- * - `native_control`: the Kestra control task with the same meaning.
+ * - `native_control`: the Kestra control task with the same meaning. Its condition, switch value
+ *   or item list is computed by the Vortex evaluator through the protected callback, and Kestra
+ *   branches only on that result.
  * - `evaluator_callback`: a pure task; the Vortex evaluator computes it through the protected
  *   callback, and Kestra branches only on the result.
  * - `protected_callback`: a read, change or background-start task; Kestra calls the signed
@@ -127,6 +129,9 @@ export const flowTaskDefaultPolicySchema = z
 
 const flowTaskTypeKeySchema = z.union([builderKeySchema, namespacedKeySchema]);
 
+/** The properties that name the target of a saved-record task outside a transaction flow. */
+export const flowSavedRecordTargetProperties = ["record_type", "record"] as const;
+
 export const flowTaskTypeDefinitionSchema = z
   .object({
     /** Control tasks use a plain key; every other task uses a dotted key that no control task can take. */
@@ -143,7 +148,11 @@ export const flowTaskTypeDefinitionSchema = z
      * class that operation can have, and the operation's own descriptor decides each placement.
      */
     effectDeclaredBy: z.enum(["task", "operation_descriptor"]),
-    /** A `change` task may run in a transaction only on the record being saved. */
+    /**
+     * A `change` task may run in a transaction only on the record being saved. Such a task declares
+     * its target properties (`flowSavedRecordTargetProperties`) as optional: a transaction flow never
+     * names them, because the task applies to the saved record, and every other flow must.
+     */
     transactionScope: z.literal("saved_record").optional(),
     /** The one protected operation the task calls, when the registry fixes it. */
     protectedOperationKey: namespacedKeySchema.optional(),
@@ -186,6 +195,13 @@ export const flowTaskTypeDefinitionSchema = z
     }
     if (value.transactionScope !== undefined && !locations.has("transaction"))
       issue(["transactionScope"], "A transaction scope applies only to a transaction task");
+    if (value.transactionScope === "saved_record") {
+      if (value.properties.record === undefined)
+        issue(["properties", "record"], "A saved-record task declares the record it changes outside transactions");
+      for (const name of flowSavedRecordTargetProperties)
+        if (value.properties[name]?.required === true)
+          issue(["properties", name], "A saved-record task's target is optional, named only outside transactions");
+    }
     const durableCompiled = value.kestra.mode !== "not_compiled";
     if (durableCompiled !== locations.has("durable"))
       issue(["kestra", "mode"], "A task compiles for Kestra exactly when it can run in a durable flow");
@@ -357,7 +373,6 @@ const controlDefinitions: Record<FlowControlTaskTypeKey, DefinitionInput> = {
     runLocations: ["durable"],
     effect: "pure",
     kestra: "native_control",
-    retry: durableRetry,
   },
   wait_until: {
     title: "Wait until",
@@ -378,7 +393,7 @@ const controlDefinitions: Record<FlowControlTaskTypeKey, DefinitionInput> = {
 };
 
 const recordProperties = {
-  recordType: required("record_type_id"),
+  record_type: required("record_type_id"),
   record: required("record_reference"),
 };
 
@@ -391,7 +406,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     effect: "change",
     protectedOperationKey: applyRecordChanges,
     properties: {
-      recordType: required("record_type_id"),
+      record_type: required("record_type_id"),
       record: optional("record_reference"),
       values: required("field_values"),
     },
@@ -405,7 +420,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     runLocations: protectedLocations,
     effect: "change",
     protectedOperationKey: applyRecordChanges,
-    properties: { recordType: required("record_type_id"), values: required("field_values") },
+    properties: { record_type: required("record_type_id"), values: required("field_values") },
     outputs: [output("record", "record_reference")],
     kestra: "protected_callback",
     retry: durableRetry,
@@ -417,7 +432,11 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     effect: "change",
     transactionScope: "saved_record",
     protectedOperationKey: applyRecordChanges,
-    properties: { ...recordProperties, values: required("field_values") },
+    properties: {
+      record_type: optional("record_type_id"),
+      record: optional("record_reference"),
+      values: required("field_values"),
+    },
     outputs: [output("record", "record_reference")],
     kestra: "protected_callback",
     retry: durableRetry,
@@ -508,14 +527,15 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     runLocations: ["server", "transaction", "durable"],
     effect: "change",
     transactionScope: "saved_record",
-    properties: { event: required("namespaced_key"), record: required("record_reference") },
+    properties: { event: required("namespaced_key"), record: optional("record_reference") },
     kestra: "protected_callback",
     retry: durableRetry,
   },
+  // External calls run on Kestra (decision 1, "One start path"), never inside a request.
   "connection.call": {
     title: "Call connection",
-    summary: "Calls an operation of a bound external connection.",
-    runLocations: protectedLocations,
+    summary: "Calls an operation of a bound external connection from a durable flow.",
+    runLocations: ["durable"],
     effect: "change",
     properties: {
       connection: required("connection_binding_id"),
@@ -540,7 +560,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     summary: "Generates a file from a query, within a row limit.",
     runLocations: protectedLocations,
     effect: "change",
-    properties: { query: required("query_id"), maximumRows: required("whole_number") },
+    properties: { query: required("query_id"), maximum_rows: required("whole_number") },
     outputs: [output("file", "file_reference")],
     kestra: "protected_callback",
     retry: durableRetry,
@@ -834,6 +854,7 @@ export type FlowTaskPlacementIssue = {
     | "wrong_run_location"
     | "unknown_property"
     | "missing_property"
+    | "saved_record_target"
     | "refusal_not_possible";
   message: string;
 };
@@ -848,8 +869,9 @@ const locationLabels: Record<FlowTaskRunLocation, string> = {
 /**
  * Checks every task of a flow, including nested tasks, error handlers and finally tasks, against
  * the registry: the type and pinned version exist, the task can run where this execution kind runs
- * it, its properties match the declared ones, and it branches on refusal only when it can be
- * refused. Values inside properties are checked by the compiler, not here.
+ * it, its properties match the declared ones, a task in a save transaction changes only the
+ * record being saved, and it branches on refusal only when it can be refused. Values inside
+ * properties are checked by the compiler, not here.
  */
 export const validateFlowTaskPlacement = (
   flow: FlowDefinition | FlowSource,
@@ -898,6 +920,23 @@ export const validateFlowTaskPlacement = (
                 code: "missing_property",
                 message: `${definition.title} requires the property ${name}`,
               });
+          if (definition.transactionScope === "saved_record")
+            for (const name of flowSavedRecordTargetProperties) {
+              if (!Object.hasOwn(definition.properties, name)) continue;
+              const named = Object.hasOwn(registered.properties, name);
+              if (flow.execution === "transaction" && named)
+                issues.push({
+                  path: [...taskPath, "properties", name],
+                  code: "saved_record_target",
+                  message: `In a save transaction, ${definition.title} changes only the record being saved, so it cannot name ${name}`,
+                });
+              else if (flow.execution !== "transaction" && !named)
+                issues.push({
+                  path: [...taskPath, "properties", name],
+                  code: "missing_property",
+                  message: `${definition.title} requires the property ${name} outside a save transaction`,
+                });
+            }
           if (
             registered.allowRefusal === true &&
             !definition.outcomes.some(
