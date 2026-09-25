@@ -71,10 +71,20 @@ export class KestraInstanceTargetError extends Error {
 const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const hasOnlyKeys = (
+/**
+ * True only when `value` has exactly the `required` keys as its own properties,
+ * so an inherited or extra field can neither supply nor smuggle a setting.
+ */
+const hasExactlyOwnKeys = (
   value: Readonly<Record<string, unknown>>,
-  allowed: readonly string[],
-): boolean => Object.keys(value).every((key) => allowed.includes(key));
+  required: readonly string[],
+): boolean => {
+  const keys = Object.keys(value);
+  return (
+    keys.length === required.length &&
+    required.every((key) => Object.prototype.hasOwnProperty.call(value, key))
+  );
+};
 
 /**
  * Accepts only a credential-free http(s) origin. Plain http is allowed only for
@@ -108,7 +118,7 @@ const parseBaseUrl = (value: unknown): string | undefined => {
 export const parseApplicationKestraInstanceTarget = (
   candidate: unknown,
 ): ApplicationKestraInstanceTarget => {
-  if (!isObject(candidate) || !hasOnlyKeys(candidate, ["kind", "baseUrl"]))
+  if (!isObject(candidate) || !hasExactlyOwnKeys(candidate, ["kind", "baseUrl"]))
     throw new KestraInstanceTargetError("INVALID_KESTRA_INSTANCE_TARGET");
   if (candidate.kind !== workflowServiceKestraInstanceKind)
     throw new KestraInstanceTargetError("UNSUPPORTED_KESTRA_INSTANCE_KIND");
@@ -122,3 +132,17 @@ export const parseApplicationKestraInstanceTarget = (
     callbackKeySecretName: applicationKestraCallbackKeySecretName,
   });
 };
+
+/**
+ * Resolves the application instance from the server environment. It reads only
+ * `VORTEX_APPLICATION_KESTRA_URL`; no other variable, and in particular no
+ * operations-instance address or credential, is consulted or used as a
+ * fallback. A missing or unsafe address is refused with the fixed error code.
+ */
+export const resolveApplicationKestraInstanceTarget = (
+  environment: Readonly<Record<string, string | undefined>>,
+): ApplicationKestraInstanceTarget =>
+  parseApplicationKestraInstanceTarget({
+    kind: workflowServiceKestraInstanceKind,
+    baseUrl: environment[applicationKestraBaseUrlEnvironmentKey],
+  });

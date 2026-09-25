@@ -72,6 +72,7 @@ export {
 
 export {
   parseApplicationKestraInstanceTarget,
+  resolveApplicationKestraInstanceTarget,
   applicationKestraBaseUrlEnvironmentKey,
   applicationKestraCallbackKeySecretName,
   kestraInstanceKinds,

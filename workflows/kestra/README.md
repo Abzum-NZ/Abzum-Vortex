@@ -155,13 +155,22 @@ The application instance's environment holds exactly one flow secret,
 `VORTEX_WORKFLOW_CALLBACK_KEY`. It holds no delivery, database or provider secret: the delivery
 webhook keys, the Testing and Production Doppler tokens and the event-dispatch credential above
 exist only in this operations instance. Its own PostgreSQL password and interface basic-auth
-password are engine bootstrap values supplied from the deployment environment, and they are never
-available to a customer flow as a secret. The application instance bakes no operational flow or
-script and starts with no `--flow-path`.
+password are engine bootstrap values supplied from the deployment environment through
+`KESTRA_CONFIGURATION`. They are not flow secrets and no instance variable carries the `ENV_` prefix,
+so neither Kestra's secret lookup nor its environment variables expose them to a flow definition.
+The application instance bakes no operational flow or script and starts with no `--flow-path`.
+
+That protection covers flow definitions, not code running inside the Kestra container. A Process
+runner script or command task would run as `root` beside the engine, inherit its environment and
+reach its state database, so it could read those bootstrap values. Vortex compiles customer flows
+only to the generic protected-operation callback task, and a package script must not run on this
+instance until it has a sandboxed task runner that sees only its declared inputs and the callback
+key.
 
 The Workflow service's registration and start adapters resolve their provider target only through
-`runtime/workflow/src/kestra-instance.ts`, which knows only the application instance and exposes no
-operations address, credential or secret. An operational secret must never be added to the
+`runtime/workflow/src/kestra-instance.ts`, which knows only the application instance, reads its
+address only from `VORTEX_APPLICATION_KESTRA_URL`, and exposes no operations address, credential or
+secret. The application's server environment therefore needs no operations-instance address at all. An operational secret must never be added to the
 application instance's environment, and no Workflow adapter may be pointed at this operations
 instance.
 

@@ -15,9 +15,13 @@
 # Like the operations stack, both images are pinned to exact tags and
 # multi-platform digests, the Docker socket is not mounted, and no password is
 # written down. Kestra's own PostgreSQL password and its interface basic-auth
-# password are engine bootstrap values supplied by the deployment environment;
-# they are never available to a customer flow as a secret. Every other value
-# below comes from the environment.
+# password are engine bootstrap values supplied by the deployment environment
+# through KESTRA_CONFIGURATION. They are not flow secrets and no variable here
+# has the ENV_ prefix, so a flow definition cannot read them. Code running in
+# this container (a Process runner script or command task) could, which is why
+# customer flows compile only to the protected-operation callback task and no
+# package script may run here without a sandboxed task runner (README.md).
+# Every other value below comes from the environment.
 
 volumes:
   kestra-application-postgres-data:
