@@ -12,6 +12,7 @@ export const definitionCompilerRefusalCodes = Object.freeze([
   "vortex.definition.application_block_settings",
   "vortex.definition.application_calendar_mapping",
   "vortex.definition.application_connection_operations",
+  "vortex.definition.application_control_binding",
   "vortex.definition.application_dependency_manifest",
   "vortex.definition.application_event_references",
   "vortex.definition.application_flow_binding_event",

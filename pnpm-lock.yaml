@@ -550,9 +550,6 @@ importers:
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@vortex/modules':
-        specifier: workspace:*
-        version: link:../modules
       react:
         specifier: 19.3.0
         version: 19.3.0
