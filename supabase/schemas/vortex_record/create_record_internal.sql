@@ -166,38 +166,15 @@ begin
       owner_account_id, owner_group_id,
       (context_value ->> 'organizationAccountId')::uuid;
 
-    -- #858: lock every created link's target row before the data-version bump
-    -- and edge pass below, so a multi-link create takes all its row locks
-    -- before its data version and any edge identity, as the update writer does.
-    -- A malformed or undeclared link is left to the writer's own validation.
-    for relationship_value in
-      select item.value from pg_catalog.jsonb_array_elements(record_type_value -> 'relationships') as item(value)
-      order by (item.value ->> 'relationshipId')::uuid
-    loop
-      field_id_value := (relationship_value ->> 'fromFieldId')::uuid;
-      if final_values ? pg_catalog.lower(field_id_value::text) then
-        input_value := final_values -> pg_catalog.lower(field_id_value::text);
-        if pg_catalog.jsonb_typeof(input_value) = 'object'
-          and input_value - array['recordTypeId', 'recordId']::text[] = '{}'::jsonb
-          and pg_catalog.jsonb_typeof(input_value -> 'recordTypeId') = 'string'
-          and pg_catalog.jsonb_typeof(input_value -> 'recordId') = 'string'
-          and pg_catalog.pg_input_is_valid(input_value ->> 'recordTypeId', 'uuid')
-          and pg_catalog.pg_input_is_valid(input_value ->> 'recordId', 'uuid')
-          and pg_catalog.lower(input_value ->> 'recordTypeId') <>
-            '00000000-0000-0000-0000-000000000000'
-          and pg_catalog.lower(input_value ->> 'recordId') <>
-            '00000000-0000-0000-0000-000000000000'
-          and vortex_record.relationship_declares_target_internal(
-            relationship_value, (input_value ->> 'recordTypeId')::uuid
-          ) then
-          perform vortex_record.lock_relationship_target_row_internal(
-            (input_value ->> 'recordTypeId')::uuid,
-            (input_value ->> 'recordId')::uuid,
-            (context_value ->> 'organizationId')::uuid
-          );
-        end if;
-      end if;
-    end loop;
+    -- #1061: the canonical link-target share-lock prelude is written once in
+    -- lock_record_change_targets_internal. Every created link's target row is
+    -- locked here, before the data-version bump and edge pass below, so a
+    -- multi-link create takes all its row locks before its data version and any
+    -- edge identity, as the update writer does. A malformed or undeclared link
+    -- is left to the writer's own validation.
+    perform vortex_record.lock_record_change_targets_internal(
+      p_record_type_id, 'create', final_values
+    );
     -- The new record's data version is taken before any relationship edge
     -- identity, as every other relationship writer takes it.
     perform vortex_record.bump_record_data_version_internal(
