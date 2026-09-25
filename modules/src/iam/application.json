@@ -2997,8 +2997,57 @@
                       {
                         "kind": "group",
                         "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.target_role_key"},
+                          "label": {"kind":"text","value":"Target role"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.target_group_key"},
+                          "label": {"kind":"text","value":"Target group"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.application_context"},
+                          "label": {"kind":"text","value":"Application context"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.reason"},
+                          "label": {"kind":"text","value":"Reason"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.starts_on"},
+                          "label": {"kind":"text","value":"Starts on"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.expires_on"},
+                          "label": {"kind":"text","value":"Expires on"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
                           "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.submitted_at"},
                           "label": {"kind":"text","value":"Submitted at"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.decided_at"},
+                          "label": {"kind":"text","value":"Decided at"}
                         }
                       }
                     ]

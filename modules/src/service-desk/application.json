@@ -830,6 +830,13 @@
                                                                                                                               {
                                                                                                                                 "kind": "group",
                                                                                                                                 "properties": {
+                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.cases:case.description"},
+                                                                                                                                  "label": {"kind":"text","value":"Description"}
+                                                                                                                                }
+                                                                                                                              },
+                                                                                                                              {
+                                                                                                                                "kind": "group",
+                                                                                                                                "properties": {
                                                                                                                                   "field": {"kind":"field_reference","field":"vortex.service_desk.cases:case.customer_company"},
                                                                                                                                   "label": {"kind":"text","value":"Customer company"}
                                                                                                                                 }
@@ -865,8 +872,36 @@
                                                                                                                               {
                                                                                                                                 "kind": "group",
                                                                                                                                 "properties": {
+                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.cases:case.service_level"},
+                                                                                                                                  "label": {"kind":"text","value":"Service level"}
+                                                                                                                                }
+                                                                                                                              },
+                                                                                                                              {
+                                                                                                                                "kind": "group",
+                                                                                                                                "properties": {
+                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.cases:case.opened_at"},
+                                                                                                                                  "label": {"kind":"text","value":"Opened at"}
+                                                                                                                                }
+                                                                                                                              },
+                                                                                                                              {
+                                                                                                                                "kind": "group",
+                                                                                                                                "properties": {
+                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.cases:case.first_response_due_at"},
+                                                                                                                                  "label": {"kind":"text","value":"First response due"}
+                                                                                                                                }
+                                                                                                                              },
+                                                                                                                              {
+                                                                                                                                "kind": "group",
+                                                                                                                                "properties": {
                                                                                                                                   "field": {"kind":"field_reference","field":"vortex.service_desk.cases:case.resolution_due_at"},
                                                                                                                                   "label": {"kind":"text","value":"Resolution due"}
+                                                                                                                                }
+                                                                                                                              },
+                                                                                                                              {
+                                                                                                                                "kind": "group",
+                                                                                                                                "properties": {
+                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.cases:case.resolved_at"},
+                                                                                                                                  "label": {"kind":"text","value":"Resolved at"}
                                                                                                                                 }
                                                                                                                               },
                                                                                                                               {
@@ -1210,6 +1245,13 @@
                                                                                                                               {
                                                                                                                                 "kind": "group",
                                                                                                                                 "properties": {
+                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.knowledge:article.body"},
+                                                                                                                                  "label": {"kind":"text","value":"Article"}
+                                                                                                                                }
+                                                                                                                              },
+                                                                                                                              {
+                                                                                                                                "kind": "group",
+                                                                                                                                "properties": {
                                                                                                                                   "field": {"kind":"field_reference","field":"vortex.service_desk.knowledge:article.status"},
                                                                                                                                   "label": {"kind":"text","value":"Status"}
                                                                                                                                 }
@@ -1315,15 +1357,8 @@
                                                                                                                               {
                                                                                                                                 "kind": "group",
                                                                                                                                 "properties": {
-                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.knowledge:article.status"},
-                                                                                                                                  "label": {"kind":"text","value":"Status"}
-                                                                                                                                }
-                                                                                                                              },
-                                                                                                                              {
-                                                                                                                                "kind": "group",
-                                                                                                                                "properties": {
-                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.knowledge:article.public"},
-                                                                                                                                  "label": {"kind":"text","value":"Public"}
+                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.knowledge:article.body"},
+                                                                                                                                  "label": {"kind":"text","value":"Article"}
                                                                                                                                 }
                                                                                                                               },
                                                                                                                               {
@@ -1839,8 +1874,29 @@
                                                                                                                                        {
                                                                                                                                          "kind": "group",
                                                                                                                                          "properties": {
-                                                                                                                                           "field": {"kind":"field_reference","field":"vortex.crm.organisations:company.phone"},
-                                                                                                                                           "label": {"kind":"text","value":"Main phone"}
+                                                                                                                                           "field": {"kind":"field_reference","field":"vortex.crm.organisations:company.company_kind"},
+                                                                                                                                           "label": {"kind":"text","value":"Company type"}
+                                                                                                                                         }
+                                                                                                                                       },
+                                                                                                                                       {
+                                                                                                                                         "kind": "group",
+                                                                                                                                         "properties": {
+                                                                                                                                           "field": {"kind":"field_reference","field":"vortex.crm.organisations:company.industry"},
+                                                                                                                                           "label": {"kind":"text","value":"Industry"}
+                                                                                                                                         }
+                                                                                                                                       },
+                                                                                                                                       {
+                                                                                                                                         "kind": "group",
+                                                                                                                                         "properties": {
+                                                                                                                                           "field": {"kind":"field_reference","field":"vortex.crm.organisations:company.annual_revenue"},
+                                                                                                                                           "label": {"kind":"text","value":"Annual revenue"}
+                                                                                                                                         }
+                                                                                                                                       },
+                                                                                                                                       {
+                                                                                                                                         "kind": "group",
+                                                                                                                                         "properties": {
+                                                                                                                                           "field": {"kind":"field_reference","field":"vortex.crm.organisations:company.employee_count"},
+                                                                                                                                           "label": {"kind":"text","value":"Employee count"}
                                                                                                                                          }
                                                                                                                                        },
                                                                                                                                        {
@@ -1848,6 +1904,34 @@
                                                                                                                                          "properties": {
                                                                                                                                            "field": {"kind":"field_reference","field":"vortex.crm.organisations:company.website"},
                                                                                                                                            "label": {"kind":"text","value":"Website"}
+                                                                                                                                         }
+                                                                                                                                       },
+                                                                                                                                       {
+                                                                                                                                         "kind": "group",
+                                                                                                                                         "properties": {
+                                                                                                                                           "field": {"kind":"field_reference","field":"vortex.crm.organisations:company.phone"},
+                                                                                                                                           "label": {"kind":"text","value":"Main phone"}
+                                                                                                                                         }
+                                                                                                                                       },
+                                                                                                                                       {
+                                                                                                                                         "kind": "group",
+                                                                                                                                         "properties": {
+                                                                                                                                           "field": {"kind":"field_reference","field":"vortex.crm.organisations:company.description"},
+                                                                                                                                           "label": {"kind":"text","value":"Description"}
+                                                                                                                                         }
+                                                                                                                                       },
+                                                                                                                                       {
+                                                                                                                                         "kind": "group",
+                                                                                                                                         "properties": {
+                                                                                                                                           "field": {"kind":"field_reference","field":"vortex.crm.organisations:company.parent_company"},
+                                                                                                                                           "label": {"kind":"text","value":"Parent company"}
+                                                                                                                                         }
+                                                                                                                                       },
+                                                                                                                                       {
+                                                                                                                                         "kind": "group",
+                                                                                                                                         "properties": {
+                                                                                                                                           "field": {"kind":"field_reference","field":"vortex.crm.organisations:company.customer_since"},
+                                                                                                                                           "label": {"kind":"text","value":"Customer since"}
                                                                                                                                          }
                                                                                                                                        }
                                                                                                                                      ]
@@ -1998,6 +2082,20 @@
                                                                                                                                         {
                                                                                                                                           "kind": "group",
                                                                                                                                           "properties": {
+                                                                                                                                            "field": {"kind":"field_reference","field":"vortex.crm.people:contact.first_name"},
+                                                                                                                                            "label": {"kind":"text","value":"First name"}
+                                                                                                                                          }
+                                                                                                                                        },
+                                                                                                                                        {
+                                                                                                                                          "kind": "group",
+                                                                                                                                          "properties": {
+                                                                                                                                            "field": {"kind":"field_reference","field":"vortex.crm.people:contact.last_name"},
+                                                                                                                                            "label": {"kind":"text","value":"Last name"}
+                                                                                                                                          }
+                                                                                                                                        },
+                                                                                                                                        {
+                                                                                                                                          "kind": "group",
+                                                                                                                                          "properties": {
                                                                                                                                             "field": {"kind":"field_reference","field":"vortex.crm.people:contact.full_name"},
                                                                                                                                             "label": {"kind":"text","value":"Full name"}
                                                                                                                                           }
@@ -2012,8 +2110,36 @@
                                                                                                                                         {
                                                                                                                                           "kind": "group",
                                                                                                                                           "properties": {
+                                                                                                                                            "field": {"kind":"field_reference","field":"vortex.crm.people:contact.phone"},
+                                                                                                                                            "label": {"kind":"text","value":"Phone"}
+                                                                                                                                          }
+                                                                                                                                        },
+                                                                                                                                        {
+                                                                                                                                          "kind": "group",
+                                                                                                                                          "properties": {
                                                                                                                                             "field": {"kind":"field_reference","field":"vortex.crm.people:contact.company"},
                                                                                                                                             "label": {"kind":"text","value":"Company"}
+                                                                                                                                          }
+                                                                                                                                        },
+                                                                                                                                        {
+                                                                                                                                          "kind": "group",
+                                                                                                                                          "properties": {
+                                                                                                                                            "field": {"kind":"field_reference","field":"vortex.crm.people:contact.relationship_owner"},
+                                                                                                                                            "label": {"kind":"text","value":"Relationship owner"}
+                                                                                                                                          }
+                                                                                                                                        },
+                                                                                                                                        {
+                                                                                                                                          "kind": "group",
+                                                                                                                                          "properties": {
+                                                                                                                                            "field": {"kind":"field_reference","field":"vortex.crm.people:contact.email_consent"},
+                                                                                                                                            "label": {"kind":"text","value":"Email consent"}
+                                                                                                                                          }
+                                                                                                                                        },
+                                                                                                                                        {
+                                                                                                                                          "kind": "group",
+                                                                                                                                          "properties": {
+                                                                                                                                            "field": {"kind":"field_reference","field":"vortex.crm.people:contact.notes"},
+                                                                                                                                            "label": {"kind":"text","value":"Notes"}
                                                                                                                                           }
                                                                                                                                         }
                                                                                                                                       ]
