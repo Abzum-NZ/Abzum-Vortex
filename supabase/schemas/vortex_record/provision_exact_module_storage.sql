@@ -5,9 +5,6 @@ create or replace function vortex_record.provision_exact_module_storage(
 returns table (
   module_root_id uuid,
   release_revision bigint,
-  content_fingerprint text,
-  resolution_fingerprint text,
-  generator_contract_version text,
   storage_contract_ids uuid[],
   changed boolean
 )
@@ -83,13 +80,7 @@ begin
     select provision.storage_contract_ids into result_storage_ids
     from vortex_record.release_provisions as provision
     where provision.module_root_id = p_module_root_id
-      and provision.release_revision = p_module_release_revision
-      and provision.content_fingerprint = release_row.content_fingerprint
-      and provision.resolution_fingerprint = release_row.resolution_fingerprint
-      and provision.generator_contract_version = '1.0.0';
-    if result_storage_ids is null then
-      raise exception using errcode = '55000', message = 'Stored release provision evidence is incompatible';
-    end if;
+      and provision.release_revision = p_module_release_revision;
     if result_storage_ids is distinct from (
       select pg_catalog.array_agg((item.value ->> 'storageContractId')::uuid order by item.value ->> 'storageContractId')
       from pg_catalog.jsonb_array_elements(record_types) as item(value)
@@ -250,11 +241,11 @@ begin
         storage_contract_id, physical_schema_token, physical_table_token,
         module_root_id, record_type_id, storage_scope,
         first_compatible_release_revision, last_compatible_release_revision,
-        state, generator_contract_version, content_fingerprint, record_type_definition
+        state, content_fingerprint, record_type_definition
       ) values (
         storage_id, 'record_data', table_token, p_module_root_id,
         record_type_id_value, storage_scope_value, p_module_release_revision,
-        p_module_release_revision, 'active', '1.0.0', shape_fingerprint, record_type
+        p_module_release_revision, 'active', shape_fingerprint, record_type
       );
       any_change := true;
     else
@@ -262,7 +253,6 @@ begin
         or stored_catalogue.record_type_id <> record_type_id_value
         or stored_catalogue.storage_scope <> storage_scope_value
         or stored_catalogue.state <> 'active'
-        or stored_catalogue.generator_contract_version <> '1.0.0'
         or stored_catalogue.physical_schema_token <> 'record_data'
         or stored_catalogue.physical_table_token <> table_token
         or pg_catalog.to_regclass(pg_catalog.format('%I.%I', 'record_data', table_token)) is null then
@@ -454,16 +444,13 @@ begin
   select pg_catalog.array_agg(value order by value) into result_storage_ids
   from pg_catalog.unnest(result_storage_ids) as item(value);
   insert into vortex_record.release_provisions (
-    module_root_id, release_revision, content_fingerprint, resolution_fingerprint,
-    generator_contract_version, storage_contract_ids
+    module_root_id, release_revision, storage_contract_ids
   ) values (
-    p_module_root_id, p_module_release_revision, release_row.content_fingerprint,
-    release_row.resolution_fingerprint, '1.0.0', result_storage_ids
+    p_module_root_id, p_module_release_revision, result_storage_ids
   ) on conflict on constraint release_provisions_pkey do nothing;
 
   return query select p_module_root_id, p_module_release_revision,
-    release_row.content_fingerprint, release_row.resolution_fingerprint,
-    '1.0.0'::text, result_storage_ids, any_change;
+    result_storage_ids, any_change;
 exception
   when no_data_found then
     raise exception using errcode = 'P0002', message = 'Exact Module release is unavailable';
