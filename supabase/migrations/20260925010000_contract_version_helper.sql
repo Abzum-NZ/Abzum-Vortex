@@ -9,6 +9,8 @@
 -- in-place relationship-target and index-readiness patches applied after its last
 -- create, and its owner, security definer, search_path, grants and comment are kept.
 
+begin;
+
 create or replace function vortex_definition.accepted_contract_version(
   p_kind text
 )
@@ -1971,3 +1973,5 @@ grant execute on function vortex_access.evaluate_organization_record_access_inte
   to vortex_record_adapter;
 comment on function vortex_access.evaluate_organization_record_access_internal(jsonb, uuid, jsonb) is
   'The complete exact-record access decision: unions every eligible alternative''s own complete row scope and always carries the exact recordId. Owner-only except for the fixed record adapter.';
+
+commit;
