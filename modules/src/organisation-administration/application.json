@@ -223,13 +223,17 @@
           "placements": {
             "shell_root": {
               "block": {
-                "block_id": "a3b7065b-47ef-4c92-93d1-59300f8b059c",
+                "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
                 "release_version": "1.0.0"
               },
               "settings": {
-                "title": {
-                  "kind": "text",
-                  "value": "Organisation administration"
+                "direction": {
+                  "kind": "choice",
+                  "value": "column"
+                },
+                "gap": {
+                  "kind": "choice",
+                  "value": "medium"
                 }
               },
               "theme_overrides": {},
@@ -245,10 +249,121 @@
                 }
               },
               "slots": {
-                "tab_one": {
-                  "placements": {},
+                "header": {
+                  "placements": {
+                    "shell_heading": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.0.0"
+                      },
+                      "settings": {
+                        "text": {
+                          "kind": "text",
+                          "value": "Organisation Administration"
+                        },
+                        "level": {
+                          "kind": "choice",
+                          "value": "one"
+                        }
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      },
+                      "slots": {}
+                    }
+                  },
                   "order": {
-                    "desktop": []
+                    "desktop": [
+                      "shell_heading"
+                    ]
+                  }
+                },
+                "content": {
+                  "placements": {
+                    "shell_body": {
+                      "block": {
+                        "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                        "release_version": "1.0.0"
+                      },
+                      "settings": {
+                        "direction": {
+                          "kind": "choice",
+                          "value": "row"
+                        },
+                        "gap": {
+                          "kind": "choice",
+                          "value": "medium"
+                        }
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      },
+                      "slots": {
+                        "menu": {
+                          "placements": {
+                            "shell_navigation": {
+                              "block": {
+                                "block_id": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
+                                "release_version": "1.0.0"
+                              },
+                              "settings": {
+                                "title": {
+                                  "kind": "text",
+                                  "value": "Organisation Administration"
+                                }
+                              },
+                              "theme_overrides": {},
+                              "responsive": {
+                                "desktop": {
+                                  "visible": true,
+                                  "width": {
+                                    "kind": "fill"
+                                  },
+                                  "height": {
+                                    "kind": "content"
+                                  }
+                                }
+                              },
+                              "slots": {}
+                            }
+                          },
+                          "order": {
+                            "desktop": [
+                              "shell_navigation"
+                            ]
+                          }
+                        },
+                        "content": {
+                          "placements": {},
+                          "order": {
+                            "desktop": []
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "order": {
+                    "desktop": [
+                      "shell_body"
+                    ]
                   }
                 }
               }
@@ -275,8 +390,8 @@
               "input",
               "layout"
             ],
-            "parent_placement": "shell_root",
-            "parent_slot": "tab_one"
+            "parent_placement": "shell_body",
+            "parent_slot": "content"
           }
         ]
       }
