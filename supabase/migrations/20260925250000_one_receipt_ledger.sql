@@ -52,7 +52,7 @@ create table vortex_record.command_receipts (
   command_fingerprint text not null,
   record_type_id uuid not null,
   record_id uuid,
-  identity jsonb not null default '{}'::jsonb,
+  command_identity jsonb not null default '{}'::jsonb,
   expected_concurrency_number bigint,
   recovery_policy_revision bigint,
   activity_id uuid,
@@ -75,13 +75,13 @@ create table vortex_record.command_receipts (
     state in ('pending', 'completed')
   ),
   constraint command_receipts_identity_valid check (
-    pg_catalog.jsonb_typeof(identity) = 'object'
+    pg_catalog.jsonb_typeof(command_identity) = 'object'
   ),
   -- A record save or ownership transfer names its record only when it completes.
   constraint command_receipts_save_valid check (
     command_kind <> 'record_save' or (
       operation in ('create', 'update', 'transfer_ownership')
-      and identity = '{}'::jsonb
+      and command_identity = '{}'::jsonb
       and expected_concurrency_number is null
       and recovery_policy_revision is null
       and activity_id is null
@@ -101,9 +101,9 @@ create table vortex_record.command_receipts (
     command_kind <> 'named_action' or (
       operation = 'named_action'
       and record_id is not null
-      and identity ?& array['actionOwnerKind', 'actionOwnerId', 'actionReleaseRevision', 'actionId']
-      and identity ->> 'actionOwnerKind' in ('application', 'module')
-      and (identity ->> 'actionReleaseRevision')::bigint between 1 and 9007199254740991
+      and command_identity ?& array['actionOwnerKind', 'actionOwnerId', 'actionReleaseRevision', 'actionId']
+      and command_identity ->> 'actionOwnerKind' in ('application', 'module')
+      and (command_identity ->> 'actionReleaseRevision')::bigint between 1 and 9007199254740991
       and expected_concurrency_number is null
       and recovery_policy_revision is null
       and activity_id is null
@@ -124,7 +124,7 @@ create table vortex_record.command_receipts (
     command_kind <> 'record_lifecycle' or (
       operation in ('delete', 'restore')
       and record_id is not null
-      and identity = '{}'::jsonb
+      and command_identity = '{}'::jsonb
       and expected_concurrency_number between 1 and 9007199254740990
       and activity_id is not null
       and activity_id <> '00000000-0000-0000-0000-000000000000'::uuid
@@ -169,7 +169,7 @@ comment on table vortex_record.command_receipts is
 insert into vortex_record.command_receipts (
   organization_id, application_root_id, actor_organization_account_id,
   command_kind, command_id, operation, command_fingerprint, record_type_id,
-  record_id, identity, state, concurrency_number, created_at, completed_at
+  record_id, command_identity, state, concurrency_number, created_at, completed_at
 )
 select
   stored.organization_id, stored.application_root_id,
@@ -182,7 +182,7 @@ from vortex_record.save_command_receipts as stored;
 insert into vortex_record.command_receipts (
   organization_id, application_root_id, actor_organization_account_id,
   command_kind, command_id, operation, command_fingerprint, record_type_id,
-  record_id, identity, state, concurrency_number, created_at, completed_at
+  record_id, command_identity, state, concurrency_number, created_at, completed_at
 )
 select
   stored.organization_id, stored.application_root_id,
@@ -201,7 +201,7 @@ from vortex_record.named_action_command_receipts as stored;
 insert into vortex_record.command_receipts (
   organization_id, application_root_id, actor_organization_account_id,
   command_kind, command_id, operation, command_fingerprint, record_type_id,
-  record_id, identity, expected_concurrency_number, recovery_policy_revision,
+  record_id, command_identity, expected_concurrency_number, recovery_policy_revision,
   activity_id, occurrence_id, state, concurrency_number, created_at, completed_at
 )
 select
@@ -305,7 +305,7 @@ begin
     insert into vortex_record.command_receipts (
       organization_id, application_root_id, actor_organization_account_id,
       command_kind, command_id, operation, command_fingerprint, record_type_id,
-      record_id, identity, expected_concurrency_number, recovery_policy_revision,
+      record_id, command_identity, expected_concurrency_number, recovery_policy_revision,
       activity_id, occurrence_id, state
     ) values (
       organization_id_value, application_root_id_value, actor_id_value,
@@ -347,7 +347,7 @@ begin
     or receipt.command_fingerprint is distinct from p_fingerprint
     or receipt.operation is distinct from p_operation
     or receipt.record_type_id is distinct from p_record_type_id
-    or receipt.identity is distinct from identity_value
+    or receipt.command_identity is distinct from identity_value
     or (p_record_id is not null and receipt.record_id is distinct from p_record_id) then
     return pg_catalog.jsonb_build_object('status', 'identity_conflict');
   end if;

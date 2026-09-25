@@ -36,7 +36,7 @@ begin
     insert into vortex_record.command_receipts (
       organization_id, application_root_id, actor_organization_account_id,
       command_kind, command_id, operation, command_fingerprint, record_type_id,
-      record_id, identity, expected_concurrency_number, recovery_policy_revision,
+      record_id, command_identity, expected_concurrency_number, recovery_policy_revision,
       activity_id, occurrence_id, state
     ) values (
       organization_id_value, application_root_id_value, actor_id_value,
@@ -78,7 +78,7 @@ begin
     or receipt.command_fingerprint is distinct from p_fingerprint
     or receipt.operation is distinct from p_operation
     or receipt.record_type_id is distinct from p_record_type_id
-    or receipt.identity is distinct from identity_value
+    or receipt.command_identity is distinct from identity_value
     or (p_record_id is not null and receipt.record_id is distinct from p_record_id) then
     return pg_catalog.jsonb_build_object('status', 'identity_conflict');
   end if;
