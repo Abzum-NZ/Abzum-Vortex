@@ -415,12 +415,447 @@
                   },
                   "slots": {},
                   "read_model": "organization_accounts"
+                },
+                "form_suspend_account": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Suspend organisation account"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "input_suspend_account_organization_account_id": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "organization_account_id"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Organisation account id"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_suspend_account_expected_revision": {
+                          "block": {
+                            "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "expected_revision"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Expected revision"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "integer": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "min_value": {
+                              "kind": "number",
+                              "value": 1
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "button_suspend_account": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Suspend account"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "action"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "danger"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "input_suspend_account_organization_account_id",
+                          "input_suspend_account_expected_revision",
+                          "button_suspend_account"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "form_reactivate_account": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Reactivate organisation account"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "input_reactivate_account_organization_account_id": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "organization_account_id"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Organisation account id"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_reactivate_account_expected_revision": {
+                          "block": {
+                            "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "expected_revision"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Expected revision"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "integer": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "min_value": {
+                              "kind": "number",
+                              "value": 1
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "button_reactivate_account": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Reactivate account"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "action"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "input_reactivate_account_organization_account_id",
+                          "input_reactivate_account_expected_revision",
+                          "button_reactivate_account"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "form_close_account": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Close organisation account"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "input_close_account_organization_account_id": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "organization_account_id"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Organisation account id"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_close_account_expected_revision": {
+                          "block": {
+                            "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "expected_revision"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Expected revision"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "integer": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "min_value": {
+                              "kind": "number",
+                              "value": 1
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "button_close_account": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Close account"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "action"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "danger"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "input_close_account_organization_account_id",
+                          "input_close_account_expected_revision",
+                          "button_close_account"
+                        ]
+                      }
+                    }
+                  }
                 }
               },
               "order": {
                 "desktop": [
                   "accounts_text",
-                  "accounts_region"
+                  "accounts_region",
+                  "form_suspend_account",
+                  "form_reactivate_account",
+                  "form_close_account"
                 ]
               }
             }
@@ -501,12 +936,294 @@
                   },
                   "slots": {},
                   "read_model": "organization_invitations"
+                },
+                "form_create_invitation": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Create invitation"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "input_create_invitation_invited_email": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "invited_email"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Invited email"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_create_invitation_expires_at": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "expires_at"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Expires at"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "button_create_invitation": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Create invitation"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "action"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "input_create_invitation_invited_email",
+                          "input_create_invitation_expires_at",
+                          "button_create_invitation"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "form_revoke_invitation": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Revoke invitation"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "input_revoke_invitation_invitation_id": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "invitation_id"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Invitation id"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_revoke_invitation_expected_revision": {
+                          "block": {
+                            "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "expected_revision"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Expected revision"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "integer": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "min_value": {
+                              "kind": "number",
+                              "value": 1
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "button_revoke_invitation": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Revoke invitation"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "action"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "danger"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "input_revoke_invitation_invitation_id",
+                          "input_revoke_invitation_expected_revision",
+                          "button_revoke_invitation"
+                        ]
+                      }
+                    }
+                  }
                 }
               },
               "order": {
                 "desktop": [
                   "invitations_text",
-                  "invitations_region"
+                  "invitations_region",
+                  "form_create_invitation",
+                  "form_revoke_invitation"
                 ]
               }
             }
@@ -1832,6 +2549,281 @@
         "outputs": {},
         "errors": [],
         "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_suspend_organization_account",
+        "key": "suspend_organization_account",
+        "labels": {
+          "name": "Suspend organisation account"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "organization_account_id": {
+            "type": "text",
+            "required": true
+          },
+          "expected_revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.suspend_organization_account"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_reactivate_organization_account",
+        "key": "reactivate_organization_account",
+        "labels": {
+          "name": "Reactivate organisation account"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "organization_account_id": {
+            "type": "text",
+            "required": true
+          },
+          "expected_revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.reactivate_organization_account"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_close_organization_account",
+        "key": "close_organization_account",
+        "labels": {
+          "name": "Close organisation account"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "organization_account_id": {
+            "type": "text",
+            "required": true
+          },
+          "expected_revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.close_organization_account"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_create_organization_invitation",
+        "key": "create_organization_invitation",
+        "labels": {
+          "name": "Create organisation invitation"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "invited_email": {
+            "type": "text",
+            "required": true
+          },
+          "expires_at": {
+            "type": "text",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.create_organization_invitation"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_revoke_organization_invitation",
+        "key": "revoke_organization_invitation",
+        "labels": {
+          "name": "Revoke organisation invitation"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "invitation_id": {
+            "type": "text",
+            "required": true
+          },
+          "expected_revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.revoke_organization_invitation"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
       }
     ],
     "flow_bindings": [
@@ -1916,6 +2908,91 @@
           "details": {
             "kind": "caller",
             "name": "details"
+          }
+        }
+      },
+      {
+        "id": "binding_suspend_account",
+        "control": "button_suspend_account",
+        "event_id": "event_organisation_settings_action",
+        "event": "action",
+        "flow": "flow_suspend_organization_account",
+        "inputs": {
+          "organization_account_id": {
+            "kind": "caller",
+            "name": "organization_account_id"
+          },
+          "expected_revision": {
+            "kind": "caller",
+            "name": "expected_revision"
+          }
+        }
+      },
+      {
+        "id": "binding_reactivate_account",
+        "control": "button_reactivate_account",
+        "event_id": "event_organisation_settings_action",
+        "event": "action",
+        "flow": "flow_reactivate_organization_account",
+        "inputs": {
+          "organization_account_id": {
+            "kind": "caller",
+            "name": "organization_account_id"
+          },
+          "expected_revision": {
+            "kind": "caller",
+            "name": "expected_revision"
+          }
+        }
+      },
+      {
+        "id": "binding_close_account",
+        "control": "button_close_account",
+        "event_id": "event_organisation_settings_action",
+        "event": "action",
+        "flow": "flow_close_organization_account",
+        "inputs": {
+          "organization_account_id": {
+            "kind": "caller",
+            "name": "organization_account_id"
+          },
+          "expected_revision": {
+            "kind": "caller",
+            "name": "expected_revision"
+          }
+        }
+      },
+      {
+        "id": "binding_create_invitation",
+        "control": "button_create_invitation",
+        "event_id": "event_organisation_settings_action",
+        "event": "action",
+        "flow": "flow_create_organization_invitation",
+        "inputs": {
+          "invited_email": {
+            "kind": "caller",
+            "name": "invited_email"
+          },
+          "expires_at": {
+            "kind": "caller",
+            "name": "expires_at"
+          }
+        }
+      },
+      {
+        "id": "binding_revoke_invitation",
+        "control": "button_revoke_invitation",
+        "event_id": "event_organisation_settings_action",
+        "event": "action",
+        "flow": "flow_revoke_organization_invitation",
+        "inputs": {
+          "invitation_id": {
+            "kind": "caller",
+            "name": "invitation_id"
+          },
+          "expected_revision": {
+            "kind": "caller",
+            "name": "expected_revision"
           }
         }
       }
