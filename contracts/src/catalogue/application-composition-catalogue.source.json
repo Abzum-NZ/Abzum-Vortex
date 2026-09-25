@@ -285,6 +285,355 @@
     ],
     "supportedStateOperations": []
   },
+  "TEXT_BLOCK_RELEASE_1_1_0": {
+    "blockId": "addfad00-1b11-4674-83fa-913667f87e79",
+    "key": "platform.display.text",
+    "releaseVersion": "1.1.0",
+    "name": "Plain text",
+    "icon": "type",
+    "paletteGroup": "content",
+    "rendererKey": "platform.renderer.text",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "title",
+        "label": "Title",
+        "help": "Accessible name shown as the block heading",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "text",
+        "key": "text",
+        "label": "Text",
+        "help": "Literal text shown when no projected value is supplied",
+        "required": false,
+        "minLength": 0,
+        "maxLength": 5000
+      },
+      {
+        "kind": "text",
+        "key": "empty_message",
+        "label": "Empty message",
+        "help": "Text shown when there is no text to display",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content_or_bounded",
+      "publicSurface": "allowed",
+      "accessibleName": "optional",
+      "accessibleNamePropertyPath": [
+        "title"
+      ]
+    },
+    "supportedEvents": [
+      "refresh"
+    ],
+    "supportedStateOperations": []
+  },
+  "RICH_TEXT_BLOCK_RELEASE_1_1_0": {
+    "blockId": "148f420f-f7db-4145-80f4-3d3fa036096b",
+    "key": "platform.display.rich_text",
+    "releaseVersion": "1.1.0",
+    "name": "Rich text",
+    "icon": "file-text",
+    "paletteGroup": "content",
+    "rendererKey": "platform.renderer.rich_text",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "title",
+        "label": "Title",
+        "help": "Accessible name shown as the block heading",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "rich_text",
+        "key": "document",
+        "label": "Content",
+        "help": "Structured content shown when no projected value is supplied",
+        "required": false,
+        "allowedElements": [
+          "paragraph",
+          "heading",
+          "bulleted_list",
+          "numbered_list",
+          "emphasis",
+          "link"
+        ]
+      },
+      {
+        "kind": "text",
+        "key": "empty_message",
+        "label": "Empty message",
+        "help": "Text shown when there is no content to display",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content_or_bounded",
+      "publicSurface": "allowed",
+      "accessibleName": "optional",
+      "accessibleNamePropertyPath": [
+        "title"
+      ]
+    },
+    "supportedEvents": [
+      "refresh"
+    ],
+    "supportedStateOperations": []
+  },
+  "LIST_BLOCK_RELEASE_1_1_0": {
+    "blockId": "4881c816-e4ce-4c39-b0b7-20958b947748",
+    "key": "platform.display.list",
+    "releaseVersion": "1.1.0",
+    "name": "List",
+    "icon": "list",
+    "paletteGroup": "data",
+    "rendererKey": "platform.renderer.list",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "title",
+        "label": "Title",
+        "help": "Accessible name shown as the block heading",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "text",
+        "key": "empty_message",
+        "label": "Empty message",
+        "help": "Text shown when there are no records to display",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content_or_bounded",
+      "publicSurface": "allowed",
+      "accessibleName": "optional",
+      "accessibleNamePropertyPath": [
+        "title"
+      ]
+    },
+    "supportedEvents": [
+      "refresh",
+      "row_action",
+      "selection_changed",
+      "page_changed"
+    ],
+    "supportedStateOperations": []
+  },
+  "TABLE_BLOCK_RELEASE_1_1_0": {
+    "blockId": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+    "key": "platform.display.table",
+    "releaseVersion": "1.1.0",
+    "name": "Table",
+    "icon": "table",
+    "paletteGroup": "data",
+    "rendererKey": "platform.renderer.table",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "title",
+        "label": "Title",
+        "help": "Accessible name shown as the block heading",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "text",
+        "key": "empty_message",
+        "label": "Empty message",
+        "help": "Text shown when there are no records to display",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content_or_bounded",
+      "publicSurface": "allowed",
+      "accessibleName": "optional",
+      "accessibleNamePropertyPath": [
+        "title"
+      ]
+    },
+    "supportedEvents": [
+      "refresh",
+      "row_action",
+      "selection_changed",
+      "sort_changed",
+      "page_changed"
+    ],
+    "supportedStateOperations": []
+  },
+  "RECORD_DETAIL_BLOCK_RELEASE_1_1_0": {
+    "blockId": "e2569df0-2f10-4b20-b41d-177b66cd136c",
+    "key": "platform.display.record_detail",
+    "releaseVersion": "1.1.0",
+    "name": "Record detail",
+    "icon": "file",
+    "paletteGroup": "record",
+    "rendererKey": "platform.renderer.record_detail",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "title",
+        "label": "Title",
+        "help": "Accessible name shown as the block heading",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "text",
+        "key": "empty_message",
+        "label": "Empty message",
+        "help": "Text shown when there are no details to display",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content_or_bounded",
+      "publicSurface": "allowed",
+      "accessibleName": "optional",
+      "accessibleNamePropertyPath": [
+        "title"
+      ]
+    },
+    "supportedEvents": [
+      "refresh",
+      "row_action"
+    ],
+    "supportedStateOperations": []
+  },
+  "GROUPED_DATA_BLOCK_RELEASE_1_1_0": {
+    "blockId": "6c27a0c2-ad91-4a5a-ab1d-54d337bebe36",
+    "key": "platform.display.grouped_data",
+    "releaseVersion": "1.1.0",
+    "name": "Grouped data",
+    "icon": "layers",
+    "paletteGroup": "data",
+    "rendererKey": "platform.renderer.grouped_data",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "title",
+        "label": "Title",
+        "help": "Accessible name shown as the block heading",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "text",
+        "key": "empty_message",
+        "label": "Empty message",
+        "help": "Text shown when there are no groups to display",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content_or_bounded",
+      "publicSurface": "allowed",
+      "accessibleName": "optional",
+      "accessibleNamePropertyPath": [
+        "title"
+      ]
+    },
+    "supportedEvents": [
+      "refresh",
+      "row_action",
+      "selection_changed"
+    ],
+    "supportedStateOperations": []
+  },
+  "SUMMARY_VALUES_BLOCK_RELEASE_1_1_0": {
+    "blockId": "b00f7a0f-9094-4186-b8c4-066b1df6c395",
+    "key": "platform.display.summary_values",
+    "releaseVersion": "1.1.0",
+    "name": "Summary values",
+    "icon": "hash",
+    "paletteGroup": "figures",
+    "rendererKey": "platform.renderer.summary_values",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "title",
+        "label": "Title",
+        "help": "Accessible name shown as the block heading",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "text",
+        "key": "empty_message",
+        "label": "Empty message",
+        "help": "Text shown when there are no values to display",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content_or_bounded",
+      "publicSurface": "allowed",
+      "accessibleName": "optional",
+      "accessibleNamePropertyPath": [
+        "title"
+      ]
+    },
+    "supportedEvents": [
+      "refresh"
+    ],
+    "supportedStateOperations": []
+  },
   "TEXT_INPUT_BLOCK_RELEASE": {
     "blockId": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
     "key": "platform.form.text_input",
