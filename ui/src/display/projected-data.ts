@@ -1,5 +1,6 @@
 import {
   builderKeySchema,
+  fieldIdSchema,
   richTextDocumentV2Schema,
   safeHttpsUrlSchema,
   timestampSchema,
@@ -103,12 +104,13 @@ export type DisplayRefusalReason = "not_permitted" | "access_ended" | "not_found
 
 /**
  * Explicit, data-safe state passed for one placement.
- * Only the `ready` state carries values; loading, empty and refused cannot leak data.
+ * Only the `ready` state carries values; loading, empty, refused and error cannot leak data.
  */
 export type ProjectedDisplayData =
   | Readonly<{ status: "loading" }>
   | Readonly<{ status: "empty" }>
   | Readonly<{ status: "refused"; reason: DisplayRefusalReason }>
+  | Readonly<{ status: "error" }>
   | Readonly<{ status: "ready"; values: ProjectedDisplayValues }>;
 
 /** Declared semantic event names this display family can emit. */
@@ -162,6 +164,7 @@ const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = [
 
 const LOADING_STATE: ProjectedDisplayData = Object.freeze({ status: "loading" });
 const EMPTY_STATE: ProjectedDisplayData = Object.freeze({ status: "empty" });
+const ERROR_STATE: ProjectedDisplayData = Object.freeze({ status: "error" });
 const EMPTY_CELL: DisplayCellValue = Object.freeze({ kind: "empty" });
 const EMPTY_HANDLERS: DisplayEventHandlers = Object.freeze({});
 const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
@@ -225,6 +228,18 @@ const requireBuilderKey = (
 ): string => {
   const parsed = builderKeySchema.safeParse(value);
   return parsed.success ? parsed.data : fail(message, location);
+};
+
+/** A row cell, column, detail field or sort key: a builder key or a declared field identity. */
+const requireFieldKey = (
+  value: unknown,
+  message: string,
+  location: DefinitionRenderErrorLocation,
+): string => {
+  const parsed = builderKeySchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  const field = fieldIdSchema.safeParse(value);
+  return field.success ? field.data : fail(message, location);
 };
 
 const requirePositiveInteger = (
@@ -366,7 +381,7 @@ const parseRows = (
       );
       const cells: Record<string, DisplayCellValue> = {};
       for (const [key, cell] of Object.entries(cellsRecord)) {
-        const cellKey = requireBuilderKey(key, `Invalid projected cell key '${key}'`, rowLocation);
+        const cellKey = requireFieldKey(key, `Invalid projected cell key '${key}'`, rowLocation);
         cells[cellKey] = parseCellValue(cell, { ...rowLocation, propertyPath: [cellKey] });
       }
       return Object.freeze({ recordId, cells: Object.freeze(cells) });
@@ -385,7 +400,7 @@ const parseColumns = (
       const columnLocation = { ...location, propertyPath: [`columns[${index}]`] };
       const record = requireRecord(item, "A projected column must be an object", columnLocation);
       requireExactKeys(record, ["key", "label"], columnLocation);
-      const key = requireBuilderKey(
+      const key = requireFieldKey(
         record.key,
         "A projected column requires a stable key",
         columnLocation,
@@ -495,7 +510,7 @@ const parseFields = (
       const fieldLocation = { ...location, propertyPath: [`fields[${index}]`] };
       const record = requireRecord(item, "A detail field must be an object", fieldLocation);
       requireExactKeys(record, ["key", "label", "value"], fieldLocation);
-      const key = requireBuilderKey(
+      const key = requireFieldKey(
         record.key,
         "A detail field requires a stable key",
         fieldLocation,
@@ -628,7 +643,7 @@ const parseProjectedValues = (
           "direction",
         ], location);
         const sortRecord = record.sort as Record<string, unknown>;
-        const columnKey = requireBuilderKey(
+        const columnKey = requireFieldKey(
           sortRecord.columnKey,
           "A projected sort requires a column key",
           location,
@@ -699,6 +714,9 @@ export const parseProjectedDisplayData = (
         return fail("A refused display state must use a fixed refusal reason", location);
       return Object.freeze({ status: "refused", reason: reason as DisplayRefusalReason });
     }
+    case "error":
+      requireExactKeys(record, ["status"], location);
+      return ERROR_STATE;
     case "ready":
       requireExactKeys(record, ["status", "values"], location);
       return Object.freeze({

@@ -33,6 +33,7 @@ import {
   recordTypeIdSchema,
   revisionSchema,
   roleIdSchema,
+  ruleIdSchema,
   semanticVersionSchema,
   timestampSchema,
   workflowRunIdSchema,
@@ -281,15 +282,23 @@ export const interfaceOperationSchema = z
     rateLimitPerMinute: z.number().int().min(1).max(100_000),
     maximumRequestBytes: z.number().int().min(1).max(100_000_000),
     duplicateProtection: z.enum(["not_required", "required"]),
+    /**
+     * What the operation calls. A change or background start names an application-owned flow entry
+     * point (a one-task flow by default) and never a lower-level action or workflow, so a published
+     * interface and the web and agent surfaces that start the same flow share one start path. A
+     * read names a declared query, which the Query engine runs directly under the caller's access.
+     * Definition validation resolves the flow and checks the shape against the work it commits.
+     */
     target: z.discriminatedUnion("kind", [
-      z.object({ kind: z.literal("action"), key: namespacedKeySchema }).strict(),
+      z.object({ kind: z.literal("flow"), flowId: ruleIdSchema }).strict(),
       z.object({ kind: z.literal("query"), key: builderKeySchema }).strict(),
-      z.object({ kind: z.literal("workflow"), key: builderKeySchema }).strict(),
     ]),
     errorCodes: z.array(builderKeySchema),
   })
   .strict()
   .superRefine((value, context) => {
+    // A flow entry point takes a named-action subject and inputs or returns its run identifier; a
+    // query takes nothing and returns its fields. Validation decides which flow entry point it is.
     const inputKinds = new Set(
       Object.values(value.inputShape).map((field) => field.targetBinding.kind),
     );
@@ -297,28 +306,26 @@ export const interfaceOperationSchema = z
       Object.values(value.outputShape).map((field) => field.targetBinding.kind),
     );
     const allowedInputKinds = {
-      action: new Set(["action_subject", "action_input"]),
+      flow: new Set(["action_subject", "action_input"]),
       query: new Set(),
-      workflow: new Set(),
     }[value.target.kind];
     const allowedOutputKinds = {
-      action: new Set(),
+      flow: new Set(["workflow_run_id"]),
       query: new Set(["query_field", "query_page_information"]),
-      workflow: new Set(["workflow_run_id"]),
     }[value.target.kind];
     for (const kind of inputKinds)
       if (!allowedInputKinds.has(kind))
         context.addIssue({
           code: "custom",
           path: ["inputShape"],
-          message: `An ${value.target.kind} interface accepts only ${value.target.kind} input bindings`,
+          message: `A ${value.target.kind} interface accepts only ${value.target.kind} input bindings`,
         });
     for (const kind of outputKinds)
       if (!allowedOutputKinds.has(kind))
         context.addIssue({
           code: "custom",
           path: ["outputShape"],
-          message: `An ${value.target.kind} interface accepts only ${value.target.kind} output bindings`,
+          message: `A ${value.target.kind} interface accepts only ${value.target.kind} output bindings`,
         });
   });
 export const interfaceDefinitionSchema = z

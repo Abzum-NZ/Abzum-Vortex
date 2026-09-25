@@ -51,6 +51,23 @@ export {
   type ProtectedReadModelResolution,
 } from "./protected-read-model-resolution";
 export {
+  projectRecordDetailData,
+  projectRecordsTableData,
+  type ComponentDataProjectionInput,
+  type ProjectedCellValue,
+  type ProjectedComponentData,
+  type ProjectedRecordDetailValues,
+  type ProjectedTableRow,
+  type ProjectedTableValues,
+} from "./component-data-projection";
+export {
+  buildRecordsTableQueryCommand,
+  createRecordsTableQueryResolver,
+  type RecordsTableQueryRequest,
+  type RecordsTableQueryResolution,
+  type RecordsTableQueryRunner,
+} from "./records-table-query";
+export {
   abandonPrivateFormDraftCommandSchema,
   createPrivateFormDraftCommandSchema,
   PrivateFormDraftError,
