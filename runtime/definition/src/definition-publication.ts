@@ -100,9 +100,9 @@ export class DefinitionPublicationError extends Error {
   }
 }
 
-const refuse = (code: DefinitionPublicationFailureCode): never => {
+function refuse(code: DefinitionPublicationFailureCode): never {
   throw new DefinitionPublicationError(code);
-};
+}
 
 /** Read model needed to compile one current draft. Implementations must tenant-scope every method. */
 type DefinitionPublicationCandidateCommon = Readonly<{
@@ -586,7 +586,9 @@ const findPinned = <Kind extends ExactDefinitionDependency["kind"]>(
           ? entry.blockId === subject
           : entry.kind === "protected_operation"
             ? entry.operation.operationId === subject
-            : entry.key === subject),
+            : entry.kind === "module" || entry.kind === "connection_type"
+              ? entry.key === subject
+              : false),
   );
   if (matches.length !== 1) return refuse("DEFINITION_CONFIRMATION_MISMATCH");
   return matches[0] as Extract<ExactDefinitionDependency, { kind: Kind }>;
@@ -751,12 +753,13 @@ const resolveDependencies = async (
             : "DEFINITION_DEPENDENCY_SUBSTITUTED",
         );
       if (pinned !== undefined) {
-        const exact = pinned.filter(
-          (dependency) =>
-            dependency.kind === "protected_operation" &&
-            dependency.operation.owner.kind === "platform_service" &&
-            dependency.operation.owner.serviceId === registered.serviceId &&
-            dependency.operation.operationId === registered.operationId,
+        const exact = pinned.flatMap((dependency) =>
+          dependency.kind === "protected_operation" &&
+          dependency.operation.owner.kind === "platform_service" &&
+          dependency.operation.owner.serviceId === registered.serviceId &&
+          dependency.operation.operationId === registered.operationId
+            ? [dependency]
+            : [],
         );
         if (exact.length !== 1) refuse("DEFINITION_CONFIRMATION_MISMATCH");
         const pinnedOperation = exact[0]!;

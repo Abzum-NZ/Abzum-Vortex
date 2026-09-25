@@ -378,7 +378,7 @@ function sourceTranslationContext(source: unknown) {
           : undefined;
     const candidateKey = entry.key ?? entry.id;
     const parsedCandidate = namespacedKeySchema.or(builderKeySchema).safeParse(candidateKey);
-    const nextSegments =
+    const nextSegments: DefinitionValidationLocation["segments"] =
       locationKind && parsedCandidate.success && current.segments.length < 12
         ? [...current.segments, { kind: locationKind, key: parsedCandidate.data }]
         : current.segments;
@@ -4704,7 +4704,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           : undefined;
       const sourceWorkflow =
         request?.source.kind === "application"
-          ? request.source.body.workflows.find(
+          ? (request.source.body as ApplicationSourceDocumentV2["body"]).workflows.find(
               (candidate) => candidate.key === String(workflow.key),
             )
           : undefined;
