@@ -116,24 +116,45 @@ export type ProjectedDisplayData =
 /** Declared semantic event names this display family can emit. */
 export type DisplaySemanticEventName = Extract<
   ComponentSemanticEventKind,
-  "refresh" | "row_action" | "selection_changed" | "sort_changed" | "page_changed"
+  | "refresh"
+  | "row_clicked"
+  | "row_action"
+  | "selection_changed"
+  | "sort_changed"
+  | "page_changed"
+  | "bulk_action"
+  | "inline_edit"
 >;
 
 /**
  * One declared semantic event. Row and item events always carry stable identity;
  * no event is ever emitted without a real user interaction. The bound flow, not the
  * component, decides what a row action does.
+ *
+ * A row click, row action, bulk action and inline-edit commit carry the stable `eventId` of the
+ * exact configured control that fired, because one table placement may declare several named
+ * commands that each bind to a different flow. A legacy `row_action` from an earlier release that
+ * declares only one command may leave it absent.
  */
 export type DisplaySemanticEvent =
   | Readonly<{ event: "refresh" }>
-  | Readonly<{ event: "row_action"; recordId: string }>
+  | Readonly<{ event: "row_clicked"; eventId: string; recordId: string }>
+  | Readonly<{ event: "row_action"; eventId?: string; recordId: string }>
   | Readonly<{ event: "selection_changed"; recordId: string; selected: boolean }>
   | Readonly<{
       event: "sort_changed";
       columnKey: string;
       direction: "ascending" | "descending";
     }>
-  | Readonly<{ event: "page_changed"; page: number }>;
+  | Readonly<{ event: "page_changed"; page: number }>
+  | Readonly<{ event: "bulk_action"; eventId: string; recordIds: readonly string[] }>
+  | Readonly<{
+      event: "inline_edit";
+      eventId: string;
+      recordId: string;
+      field: string;
+      value: DisplayCellValue;
+    }>;
 
 export type DisplayEventHandler = (event: DisplaySemanticEvent) => void;
 
@@ -156,10 +177,13 @@ const DISPLAY_REFUSAL_REASONS: readonly DisplayRefusalReason[] = [
 
 const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = [
   "refresh",
+  "row_clicked",
   "row_action",
   "selection_changed",
   "sort_changed",
   "page_changed",
+  "bulk_action",
+  "inline_edit",
 ];
 
 const LOADING_STATE: ProjectedDisplayData = Object.freeze({ status: "loading" });
