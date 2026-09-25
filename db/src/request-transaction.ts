@@ -48,7 +48,8 @@ export type ResolvedRequestContext<Scope> = Readonly<{
   context: SessionContext;
   /**
    * The channel the trusted entry point reached this request through. It is installed in the
-   * request context, never read from client input; when absent the database defaults it to `web`.
+   * request context, never read from client input; when absent `vortex_context.channel()` reads
+   * it as `web`.
    */
   channel?: ProtectedOperationChannel;
   scope: Scope;

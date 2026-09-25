@@ -925,8 +925,20 @@ export const activityActorKindSchema = z.enum([
 /**
  * The one channel vocabulary. It is the channel through which a protected operation, and the flow
  * surface that invoked it, was reached. The trusted server entry point sets the channel in the
- * request context; a caller never supplies it. Activity source and flow execution binding surface
- * are the same list, so a recorded source and a permitted surface always agree.
+ * request context; a caller never supplies it, and a context without one means `web`. Activity
+ * source and flow execution binding surface are the same list, so a recorded source and a permitted
+ * surface always agree.
+ *
+ * - `web`: a signed-in person using the Vortex web application.
+ * - `mcp`: an MCP client acting through the Vortex MCP surface.
+ * - `programmatic_interface`: a caller of a published programmatic interface (formerly the
+ *   Activity source `interface`).
+ * - `connection`: an external system reaching the organisation through an installed connection.
+ *   Activity recorded before the wrappers read the context channel (#1094, #1095) also uses it for
+ *   connection grant and administration changes.
+ * - `federation`: another organisation reaching this one through federation.
+ * - `durable_workflow`: a step of a durable workflow run (formerly the Activity source `workflow`).
+ * - `system`: platform work with no outside caller, such as scheduled or maintenance work.
  */
 export const protectedOperationChannelSchema = z.enum([
   "web",
