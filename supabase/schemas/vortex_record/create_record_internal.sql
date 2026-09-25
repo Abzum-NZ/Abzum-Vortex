@@ -173,7 +173,7 @@ begin
     -- edge identity, as the update writer does. A malformed or undeclared link
     -- is left to the writer's own validation.
     perform vortex_record.lock_record_change_targets_internal(
-      p_record_type_id, 'create', final_values
+      record_type_value, (context_value ->> 'organizationId')::uuid, final_values
     );
     -- The new record's data version is taken before any relationship edge
     -- identity, as every other relationship writer takes it.

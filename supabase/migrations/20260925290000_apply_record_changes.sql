@@ -8,9 +8,12 @@
 -- it, and writes the link-target lock prelude once.
 --
 --   * lock_record_change_targets_internal is the one canonical link-target
---     share-lock prelude: every declared to-one target named by the submitted
---     final values is share-locked in relationship identity order, before any
---     source data version or relationship edge identity.
+--     share-lock prelude: given the Record type its caller already resolved,
+--     every declared to-one target named by the submitted final values is
+--     share-locked in relationship identity order, before any source data
+--     version or relationship edge identity. The ordinary update's target
+--     locks move from field identity order to this relationship identity
+--     order, the order create already used.
 --   * apply_record_changes is the one protected operation: it claims one
 --     receipt, applies the ordered create_subject/set_fields mutations under
 --     that prelude and one access decision per touched record, then writes one
@@ -42,8 +45,8 @@ reset role;
 set local role vortex_record_adapter;
 
 create or replace function vortex_record.lock_record_change_targets_internal(
-  p_record_type_id uuid,
-  p_operation text,
+  p_record_type jsonb,
+  p_organization_id uuid,
   p_final_values jsonb
 )
 returns void
@@ -53,36 +56,29 @@ security invoker
 set search_path = ''
 as $function$
 declare
-  meta jsonb;
-  record_type_value jsonb;
   relationship_value jsonb;
   field_id_value uuid;
   input_value jsonb;
 begin
-  if p_record_type_id is null
-    or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
-    or p_operation not in ('create', 'update')
+  if pg_catalog.jsonb_typeof(p_record_type) is distinct from 'object'
+    or p_organization_id is null
+    or p_organization_id = '00000000-0000-0000-0000-000000000000'::uuid
     or pg_catalog.jsonb_typeof(p_final_values) is distinct from 'object' then
     raise exception using errcode = '22023',
       message = 'Record change target lock input is invalid';
   end if;
-  meta := vortex_record.resolve_record_action_context_internal(
-    p_record_type_id, p_operation
-  );
-  if pg_catalog.jsonb_typeof(meta -> 'recordType') is distinct from 'object' then
-    raise exception using errcode = '55000',
-      message = 'Record change target lock context is unavailable';
-  end if;
-  record_type_value := meta -> 'recordType';
 
-  -- The one canonical link-target share-lock prelude. Every declared to-one link
-  -- whose submitted value names a valid declared target takes that target's row
-  -- share lock here, in relationship identity order, before the caller writes a
-  -- source data version or takes any relationship edge identity (L5 before L6).
-  -- A malformed or undeclared link is left to the caller's own validation.
+  -- The one canonical link-target share-lock prelude. The caller passes the
+  -- installed Record type it already resolved for this change, so the locks
+  -- follow exactly the definition the caller validated and writes. Every
+  -- declared to-one link whose submitted value names a valid declared target
+  -- takes that target's row share lock here, in relationship identity order,
+  -- before the caller writes a source data version or takes any relationship
+  -- edge identity (L5 before L6). A malformed or undeclared link is left to the
+  -- caller's own validation.
   for relationship_value in
     select item.value
-    from pg_catalog.jsonb_array_elements(record_type_value -> 'relationships') as item(value)
+    from pg_catalog.jsonb_array_elements(p_record_type -> 'relationships') as item(value)
     order by (item.value ->> 'relationshipId')::uuid
   loop
     field_id_value := (relationship_value ->> 'fromFieldId')::uuid;
@@ -104,7 +100,7 @@ begin
         perform vortex_record.lock_relationship_target_row_internal(
           (input_value ->> 'recordTypeId')::uuid,
           (input_value ->> 'recordId')::uuid,
-          (meta -> 'context' ->> 'organizationId')::uuid
+          p_organization_id
         );
       end if;
     end if;
@@ -112,14 +108,14 @@ begin
 end
 $function$;
 
-revoke all on function vortex_record.lock_record_change_targets_internal(uuid, text, jsonb)
+revoke all on function vortex_record.lock_record_change_targets_internal(jsonb, uuid, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_module_owner;
-grant execute on function vortex_record.lock_record_change_targets_internal(uuid, text, jsonb)
+grant execute on function vortex_record.lock_record_change_targets_internal(jsonb, uuid, jsonb)
   to vortex_record_adapter;
 
-comment on function vortex_record.lock_record_change_targets_internal(uuid, text, jsonb) is
-  'The one canonical link-target share-lock prelude for a record change: share-locks every declared to-one target named by the submitted final values, in relationship identity order, before any source data version or relationship edge identity.';
+comment on function vortex_record.lock_record_change_targets_internal(jsonb, uuid, jsonb) is
+  'The one canonical link-target share-lock prelude for a record change: given the caller''s resolved Record type, share-locks every declared to-one target named by the submitted final values, in relationship identity order, before any source data version or relationship edge identity.';
 
 create or replace function vortex_record.apply_record_changes(
   p_command_id uuid,
@@ -217,6 +213,7 @@ begin
   loop
     if pg_catalog.jsonb_typeof(mutation) is distinct from 'object'
       or not (mutation ?& array['kind', 'values'])
+      or mutation - array['kind', 'values']::text[] <> '{}'::jsonb
       or pg_catalog.jsonb_typeof(mutation -> 'kind') is distinct from 'string'
       or (mutation ->> 'kind') not in ('create_subject', 'set_fields')
       or pg_catalog.jsonb_typeof(mutation -> 'values') is distinct from 'object' then
@@ -246,7 +243,7 @@ begin
   context_value := vortex_access.validated_human_request_context();
   if not context_value ? 'applicationRootId' then
     raise exception using errcode = '42501',
-      message = 'Record change requires an Application context';
+      message = 'Record save requires an Application context';
   end if;
   organization_id_value := (context_value ->> 'organizationId')::uuid;
   application_root_id_value := (context_value ->> 'applicationRootId')::uuid;
@@ -426,7 +423,7 @@ begin
       );
     elsif decision ->> 'outcome' <> 'allowed' then
       raise exception using errcode = '42501',
-        message = 'Record change authority is unavailable';
+        message = 'Record save authority is unavailable';
     end if;
     update_bounds := vortex_access.resolve_record_field_bounds_internal(decision);
     for relationship_change in
@@ -522,9 +519,9 @@ begin
     -- share-locked in relationship identity order here, after each target has
     -- passed the same access decision the writer re-checks and before any
     -- source data version or relationship edge identity is taken. Keeping all
-    -- target row locks in one place is what #858 corrected across six writers.
+    -- target row locks in one place replaces the per-writer #858 corrections.
     perform vortex_record.lock_record_change_targets_internal(
-      p_record_type_id, 'update', final_values
+      meta -> 'recordType', organization_id_value, final_values
     );
 
     -- Target closures may reach the source through a currently permitted
@@ -699,18 +696,18 @@ begin
     ))
   );
   if pg_catalog.jsonb_array_length(event_result) <> 1 then
-    raise exception using errcode = '55000', message = 'Record change Event append failed';
+    raise exception using errcode = '55000', message = 'Record save Event append failed';
   end if;
 
   perform vortex_record.complete_command_receipt_internal(
     'record_save', p_command_id, saved_record_id, saved_concurrency_number,
-    'Record change receipt is stale'
+    'Record save receipt is stale'
   );
 
   projection := vortex_record.read_record(p_record_type_id, saved_record_id);
   if projection ->> 'outcome' <> 'allowed' then
     raise exception using errcode = '55000',
-      message = 'Changed Record projection is unavailable';
+      message = 'Saved Record projection is unavailable';
   end if;
   return pg_catalog.jsonb_build_object(
     'outcome', 'saved',
@@ -912,7 +909,7 @@ begin
     -- edge identity, as the update writer does. A malformed or undeclared link
     -- is left to the writer's own validation.
     perform vortex_record.lock_record_change_targets_internal(
-      p_record_type_id, 'create', final_values
+      record_type_value, (context_value ->> 'organizationId')::uuid, final_values
     );
     -- The new record's data version is taken before any relationship edge
     -- identity, as every other relationship writer takes it.

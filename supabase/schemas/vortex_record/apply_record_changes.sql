@@ -94,6 +94,7 @@ begin
   loop
     if pg_catalog.jsonb_typeof(mutation) is distinct from 'object'
       or not (mutation ?& array['kind', 'values'])
+      or mutation - array['kind', 'values']::text[] <> '{}'::jsonb
       or pg_catalog.jsonb_typeof(mutation -> 'kind') is distinct from 'string'
       or (mutation ->> 'kind') not in ('create_subject', 'set_fields')
       or pg_catalog.jsonb_typeof(mutation -> 'values') is distinct from 'object' then
@@ -123,7 +124,7 @@ begin
   context_value := vortex_access.validated_human_request_context();
   if not context_value ? 'applicationRootId' then
     raise exception using errcode = '42501',
-      message = 'Record change requires an Application context';
+      message = 'Record save requires an Application context';
   end if;
   organization_id_value := (context_value ->> 'organizationId')::uuid;
   application_root_id_value := (context_value ->> 'applicationRootId')::uuid;
@@ -303,7 +304,7 @@ begin
       );
     elsif decision ->> 'outcome' <> 'allowed' then
       raise exception using errcode = '42501',
-        message = 'Record change authority is unavailable';
+        message = 'Record save authority is unavailable';
     end if;
     update_bounds := vortex_access.resolve_record_field_bounds_internal(decision);
     for relationship_change in
@@ -399,9 +400,9 @@ begin
     -- share-locked in relationship identity order here, after each target has
     -- passed the same access decision the writer re-checks and before any
     -- source data version or relationship edge identity is taken. Keeping all
-    -- target row locks in one place is what #858 corrected across six writers.
+    -- target row locks in one place replaces the per-writer #858 corrections.
     perform vortex_record.lock_record_change_targets_internal(
-      p_record_type_id, 'update', final_values
+      meta -> 'recordType', organization_id_value, final_values
     );
 
     -- Target closures may reach the source through a currently permitted
@@ -576,18 +577,18 @@ begin
     ))
   );
   if pg_catalog.jsonb_array_length(event_result) <> 1 then
-    raise exception using errcode = '55000', message = 'Record change Event append failed';
+    raise exception using errcode = '55000', message = 'Record save Event append failed';
   end if;
 
   perform vortex_record.complete_command_receipt_internal(
     'record_save', p_command_id, saved_record_id, saved_concurrency_number,
-    'Record change receipt is stale'
+    'Record save receipt is stale'
   );
 
   projection := vortex_record.read_record(p_record_type_id, saved_record_id);
   if projection ->> 'outcome' <> 'allowed' then
     raise exception using errcode = '55000',
-      message = 'Changed Record projection is unavailable';
+      message = 'Saved Record projection is unavailable';
   end if;
   return pg_catalog.jsonb_build_object(
     'outcome', 'saved',

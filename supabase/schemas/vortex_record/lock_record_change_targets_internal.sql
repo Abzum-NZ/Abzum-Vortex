@@ -1,6 +1,6 @@
 create or replace function vortex_record.lock_record_change_targets_internal(
-  p_record_type_id uuid,
-  p_operation text,
+  p_record_type jsonb,
+  p_organization_id uuid,
   p_final_values jsonb
 )
 returns void
@@ -10,36 +10,29 @@ security invoker
 set search_path = ''
 as $function$
 declare
-  meta jsonb;
-  record_type_value jsonb;
   relationship_value jsonb;
   field_id_value uuid;
   input_value jsonb;
 begin
-  if p_record_type_id is null
-    or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
-    or p_operation not in ('create', 'update')
+  if pg_catalog.jsonb_typeof(p_record_type) is distinct from 'object'
+    or p_organization_id is null
+    or p_organization_id = '00000000-0000-0000-0000-000000000000'::uuid
     or pg_catalog.jsonb_typeof(p_final_values) is distinct from 'object' then
     raise exception using errcode = '22023',
       message = 'Record change target lock input is invalid';
   end if;
-  meta := vortex_record.resolve_record_action_context_internal(
-    p_record_type_id, p_operation
-  );
-  if pg_catalog.jsonb_typeof(meta -> 'recordType') is distinct from 'object' then
-    raise exception using errcode = '55000',
-      message = 'Record change target lock context is unavailable';
-  end if;
-  record_type_value := meta -> 'recordType';
 
-  -- The one canonical link-target share-lock prelude. Every declared to-one link
-  -- whose submitted value names a valid declared target takes that target's row
-  -- share lock here, in relationship identity order, before the caller writes a
-  -- source data version or takes any relationship edge identity (L5 before L6).
-  -- A malformed or undeclared link is left to the caller's own validation.
+  -- The one canonical link-target share-lock prelude. The caller passes the
+  -- installed Record type it already resolved for this change, so the locks
+  -- follow exactly the definition the caller validated and writes. Every
+  -- declared to-one link whose submitted value names a valid declared target
+  -- takes that target's row share lock here, in relationship identity order,
+  -- before the caller writes a source data version or takes any relationship
+  -- edge identity (L5 before L6). A malformed or undeclared link is left to the
+  -- caller's own validation.
   for relationship_value in
     select item.value
-    from pg_catalog.jsonb_array_elements(record_type_value -> 'relationships') as item(value)
+    from pg_catalog.jsonb_array_elements(p_record_type -> 'relationships') as item(value)
     order by (item.value ->> 'relationshipId')::uuid
   loop
     field_id_value := (relationship_value ->> 'fromFieldId')::uuid;
@@ -61,7 +54,7 @@ begin
         perform vortex_record.lock_relationship_target_row_internal(
           (input_value ->> 'recordTypeId')::uuid,
           (input_value ->> 'recordId')::uuid,
-          (meta -> 'context' ->> 'organizationId')::uuid
+          p_organization_id
         );
       end if;
     end if;
@@ -69,11 +62,11 @@ begin
 end
 $function$;
 
-revoke all on function vortex_record.lock_record_change_targets_internal(uuid, text, jsonb)
+revoke all on function vortex_record.lock_record_change_targets_internal(jsonb, uuid, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_module_owner;
-grant execute on function vortex_record.lock_record_change_targets_internal(uuid, text, jsonb)
+grant execute on function vortex_record.lock_record_change_targets_internal(jsonb, uuid, jsonb)
   to vortex_record_adapter;
 
-comment on function vortex_record.lock_record_change_targets_internal(uuid, text, jsonb) is
-  'The one canonical link-target share-lock prelude for a record change: share-locks every declared to-one target named by the submitted final values, in relationship identity order, before any source data version or relationship edge identity.';
+comment on function vortex_record.lock_record_change_targets_internal(jsonb, uuid, jsonb) is
+  'The one canonical link-target share-lock prelude for a record change: given the caller''s resolved Record type, share-locks every declared to-one target named by the submitted final values, in relationship identity order, before any source data version or relationship edge identity.';
