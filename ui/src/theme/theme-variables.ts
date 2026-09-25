@@ -221,10 +221,10 @@ export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVar
   const appSurface = themeSurface(tokens);
   const appText = colorPair(tokens, "text");
   // Surface and text change together so body text is never painted on an unvalidated surface.
-  const surfaceFromTheme = appSurface !== undefined && appText !== undefined;
-  // #594 validated text-like colours against the surface actually painted.
-  const surfaceValidated = appSurface === undefined || surfaceFromTheme;
-  const surface = (surfaceFromTheme ? appSurface : undefined) ?? DEFAULT_SURFACE;
+  // #594 refuses a theme without a declared background, so without one no surface-relative
+  // theme colour is trusted and the registered platform values are painted instead.
+  const surfaceValidated = appSurface !== undefined && appText !== undefined;
+  const surface = (surfaceValidated ? appSurface : undefined) ?? DEFAULT_SURFACE;
   const text = (surfaceValidated ? appText : undefined) ?? DEFAULT_TEXT;
 
   // Fallbacks are concrete values rather than var() references, so a placement override
@@ -232,7 +232,7 @@ export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVar
   /** A surface-relative colour: the theme's validated value, else a readable fallback. */
   const onSurface = (key: string, platform: ColorPair): string => {
     const themed = surfaceValidated ? colorPair(tokens, key) : undefined;
-    return colorValue(themed ?? (surfaceFromTheme ? text : platform));
+    return colorValue(themed ?? (surfaceValidated ? text : platform));
   };
 
   const primary = filledPair(tokens, "primary");
@@ -285,7 +285,7 @@ export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVar
     "--vortex-warning-text": onSurface("warning_text", PLATFORM_DEFAULTS.warningText),
     "--vortex-info-text": onSurface("info_text", PLATFORM_DEFAULTS.infoText),
     "--vortex-focus-color": colorValue(
-      focusColor ?? (surfaceFromTheme ? text : PLATFORM_DEFAULTS.focus),
+      focusColor ?? (surfaceValidated ? text : PLATFORM_DEFAULTS.focus),
     ),
     // Visible focus is never thinner than #594's 1px minimum.
     "--vortex-focus-width": (focus === undefined ? undefined : rem(focus.widthRem, 0.0625)) ?? "0.125rem",

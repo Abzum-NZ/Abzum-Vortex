@@ -1,20 +1,6 @@
-:root {
-  color-scheme: light dark;
-
-  /* The registered platform theme release, under the shared token-role vocabulary. The
-     theme renderer emits these same variables for application pages, so the bootstrap
-     landing, sign-in, organisation chooser and error pages read one vocabulary. */
-  --vortex-surface: light-dark(#ffffff, #0f172a);
-  --vortex-text: light-dark(#0f172a, #f8fafc);
-  --vortex-text-muted: light-dark(#475569, #cbd5e1);
-  --vortex-border-color: light-dark(#cbd5e1, #334155);
-  --vortex-accent: light-dark(#1d4ed8, #93c5fd);
-  --vortex-primary: light-dark(#1d4ed8, #93c5fd);
-  --vortex-on-primary: light-dark(#ffffff, #0b1220);
-  --vortex-danger: light-dark(#b91c1c, #f87171);
-  --vortex-danger-text: light-dark(#b91c1c, #f87171);
-  --vortex-focus-color: light-dark(#1d4ed8, #93c5fd);
-}
+/* The bootstrap landing, sign-in, organisation chooser and error pages read the theme
+   renderer's --vortex-* variables. The root layout mounts the registered platform theme's
+   values on <html>, so this stylesheet declares no palette of its own. */
 
 * {
   box-sizing: border-box;
@@ -363,7 +349,7 @@ a {
   width: 58px;
   height: 58px;
   border-radius: 50%;
-  background: var(--vortex-accent);
+  background: var(--vortex-primary);
   color: var(--vortex-on-primary);
   font-size: 26px;
   font-weight: 900;

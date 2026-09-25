@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { DefinitionRuleFailure } from "@vortex/contracts";
+import { platformThemeTokenRolesV2, type DefinitionRuleFailure } from "@vortex/contracts";
 import { createLocatedFailure } from "./errors";
 import type {
   ThemeResolutionOptions,
@@ -11,6 +11,9 @@ import type {
 export const WCAG_AA_NORMAL_TEXT_MIN_CONTRAST = 4.5;
 export const WCAG_AA_LARGE_TEXT_MIN_CONTRAST = 3.0;
 export const WCAG_AA_NON_TEXT_MIN_CONTRAST = 3.0;
+
+/** The vocabulary's brand fill, which the renderer also paints on the surface as the accent. */
+const ACCENT_TOKEN_KEY = "primary";
 
 export const DEFAULT_LIGHT_SURFACE = "#FFFFFF";
 export const DEFAULT_DARK_SURFACE = "#000000";
@@ -88,10 +91,10 @@ export function contrastRatio(
 }
 
 /**
- * A theme is role-aware when its catalogue declares any colour role. The shared token-role
- * vocabulary marks every foreground/background colour pair, so a role-aware theme is judged
- * only by those declarations and never by token names. A theme that declares no roles (no
- * current platform release produces one) is judged by no contrast rule at all.
+ * Whether a theme's catalogue declares any colour role. Every materialised theme comes from a
+ * platform release that declares the shared vocabulary's roles, so readability is judged only
+ * by those declarations and never by token names. A theme that declares no roles, or declares
+ * one other than the vocabulary's, is refused by `validateThemeContrast`.
  */
 export function declaresColorRoles(tokens: Readonly<Record<string, ThemeTokenValueV2>>): boolean {
   return Object.values(tokens).some(
@@ -156,13 +159,31 @@ export function validateThemeContrast(
     ruleFailures.push(located.ruleFailure);
   };
 
-  const roleAware = declaresColorRoles(tokens);
+  // The renderer paints each vocabulary colour by its key, so a vocabulary colour must carry
+  // exactly the role the vocabulary declares for it; otherwise the checks below would judge it
+  // as something other than what is painted.
+  for (const role of platformThemeTokenRolesV2) {
+    const token = tokens[role.key];
+    if (token?.kind !== "color_pair") continue;
+    const declared: string | undefined = "colorRole" in role ? role.colorRole : undefined;
+    if (token.role !== declared)
+      addFailure({
+        code: "COLOR_ROLE_MISMATCH",
+        family: "invalid_value",
+        message:
+          declared === undefined
+            ? `Colour token "${role.key}" must not declare a colour role; the shared token vocabulary gives it none`
+            : `Colour token "${role.key}" must declare the "${declared}" colour role the shared token vocabulary gives it`,
+        tokenKey: role.key,
+      });
+  }
+
   const surface = findThemeSurface(tokens);
-  if (roleAware && surface.key === undefined) {
+  if (surface.key === undefined) {
     addFailure({
       code: "MISSING_BACKGROUND_ROLE",
       family: "invalid_value",
-      message: "A theme that declares colour roles must declare a background colour",
+      message: "A theme must declare a colour with the background role",
     });
   }
   const lightSurface = surface.light;
@@ -202,6 +223,29 @@ export function validateThemeContrast(
           code: "INSUFFICIENT_CONTRAST",
           family: "invalid_value",
           message: `Text color token "${key}" has insufficient dark mode contrast ratio (${darkRatio.toFixed(2)}:1 < ${WCAG_AA_NORMAL_TEXT_MIN_CONTRAST}:1) against ${surfaceName} (${darkSurface})`,
+          tokenKey: key,
+        });
+      }
+    }
+
+    // The renderer also paints the brand fill directly on the surface as the accent
+    // (selection bars, checked controls, active tabs), so it must stay visible there.
+    if (key === ACCENT_TOKEN_KEY) {
+      const lightRatio = contrastRatio(token.light, lightSurface, DEFAULT_LIGHT_SURFACE);
+      if (lightRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
+        addFailure({
+          code: "INSUFFICIENT_CONTRAST",
+          family: "invalid_value",
+          message: `Brand color token "${key}" has insufficient light mode contrast ratio (${lightRatio.toFixed(2)}:1 < ${WCAG_AA_NON_TEXT_MIN_CONTRAST}:1) against ${surfaceName} (${lightSurface})`,
+          tokenKey: key,
+        });
+      }
+      const darkRatio = contrastRatio(token.dark, darkSurface, DEFAULT_DARK_SURFACE);
+      if (darkRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
+        addFailure({
+          code: "INSUFFICIENT_CONTRAST",
+          family: "invalid_value",
+          message: `Brand color token "${key}" has insufficient dark mode contrast ratio (${darkRatio.toFixed(2)}:1 < ${WCAG_AA_NON_TEXT_MIN_CONTRAST}:1) against ${surfaceName} (${darkSurface})`,
           tokenKey: key,
         });
       }
