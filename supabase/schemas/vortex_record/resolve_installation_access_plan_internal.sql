@@ -102,6 +102,9 @@ begin
   for binding_item in
     select item.value
     from pg_catalog.jsonb_array_elements(p_installation -> 'moduleBindings') as item(value)
+    -- Canonical binding order, so the plan content never depends on the order
+    -- a caller happened to supply and always matches the plan key's order.
+    order by (item.value ->> 'moduleRootId') collate "C"
   loop
     module_root_value := (binding_item ->> 'moduleRootId')::uuid;
     release_revision_value := (binding_item ->> 'moduleReleaseRevision')::bigint;
