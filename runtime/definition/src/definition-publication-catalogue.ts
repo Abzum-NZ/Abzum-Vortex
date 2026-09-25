@@ -12,7 +12,6 @@ import {
   PLATFORM_SERVICE_OPERATIONS,
   platformIdSchema,
   platformThemeReleaseV2Schema,
-  platformManagedFlowDependencySchema,
   platformServiceOperationReleaseSchema,
   stableDefinitionReleaseVersionSchema,
   type ApplicationCompositionCatalogueSnapshotV2,
@@ -24,7 +23,6 @@ import {
   type PlatformBlockReleaseV2,
   type PlatformThemeReleaseV2,
   type PlatformThemeTokenRoleV2,
-  type PlatformManagedFlowDependency,
   type PlatformServiceOperationRelease,
   type SemanticVersion,
 } from "@vortex/contracts";
@@ -46,7 +44,6 @@ export type PlatformConnectionTypeReleaseDefinition = Readonly<{
 export type ImmutableDefinitionPublicationCatalogueDefinition = Readonly<{
   connectionTypeReleases: readonly PlatformConnectionTypeReleaseDefinition[];
   applicationCompositionV2?: ApplicationCompositionCatalogueDefinitionV2;
-  platformManagedFlowReleases?: readonly PlatformManagedFlowDependency[];
   platformServiceOperationReleases?: readonly PlatformServiceOperationRelease[];
 }>;
 
@@ -126,10 +123,6 @@ const catalogueDefinitionSchema = z
   .object({
     connectionTypeReleases: z.array(connectionTypeReleaseDefinitionSchema).max(10_000),
     applicationCompositionV2: applicationCompositionCatalogueDefinitionV2Schema.optional(),
-    platformManagedFlowReleases: z
-      .array(platformManagedFlowDependencySchema)
-      .max(10_000)
-      .optional(),
     platformServiceOperationReleases: z
       .array(platformServiceOperationReleaseSchema)
       .max(10_000)
@@ -361,11 +354,6 @@ export const createImmutableDefinitionPublicationCatalogue = (
   ensureUniqueConnectionTypeReleases(definition.connectionTypeReleases);
   ensureUniqueApplicationCompositionReleases(definition.applicationCompositionV2);
   ensurePlatformThemeReleasesCoverEveryRole(definition.applicationCompositionV2);
-  const managedFlowReleases = definition.platformManagedFlowReleases ?? [];
-  const managedFlowIdentities = new Set(
-    managedFlowReleases.map((release) => `${release.flowId}:${release.releaseVersion}`),
-  );
-  if (managedFlowIdentities.size !== managedFlowReleases.length) duplicate();
   ensureRegisteredPlatformServiceOperationsAuthentic();
   const operationReleases = [
     ...PLATFORM_SERVICE_OPERATION_RELEASES,
@@ -408,12 +396,6 @@ export const createImmutableDefinitionPublicationCatalogue = (
       release,
     ]),
   );
-  const managedFlowsByIdentity = new Map(
-    managedFlowReleases.map((release) => [
-      `${release.flowId}:${release.releaseVersion}`,
-      deepFreeze({ ...release }),
-    ]),
-  );
   const operationsByIdentity = new Map(
     operationReleases.map((release) => [
       `${release.serviceId}:${release.operationId}:${release.releaseVersion}`,
@@ -432,8 +414,6 @@ export const createImmutableDefinitionPublicationCatalogue = (
       connectionsByIdentity.get(`${rootId}:${releaseVersion}`),
     readPlatformBlockReleaseV2,
     readPlatformThemeReleaseV2,
-    readPlatformManagedFlowRelease: async (flowId: string, releaseVersion: string) =>
-      managedFlowsByIdentity.get(`${flowId}:${releaseVersion}`),
     readPlatformServiceOperationRelease: async (
       serviceId: string,
       operationId: string,
