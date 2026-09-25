@@ -33,6 +33,11 @@ import {
 } from "./identifiers";
 import { versionRequirementSchema } from "./definitions";
 
+/**
+ * @deprecated The current-user node-and-edge flow and its per-surface bindings are replaced by
+ * the one flow definition and `flowBindingSchema` (the flow id plus a typed input map) in
+ * `flow-contracts.ts`. Conversion and removal belong to #986 and #988; do not extend this format.
+ */
 export const applicationFlowBindingContractVersion = "1.0.0" as const;
 
 /**

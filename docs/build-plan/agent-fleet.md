@@ -25,7 +25,7 @@ Phase labels and Pickup Order are preserved as planning/reporting metadata, whil
 | Bounded UI components, pages and wiring | Gemini 3.8 Flash (Antigravity - Max or High) or GPT-6 Luna (Codex - Max, never below High) |
 | Alternative implementation | Claude Sonnet 5 (High) |
 | Complex architecture, authorization or transactions | Claude Opus 5.5 (High) or GPT-6 Sol (High), whichever has capacity |
-| All final reviews, fixes and re-reviews | Claude Opus 5.5 (High) or GPT-6 Sol (High), separate session from implementer, spread across both |
+| All final reviews, fixes and re-reviews | Claude Opus 5.5 at Medium reasoning effort, or GPT-6 Sol (High) when Codex has capacity; separate session from implementer, spread across both |
 
 Choose the cheapest capable model. Before dispatch, review handoff and each 30-minute active checkpoint, read `orca account list --json` for Claude and Codex session and weekly usage, reset times, freshness and errors. GLM and Antigravity capacity may require observing the actual provider response. Unknown quota is not unlimited. Capacity guidance does not permit ignoring real dependencies, unresolved scope or exclusive ownership. Avoid routine implementation below 25% weekly remaining; preserve 15% for essential coordination/review. No automatic credit purchases or resets. If both qualified reviewers are unavailable, remain In review with a capacity blocker; do not substitute a cheaper reviewer or claim Done.
 

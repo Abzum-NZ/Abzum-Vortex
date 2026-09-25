@@ -22,6 +22,11 @@ export {
 } from "./rule-table-values";
 export type { RuleTableColumn } from "./rule-table-values";
 
+/**
+ * @deprecated The node-and-edge rule graph is replaced by the one flow definition in
+ * `flow-contracts.ts` (a `BeforeSave` trigger with `transaction` execution). Conversion and removal
+ * of this format belong to #986 and #988; do not extend it.
+ */
 export const ruleGraphContractVersion = "1.0.0" as const;
 export const ruleGraphNodeContractVersion = "1.0.0" as const;
 
