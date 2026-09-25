@@ -20,6 +20,13 @@ import {
   type RuleGraphValueType,
 } from "./rule-graph-contracts";
 
+// Removal point (#1007): this source node-and-edge shape is no longer authored. #986 converted
+// every shipped definition to flows, so it now exists only as the private intermediate that
+// `before-save-flow-rules.ts` lowers a `BeforeSave` flow into before `rule-graph-compilation.ts`
+// resolves it to the canonical rule in `content.rules`. It stays until #1007 replaces the
+// rule-graph evaluator and the database read of `content.rules`; deleting it now would stop every
+// shipped save rule from compiling. #988 removed the unused authored type aliases only.
+
 const sourceTypedValueBranches = ruleGraphValueTypeKeys.map((type) =>
   z
     .object({
@@ -89,7 +96,6 @@ export const sourceRuleGraphInputDeclarationSchema = z
   .strict()
   .superRefine(validateReferenceTargets)
   .superRefine(validateRuleTableDeclaration);
-export type SourceRuleGraphInputDeclaration = z.infer<typeof sourceRuleGraphInputDeclarationSchema>;
 
 export const sourceRuleGraphVariableDeclarationSchema = z
   .object({
@@ -122,9 +128,6 @@ export const sourceRuleGraphVariableDeclarationSchema = z
         message: "A variable default must match its declared type",
       });
   });
-export type SourceRuleGraphVariableDeclaration = z.infer<
-  typeof sourceRuleGraphVariableDeclarationSchema
->;
 
 export const sourceRuleGraphOperandSchema = z.union([
   z.object({ source: z.literal("literal"), value: sourceRuleGraphTypedValueSchema }).strict(),

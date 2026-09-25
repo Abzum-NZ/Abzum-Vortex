@@ -137,10 +137,18 @@ export {
   type FlowOrchestratorDependencies,
   type FlowOrchestratorResponse,
   type FlowRelease,
+  type FlowRunExpectation,
   type FlowResumeRequest,
   type FlowStartRequest,
   type FlowUnavailableNotice,
 } from "./flow-orchestrator";
+
+export {
+  createFormContinuationService,
+  type FormContinuationInstallationResolver,
+  type FormContinuationInstalledRelease,
+  type FormContinuationServiceDependencies,
+} from "./form-continuation";
 
 export {
   createDatabaseFlowStores,
@@ -165,5 +173,6 @@ export const AppService = Object.freeze({
   createIdentityDisablementCoordinator,
   createProtectedOperationExecutor,
   createFlowOrchestrator,
+  createFormContinuationService,
   createDatabaseFlowStores,
 });

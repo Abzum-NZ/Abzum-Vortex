@@ -137,6 +137,21 @@ const resumeRequestSchema = z
 export type FlowStartRequest = z.input<typeof startRequestSchema>;
 export type FlowResumeRequest = z.input<typeof resumeRequestSchema>;
 
+/**
+ * What a caller last saw, compared with trusted server state before a run starts or resumes. It is
+ * evidence, never authority: any difference refuses the call. A mismatch found only in the stored
+ * run (its node, run id or committed effects) is found after the single-use continuation is
+ * consumed, so a stale or forged continuation is spent and the person restarts.
+ */
+export type FlowRunExpectation = Readonly<{
+  /** The exact release of the flow set; must equal the release trusted installation state resolves. */
+  releaseKey: string;
+  /** The paused node the caller answers; the stored run must be paused at exactly this node. */
+  pausedAt?: Readonly<{ nodeId: string; awaiting: "form" | "confirm" }>;
+  /** The receipt the caller holds; the stored run must be that run with that many committed effects. */
+  receipt?: Readonly<{ runId: string; committedEffects: number }>;
+}>;
+
 /** Why a task did not run: the located, fail-closed "not yet available" outcome. */
 export type FlowUnavailableNotice = Readonly<{
   taskId: string;
@@ -164,6 +179,8 @@ export type FlowOrchestratorResponse =
       /** Set only for a failure: which rule ended the run, and at which task. */
       failure?: Readonly<{ code: FlowFailureCode; taskId?: string }>;
       stopped?: string;
+      /** Protected effects this run committed, across every resume: a later failure is then partial. */
+      committedEffects: number;
       outputs: Readonly<Record<string, JsonValue>>;
       intents: readonly SafeIntent[];
       unavailable: readonly FlowUnavailableNotice[];
@@ -172,6 +189,10 @@ export type FlowOrchestratorResponse =
       kind: "suspended";
       runId: string;
       awaiting: "form" | "confirm";
+      /** The paused node (task id) the continuation resumes, and the release the run is bound to. */
+      nodeId: string;
+      releaseKey: string;
+      committedEffects: number;
       /** The typed intent for the page or MCP client, ending with the form or confirmation. */
       intents: readonly SafeIntent[];
       continuation: string;
@@ -280,6 +301,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         kind: "finished",
         runId: step.state.runId,
         outcome: step.result.failure.outcome,
+        committedEffects: step.state.committedEffects,
         failure: {
           code: step.result.failure.code,
           ...(step.result.failure.taskId === undefined ? {} : { taskId: step.result.failure.taskId }),
@@ -292,6 +314,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       kind: "finished",
       runId: step.state.runId,
       outcome: step.state.committedEffects > 0 ? "committed" : "completed",
+      committedEffects: step.state.committedEffects,
       ...(step.result.stopped === undefined ? {} : { stopped: step.result.stopped }),
       outputs: Object.fromEntries(
         Object.entries(step.result.outputs).map(([name, value]) => [name, value.value]),
@@ -305,6 +328,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     kind: "finished",
     runId: state.runId,
     outcome: "failed",
+    committedEffects: state.committedEffects,
     failure: { code: "server_time_limit" },
     outputs: {},
     intents: [],
@@ -424,6 +448,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         kind: "finished",
         runId: step.state.runId,
         outcome: "failed",
+        committedEffects: step.state.committedEffects,
         failure: { code: "continuation_unavailable" },
         outputs: {},
         intents: [],
@@ -433,6 +458,9 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       kind: "suspended",
       runId: step.state.runId,
       awaiting: step.awaiting,
+      nodeId: step.state.awaiting?.taskId ?? "",
+      releaseKey: run.release.releaseKey,
+      committedEffects: step.state.committedEffects,
       intents: step.intents.map(safeIntent),
       continuation: token,
       expiresAt: stored.expiresAt,
@@ -503,13 +531,18 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
      * is issued here. The inputs are values only: authority, organisation and actor never come
      * from them.
      */
-    async start(request: FlowStartRequest): Promise<FlowOrchestratorResponse> {
+    async start(
+      request: FlowStartRequest,
+      expectation?: Pick<FlowRunExpectation, "releaseKey">,
+    ): Promise<FlowOrchestratorResponse> {
       try {
         const parsed = startRequestSchema.safeParse(request);
         if (!parsed.success || !withinPayload(parsed.data.binding.inputs)) return refused;
         const { session, selection, binding } = parsed.data;
         const prepared = await prepare(session, selection, binding.flowId);
         if (prepared === undefined) return refused;
+        if (expectation !== undefined && expectation.releaseKey !== prepared.release.releaseKey)
+          return refused;
         const actor = await dependencies.resolveActor?.(session, selection);
         const run: Run = {
           ...prepared,
@@ -538,13 +571,19 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
      * consumed exactly once, and only for the initiator, organisation and flow release it was
      * issued for; a replay of it is refused, so no protected effect is repeated.
      */
-    async resume(request: FlowResumeRequest): Promise<FlowOrchestratorResponse> {
+    async resume(
+      request: FlowResumeRequest,
+      expectation?: FlowRunExpectation,
+    ): Promise<FlowOrchestratorResponse> {
       try {
         const parsed = resumeRequestSchema.safeParse(request);
         if (!parsed.success || !withinPayload(parsed.data.answer)) return refused;
         const { session, selection, flowId, continuation, answer } = parsed.data;
         const prepared = await prepare(session, selection, flowId);
         if (prepared === undefined) return refused;
+        // A different release is refused before the continuation is spent.
+        if (expectation !== undefined && expectation.releaseKey !== prepared.release.releaseKey)
+          return refused;
         const stored = await dependencies.continuations.consume({
           tokenHash: sha256(continuation),
           organizationId: selection.organizationId,
@@ -556,6 +595,22 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         const state = stored.state as FlowRunState;
         // The stored run must be the run the row is bound to; anything else is never resumed.
         if (!isRecord(state) || state.runId !== stored.runId) return refused;
+        if (expectation !== undefined) {
+          const paused = state.awaiting;
+          if (
+            expectation.pausedAt !== undefined &&
+            (paused === undefined ||
+              paused.kind !== expectation.pausedAt.awaiting ||
+              paused.taskId !== expectation.pausedAt.nodeId)
+          )
+            return refused;
+          if (
+            expectation.receipt !== undefined &&
+            (expectation.receipt.runId !== state.runId ||
+              expectation.receipt.committedEffects !== state.committedEffects)
+          )
+            return refused;
+        }
         const run: Run = {
           ...prepared,
           carriedMilliseconds: stored.elapsedMilliseconds,
