@@ -20,8 +20,7 @@ begin
     or pg_catalog.jsonb_typeof(p_expression) is distinct from 'object'
     or p_expression ->> 'kind' is distinct from 'deadline_passed'
     or pg_catalog.jsonb_typeof(p_expression -> 'dueFieldId') is distinct from 'string'
-    or pg_catalog.jsonb_typeof(p_clock -> 'instant') is distinct from 'string'
-    or pg_catalog.jsonb_typeof(p_clock -> 'organizationLocalDate') is distinct from 'string' then
+    or pg_catalog.jsonb_typeof(p_clock -> 'instant') is distinct from 'string' then
     return null;
   end if;
   select mapping.* into due_mapping
@@ -32,7 +31,9 @@ begin
     raise exception using errcode = '55000',
       message = 'Record storage disagrees with the installed definition';
   end if;
-  if due_mapping.database_value_type not in ('date', 'timestamp_with_time_zone') then
+  if due_mapping.database_value_type not in ('date', 'timestamp_with_time_zone')
+    or (due_mapping.database_value_type = 'date'
+      and pg_catalog.jsonb_typeof(p_clock -> 'organizationLocalDate') is distinct from 'string') then
     return null;
   end if;
   if pg_catalog.jsonb_typeof(p_expression -> 'statusFieldId') = 'string' then

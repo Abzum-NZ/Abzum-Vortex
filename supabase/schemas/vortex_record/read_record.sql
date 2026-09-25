@@ -88,6 +88,10 @@ begin
         read_time_value := 'false'::jsonb;
       elsif pg_catalog.jsonb_typeof(due_value) = 'string'
         and loaded -> 'columns' -> due_key ->> 'databaseValueType' = 'date' then
+        -- Without the organisation's time zone the local date is unknown.
+        if read_time_clock ->> 'organizationLocalDate' is null then
+          continue;
+        end if;
         read_time_value := pg_catalog.to_jsonb((read_time_clock ->> 'organizationLocalDate') > (due_value #>> '{}'));
       elsif pg_catalog.jsonb_typeof(due_value) = 'string'
         and loaded -> 'columns' -> due_key ->> 'databaseValueType' = 'timestamp_with_time_zone' then

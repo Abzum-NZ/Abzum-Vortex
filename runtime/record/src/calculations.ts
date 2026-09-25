@@ -594,15 +594,26 @@ export type EvaluateReadTimeCalculationsV2Result =
  * evaluator a save uses, from the record's stored values and one read clock:
  * the statement instant and the current date in the organisation's time zone.
  * The result is never written back. It performs no reads or access decisions.
+ * A required read-time field with no value now (such as a deadline with no due
+ * value) is reported empty, as the database read reports it, rather than
+ * failing the read.
  */
 export const evaluateReadTimeCalculationsV2 = (
   input: EvaluateRecordCalculationsV2Input,
 ): EvaluateReadTimeCalculationsV2Result => {
-  const evaluated = evaluateRecordCalculationsV2(input);
-  if (!evaluated.success) return evaluated;
   const parsed = recordTypeDefinitionV2Schema.safeParse(input.recordType);
   if (!parsed.success) return { success: false, issues: [issue("invalid_input")] };
   const readTimeIds = new Set(readTimeCalculationFieldIdsV2(parsed.data));
+  const evaluated = evaluateRecordCalculationsV2({
+    ...input,
+    recordType: {
+      ...parsed.data,
+      fields: parsed.data.fields.map((field) =>
+        readTimeIds.has(field.fieldId) ? { ...field, required: false } : field,
+      ),
+    },
+  });
+  if (!evaluated.success) return evaluated;
   return {
     success: true,
     values: Object.fromEntries(
