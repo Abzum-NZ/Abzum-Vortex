@@ -54,6 +54,7 @@ export * from "./record-lifecycle-policy";
 export * from "./record-ownership-compatibility";
 export * from "./records";
 export * from "./record-share-operations";
+export { sourceWorkflowRunAsSchema, workflowRunAsSchema } from "./run-as-vocabulary";
 export * from "./rule-graph-contracts";
 export * from "./rule-graph-source-contracts";
 export * from "./storage";

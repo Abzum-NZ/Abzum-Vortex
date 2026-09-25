@@ -2,7 +2,11 @@ import "server-only";
 
 import { createHash, timingSafeEqual } from "node:crypto";
 import { actorIdSchema, type EventOccurrenceEnvelopeV2 } from "@vortex/contracts";
-import { withRuntimeTransaction, type RuntimeDatabaseTransaction } from "@vortex/db";
+import {
+  withRuntimeTransaction,
+  type DatabaseRow,
+  type RuntimeDatabaseTransaction,
+} from "@vortex/db";
 import {
   createEventConsumerProgressRepository,
   eventConsumerProgressLimits,
@@ -91,10 +95,11 @@ export type EventConsumerAdapter = Readonly<{
 }>;
 
 /**
- * The dispatcher identity established by {@link authenticateEventDispatcher}
- * from a verified credential and server configuration. Only values issued by
- * that function are accepted by a dispatch; an object literal of the same shape
- * is caller-asserted and refused.
+ * The dispatcher identity established by {@link createEventDispatcherRoute}
+ * only after a verified credential and a resolved active system actor grant.
+ * The actor is read from the grant, never from the request or from server
+ * configuration. Only values issued by that path are accepted by a dispatch;
+ * an object literal of the same shape is caller-asserted and refused.
  */
 export type AuthenticatedEventDispatcher = Readonly<{
   kind: "event_dispatcher";
@@ -105,13 +110,31 @@ export const eventDispatcherRefusalReasons = [
   "dispatcher_not_configured",
   "credential_missing",
   "credential_rejected",
+  "dispatcher_grant_missing",
+  "dispatcher_grant_ambiguous",
+  "dispatcher_grant_organisation_inactive",
+  "dispatcher_grant_unavailable",
 ] as const;
 
 export type EventDispatcherRefusalReason = (typeof eventDispatcherRefusalReasons)[number];
 
+/** The credential check outcome; the system actor is resolved from the grant afterwards. */
 export type EventDispatcherAuthentication =
-  | Readonly<{ outcome: "authenticated"; dispatcher: AuthenticatedEventDispatcher }>
+  | Readonly<{ outcome: "authenticated" }>
   | Readonly<{ outcome: "refused"; reason: EventDispatcherRefusalReason }>;
+
+/**
+ * The active system actor grant that authorises dispatch, resolved by storage
+ * for the fixed dispatcher operation. `systemActorId` is the granted actor;
+ * every other result refuses.
+ */
+export type EventDispatcherGrantAuthority =
+  | Readonly<{ outcome: "authorised"; systemActorId: string }>
+  | Readonly<{ outcome: "refused"; reason: EventDispatcherRefusalReason }>;
+
+export interface EventDispatcherGrantReader {
+  resolve(): Promise<EventDispatcherGrantAuthority>;
+}
 
 export type DispatchEventsInput = Readonly<{
   dispatcher: AuthenticatedEventDispatcher;
@@ -172,7 +195,10 @@ export type EventDispatchRouteResponse =
   | Readonly<{ outcome: "dispatched"; result: EventDispatchResult }>;
 
 export type EventDispatcherRouteDependencies = EventDispatcherDependencies &
-  Readonly<{ environment?: Readonly<Record<string, string | undefined>> }>;
+  Readonly<{
+    environment?: Readonly<Record<string, string | undefined>>;
+    grant?: EventDispatcherGrantReader;
+  }>;
 
 export interface EventDispatcherRoute {
   handle(request: EventDispatchRouteRequest): Promise<EventDispatchRouteResponse>;
@@ -211,28 +237,25 @@ const failureClassificationMatches = (
   typeof value === "string" &&
   (eventDeliveryFailureClassifications as readonly string[]).includes(value);
 
-// Dispatcher identities are only ever minted here, after credential
-// verification, so membership proves authentication rather than shape.
+// Dispatcher identities are only ever minted by mintAuthenticatedDispatcher,
+// after both the credential and the grant are verified, so membership proves
+// authenticity rather than shape.
 const authenticatedDispatchers = new WeakSet<AuthenticatedEventDispatcher>();
 
-type DispatcherConfiguration = Readonly<{ systemActorId: string; credentialDigest: Buffer }>;
+type DispatcherConfiguration = Readonly<{ credentialDigest: Buffer }>;
 
 /**
- * The dispatcher's system actor and the SHA-256 digest of its credential come
- * from server configuration. Only the digest is configured here; the credential
- * itself is held by the wake-up and recovery callers.
+ * Only the SHA-256 digest of the dispatcher's bearer credential comes from
+ * server configuration; the credential itself is held by the wake-up and
+ * recovery callers. The dispatcher's system actor is never configured: it is
+ * read from the active system actor grant at dispatch time.
  */
 const dispatcherConfiguration = (
   environment: Readonly<Record<string, string | undefined>>,
 ): DispatcherConfiguration | undefined => {
-  const systemActorId = actorIdSchema.safeParse(environment.VORTEX_EVENT_DISPATCHER_ACTOR_ID);
   const digest = environment.VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256;
-  if (!systemActorId.success || digest === undefined || !/^[0-9a-f]{64}$/.test(digest))
-    return undefined;
-  return Object.freeze({
-    systemActorId: systemActorId.data,
-    credentialDigest: Buffer.from(digest, "hex"),
-  });
+  if (digest === undefined || !/^[0-9a-f]{64}$/.test(digest)) return undefined;
+  return Object.freeze({ credentialDigest: Buffer.from(digest, "hex") });
 };
 
 const bearerCredential = (authorization: unknown): string | undefined => {
@@ -257,25 +280,78 @@ const verifyCredential = (
   const presented = createHash("sha256").update(credential, "utf8").digest();
   if (!timingSafeEqual(presented, configuration.credentialDigest))
     return { outcome: "refused", reason: "credential_rejected" };
+  return { outcome: "authenticated" };
+};
+
+const mintAuthenticatedDispatcher = (systemActorId: string): AuthenticatedEventDispatcher => {
   const dispatcher: AuthenticatedEventDispatcher = Object.freeze({
     kind: "event_dispatcher",
-    systemActorId: configuration.systemActorId,
+    systemActorId,
   });
   authenticatedDispatchers.add(dispatcher);
-  return { outcome: "authenticated", dispatcher };
+  return dispatcher;
 };
 
 /**
  * Authenticates the dispatcher route's caller from its `Authorization: Bearer`
- * credential against the configured credential digest, in constant time. The
- * resulting identity is the configured dispatcher actor; nothing the caller
- * sends can name or elevate it. Unconfigured dispatch refuses closed.
+ * credential against the configured credential digest, in constant time. A
+ * successful result only proves the credential; the system actor is resolved
+ * separately from the active system actor grant, so nothing the caller sends
+ * can name or elevate it. Unconfigured dispatch refuses closed.
  */
 export const authenticateEventDispatcher = (
   authorization: string | null | undefined,
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): EventDispatcherAuthentication =>
   verifyCredential(dispatcherConfiguration(environment), authorization);
+
+type GrantRow = DatabaseRow & { readonly result: unknown };
+
+const grantRefusalReasonMatches = (value: unknown): value is EventDispatcherRefusalReason =>
+  typeof value === "string" &&
+  (eventDispatcherRefusalReasons as readonly string[]).includes(value);
+
+const parseGrantAuthority = (candidate: unknown): EventDispatcherGrantAuthority => {
+  const authorised = exactRecord(candidate, ["outcome", "systemActorId"]);
+  if (
+    authorised?.outcome === "authorised" &&
+    actorIdSchema.safeParse(authorised.systemActorId).success
+  )
+    return { outcome: "authorised", systemActorId: authorised.systemActorId as string };
+  const refused = exactRecord(candidate, ["outcome", "reason"]);
+  if (refused?.outcome === "refused" && grantRefusalReasonMatches(refused.reason))
+    return { outcome: "refused", reason: refused.reason };
+  return { outcome: "refused", reason: "dispatcher_grant_unavailable" };
+};
+
+/**
+ * Resolves the dispatcher's system actor from storage. The runtime function
+ * returns the granted actor only when exactly one active system actor grant
+ * exists for the fixed dispatcher operation and, when the grant names an
+ * organisation, that organisation is active; every other answer, a missing
+ * function, or an unusable result refuses closed. The actor is read from the
+ * grant, never from the request.
+ */
+export const createEventDispatcherGrantReader = (
+  run: EventDispatcherTransactionRunner,
+): EventDispatcherGrantReader =>
+  Object.freeze({
+    async resolve(): Promise<EventDispatcherGrantAuthority> {
+      try {
+        const rows = await run((transaction) =>
+          transaction.query<GrantRow>`
+            select vortex_event.resolve_event_dispatcher_actor() as result
+          `,
+        );
+        const first = rows[0];
+        if (rows.length !== 1 || first === undefined)
+          return { outcome: "refused", reason: "dispatcher_grant_unavailable" };
+        return parseGrantAuthority(first.result);
+      } catch {
+        return { outcome: "refused", reason: "dispatcher_grant_unavailable" };
+      }
+    },
+  });
 
 type RegisteredConsumer = Readonly<{
   consumerKey: string;
@@ -601,22 +677,31 @@ export const createEventDispatcher = (dependencies: EventDispatcherDependencies)
 };
 
 /**
- * The protected dispatcher route: authenticates the caller, then runs one
- * bounded dispatch. Webhook wake-ups and scheduled recovery both call this same
- * operation. Responses carry only refusal reasons, safe error codes and counts.
+ * The protected dispatcher route: verifies the caller's credential, resolves
+ * the dispatcher's system actor from an active system actor grant, then runs
+ * one bounded dispatch. Webhook wake-ups and scheduled recovery both call this
+ * same operation. Responses carry only refusal reasons, safe error codes and
+ * counts; a missing, ambiguous, unavailable or organisation-inactive grant
+ * refuses closed before any occurrence is claimed.
  */
 export const createEventDispatcherRoute = (
   dependencies: EventDispatcherRouteDependencies,
 ): EventDispatcherRoute => {
   const configuration = dispatcherConfiguration(dependencies.environment ?? process.env);
   const dispatcher = createEventDispatcher(dependencies);
+  const run: EventDispatcherTransactionRunner =
+    dependencies.runtimeTransaction ?? withRuntimeTransaction;
+  const grant = dependencies.grant ?? createEventDispatcherGrantReader(run);
   return Object.freeze({
     async handle(request: EventDispatchRouteRequest): Promise<EventDispatchRouteResponse> {
       const authentication = verifyCredential(configuration, request.authorization);
       if (authentication.outcome === "refused") return authentication;
+      const authority = await grant.resolve();
+      if (authority.outcome === "refused") return authority;
+      const dispatcherIdentity = mintAuthenticatedDispatcher(authority.systemActorId);
       try {
         const result = await dispatcher.dispatch({
-          dispatcher: authentication.dispatcher,
+          dispatcher: dispatcherIdentity,
           ...(request.batchLimit === undefined ? {} : { batchLimit: request.batchLimit as number }),
           ...(request.consumerKey === undefined
             ? {}

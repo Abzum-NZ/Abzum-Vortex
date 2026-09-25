@@ -21,6 +21,14 @@ type ReadBodyResult =
   | Readonly<{ ok: true; body?: unknown }>
   | Readonly<{ ok: false; status: number }>;
 
+// A rejected caller credential is 401. A missing server configuration or a
+// missing, ambiguous, unavailable or inactive-organisation system actor grant
+// is 503: no credential the caller could present would succeed.
+const credentialRefusals: ReadonlySet<string> = new Set([
+  "credential_missing",
+  "credential_rejected",
+]);
+
 const readBody = async (request: NextRequest): Promise<ReadBodyResult> => {
   const declaredLength = Number(request.headers.get("content-length") ?? 0);
   if (declaredLength > eventDispatcherWakeupLimits.maximumRequestBodyLength)
@@ -59,7 +67,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (response.outcome === "refused")
     return privateResponse(
       { outcome: "refused", reason: response.reason },
-      response.reason === "dispatcher_not_configured" ? 503 : 401,
+      credentialRefusals.has(response.reason) ? 401 : 503,
     );
   if (response.outcome === "invalid_request")
     return privateResponse({ outcome: "invalid_request", code: response.code }, 400);

@@ -33,6 +33,7 @@ import {
 } from "./application-composition-v2";
 import { sourceComponentFlowBindingSchema } from "./application-flow-bindings";
 import { flowAliasSchema, sourceFlowCollectionSchema } from "./flow-source-contracts";
+import { sourceWorkflowRunAsSchema } from "./run-as-vocabulary";
 
 const maximumSourceDocumentNodes = 50_000;
 const maximumSourceNestingDepth = 32;
@@ -806,7 +807,7 @@ export const sourceApplicationBodyV2Schema = z
               })
               .strict(),
           ]),
-          run_as: z.enum(["triggering_account", "system_with_source_authority"]),
+          run_as: sourceWorkflowRunAsSchema,
           maximum_nesting_depth: z.number().int().min(1).max(5),
           nodes: z.array(sourceWorkflowNodeSchema).min(1).max(100),
           edges: z.array(
