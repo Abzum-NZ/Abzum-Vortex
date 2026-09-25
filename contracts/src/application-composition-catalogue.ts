@@ -20,13 +20,16 @@ const deepFreeze = <Value>(value: Value): Value => {
  * parsed through the release contract at module load and deep-frozen. Its fingerprints are the
  * canonical-JSON SHA-256 values that `pnpm catalogue:fingerprints` derives from that same
  * content into catalogue/catalogue-fingerprints.generated.json; they are merged in by block id
- * and never written by hand.
+ * and release version and never written by hand.
  */
-const release = (definition: { blockId: string }): PlatformBlockReleaseV2 =>
+const release = (definition: { blockId: string; releaseVersion: string }): PlatformBlockReleaseV2 =>
   deepFreeze(
     platformBlockReleaseV2Schema.parse({
       ...definition,
-      ...generatedReleaseFingerprints("platformBlocks", definition.blockId),
+      ...generatedReleaseFingerprints(
+        "platformBlocks",
+        `${definition.blockId}:${definition.releaseVersion}`,
+      ),
     }),
   );
 

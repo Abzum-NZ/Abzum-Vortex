@@ -28,7 +28,7 @@ export type PlatformServiceOperationCatalogueEntry = Readonly<{
 const entry = (definition: {
   key: string;
   name: string;
-  release: { operationId: string };
+  release: { serviceId: string; operationId: string; releaseVersion: string };
   descriptor: unknown;
 }): PlatformServiceOperationCatalogueEntry =>
   deepFreeze({
@@ -36,7 +36,10 @@ const entry = (definition: {
     name: definition.name,
     release: platformServiceOperationReleaseSchema.parse({
       ...definition.release,
-      ...generatedReleaseFingerprints("platformServiceOperations", definition.release.operationId),
+      ...generatedReleaseFingerprints(
+        "platformServiceOperations",
+        `${definition.release.serviceId}:${definition.release.operationId}:${definition.release.releaseVersion}`,
+      ),
     }),
     descriptor: protectedOperationDescriptorSchema.parse(definition.descriptor),
   });
@@ -52,9 +55,9 @@ const entry = (definition: {
  * `{ kind: "platform_service_operation", serviceId, operationId, releaseVersion,
  * contentFingerprint }`. The operations live in catalogue/platform-service-operation-catalogue.source.json
  * and `pnpm catalogue:fingerprints` derives both fingerprints from them into
- * catalogue/catalogue-fingerprints.generated.json, merged in by operation id and never written by
- * hand; the publication catalogue recomputes both when it is created, so a changed descriptor
- * without regenerated fingerprints refuses instead of publishing.
+ * catalogue/catalogue-fingerprints.generated.json, merged in by service, operation and release
+ * version and never written by hand; the publication catalogue recomputes both when it is created,
+ * so a changed descriptor without regenerated fingerprints refuses instead of publishing.
  *
  * Only the terminal, metadata and settings operations the Access services already provide are
  * registered. Nothing here grants, assigns or activates access, so no flow can expand authority.

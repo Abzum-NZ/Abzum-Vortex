@@ -10,8 +10,11 @@ import { fileURLToPath } from "node:url";
  * identity but never a fingerprint. This script derives the content and catalogue fingerprints
  * with runtime/definition/src/catalogue-release-fingerprints.ts, the same canonical-JSON SHA-256
  * derivation the publication catalogue uses to materialise and verify releases, and writes them to
- * catalogue-fingerprints.generated.json. The contracts catalogues merge that file in by release
- * identity, so no fingerprint is ever typed by hand. Run it after any catalogue source change:
+ * catalogue-fingerprints.generated.json, keyed by exact release identity (the identity the
+ * publication catalogue resolves: block or theme id and release version, or service, operation and
+ * release version). The contracts catalogues merge that file in by the same identity, so no
+ * fingerprint is ever typed by hand and a new release version never reuses another's values. Run
+ * it after any catalogue source change:
  *
  *   pnpm catalogue:fingerprints           write the generated file
  *   pnpm catalogue:fingerprints --check   fail when the generated file is stale
@@ -56,14 +59,14 @@ const byIdentity = (kind, entries, identityOf, derive) => {
 const platformBlocks = byIdentity(
   "platform block",
   Object.values(await readSource("application-composition-catalogue.source.json")),
-  (release) => release.blockId,
+  (release) => `${release.blockId}:${release.releaseVersion}`,
   platformBlockReleaseFingerprints,
 );
 
 const platformServiceOperations = byIdentity(
   "platform-service operation",
   Object.values(await readSource("platform-service-operation-catalogue.source.json")),
-  (entry) => entry.release.operationId,
+  (entry) => `${entry.release.serviceId}:${entry.release.operationId}:${entry.release.releaseVersion}`,
   (entry) => platformServiceOperationReleaseFingerprints(entry.release, entry.descriptor),
 );
 
@@ -71,7 +74,7 @@ const theme = await readSource("platform-theme-catalogue.source.json");
 const platformThemes = byIdentity(
   "platform theme",
   [theme],
-  (release) => release.catalogueThemeId,
+  (release) => `${release.catalogueThemeId}:${release.releaseVersion}`,
   platformThemeReleaseFingerprints,
 );
 

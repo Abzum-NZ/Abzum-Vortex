@@ -30,13 +30,17 @@ const tokens: Record<PlatformThemeTokenRoleKeyV2, unknown> = source.tokens;
  * (`platformThemeTokenRolesV2`), so the release maps every renderer role and no
  * consumer falls back to a second token convention. Its fingerprints are the canonical-JSON
  * SHA-256 values that `pnpm catalogue:fingerprints` derives from the same token content into
- * catalogue/catalogue-fingerprints.generated.json, merged in by theme id and never written by hand.
+ * catalogue/catalogue-fingerprints.generated.json, merged in by theme id and release version and
+ * never written by hand.
  */
 export const DEFAULT_PLATFORM_THEME_RELEASE_V2: PlatformThemeReleaseV2 = deepFreeze(
   platformThemeReleaseV2Schema.parse({
     catalogueThemeId: source.catalogueThemeId,
     releaseVersion: source.releaseVersion,
-    ...generatedReleaseFingerprints("platformThemes", source.catalogueThemeId),
+    ...generatedReleaseFingerprints(
+      "platformThemes",
+      `${source.catalogueThemeId}:${source.releaseVersion}`,
+    ),
     tokens,
   }),
 );

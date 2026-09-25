@@ -7,8 +7,9 @@ type GeneratedReleaseFingerprints = Readonly<{
 
 /**
  * The content and catalogue fingerprints that `pnpm catalogue:fingerprints` generated for one
- * catalogue release, found by its identity. A release with no generated entry means its source
- * changed without regenerating, so loading the catalogue fails instead of using a stale value.
+ * catalogue release, found by its exact release identity (the key the generator writes). A release
+ * with no generated entry means its source changed without regenerating, so loading the catalogue
+ * fails instead of using a stale value.
  */
 export const generatedReleaseFingerprints = (
   kind: keyof typeof fingerprints,
