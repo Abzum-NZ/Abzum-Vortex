@@ -89,6 +89,14 @@ export {
   type PrepareApplicationPermissionRegistrationCommand,
 } from "./permission-registry-definition-adapter";
 export {
+  BuilderAuthorityError,
+  requireBuilderAuthority,
+  type BuilderAuthority,
+  type BuilderConferredPermission,
+  type BuilderOperation,
+  type BuilderTargetFacts,
+} from "@vortex/definition";
+export {
   createBuilderAuthority,
   type BuilderAuthorityDependencies,
   type BuilderTargetFactsReader,
