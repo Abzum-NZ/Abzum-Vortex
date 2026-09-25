@@ -338,9 +338,17 @@ begin
       return pg_catalog.jsonb_build_object('predicate', null, 'parameters', parameter_values);
     end if;
   elsif left_is_field then
-    shared_type := left_type;
+    if left_type = 'number' and right_type = 'decimal_number' then
+      shared_type := 'decimal_number';
+    else
+      shared_type := left_type;
+    end if;
   elsif right_is_field then
-    shared_type := right_type;
+    if right_type = 'number' and left_type = 'decimal_number' then
+      shared_type := 'decimal_number';
+    else
+      shared_type := right_type;
+    end if;
   else
     return pg_catalog.jsonb_build_object('predicate', null, 'parameters', parameter_values);
   end if;
@@ -491,7 +499,7 @@ begin
     predicate_sql := case when operator_value = 'in' then in_sql
       else '(not (' || in_sql || '))' end;
   else
-    if shared_type not in ('text', 'number', 'decimal_number', 'money', 'date', 'date_time') then
+    if shared_type not in ('text', 'number', 'decimal_number', 'date', 'date_time') then
       return pg_catalog.jsonb_build_object('predicate', null, 'parameters', parameter_values);
     end if;
     operator_sql := case operator_value
@@ -516,10 +524,6 @@ begin
       when 'date_time' then pg_catalog.format(
         '(%s::timestamp with time zone %s %s::timestamp with time zone)',
         left_sql, operator_sql, right_sql
-      )
-      when 'money' then pg_catalog.format(
-        '(%s ->> ''currency'' = %s ->> ''currency'' and (%s ->> ''amount'')::numeric %s (%s ->> ''amount'')::numeric)',
-        left_sql, right_sql, left_sql, operator_sql, right_sql
       )
     end;
     predicate_sql := 'coalesce(' || ordering_sql || ', false)';
