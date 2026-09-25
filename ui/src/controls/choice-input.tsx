@@ -2,8 +2,12 @@
 
 import { useState, type ReactElement } from "react";
 import { DefinitionRenderError } from "../definition-error";
-import type { PlatformBlockRenderProps } from "../registry";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import type { ChoiceInputPayload } from "./projected-data";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import {
   describedBy,
   FieldLabelText,
@@ -15,7 +19,7 @@ import {
 } from "./field-parts";
 import { useFormField } from "./form-context";
 
-export type ChoiceInputProps = PlatformBlockRenderProps;
+export type ChoiceInputProps = ControlRenderProps<ChoiceInputPayload>;
 
 /** Lists longer than this offer a search box; shorter lists are scanned directly. */
 const SEARCHABLE_OPTION_THRESHOLD = 7;
@@ -29,7 +33,7 @@ const SEARCHABLE_OPTION_THRESHOLD = 7;
  * registered or emitted.
  */
 export function ChoiceInput(props: ChoiceInputProps): ReactElement {
-  const context = resolveControlContext(props, "choice_input", ["field_changed"]);
+  const context = resolveControlContext<ChoiceInputPayload>(props, ["field_changed"]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();

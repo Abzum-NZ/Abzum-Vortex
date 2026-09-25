@@ -8,23 +8,29 @@ import type { PlatformBlockRenderProps } from "../registry";
 import {
   parseChoiceOptions,
   type ChoiceOption,
+  type ControlDataState,
   type ControlEventHandlers,
   type ControlSemanticEventName,
-  type ProjectedControlValueKind,
-  type ProjectedControlValues,
 } from "./projected-data";
 
 const fail = (message: string, location: DefinitionRenderErrorLocation): never => {
   throw new DefinitionRenderError("INVALID_COMPOSITION", message, location);
 };
 
+/**
+ * The props a control block's renderer receives: the base props every block has, plus this block's
+ * own `data` and `events`, which its own registration validated fail-closed.
+ */
+export type ControlRenderProps<Values> = PlatformBlockRenderProps &
+  Readonly<{ data?: ControlDataState<Values>; events?: ControlEventHandlers }>;
+
 /** Resolved presentation context shared by every form and action control. */
-export type ControlContext<Kind extends ProjectedControlValueKind> = Readonly<{
+export type ControlContext<Values> = Readonly<{
   location: DefinitionRenderErrorLocation;
   /** Authored accessible name, read only through the declared metadata path. */
   accessibleName: string | undefined;
-  /** Ready values of this control's exact kind, or the last ready values kept while not ready. */
-  values: Extract<ProjectedControlValues, { kind: Kind }> | undefined;
+  /** Ready values of this control's own payload, or the last ready values kept while not ready. */
+  values: Values | undefined;
   /** The control's data or a submission it started is pending; it cannot be activated. */
   pending: boolean;
   /** The placement is viewable but its use is unavailable to the current person. */
@@ -56,49 +62,35 @@ function useLastReadyValues<Values>(
 }
 
 /**
- * Resolves one control's props, failing closed on a display projection, ready values of another
- * kind, or a callback for an event this block does not declare. The control never fetches data
- * or calls a Record, Query or App service; it only emits its declared semantic events. It keeps
- * the last ready values in state, so each control calls it once, unconditionally, while rendering.
+ * Resolves one control's props from the inputs its own registration validated, failing closed on a
+ * callback for an event this block does not declare. The control never fetches data or calls a
+ * Record, Query or App service; it only emits its declared semantic events. It keeps the last ready
+ * values in state, so each control calls it once, unconditionally, while rendering.
  */
-export function resolveControlContext<Kind extends ProjectedControlValueKind>(
-  props: PlatformBlockRenderProps,
-  kind: Kind,
+export function resolveControlContext<Values>(
+  props: ControlRenderProps<Values>,
   declaredEvents: readonly ControlSemanticEventName[],
-): ControlContext<Kind> {
-  const { metadata, placementId, controlData, controlEvents, availability } = props;
+): ControlContext<Values> {
+  const { metadata, placementId, data, events: suppliedEvents, availability } = props;
   const location: DefinitionRenderErrorLocation = {
     placementId,
     blockId: metadata.blockId,
     releaseVersion: metadata.releaseVersion,
   };
-  if (props.projectedData !== undefined || props.displayEvents !== undefined)
-    fail(
-      `Control block '${metadata.key}' does not accept display data or display events`,
-      location,
-    );
 
-  let ready: Extract<ProjectedControlValues, { kind: Kind }> | undefined;
-  if (controlData?.status === "ready") {
-    if (controlData.values.kind !== kind)
-      fail(
-        `Block '${metadata.key}' expected '${kind}' projected values, got '${controlData.values.kind}'`,
-        location,
-      );
-    ready = controlData.values as Extract<ProjectedControlValues, { kind: Kind }>;
-  }
+  const ready = data?.status === "ready" ? data.values : undefined;
   const values = useLastReadyValues(placementId, ready);
 
-  if (controlEvents !== undefined) {
-    for (const name of Object.keys(controlEvents)) {
+  if (suppliedEvents !== undefined) {
+    for (const name of Object.keys(suppliedEvents)) {
       if (!declaredEvents.includes(name as ControlSemanticEventName))
         fail(`Block '${metadata.key}' does not declare semantic event '${name}'`, location);
     }
   }
 
-  const pending = controlData?.status === "loading";
+  const pending = data?.status === "loading";
   const unavailable = availability === "unavailable";
-  const disabledReason = controlData?.status === "disabled" ? controlData.reason : undefined;
+  const disabledReason = data?.status === "disabled" ? data.reason : undefined;
   return {
     location,
     accessibleName: getAccessibleName(props.settings, metadata),
@@ -106,8 +98,8 @@ export function resolveControlContext<Kind extends ProjectedControlValueKind>(
     pending,
     unavailable,
     disabledReason,
-    inactive: unavailable || pending || controlData?.status === "disabled",
-    events: availability === "available" ? controlEvents : undefined,
+    inactive: unavailable || pending || data?.status === "disabled",
+    events: availability === "available" ? suppliedEvents : undefined,
   };
 }
 

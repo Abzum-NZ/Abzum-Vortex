@@ -1,5 +1,4 @@
 import type { ReactElement } from "react";
-import type { PlatformBlockRenderProps } from "../registry";
 import { DisplayCellView } from "./cell";
 import {
   DisplayHeader,
@@ -8,22 +7,20 @@ import {
   RowActionControl,
   rowName,
   SelectionControl,
+  type DisplayRenderProps,
 } from "./controls";
 import { DisplayStateContainer } from "./display-state-container";
+import type { ListPayload } from "./projected-data";
 
 /**
  * Shared browser-safe display component for lists of permission-projected records.
  * Preserves stable row identities and emits declared semantic events only on user interaction.
  * Never executes or fetches a Query.
  */
-export function ListDisplay(props: PlatformBlockRenderProps): ReactElement {
+export function ListDisplay(props: DisplayRenderProps<ListPayload>): ReactElement {
   const { placementId, availability } = props;
-  const { title, accessibleName, values, state, emptyMessage, events } = resolveDisplayContext(
-    props,
-    "list",
-    (list) => list.rows.length === 0,
-    "No items to show",
-  );
+  const { title, accessibleName, values, state, emptyMessage, events } =
+    resolveDisplayContext<ListPayload>(props, (list) => list.rows.length === 0, "No items to show");
 
   return (
     <DisplayStateContainer

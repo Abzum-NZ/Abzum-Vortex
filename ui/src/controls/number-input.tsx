@@ -2,8 +2,12 @@
 
 import type { ChangeEvent, ReactElement } from "react";
 import { DefinitionRenderError } from "../definition-error";
-import type { PlatformBlockRenderProps } from "../registry";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import type { NumberInputPayload } from "./projected-data";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import {
   describedBy,
   FieldLabelText,
@@ -15,14 +19,14 @@ import {
 } from "./field-parts";
 import { useFormField } from "./form-context";
 
-export type NumberInputProps = PlatformBlockRenderProps;
+export type NumberInputProps = ControlRenderProps<NumberInputPayload>;
 
 /**
  * Typed number input. Empty, unparsable or non-integer (when integer is declared) entry is the
  * typed value `null`; it is never truncated or coerced. Arrow-key stepping is the native control's.
  */
 export function NumberInput(props: NumberInputProps): ReactElement {
-  const context = resolveControlContext(props, "number_input", ["field_changed"]);
+  const context = resolveControlContext<NumberInputPayload>(props, ["field_changed"]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();

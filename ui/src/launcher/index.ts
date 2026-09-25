@@ -1,4 +1,4 @@
-// Launcher Projected Data & Binding Contracts
+// Launcher List Payload & Binding Contracts
 export {
   linkTilesToListValues,
   parsePermittedApplicationsLauncherProjection,
@@ -12,6 +12,7 @@ export {
   readLauncherSettings,
   resolveLauncherListContext,
   type LauncherListContext,
+  type LauncherRenderProps,
   type LauncherSettings,
 } from "./launcher-context";
 

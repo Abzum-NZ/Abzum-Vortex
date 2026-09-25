@@ -1,15 +1,20 @@
-// Projected Data & Events Contracts
+// Per-Block Payload & Event Contracts
 export {
-  assertProjectionKeysArePlacements,
+  DISPLAY_EVENT_NAMES,
+  parseDisplayData,
   parseDisplayEventHandlers,
-  parseDisplayEventsByPlacement,
-  parseProjectedDataByPlacement,
-  parseProjectedDisplayData,
+  parseGroupedPayload,
+  parseListPayload,
+  parseRecordDetailPayload,
+  parseRichTextPayload,
+  parseSummaryPayload,
+  parseTablePayload,
+  parseTextPayload,
   type DisplayCellValue,
   type DisplayColumn,
+  type DisplayDataState,
   type DisplayEventHandler,
   type DisplayEventHandlers,
-  type DisplayEventsByPlacement,
   type DisplayField,
   type DisplayGroup,
   type DisplayRefusalReason,
@@ -20,10 +25,20 @@ export {
   type DisplaySemanticEvent,
   type DisplaySemanticEventName,
   type DisplaySummaryValue,
-  type ProjectedDataByPlacement,
-  type ProjectedDisplayData,
-  type ProjectedDisplayValueKind,
-  type ProjectedDisplayValues,
+  type GroupedData,
+  type GroupedPayload,
+  type ListData,
+  type ListPayload,
+  type RecordDetailData,
+  type RecordDetailPayload,
+  type RichTextData,
+  type RichTextPayload,
+  type SummaryData,
+  type SummaryPayload,
+  type TableData,
+  type TablePayload,
+  type TextData,
+  type TextPayload,
 } from "./projected-data";
 
 // Rich Text Rendering
@@ -49,6 +64,9 @@ export { TableDisplay } from "./table";
 export { RecordDetailDisplay } from "./record-detail";
 export { GroupedDataDisplay } from "./grouped-data";
 export { SummaryValuesDisplay } from "./summary-values";
+
+// Per-Block Render Props
+export { type DisplayRenderProps } from "./controls";
 
 // Display Registrations & Registry
 export {
