@@ -1,6 +1,14 @@
 -- Keep the organisation's exact default application reference with its
 -- Identity-owned execution settings. A later protected installation operation
 -- sets it; this migration supplies only the storage and read side.
+
+-- The postgres-owned functions below are created in vortex_module, which needs
+-- the schema CREATE privilege that only the schema owner can lend. Revoked again
+-- at the end of this migration.
+set local role vortex_module_owner;
+grant create on schema vortex_module to postgres;
+reset role;
+
 alter table vortex_definition.roots
   add constraint roots_organization_root_id_unique unique (organization_id, root_id);
 
@@ -443,3 +451,7 @@ grant execute on function vortex_module.read_application_address_candidates(uuid
 
 comment on function vortex_module.read_application_address_candidates(uuid, text, text) is
   'Private App candidate read for one exact live human organisation address; only App may project metadata after current page Access decisions.';
+
+set local role vortex_module_owner;
+revoke create on schema vortex_module from postgres;
+reset role;

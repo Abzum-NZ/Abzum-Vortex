@@ -5,6 +5,7 @@ import {
   flowTaskRegistry,
   parseExactDecimal,
   type FlowDefinition,
+  type FlowExecutionKind,
   type FlowReference,
   type FlowTask,
   type FlowValue,
@@ -132,6 +133,11 @@ export type FlowRunState = Readonly<{
   runId: string;
   now: string;
   actor?: string;
+  /**
+   * The record a run acts on, keyed by field key, for `trigger.record.<field>` reads. It is set only
+   * by a host that runs a flow for one record (a named action's subject) and never comes from a flow.
+   */
+  triggerRecord?: FlowRuntimeValues;
   activations: readonly Activation[];
   /** Protected operations started so far in this run, across every resume. */
   protectedOperations: number;
@@ -190,6 +196,19 @@ export type FlowRunStart = Readonly<{
   inputs: Readonly<Record<string, unknown>>;
   now: string;
   actor?: string;
+  /**
+   * The execution kinds the host may start; interactive by default. A named action starts as a
+   * `transaction` flow through its binding, driven by the host that owns the transaction.
+   */
+  executionKinds?: readonly FlowExecutionKind[];
+  /** The record the run acts on, keyed by field key; see `FlowRunState.triggerRecord`. */
+  triggerRecord?: FlowRuntimeValues;
+  /**
+   * Inputs the host has already verified and typed under its own rules (a named action checks each
+   * input against its declaration before the run). When supplied they are the run's inputs as given,
+   * and the interpreter's own value-shape check is not applied to them.
+   */
+  verifiedInputs?: FlowRuntimeValues;
 }>;
 
 export type FlowRunResume =
@@ -302,7 +321,10 @@ const scopeOf = (state: FlowRunState, activation: Activation, flow: FlowDefiniti
           : typed("organization_account_reference", state.actor);
       case "execution_now":
         return typed("date_time", state.now);
-      // A run started by a person or a system has no trigger record.
+      // A run started by a person or a system has no trigger record, unless the host supplied the
+      // record it acts on.
+      case "trigger_record":
+        return state.triggerRecord?.[reference.field];
       default:
         return undefined;
     }
@@ -626,6 +648,9 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
       });
       return { kind: "continue" };
     }
+    // A transaction flow refuses its record here, as a save rule refuses a save.
+    if (registered.type === "rule.refuse" && flow.execution === "transaction")
+      return failed("task_refused", "refused", taskId);
     // Save rules give feedback in the browser and are authoritative in the save transaction.
     return failed("task_not_available", "failed", taskId);
   }
@@ -784,15 +809,16 @@ export const startFlowRun = (start: FlowRunStart, library: FlowLibrary): FlowRun
     committedEffects: 0,
     steps: 0,
     pendingIntents: [],
+    ...(start.triggerRecord === undefined ? {} : { triggerRecord: start.triggerRecord }),
   };
   const machine: Machine = { state: { ...state }, library };
   const flow = library(start.flowId);
   if (flow === undefined) return failedStep(machine, { outcome: "failed", code: "flow_unavailable" });
-  if (flow.execution !== "interactive")
+  if (!(start.executionKinds ?? ["interactive"]).includes(flow.execution))
     return failedStep(machine, { outcome: "failed", code: "flow_not_runnable" });
   let inputs: FlowRuntimeValues;
   try {
-    inputs = buildInputs(flow, start.inputs);
+    inputs = start.verifiedInputs ?? buildInputs(flow, start.inputs);
   } catch (error) {
     if (error instanceof Failed) return failedStep(machine, error.failure);
     throw error;

@@ -210,6 +210,7 @@ declare
   occurrences integer;
   definition text;
   owner_name name;
+  lent_execute boolean;
 begin
   for target in
     select item.value
@@ -246,7 +247,18 @@ begin
     from pg_catalog.pg_proc as procedure
     where procedure.oid = procedure_id;
     execute pg_catalog.format('set local role %I', owner_name);
+    -- Replacing a function is refused when its owner no longer holds EXECUTE on
+    -- it, as on a fresh database where earlier migrations revoked it. The owner
+    -- lends itself EXECUTE for the replace and gives it back, so the ACL is the
+    -- same afterwards.
+    lent_execute := not pg_catalog.has_function_privilege(owner_name, procedure_id, 'execute');
+    if lent_execute then
+      execute pg_catalog.format('grant execute on function %s to %I', procedure_id, owner_name);
+    end if;
     execute definition;
+    if lent_execute then
+      execute pg_catalog.format('revoke execute on function %s from %I', procedure_id, owner_name);
+    end if;
     reset role;
   end loop;
 end

@@ -125,7 +125,7 @@ begin
       raise exception 'Upload function is missing';
     end if;
     definition := pg_catalog.pg_get_functiondef(target);
-    if pg_catalog.position('vortex_file.upload_validated_context()' in definition) = 0 then
+    if pg_catalog.strpos(definition, 'vortex_file.upload_validated_context()') = 0 then
       execute pg_temp.upload_patch(definition, context_old, context_new);
     end if;
   end loop;
@@ -138,7 +138,7 @@ begin
     raise exception 'Upload function is missing';
   end if;
   definition := pg_catalog.pg_get_functiondef(target);
-  if pg_catalog.position('vortex_file.upload_validated_context()' in definition) = 0 then
+  if pg_catalog.strpos(definition, 'vortex_file.upload_validated_context()') = 0 then
     definition := pg_temp.upload_patch(definition, context_old, context_new);
 
     definition := pg_temp.upload_patch(definition,
@@ -235,7 +235,7 @@ $new$);
     raise exception 'Upload function is missing';
   end if;
   definition := pg_catalog.pg_get_functiondef(target);
-  if pg_catalog.position('vortex_file.upload_validated_context()' in definition) = 0 then
+  if pg_catalog.strpos(definition, 'vortex_file.upload_validated_context()') = 0 then
     definition := pg_temp.upload_patch(definition, context_old, context_new);
 
     definition := pg_temp.upload_patch(definition,
