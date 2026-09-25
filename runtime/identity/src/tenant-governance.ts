@@ -62,7 +62,6 @@ import {
   type DatabaseRow,
   type RuntimeDatabaseTransaction,
 } from "@vortex/db";
-import { requireIdentityNotDisabled } from "./identity-disablement-publication";
 
 type Runner = <Result>(
   operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
@@ -206,7 +205,7 @@ export const createTenantGovernanceService = (
       try {
         const page = await run(async (tx) => {
           const rows =
-            await tx.query`select * from vortex_identity.list_tenant_launcher(${verified.data.identityId}::uuid, ${query.data.limit + 1}::integer, ${query.data.after ?? null}::uuid)`;
+            await tx.query`select * from vortex_identity.list_tenant_launcher(${query.data.limit + 1}::integer, ${query.data.after ?? null}::uuid)`;
           const visible = rows
             .slice(0, query.data.limit)
             .map((row) => ({ tenantId: row.tenant_id, displayName: row.display_name }));
@@ -230,7 +229,7 @@ export const createTenantGovernanceService = (
       try {
         const page = await run(async (tx) => {
           const rows =
-            await tx.query`select * from vortex_identity.list_tenant_hierarchy(${verified.data.identityId}::uuid, ${query.data.tenantId}::uuid, ${query.data.page.limit + 1}::integer, ${query.data.page.after ?? null}::uuid)`;
+            await tx.query`select * from vortex_identity.list_tenant_hierarchy(${query.data.tenantId}::uuid, ${query.data.page.limit + 1}::integer, ${query.data.page.after ?? null}::uuid)`;
           const entries = rows.slice(0, query.data.page.limit).map(hierarchyEntry);
           return tenantHierarchyPageSchema.parse({
             entries,
@@ -254,7 +253,7 @@ export const createTenantGovernanceService = (
       try {
         const rows = await run(
           (tx) =>
-            tx.query`select * from vortex_identity.read_tenant_organization(${verified.data.identityId}::uuid, ${query.data.tenantId}::uuid, ${query.data.organizationId}::uuid)`,
+            tx.query`select * from vortex_identity.read_tenant_organization(${query.data.tenantId}::uuid, ${query.data.organizationId}::uuid)`,
         );
         if (rows.length !== 1) return readRefusal(false);
         return { outcome: "available", organization: hierarchyEntry(rows[0]!) };
@@ -272,7 +271,7 @@ export const createTenantGovernanceService = (
       try {
         const page = await run(async (tx) => {
           const rows =
-            await tx.query`select * from vortex_identity.list_tenant_administrator_assignments(${verified.data.identityId}::uuid, ${query.data.tenantId}::uuid, ${query.data.page.limit + 1}::integer, ${query.data.page.after ?? null}::uuid)`;
+            await tx.query`select * from vortex_identity.list_tenant_administrator_assignments(${query.data.tenantId}::uuid, ${query.data.page.limit + 1}::integer, ${query.data.page.after ?? null}::uuid)`;
           const entries = rows.slice(0, query.data.page.limit).map(assignmentEntry);
           return tenantAssignmentPageSchema.parse({
             entries,
@@ -298,10 +297,10 @@ export const createTenantGovernanceService = (
         };
       try {
         const value = command.data;
-        const rows = await run(async (tx) => {
-          await requireIdentityNotDisabled(tx, verified.data.identityId);
-          return tx.query<MutationRow>`select * from vortex_identity.grant_tenant_administrator(${verified.data.identityId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.identityId}::uuid, ${JSON.stringify(value.capabilities)}::jsonb, ${value.startsAt}::timestamptz, ${value.expiresAt ?? null}::timestamptz)`;
-        });
+        const rows = await run(
+          (tx) =>
+            tx.query<MutationRow>`select * from vortex_identity.grant_tenant_administrator(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.identityId}::uuid, ${JSON.stringify(value.capabilities)}::jsonb, ${value.startsAt}::timestamptz, ${value.expiresAt ?? null}::timestamptz)`,
+        );
         return grantTenantAdministratorResultSchema.parse(
           mutationResult(rows.length === 1 ? rows[0] : undefined),
         );
@@ -331,7 +330,7 @@ export const createTenantGovernanceService = (
         const settings = value.runtimeSettings;
         const rows = await run(
           (tx) =>
-            tx.query<OrganizationCreationRow>`select * from vortex_identity.create_tenant_organization(${verified.data.identityId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.parentOrganizationId}::uuid, ${value.shortName}::text, ${value.displayName}::text, ${steward.identityId}::uuid, ${steward.accountDisplayName}::text, ${steward.accountLanguage}::text, ${steward.accountTimeZone}::text, ${settings.language}::text, ${settings.timeZone}::text, ${settings.currency}::text, ${settings.dateFormat}::text, ${settings.numberFormat}::text)`,
+            tx.query<OrganizationCreationRow>`select * from vortex_identity.create_tenant_organization(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.parentOrganizationId}::uuid, ${value.shortName}::text, ${value.displayName}::text, ${steward.identityId}::uuid, ${steward.accountDisplayName}::text, ${steward.accountLanguage}::text, ${steward.accountTimeZone}::text, ${settings.language}::text, ${settings.timeZone}::text, ${settings.currency}::text, ${settings.dateFormat}::text, ${settings.numberFormat}::text)`,
         );
         return createTenantOrganizationResultSchema.parse(
           organizationCreationResult(rows.length === 1 ? rows[0] : undefined),
@@ -358,10 +357,10 @@ export const createTenantGovernanceService = (
         };
       try {
         const value = command.data;
-        const rows = await run(async (tx) => {
-          await requireIdentityNotDisabled(tx, verified.data.identityId);
-          return tx.query<MutationRow>`select * from vortex_identity.change_tenant_administrator(${verified.data.identityId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.assignmentId}::uuid, ${value.expectedRevision}::bigint, ${JSON.stringify(value.capabilities)}::jsonb, ${value.startsAt}::timestamptz, ${value.expiresAt ?? null}::timestamptz)`;
-        });
+        const rows = await run(
+          (tx) =>
+            tx.query<MutationRow>`select * from vortex_identity.change_tenant_administrator(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.assignmentId}::uuid, ${value.expectedRevision}::bigint, ${JSON.stringify(value.capabilities)}::jsonb, ${value.startsAt}::timestamptz, ${value.expiresAt ?? null}::timestamptz)`,
+        );
         return changeTenantAdministratorResultSchema.parse(
           mutationResult(rows.length === 1 ? rows[0] : undefined),
         );
@@ -387,10 +386,10 @@ export const createTenantGovernanceService = (
         };
       try {
         const value = command.data;
-        const rows = await run(async (tx) => {
-          await requireIdentityNotDisabled(tx, verified.data.identityId);
-          return tx.query<MutationRow>`select * from vortex_identity.revoke_tenant_administrator(${verified.data.identityId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.assignmentId}::uuid, ${value.expectedRevision}::bigint)`;
-        });
+        const rows = await run(
+          (tx) =>
+            tx.query<MutationRow>`select * from vortex_identity.revoke_tenant_administrator(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.assignmentId}::uuid, ${value.expectedRevision}::bigint)`,
+        );
         return revokeTenantAdministratorResultSchema.parse(
           mutationResult(rows.length === 1 ? rows[0] : undefined),
         );
@@ -418,7 +417,7 @@ export const createTenantGovernanceService = (
         const value = command.data;
         const rows = await run(
           (tx) =>
-            tx.query<OrganizationMutationRow>`select * from vortex_identity.rename_tenant_organization(${verified.data.identityId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint, ${value.displayName}::text)`,
+            tx.query<OrganizationMutationRow>`select * from vortex_identity.rename_tenant_organization(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint, ${value.displayName}::text)`,
         );
         return renameTenantOrganizationResultSchema.parse(
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
@@ -447,7 +446,7 @@ export const createTenantGovernanceService = (
         const value = command.data;
         const rows = await run(
           (tx) =>
-            tx.query<OrganizationMutationRow>`select * from vortex_identity.reparent_tenant_organization(${verified.data.identityId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint, ${value.parentOrganizationId}::uuid)`,
+            tx.query<OrganizationMutationRow>`select * from vortex_identity.reparent_tenant_organization(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint, ${value.parentOrganizationId}::uuid)`,
         );
         return reparentTenantOrganizationResultSchema.parse(
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
@@ -476,7 +475,7 @@ export const createTenantGovernanceService = (
         const value = command.data;
         const rows = await run(
           (tx) =>
-            tx.query<OrganizationMutationRow>`select * from vortex_identity.suspend_tenant_organization(${verified.data.identityId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint)`,
+            tx.query<OrganizationMutationRow>`select * from vortex_identity.suspend_tenant_organization(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return suspendTenantOrganizationResultSchema.parse(
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
@@ -505,7 +504,7 @@ export const createTenantGovernanceService = (
         const value = command.data;
         const rows = await run(
           (tx) =>
-            tx.query<OrganizationMutationRow>`select * from vortex_identity.reactivate_tenant_organization(${verified.data.identityId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint)`,
+            tx.query<OrganizationMutationRow>`select * from vortex_identity.reactivate_tenant_organization(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return reactivateTenantOrganizationResultSchema.parse(
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
@@ -534,7 +533,7 @@ export const createTenantGovernanceService = (
         const value = command.data;
         const rows = await run(
           (tx) =>
-            tx.query<OrganizationMutationRow>`select * from vortex_identity.archive_tenant_organization(${verified.data.identityId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint)`,
+            tx.query<OrganizationMutationRow>`select * from vortex_identity.archive_tenant_organization(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return archiveTenantOrganizationResultSchema.parse(
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
