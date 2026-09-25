@@ -1,4 +1,4 @@
-import { type PermissionId } from "./identifiers";
+import { type PermissionId, type PlatformId } from "./identifiers";
 import { type PermissionDeclaration } from "./permissions";
 
 /** A shipped declaration whose permanent identity is still a plain UUID literal before it is branded. */
@@ -21,7 +21,8 @@ const brandPermission = (permission: ShippedPermission): PermissionDeclaration =
  * is a permanent internal identifier that never changes between catalogue versions, and no release
  * is ever removed.
  */
-export const platformPermissionCatalogueOwnerId = "cabe121e-0baf-4084-9471-cce915d460a8";
+export const platformPermissionCatalogueOwnerId =
+  "cabe121e-0baf-4084-9471-cce915d460a8" as PlatformId;
 export const platformPermissionCatalogueVersionV1 = "1.0.0";
 export const platformPermissionCatalogueVersionV1_0_1 = "1.0.1";
 export const platformPermissionCatalogueVersion = "1.4.0";
