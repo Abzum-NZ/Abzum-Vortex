@@ -4,7 +4,7 @@ import {
   personalDataClassSchema,
   publicDisplaySchema,
   searchPrioritySchema,
-  sharingParameterValueTypeSchema,
+  sharingParameterValueTypeV2Schema,
 } from "./catalogues";
 import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "./common";
 import { recordTypeReferenceSchema } from "./definitions";
@@ -901,7 +901,7 @@ const sharingConditionPublicationTestV1Schema =
 const sharingConditionParameterV2Schema = z
   .object({
     ...sharingConditionParameterV1Schema.shape,
-    type: sharingParameterValueTypeSchema,
+    type: sharingParameterValueTypeV2Schema,
   })
   .strict();
 const sharingConditionPublicationTestV2Schema = z

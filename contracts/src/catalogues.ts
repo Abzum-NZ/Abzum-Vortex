@@ -99,18 +99,27 @@ export const actionInputValueTypeKeys = Object.values(actionInputValueTypes) as 
 ];
 export const actionInputValueTypeSchema = z.enum(actionInputValueTypeKeys);
 
-/** Sharing-parameter value types: the view of the catalogue used by saved sharing conditions. */
+/**
+ * Sharing-parameter value types: the view of the catalogue used by V1 saved sharing conditions.
+ * The V1 typed-condition evaluator refuses any other parameter type, so this view stays exact.
+ */
 export const sharingParameterValueTypeKeys = [
   "text",
   "number",
-  "decimal_number",
-  "money",
   "boolean",
   "date",
   "date_time",
   "organization_account_reference",
 ] as const satisfies readonly ValueType[];
 export const sharingParameterValueTypeSchema = z.enum(sharingParameterValueTypeKeys);
+
+/** V2 sharing-parameter value types: the V1 view plus the exact decimal_number and money types. */
+export const sharingParameterValueTypeV2Keys = [
+  ...sharingParameterValueTypeKeys,
+  "decimal_number",
+  "money",
+] as const satisfies readonly ValueType[];
+export const sharingParameterValueTypeV2Schema = z.enum(sharingParameterValueTypeV2Keys);
 
 export const pageTypeKeys = [
   "list",
