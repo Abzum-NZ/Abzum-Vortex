@@ -112,7 +112,6 @@ export const eventDispatcherRefusalReasons = [
   "credential_rejected",
   "dispatcher_grant_missing",
   "dispatcher_grant_ambiguous",
-  "dispatcher_grant_organisation_inactive",
   "dispatcher_grant_unavailable",
 ] as const;
 
@@ -124,9 +123,9 @@ export type EventDispatcherAuthentication =
   | Readonly<{ outcome: "refused"; reason: EventDispatcherRefusalReason }>;
 
 /**
- * The active system actor grant that authorises dispatch, resolved by storage
- * for the fixed dispatcher operation. `systemActorId` is the granted actor;
- * every other result refuses.
+ * The active platform-wide system actor grant that authorises dispatch,
+ * resolved by Access for the fixed dispatcher operation. `systemActorId` is
+ * the granted actor; every other result refuses.
  */
 export type EventDispatcherGrantAuthority =
   | Readonly<{ outcome: "authorised"; systemActorId: string }>
@@ -307,9 +306,16 @@ export const authenticateEventDispatcher = (
 
 type GrantRow = DatabaseRow & { readonly result: unknown };
 
+// Storage may only answer with a grant refusal; a credential or configuration
+// reason from it would be misreported to the caller, so it is unusable.
+const grantRefusalReasons: readonly EventDispatcherRefusalReason[] = [
+  "dispatcher_grant_missing",
+  "dispatcher_grant_ambiguous",
+  "dispatcher_grant_unavailable",
+];
+
 const grantRefusalReasonMatches = (value: unknown): value is EventDispatcherRefusalReason =>
-  typeof value === "string" &&
-  (eventDispatcherRefusalReasons as readonly string[]).includes(value);
+  typeof value === "string" && (grantRefusalReasons as readonly string[]).includes(value);
 
 const parseGrantAuthority = (candidate: unknown): EventDispatcherGrantAuthority => {
   const authorised = exactRecord(candidate, ["outcome", "systemActorId"]);
@@ -325,12 +331,13 @@ const parseGrantAuthority = (candidate: unknown): EventDispatcherGrantAuthority 
 };
 
 /**
- * Resolves the dispatcher's system actor from storage for the fixed
- * `dispatch_event_occurrences` operation. The runtime function returns the
- * granted actor only when exactly one active system actor grant exists and,
- * when the grant names an organisation, that organisation is active; every
- * other answer, a missing function, or an unusable result refuses closed. The
- * actor is read from the grant, never from the request.
+ * Resolves the dispatcher's system actor through Access for the fixed
+ * `dispatch_event_occurrences` operation. Dispatch claims occurrences of every
+ * organisation, so the runtime function returns the granted actor only when
+ * exactly one active platform-wide grant (no organisation, flow or scope
+ * subject) exists; every other answer, a missing function, or an unusable
+ * result refuses closed. The actor is read from the grant, never from the
+ * request.
  */
 export const createEventDispatcherGrantReader = (
   run: EventDispatcherTransactionRunner,
@@ -340,7 +347,7 @@ export const createEventDispatcherGrantReader = (
       try {
         const rows = await run((transaction) =>
           transaction.query<GrantRow>`
-            select vortex_event.resolve_event_dispatcher_actor() as result
+            select vortex_access.resolve_event_dispatcher_actor() as result
           `,
         );
         const first = rows[0];
@@ -681,8 +688,8 @@ export const createEventDispatcher = (dependencies: EventDispatcherDependencies)
  * the dispatcher's system actor from an active system actor grant, then runs
  * one bounded dispatch. Webhook wake-ups and scheduled recovery both call this
  * same operation. Responses carry only refusal reasons, safe error codes and
- * counts; a missing, ambiguous, unavailable or organisation-inactive grant
- * refuses closed before any occurrence is claimed.
+ * counts; a missing, ambiguous or unavailable grant refuses closed before
+ * any occurrence is claimed.
  */
 export const createEventDispatcherRoute = (
   dependencies: EventDispatcherRouteDependencies,
@@ -698,6 +705,10 @@ export const createEventDispatcherRoute = (
       if (authentication.outcome === "refused") return authentication;
       const authority = await grant.resolve();
       if (authority.outcome === "refused") return authority;
+      // The granted actor is revalidated here so an injected reader cannot mint
+      // an identity from an unusable value.
+      if (!actorIdSchema.safeParse(authority.systemActorId).success)
+        return { outcome: "refused", reason: "dispatcher_grant_unavailable" };
       const dispatcherIdentity = mintAuthenticatedDispatcher(authority.systemActorId);
       try {
         const result = await dispatcher.dispatch({

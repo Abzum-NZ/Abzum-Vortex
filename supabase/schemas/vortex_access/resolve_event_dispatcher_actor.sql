@@ -1,19 +1,3 @@
--- #1090: the event dispatcher's system actor comes from an active system actor grant.
---
--- The dispatcher previously took its actor from environment configuration. It
--- now carries only the credential digest in server configuration: the actor is
--- read by Access from the one registry of system actor grants (#1089) for the
--- fixed dispatch_event_occurrences operation. The dispatcher claims occurrences
--- of every organisation, so only a platform-wide grant (no organisation, flow or
--- scope subject) authorises it, and dispatch refuses closed when no such active
--- grant exists or more than one does. The identity is never taken from the
--- request.
---
--- The function below is its complete body, identical to its canonical file
--- supabase/schemas/vortex_access/resolve_event_dispatcher_actor.sql.
-
-begin;
-
 create or replace function vortex_access.resolve_event_dispatcher_actor()
 returns jsonb
 language plpgsql
@@ -64,5 +48,3 @@ grant execute on function vortex_access.resolve_event_dispatcher_actor()
 
 comment on function vortex_access.resolve_event_dispatcher_actor() is
   'Resolves the event dispatcher''s system actor from the single active platform-wide system actor grant for the dispatch_event_occurrences operation; refuses when none or more than one exists. A grant confined to an organisation, flow or scope never authorises dispatch. Runtime-only; the actor is never taken from the caller.';
-
-commit;

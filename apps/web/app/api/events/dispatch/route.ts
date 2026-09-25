@@ -22,8 +22,8 @@ type ReadBodyResult =
   | Readonly<{ ok: false; status: number }>;
 
 // A rejected caller credential is 401. A missing server configuration or a
-// missing, ambiguous, unavailable or inactive-organisation system actor grant
-// is 503: no credential the caller could present would succeed.
+// missing, ambiguous or unavailable system actor grant is 503: no credential
+// the caller could present would succeed.
 const credentialRefusals: ReadonlySet<string> = new Set([
   "credential_missing",
   "credential_rejected",
