@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import {
   builderKeySchema,
+  conditionNodeSchema,
   fieldIdSchema,
   jsonValueSchema,
   moduleRootIdSchema,
@@ -15,6 +16,20 @@ import {
   recordSystemValuesSchema,
   supportedRecordSystemFieldKeySchema,
 } from "./record-system-values";
+
+/** A field identifier list is unique without regard to case, as the engine keys fields. */
+const uniqueFieldIds = (fieldIds: readonly string[]): boolean =>
+  new Set(fieldIds.map((fieldId) => fieldId.toLowerCase())).size === fieldIds.length;
+
+/**
+ * One viewer-chosen sort over a field the bound list component declares sortable. The engine
+ * accepts it only when the installed record type also declares the field sortable and the reader
+ * is guaranteed to see it, so a user sort never orders on a hidden or non-sortable value.
+ */
+export const protectedQuerySortSchema = z
+  .object({ fieldId: fieldIdSchema, direction: z.enum(["ascending", "descending"]) })
+  .strict();
+export type ProtectedQuerySort = z.infer<typeof protectedQuerySortSchema>;
 
 /**
  * One protected Query request. It names only the published Module query and the
@@ -46,6 +61,49 @@ export const protectedQueryCommandSchema = z
       .refine((keys) => new Set(keys).size === keys.length, {
         message: "Each system field is declared once",
       })
+      .default([]),
+    /**
+     * The viewer's chosen sort, from a list component's sort control. Empty uses the published
+     * query's declared sort. Every named field must be one the component declares sortable and
+     * the installed record type also declares sortable, or the whole request is refused.
+     */
+    sort: z
+      .array(protectedQuerySortSchema)
+      .max(20)
+      .refine((sorts) => uniqueFieldIds(sorts.map((sort) => sort.fieldId)), {
+        message: "Each sort field is named once",
+      })
+      .default([]),
+    /**
+     * The viewer's typed filter, from a list component's filter controls, ANDed with the published
+     * query's declared filter so it can only narrow the result. Every field it reads must be one
+     * the component declares filterable; anything else refuses the request.
+     */
+    filter: conditionNodeSchema.optional(),
+    /** The viewer's search text, matched only over fields the installed record type marks searchable. */
+    search: z.string().min(1).max(200).optional(),
+    /**
+     * The fields the bound component declares sortable, filterable and searchable. The service
+     * refuses a user sort or filter outside these sets; the engine additionally intersects every
+     * accepted field with the installed record type's own sortable/filterable/search-priority
+     * flags and the guaranteed-readable projection. An empty searchable set means the component
+     * declares only a search box, so the engine searches every field the record type marks
+     * searchable.
+     */
+    sortableFieldIds: z
+      .array(fieldIdSchema)
+      .max(200)
+      .refine(uniqueFieldIds, { message: "Each sortable field is named once" })
+      .default([]),
+    filterableFieldIds: z
+      .array(fieldIdSchema)
+      .max(200)
+      .refine(uniqueFieldIds, { message: "Each filterable field is named once" })
+      .default([]),
+    searchableFieldIds: z
+      .array(fieldIdSchema)
+      .max(200)
+      .refine(uniqueFieldIds, { message: "Each searchable field is named once" })
       .default([]),
     pageSize: z.number().int().min(1).max(200),
     continuationToken: z.string().min(1).max(65_536).optional(),

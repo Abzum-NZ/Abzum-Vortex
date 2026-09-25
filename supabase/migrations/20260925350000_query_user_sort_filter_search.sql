@@ -1,3 +1,30 @@
+-- #1226: the Query engine accepts declared sort, filter and search from list components.
+--
+-- A Records table's sort control, filter controls and search box already emit data
+-- events and never sort, filter or search the returned page locally (#1131). This
+-- migration lets the viewer's choices reach the protected Query engine.
+--
+-- run_module_query accepts one bound list component's declared sortable, filterable
+-- and searchable field sets together with the viewer's chosen sort, typed filter and
+-- search term. It refuses a sort or filter outside the declared sets; keeps a user
+-- sort only over a field the record type declares sortable and the reader is
+-- guaranteed to see (a user order is refused rather than silently reordered); ANDs
+-- the user filter with the published filter so the result can only narrow; and
+-- matches a search only through searchable fields the returned row exposes to the
+-- reader, so a hidden value never decides a match. Every returned row still passes
+-- read_record, and the #1212 cursor rule holds: the keyset cursor carries only
+-- readable sort values and a record identity, and the scan order and budget never
+-- depend on a hidden value. The signature changes, so the old function is dropped
+-- first; every statement below is identical to the canonical file
+-- supabase/schemas/vortex_record/run_module_query.sql changed in this commit.
+begin;
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+
+drop function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb);
 create or replace function vortex_record.run_module_query(
   p_module_root_id uuid,
   p_query_id uuid,
@@ -936,3 +963,9 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
 
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb) is
   'One bounded keyset page of rows readable through read_record for one installed Module query, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows the scan to the caller''s owner, owner-group and direct-share records where those routes have an exact table form, and still decides every returned row through read_record; works out read-time fields, such as a deadline-passed calculation, inside the query at one statement timestamp in the organisation time zone, so no query is refused for freshness.';
+
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+commit;

@@ -3,11 +3,13 @@ import "server-only";
 import {
   readRecordsTableContract,
   type BlockPropertyValueV2Contract,
+  type ConditionNode,
   type IdentitySession,
   type JsonValue,
   type ModuleRootId,
   type OrganizationSelectionCandidate,
   type QueryId,
+  type RecordsDisplayFormat,
 } from "@vortex/contracts";
 import type { HumanOrganizationRequestResult } from "@vortex/access";
 import {
@@ -50,6 +52,21 @@ export type RecordsTableQueryRequest = Readonly<{
   continuationToken?: string;
   /** Headings from the installed definition for declared columns that set no label (field identity to label). */
   fieldLabels?: Readonly<Record<string, string>>;
+  /**
+   * The viewer's chosen sort, from a `sort_changed` data event. It must be a declared sortable
+   * field; `null` or absent uses the bound query's declared sort.
+   */
+  sort?: Readonly<{ fieldId: string; direction: "ascending" | "descending" }> | null;
+  /**
+   * The viewer's active per-field filters, from `filter_changed` data events. An empty value
+   * clears that field; every named field must be a declared filterable field.
+   */
+  filters?: readonly Readonly<{ fieldId: string; value: string }>[];
+  /**
+   * The viewer's search text, from a `search_changed` data event. It is sent only when the
+   * placement enables search; the engine matches it over the record type's searchable fields.
+   */
+  search?: string | null;
 }>;
 
 /**
@@ -74,11 +91,59 @@ export type RecordsTableQueryResolution =
 const refused = Object.freeze({ kind: "refused" as const });
 const unavailable = Object.freeze({ kind: "unavailable" as const });
 
+const lowerUnique = (values: readonly string[]): string[] => [
+  ...new Set(values.map((value) => value.toLowerCase())),
+];
+
+/**
+ * One `filter_changed` value as a typed condition over its field. A text-like field matches a
+ * substring, while a number, date or yes/no field must equal the value the control reports; an
+ * unparsable value yields undefined so the command is refused rather than filtered loosely.
+ */
+const filterConditionFor = (
+  format: RecordsDisplayFormat,
+  fieldId: string,
+  raw: string,
+): ConditionNode | undefined => {
+  const left = { source: "field" as const, fieldId: fieldId.toLowerCase() };
+  switch (format) {
+    case "number":
+    case "currency":
+    case "percent": {
+      const value = Number(raw);
+      return Number.isFinite(value)
+        ? { kind: "comparison", operator: "equals", left, right: { source: "value", value } }
+        : undefined;
+    }
+    case "boolean":
+      return raw === "true" || raw === "false"
+        ? {
+            kind: "comparison",
+            operator: "equals",
+            left,
+            right: { source: "value", value: raw === "true" },
+          }
+        : undefined;
+    case "date":
+    case "date_time":
+      return { kind: "comparison", operator: "equals", left, right: { source: "value", value: raw } };
+    default:
+      return {
+        kind: "comparison",
+        operator: "contains",
+        left,
+        right: { source: "value", value: raw },
+      };
+  }
+};
+
 /**
  * Builds the Query engine command a declared Records table needs: exactly its declared columns,
- * its declared page size and its declared query inputs. Returns undefined when the placement
- * declares no data contract, a page-supplied input is missing or the command is not one the
- * Query engine accepts (for example a column that is not a field identity).
+ * its declared page size, its declared query inputs, and the viewer's current sort, filters and
+ * search from the table's data events. Every user choice must stay inside the component's declared
+ * sortable and filterable fields, so an unconfigured field can neither sort nor filter. Returns
+ * undefined when the placement declares no data contract, a page-supplied input is missing, a user
+ * choice names an undeclared or unreadable field, or the command is not one the Query engine accepts.
  */
 export const buildRecordsTableQueryCommand = (
   request: RecordsTableQueryRequest,
@@ -97,12 +162,50 @@ export const buildRecordsTableQueryCommand = (
     if (value === undefined) return undefined;
     inputValues[parameter.input] = value;
   }
+
+  const sortableFieldIds = lowerUnique(contract.sortableFields);
+  const filterableFieldIds = lowerUnique(contract.filterableFields);
+  const sort: { fieldId: string; direction: "ascending" | "descending" }[] = [];
+  if (request.sort !== undefined && request.sort !== null) {
+    if (!sortableFieldIds.includes(request.sort.fieldId.toLowerCase())) return undefined;
+    sort.push({ fieldId: request.sort.fieldId, direction: request.sort.direction });
+  }
+  const conditions: ConditionNode[] = [];
+  for (const filter of request.filters ?? []) {
+    if (filter.value === "") continue;
+    const fieldId = filter.fieldId.toLowerCase();
+    if (!filterableFieldIds.includes(fieldId)) return undefined;
+    const column = contract.columns.find((candidate) => candidate.field.toLowerCase() === fieldId);
+    if (column === undefined) return undefined;
+    const condition = filterConditionFor(column.format, filter.fieldId, filter.value);
+    if (condition === undefined) return undefined;
+    conditions.push(condition);
+  }
+  const filter: ConditionNode | undefined =
+    conditions.length === 0
+      ? undefined
+      : conditions.length === 1
+        ? conditions[0]
+        : { kind: "all", conditions };
+  const search =
+    contract.search && request.search !== undefined && request.search !== null && request.search.trim() !== ""
+      ? request.search.trim()
+      : undefined;
+
   const command = protectedQueryCommandSchema.safeParse({
     moduleRootId: request.moduleRootId,
     queryId: request.queryId,
     inputValues,
     requestedFieldIds: fieldIds,
     requestedSystemFieldKeys: [],
+    sort,
+    ...(filter === undefined ? {} : { filter }),
+    ...(search === undefined ? {} : { search }),
+    sortableFieldIds,
+    filterableFieldIds,
+    // The table contract declares only a search box, not a searchable field list, so an empty
+    // declared set tells the engine to search every field the record type marks searchable.
+    searchableFieldIds: [],
     pageSize: contract.pageSize,
     ...(request.continuationToken === undefined
       ? {}
