@@ -5542,7 +5542,11 @@ function compileCheckedFlowSources(
     if (output.kind === "module") remember(output.canonical.content.actions);
   const issue = findOperationCallIssue(
     flowSet.flows,
-    (key) => platformOperationLookup(key) ?? actions.get(key),
+    // Only an Application pins a platform operation's release in its manifest, so only an
+    // Application may call one.
+    (key) =>
+      (source.kind === "application" ? platformOperationLookup(key) : undefined) ??
+      actions.get(key),
   );
   if (issue !== undefined)
     throw new DefinitionCompilationError(

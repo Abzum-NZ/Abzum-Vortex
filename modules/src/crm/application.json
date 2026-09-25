@@ -3621,1600 +3621,810 @@
 
                             ],
                  "flows":  [
-    {
-        "id": "crm_named_action_company_merge",
-        "key": "crm_named_action_company_merge",
-        "name": "Merge company",
-        "description": "Merges the current company into the selected company through the bound company.merge named action: the selected company receives the current company's parent company link and the current company is removed.",
-        "run_as": "current_user",
-        "inputs": {
-            "duplicate_company": {
-                "type": "record_reference",
-                "required": true,
-                "record_types": [
-                    "vortex.crm.organisations:company"
-                ]
-            }
-        },
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_company_merge",
-                "key": "start",
-                "kind": "start",
-                "outputs": {
-                    "duplicate_company": {
-                        "type": "record_reference",
-                        "required": true,
-                        "record_types": [
-                            "vortex.crm.organisations:company"
-                        ]
-                    }
-                }
-            },
-            {
-                "id": "merge_company",
-                "key": "merge_company",
-                "kind": "action",
-                "target": {
-                    "kind": "named_action",
-                    "action": "vortex.crm.organisations.company.merge"
-                },
-                "inputs": {
-                    "duplicate_company": {
-                        "type": "record_reference",
-                        "value": {
-                            "source": "flow_input",
-                            "input": "duplicate_company"
-                        }
-                    }
-                },
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_company_merge_committed",
-                "key": "return_committed",
-                "kind": "return",
-                "results": {},
-                "outcome": "committed"
-            },
-            {
-                "id": "return_company_merge_validation",
-                "key": "return_validation",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_company_merge_refused",
-                "key": "return_refused",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            },
-            {
-                "id": "return_company_merge_conflict",
-                "key": "return_conflict",
-                "kind": "return",
-                "results": {},
-                "outcome": "conflict"
-            },
-            {
-                "id": "return_company_merge_uncertain",
-                "key": "return_uncertain",
-                "kind": "return",
-                "results": {},
-                "outcome": "uncertain"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_company_merge",
-                "from_node": "start_company_merge",
-                "to_node": "merge_company"
-            },
-            {
-                "id": "merge_company_committed",
-                "from_node": "merge_company",
-                "to_node": "return_company_merge_committed",
-                "outcome": "committed"
-            },
-            {
-                "id": "merge_company_validation",
-                "from_node": "merge_company",
-                "to_node": "return_company_merge_validation",
-                "outcome": "validation"
-            },
-            {
-                "id": "merge_company_refused",
-                "from_node": "merge_company",
-                "to_node": "return_company_merge_refused",
-                "outcome": "refused"
-            },
-            {
-                "id": "merge_company_conflict",
-                "from_node": "merge_company",
-                "to_node": "return_company_merge_conflict",
-                "outcome": "conflict"
-            },
-            {
-                "id": "merge_company_uncertain",
-                "from_node": "merge_company",
-                "to_node": "return_company_merge_uncertain",
-                "outcome": "uncertain"
-            }
-        ]
-    },
-    {
-        "id": "crm_form_flow_0",
-        "key": "crm_form_flow_0",
-        "name": "Continue Qualify lead",
-        "description": "Continue the declared form submission using its current Application action.",
-        "run_as": "current_user",
-        "inputs": {},
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_0",
-                "key": "start",
-                "kind": "start",
-                "outputs": {}
-            },
-            {
-                "id": "continue_0",
-                "key": "continue_form",
-                "kind": "action",
-                "target": {
-                    "kind": "form_continuation",
-                    "form": "form_6_0",
-                    "continuation_event": "form_submit_0"
-                },
-                "inputs": {},
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_0_0",
-                "key": "return_0",
-                "kind": "return",
-                "results": {},
-                "outcome": "completed"
-            },
-            {
-                "id": "return_0_1",
-                "key": "return_1",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_0_2",
-                "key": "return_2",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_0",
-                "from_node": "start_0",
-                "to_node": "continue_0"
-            },
-            {
-                "id": "route_0_0",
-                "from_node": "continue_0",
-                "to_node": "return_0_0",
-                "outcome": "completed"
-            },
-            {
-                "id": "route_0_1",
-                "from_node": "continue_0",
-                "to_node": "return_0_1",
-                "outcome": "validation"
-            },
-            {
-                "id": "route_0_2",
-                "from_node": "continue_0",
-                "to_node": "return_0_2",
-                "outcome": "refused"
-            }
-        ]
-    },
-    {
-        "id": "crm_form_flow_1",
-        "key": "crm_form_flow_1",
-        "name": "Continue Qualify lead",
-        "description": "Continue the declared form submission using its current Application action.",
-        "run_as": "current_user",
-        "inputs": {},
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_1",
-                "key": "start",
-                "kind": "start",
-                "outputs": {}
-            },
-            {
-                "id": "continue_1",
-                "key": "continue_form",
-                "kind": "action",
-                "target": {
-                    "kind": "form_continuation",
-                    "form": "form_6_1",
-                    "continuation_event": "form_submit_1"
-                },
-                "inputs": {},
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_1_0",
-                "key": "return_0",
-                "kind": "return",
-                "results": {},
-                "outcome": "completed"
-            },
-            {
-                "id": "return_1_1",
-                "key": "return_1",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_1_2",
-                "key": "return_2",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_1",
-                "from_node": "start_1",
-                "to_node": "continue_1"
-            },
-            {
-                "id": "route_1_0",
-                "from_node": "continue_1",
-                "to_node": "return_1_0",
-                "outcome": "completed"
-            },
-            {
-                "id": "route_1_1",
-                "from_node": "continue_1",
-                "to_node": "return_1_1",
-                "outcome": "validation"
-            },
-            {
-                "id": "route_1_2",
-                "from_node": "continue_1",
-                "to_node": "return_1_2",
-                "outcome": "refused"
-            }
-        ]
-    },
-    {
-        "id": "crm_form_flow_2",
-        "key": "crm_form_flow_2",
-        "name": "Continue Qualify lead",
-        "description": "Continue the declared form submission using its current Application action.",
-        "run_as": "current_user",
-        "inputs": {},
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_2",
-                "key": "start",
-                "kind": "start",
-                "outputs": {}
-            },
-            {
-                "id": "continue_2",
-                "key": "continue_form",
-                "kind": "action",
-                "target": {
-                    "kind": "form_continuation",
-                    "form": "form_6_2",
-                    "continuation_event": "form_submit_2"
-                },
-                "inputs": {},
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_2_0",
-                "key": "return_0",
-                "kind": "return",
-                "results": {},
-                "outcome": "completed"
-            },
-            {
-                "id": "return_2_1",
-                "key": "return_1",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_2_2",
-                "key": "return_2",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_2",
-                "from_node": "start_2",
-                "to_node": "continue_2"
-            },
-            {
-                "id": "route_2_0",
-                "from_node": "continue_2",
-                "to_node": "return_2_0",
-                "outcome": "completed"
-            },
-            {
-                "id": "route_2_1",
-                "from_node": "continue_2",
-                "to_node": "return_2_1",
-                "outcome": "validation"
-            },
-            {
-                "id": "route_2_2",
-                "from_node": "continue_2",
-                "to_node": "return_2_2",
-                "outcome": "refused"
-            }
-        ]
-    },
-    {
-        "id": "crm_form_flow_3",
-        "key": "crm_form_flow_3",
-        "name": "Continue Qualify lead",
-        "description": "Continue the declared form submission using its current Application action.",
-        "run_as": "current_user",
-        "inputs": {},
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_3",
-                "key": "start",
-                "kind": "start",
-                "outputs": {}
-            },
-            {
-                "id": "continue_3",
-                "key": "continue_form",
-                "kind": "action",
-                "target": {
-                    "kind": "form_continuation",
-                    "form": "form_6_3",
-                    "continuation_event": "form_submit_3"
-                },
-                "inputs": {},
-                "outputs": {
-                    "first_name": {
-                        "type": "text",
-                        "required": true
-                    },
-                    "last_name": {
-                        "type": "text",
-                        "required": true
-                    }
-                },
-                "results": {}
-            },
-            {
-                "id": "commit_3",
-                "key": "commit_action",
-                "kind": "action",
-                "target": {
-                    "kind": "named_action",
-                    "action": "vortex.crm.people.lead.convert"
-                },
-                "inputs": {
-                    "first_name": {
-                        "type": "text",
-                        "value": {
-                            "source": "node_output",
-                            "node": "continue_3",
-                            "output": "first_name"
-                        }
-                    },
-                    "last_name": {
-                        "type": "text",
-                        "value": {
-                            "source": "node_output",
-                            "node": "continue_3",
-                            "output": "last_name"
-                        }
-                    }
-                },
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_3_validation",
-                "key": "return_validation",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_3_refused",
-                "key": "return_refused",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            },
-            {
-                "id": "return_3_committed",
-                "key": "return_committed",
-                "kind": "return",
-                "results": {},
-                "outcome": "committed"
-            },
-            {
-                "id": "return_3_conflict",
-                "key": "return_conflict",
-                "kind": "return",
-                "results": {},
-                "outcome": "conflict"
-            },
-            {
-                "id": "return_3_uncertain",
-                "key": "return_uncertain",
-                "kind": "return",
-                "results": {},
-                "outcome": "uncertain"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_3",
-                "from_node": "start_3",
-                "to_node": "continue_3"
-            },
-            {
-                "id": "continue_3_completed",
-                "from_node": "continue_3",
-                "to_node": "commit_3",
-                "outcome": "completed"
-            },
-            {
-                "id": "continue_3_validation",
-                "from_node": "continue_3",
-                "to_node": "return_3_validation",
-                "outcome": "validation"
-            },
-            {
-                "id": "continue_3_refused",
-                "from_node": "continue_3",
-                "to_node": "return_3_refused",
-                "outcome": "refused"
-            },
-            {
-                "id": "commit_3_committed",
-                "from_node": "commit_3",
-                "to_node": "return_3_committed",
-                "outcome": "committed"
-            },
-            {
-                "id": "commit_3_validation",
-                "from_node": "commit_3",
-                "to_node": "return_3_validation",
-                "outcome": "validation"
-            },
-            {
-                "id": "commit_3_refused",
-                "from_node": "commit_3",
-                "to_node": "return_3_refused",
-                "outcome": "refused"
-            },
-            {
-                "id": "commit_3_conflict",
-                "from_node": "commit_3",
-                "to_node": "return_3_conflict",
-                "outcome": "conflict"
-            },
-            {
-                "id": "commit_3_uncertain",
-                "from_node": "commit_3",
-                "to_node": "return_3_uncertain",
-                "outcome": "uncertain"
-            }
-        ]
-    },
-    {
-        "id": "crm_form_flow_4",
-        "key": "crm_form_flow_4",
-        "name": "Continue Create company",
-        "description": "Continue the declared form submission using its current Application action.",
-        "run_as": "current_user",
-        "inputs": {},
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_4",
-                "key": "start",
-                "kind": "start",
-                "outputs": {}
-            },
-            {
-                "id": "continue_4",
-                "key": "continue_form",
-                "kind": "action",
-                "target": {
-                    "kind": "record_save",
-                    "record_type": "vortex.crm.organisations:company",
-                    "mode": "create"
-                },
-                "inputs": {},
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_4_0",
-                "key": "return_0",
-                "kind": "return",
-                "results": {},
-                "outcome": "committed"
-            },
-            {
-                "id": "return_4_1",
-                "key": "return_1",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_4_2",
-                "key": "return_2",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            },
-            {
-                "id": "return_4_3",
-                "key": "return_3",
-                "kind": "return",
-                "results": {},
-                "outcome": "conflict"
-            },
-            {
-                "id": "return_4_4",
-                "key": "return_4",
-                "kind": "return",
-                "results": {},
-                "outcome": "uncertain"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_4",
-                "from_node": "start_4",
-                "to_node": "continue_4"
-            },
-            {
-                "id": "route_4_0",
-                "from_node": "continue_4",
-                "to_node": "return_4_0",
-                "outcome": "committed"
-            },
-            {
-                "id": "route_4_1",
-                "from_node": "continue_4",
-                "to_node": "return_4_1",
-                "outcome": "validation"
-            },
-            {
-                "id": "route_4_2",
-                "from_node": "continue_4",
-                "to_node": "return_4_2",
-                "outcome": "refused"
-            },
-            {
-                "id": "route_4_3",
-                "from_node": "continue_4",
-                "to_node": "return_4_3",
-                "outcome": "conflict"
-            },
-            {
-                "id": "route_4_4",
-                "from_node": "continue_4",
-                "to_node": "return_4_4",
-                "outcome": "uncertain"
-            }
-        ]
-    },
-    {
-        "id": "crm_form_flow_5",
-        "key": "crm_form_flow_5",
-        "name": "Continue Edit company",
-        "description": "Continue the declared form submission using its current Application action.",
-        "run_as": "current_user",
-        "inputs": {},
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_5",
-                "key": "start",
-                "kind": "start",
-                "outputs": {}
-            },
-            {
-                "id": "continue_5",
-                "key": "continue_form",
-                "kind": "action",
-                "target": {
-                    "kind": "record_save",
-                    "record_type": "vortex.crm.organisations:company",
-                    "mode": "update"
-                },
-                "inputs": {},
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_5_0",
-                "key": "return_0",
-                "kind": "return",
-                "results": {},
-                "outcome": "committed"
-            },
-            {
-                "id": "return_5_1",
-                "key": "return_1",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_5_2",
-                "key": "return_2",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            },
-            {
-                "id": "return_5_3",
-                "key": "return_3",
-                "kind": "return",
-                "results": {},
-                "outcome": "conflict"
-            },
-            {
-                "id": "return_5_4",
-                "key": "return_4",
-                "kind": "return",
-                "results": {},
-                "outcome": "uncertain"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_5",
-                "from_node": "start_5",
-                "to_node": "continue_5"
-            },
-            {
-                "id": "route_5_0",
-                "from_node": "continue_5",
-                "to_node": "return_5_0",
-                "outcome": "committed"
-            },
-            {
-                "id": "route_5_1",
-                "from_node": "continue_5",
-                "to_node": "return_5_1",
-                "outcome": "validation"
-            },
-            {
-                "id": "route_5_2",
-                "from_node": "continue_5",
-                "to_node": "return_5_2",
-                "outcome": "refused"
-            },
-            {
-                "id": "route_5_3",
-                "from_node": "continue_5",
-                "to_node": "return_5_3",
-                "outcome": "conflict"
-            },
-            {
-                "id": "route_5_4",
-                "from_node": "continue_5",
-                "to_node": "return_5_4",
-                "outcome": "uncertain"
-            }
-        ]
-    },
-    {
-        "id": "crm_form_flow_6",
-        "key": "crm_form_flow_6",
-        "name": "Continue Create contact",
-        "description": "Continue the declared form submission using its current Application action.",
-        "run_as": "current_user",
-        "inputs": {},
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_6",
-                "key": "start",
-                "kind": "start",
-                "outputs": {}
-            },
-            {
-                "id": "continue_6",
-                "key": "continue_form",
-                "kind": "action",
-                "target": {
-                    "kind": "record_save",
-                    "record_type": "vortex.crm.people:contact",
-                    "mode": "create"
-                },
-                "inputs": {},
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_6_0",
-                "key": "return_0",
-                "kind": "return",
-                "results": {},
-                "outcome": "committed"
-            },
-            {
-                "id": "return_6_1",
-                "key": "return_1",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_6_2",
-                "key": "return_2",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            },
-            {
-                "id": "return_6_3",
-                "key": "return_3",
-                "kind": "return",
-                "results": {},
-                "outcome": "conflict"
-            },
-            {
-                "id": "return_6_4",
-                "key": "return_4",
-                "kind": "return",
-                "results": {},
-                "outcome": "uncertain"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_6",
-                "from_node": "start_6",
-                "to_node": "continue_6"
-            },
-            {
-                "id": "route_6_0",
-                "from_node": "continue_6",
-                "to_node": "return_6_0",
-                "outcome": "committed"
-            },
-            {
-                "id": "route_6_1",
-                "from_node": "continue_6",
-                "to_node": "return_6_1",
-                "outcome": "validation"
-            },
-            {
-                "id": "route_6_2",
-                "from_node": "continue_6",
-                "to_node": "return_6_2",
-                "outcome": "refused"
-            },
-            {
-                "id": "route_6_3",
-                "from_node": "continue_6",
-                "to_node": "return_6_3",
-                "outcome": "conflict"
-            },
-            {
-                "id": "route_6_4",
-                "from_node": "continue_6",
-                "to_node": "return_6_4",
-                "outcome": "uncertain"
-            }
-        ]
-    },
-    {
-        "id": "crm_form_flow_7",
-        "key": "crm_form_flow_7",
-        "name": "Continue Edit contact",
-        "description": "Continue the declared form submission using its current Application action.",
-        "run_as": "current_user",
-        "inputs": {},
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_7",
-                "key": "start",
-                "kind": "start",
-                "outputs": {}
-            },
-            {
-                "id": "continue_7",
-                "key": "continue_form",
-                "kind": "action",
-                "target": {
-                    "kind": "record_save",
-                    "record_type": "vortex.crm.people:contact",
-                    "mode": "update"
-                },
-                "inputs": {},
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_7_0",
-                "key": "return_0",
-                "kind": "return",
-                "results": {},
-                "outcome": "committed"
-            },
-            {
-                "id": "return_7_1",
-                "key": "return_1",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_7_2",
-                "key": "return_2",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            },
-            {
-                "id": "return_7_3",
-                "key": "return_3",
-                "kind": "return",
-                "results": {},
-                "outcome": "conflict"
-            },
-            {
-                "id": "return_7_4",
-                "key": "return_4",
-                "kind": "return",
-                "results": {},
-                "outcome": "uncertain"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_7",
-                "from_node": "start_7",
-                "to_node": "continue_7"
-            },
-            {
-                "id": "route_7_0",
-                "from_node": "continue_7",
-                "to_node": "return_7_0",
-                "outcome": "committed"
-            },
-            {
-                "id": "route_7_1",
-                "from_node": "continue_7",
-                "to_node": "return_7_1",
-                "outcome": "validation"
-            },
-            {
-                "id": "route_7_2",
-                "from_node": "continue_7",
-                "to_node": "return_7_2",
-                "outcome": "refused"
-            },
-            {
-                "id": "route_7_3",
-                "from_node": "continue_7",
-                "to_node": "return_7_3",
-                "outcome": "conflict"
-            },
-            {
-                "id": "route_7_4",
-                "from_node": "continue_7",
-                "to_node": "return_7_4",
-                "outcome": "uncertain"
-            }
-        ]
-    },
-    {
-        "id": "crm_form_flow_8",
-        "key": "crm_form_flow_8",
-        "name": "Continue Create lead",
-        "description": "Continue the declared form submission using its current Application action.",
-        "run_as": "current_user",
-        "inputs": {},
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_8",
-                "key": "start",
-                "kind": "start",
-                "outputs": {}
-            },
-            {
-                "id": "continue_8",
-                "key": "continue_form",
-                "kind": "action",
-                "target": {
-                    "kind": "record_save",
-                    "record_type": "vortex.crm.people:lead",
-                    "mode": "create"
-                },
-                "inputs": {},
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_8_0",
-                "key": "return_0",
-                "kind": "return",
-                "results": {},
-                "outcome": "committed"
-            },
-            {
-                "id": "return_8_1",
-                "key": "return_1",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_8_2",
-                "key": "return_2",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            },
-            {
-                "id": "return_8_3",
-                "key": "return_3",
-                "kind": "return",
-                "results": {},
-                "outcome": "conflict"
-            },
-            {
-                "id": "return_8_4",
-                "key": "return_4",
-                "kind": "return",
-                "results": {},
-                "outcome": "uncertain"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_8",
-                "from_node": "start_8",
-                "to_node": "continue_8"
-            },
-            {
-                "id": "route_8_0",
-                "from_node": "continue_8",
-                "to_node": "return_8_0",
-                "outcome": "committed"
-            },
-            {
-                "id": "route_8_1",
-                "from_node": "continue_8",
-                "to_node": "return_8_1",
-                "outcome": "validation"
-            },
-            {
-                "id": "route_8_2",
-                "from_node": "continue_8",
-                "to_node": "return_8_2",
-                "outcome": "refused"
-            },
-            {
-                "id": "route_8_3",
-                "from_node": "continue_8",
-                "to_node": "return_8_3",
-                "outcome": "conflict"
-            },
-            {
-                "id": "route_8_4",
-                "from_node": "continue_8",
-                "to_node": "return_8_4",
-                "outcome": "uncertain"
-            }
-        ]
-    },
-    {
-        "id": "crm_form_flow_9",
-        "key": "crm_form_flow_9",
-        "name": "Continue Edit lead",
-        "description": "Continue the declared form submission using its current Application action.",
-        "run_as": "current_user",
-        "inputs": {},
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_9",
-                "key": "start",
-                "kind": "start",
-                "outputs": {}
-            },
-            {
-                "id": "continue_9",
-                "key": "continue_form",
-                "kind": "action",
-                "target": {
-                    "kind": "record_save",
-                    "record_type": "vortex.crm.people:lead",
-                    "mode": "update"
-                },
-                "inputs": {},
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_9_0",
-                "key": "return_0",
-                "kind": "return",
-                "results": {},
-                "outcome": "committed"
-            },
-            {
-                "id": "return_9_1",
-                "key": "return_1",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_9_2",
-                "key": "return_2",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            },
-            {
-                "id": "return_9_3",
-                "key": "return_3",
-                "kind": "return",
-                "results": {},
-                "outcome": "conflict"
-            },
-            {
-                "id": "return_9_4",
-                "key": "return_4",
-                "kind": "return",
-                "results": {},
-                "outcome": "uncertain"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_9",
-                "from_node": "start_9",
-                "to_node": "continue_9"
-            },
-            {
-                "id": "route_9_0",
-                "from_node": "continue_9",
-                "to_node": "return_9_0",
-                "outcome": "committed"
-            },
-            {
-                "id": "route_9_1",
-                "from_node": "continue_9",
-                "to_node": "return_9_1",
-                "outcome": "validation"
-            },
-            {
-                "id": "route_9_2",
-                "from_node": "continue_9",
-                "to_node": "return_9_2",
-                "outcome": "refused"
-            },
-            {
-                "id": "route_9_3",
-                "from_node": "continue_9",
-                "to_node": "return_9_3",
-                "outcome": "conflict"
-            },
-            {
-                "id": "route_9_4",
-                "from_node": "continue_9",
-                "to_node": "return_9_4",
-                "outcome": "uncertain"
-            }
-        ]
-    },
-    {
-        "id": "crm_named_action_opportunity_mark_won",
-        "key": "crm_named_action_opportunity_mark_won",
-        "name": "Mark opportunity won",
-        "description": "Marks the current opportunity won through the bound opportunity.mark_won named action.",
-        "run_as": "current_user",
-        "inputs": {},
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_crm_named_action_opportunity_mark_won",
-                "key": "start",
-                "kind": "start",
-                "outputs": {}
-            },
-            {
-                "id": "run_crm_named_action_opportunity_mark_won",
-                "key": "run_action",
-                "kind": "action",
-                "target": {
-                    "kind": "named_action",
-                    "action": "vortex.crm.opportunities.opportunity.mark_won"
-                },
-                "inputs": {},
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_crm_named_action_opportunity_mark_won_committed",
-                "key": "return_committed",
-                "kind": "return",
-                "results": {},
-                "outcome": "committed"
-            },
-            {
-                "id": "return_crm_named_action_opportunity_mark_won_validation",
-                "key": "return_validation",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_crm_named_action_opportunity_mark_won_refused",
-                "key": "return_refused",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            },
-            {
-                "id": "return_crm_named_action_opportunity_mark_won_conflict",
-                "key": "return_conflict",
-                "kind": "return",
-                "results": {},
-                "outcome": "conflict"
-            },
-            {
-                "id": "return_crm_named_action_opportunity_mark_won_uncertain",
-                "key": "return_uncertain",
-                "kind": "return",
-                "results": {},
-                "outcome": "uncertain"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_crm_named_action_opportunity_mark_won",
-                "from_node": "start_crm_named_action_opportunity_mark_won",
-                "to_node": "run_crm_named_action_opportunity_mark_won"
-            },
-            {
-                "id": "run_crm_named_action_opportunity_mark_won_committed",
-                "from_node": "run_crm_named_action_opportunity_mark_won",
-                "to_node": "return_crm_named_action_opportunity_mark_won_committed",
-                "outcome": "committed"
-            },
-            {
-                "id": "run_crm_named_action_opportunity_mark_won_validation",
-                "from_node": "run_crm_named_action_opportunity_mark_won",
-                "to_node": "return_crm_named_action_opportunity_mark_won_validation",
-                "outcome": "validation"
-            },
-            {
-                "id": "run_crm_named_action_opportunity_mark_won_refused",
-                "from_node": "run_crm_named_action_opportunity_mark_won",
-                "to_node": "return_crm_named_action_opportunity_mark_won_refused",
-                "outcome": "refused"
-            },
-            {
-                "id": "run_crm_named_action_opportunity_mark_won_conflict",
-                "from_node": "run_crm_named_action_opportunity_mark_won",
-                "to_node": "return_crm_named_action_opportunity_mark_won_conflict",
-                "outcome": "conflict"
-            },
-            {
-                "id": "run_crm_named_action_opportunity_mark_won_uncertain",
-                "from_node": "run_crm_named_action_opportunity_mark_won",
-                "to_node": "return_crm_named_action_opportunity_mark_won_uncertain",
-                "outcome": "uncertain"
-            }
-        ]
-    },
-    {
-        "id": "crm_named_action_activity_complete",
-        "key": "crm_named_action_activity_complete",
-        "name": "Complete activity",
-        "description": "Completes the current activity through the bound activity.complete named action.",
-        "run_as": "current_user",
-        "inputs": {},
-        "outputs": {},
-        "variables": {},
-        "nodes": [
-            {
-                "id": "start_crm_named_action_activity_complete",
-                "key": "start",
-                "kind": "start",
-                "outputs": {}
-            },
-            {
-                "id": "run_crm_named_action_activity_complete",
-                "key": "run_action",
-                "kind": "action",
-                "target": {
-                    "kind": "named_action",
-                    "action": "vortex.crm.activities.activity.complete"
-                },
-                "inputs": {},
-                "outputs": {},
-                "results": {}
-            },
-            {
-                "id": "return_crm_named_action_activity_complete_committed",
-                "key": "return_committed",
-                "kind": "return",
-                "results": {},
-                "outcome": "committed"
-            },
-            {
-                "id": "return_crm_named_action_activity_complete_validation",
-                "key": "return_validation",
-                "kind": "return",
-                "results": {},
-                "outcome": "validation"
-            },
-            {
-                "id": "return_crm_named_action_activity_complete_refused",
-                "key": "return_refused",
-                "kind": "return",
-                "results": {},
-                "outcome": "refused"
-            },
-            {
-                "id": "return_crm_named_action_activity_complete_conflict",
-                "key": "return_conflict",
-                "kind": "return",
-                "results": {},
-                "outcome": "conflict"
-            },
-            {
-                "id": "return_crm_named_action_activity_complete_uncertain",
-                "key": "return_uncertain",
-                "kind": "return",
-                "results": {},
-                "outcome": "uncertain"
-            }
-        ],
-        "edges": [
-            {
-                "id": "begin_crm_named_action_activity_complete",
-                "from_node": "start_crm_named_action_activity_complete",
-                "to_node": "run_crm_named_action_activity_complete"
-            },
-            {
-                "id": "run_crm_named_action_activity_complete_committed",
-                "from_node": "run_crm_named_action_activity_complete",
-                "to_node": "return_crm_named_action_activity_complete_committed",
-                "outcome": "committed"
-            },
-            {
-                "id": "run_crm_named_action_activity_complete_validation",
-                "from_node": "run_crm_named_action_activity_complete",
-                "to_node": "return_crm_named_action_activity_complete_validation",
-                "outcome": "validation"
-            },
-            {
-                "id": "run_crm_named_action_activity_complete_refused",
-                "from_node": "run_crm_named_action_activity_complete",
-                "to_node": "return_crm_named_action_activity_complete_refused",
-                "outcome": "refused"
-            },
-            {
-                "id": "run_crm_named_action_activity_complete_conflict",
-                "from_node": "run_crm_named_action_activity_complete",
-                "to_node": "return_crm_named_action_activity_complete_conflict",
-                "outcome": "conflict"
-            },
-            {
-                "id": "run_crm_named_action_activity_complete_uncertain",
-                "from_node": "run_crm_named_action_activity_complete",
-                "to_node": "return_crm_named_action_activity_complete_uncertain",
-                "outcome": "uncertain"
-            }
-        ]
-    }
-],
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_named_action_company_merge",
+                         "key": "crm_named_action_company_merge",
+                         "description": "Merges the current company into the selected company through the bound company.merge named action: the selected company receives the current company's parent company link and the current company is removed.",
+                         "labels": {
+                             "name": "Merge company"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "duplicate_company": {
+                                 "type": "record_reference",
+                                 "required": true,
+                                 "recordTypeIds": [
+                                     "vortex.crm.organisations:company"
+                                 ]
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "call",
+                                 "type": "operation.call",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "operation": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.crm.organisations.company.merge"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_form_flow_0",
+                         "key": "crm_form_flow_0",
+                         "description": "Continue the declared form submission using its current Application action.",
+                         "labels": {
+                             "name": "Continue Qualify lead"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {},
+                         "tasks": [
+                             {
+                                 "id": "show_form",
+                                 "type": "interface.show_form",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "form": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "form_6_0"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_form_flow_1",
+                         "key": "crm_form_flow_1",
+                         "description": "Continue the declared form submission using its current Application action.",
+                         "labels": {
+                             "name": "Continue Qualify lead"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {},
+                         "tasks": [
+                             {
+                                 "id": "show_form",
+                                 "type": "interface.show_form",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "form": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "form_6_1"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_form_flow_2",
+                         "key": "crm_form_flow_2",
+                         "description": "Continue the declared form submission using its current Application action.",
+                         "labels": {
+                             "name": "Continue Qualify lead"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {},
+                         "tasks": [
+                             {
+                                 "id": "show_form",
+                                 "type": "interface.show_form",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "form": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "form_6_2"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_form_flow_3",
+                         "key": "crm_form_flow_3",
+                         "description": "Continue the declared form submission using its current Application action.",
+                         "labels": {
+                             "name": "Continue Qualify lead"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {},
+                         "tasks": [
+                             {
+                                 "id": "collect",
+                                 "type": "interface.show_form",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "form": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "form_6_3"
+                                         }
+                                     }
+                                 }
+                             },
+                             {
+                                 "id": "confirmed",
+                                 "type": "if",
+                                 "condition": {
+                                     "op": "reference",
+                                     "reference": {
+                                         "source": "task_output",
+                                         "task": "collect",
+                                         "key": "submitted"
+                                     }
+                                 },
+                                 "then": [
+                                     {
+                                         "id": "commit",
+                                         "type": "operation.call",
+                                         "version": "1.0.0",
+                                         "properties": {
+                                             "operation": {
+                                                 "kind": "literal",
+                                                 "literal": {
+                                                     "type": "text",
+                                                     "value": "vortex.crm.people.lead.convert"
+                                                 }
+                                             },
+                                             "inputs": {
+                                                 "kind": "reference",
+                                                 "reference": {
+                                                     "source": "task_output",
+                                                     "task": "collect",
+                                                     "key": "values"
+                                                 }
+                                             }
+                                         }
+                                     }
+                                 ]
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_form_flow_4",
+                         "key": "crm_form_flow_4",
+                         "description": "Saves the submitted form as a new record through the one Save record task.",
+                         "labels": {
+                             "name": "Continue Create company"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "values": {
+                                 "type": "json",
+                                 "required": true
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "save",
+                                 "type": "record.save",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "record_type": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.crm.organisations:company"
+                                         }
+                                     },
+                                     "values": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "values"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "recordTypeIds": [
+                                     "vortex.crm.organisations:company"
+                                 ],
+                                 "value": {
+                                     "kind": "reference",
+                                     "reference": {
+                                         "source": "task_output",
+                                         "task": "save",
+                                         "key": "record"
+                                     }
+                                 }
+                             }
+                         }
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_form_flow_5",
+                         "key": "crm_form_flow_5",
+                         "description": "Saves the submitted form onto the record being edited through the one Save record task.",
+                         "labels": {
+                             "name": "Continue Edit company"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "recordTypeIds": [
+                                     "vortex.crm.organisations:company"
+                                 ],
+                                 "required": true
+                             },
+                             "values": {
+                                 "type": "json",
+                                 "required": true
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "save",
+                                 "type": "record.save",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "record_type": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.crm.organisations:company"
+                                         }
+                                     },
+                                     "record": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "record"
+                                         }
+                                     },
+                                     "values": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "values"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "recordTypeIds": [
+                                     "vortex.crm.organisations:company"
+                                 ],
+                                 "value": {
+                                     "kind": "reference",
+                                     "reference": {
+                                         "source": "task_output",
+                                         "task": "save",
+                                         "key": "record"
+                                     }
+                                 }
+                             }
+                         }
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_form_flow_6",
+                         "key": "crm_form_flow_6",
+                         "description": "Saves the submitted form as a new record through the one Save record task.",
+                         "labels": {
+                             "name": "Continue Create contact"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "values": {
+                                 "type": "json",
+                                 "required": true
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "save",
+                                 "type": "record.save",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "record_type": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.crm.people:contact"
+                                         }
+                                     },
+                                     "values": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "values"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "recordTypeIds": [
+                                     "vortex.crm.people:contact"
+                                 ],
+                                 "value": {
+                                     "kind": "reference",
+                                     "reference": {
+                                         "source": "task_output",
+                                         "task": "save",
+                                         "key": "record"
+                                     }
+                                 }
+                             }
+                         }
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_form_flow_7",
+                         "key": "crm_form_flow_7",
+                         "description": "Saves the submitted form onto the record being edited through the one Save record task.",
+                         "labels": {
+                             "name": "Continue Edit contact"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "recordTypeIds": [
+                                     "vortex.crm.people:contact"
+                                 ],
+                                 "required": true
+                             },
+                             "values": {
+                                 "type": "json",
+                                 "required": true
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "save",
+                                 "type": "record.save",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "record_type": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.crm.people:contact"
+                                         }
+                                     },
+                                     "record": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "record"
+                                         }
+                                     },
+                                     "values": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "values"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "recordTypeIds": [
+                                     "vortex.crm.people:contact"
+                                 ],
+                                 "value": {
+                                     "kind": "reference",
+                                     "reference": {
+                                         "source": "task_output",
+                                         "task": "save",
+                                         "key": "record"
+                                     }
+                                 }
+                             }
+                         }
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_form_flow_8",
+                         "key": "crm_form_flow_8",
+                         "description": "Saves the submitted form as a new record through the one Save record task.",
+                         "labels": {
+                             "name": "Continue Create lead"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "values": {
+                                 "type": "json",
+                                 "required": true
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "save",
+                                 "type": "record.save",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "record_type": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.crm.people:lead"
+                                         }
+                                     },
+                                     "values": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "values"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "recordTypeIds": [
+                                     "vortex.crm.people:lead"
+                                 ],
+                                 "value": {
+                                     "kind": "reference",
+                                     "reference": {
+                                         "source": "task_output",
+                                         "task": "save",
+                                         "key": "record"
+                                     }
+                                 }
+                             }
+                         }
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_form_flow_9",
+                         "key": "crm_form_flow_9",
+                         "description": "Saves the submitted form onto the record being edited through the one Save record task.",
+                         "labels": {
+                             "name": "Continue Edit lead"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "recordTypeIds": [
+                                     "vortex.crm.people:lead"
+                                 ],
+                                 "required": true
+                             },
+                             "values": {
+                                 "type": "json",
+                                 "required": true
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "save",
+                                 "type": "record.save",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "record_type": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.crm.people:lead"
+                                         }
+                                     },
+                                     "record": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "record"
+                                         }
+                                     },
+                                     "values": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "values"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "recordTypeIds": [
+                                     "vortex.crm.people:lead"
+                                 ],
+                                 "value": {
+                                     "kind": "reference",
+                                     "reference": {
+                                         "source": "task_output",
+                                         "task": "save",
+                                         "key": "record"
+                                     }
+                                 }
+                             }
+                         }
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_named_action_opportunity_mark_won",
+                         "key": "crm_named_action_opportunity_mark_won",
+                         "description": "Marks the current opportunity won through the bound opportunity.mark_won named action.",
+                         "labels": {
+                             "name": "Mark opportunity won"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {},
+                         "tasks": [
+                             {
+                                 "id": "call",
+                                 "type": "operation.call",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "operation": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.crm.opportunities.opportunity.mark_won"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_named_action_activity_complete",
+                         "key": "crm_named_action_activity_complete",
+                         "description": "Completes the current activity through the bound activity.complete named action.",
+                         "labels": {
+                             "name": "Complete activity"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {},
+                         "tasks": [
+                             {
+                                 "id": "call",
+                                 "type": "operation.call",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "operation": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.crm.activities.activity.complete"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     }
+                 ],
                  "flow_bindings":  [
-                                       {
-                                           "id":  "form_binding_crm_company_merge",
-                                           "control":  "form_crm_company_merge",
-                                           "event_id":  "form_submit_crm_company_merge",
-                                           "event":  "form_submit",
-                                           "flow":  {
-                                                        "kind":  "application_owned",
-                                                        "flow":  "crm_named_action_company_merge"
-                                                    },
-                                           "inputs":  {
-                                                          "duplicate_company":  {
-                                                                                    "type":  "record_reference",
-                                                                                    "value":  {
-                                                                                                  "source":  "form_input",
-                                                                                                  "form":  "form_crm_company_merge",
-                                                                                                  "input":  "duplicate_company"
-                                                                                              }
-                                                                                }
-                                                      },
-                                           "results":  {
-
-                                                       },
-                                           "declared_effects":  [
-                                                                    "form_interaction",
-                                                                    "change"
-                                                                ]
-                                       },
-                                       {
-                                           "id":  "form_binding_0",
-                                           "control":  "form_6_0",
-                                           "event_id":  "form_submit_0",
-                                           "event":  "form_submit",
-                                           "flow":  {
-                                                        "kind":  "application_owned",
-                                                        "flow":  "crm_form_flow_0"
-                                                    },
-                                           "inputs":  {
-
-                                                      },
-                                           "results":  {
-
-                                                       },
-                                           "declared_effects":  [
-                                                                    "form_interaction"
-                                                                ]
-                                       },
-                                       {
-                                           "id":  "form_binding_1",
-                                           "control":  "form_6_1",
-                                           "event_id":  "form_submit_1",
-                                           "event":  "form_submit",
-                                           "flow":  {
-                                                        "kind":  "application_owned",
-                                                        "flow":  "crm_form_flow_1"
-                                                    },
-                                           "inputs":  {
-
-                                                      },
-                                           "results":  {
-
-                                                       },
-                                           "declared_effects":  [
-                                                                    "form_interaction"
-                                                                ]
-                                       },
-                                       {
-                                           "id":  "form_binding_2",
-                                           "control":  "form_6_2",
-                                           "event_id":  "form_submit_2",
-                                           "event":  "form_submit",
-                                           "flow":  {
-                                                        "kind":  "application_owned",
-                                                        "flow":  "crm_form_flow_2"
-                                                    },
-                                           "inputs":  {
-
-                                                      },
-                                           "results":  {
-
-                                                       },
-                                           "declared_effects":  [
-                                                                    "form_interaction"
-                                                                ]
-                                       },
-                                       {
-                                           "id":  "form_binding_3",
-                                           "control":  "form_6_3",
-                                           "event_id":  "form_submit_3",
-                                           "event":  "form_submit",
-                                           "flow":  {
-                                                        "kind":  "application_owned",
-                                                        "flow":  "crm_form_flow_3"
-                                                    },
-                                           "inputs":  {
-
-                                                      },
-                                           "results":  {
-
-                                                       },
-                                           "declared_effects":  [
-                                                                    "form_interaction",
-                                                                    "change"
-                                                                ]
-                                       },
-                                       {
-                                           "id":  "form_binding_4",
-                                           "control":  "form_crm_company_create",
-                                           "event_id":  "form_submit_4",
-                                           "event":  "form_submit",
-                                           "flow":  {
-                                                        "kind":  "application_owned",
-                                                        "flow":  "crm_form_flow_4"
-                                                    },
-                                           "inputs":  {
-
-                                                      },
-                                           "results":  {
-
-                                                       },
-                                           "declared_effects":  [
-                                                                    "form_interaction",
-                                                                    "change"
-                                                                ]
-                                       },
-                                       {
-                                           "id":  "form_binding_5",
-                                           "control":  "form_crm_company_edit",
-                                           "event_id":  "form_submit_5",
-                                           "event":  "form_submit",
-                                           "flow":  {
-                                                        "kind":  "application_owned",
-                                                        "flow":  "crm_form_flow_5"
-                                                    },
-                                           "inputs":  {
-
-                                                      },
-                                           "results":  {
-
-                                                       },
-                                           "declared_effects":  [
-                                                                    "form_interaction",
-                                                                    "change"
-                                                                ]
-                                       },
-                                       {
-                                           "id":  "form_binding_6",
-                                           "control":  "form_crm_contact_create",
-                                           "event_id":  "form_submit_6",
-                                           "event":  "form_submit",
-                                           "flow":  {
-                                                        "kind":  "application_owned",
-                                                        "flow":  "crm_form_flow_6"
-                                                    },
-                                           "inputs":  {
-
-                                                      },
-                                           "results":  {
-
-                                                       },
-                                           "declared_effects":  [
-                                                                    "form_interaction",
-                                                                    "change"
-                                                                ]
-                                       },
-                                       {
-                                           "id":  "form_binding_7",
-                                           "control":  "form_crm_contact_edit",
-                                           "event_id":  "form_submit_7",
-                                           "event":  "form_submit",
-                                           "flow":  {
-                                                        "kind":  "application_owned",
-                                                        "flow":  "crm_form_flow_7"
-                                                    },
-                                           "inputs":  {
-
-                                                      },
-                                           "results":  {
-
-                                                       },
-                                           "declared_effects":  [
-                                                                    "form_interaction",
-                                                                    "change"
-                                                                ]
-                                       },
-                                       {
-                                           "id":  "form_binding_8",
-                                           "control":  "form_crm_lead_create",
-                                           "event_id":  "form_submit_8",
-                                           "event":  "form_submit",
-                                           "flow":  {
-                                                        "kind":  "application_owned",
-                                                        "flow":  "crm_form_flow_8"
-                                                    },
-                                           "inputs":  {
-
-                                                      },
-                                           "results":  {
-
-                                                       },
-                                           "declared_effects":  [
-                                                                    "form_interaction",
-                                                                    "change"
-                                                                ]
-                                       },
-                                       {
-                                           "id":  "form_binding_9",
-                                           "control":  "form_crm_lead_edit",
-                                           "event_id":  "form_submit_9",
-                                           "event":  "form_submit",
-                                           "flow":  {
-                                                        "kind":  "application_owned",
-                                                        "flow":  "crm_form_flow_9"
-                                                    },
-                                           "inputs":  {
-
-                                                      },
-                                           "results":  {
-
-                                                       },
-                                           "declared_effects":  [
-                                                                    "form_interaction",
-                                                                    "change"
-                                                                ]
-                                       },
-    {
-        "id": "action_binding_crm_opportunity_mark_won",
-        "control": "action_crm_opportunity_mark_won",
-        "event_id": "event_crm_opportunity_mark_won",
-        "event": "action",
-        "flow": {
-            "kind": "application_owned",
-            "flow": "crm_named_action_opportunity_mark_won"
-        },
-        "inputs": {},
-        "results": {},
-        "declared_effects": [
-            "change"
-        ]
-    },
-    {
-        "id": "action_binding_crm_activity_complete",
-        "control": "action_crm_activity_complete",
-        "event_id": "event_crm_activity_complete",
-        "event": "action",
-        "flow": {
-            "kind": "application_owned",
-            "flow": "crm_named_action_activity_complete"
-        },
-        "inputs": {},
-        "results": {},
-        "declared_effects": [
-            "change"
-        ]
-    }
-                                   ]
+                     {
+                         "id": "form_binding_crm_company_merge",
+                         "control": "form_crm_company_merge",
+                         "event_id": "form_submit_crm_company_merge",
+                         "event": "form_submit",
+                         "flow": "crm_named_action_company_merge",
+                         "inputs": {
+                             "duplicate_company": {
+                                 "kind": "caller",
+                                 "name": "duplicate_company"
+                             }
+                         }
+                     },
+                     {
+                         "id": "form_binding_0",
+                         "control": "form_6_0",
+                         "event_id": "form_submit_0",
+                         "event": "form_submit",
+                         "flow": "crm_form_flow_0",
+                         "inputs": {}
+                     },
+                     {
+                         "id": "form_binding_1",
+                         "control": "form_6_1",
+                         "event_id": "form_submit_1",
+                         "event": "form_submit",
+                         "flow": "crm_form_flow_1",
+                         "inputs": {}
+                     },
+                     {
+                         "id": "form_binding_2",
+                         "control": "form_6_2",
+                         "event_id": "form_submit_2",
+                         "event": "form_submit",
+                         "flow": "crm_form_flow_2",
+                         "inputs": {}
+                     },
+                     {
+                         "id": "form_binding_3",
+                         "control": "form_6_3",
+                         "event_id": "form_submit_3",
+                         "event": "form_submit",
+                         "flow": "crm_form_flow_3",
+                         "inputs": {}
+                     },
+                     {
+                         "id": "form_binding_4",
+                         "control": "form_crm_company_create",
+                         "event_id": "form_submit_4",
+                         "event": "form_submit",
+                         "flow": "crm_form_flow_4",
+                         "inputs": {
+                             "values": {
+                                 "kind": "caller",
+                                 "name": "values"
+                             }
+                         }
+                     },
+                     {
+                         "id": "form_binding_5",
+                         "control": "form_crm_company_edit",
+                         "event_id": "form_submit_5",
+                         "event": "form_submit",
+                         "flow": "crm_form_flow_5",
+                         "inputs": {
+                             "values": {
+                                 "kind": "caller",
+                                 "name": "values"
+                             },
+                             "record": {
+                                 "kind": "caller",
+                                 "name": "record"
+                             }
+                         }
+                     },
+                     {
+                         "id": "form_binding_6",
+                         "control": "form_crm_contact_create",
+                         "event_id": "form_submit_6",
+                         "event": "form_submit",
+                         "flow": "crm_form_flow_6",
+                         "inputs": {
+                             "values": {
+                                 "kind": "caller",
+                                 "name": "values"
+                             }
+                         }
+                     },
+                     {
+                         "id": "form_binding_7",
+                         "control": "form_crm_contact_edit",
+                         "event_id": "form_submit_7",
+                         "event": "form_submit",
+                         "flow": "crm_form_flow_7",
+                         "inputs": {
+                             "values": {
+                                 "kind": "caller",
+                                 "name": "values"
+                             },
+                             "record": {
+                                 "kind": "caller",
+                                 "name": "record"
+                             }
+                         }
+                     },
+                     {
+                         "id": "form_binding_8",
+                         "control": "form_crm_lead_create",
+                         "event_id": "form_submit_8",
+                         "event": "form_submit",
+                         "flow": "crm_form_flow_8",
+                         "inputs": {
+                             "values": {
+                                 "kind": "caller",
+                                 "name": "values"
+                             }
+                         }
+                     },
+                     {
+                         "id": "form_binding_9",
+                         "control": "form_crm_lead_edit",
+                         "event_id": "form_submit_9",
+                         "event": "form_submit",
+                         "flow": "crm_form_flow_9",
+                         "inputs": {
+                             "values": {
+                                 "kind": "caller",
+                                 "name": "values"
+                             },
+                             "record": {
+                                 "kind": "caller",
+                                 "name": "record"
+                             }
+                         }
+                     },
+                     {
+                         "id": "action_binding_crm_opportunity_mark_won",
+                         "control": "action_crm_opportunity_mark_won",
+                         "event_id": "event_crm_opportunity_mark_won",
+                         "event": "action",
+                         "flow": "crm_named_action_opportunity_mark_won",
+                         "inputs": {}
+                     },
+                     {
+                         "id": "action_binding_crm_activity_complete",
+                         "control": "action_crm_activity_complete",
+                         "event_id": "event_crm_activity_complete",
+                         "event": "action",
+                         "flow": "crm_named_action_activity_complete",
+                         "inputs": {}
+                     }
+                 ]
              }
 }

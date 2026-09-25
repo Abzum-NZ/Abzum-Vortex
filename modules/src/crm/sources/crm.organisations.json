@@ -563,68 +563,75 @@
         "personal_or_sensitive_values_allowed": false
       }
     ],
-    "rules": [
+    "flows": [
       {
+        "contractVersion": "1.0.0",
         "id": "rule_company_name",
         "key": "company_name_required",
-        "record_type": "company",
-        "profile": "before_save",
-        "graph_version": "1.0.0",
-        "priority": 100,
-        "inputs": [],
-        "variables": [],
-        "nodes": [
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
           {
-            "id": "start",
-            "node_version": "1.0.0",
-            "type": "start",
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "company",
             "operations": [
-              "create",
-              "update"
-            ]
-          },
-          {
-            "id": "name_missing",
-            "node_version": "1.0.0",
-            "type": "condition",
-            "condition": {
-              "kind": "comparison",
-              "operator": "is_empty",
-              "left": {
-                "source": "current_field",
-                "field": "name"
+              {
+                "kind": "create"
+              },
+              {
+                "kind": "update"
               }
-            }
-          },
-          {
-            "id": "refuse_without_name",
-            "node_version": "1.0.0",
-            "type": "refuse",
-            "code": "company_name_required",
-            "message": "Enter the company name.",
-            "field": "name"
-          },
-          {
-            "id": "finish",
-            "node_version": "1.0.0",
-            "type": "finish"
+            ],
+            "priority": 100
           }
         ],
-        "edges": [
+        "tasks": [
           {
-            "from": "start",
-            "port": "next",
-            "to": "name_missing"
-          },
-          {
-            "from": "name_missing",
-            "port": "true",
-            "to": "refuse_without_name"
-          },
-          {
-            "from": "name_missing",
-            "port": "false",
-            "to": "finish"
+            "id": "name_missing",
+            "type": "if",
+            "condition": {
+              "op": "is_empty",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "trigger_record",
+                  "field": "name"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "refuse_without_name",
+                "type": "rule.refuse",
+                "version": "1.0.0",
+                "properties": {
+                  "reason": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "company_name_required"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "Enter the company name."
+                    }
+                  },
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "company.name"
+                    }
+                  }
+                }
+              }
+            ]
           }
         ]
       }

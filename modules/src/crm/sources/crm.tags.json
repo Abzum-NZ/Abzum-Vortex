@@ -596,7 +596,7 @@
         "personal_or_sensitive_values_allowed": false
       }
     ],
-    "rules": [],
+    "flows": [],
     "extension_points": [],
     "sharing_conditions": []
   }
