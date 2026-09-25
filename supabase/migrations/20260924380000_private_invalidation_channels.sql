@@ -180,7 +180,15 @@ $function$;
 -- account cannot renew its way to a topic it may no longer open. The policy
 -- admits Broadcast only; there is deliberately no insert policy, so a browser
 -- can neither send on nor track Presence in these topics.
-alter table realtime.messages enable row level security;
+-- The Realtime service already enables row level security on its own table, and
+-- only its owner may run the ALTER, so enable it only when it is somehow off.
+do $enable_rls$
+begin
+  if not (select relrowsecurity from pg_catalog.pg_class where oid = 'realtime.messages'::regclass) then
+    alter table realtime.messages enable row level security;
+  end if;
+end
+$enable_rls$;
 
 drop policy if exists vortex_private_invalidation_member_read on realtime.messages;
 

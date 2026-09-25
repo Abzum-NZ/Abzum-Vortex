@@ -128,9 +128,9 @@ as $function$
     'oldestPendingAgeSeconds',
       case
         when pending.oldest_occurred_at is null then null
-        else pg_catalog.least(
+        else least(
           2592000,
-          pg_catalog.greatest(
+          greatest(
             0,
             -- EXTRACT is SQL syntax, not a schema-qualifiable call; it always
             -- resolves from pg_catalog even under the empty search_path.

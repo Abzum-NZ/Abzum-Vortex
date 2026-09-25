@@ -5,7 +5,7 @@
 begin;
 
 set local role vortex_record_owner;
-grant create on schema vortex_record to postgres;
+grant create on schema vortex_record to postgres, vortex_record_adapter;
 reset role;
 
 set local role vortex_record_adapter;
@@ -84,7 +84,7 @@ comment on function vortex_record.next_deadline_refresh_due_at() is
   'Read-only earliest deadline due timestamp for the configured worker login role; returns no record or tenant data.';
 
 set local role vortex_record_owner;
-revoke create on schema vortex_record from postgres;
+revoke create on schema vortex_record from postgres, vortex_record_adapter;
 reset role;
 
 commit;
