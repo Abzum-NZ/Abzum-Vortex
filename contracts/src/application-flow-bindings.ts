@@ -33,8 +33,9 @@ import { protectedOperationChannelSchema } from "./operation-contracts";
  * dependency-manifest contracts. The current-user node-and-edge flow and its per-surface component
  * binding were removed with #986: an Application owns ordinary flows (`flow-contracts.ts`), and a
  * component binding holds only the flow id plus a typed input map (`flowBindingSchema`). #988
- * removed the remaining unused authored type aliases; every schema that stays below is consumed by
- * the compiler, publication, access or runtime contracts.
+ * removed the remaining unused authored type aliases; every schema that stays below is consumed,
+ * directly or through a schema that composes it, by the compiler, publication, access or runtime
+ * contracts.
  */
 export const applicationFlowBindingContractVersion = "1.0.0" as const;
 
