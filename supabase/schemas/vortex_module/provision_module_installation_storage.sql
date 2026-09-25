@@ -13,9 +13,6 @@ returns table (
   application_release_revision bigint,
   module_root_id uuid,
   module_release_revision bigint,
-  content_fingerprint text,
-  resolution_fingerprint text,
-  generator_contract_version text,
   storage_contract_ids uuid[]
 )
 language plpgsql
@@ -172,17 +169,13 @@ begin
     and stored_binding.application_release_revision = p_application_release_revision
     and stored_binding.module_release_revision = p_module_release_revision
     and stored_binding.state = 'provisioned' then
-    if stored_binding.content_fingerprint <> provision.content_fingerprint
-      or stored_binding.resolution_fingerprint <> provision.resolution_fingerprint
-      or stored_binding.generator_contract_version <> provision.generator_contract_version
-      or stored_binding.storage_contract_ids <> provision.storage_contract_ids then
+    if stored_binding.storage_contract_ids <> provision.storage_contract_ids then
       raise exception using errcode = '55000', message = 'Stored Module installation evidence is incompatible';
     end if;
     return query select stored_binding.state, false, stored_binding.binding_revision,
       stored_binding.application_root_id, stored_binding.application_release_revision,
       stored_binding.module_root_id, stored_binding.module_release_revision,
-      stored_binding.content_fingerprint, stored_binding.resolution_fingerprint,
-      stored_binding.generator_contract_version, stored_binding.storage_contract_ids;
+      stored_binding.storage_contract_ids;
     return;
   end if;
 
@@ -196,9 +189,6 @@ begin
         application_release_revision = p_application_release_revision,
         module_release_revision = p_module_release_revision,
         state = 'provisioned',
-        content_fingerprint = provision.content_fingerprint,
-        resolution_fingerprint = provision.resolution_fingerprint,
-        generator_contract_version = provision.generator_contract_version,
         storage_contract_ids = provision.storage_contract_ids,
         changed_at = pg_catalog.statement_timestamp()
     where binding.organization_id = permission_decision.organization_id
@@ -213,21 +203,17 @@ begin
     insert into vortex_module.installation_bindings (
       organization_id, application_root_id, module_root_id, binding_revision,
       application_release_revision, module_release_revision, state,
-      content_fingerprint, resolution_fingerprint, generator_contract_version,
       storage_contract_ids
     ) values (
       permission_decision.organization_id, p_application_root_id, p_module_root_id, 1,
       p_application_release_revision, p_module_release_revision, 'provisioned',
-      provision.content_fingerprint, provision.resolution_fingerprint,
-      provision.generator_contract_version, provision.storage_contract_ids
+      provision.storage_contract_ids
     );
   end if;
 
   return query select 'provisioned'::text, true, next_binding_revision,
     p_application_root_id, p_application_release_revision, p_module_root_id,
-    p_module_release_revision, provision.content_fingerprint,
-    provision.resolution_fingerprint, provision.generator_contract_version,
-    provision.storage_contract_ids;
+    p_module_release_revision, provision.storage_contract_ids;
 exception
   when no_data_found then
     raise exception using errcode = 'P0002', message = 'Module installation evidence is unavailable';
