@@ -5195,32 +5195,20 @@ function compileApplicationFlowBindings(
     );
 
     const flowRef = asObject(binding.flow);
-    let compiledFlowRef: JsonObject;
-    if (flowRef.kind === "platform_managed") {
-      const evidence = managedFlow(String(flowRef.flow_id), String(flowRef.release_version));
-      compiledFlowRef = {
-        kind: "platform_managed",
-        flowId: flowRef.flow_id,
-        releaseVersion: flowRef.release_version,
-        contentFingerprint: evidence.contentFingerprint,
-        catalogueFingerprint: evidence.catalogueFingerprint,
-      };
-    } else {
-      const authoredFlow = sourceFlow(String(flowRef.flow));
-      if (authoredFlow === undefined)
-        fail("vortex.definition.missing_identity", "unresolved_reference");
-      compiledFlowRef = {
-        kind: "application_owned",
-        applicationRootId: root.rootId,
-        flowId: resolution.id(definitionKey, "flow", String(flowRef.flow), "content"),
-        releaseVersion: appVersion,
-        contentFingerprint: fingerprintCanonicalValue({
-          kind: "application_flow",
-          value: authoredFlow,
-        }),
-        resolutionFingerprint,
-      };
-    }
+    const authoredFlow = sourceFlow(String(flowRef.flow));
+    if (authoredFlow === undefined)
+      fail("vortex.definition.missing_identity", "unresolved_reference");
+    const compiledFlowRef: JsonObject = {
+      kind: "application_owned",
+      applicationRootId: root.rootId,
+      flowId: resolution.id(definitionKey, "flow", String(flowRef.flow), "content"),
+      releaseVersion: appVersion,
+      contentFingerprint: fingerprintCanonicalValue({
+        kind: "application_flow",
+        value: authoredFlow,
+      }),
+      resolutionFingerprint,
+    };
 
     const compileBindingContext = (ctx: JsonObject): JsonObject => {
       const kind = ctx.kind;

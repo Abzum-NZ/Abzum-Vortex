@@ -46,10 +46,8 @@ export const hasAuthenticResolutionFingerprint = (
 const manifestSubject = (dependency: ExactDefinitionDependency): string =>
   dependency.kind === "platform_theme"
     ? `${dependency.kind}:${dependency.catalogueThemeId}`
-    : dependency.kind === "platform_block"
-      ? `${dependency.kind}:${dependency.blockId}`
-      : dependency.kind === "platform_flow"
-        ? `${dependency.kind}:${dependency.flowId}`
+      : dependency.kind === "platform_block"
+        ? `${dependency.kind}:${dependency.blockId}`
         : dependency.kind === "application_flow"
           ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}`
           : dependency.kind === "application_flow_node"
@@ -87,8 +85,6 @@ const sameStringSet = (left: readonly string[], right: readonly string[]): boole
 
 const flowManifestSubject = (dependency: ExactDefinitionDependency): string => {
   switch (dependency.kind) {
-    case "platform_flow":
-      return `${dependency.kind}:${dependency.flowId}`;
     case "application_flow":
       return `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}`;
     case "application_flow_node":
@@ -306,36 +302,27 @@ const exactApplicationFlowTargetsMatch = (
     }
   }
   for (const binding of output.canonical.content.flowBindings) {
-    if (binding.flow.kind === "application_owned") {
-      const flow = output.canonical.content.flows.find(
-        (candidate) => candidate.flowId === binding.flow.flowId,
-      );
-      if (
-        flow === undefined ||
-        !applicationEvidenceMatches(
-          binding.flow.applicationRootId,
-          binding.flow.releaseVersion,
-          binding.flow.resolutionFingerprint,
-        ) ||
-        binding.flow.contentFingerprint !== flow.contentFingerprint
-      )
-        return false;
-      add({
-        kind: "application_flow",
-        applicationRootId,
-        flowId: binding.flow.flowId,
-        releaseVersion: binding.flow.releaseVersion,
-        contentFingerprint: binding.flow.contentFingerprint,
-        resolutionFingerprint: binding.flow.resolutionFingerprint,
-      });
-    } else
-      add({
-        kind: "platform_flow",
-        flowId: binding.flow.flowId,
-        releaseVersion: binding.flow.releaseVersion,
-        contentFingerprint: binding.flow.contentFingerprint,
-        catalogueFingerprint: binding.flow.catalogueFingerprint,
-      });
+    const flow = output.canonical.content.flows.find(
+      (candidate) => candidate.flowId === binding.flow.flowId,
+    );
+    if (
+      flow === undefined ||
+      !applicationEvidenceMatches(
+        binding.flow.applicationRootId,
+        binding.flow.releaseVersion,
+        binding.flow.resolutionFingerprint,
+      ) ||
+      binding.flow.contentFingerprint !== flow.contentFingerprint
+    )
+      return false;
+    add({
+      kind: "application_flow",
+      applicationRootId,
+      flowId: binding.flow.flowId,
+      releaseVersion: binding.flow.releaseVersion,
+      contentFingerprint: binding.flow.contentFingerprint,
+      resolutionFingerprint: binding.flow.resolutionFingerprint,
+    });
   }
   const actual = manifest.filter((entry) => flowManifestSubject(entry) !== "");
   const actualBySubject = new Map(actual.map((entry) => [flowManifestSubject(entry), entry]));

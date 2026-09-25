@@ -42,7 +42,6 @@ import {
   type PlatformBlockReleaseV2,
   type PlatformId,
   type PlatformThemeReleaseV2,
-  type PlatformManagedFlowDependency,
   type PlatformServiceOperationRelease,
   type Revision,
   type SemanticVersion,
@@ -194,10 +193,6 @@ export interface DefinitionPublicationCatalogue {
       }>;
     }>,
   ): Promise<ApplicationCompositionCatalogueSnapshotV2 | undefined>;
-  readPlatformManagedFlowRelease?(
-    flowId: string,
-    releaseVersion: string,
-  ): Promise<PlatformManagedFlowDependency | undefined>;
   readPlatformServiceOperationRelease?(
     serviceId: string,
     operationId: string,
@@ -257,7 +252,6 @@ type ResolvedDependencies = Readonly<{
   modules: readonly ResolvableModuleRelease[];
   connections: readonly ResolvableConnectionTypeRelease[];
   compositionV2?: ApplicationCompositionCatalogueSnapshotV2;
-  managedFlows: readonly PlatformManagedFlowDependency[];
   platformOperations: readonly PlatformServiceOperationRelease[];
 }>;
 
@@ -365,9 +359,7 @@ const subjectOf = (dependency: ExactDefinitionDependency): string =>
     ? `${dependency.kind}:${dependency.catalogueThemeId}`
     : dependency.kind === "platform_block"
       ? `${dependency.kind}:${dependency.blockId}`
-      : dependency.kind === "platform_flow"
-        ? `${dependency.kind}:${dependency.flowId}`
-        : dependency.kind === "application_flow"
+      : dependency.kind === "application_flow"
           ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}`
           : dependency.kind === "application_flow_node"
             ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}:${dependency.nodeId}`
@@ -586,9 +578,7 @@ const findPinned = <Kind extends ExactDefinitionDependency["kind"]>(
         ? entry.catalogueThemeId === subject
         : entry.kind === "platform_block"
           ? entry.blockId === subject
-          : entry.kind === "platform_flow"
-            ? String(entry.flowId) === subject
-            : entry.kind === "protected_operation"
+          : entry.kind === "protected_operation"
               ? entry.operation.operationId === subject
           : entry.key === subject),
   );
@@ -731,39 +721,9 @@ const resolveDependencies = async (
       pinned,
     );
 
-  const managedFlows: PlatformManagedFlowDependency[] = [];
-  const managedFlowSubjects = new Set<string>();
   const platformOperations: PlatformServiceOperationRelease[] = [];
   const platformOperationSubjects = new Set<string>();
   if (candidate.draft.source.kind === "application") {
-    for (const binding of candidate.draft.source.body.flow_bindings) {
-      if (binding.flow.kind !== "platform_managed") continue;
-      const release = await catalogue.readPlatformManagedFlowRelease?.(
-        binding.flow.flow_id,
-        binding.flow.release_version,
-      );
-      if (
-        release === undefined ||
-        release.kind !== "platform_flow" ||
-        release.flowId !== binding.flow.flow_id ||
-        release.releaseVersion !== binding.flow.release_version
-      )
-        refuse("DEFINITION_DEPENDENCY_MISSING");
-      if (pinned !== undefined) {
-        const exact = findPinned(pinned, "platform_flow", String(binding.flow.flow_id));
-        if (
-          exact.releaseVersion !== release.releaseVersion ||
-          exact.contentFingerprint !== release.contentFingerprint ||
-          exact.catalogueFingerprint !== release.catalogueFingerprint
-        )
-          refuse("DEFINITION_CONFIRMATION_MISMATCH");
-      }
-      const subject = `${release.flowId}:${release.releaseVersion}`;
-      if (!managedFlowSubjects.has(subject)) {
-        managedFlowSubjects.add(subject);
-        managedFlows.push(release);
-      }
-    }
     for (const flow of candidate.draft.source.body.flows) {
       for (const node of flow.nodes) {
         if (node.kind !== "action" || node.target.kind !== "protected_operation") continue;
@@ -841,7 +801,6 @@ const resolveDependencies = async (
   return {
     modules,
     connections,
-    managedFlows,
     platformOperations,
     ...(compositionV2 === undefined ? {} : { compositionV2 }),
   };
@@ -1001,14 +960,6 @@ const flowTargetManifestFor = (
         releaseVersion: binding.flow.releaseVersion,
         contentFingerprint: binding.flow.contentFingerprint,
         resolutionFingerprint: binding.flow.resolutionFingerprint,
-      });
-    else
-      add({
-        kind: "platform_flow",
-        flowId: binding.flow.flowId,
-        releaseVersion: binding.flow.releaseVersion,
-        contentFingerprint: binding.flow.contentFingerprint,
-        catalogueFingerprint: binding.flow.catalogueFingerprint,
       });
   }
   return entries;
@@ -1233,7 +1184,7 @@ const compileCandidate = (
       parsedCompilationRequest(applicationCompilationRequestV2Schema, request),
       dependencyOutputs,
       {
-        managedFlows: dependencies.managedFlows,
+        managedFlows: [],
         platformOperations: dependencies.platformOperations,
       },
     );

@@ -124,7 +124,7 @@ export type ApplicationPreviewInteraction = Readonly<{
   controlId: string;
   eventId: string;
   event: ComponentSemanticEventKind;
-  flowKind: "application_owned" | "platform_managed";
+  flowKind: "application_owned";
   flowId: string;
   declaredEffects: readonly FlowEffectKind[];
   simulatedNodes: readonly ApplicationPreviewFlowNodeSimulation[];
