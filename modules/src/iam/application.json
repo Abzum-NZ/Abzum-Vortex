@@ -598,7 +598,7 @@
                   },
                   "text": {
                     "kind": "text",
-                    "value": "Revise a role's label and description, create an empty Group, rename a Group, add or remove a Group membership, or end a role, Group or Group membership. Each change runs under your own authority in protected Access, is checked against the revision you read, and is refused if you lack the authority or if it exceeds your delegated scope."
+                    "value": "Revise a role's label and description, create an empty Group, rename a Group, or end a role, Group or Group membership. Each change runs under your own authority in protected Access, is checked against the revision you read, and is refused if you lack the authority. Granting access is never done from here."
                   }
                 },
                 "theme_overrides": {},
@@ -1576,244 +1576,6 @@
                     }
                   }
                 }
-              },
-              "form_add_group_membership": {
-                "block": {
-                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Add group membership"
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {
-                  "content": {
-                    "placements": {
-                      "input_add_group_membership_membership_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "membership_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Membership id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_add_group_membership_group_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "group_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Group id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_add_group_membership_organization_account_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "organization_account_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Organization account id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_add_group_membership_starts_at": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "starts_at"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Starts at"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_add_group_membership_expires_at": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "expires_at"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Expires at"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": false
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "button_add_group_membership": {
-                        "block": {
-                          "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "label": {
-                            "kind": "text",
-                            "value": "Add group membership"
-                          },
-                          "action_kind": {
-                            "kind": "choice",
-                            "value": "action"
-                          },
-                          "variant": {
-                            "kind": "choice",
-                            "value": "primary"
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      }
-                    },
-                    "order": {
-                      "desktop": [
-                        "input_add_group_membership_membership_id",
-                        "input_add_group_membership_group_id",
-                        "input_add_group_membership_organization_account_id",
-                        "input_add_group_membership_starts_at",
-                        "input_add_group_membership_expires_at",
-                        "button_add_group_membership"
-                      ]
-                    }
-                  }
-                }
               }
             },
             "order": {
@@ -1822,7 +1584,6 @@
                 "form_revise_role_metadata",
                 "form_retire_role",
                 "form_create_group",
-                "form_add_group_membership",
                 "form_rename_group",
                 "form_retire_group",
                 "form_remove_group_membership"
@@ -1862,7 +1623,7 @@
                   },
                   "text": {
                     "kind": "text",
-                    "value": "Assign or end a role assignment, deactivate a role activation, or revoke a delegation authority. Each change runs under your own authority in protected Access, is checked against the revision you read, and is refused if you lack the authority or if it exceeds your delegated scope."
+                    "value": "End a role assignment, a role activation or a delegation authority. Each change runs under your own authority in protected Access, is checked against the revision you read, and is refused if you lack the authority. Granting, assigning and activating access are never done from here."
                   }
                 },
                 "theme_overrides": {},
@@ -2310,457 +2071,12 @@
                     }
                   }
                 }
-              },
-              "form_assign_role_assignment": {
-                "block": {
-                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Assign role"
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {
-                  "content": {
-                    "placements": {
-                      "input_assign_role_assignment_role_assignment_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "role_assignment_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Role assignment id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_assign_role_assignment_role_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "role_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Role id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_assign_role_assignment_expected_role_revision": {
-                        "block": {
-                          "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "expected_role_revision"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Expected role revision"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "integer": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "min_value": {
-                            "kind": "number",
-                            "value": 1
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_assign_role_assignment_assignee_kind": {
-                        "block": {
-                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "assignee_kind"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Assignee kind"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "options": {
-                            "kind": "list",
-                            "items": [
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "organization_account"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Organisation account"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "group"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Group"
-                                  }
-                                }
-                              }
-                            ]
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_assign_role_assignment_organization_account_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "organization_account_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Organization account id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": false
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_assign_role_assignment_group_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "group_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Group id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": false
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_assign_role_assignment_assignment_kind": {
-                        "block": {
-                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "assignment_kind"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Assignment kind"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "options": {
-                            "kind": "list",
-                            "items": [
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "standing"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Standing"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "eligible"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Eligible"
-                                  }
-                                }
-                              }
-                            ]
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_assign_role_assignment_starts_at": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "starts_at"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Starts at"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_assign_role_assignment_expires_at": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "expires_at"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Expires at"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": false
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "button_assign_role_assignment": {
-                        "block": {
-                          "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "label": {
-                            "kind": "text",
-                            "value": "Assign role"
-                          },
-                          "action_kind": {
-                            "kind": "choice",
-                            "value": "action"
-                          },
-                          "variant": {
-                            "kind": "choice",
-                            "value": "primary"
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      }
-                    },
-                    "order": {
-                      "desktop": [
-                        "input_assign_role_assignment_role_assignment_id",
-                        "input_assign_role_assignment_role_id",
-                        "input_assign_role_assignment_expected_role_revision",
-                        "input_assign_role_assignment_assignee_kind",
-                        "input_assign_role_assignment_organization_account_id",
-                        "input_assign_role_assignment_group_id",
-                        "input_assign_role_assignment_assignment_kind",
-                        "input_assign_role_assignment_starts_at",
-                        "input_assign_role_assignment_expires_at",
-                        "button_assign_role_assignment"
-                      ]
-                    }
-                  }
-                }
               }
             },
             "order": {
               "desktop": [
                 "iam_manage_assignments_heading",
                 "form_revoke_role_assignment",
-                "form_assign_role_assignment",
                 "form_deactivate_role_activation",
                 "form_revoke_delegation_authority"
               ]
@@ -3896,10 +3212,16 @@
     ],
     "flows": [
       {
+        "contractVersion": "1.0.0",
         "id": "flow_revise_role_metadata",
         "key": "revise_role_metadata",
-        "name": "Revise role details",
-        "run_as": "current_user",
+        "labels": {
+          "name": "Revise role details"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
         "inputs": {
           "role_id": {
             "type": "text",
@@ -3918,214 +3240,47 @@
             "required": true
           }
         },
-        "outputs": {
-          "role_id": {
-            "type": "text",
-            "required": false
-          },
-          "revision": {
-            "type": "whole_number",
-            "required": false
-          },
-          "access_version": {
-            "type": "whole_number",
-            "required": false
-          }
-        },
-        "variables": {},
-        "nodes": [
+        "tasks": [
           {
-            "id": "node_start",
-            "key": "start",
-            "kind": "start",
-            "outputs": {
-              "role_id": {
-                "type": "text",
-                "required": true
-              },
-              "expected_role_revision": {
-                "type": "whole_number",
-                "required": true
-              },
-              "label": {
-                "type": "text",
-                "required": true
-              },
-              "description": {
-                "type": "text",
-                "required": true
-              }
-            }
-          },
-          {
-            "id": "node_operation",
-            "key": "operation",
-            "kind": "action",
-            "target": {
-              "kind": "protected_operation",
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
               "operation": {
-                "owner": {
-                  "kind": "platform_service",
-                  "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
-                },
-                "operationId": "8afbef77-caa4-45f3-8e69-34e527152d93"
-              },
-              "release_version": "1.0.0"
-            },
-            "inputs": {
-              "role_id": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "role_id"
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.revise_role_metadata"
                 }
-              },
-              "expected_role_revision": {
-                "type": "whole_number",
-                "value": {
-                  "source": "flow_input",
-                  "input": "expected_role_revision"
-                }
-              },
-              "label": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "label"
-                }
-              },
-              "description": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "description"
-                }
-              }
-            },
-            "outputs": {
-              "role_id": {
-                "type": "text",
-                "required": false
-              },
-              "revision": {
-                "type": "whole_number",
-                "required": false
-              },
-              "access_version": {
-                "type": "whole_number",
-                "required": false
-              }
-            },
-            "results": {
-              "role_id": {
-                "output": "role_id",
-                "type": "text"
-              },
-              "revision": {
-                "output": "revision",
-                "type": "whole_number"
-              },
-              "access_version": {
-                "output": "access_version",
-                "type": "whole_number"
               }
             }
-          },
-          {
-            "id": "node_committed",
-            "key": "return_committed",
-            "kind": "return",
-            "outcome": "committed",
-            "results": {
-              "role_id": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "role_id"
-              },
-              "revision": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "revision"
-              },
-              "access_version": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "access_version"
-              }
-            }
-          },
-          {
-            "id": "node_refused",
-            "key": "return_refused",
-            "kind": "return",
-            "outcome": "refused",
-            "results": {}
-          },
-          {
-            "id": "node_conflict",
-            "key": "return_conflict",
-            "kind": "return",
-            "outcome": "conflict",
-            "results": {}
-          },
-          {
-            "id": "node_validation",
-            "key": "return_validation",
-            "kind": "return",
-            "outcome": "validation",
-            "results": {}
-          },
-          {
-            "id": "node_failed",
-            "key": "return_failed",
-            "kind": "return",
-            "outcome": "failed",
-            "results": {}
           }
         ],
-        "edges": [
-          {
-            "id": "edge_start",
-            "from_node": "node_start",
-            "to_node": "node_operation"
-          },
-          {
-            "id": "edge_committed",
-            "from_node": "node_operation",
-            "to_node": "node_committed",
-            "outcome": "committed"
-          },
-          {
-            "id": "edge_refused",
-            "from_node": "node_operation",
-            "to_node": "node_refused",
-            "outcome": "refused"
-          },
-          {
-            "id": "edge_conflict",
-            "from_node": "node_operation",
-            "to_node": "node_conflict",
-            "outcome": "conflict"
-          },
-          {
-            "id": "edge_validation",
-            "from_node": "node_operation",
-            "to_node": "node_validation",
-            "outcome": "validation"
-          },
-          {
-            "id": "edge_failed",
-            "from_node": "node_operation",
-            "to_node": "node_failed",
-            "outcome": "failed"
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
           }
-        ]
+        }
       },
       {
+        "contractVersion": "1.0.0",
         "id": "flow_retire_role",
         "key": "retire_role",
-        "name": "Retire role",
-        "run_as": "current_user",
+        "labels": {
+          "name": "Retire role"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
         "inputs": {
           "role_id": {
             "type": "text",
@@ -4136,192 +3291,47 @@
             "required": true
           }
         },
-        "outputs": {
-          "role_id": {
-            "type": "text",
-            "required": false
-          },
-          "revision": {
-            "type": "whole_number",
-            "required": false
-          },
-          "access_version": {
-            "type": "whole_number",
-            "required": false
-          }
-        },
-        "variables": {},
-        "nodes": [
+        "tasks": [
           {
-            "id": "node_start",
-            "key": "start",
-            "kind": "start",
-            "outputs": {
-              "role_id": {
-                "type": "text",
-                "required": true
-              },
-              "expected_role_revision": {
-                "type": "whole_number",
-                "required": true
-              }
-            }
-          },
-          {
-            "id": "node_operation",
-            "key": "operation",
-            "kind": "action",
-            "target": {
-              "kind": "protected_operation",
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
               "operation": {
-                "owner": {
-                  "kind": "platform_service",
-                  "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
-                },
-                "operationId": "bdbd9b70-f587-4522-bb0f-6e81173e69d4"
-              },
-              "release_version": "1.0.0"
-            },
-            "inputs": {
-              "role_id": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "role_id"
-                }
-              },
-              "expected_role_revision": {
-                "type": "whole_number",
-                "value": {
-                  "source": "flow_input",
-                  "input": "expected_role_revision"
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.retire_role"
                 }
               }
-            },
-            "outputs": {
-              "role_id": {
-                "type": "text",
-                "required": false
-              },
-              "revision": {
-                "type": "whole_number",
-                "required": false
-              },
-              "access_version": {
-                "type": "whole_number",
-                "required": false
-              }
-            },
-            "results": {
-              "role_id": {
-                "output": "role_id",
-                "type": "text"
-              },
-              "revision": {
-                "output": "revision",
-                "type": "whole_number"
-              },
-              "access_version": {
-                "output": "access_version",
-                "type": "whole_number"
-              }
             }
-          },
-          {
-            "id": "node_committed",
-            "key": "return_committed",
-            "kind": "return",
-            "outcome": "committed",
-            "results": {
-              "role_id": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "role_id"
-              },
-              "revision": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "revision"
-              },
-              "access_version": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "access_version"
-              }
-            }
-          },
-          {
-            "id": "node_refused",
-            "key": "return_refused",
-            "kind": "return",
-            "outcome": "refused",
-            "results": {}
-          },
-          {
-            "id": "node_conflict",
-            "key": "return_conflict",
-            "kind": "return",
-            "outcome": "conflict",
-            "results": {}
-          },
-          {
-            "id": "node_validation",
-            "key": "return_validation",
-            "kind": "return",
-            "outcome": "validation",
-            "results": {}
-          },
-          {
-            "id": "node_failed",
-            "key": "return_failed",
-            "kind": "return",
-            "outcome": "failed",
-            "results": {}
           }
         ],
-        "edges": [
-          {
-            "id": "edge_start",
-            "from_node": "node_start",
-            "to_node": "node_operation"
-          },
-          {
-            "id": "edge_committed",
-            "from_node": "node_operation",
-            "to_node": "node_committed",
-            "outcome": "committed"
-          },
-          {
-            "id": "edge_refused",
-            "from_node": "node_operation",
-            "to_node": "node_refused",
-            "outcome": "refused"
-          },
-          {
-            "id": "edge_conflict",
-            "from_node": "node_operation",
-            "to_node": "node_conflict",
-            "outcome": "conflict"
-          },
-          {
-            "id": "edge_validation",
-            "from_node": "node_operation",
-            "to_node": "node_validation",
-            "outcome": "validation"
-          },
-          {
-            "id": "edge_failed",
-            "from_node": "node_operation",
-            "to_node": "node_failed",
-            "outcome": "failed"
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
           }
-        ]
+        }
       },
       {
+        "contractVersion": "1.0.0",
         "id": "flow_create_group",
         "key": "create_group",
-        "name": "Create group",
-        "run_as": "current_user",
+        "labels": {
+          "name": "Create group"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
         "inputs": {
           "group_key": {
             "type": "text",
@@ -4332,179 +3342,47 @@
             "required": true
           }
         },
-        "outputs": {
-          "group_id": {
-            "type": "text",
-            "required": false
-          },
-          "revision": {
-            "type": "whole_number",
-            "required": false
-          },
-          "access_version": {
-            "type": "whole_number",
-            "required": false
-          }
-        },
-        "variables": {},
-        "nodes": [
+        "tasks": [
           {
-            "id": "node_start",
-            "key": "start",
-            "kind": "start",
-            "outputs": {
-              "group_key": {
-                "type": "text",
-                "required": true
-              },
-              "label": {
-                "type": "text",
-                "required": true
-              }
-            }
-          },
-          {
-            "id": "node_operation",
-            "key": "operation",
-            "kind": "action",
-            "target": {
-              "kind": "protected_operation",
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
               "operation": {
-                "owner": {
-                  "kind": "platform_service",
-                  "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
-                },
-                "operationId": "8e6e6659-85c5-47d8-a8a1-24c3e2faf020"
-              },
-              "release_version": "1.0.0"
-            },
-            "inputs": {
-              "group_key": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "group_key"
-                }
-              },
-              "label": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "label"
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.create_group"
                 }
               }
-            },
-            "outputs": {
-              "group_id": {
-                "type": "text",
-                "required": false
-              },
-              "revision": {
-                "type": "whole_number",
-                "required": false
-              },
-              "access_version": {
-                "type": "whole_number",
-                "required": false
-              }
-            },
-            "results": {
-              "group_id": {
-                "output": "group_id",
-                "type": "text"
-              },
-              "revision": {
-                "output": "revision",
-                "type": "whole_number"
-              },
-              "access_version": {
-                "output": "access_version",
-                "type": "whole_number"
-              }
             }
-          },
-          {
-            "id": "node_committed",
-            "key": "return_committed",
-            "kind": "return",
-            "outcome": "committed",
-            "results": {
-              "group_id": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "group_id"
-              },
-              "revision": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "revision"
-              },
-              "access_version": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "access_version"
-              }
-            }
-          },
-          {
-            "id": "node_refused",
-            "key": "return_refused",
-            "kind": "return",
-            "outcome": "refused",
-            "results": {}
-          },
-          {
-            "id": "node_validation",
-            "key": "return_validation",
-            "kind": "return",
-            "outcome": "validation",
-            "results": {}
-          },
-          {
-            "id": "node_failed",
-            "key": "return_failed",
-            "kind": "return",
-            "outcome": "failed",
-            "results": {}
           }
         ],
-        "edges": [
-          {
-            "id": "edge_start",
-            "from_node": "node_start",
-            "to_node": "node_operation"
-          },
-          {
-            "id": "edge_committed",
-            "from_node": "node_operation",
-            "to_node": "node_committed",
-            "outcome": "committed"
-          },
-          {
-            "id": "edge_refused",
-            "from_node": "node_operation",
-            "to_node": "node_refused",
-            "outcome": "refused"
-          },
-          {
-            "id": "edge_validation",
-            "from_node": "node_operation",
-            "to_node": "node_validation",
-            "outcome": "validation"
-          },
-          {
-            "id": "edge_failed",
-            "from_node": "node_operation",
-            "to_node": "node_failed",
-            "outcome": "failed"
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
           }
-        ]
+        }
       },
       {
+        "contractVersion": "1.0.0",
         "id": "flow_rename_group",
         "key": "rename_group",
-        "name": "Rename group",
-        "run_as": "current_user",
+        "labels": {
+          "name": "Rename group"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
         "inputs": {
           "group_id": {
             "type": "text",
@@ -4519,203 +3397,47 @@
             "required": true
           }
         },
-        "outputs": {
-          "group_id": {
-            "type": "text",
-            "required": false
-          },
-          "revision": {
-            "type": "whole_number",
-            "required": false
-          },
-          "access_version": {
-            "type": "whole_number",
-            "required": false
-          }
-        },
-        "variables": {},
-        "nodes": [
+        "tasks": [
           {
-            "id": "node_start",
-            "key": "start",
-            "kind": "start",
-            "outputs": {
-              "group_id": {
-                "type": "text",
-                "required": true
-              },
-              "expected_group_revision": {
-                "type": "whole_number",
-                "required": true
-              },
-              "label": {
-                "type": "text",
-                "required": true
-              }
-            }
-          },
-          {
-            "id": "node_operation",
-            "key": "operation",
-            "kind": "action",
-            "target": {
-              "kind": "protected_operation",
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
               "operation": {
-                "owner": {
-                  "kind": "platform_service",
-                  "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
-                },
-                "operationId": "fa60026c-8a50-4607-b357-20bb3eed7321"
-              },
-              "release_version": "1.0.0"
-            },
-            "inputs": {
-              "group_id": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "group_id"
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.rename_group"
                 }
-              },
-              "expected_group_revision": {
-                "type": "whole_number",
-                "value": {
-                  "source": "flow_input",
-                  "input": "expected_group_revision"
-                }
-              },
-              "label": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "label"
-                }
-              }
-            },
-            "outputs": {
-              "group_id": {
-                "type": "text",
-                "required": false
-              },
-              "revision": {
-                "type": "whole_number",
-                "required": false
-              },
-              "access_version": {
-                "type": "whole_number",
-                "required": false
-              }
-            },
-            "results": {
-              "group_id": {
-                "output": "group_id",
-                "type": "text"
-              },
-              "revision": {
-                "output": "revision",
-                "type": "whole_number"
-              },
-              "access_version": {
-                "output": "access_version",
-                "type": "whole_number"
               }
             }
-          },
-          {
-            "id": "node_committed",
-            "key": "return_committed",
-            "kind": "return",
-            "outcome": "committed",
-            "results": {
-              "group_id": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "group_id"
-              },
-              "revision": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "revision"
-              },
-              "access_version": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "access_version"
-              }
-            }
-          },
-          {
-            "id": "node_refused",
-            "key": "return_refused",
-            "kind": "return",
-            "outcome": "refused",
-            "results": {}
-          },
-          {
-            "id": "node_conflict",
-            "key": "return_conflict",
-            "kind": "return",
-            "outcome": "conflict",
-            "results": {}
-          },
-          {
-            "id": "node_validation",
-            "key": "return_validation",
-            "kind": "return",
-            "outcome": "validation",
-            "results": {}
-          },
-          {
-            "id": "node_failed",
-            "key": "return_failed",
-            "kind": "return",
-            "outcome": "failed",
-            "results": {}
           }
         ],
-        "edges": [
-          {
-            "id": "edge_start",
-            "from_node": "node_start",
-            "to_node": "node_operation"
-          },
-          {
-            "id": "edge_committed",
-            "from_node": "node_operation",
-            "to_node": "node_committed",
-            "outcome": "committed"
-          },
-          {
-            "id": "edge_refused",
-            "from_node": "node_operation",
-            "to_node": "node_refused",
-            "outcome": "refused"
-          },
-          {
-            "id": "edge_conflict",
-            "from_node": "node_operation",
-            "to_node": "node_conflict",
-            "outcome": "conflict"
-          },
-          {
-            "id": "edge_validation",
-            "from_node": "node_operation",
-            "to_node": "node_validation",
-            "outcome": "validation"
-          },
-          {
-            "id": "edge_failed",
-            "from_node": "node_operation",
-            "to_node": "node_failed",
-            "outcome": "failed"
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
           }
-        ]
+        }
       },
       {
+        "contractVersion": "1.0.0",
         "id": "flow_retire_group",
         "key": "retire_group",
-        "name": "Retire group",
-        "run_as": "current_user",
+        "labels": {
+          "name": "Retire group"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
         "inputs": {
           "group_id": {
             "type": "text",
@@ -4726,192 +3448,47 @@
             "required": true
           }
         },
-        "outputs": {
-          "group_id": {
-            "type": "text",
-            "required": false
-          },
-          "revision": {
-            "type": "whole_number",
-            "required": false
-          },
-          "access_version": {
-            "type": "whole_number",
-            "required": false
-          }
-        },
-        "variables": {},
-        "nodes": [
+        "tasks": [
           {
-            "id": "node_start",
-            "key": "start",
-            "kind": "start",
-            "outputs": {
-              "group_id": {
-                "type": "text",
-                "required": true
-              },
-              "expected_group_revision": {
-                "type": "whole_number",
-                "required": true
-              }
-            }
-          },
-          {
-            "id": "node_operation",
-            "key": "operation",
-            "kind": "action",
-            "target": {
-              "kind": "protected_operation",
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
               "operation": {
-                "owner": {
-                  "kind": "platform_service",
-                  "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
-                },
-                "operationId": "3ca55b1c-66e4-43f2-9a38-f756e3b4cb6d"
-              },
-              "release_version": "1.0.0"
-            },
-            "inputs": {
-              "group_id": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "group_id"
-                }
-              },
-              "expected_group_revision": {
-                "type": "whole_number",
-                "value": {
-                  "source": "flow_input",
-                  "input": "expected_group_revision"
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.retire_group"
                 }
               }
-            },
-            "outputs": {
-              "group_id": {
-                "type": "text",
-                "required": false
-              },
-              "revision": {
-                "type": "whole_number",
-                "required": false
-              },
-              "access_version": {
-                "type": "whole_number",
-                "required": false
-              }
-            },
-            "results": {
-              "group_id": {
-                "output": "group_id",
-                "type": "text"
-              },
-              "revision": {
-                "output": "revision",
-                "type": "whole_number"
-              },
-              "access_version": {
-                "output": "access_version",
-                "type": "whole_number"
-              }
             }
-          },
-          {
-            "id": "node_committed",
-            "key": "return_committed",
-            "kind": "return",
-            "outcome": "committed",
-            "results": {
-              "group_id": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "group_id"
-              },
-              "revision": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "revision"
-              },
-              "access_version": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "access_version"
-              }
-            }
-          },
-          {
-            "id": "node_refused",
-            "key": "return_refused",
-            "kind": "return",
-            "outcome": "refused",
-            "results": {}
-          },
-          {
-            "id": "node_conflict",
-            "key": "return_conflict",
-            "kind": "return",
-            "outcome": "conflict",
-            "results": {}
-          },
-          {
-            "id": "node_validation",
-            "key": "return_validation",
-            "kind": "return",
-            "outcome": "validation",
-            "results": {}
-          },
-          {
-            "id": "node_failed",
-            "key": "return_failed",
-            "kind": "return",
-            "outcome": "failed",
-            "results": {}
           }
         ],
-        "edges": [
-          {
-            "id": "edge_start",
-            "from_node": "node_start",
-            "to_node": "node_operation"
-          },
-          {
-            "id": "edge_committed",
-            "from_node": "node_operation",
-            "to_node": "node_committed",
-            "outcome": "committed"
-          },
-          {
-            "id": "edge_refused",
-            "from_node": "node_operation",
-            "to_node": "node_refused",
-            "outcome": "refused"
-          },
-          {
-            "id": "edge_conflict",
-            "from_node": "node_operation",
-            "to_node": "node_conflict",
-            "outcome": "conflict"
-          },
-          {
-            "id": "edge_validation",
-            "from_node": "node_operation",
-            "to_node": "node_validation",
-            "outcome": "validation"
-          },
-          {
-            "id": "edge_failed",
-            "from_node": "node_operation",
-            "to_node": "node_failed",
-            "outcome": "failed"
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
           }
-        ]
+        }
       },
       {
+        "contractVersion": "1.0.0",
         "id": "flow_remove_group_membership",
         "key": "remove_group_membership",
-        "name": "Remove group membership",
-        "run_as": "current_user",
+        "labels": {
+          "name": "Remove group membership"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
         "inputs": {
           "membership_id": {
             "type": "text",
@@ -4922,192 +3499,47 @@
             "required": true
           }
         },
-        "outputs": {
-          "membership_id": {
-            "type": "text",
-            "required": false
-          },
-          "revision": {
-            "type": "whole_number",
-            "required": false
-          },
-          "access_version": {
-            "type": "whole_number",
-            "required": false
-          }
-        },
-        "variables": {},
-        "nodes": [
+        "tasks": [
           {
-            "id": "node_start",
-            "key": "start",
-            "kind": "start",
-            "outputs": {
-              "membership_id": {
-                "type": "text",
-                "required": true
-              },
-              "expected_membership_revision": {
-                "type": "whole_number",
-                "required": true
-              }
-            }
-          },
-          {
-            "id": "node_operation",
-            "key": "operation",
-            "kind": "action",
-            "target": {
-              "kind": "protected_operation",
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
               "operation": {
-                "owner": {
-                  "kind": "platform_service",
-                  "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
-                },
-                "operationId": "04e33773-ea8d-4dfe-9003-310e18b8d5db"
-              },
-              "release_version": "1.0.0"
-            },
-            "inputs": {
-              "membership_id": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "membership_id"
-                }
-              },
-              "expected_membership_revision": {
-                "type": "whole_number",
-                "value": {
-                  "source": "flow_input",
-                  "input": "expected_membership_revision"
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.remove_group_membership"
                 }
               }
-            },
-            "outputs": {
-              "membership_id": {
-                "type": "text",
-                "required": false
-              },
-              "revision": {
-                "type": "whole_number",
-                "required": false
-              },
-              "access_version": {
-                "type": "whole_number",
-                "required": false
-              }
-            },
-            "results": {
-              "membership_id": {
-                "output": "membership_id",
-                "type": "text"
-              },
-              "revision": {
-                "output": "revision",
-                "type": "whole_number"
-              },
-              "access_version": {
-                "output": "access_version",
-                "type": "whole_number"
-              }
             }
-          },
-          {
-            "id": "node_committed",
-            "key": "return_committed",
-            "kind": "return",
-            "outcome": "committed",
-            "results": {
-              "membership_id": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "membership_id"
-              },
-              "revision": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "revision"
-              },
-              "access_version": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "access_version"
-              }
-            }
-          },
-          {
-            "id": "node_refused",
-            "key": "return_refused",
-            "kind": "return",
-            "outcome": "refused",
-            "results": {}
-          },
-          {
-            "id": "node_conflict",
-            "key": "return_conflict",
-            "kind": "return",
-            "outcome": "conflict",
-            "results": {}
-          },
-          {
-            "id": "node_validation",
-            "key": "return_validation",
-            "kind": "return",
-            "outcome": "validation",
-            "results": {}
-          },
-          {
-            "id": "node_failed",
-            "key": "return_failed",
-            "kind": "return",
-            "outcome": "failed",
-            "results": {}
           }
         ],
-        "edges": [
-          {
-            "id": "edge_start",
-            "from_node": "node_start",
-            "to_node": "node_operation"
-          },
-          {
-            "id": "edge_committed",
-            "from_node": "node_operation",
-            "to_node": "node_committed",
-            "outcome": "committed"
-          },
-          {
-            "id": "edge_refused",
-            "from_node": "node_operation",
-            "to_node": "node_refused",
-            "outcome": "refused"
-          },
-          {
-            "id": "edge_conflict",
-            "from_node": "node_operation",
-            "to_node": "node_conflict",
-            "outcome": "conflict"
-          },
-          {
-            "id": "edge_validation",
-            "from_node": "node_operation",
-            "to_node": "node_validation",
-            "outcome": "validation"
-          },
-          {
-            "id": "edge_failed",
-            "from_node": "node_operation",
-            "to_node": "node_failed",
-            "outcome": "failed"
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
           }
-        ]
+        }
       },
       {
+        "contractVersion": "1.0.0",
         "id": "flow_revoke_role_assignment",
         "key": "revoke_role_assignment",
-        "name": "Revoke role assignment",
-        "run_as": "current_user",
+        "labels": {
+          "name": "Revoke role assignment"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
         "inputs": {
           "role_assignment_id": {
             "type": "text",
@@ -5118,192 +3550,47 @@
             "required": true
           }
         },
-        "outputs": {
-          "role_assignment_id": {
-            "type": "text",
-            "required": false
-          },
-          "revision": {
-            "type": "whole_number",
-            "required": false
-          },
-          "access_version": {
-            "type": "whole_number",
-            "required": false
-          }
-        },
-        "variables": {},
-        "nodes": [
+        "tasks": [
           {
-            "id": "node_start",
-            "key": "start",
-            "kind": "start",
-            "outputs": {
-              "role_assignment_id": {
-                "type": "text",
-                "required": true
-              },
-              "expected_assignment_revision": {
-                "type": "whole_number",
-                "required": true
-              }
-            }
-          },
-          {
-            "id": "node_operation",
-            "key": "operation",
-            "kind": "action",
-            "target": {
-              "kind": "protected_operation",
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
               "operation": {
-                "owner": {
-                  "kind": "platform_service",
-                  "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
-                },
-                "operationId": "199901c1-3d3e-4243-9912-1ebcf743a4c4"
-              },
-              "release_version": "1.0.0"
-            },
-            "inputs": {
-              "role_assignment_id": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "role_assignment_id"
-                }
-              },
-              "expected_assignment_revision": {
-                "type": "whole_number",
-                "value": {
-                  "source": "flow_input",
-                  "input": "expected_assignment_revision"
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.revoke_role_assignment"
                 }
               }
-            },
-            "outputs": {
-              "role_assignment_id": {
-                "type": "text",
-                "required": false
-              },
-              "revision": {
-                "type": "whole_number",
-                "required": false
-              },
-              "access_version": {
-                "type": "whole_number",
-                "required": false
-              }
-            },
-            "results": {
-              "role_assignment_id": {
-                "output": "role_assignment_id",
-                "type": "text"
-              },
-              "revision": {
-                "output": "revision",
-                "type": "whole_number"
-              },
-              "access_version": {
-                "output": "access_version",
-                "type": "whole_number"
-              }
             }
-          },
-          {
-            "id": "node_committed",
-            "key": "return_committed",
-            "kind": "return",
-            "outcome": "committed",
-            "results": {
-              "role_assignment_id": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "role_assignment_id"
-              },
-              "revision": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "revision"
-              },
-              "access_version": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "access_version"
-              }
-            }
-          },
-          {
-            "id": "node_refused",
-            "key": "return_refused",
-            "kind": "return",
-            "outcome": "refused",
-            "results": {}
-          },
-          {
-            "id": "node_conflict",
-            "key": "return_conflict",
-            "kind": "return",
-            "outcome": "conflict",
-            "results": {}
-          },
-          {
-            "id": "node_validation",
-            "key": "return_validation",
-            "kind": "return",
-            "outcome": "validation",
-            "results": {}
-          },
-          {
-            "id": "node_failed",
-            "key": "return_failed",
-            "kind": "return",
-            "outcome": "failed",
-            "results": {}
           }
         ],
-        "edges": [
-          {
-            "id": "edge_start",
-            "from_node": "node_start",
-            "to_node": "node_operation"
-          },
-          {
-            "id": "edge_committed",
-            "from_node": "node_operation",
-            "to_node": "node_committed",
-            "outcome": "committed"
-          },
-          {
-            "id": "edge_refused",
-            "from_node": "node_operation",
-            "to_node": "node_refused",
-            "outcome": "refused"
-          },
-          {
-            "id": "edge_conflict",
-            "from_node": "node_operation",
-            "to_node": "node_conflict",
-            "outcome": "conflict"
-          },
-          {
-            "id": "edge_validation",
-            "from_node": "node_operation",
-            "to_node": "node_validation",
-            "outcome": "validation"
-          },
-          {
-            "id": "edge_failed",
-            "from_node": "node_operation",
-            "to_node": "node_failed",
-            "outcome": "failed"
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
           }
-        ]
+        }
       },
       {
+        "contractVersion": "1.0.0",
         "id": "flow_deactivate_role_activation",
         "key": "deactivate_role_activation",
-        "name": "Deactivate role activation",
-        "run_as": "current_user",
+        "labels": {
+          "name": "Deactivate role activation"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
         "inputs": {
           "role_activation_id": {
             "type": "text",
@@ -5314,192 +3601,47 @@
             "required": true
           }
         },
-        "outputs": {
-          "role_activation_id": {
-            "type": "text",
-            "required": false
-          },
-          "revision": {
-            "type": "whole_number",
-            "required": false
-          },
-          "access_version": {
-            "type": "whole_number",
-            "required": false
-          }
-        },
-        "variables": {},
-        "nodes": [
+        "tasks": [
           {
-            "id": "node_start",
-            "key": "start",
-            "kind": "start",
-            "outputs": {
-              "role_activation_id": {
-                "type": "text",
-                "required": true
-              },
-              "expected_activation_revision": {
-                "type": "whole_number",
-                "required": true
-              }
-            }
-          },
-          {
-            "id": "node_operation",
-            "key": "operation",
-            "kind": "action",
-            "target": {
-              "kind": "protected_operation",
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
               "operation": {
-                "owner": {
-                  "kind": "platform_service",
-                  "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
-                },
-                "operationId": "868c640d-4d9f-4f0f-b0fc-268af1764a43"
-              },
-              "release_version": "1.0.0"
-            },
-            "inputs": {
-              "role_activation_id": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "role_activation_id"
-                }
-              },
-              "expected_activation_revision": {
-                "type": "whole_number",
-                "value": {
-                  "source": "flow_input",
-                  "input": "expected_activation_revision"
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.deactivate_role_activation"
                 }
               }
-            },
-            "outputs": {
-              "role_activation_id": {
-                "type": "text",
-                "required": false
-              },
-              "revision": {
-                "type": "whole_number",
-                "required": false
-              },
-              "access_version": {
-                "type": "whole_number",
-                "required": false
-              }
-            },
-            "results": {
-              "role_activation_id": {
-                "output": "role_activation_id",
-                "type": "text"
-              },
-              "revision": {
-                "output": "revision",
-                "type": "whole_number"
-              },
-              "access_version": {
-                "output": "access_version",
-                "type": "whole_number"
-              }
             }
-          },
-          {
-            "id": "node_committed",
-            "key": "return_committed",
-            "kind": "return",
-            "outcome": "committed",
-            "results": {
-              "role_activation_id": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "role_activation_id"
-              },
-              "revision": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "revision"
-              },
-              "access_version": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "access_version"
-              }
-            }
-          },
-          {
-            "id": "node_refused",
-            "key": "return_refused",
-            "kind": "return",
-            "outcome": "refused",
-            "results": {}
-          },
-          {
-            "id": "node_conflict",
-            "key": "return_conflict",
-            "kind": "return",
-            "outcome": "conflict",
-            "results": {}
-          },
-          {
-            "id": "node_validation",
-            "key": "return_validation",
-            "kind": "return",
-            "outcome": "validation",
-            "results": {}
-          },
-          {
-            "id": "node_failed",
-            "key": "return_failed",
-            "kind": "return",
-            "outcome": "failed",
-            "results": {}
           }
         ],
-        "edges": [
-          {
-            "id": "edge_start",
-            "from_node": "node_start",
-            "to_node": "node_operation"
-          },
-          {
-            "id": "edge_committed",
-            "from_node": "node_operation",
-            "to_node": "node_committed",
-            "outcome": "committed"
-          },
-          {
-            "id": "edge_refused",
-            "from_node": "node_operation",
-            "to_node": "node_refused",
-            "outcome": "refused"
-          },
-          {
-            "id": "edge_conflict",
-            "from_node": "node_operation",
-            "to_node": "node_conflict",
-            "outcome": "conflict"
-          },
-          {
-            "id": "edge_validation",
-            "from_node": "node_operation",
-            "to_node": "node_validation",
-            "outcome": "validation"
-          },
-          {
-            "id": "edge_failed",
-            "from_node": "node_operation",
-            "to_node": "node_failed",
-            "outcome": "failed"
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
           }
-        ]
+        }
       },
       {
+        "contractVersion": "1.0.0",
         "id": "flow_revoke_delegation_authority",
         "key": "revoke_delegation_authority",
-        "name": "Revoke delegation authority",
-        "run_as": "current_user",
+        "labels": {
+          "name": "Revoke delegation authority"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
         "inputs": {
           "delegation_authority_id": {
             "type": "text",
@@ -5510,715 +3652,35 @@
             "required": true
           }
         },
-        "outputs": {
-          "delegation_authority_id": {
-            "type": "text",
-            "required": false
-          },
-          "revision": {
-            "type": "whole_number",
-            "required": false
-          },
-          "access_version": {
-            "type": "whole_number",
-            "required": false
-          }
-        },
-        "variables": {},
-        "nodes": [
+        "tasks": [
           {
-            "id": "node_start",
-            "key": "start",
-            "kind": "start",
-            "outputs": {
-              "delegation_authority_id": {
-                "type": "text",
-                "required": true
-              },
-              "expected_delegation_revision": {
-                "type": "whole_number",
-                "required": true
-              }
-            }
-          },
-          {
-            "id": "node_operation",
-            "key": "operation",
-            "kind": "action",
-            "target": {
-              "kind": "protected_operation",
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
               "operation": {
-                "owner": {
-                  "kind": "platform_service",
-                  "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
-                },
-                "operationId": "d476aab8-f06d-416b-a28f-fb4a7c4a8729"
-              },
-              "release_version": "1.0.0"
-            },
-            "inputs": {
-              "delegation_authority_id": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "delegation_authority_id"
-                }
-              },
-              "expected_delegation_revision": {
-                "type": "whole_number",
-                "value": {
-                  "source": "flow_input",
-                  "input": "expected_delegation_revision"
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.revoke_delegation_authority"
                 }
               }
-            },
-            "outputs": {
-              "delegation_authority_id": {
-                "type": "text",
-                "required": false
-              },
-              "revision": {
-                "type": "whole_number",
-                "required": false
-              },
-              "access_version": {
-                "type": "whole_number",
-                "required": false
-              }
-            },
-            "results": {
-              "delegation_authority_id": {
-                "output": "delegation_authority_id",
-                "type": "text"
-              },
-              "revision": {
-                "output": "revision",
-                "type": "whole_number"
-              },
-              "access_version": {
-                "output": "access_version",
-                "type": "whole_number"
-              }
             }
-          },
-          {
-            "id": "node_committed",
-            "key": "return_committed",
-            "kind": "return",
-            "outcome": "committed",
-            "results": {
-              "delegation_authority_id": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "delegation_authority_id"
-              },
-              "revision": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "revision"
-              },
-              "access_version": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "access_version"
-              }
-            }
-          },
-          {
-            "id": "node_refused",
-            "key": "return_refused",
-            "kind": "return",
-            "outcome": "refused",
-            "results": {}
-          },
-          {
-            "id": "node_conflict",
-            "key": "return_conflict",
-            "kind": "return",
-            "outcome": "conflict",
-            "results": {}
-          },
-          {
-            "id": "node_validation",
-            "key": "return_validation",
-            "kind": "return",
-            "outcome": "validation",
-            "results": {}
-          },
-          {
-            "id": "node_failed",
-            "key": "return_failed",
-            "kind": "return",
-            "outcome": "failed",
-            "results": {}
           }
         ],
-        "edges": [
-          {
-            "id": "edge_start",
-            "from_node": "node_start",
-            "to_node": "node_operation"
-          },
-          {
-            "id": "edge_committed",
-            "from_node": "node_operation",
-            "to_node": "node_committed",
-            "outcome": "committed"
-          },
-          {
-            "id": "edge_refused",
-            "from_node": "node_operation",
-            "to_node": "node_refused",
-            "outcome": "refused"
-          },
-          {
-            "id": "edge_conflict",
-            "from_node": "node_operation",
-            "to_node": "node_conflict",
-            "outcome": "conflict"
-          },
-          {
-            "id": "edge_validation",
-            "from_node": "node_operation",
-            "to_node": "node_validation",
-            "outcome": "validation"
-          },
-          {
-            "id": "edge_failed",
-            "from_node": "node_operation",
-            "to_node": "node_failed",
-            "outcome": "failed"
-          }
-        ]
-      },
-      {
-        "id": "flow_add_group_membership",
-        "key": "add_group_membership",
-        "name": "Add group membership",
-        "run_as": "current_user",
-        "inputs": {
-          "membership_id": {
-            "type": "text",
-            "required": true
-          },
-          "group_id": {
-            "type": "text",
-            "required": true
-          },
-          "organization_account_id": {
-            "type": "text",
-            "required": true
-          },
-          "starts_at": {
-            "type": "text",
-            "required": true
-          },
-          "expires_at": {
-            "type": "text",
-            "required": false
-          }
-        },
         "outputs": {
-          "membership_id": {
-            "type": "text",
-            "required": false
-          },
-          "revision": {
-            "type": "whole_number",
-            "required": false
-          },
-          "access_version": {
-            "type": "whole_number",
-            "required": false
-          }
-        },
-        "variables": {},
-        "nodes": [
-          {
-            "id": "node_start",
-            "key": "start",
-            "kind": "start",
-            "outputs": {
-              "membership_id": {
-                "type": "text",
-                "required": true
-              },
-              "group_id": {
-                "type": "text",
-                "required": true
-              },
-              "organization_account_id": {
-                "type": "text",
-                "required": true
-              },
-              "starts_at": {
-                "type": "text",
-                "required": true
-              },
-              "expires_at": {
-                "type": "text",
-                "required": false
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
               }
             }
-          },
-          {
-            "id": "node_operation",
-            "key": "operation",
-            "kind": "action",
-            "target": {
-              "kind": "protected_operation",
-              "operation": {
-                "owner": {
-                  "kind": "platform_service",
-                  "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
-                },
-                "operationId": "368bb023-3059-48b9-82e2-45df9832e65d"
-              },
-              "release_version": "1.0.0"
-            },
-            "inputs": {
-              "membership_id": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "membership_id"
-                }
-              },
-              "group_id": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "group_id"
-                }
-              },
-              "organization_account_id": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "organization_account_id"
-                }
-              },
-              "starts_at": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "starts_at"
-                }
-              },
-              "expires_at": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "expires_at"
-                }
-              }
-            },
-            "outputs": {
-              "membership_id": {
-                "type": "text",
-                "required": false
-              },
-              "revision": {
-                "type": "whole_number",
-                "required": false
-              },
-              "access_version": {
-                "type": "whole_number",
-                "required": false
-              }
-            },
-            "results": {
-              "membership_id": {
-                "output": "membership_id",
-                "type": "text"
-              },
-              "revision": {
-                "output": "revision",
-                "type": "whole_number"
-              },
-              "access_version": {
-                "output": "access_version",
-                "type": "whole_number"
-              }
-            }
-          },
-          {
-            "id": "node_committed",
-            "key": "return_committed",
-            "kind": "return",
-            "outcome": "committed",
-            "results": {
-              "membership_id": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "membership_id"
-              },
-              "revision": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "revision"
-              },
-              "access_version": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "access_version"
-              }
-            }
-          },
-          {
-            "id": "node_refused",
-            "key": "return_refused",
-            "kind": "return",
-            "outcome": "refused",
-            "results": {}
-          },
-          {
-            "id": "node_validation",
-            "key": "return_validation",
-            "kind": "return",
-            "outcome": "validation",
-            "results": {}
-          },
-          {
-            "id": "node_failed",
-            "key": "return_failed",
-            "kind": "return",
-            "outcome": "failed",
-            "results": {}
           }
-        ],
-        "edges": [
-          {
-            "id": "edge_start",
-            "from_node": "node_start",
-            "to_node": "node_operation"
-          },
-          {
-            "id": "edge_committed",
-            "from_node": "node_operation",
-            "to_node": "node_committed",
-            "outcome": "committed"
-          },
-          {
-            "id": "edge_refused",
-            "from_node": "node_operation",
-            "to_node": "node_refused",
-            "outcome": "refused"
-          },
-          {
-            "id": "edge_validation",
-            "from_node": "node_operation",
-            "to_node": "node_validation",
-            "outcome": "validation"
-          },
-          {
-            "id": "edge_failed",
-            "from_node": "node_operation",
-            "to_node": "node_failed",
-            "outcome": "failed"
-          }
-        ]
-      },
-      {
-        "id": "flow_assign_role_assignment",
-        "key": "assign_role_assignment",
-        "name": "Assign role",
-        "run_as": "current_user",
-        "inputs": {
-          "role_assignment_id": {
-            "type": "text",
-            "required": true
-          },
-          "role_id": {
-            "type": "text",
-            "required": true
-          },
-          "expected_role_revision": {
-            "type": "whole_number",
-            "required": true
-          },
-          "assignee_kind": {
-            "type": "choice",
-            "required": true
-          },
-          "organization_account_id": {
-            "type": "text",
-            "required": false
-          },
-          "group_id": {
-            "type": "text",
-            "required": false
-          },
-          "assignment_kind": {
-            "type": "choice",
-            "required": true
-          },
-          "starts_at": {
-            "type": "text",
-            "required": true
-          },
-          "expires_at": {
-            "type": "text",
-            "required": false
-          }
-        },
-        "outputs": {
-          "role_assignment_id": {
-            "type": "text",
-            "required": false
-          },
-          "revision": {
-            "type": "whole_number",
-            "required": false
-          },
-          "access_version": {
-            "type": "whole_number",
-            "required": false
-          }
-        },
-        "variables": {},
-        "nodes": [
-          {
-            "id": "node_start",
-            "key": "start",
-            "kind": "start",
-            "outputs": {
-              "role_assignment_id": {
-                "type": "text",
-                "required": true
-              },
-              "role_id": {
-                "type": "text",
-                "required": true
-              },
-              "expected_role_revision": {
-                "type": "whole_number",
-                "required": true
-              },
-              "assignee_kind": {
-                "type": "choice",
-                "required": true
-              },
-              "organization_account_id": {
-                "type": "text",
-                "required": false
-              },
-              "group_id": {
-                "type": "text",
-                "required": false
-              },
-              "assignment_kind": {
-                "type": "choice",
-                "required": true
-              },
-              "starts_at": {
-                "type": "text",
-                "required": true
-              },
-              "expires_at": {
-                "type": "text",
-                "required": false
-              }
-            }
-          },
-          {
-            "id": "node_operation",
-            "key": "operation",
-            "kind": "action",
-            "target": {
-              "kind": "protected_operation",
-              "operation": {
-                "owner": {
-                  "kind": "platform_service",
-                  "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
-                },
-                "operationId": "0913006c-ea2a-49a9-bff9-6e1d53c8f2db"
-              },
-              "release_version": "1.0.0"
-            },
-            "inputs": {
-              "role_assignment_id": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "role_assignment_id"
-                }
-              },
-              "role_id": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "role_id"
-                }
-              },
-              "expected_role_revision": {
-                "type": "whole_number",
-                "value": {
-                  "source": "flow_input",
-                  "input": "expected_role_revision"
-                }
-              },
-              "assignee_kind": {
-                "type": "choice",
-                "value": {
-                  "source": "flow_input",
-                  "input": "assignee_kind"
-                }
-              },
-              "organization_account_id": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "organization_account_id"
-                }
-              },
-              "group_id": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "group_id"
-                }
-              },
-              "assignment_kind": {
-                "type": "choice",
-                "value": {
-                  "source": "flow_input",
-                  "input": "assignment_kind"
-                }
-              },
-              "starts_at": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "starts_at"
-                }
-              },
-              "expires_at": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "expires_at"
-                }
-              }
-            },
-            "outputs": {
-              "role_assignment_id": {
-                "type": "text",
-                "required": false
-              },
-              "revision": {
-                "type": "whole_number",
-                "required": false
-              },
-              "access_version": {
-                "type": "whole_number",
-                "required": false
-              }
-            },
-            "results": {
-              "role_assignment_id": {
-                "output": "role_assignment_id",
-                "type": "text"
-              },
-              "revision": {
-                "output": "revision",
-                "type": "whole_number"
-              },
-              "access_version": {
-                "output": "access_version",
-                "type": "whole_number"
-              }
-            }
-          },
-          {
-            "id": "node_committed",
-            "key": "return_committed",
-            "kind": "return",
-            "outcome": "committed",
-            "results": {
-              "role_assignment_id": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "role_assignment_id"
-              },
-              "revision": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "revision"
-              },
-              "access_version": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "access_version"
-              }
-            }
-          },
-          {
-            "id": "node_refused",
-            "key": "return_refused",
-            "kind": "return",
-            "outcome": "refused",
-            "results": {}
-          },
-          {
-            "id": "node_conflict",
-            "key": "return_conflict",
-            "kind": "return",
-            "outcome": "conflict",
-            "results": {}
-          },
-          {
-            "id": "node_validation",
-            "key": "return_validation",
-            "kind": "return",
-            "outcome": "validation",
-            "results": {}
-          },
-          {
-            "id": "node_failed",
-            "key": "return_failed",
-            "kind": "return",
-            "outcome": "failed",
-            "results": {}
-          }
-        ],
-        "edges": [
-          {
-            "id": "edge_start",
-            "from_node": "node_start",
-            "to_node": "node_operation"
-          },
-          {
-            "id": "edge_committed",
-            "from_node": "node_operation",
-            "to_node": "node_committed",
-            "outcome": "committed"
-          },
-          {
-            "id": "edge_refused",
-            "from_node": "node_operation",
-            "to_node": "node_refused",
-            "outcome": "refused"
-          },
-          {
-            "id": "edge_conflict",
-            "from_node": "node_operation",
-            "to_node": "node_conflict",
-            "outcome": "conflict"
-          },
-          {
-            "id": "edge_validation",
-            "from_node": "node_operation",
-            "to_node": "node_validation",
-            "outcome": "validation"
-          },
-          {
-            "id": "edge_failed",
-            "from_node": "node_operation",
-            "to_node": "node_failed",
-            "outcome": "failed"
-          }
-        ]
+        }
       }
     ],
     "flow_bindings": [
@@ -6227,599 +3689,165 @@
         "control": "button_revise_role_metadata",
         "event_id": "event_iam_administration_action",
         "event": "action",
-        "flow": {
-          "kind": "application_owned",
-          "flow": "flow_revise_role_metadata"
-        },
+        "flow": "flow_revise_role_metadata",
         "inputs": {
           "role_id": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_revise_role_metadata",
-              "input": "role_id"
-            }
+            "kind": "caller",
+            "name": "role_id"
           },
           "expected_role_revision": {
-            "type": "whole_number",
-            "value": {
-              "source": "form_input",
-              "form": "form_revise_role_metadata",
-              "input": "expected_role_revision"
-            }
+            "kind": "caller",
+            "name": "expected_role_revision"
           },
           "label": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_revise_role_metadata",
-              "input": "label"
-            }
+            "kind": "caller",
+            "name": "label"
           },
           "description": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_revise_role_metadata",
-              "input": "description"
-            }
+            "kind": "caller",
+            "name": "description"
           }
-        },
-        "results": {
-          "role_id": {
-            "output": "role_id",
-            "type": "text"
-          },
-          "revision": {
-            "output": "revision",
-            "type": "whole_number"
-          },
-          "access_version": {
-            "output": "access_version",
-            "type": "whole_number"
-          }
-        },
-        "declared_effects": [
-          "change"
-        ]
+        }
       },
       {
         "id": "binding_retire_role",
         "control": "button_retire_role",
         "event_id": "event_iam_administration_action",
         "event": "action",
-        "flow": {
-          "kind": "application_owned",
-          "flow": "flow_retire_role"
-        },
+        "flow": "flow_retire_role",
         "inputs": {
           "role_id": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_retire_role",
-              "input": "role_id"
-            }
+            "kind": "caller",
+            "name": "role_id"
           },
           "expected_role_revision": {
-            "type": "whole_number",
-            "value": {
-              "source": "form_input",
-              "form": "form_retire_role",
-              "input": "expected_role_revision"
-            }
+            "kind": "caller",
+            "name": "expected_role_revision"
           }
-        },
-        "results": {
-          "role_id": {
-            "output": "role_id",
-            "type": "text"
-          },
-          "revision": {
-            "output": "revision",
-            "type": "whole_number"
-          },
-          "access_version": {
-            "output": "access_version",
-            "type": "whole_number"
-          }
-        },
-        "declared_effects": [
-          "change"
-        ]
+        }
       },
       {
         "id": "binding_create_group",
         "control": "button_create_group",
         "event_id": "event_iam_administration_action",
         "event": "action",
-        "flow": {
-          "kind": "application_owned",
-          "flow": "flow_create_group"
-        },
+        "flow": "flow_create_group",
         "inputs": {
           "group_key": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_create_group",
-              "input": "group_key"
-            }
+            "kind": "caller",
+            "name": "group_key"
           },
           "label": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_create_group",
-              "input": "label"
-            }
+            "kind": "caller",
+            "name": "label"
           }
-        },
-        "results": {
-          "group_id": {
-            "output": "group_id",
-            "type": "text"
-          },
-          "revision": {
-            "output": "revision",
-            "type": "whole_number"
-          },
-          "access_version": {
-            "output": "access_version",
-            "type": "whole_number"
-          }
-        },
-        "declared_effects": [
-          "change"
-        ]
+        }
       },
       {
         "id": "binding_rename_group",
         "control": "button_rename_group",
         "event_id": "event_iam_administration_action",
         "event": "action",
-        "flow": {
-          "kind": "application_owned",
-          "flow": "flow_rename_group"
-        },
+        "flow": "flow_rename_group",
         "inputs": {
           "group_id": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_rename_group",
-              "input": "group_id"
-            }
+            "kind": "caller",
+            "name": "group_id"
           },
           "expected_group_revision": {
-            "type": "whole_number",
-            "value": {
-              "source": "form_input",
-              "form": "form_rename_group",
-              "input": "expected_group_revision"
-            }
+            "kind": "caller",
+            "name": "expected_group_revision"
           },
           "label": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_rename_group",
-              "input": "label"
-            }
+            "kind": "caller",
+            "name": "label"
           }
-        },
-        "results": {
-          "group_id": {
-            "output": "group_id",
-            "type": "text"
-          },
-          "revision": {
-            "output": "revision",
-            "type": "whole_number"
-          },
-          "access_version": {
-            "output": "access_version",
-            "type": "whole_number"
-          }
-        },
-        "declared_effects": [
-          "change"
-        ]
+        }
       },
       {
         "id": "binding_retire_group",
         "control": "button_retire_group",
         "event_id": "event_iam_administration_action",
         "event": "action",
-        "flow": {
-          "kind": "application_owned",
-          "flow": "flow_retire_group"
-        },
+        "flow": "flow_retire_group",
         "inputs": {
           "group_id": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_retire_group",
-              "input": "group_id"
-            }
+            "kind": "caller",
+            "name": "group_id"
           },
           "expected_group_revision": {
-            "type": "whole_number",
-            "value": {
-              "source": "form_input",
-              "form": "form_retire_group",
-              "input": "expected_group_revision"
-            }
+            "kind": "caller",
+            "name": "expected_group_revision"
           }
-        },
-        "results": {
-          "group_id": {
-            "output": "group_id",
-            "type": "text"
-          },
-          "revision": {
-            "output": "revision",
-            "type": "whole_number"
-          },
-          "access_version": {
-            "output": "access_version",
-            "type": "whole_number"
-          }
-        },
-        "declared_effects": [
-          "change"
-        ]
+        }
       },
       {
         "id": "binding_remove_group_membership",
         "control": "button_remove_group_membership",
         "event_id": "event_iam_administration_action",
         "event": "action",
-        "flow": {
-          "kind": "application_owned",
-          "flow": "flow_remove_group_membership"
-        },
+        "flow": "flow_remove_group_membership",
         "inputs": {
           "membership_id": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_remove_group_membership",
-              "input": "membership_id"
-            }
+            "kind": "caller",
+            "name": "membership_id"
           },
           "expected_membership_revision": {
-            "type": "whole_number",
-            "value": {
-              "source": "form_input",
-              "form": "form_remove_group_membership",
-              "input": "expected_membership_revision"
-            }
+            "kind": "caller",
+            "name": "expected_membership_revision"
           }
-        },
-        "results": {
-          "membership_id": {
-            "output": "membership_id",
-            "type": "text"
-          },
-          "revision": {
-            "output": "revision",
-            "type": "whole_number"
-          },
-          "access_version": {
-            "output": "access_version",
-            "type": "whole_number"
-          }
-        },
-        "declared_effects": [
-          "change"
-        ]
+        }
       },
       {
         "id": "binding_revoke_role_assignment",
         "control": "button_revoke_role_assignment",
         "event_id": "event_iam_administration_action",
         "event": "action",
-        "flow": {
-          "kind": "application_owned",
-          "flow": "flow_revoke_role_assignment"
-        },
+        "flow": "flow_revoke_role_assignment",
         "inputs": {
           "role_assignment_id": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_revoke_role_assignment",
-              "input": "role_assignment_id"
-            }
+            "kind": "caller",
+            "name": "role_assignment_id"
           },
           "expected_assignment_revision": {
-            "type": "whole_number",
-            "value": {
-              "source": "form_input",
-              "form": "form_revoke_role_assignment",
-              "input": "expected_assignment_revision"
-            }
+            "kind": "caller",
+            "name": "expected_assignment_revision"
           }
-        },
-        "results": {
-          "role_assignment_id": {
-            "output": "role_assignment_id",
-            "type": "text"
-          },
-          "revision": {
-            "output": "revision",
-            "type": "whole_number"
-          },
-          "access_version": {
-            "output": "access_version",
-            "type": "whole_number"
-          }
-        },
-        "declared_effects": [
-          "change"
-        ]
+        }
       },
       {
         "id": "binding_deactivate_role_activation",
         "control": "button_deactivate_role_activation",
         "event_id": "event_iam_administration_action",
         "event": "action",
-        "flow": {
-          "kind": "application_owned",
-          "flow": "flow_deactivate_role_activation"
-        },
+        "flow": "flow_deactivate_role_activation",
         "inputs": {
           "role_activation_id": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_deactivate_role_activation",
-              "input": "role_activation_id"
-            }
+            "kind": "caller",
+            "name": "role_activation_id"
           },
           "expected_activation_revision": {
-            "type": "whole_number",
-            "value": {
-              "source": "form_input",
-              "form": "form_deactivate_role_activation",
-              "input": "expected_activation_revision"
-            }
+            "kind": "caller",
+            "name": "expected_activation_revision"
           }
-        },
-        "results": {
-          "role_activation_id": {
-            "output": "role_activation_id",
-            "type": "text"
-          },
-          "revision": {
-            "output": "revision",
-            "type": "whole_number"
-          },
-          "access_version": {
-            "output": "access_version",
-            "type": "whole_number"
-          }
-        },
-        "declared_effects": [
-          "change"
-        ]
+        }
       },
       {
         "id": "binding_revoke_delegation_authority",
         "control": "button_revoke_delegation_authority",
         "event_id": "event_iam_administration_action",
         "event": "action",
-        "flow": {
-          "kind": "application_owned",
-          "flow": "flow_revoke_delegation_authority"
-        },
+        "flow": "flow_revoke_delegation_authority",
         "inputs": {
           "delegation_authority_id": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_revoke_delegation_authority",
-              "input": "delegation_authority_id"
-            }
+            "kind": "caller",
+            "name": "delegation_authority_id"
           },
           "expected_delegation_revision": {
-            "type": "whole_number",
-            "value": {
-              "source": "form_input",
-              "form": "form_revoke_delegation_authority",
-              "input": "expected_delegation_revision"
-            }
+            "kind": "caller",
+            "name": "expected_delegation_revision"
           }
-        },
-        "results": {
-          "delegation_authority_id": {
-            "output": "delegation_authority_id",
-            "type": "text"
-          },
-          "revision": {
-            "output": "revision",
-            "type": "whole_number"
-          },
-          "access_version": {
-            "output": "access_version",
-            "type": "whole_number"
-          }
-        },
-        "declared_effects": [
-          "change"
-        ]
-      },
-      {
-        "id": "binding_add_group_membership",
-        "control": "button_add_group_membership",
-        "event_id": "event_iam_administration_action",
-        "event": "action",
-        "flow": {
-          "kind": "application_owned",
-          "flow": "flow_add_group_membership"
-        },
-        "inputs": {
-          "membership_id": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_add_group_membership",
-              "input": "membership_id"
-            }
-          },
-          "group_id": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_add_group_membership",
-              "input": "group_id"
-            }
-          },
-          "organization_account_id": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_add_group_membership",
-              "input": "organization_account_id"
-            }
-          },
-          "starts_at": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_add_group_membership",
-              "input": "starts_at"
-            }
-          },
-          "expires_at": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_add_group_membership",
-              "input": "expires_at"
-            }
-          }
-        },
-        "results": {
-          "membership_id": {
-            "output": "membership_id",
-            "type": "text"
-          },
-          "revision": {
-            "output": "revision",
-            "type": "whole_number"
-          },
-          "access_version": {
-            "output": "access_version",
-            "type": "whole_number"
-          }
-        },
-        "declared_effects": [
-          "change"
-        ]
-      },
-      {
-        "id": "binding_assign_role_assignment",
-        "control": "button_assign_role_assignment",
-        "event_id": "event_iam_administration_action",
-        "event": "action",
-        "flow": {
-          "kind": "application_owned",
-          "flow": "flow_assign_role_assignment"
-        },
-        "inputs": {
-          "role_assignment_id": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_assign_role_assignment",
-              "input": "role_assignment_id"
-            }
-          },
-          "role_id": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_assign_role_assignment",
-              "input": "role_id"
-            }
-          },
-          "expected_role_revision": {
-            "type": "whole_number",
-            "value": {
-              "source": "form_input",
-              "form": "form_assign_role_assignment",
-              "input": "expected_role_revision"
-            }
-          },
-          "assignee_kind": {
-            "type": "choice",
-            "value": {
-              "source": "form_input",
-              "form": "form_assign_role_assignment",
-              "input": "assignee_kind"
-            }
-          },
-          "organization_account_id": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_assign_role_assignment",
-              "input": "organization_account_id"
-            }
-          },
-          "group_id": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_assign_role_assignment",
-              "input": "group_id"
-            }
-          },
-          "assignment_kind": {
-            "type": "choice",
-            "value": {
-              "source": "form_input",
-              "form": "form_assign_role_assignment",
-              "input": "assignment_kind"
-            }
-          },
-          "starts_at": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_assign_role_assignment",
-              "input": "starts_at"
-            }
-          },
-          "expires_at": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_assign_role_assignment",
-              "input": "expires_at"
-            }
-          }
-        },
-        "results": {
-          "role_assignment_id": {
-            "output": "role_assignment_id",
-            "type": "text"
-          },
-          "revision": {
-            "output": "revision",
-            "type": "whole_number"
-          },
-          "access_version": {
-            "output": "access_version",
-            "type": "whole_number"
-          }
-        },
-        "declared_effects": [
-          "change"
-        ]
+        }
       }
     ]
   }
