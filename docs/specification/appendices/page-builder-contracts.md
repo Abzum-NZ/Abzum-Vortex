@@ -188,8 +188,8 @@ The HR application in [#251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251
 
 | Area             | Approved example behavior                                                                                                                                                                  |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Records          | Employees, Departments, Positions and Leave Requests, with explicit relationships.                                                                                                         |
-| Employee         | Own private employee details and own leave requests. Any broader directory projection must be explicitly allowed by the application definition.                                            |
+| Records          | Employees, Departments, Positions and Leave Requests, with explicit relationships. An Employee links to the People system record type and never duplicates organisation-wide person details. |
+| Employee         | Own private HR details and own leave requests. Organisation-wide details such as department, job title, manager and cost centre are organisation-added fields on the People system record type. Any broader directory projection must be explicitly allowed by the application definition. |
 | Manager          | Permitted direct-report details and their leave requests through the declared manager relationship.                                                                                        |
 | HR administrator | Manage this HR application's records within the current organisation. No implicit platform administration.                                                                                 |
 | Leave request    | Employee submits; current designated manager approves/refuses; an authorised HR administrator is the fallback when there is no eligible manager or reassignment is required.               |
@@ -197,6 +197,8 @@ The HR application in [#251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251
 | Limits           | No payroll, statutory policy, accrued balances, leave entitlement or country-specific calculation.                                                                                         |
 
 The user approved the no-self-approval rule for this example; it is not a legal or platform requirement. All actor selection, statuses, access conditions and fallback behavior live in editable application definitions. A department move or manager change must affect subsequent authority checks; an already-open screen is not authority.
+
+The Employee record links to the People system record type through an ordinary link. Organisation-wide person details are organisation-added fields on that system record type, and a link to a person or a group is an ordinary link to the People or Group system record type, so the example builds no second people directory and needs no special person field type.
 
 Write the full HR JSON fixture set first, including the future workflow definition. Phase 7 delivers the editable HR application; Phase 9 adds its workflow through the generic workflow owners.
 

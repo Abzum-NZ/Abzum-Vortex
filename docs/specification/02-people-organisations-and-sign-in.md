@@ -205,6 +205,10 @@ The [verified recent-authentication contract](appendices/recent-authentication.m
 - One organisation account may belong to several groups. Groups belong to one organisation and may receive roles, application access, and direct record shares.
 - Group membership changes affect the next request and appear in [activity history](14-activity-privacy-and-retention.md).
 
+## Organisation fields on people, groups and the organisation
+
+People (organisation accounts), Groups and the organisation's own profile are read-only [system record types](appendices/core-contract-boundary.md#system-modules) projected from protected Identity and Access storage. An organisation may add its own fields to them through the system module's declared [extension points](05-modules-fields-and-relationships.md#extension-points) — for example department, job title, manager or cost centre on a person. Those values are ordinary organisation data keyed to the system record, stored beside the protected fact, changed through the ordinary record-change command under their own field permissions, and usable in lists, filters, rules, queries and access conditions. They never change the protected identity, membership, lifecycle or organisation fact, and another organisation never sees them. A link to a person or to a group is an ordinary link to the People or Group system record type.
+
 ## Organisation launcher and sign-in experience
 
 Public entry pages must reflect the current request's session state. A verified
@@ -248,7 +252,7 @@ An organisation-branded address may start a branded sign-in journey, but the add
 
 ## Application access
 
-An organisation account does not automatically grant every [application](07-applications-pages-and-themes.md). Application access comes from an application role or explicit application assignment under [access and permissions](04-access-and-permissions.md). A person-link field that requires application access checks the linked organisation account in the current organisation, never the global identity alone.
+An organisation account does not automatically grant every [application](07-applications-pages-and-themes.md). Application access comes from an application role or explicit application assignment under [access and permissions](04-access-and-permissions.md). An [ordinary link to a person](05-modules-fields-and-relationships.md#field-types) whose application-access setting is set checks the linked organisation account in the current organisation, never the global identity alone.
 
 The organisation manages its complete role and permission catalogue, including application-role registrations and custom roles spanning selected applications. Registering an application contributes templates and declared permissions, not automatic assignments. The [explicit initial organisation steward](04-access-and-permissions.md#initial-organisation-stewardship) can manage who receives access without receiving business-data access personally; tenant administration remains separately scoped. Existing organisations require deliberate steward adoption, not a migration that guesses the first account or tenant administrator.
 

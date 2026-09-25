@@ -118,9 +118,8 @@ An input label or input display-order change is patch. Adding an optional input,
 | Phone number | Default-country display/default hint | — | — |
 | Web address | — | Proven allowed-scheme widening | Narrowing; omitted and HTTPS-only are equivalent in the first release |
 | Table | Column order | Add optional column; lower minimum rows; raise maximum rows | Add required column; remove/change column; raise minimum; lower maximum |
-| Link | — | — | Target, reverse key, or parent-delete change |
+| Link | — | — | Target, reverse key, parent-delete or application-access requirement change |
 | Link to one of several | Target order | Add target | Remove target or change delete behaviour |
-| Link to person | — | — | Any setting change unless a future contract proves a relaxation |
 | Calculation | — | — | Result, expression, or dependency change |
 | Total | — | — | Relationship, operation, field, filter, or currency change |
 | Attachment | Kind/extension order | Add kind/extension; increase file-size or count limit | Remove kind/extension; decrease limit; change multiplicity |
