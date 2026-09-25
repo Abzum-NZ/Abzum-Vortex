@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
-import type { PlatformBlockRenderProps } from "../registry";
-import { DisplayHeader, resolveDisplayContext } from "./controls";
+import { DisplayHeader, resolveDisplayContext, type DisplayRenderProps } from "./controls";
 import { DisplayStateContainer } from "./display-state-container";
+import type { RichTextPayload } from "./projected-data";
 import { RichTextDocumentView } from "./rich-text";
 
 /**
@@ -10,24 +10,24 @@ import { RichTextDocumentView } from "./rich-text";
  * setting when no projection is supplied, as React elements only: never raw HTML or
  * dangerouslySetInnerHTML. Never executes or fetches a Query.
  */
-export function RichTextDisplay(props: PlatformBlockRenderProps): ReactElement {
+export function RichTextDisplay(props: DisplayRenderProps<RichTextPayload>): ReactElement {
   const literal = Object.hasOwn(props.settings, "document") ? props.settings.document : undefined;
-  const effectiveProps: PlatformBlockRenderProps =
-    props.projectedData === undefined && literal?.kind === "rich_text"
+  const effectiveProps: DisplayRenderProps<RichTextPayload> =
+    props.data === undefined && literal?.kind === "rich_text"
       ? {
           ...props,
-          projectedData: {
+          data: {
             status: "ready",
             values: { kind: "rich_text", document: literal.value },
           },
         }
       : props;
-  const { title, accessibleName, values, state, emptyMessage, events } = resolveDisplayContext(
-    effectiveProps,
-    "rich_text",
-    (richText) => richText.document.blocks.length === 0,
-    "No content to show",
-  );
+  const { title, accessibleName, values, state, emptyMessage, events } =
+    resolveDisplayContext<RichTextPayload>(
+      effectiveProps,
+      (richText) => richText.document.blocks.length === 0,
+      "No content to show",
+    );
 
   return (
     <DisplayStateContainer

@@ -8,18 +8,159 @@ import {
   type PlatformBlockReleaseV2,
   type ProjectedNavigation,
 } from "@vortex/contracts";
-import { DefinitionRenderError, type Breakpoint } from "./definition-error";
-import type {
-  DisplayEventHandlers,
-  ProjectedDisplayData,
-} from "./display/projected-data";
-import type {
-  ControlEventHandlers,
-  ProjectedControlData,
-} from "./controls/projected-data";
+import {
+  DefinitionRenderError,
+  type Breakpoint,
+  type DefinitionRenderErrorLocation,
+} from "./definition-error";
 
 /**
- * Properties passed to a platform block's React renderer.
+ * The one generic runtime-input map a placement's renderer receives. Every component-specific
+ * input arrives here under a name its own registration declares, so the renderer itself names no
+ * payload field, event or callback, and a new data component needs no renderer change.
+ */
+export type PlatformBlockRuntimeInputs = Readonly<Record<string, unknown>>;
+
+/**
+ * One registration's fail-closed payload parser. It validates the raw runtime inputs supplied for
+ * one placement identity and returns the frozen inputs that block's own renderer may read. A
+ * supplied input that is unknown to that block, or shared with another block, is refused; an
+ * absent input stays absent.
+ */
+export type PlatformComponentPayloadParser = (
+  inputs: unknown,
+  location: DefinitionRenderErrorLocation,
+) => PlatformBlockRuntimeInputs;
+
+/** Raw, not yet validated component runtime inputs keyed by stable placement identity. */
+export type RuntimeInputsByPlacement = Readonly<Record<string, unknown>>;
+
+/** The runtime inputs of a placement that declares none. */
+export const EMPTY_RUNTIME_INPUTS: PlatformBlockRuntimeInputs = Object.freeze({});
+
+/**
+ * The parser for a block that binds no runtime input at all: a purely authored, purely structural
+ * or purely navigational block. Any supplied input is refused, so a binding can never turn such a
+ * block into a data surface.
+ */
+export const noRuntimeInputs: PlatformComponentPayloadParser = (inputs, location) => {
+  if (inputs === undefined) return EMPTY_RUNTIME_INPUTS;
+  if (typeof inputs !== "object" || inputs === null || Array.isArray(inputs))
+    throw new DefinitionRenderError(
+      "INVALID_COMPOSITION",
+      "Component runtime inputs must be an object",
+      location,
+    );
+  const supplied = Object.keys(inputs);
+  if (supplied.length === 0) return EMPTY_RUNTIME_INPUTS;
+  throw new DefinitionRenderError(
+    "INVALID_COMPOSITION",
+    `This block accepts no runtime input, but '${supplied.join(", ")}' was supplied`,
+    location,
+  );
+};
+
+/** How one registration reads one of the runtime inputs it declares. */
+export type RuntimeInputReader = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+) => unknown;
+
+/**
+ * Prop names every block always receives from the page renderer. A runtime input can never use one,
+ * so a supplied input cannot stand in for a placement's identity, settings, availability or the
+ * page-scoped viewer context.
+ */
+const RESERVED_RENDER_PROP_NAMES: ReadonlySet<string> = new Set([
+  "placementId",
+  "settings",
+  "slots",
+  "breakpoint",
+  "metadata",
+  "themeOverrides",
+  "availability",
+  "unavailableReason",
+  "projectedNavigation",
+  "resolvePageHref",
+  "currentPageId",
+]);
+
+/**
+ * Builds a registration's parser from the exact inputs that block declares. An input that is absent
+ * stays absent; an input this block does not declare is refused, so no field is over-shared with
+ * another block. Each reader validates its own value and names it in the reported location. A
+ * declared input may not reuse a prop name the renderer always supplies.
+ */
+export function createPayloadParser(
+  readers: Readonly<Record<string, RuntimeInputReader>>,
+): PlatformComponentPayloadParser {
+  const declared = Object.keys(readers);
+  for (const name of declared)
+    if (RESERVED_RENDER_PROP_NAMES.has(name))
+      throw new DefinitionRenderError(
+        "INVALID_COMPOSITION",
+        `Runtime input '${name}' reuses a prop every block always receives`,
+      );
+  return (inputs, location) => {
+    if (inputs === undefined) return EMPTY_RUNTIME_INPUTS;
+    if (typeof inputs !== "object" || inputs === null || Array.isArray(inputs))
+      throw new DefinitionRenderError(
+        "INVALID_COMPOSITION",
+        "Component runtime inputs must be an object",
+        location,
+      );
+    const record = inputs as Readonly<Record<string, unknown>>;
+    for (const supplied of Object.keys(record))
+      if (!declared.includes(supplied))
+        throw new DefinitionRenderError(
+          "INVALID_COMPOSITION",
+          `Unexpected runtime input '${supplied}'`,
+          { ...location, propertyPath: [supplied] },
+        );
+    const parsed: Record<string, unknown> = {};
+    for (const [name, read] of Object.entries(readers))
+      if (Object.hasOwn(record, name))
+        parsed[name] = read(record[name], { ...location, propertyPath: [name] });
+    return Object.freeze(parsed);
+  };
+}
+
+/**
+ * Rejects runtime inputs that do not name a placement in the resolved tree. Absent entries are
+ * allowed; a supplied entry must resolve to an exact stable placement identity.
+ */
+export function assertRuntimeInputKeysArePlacements(
+  placementIds: ReadonlySet<string>,
+  runtimeInputs: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): void {
+  if (runtimeInputs === undefined) return;
+  if (typeof runtimeInputs !== "object" || runtimeInputs === null || Array.isArray(runtimeInputs))
+    throw new DefinitionRenderError(
+      "INVALID_COMPOSITION",
+      "Component runtime inputs must be keyed by placement identity",
+      location,
+    );
+  for (const placementId of Object.keys(runtimeInputs)) {
+    if (placementId.trim().length === 0)
+      throw new DefinitionRenderError(
+        "INVALID_COMPOSITION",
+        "A runtime-input key must be a non-empty placement identity",
+        location,
+      );
+    if (!placementIds.has(placementId))
+      throw new DefinitionRenderError(
+        "INVALID_COMPOSITION",
+        `Runtime inputs name unknown placement '${placementId}'`,
+        { ...location, placementId },
+      );
+  }
+}
+
+/**
+ * Properties every platform block's React renderer receives. The props here are the ones a block
+ * always has; everything a particular component needs beyond them is a runtime input validated by
+ * that block's own registration.
  */
 export type PlatformBlockRenderProps = Readonly<{
   placementId: string;
@@ -30,10 +171,6 @@ export type PlatformBlockRenderProps = Readonly<{
   themeOverrides?: Readonly<Record<string, unknown>>;
   availability: "available" | "unavailable";
   unavailableReason?: "operation_unavailable";
-  projectedData?: ProjectedDisplayData;
-  displayEvents?: DisplayEventHandlers;
-  controlData?: ProjectedControlData;
-  controlEvents?: ControlEventHandlers;
   /**
    * The viewer's already permission-filtered application menu, projected by the server. It is the
    * one shared `ProjectedNavigation` type; a block that renders the menu never filters, rebuilds or
@@ -56,11 +193,14 @@ export type PlatformBlockRenderProps = Readonly<{
 export type PlatformComponentRenderer = ComponentType<PlatformBlockRenderProps>;
 
 /**
- * An immutable registration pairing exact block metadata with its React renderer.
+ * An immutable registration pairing exact block metadata with its React renderer and the parser
+ * that validates that block's own runtime inputs. The parser is part of the registration, so a new
+ * data component is a release, a component and a parser and nothing else.
  */
 export type PlatformComponentRegistration = Readonly<{
   metadata: PlatformBlockReleaseV2;
   render: PlatformComponentRenderer;
+  parsePayload: PlatformComponentPayloadParser;
 }>;
 
 /**
@@ -163,6 +303,14 @@ export function createPlatformComponentRegistry(
       );
     }
 
+    if (typeof registration.parsePayload !== "function") {
+      throw new DefinitionRenderError(
+        "INVALID_COMPOSITION",
+        `Block release '${metadata.key}' (${metadata.blockId}:${metadata.releaseVersion}) registers no payload parser`,
+        { blockId: metadata.blockId, releaseVersion: metadata.releaseVersion },
+      );
+    }
+
     const identityKey = `${metadata.blockId}:${metadata.releaseVersion}`;
     if (byIdentity.has(identityKey)) {
       throw new DefinitionRenderError(
@@ -197,6 +345,7 @@ export function createPlatformComponentRegistry(
     const frozenRegistration: PlatformComponentRegistration = Object.freeze({
       metadata,
       render: registration.render,
+      parsePayload: registration.parsePayload,
     });
 
     byIdentity.set(identityKey, frozenRegistration);

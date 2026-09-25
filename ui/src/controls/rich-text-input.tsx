@@ -1,8 +1,11 @@
 "use client";
 
 import type { ChangeEvent, ReactElement } from "react";
-import type { PlatformBlockRenderProps } from "../registry";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import {
+  readControlSettings,
+  resolveControlContext,
+  type ControlRenderProps,
+} from "./control-context";
 import {
   describedBy,
   FieldLabelText,
@@ -13,9 +16,9 @@ import {
   useSeededState,
 } from "./field-parts";
 import { useFormField } from "./form-context";
-import type { TypedRichTextDocument } from "./projected-data";
+import type { RichTextInputPayload, TypedRichTextDocument } from "./projected-data";
 
-export type RichTextInputProps = PlatformBlockRenderProps;
+export type RichTextInputProps = ControlRenderProps<RichTextInputPayload>;
 
 type RichTextBlock = TypedRichTextDocument["blocks"][number];
 type RichTextInline = Extract<RichTextBlock, { kind: "paragraph" }>["children"][number];
@@ -56,7 +59,7 @@ const toDocument = (text: string): TypedRichTextDocument | null => {
  * executable content.
  */
 export function RichTextInput(props: RichTextInputProps): ReactElement {
-  const context = resolveControlContext(props, "rich_text_input", ["field_changed"]);
+  const context = resolveControlContext<RichTextInputPayload>(props, ["field_changed"]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();

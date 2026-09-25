@@ -1,10 +1,11 @@
 "use client";
 
 import type { ReactElement } from "react";
-import type { PlatformBlockRenderProps } from "../registry";
+import type { ControlRenderProps } from "./control-context";
 import { ModalSurface } from "./modal-surface";
+import type { DialogPayload } from "./projected-data";
 
-export type DialogProps = PlatformBlockRenderProps;
+export type DialogProps = ControlRenderProps<DialogPayload>;
 
 const DIALOG_WIDTHS = { small: "24rem", medium: "36rem", large: "52rem" } as const;
 
@@ -14,7 +15,7 @@ const DIALOG_WIDTHS = { small: "24rem", medium: "36rem", large: "52rem" } as con
  */
 export function Dialog(props: DialogProps): ReactElement {
   return (
-    <ModalSurface
+    <ModalSurface<DialogPayload>
       props={props}
       kind="dialog"
       surfaceStyle={(size) => ({

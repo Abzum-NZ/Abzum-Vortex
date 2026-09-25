@@ -26,7 +26,7 @@ const HEADING_LEVEL_SCALES: Readonly<Record<HeadingLevel, string>> = Object.free
  * Accessible heading whose text is the authored, required accessible name. It renders the
  * semantic heading element for its declared level using the platform heading typography, so a
  * shell header or a page section is real content rather than a styled paragraph. It carries no
- * data and emits no events.
+ * data and emits no events; its registration refuses every supplied runtime input.
  */
 export function Heading(props: HeadingProps): ReactElement {
   const location: DefinitionRenderErrorLocation = {
@@ -34,17 +34,6 @@ export function Heading(props: HeadingProps): ReactElement {
     blockId: props.metadata.blockId,
     releaseVersion: props.metadata.releaseVersion,
   };
-  if (
-    props.projectedData !== undefined ||
-    props.displayEvents !== undefined ||
-    props.controlData !== undefined ||
-    props.controlEvents !== undefined
-  )
-    throw new DefinitionRenderError(
-      "INVALID_COMPOSITION",
-      "The heading block does not accept data or semantic events",
-      location,
-    );
 
   const text = getAccessibleName(props.settings, props.metadata);
   if (text === undefined)

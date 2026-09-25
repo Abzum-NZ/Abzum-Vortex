@@ -7,7 +7,7 @@ import {
   type ApplicationModuleQueryBinding,
 } from "@vortex/contracts";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
-import type { DisplayCellValue, DisplayRow, ProjectedDisplayValues } from "../display/projected-data";
+import type { DisplayCellValue, DisplayRow, ListPayload } from "../display/projected-data";
 
 const MAXIMUM_APPLICATIONS = 10_000;
 const MAXIMUM_PAGE_KEYS = 10_000;
@@ -257,7 +257,7 @@ export function parsePermittedApplicationsLauncherProjection(
  */
 export function permittedApplicationsToListValues(
   projection: Extract<PermittedApplicationsLauncherProjection, { kind: "available" }>,
-): ProjectedDisplayValues {
+): ListPayload {
   const rows: DisplayRow[] = projection.applications.map((application) => {
     const cells: Record<string, DisplayCellValue> = {
       name: Object.freeze({ kind: "text", text: application.name }),
@@ -295,7 +295,7 @@ export type LinkTileRow = Readonly<{
 export function linkTilesToListValues(
   rows: readonly LinkTileRow[],
   location: DefinitionRenderErrorLocation = {},
-): ProjectedDisplayValues {
+): ListPayload {
   const seen = new Set<string>();
   const displayRows: DisplayRow[] = rows.map((row, index) => {
     const rowLocation = { ...location, propertyPath: [`rows[${index}]`] };
