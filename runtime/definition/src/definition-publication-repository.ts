@@ -78,7 +78,7 @@ const exactManifestSchema = z
       entry.kind === "platform_theme"
         ? `${entry.kind}:${entry.catalogueThemeId}`
         : entry.kind === "platform_block"
-          ? `${entry.kind}:${entry.blockId}`
+          ? `${entry.kind}:${entry.blockId}@${entry.releaseVersion}`
           : entry.kind === "application_flow"
               ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}`
               : entry.kind === "application_flow_node"

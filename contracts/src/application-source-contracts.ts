@@ -1106,24 +1106,23 @@ export const sourceApplicationBodyV2Schema = z
         message: "Placement aliases must be unique across the application",
       });
 
-    const manifest = new Map(
-      value.platform_block_dependencies.map((dependency) => [
-        String(dependency.block_id),
-        dependency.release_version,
-      ]),
+    const manifest = new Set(
+      value.platform_block_dependencies.map(
+        (dependency) => `${dependency.block_id}@${dependency.release_version}`,
+      ),
     );
     const used = new Set<string>();
     for (const [, placement] of placementEntries) {
-      const blockId = String(placement.block.block_id);
-      used.add(blockId);
-      if (manifest.get(blockId) !== placement.block.release_version)
+      const identity = `${placement.block.block_id}@${placement.block.release_version}`;
+      used.add(identity);
+      if (!manifest.has(identity))
         context.addIssue({
           code: "custom",
           path: ["platform_block_dependencies"],
           message: "Every placement must match one exact platform-block dependency",
         });
     }
-    if ([...manifest.keys()].some((blockId) => !used.has(blockId)))
+    if ([...manifest].some((identity) => !used.has(identity)))
       context.addIssue({
         code: "custom",
         path: ["platform_block_dependencies"],

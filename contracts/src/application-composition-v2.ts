@@ -1160,20 +1160,26 @@ export const sourcePlatformBlockDependencyV2Schema = z
   })
   .strict();
 
-const deterministicDependencyList = <Entry extends { blockId: string }>(
+const deterministicDependencyList = <Entry extends { blockId: string; releaseVersion: string }>(
   entries: Entry[],
 ): boolean =>
-  entries.every(
-    (entry, index) => index === 0 || String(entries[index - 1]!.blockId) < String(entry.blockId),
-  );
+  entries.every((entry, index) => {
+    if (index === 0) return true;
+    const previous = entries[index - 1]!;
+    const previousBlock = String(previous.blockId);
+    const currentBlock = String(entry.blockId);
+    if (previousBlock !== currentBlock) return previousBlock < currentBlock;
+    return previous.releaseVersion < entry.releaseVersion;
+  });
 
 export const platformBlockDependenciesV2Schema = z
   .array(platformBlockDependencyV2Schema)
   .superRefine((entries, context) => {
-    if (new Set(entries.map((entry) => entry.blockId)).size !== entries.length)
+    const identities = entries.map((entry) => `${entry.blockId}@${entry.releaseVersion}`);
+    if (new Set(identities).size !== identities.length)
       context.addIssue({
         code: "custom",
-        message: "One exact release is allowed per platform block",
+        message: "An application may depend on each exact platform block release only once",
       });
     if (!deterministicDependencyList(entries))
       context.addIssue({
@@ -1185,11 +1191,15 @@ export const platformBlockDependenciesV2Schema = z
 export const sourcePlatformBlockDependenciesV2Schema = z
   .array(sourcePlatformBlockDependencyV2Schema)
   .superRefine((entries, context) => {
-    const normalized = entries.map((entry) => ({ ...entry, blockId: String(entry.block_id) }));
-    if (new Set(normalized.map((entry) => entry.blockId)).size !== entries.length)
+    const normalized = entries.map((entry) => ({
+      blockId: String(entry.block_id),
+      releaseVersion: String(entry.release_version),
+    }));
+    const identities = normalized.map((entry) => `${entry.blockId}@${entry.releaseVersion}`);
+    if (new Set(identities).size !== identities.length)
       context.addIssue({
         code: "custom",
-        message: "One exact release is allowed per platform block",
+        message: "An application may depend on each exact platform block release only once",
       });
     if (!deterministicDependencyList(normalized))
       context.addIssue({
@@ -1477,14 +1487,20 @@ export const applicationCompositionCatalogueSnapshotV2Schema = z
   })
   .strict()
   .superRefine((value, context) => {
-    const blockIds = value.platformBlocks.releases.map((release) => String(release.blockId));
-    if (new Set(blockIds).size !== blockIds.length)
+    const blockIdentities = value.platformBlocks.releases.map(
+      (release) => `${release.blockId}@${release.releaseVersion}`,
+    );
+    if (new Set(blockIdentities).size !== blockIdentities.length)
       context.addIssue({
         code: "custom",
         path: ["platformBlocks", "releases"],
-        message: "A compile snapshot may contain only one exact release per platform block",
+        message: "A compile snapshot may contain each exact platform block release only once",
       });
-    if (blockIds.some((blockId, index) => index > 0 && blockIds[index - 1]! >= blockId))
+    const blockOrder = value.platformBlocks.releases.map((release) => ({
+      blockId: String(release.blockId),
+      releaseVersion: String(release.releaseVersion),
+    }));
+    if (!deterministicDependencyList(blockOrder))
       context.addIssue({
         code: "custom",
         path: ["platformBlocks", "releases"],
