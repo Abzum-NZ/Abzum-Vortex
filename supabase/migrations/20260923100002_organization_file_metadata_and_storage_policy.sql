@@ -230,7 +230,15 @@ insert into storage.buckets (id, name, public)
 values ('private_files', 'private_files', false)
 on conflict (id) do update set public = false;
 
-alter table storage.objects enable row level security;
+-- The Storage service already enables row level security on its own table, and
+-- only its owner may run the ALTER, so enable it only when it is somehow off.
+do $enable_rls$
+begin
+  if not (select relrowsecurity from pg_catalog.pg_class where oid = 'storage.objects'::regclass) then
+    alter table storage.objects enable row level security;
+  end if;
+end
+$enable_rls$;
 
 drop policy if exists "vortex_private_file_upload" on storage.objects;
 drop policy if exists "vortex_private_file_read" on storage.objects;

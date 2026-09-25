@@ -3,6 +3,7 @@ import "server-only";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
   PLATFORM_SERVICE_OPERATIONS,
+  executeNamedActionCommandV2Schema,
   flowIdSchema,
   flowMaximumServerSeconds,
   flowSchema,
@@ -11,14 +12,19 @@ import {
   organizationSelectionCandidateSchema,
   platformOperationKey,
   type FlowDefinition,
+  type ExecuteNamedActionResultV2,
   type FlowTask,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
+import type { HumanOrganizationRequestResult } from "@vortex/access";
 import {
+  collectActionFlowTasks,
   resumeFlowRun,
   startFlowRun,
+  type ActionFlowRunner,
+  type BeforeSaveRuleWarning,
   type FlowFailureCode,
   type FlowFailureOutcome,
   type FlowInterfaceIntent,
@@ -55,6 +61,11 @@ import type { ProtectedOperationExecutor } from "./protected-operation-executor"
  *   operations, 10 seconds of server time (across every resume) and a Run flow depth of 3.
  * - A task the platform cannot run yet is refused with a located `not_yet_available` notice. It is
  *   never run inline and never guessed.
+ * - A named action is a `transaction` flow started through its binding (`executeAction`). The same
+ *   interpreter runs it for the action's subject record inside the transaction the record port
+ *   owns, and the record changes it asks for are applied by that port in one apply record changes
+ *   call, so a web button and an agent tool reach one entry point. Its actor is the verified
+ *   session's organisation account, never anything the command carries.
  *
  * Every failure is a safe outcome; the orchestrator never throws to its caller.
  */
@@ -74,8 +85,30 @@ export type FlowRelease = Readonly<{
   flows: ReadonlyMap<string, unknown>;
 }>;
 
+/**
+ * What the record service runs for a named action (#1063): it prepares the action's subject under
+ * the actor's authority, calls the supplied flow run inside its own transaction, and applies every
+ * record change the flow collected in one apply record changes call. The result is the closed
+ * named-action result; any before-save rule warnings travel beside it.
+ */
+export type NamedActionRecordPort = Readonly<{
+  execute(
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    command: unknown,
+    run: ActionFlowRunner,
+  ): Promise<
+    HumanOrganizationRequestResult<ExecuteNamedActionResultV2> &
+      Readonly<{ warnings?: readonly BeforeSaveRuleWarning[] }>
+  >;
+}>;
+
+export type NamedActionExecutionResult = Awaited<ReturnType<NamedActionRecordPort["execute"]>>;
+
 export type FlowOrchestratorDependencies = Readonly<{
   executor: Pick<ProtectedOperationExecutor, "execute">;
+  /** Runs named-action flows; without it an action is unavailable. */
+  actionRecords?: NamedActionRecordPort;
   continuations: FlowContinuationStore;
   ledger: FlowEffectLedger;
   /**
@@ -207,14 +240,16 @@ const sha256 = (value: string): string => createHash("sha256").update(value).dig
 
 /** Tasks the platform cannot run on the server yet, and what each waits for. */
 const notYetAvailable: Readonly<Record<string, string>> = Object.freeze({
-  "record.save": "#1061 apply record changes",
-  "record.create": "#1061 apply record changes",
-  "record.set_fields": "#1061 apply record changes",
-  "record.link": "#1061 apply record changes",
-  "record.delete": "#1061 apply record changes",
-  "record.restore": "#1061 apply record changes",
-  "record.changes": "#1061 apply record changes",
-  "record.query": "#1061 apply record changes",
+  // A named action's record tasks run in its transaction flow through the record port; an
+  // interactive flow has no record task port yet.
+  "record.save": "the interactive record task port",
+  "record.create": "the interactive record task port",
+  "record.set_fields": "the interactive record task port",
+  "record.link": "the interactive record task port",
+  "record.delete": "the interactive record task port",
+  "record.restore": "the interactive record task port",
+  "record.changes": "the interactive record task port",
+  "record.query": "the interactive record task port",
   "flow.run_background": "#666 committed start intents",
   "event.announce": "the server event writer task",
   "message.acknowledge": "the message trigger (#1133)",
@@ -408,12 +443,13 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       (candidate) => platformOperationKey(candidate.key) === operationKey,
     );
     if (entry === undefined) {
-      // A named action of a module has no executor path yet; nothing else is registered.
+      // A named action starts through its binding (`executeAction`), never through this task, and
+      // nothing else is registered.
       run.unavailable.push({
         taskId: call.taskId,
         taskType: call.taskType,
         code: "not_yet_available",
-        requires: "the named-action executor",
+        requires: "a registered protected operation",
       });
       return { outcome: "refused" };
     }
@@ -550,6 +586,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     flowId: string,
+    kind: "interactive" | "action" = "interactive",
   ): Promise<
     Omit<Run, "carriedMilliseconds" | "segmentStart" | "unavailable" | "sensitive"> | undefined
   > => {
@@ -564,8 +601,17 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         (await dependencies.authorizeInvocation(session, selection, flow)));
 
     const flow = validated(flowId);
-    // A flow the platform runs for a person runs as that person, and only that.
-    if (flow === undefined || flow.execution !== "interactive" || flow.runAs.kind !== "initiator")
+    // A flow the platform runs for a person runs as that person, and only that. A named action's
+    // flow is a transaction flow with no trigger that runs as the saver: the verified person whose
+    // action it is.
+    if (
+      flow === undefined ||
+      (kind === "interactive"
+        ? flow.execution !== "interactive" || flow.runAs.kind !== "initiator"
+        : flow.execution !== "transaction" ||
+          flow.runAs.kind !== "saver" ||
+          flow.triggers.length > 0)
+    )
       return undefined;
     if (!(await permitted(flow))) return undefined;
 
@@ -589,6 +635,39 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
   };
 
   return Object.freeze({
+    /**
+     * Runs one named action for the verified person: resolves the exact release's action flow,
+     * checks its invocation permission, and hands the record port a run of that flow to call inside
+     * its transaction. The port applies every record change the flow asks for in one apply record
+     * changes call. Nothing about the actor or the organisation is read from the command.
+     */
+    async executeAction(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: unknown,
+    ): Promise<NamedActionExecutionResult> {
+      try {
+        const parsed = z
+          .object({ session: identitySessionSchema, selection: organizationSelectionCandidateSchema })
+          .safeParse({ session, selection });
+        const command = executeNamedActionCommandV2Schema.safeParse(commandCandidate);
+        if (!parsed.success || !command.success || dependencies.actionRecords === undefined)
+          return { kind: "unavailable" };
+        const flowId = command.data.action.actionId;
+        const prepared = await prepare(parsed.data.session, parsed.data.selection, flowId, "action");
+        if (prepared === undefined) return { kind: "unavailable" };
+        const runId = newRunId();
+        return await dependencies.actionRecords.execute(
+          parsed.data.session,
+          parsed.data.selection,
+          command.data,
+          (seed) => collectActionFlowTasks(prepared.library, flowId, runId, seed),
+        );
+      } catch {
+        return { kind: "unavailable" };
+      }
+    },
+
     /**
      * Starts a run from a binding (flow id and typed inputs) for the verified initiator. The run id
      * is issued here. The inputs are values only: authority, organisation and actor never come
