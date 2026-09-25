@@ -10,8 +10,12 @@ import {
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
   type PermissionRegistryEntryCandidate,
-  type CurrentUserFlowActionTarget as FlowActionTarget,
-  type CurrentUserFlowQueryTarget as FlowQueryTarget,
+  PLATFORM_SERVICE_OPERATIONS,
+  flowTaskChildLists,
+  flowTaskRegistry,
+  platformOperationKey,
+  type FlowDefinition,
+  type FlowTask,
   type ProtectedReadModelKey,
 } from "@vortex/contracts";
 import {
@@ -101,34 +105,24 @@ const declaration = (
   authority: { kind: "permission" },
 });
 
-type OperationOwner = Extract<FlowActionTarget, { kind: "protected_operation" }>["operation"]["owner"];
-
-type ReleaseEvidence = Readonly<{
-  releaseVersion: string;
-  contentFingerprint: string;
-  resolutionFingerprint: string;
-}>;
-
 /** Whether a placement's flow bindings reach an operation, and whether all of them resolve. */
 type PlacementOperationBinding = Readonly<{ required: boolean; bound: boolean }>;
 
-const operationOwnerId = (owner: OperationOwner): string =>
-  owner.kind === "application"
-    ? owner.applicationRootId
-    : owner.kind === "module"
-      ? owner.moduleRootId
-      : owner.serviceId;
+const platformOperationsByKey = new Map(
+  Object.values(PLATFORM_SERVICE_OPERATIONS).map((entry) => [platformOperationKey(entry.key), entry]),
+);
 
 /**
  * Resolves every placement's compiled component flow bindings against this exact installed release.
- * A placement requires an operation when one of its bound flows reaches an Action target, or when
- * any binding cannot be proved (a platform-managed flow, or a flow or target missing from this
- * release), so an unprovable binding fails closed even without a use gate. It is operation-bound
- * only when it requires an operation and every flow and target it reaches resolves: application
- * evidence names this exact Application release and its verified dependency manifest carries the
- * identical entry, and Module evidence names the exact bound Module release. The operation is
- * never named by the placement or the browser, and this only proves the binding resolves; the
- * owning operation still re-checks its own authority when invoked.
+ * A placement requires an operation when one of its bound flows changes something, starts
+ * background work or calls a protected operation, or when any binding cannot be proved (a flow, an
+ * operation, a query or a record type missing from this release), so an unprovable binding fails
+ * closed even without a use gate. It is operation-bound only when it requires an operation and
+ * every task it reaches resolves: a platform-service operation is pinned by this release's
+ * verified dependency manifest with the exact release the catalogue registers, and a named action,
+ * query or record type belongs to a bound Module release. The operation is never named by the
+ * placement or the browser, and this only proves the binding resolves; the owning operation still
+ * re-checks its own authority when invoked.
  */
 const placementOperationBindings = (
   context: InstalledRuntimeContext,
@@ -136,163 +130,104 @@ const placementOperationBindings = (
   const release = context.releaseSet;
   const application = release.application;
   const manifest = application.dependencyManifest;
-  const flows = new Map(application.content.flows.map((flow) => [flow.flowId.toLowerCase(), flow]));
-  const sameEvidence = (entry: ReleaseEvidence, target: ReleaseEvidence): boolean =>
-    entry.releaseVersion === target.releaseVersion &&
-    entry.contentFingerprint === target.contentFingerprint &&
-    entry.resolutionFingerprint === target.resolutionFingerprint;
-  const applicationReleased = (applicationRootId: string, evidence: ReleaseEvidence): boolean =>
-    sameUuid(applicationRootId, application.rootId) &&
-    evidence.releaseVersion === application.releaseVersion &&
-    evidence.resolutionFingerprint === application.resolutionFingerprint;
-  const moduleReleased = (
-    moduleRootId: string,
-    releaseVersion: string,
-    resolutionFingerprint: string,
-  ): boolean =>
-    release.modules.some(
-      (module) =>
-        sameUuid(module.rootId, moduleRootId) &&
-        module.releaseVersion === releaseVersion &&
-        module.resolutionFingerprint === resolutionFingerprint,
-    );
-  const queryResolves = (target: FlowQueryTarget): boolean => {
-    switch (target.kind) {
-      case "application_query":
-        return (
-          applicationReleased(target.applicationRootId, target) &&
-          manifest.some(
-            (entry) =>
-              entry.kind === "application_query" &&
-              sameUuid(entry.applicationRootId, target.applicationRootId) &&
-              sameUuid(entry.queryId, target.queryId) &&
-              sameEvidence(entry, target),
-          )
-        );
-      case "query":
-        return (
-          moduleReleased(
-            target.moduleRootId,
-            target.moduleReleaseVersion,
-            target.resolutionFingerprint,
-          ) &&
-          manifest.some(
-            (entry) =>
-              entry.kind === "module_query" &&
-              sameUuid(entry.moduleRootId, target.moduleRootId) &&
-              sameUuid(entry.queryId, target.queryId) &&
-              sameEvidence(entry, { ...target, releaseVersion: target.moduleReleaseVersion }),
-          )
-        );
-      default:
-        return false;
-    }
+  const flows = new Map(application.content.flows.map((flow) => [flow.id.toLowerCase(), flow]));
+  const lower = (values: Iterable<unknown>): Set<string> =>
+    new Set([...values].map((value) => String(value).toLowerCase()));
+  const actionKeys = new Set([
+    ...application.content.actions.map((action) => String(action.key)),
+    ...release.modules.flatMap((module) => module.content.actions.map((action) => String(action.key))),
+  ]);
+  const recordTypeIds = lower(
+    release.modules.flatMap((module) => module.content.recordTypes.map((record) => record.recordTypeId)),
+  );
+  const queryIds = lower([
+    ...application.content.queries.map((query) => query.queryId),
+    ...release.modules.flatMap((module) => module.content.queries.map((query) => query.queryId)),
+  ]);
+  const literal = (task: FlowTask, name: string): string | undefined => {
+    const value = (task as { properties?: Record<string, { kind: string; literal?: { value: unknown } }> })
+      .properties?.[name];
+    return value?.kind === "literal" ? String(value.literal?.value) : undefined;
   };
-  const actionResolves = (target: FlowActionTarget): boolean => {
-    switch (target.kind) {
-      case "protected_operation": {
-        const owner = target.operation.owner;
-        if (
-          (owner.kind === "application" && !applicationReleased(owner.applicationRootId, target)) ||
-          (owner.kind === "module" &&
-            !moduleReleased(
-              owner.moduleRootId,
-              target.releaseVersion,
-              target.resolutionFingerprint,
-            )) ||
-          (owner.kind === "platform_service" && target.catalogueFingerprint === undefined)
-        )
-          return false;
-        return manifest.some(
-          (entry) =>
-            entry.kind === "protected_operation" &&
-            entry.operation.owner.kind === owner.kind &&
-            sameUuid(operationOwnerId(entry.operation.owner), operationOwnerId(owner)) &&
-            sameUuid(entry.operation.operationId, target.operation.operationId) &&
-            sameEvidence(entry, target) &&
-            entry.catalogueFingerprint === target.catalogueFingerprint,
-        );
+  const operationResolves = (key: string | undefined): boolean => {
+    if (key === undefined) return false;
+    if (actionKeys.has(key)) return true;
+    const platform = platformOperationsByKey.get(key);
+    return (
+      platform !== undefined &&
+      manifest.some(
+        (entry) =>
+          entry.kind === "protected_operation" &&
+          entry.operation.owner.kind === "platform_service" &&
+          sameUuid(entry.operation.owner.serviceId, platform.release.serviceId) &&
+          sameUuid(entry.operation.operationId, platform.release.operationId) &&
+          entry.releaseVersion === platform.release.releaseVersion &&
+          entry.contentFingerprint === platform.release.contentFingerprint &&
+          entry.catalogueFingerprint === platform.release.catalogueFingerprint,
+      )
+    );
+  };
+  /** What one flow, and every flow it runs, needs and whether all of it resolves in this release. */
+  const analyse = (
+    flow: FlowDefinition,
+    seen: ReadonlySet<string>,
+  ): { required: boolean; resolved: boolean } => {
+    const outcome = { required: false, resolved: true };
+    const visit = (tasks: readonly FlowTask[]) => {
+      for (const task of tasks) {
+        if (task.type === "run_flow") {
+          const target = flows.get(String((task as { flowId: string }).flowId).toLowerCase());
+          if (target === undefined || seen.has(target.id)) outcome.resolved = false;
+          else {
+            const inner = analyse(target, new Set([...seen, target.id]));
+            outcome.required ||= inner.required;
+            outcome.resolved &&= inner.resolved;
+          }
+        } else if (Object.hasOwn(flowTaskRegistry, task.type)) {
+          const definition = flowTaskRegistry[task.type as keyof typeof flowTaskRegistry];
+          if (task.type === "operation.call") {
+            outcome.required = true;
+            if (!operationResolves(literal(task, "operation"))) outcome.resolved = false;
+          } else if (task.type === "record.query") {
+            if (!queryIds.has(String(literal(task, "query")).toLowerCase())) {
+              outcome.required = true;
+              outcome.resolved = false;
+            }
+          } else if (definition.effect === "change" || definition.effect === "background_start") {
+            outcome.required = true;
+            const recordType = literal(task, "record_type");
+            if (recordType !== undefined && !recordTypeIds.has(recordType.toLowerCase()))
+              outcome.resolved = false;
+            if (
+              task.type === "flow.run_background" &&
+              !flows.has(String(literal(task, "flow")).toLowerCase())
+            )
+              outcome.resolved = false;
+          }
+        } else outcome.resolved = false;
+        for (const child of flowTaskChildLists(task)) visit(child.tasks);
       }
-      case "form_continuation":
-        return (
-          applicationReleased(target.applicationRootId, target) &&
-          manifest.some(
-            (entry) =>
-              entry.kind === "application_form" &&
-              sameUuid(entry.applicationRootId, target.applicationRootId) &&
-              sameUuid(entry.formId, target.formId) &&
-              sameEvidence(entry, target),
-          )
-        );
-      case "durable_workflow_start":
-        return (
-          applicationReleased(target.applicationRootId, target) &&
-          manifest.some(
-            (entry) =>
-              entry.kind === "application_workflow" &&
-              sameUuid(entry.applicationRootId, target.applicationRootId) &&
-              sameUuid(entry.workflowId, target.workflowId) &&
-              sameEvidence(entry, target),
-          )
-        );
-      case "application_action":
-        return (
-          applicationReleased(target.applicationRootId, target) &&
-          manifest.some(
-            (entry) =>
-              entry.kind === "application_action" &&
-              sameUuid(entry.applicationRootId, target.applicationRootId) &&
-              sameUuid(entry.actionId, target.actionId) &&
-              sameEvidence(entry, target),
-          )
-        );
-      // A generic record save is pinned only by its owning Module's exact bound release.
-      case "record_save":
-        return (
-          sameUuid(target.applicationRootId, application.rootId) &&
-          moduleReleased(target.moduleRootId, target.releaseVersion, target.resolutionFingerprint)
-        );
-      default:
-        return false;
-    }
+    };
+    visit(flow.tasks);
+    visit(flow.errors);
+    visit(flow.finally);
+    return outcome;
   };
   const outcomes = new Map<string, { required: boolean; resolved: boolean }>();
   for (const binding of application.content.flowBindings) {
     const placementId = binding.controlId.toLowerCase();
     const outcome = outcomes.get(placementId) ?? { required: false, resolved: true };
     outcomes.set(placementId, outcome);
-    const reference = binding.flow;
-    const flow =
-      reference.kind === "application_owned" ? flows.get(reference.flowId.toLowerCase()) : undefined;
-    // A platform-managed flow's operations cannot be read here, so it fails closed like any flow
-    // whose exact evidence is not this release's.
-    if (
-      reference.kind !== "application_owned" ||
-      flow === undefined ||
-      !applicationReleased(reference.applicationRootId, reference) ||
-      !applicationReleased(application.rootId, flow) ||
-      flow.contentFingerprint !== reference.contentFingerprint ||
-      !manifest.some(
-        (entry) =>
-          entry.kind === "application_flow" &&
-          sameUuid(entry.applicationRootId, application.rootId) &&
-          sameUuid(entry.flowId, flow.flowId) &&
-          sameEvidence(entry, reference),
-      )
-    ) {
+    const flow = flows.get(binding.flow.flowId.toLowerCase());
+    // A flow this release does not contain fails closed like any binding that cannot be proved.
+    if (flow === undefined) {
       outcome.required = true;
       outcome.resolved = false;
       continue;
     }
-    for (const node of flow.nodes) {
-      if (node.kind === "action") {
-        outcome.required = true;
-        if (!actionResolves(node.target)) outcome.resolved = false;
-      } else if (node.kind === "query" && !queryResolves(node.target)) {
-        outcome.required = true;
-        outcome.resolved = false;
-      }
-    }
+    const analysed = analyse(flow, new Set([flow.id]));
+    outcome.required ||= analysed.required;
+    outcome.resolved &&= analysed.resolved;
   }
   return new Map(
     [...outcomes].map(([placementId, outcome]) => [

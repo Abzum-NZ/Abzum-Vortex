@@ -6,11 +6,13 @@ import {
   type DefinitionResolutionSnapshotV2,
   type DefinitionResolutionSnapshotV3,
   type ExactDefinitionDependency,
+  type FlowDefinition,
   type Fingerprint,
   type OrganizationId,
   type SemanticVersion,
 } from "@vortex/contracts";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
+import { platformOperationsCalledBy } from "./flow-operation-calls";
 
 type CustomerDefinitionOutput = Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>;
 type CustomerDefinitionResolution =
@@ -112,224 +114,36 @@ const flowManifestSubject = (dependency: ExactDefinitionDependency): string => {
   }
 };
 
+/**
+ * The Application's flows and bindings are contained in its own release, so the only flow targets
+ * its manifest pins are the platform-service operations its Call protected operation tasks name.
+ * The manifest must hold exactly one entry for each, with the exact release the catalogue registers.
+ */
 const exactApplicationFlowTargetsMatch = (
   output: Extract<CustomerDefinitionOutput, { kind: "application" }>,
   manifest: readonly ExactDefinitionDependency[],
 ): boolean => {
-  const expectedBySubject = new Map<string, ExactDefinitionDependency>();
-  let conflictingExpected = false;
-  const add = (entry: ExactDefinitionDependency): void => {
-    const subject = flowManifestSubject(entry);
-    const existing = expectedBySubject.get(subject);
-    if (existing !== undefined && !sameCanonicalJson(existing, entry)) {
-      conflictingExpected = true;
-      return;
-    }
-    expectedBySubject.set(subject, entry);
-  };
-  const applicationRootId = output.canonical.envelope.rootId;
-  const applicationEvidenceMatches = (
-    rootId: unknown,
-    releaseVersion: unknown,
-    resolutionFingerprint: unknown,
-  ): boolean =>
-    String(rootId) === String(applicationRootId) &&
-    releaseVersion === output.artifact.exactVersion &&
-    resolutionFingerprint === output.resolutionFingerprint;
-  const moduleEvidenceMatches = (
-    rootId: unknown,
-    releaseVersion: unknown,
-    resolutionFingerprint: unknown,
-  ): boolean =>
-    manifest.some(
-      (entry) =>
-        entry.kind === "module" &&
-        String(entry.rootId) === String(rootId) &&
-        entry.releaseVersion === releaseVersion &&
-        entry.resolutionFingerprint === resolutionFingerprint,
-    );
-  for (const flow of output.canonical.content.flows) {
-    if (
-      !applicationEvidenceMatches(
-        applicationRootId,
-        flow.releaseVersion,
-        flow.resolutionFingerprint,
-      )
-    )
-      return false;
-    add({
-      kind: "application_flow",
-      applicationRootId,
-      flowId: flow.flowId,
-      releaseVersion: flow.releaseVersion,
-      contentFingerprint: flow.contentFingerprint,
-      resolutionFingerprint: flow.resolutionFingerprint,
-    });
-    for (const node of flow.nodes) {
-      add({
-        kind: "application_flow_node",
-        applicationRootId,
-        flowId: flow.flowId,
-        nodeId: node.nodeId,
-        releaseVersion: flow.releaseVersion,
-        contentFingerprint: fingerprintCanonicalValue({ kind: "flow_node", node }),
-        resolutionFingerprint: flow.resolutionFingerprint,
-      });
-      const target = (node as unknown as { target?: Record<string, unknown> }).target;
-      if (target === undefined) continue;
-      const common = {
-        releaseVersion: String(target.releaseVersion),
-        contentFingerprint: String(target.contentFingerprint),
-        resolutionFingerprint: String(target.resolutionFingerprint),
-      };
-      switch (target.kind) {
-        case "application_query":
-          if (
-            !applicationEvidenceMatches(
-              target.applicationRootId,
-              target.releaseVersion,
-              target.resolutionFingerprint,
-            )
-          )
-            return false;
-          add({ kind: "application_query", applicationRootId, queryId: String(target.queryId), ...common });
-          break;
-        case "query":
-          if (
-            !moduleEvidenceMatches(
-              target.moduleRootId,
-              target.moduleReleaseVersion,
-              target.resolutionFingerprint,
-            )
-          )
-            return false;
-          add({
-            kind: "module_query",
-            moduleRootId: String(target.moduleRootId),
-            queryId: String(target.queryId),
-            declaredRequirement: target.declaredRequirement as never,
-            ...common,
-            releaseVersion: String(target.moduleReleaseVersion),
-          });
-          break;
-        case "protected_operation":
-          if (
-            target.operation === null ||
-            typeof target.operation !== "object" ||
-            Array.isArray(target.operation)
-          )
-            return false;
-          {
-            const owner = (target.operation as { owner?: Record<string, unknown> }).owner;
-            if (owner === undefined) return false;
-            if (
-              owner.kind === "application" &&
-              !applicationEvidenceMatches(
-                owner.applicationRootId,
-                target.releaseVersion,
-                target.resolutionFingerprint,
-              )
-            )
-              return false;
-            if (
-              owner.kind === "module" &&
-              !moduleEvidenceMatches(
-                owner.moduleRootId,
-                target.releaseVersion,
-                target.resolutionFingerprint,
-              )
-            )
-              return false;
-            if (owner.kind === "platform_service" && target.catalogueFingerprint === undefined)
-              return false;
-          }
-          add({
-            kind: "protected_operation",
-            operation: target.operation as never,
-            ...common,
-            ...(target.catalogueFingerprint === undefined
-              ? {}
-              : { catalogueFingerprint: String(target.catalogueFingerprint) }),
-          });
-          break;
-        case "form_continuation":
-          if (
-            !applicationEvidenceMatches(
-              target.applicationRootId,
-              target.releaseVersion,
-              target.resolutionFingerprint,
-            )
-          )
-            return false;
-          add({ kind: "application_form", applicationRootId, formId: String(target.formId), ...common });
-          break;
-        case "durable_workflow_start":
-          if (
-            !applicationEvidenceMatches(
-              target.applicationRootId,
-              target.releaseVersion,
-              target.resolutionFingerprint,
-            )
-          )
-            return false;
-          add({ kind: "application_workflow", applicationRootId, workflowId: String(target.workflowId), ...common });
-          break;
-        case "application_action":
-          if (
-            !applicationEvidenceMatches(
-              target.applicationRootId,
-              target.releaseVersion,
-              target.resolutionFingerprint,
-            )
-          )
-            return false;
-          add({ kind: "application_action", applicationRootId, actionId: String(target.actionId), ...common });
-          break;
-        case "record_save":
-          // A generic record save is pinned by its owning Module binding's release; it adds no
-          // separate entry, but it must belong to this Application and match that Module evidence.
-          if (
-            String(target.applicationRootId) !== String(applicationRootId) ||
-            !moduleEvidenceMatches(
-              target.moduleRootId,
-              target.releaseVersion,
-              target.resolutionFingerprint,
-            )
-          )
-            return false;
-          break;
-      }
-    }
-  }
-  for (const binding of output.canonical.content.flowBindings) {
-    const flow = output.canonical.content.flows.find(
-      (candidate) => candidate.flowId === binding.flow.flowId,
-    );
-    if (
-      flow === undefined ||
-      !applicationEvidenceMatches(
-        binding.flow.applicationRootId,
-        binding.flow.releaseVersion,
-        binding.flow.resolutionFingerprint,
-      ) ||
-      binding.flow.contentFingerprint !== flow.contentFingerprint
-    )
-      return false;
-    add({
-      kind: "application_flow",
-      applicationRootId,
-      flowId: binding.flow.flowId,
-      releaseVersion: binding.flow.releaseVersion,
-      contentFingerprint: binding.flow.contentFingerprint,
-      resolutionFingerprint: binding.flow.resolutionFingerprint,
-    });
-  }
+  const expected = platformOperationsCalledBy(
+    output.canonical.content.flows as unknown as FlowDefinition[],
+  ).map((operation): ExactDefinitionDependency => ({
+    kind: "protected_operation",
+    operation: {
+      owner: { kind: "platform_service", serviceId: operation.release.serviceId },
+      operationId: operation.release.operationId,
+    },
+    releaseVersion: operation.release.releaseVersion,
+    contentFingerprint: operation.release.contentFingerprint,
+    resolutionFingerprint: output.resolutionFingerprint,
+    catalogueFingerprint: operation.release.catalogueFingerprint,
+  }));
+  const expectedBySubject = new Map(expected.map((entry) => [flowManifestSubject(entry), entry]));
   const actual = manifest.filter((entry) => flowManifestSubject(entry) !== "");
   const actualBySubject = new Map(actual.map((entry) => [flowManifestSubject(entry), entry]));
-  if (conflictingExpected || actualBySubject.size !== actual.length) return false;
+  if (expectedBySubject.size !== expected.length || actualBySubject.size !== actual.length)
+    return false;
   if (expectedBySubject.size !== actualBySubject.size) return false;
-  return [...expectedBySubject].every(
-    ([subject, entry]) => sameCanonicalJson(entry, actualBySubject.get(subject)),
+  return [...expectedBySubject].every(([subject, entry]) =>
+    sameCanonicalJson(entry, actualBySubject.get(subject)),
   );
 };
 

@@ -4,15 +4,16 @@ import {
   applicationContentV2Schema,
   applicationRootIdSchema,
   canonicalPlacementEntriesV2,
+  flowTaskChildLists,
+  flowTaskRegistry,
   revisionSchema,
   sessionContextSchema,
   type ApplicationContentV2,
   type ComponentFlowBinding,
   type ComponentSemanticEventKind,
-  type CurrentUserFlow,
-  type CurrentUserFlowNode,
+  type FlowDefinition,
   type FlowEffectKind,
-  type FrontendFlowNodeTarget,
+  type FlowTask,
   type SessionContext,
 } from "@vortex/contracts";
 import { z } from "zod";
@@ -32,8 +33,8 @@ import {
  * publication chain, and the materialiser proves the request, the draft identity and the rendered
  * page agree before it emits an artifact.
  *
- * The emitted artifact is deliberately inert. Every effectful flow node (a read, a change, a form
- * continuation or a durable workflow start) is replaced by an explicit, labelled simulation, and
+ * The emitted artifact is deliberately inert. Every effectful flow task (a read, a change, a form
+ * display or a background flow start) is replaced by an explicit, labelled simulation, and
  * the artifact carries no executor, permission or installation state. The browser hook that
  * consumes the artifact therefore has nothing that can commit a record, change access or start
  * durable work. Unavailable application-owned flows and unbound sample values are reported as
@@ -97,37 +98,30 @@ export type ApplicationPreviewComposition = Readonly<{
   theme: ApplicationContentV2["theme"];
 }>;
 
-/** The simulated effect a substituted flow node would have performed in live rendering. */
+/** The simulated effect a substituted flow task would have performed in live rendering. */
 export type ApplicationPreviewSimulatedEffect =
   | "read"
   | "change"
   | "background_start"
   | "form_interaction";
 
-export type ApplicationPreviewFlowTargetKind =
-  | FrontendFlowNodeTarget["kind"]
-  | "application_action"
-  | "application_query"
-  | "record_save";
-
-export type ApplicationPreviewFlowNodeSimulation = Readonly<{
-  nodeId: string;
-  nodeKind: CurrentUserFlowNode["kind"];
-  targetKind?: ApplicationPreviewFlowTargetKind;
+export type ApplicationPreviewFlowTaskSimulation = Readonly<{
+  taskId: string;
+  /** The registered task type, for example `record.save`. */
+  taskType: string;
   simulatedEffect: ApplicationPreviewSimulatedEffect;
   label: string;
 }>;
 
-/** One component flow binding with every effectful node replaced by explicit simulations. */
+/** One component flow binding with every effectful task replaced by explicit simulations. */
 export type ApplicationPreviewInteraction = Readonly<{
   bindingId: string;
   controlId: string;
   eventId: string;
   event: ComponentSemanticEventKind;
-  flowKind: "application_owned";
   flowId: string;
   declaredEffects: readonly FlowEffectKind[];
-  simulatedNodes: readonly ApplicationPreviewFlowNodeSimulation[];
+  simulatedTasks: readonly ApplicationPreviewFlowTaskSimulation[];
   simulated: true;
 }>;
 
@@ -177,87 +171,65 @@ export type ApplicationPreviewResult =
   | Readonly<{ status: "ok"; artifact: ApplicationPreviewArtifact }>
   | Readonly<{ status: "refused"; refusal: ApplicationPreviewRefusal }>;
 
-const simulateActionTargetEffect = (
-  targetKind: ApplicationPreviewFlowTargetKind,
-  declaredEffects: readonly FlowEffectKind[],
-): ApplicationPreviewSimulatedEffect => {
-  if (targetKind === "query" || targetKind === "application_query") return "read";
-  if (targetKind === "form_continuation") return "form_interaction";
-  if (targetKind === "durable_workflow_start") return "background_start";
-  // A generic record save always commits one record through the ordinary Record operation.
-  if (targetKind === "record_save") return "change";
-  // Protected operations and application actions carry their own effect; read the binding's
-  // declared effects rather than guessing. A change is the conservative default.
-  if (declaredEffects.includes("background_start")) return "background_start";
-  if (declaredEffects.includes("read") && !declaredEffects.includes("change")) return "read";
-  return "change";
+/**
+ * The effect a registered task would perform, or nothing for a task that reads, changes and starts
+ * nothing. Showing a form is the one interface task that is simulated; the rest only present.
+ */
+const simulatedEffectOf = (task: FlowTask): ApplicationPreviewSimulatedEffect | undefined => {
+  const definition = Object.hasOwn(flowTaskRegistry, task.type)
+    ? flowTaskRegistry[task.type as keyof typeof flowTaskRegistry]
+    : undefined;
+  if (definition === undefined) return undefined;
+  if (task.type === "interface.show_form") return "form_interaction";
+  return definition.effect === "read" ||
+    definition.effect === "change" ||
+    definition.effect === "background_start"
+    ? definition.effect
+    : undefined;
 };
 
-const simulateNode = (
-  node: CurrentUserFlowNode,
-  declaredEffects: readonly FlowEffectKind[],
-): ApplicationPreviewFlowNodeSimulation | undefined => {
-  const label = node.label ?? node.key;
-  switch (node.kind) {
-    case "query":
-      return {
-        nodeId: String(node.nodeId),
-        nodeKind: node.kind,
-        targetKind: node.target.kind,
-        simulatedEffect: "read",
-        label,
-      };
-    case "action":
-      return {
-        nodeId: String(node.nodeId),
-        nodeKind: node.kind,
-        targetKind: node.target.kind,
-        simulatedEffect: simulateActionTargetEffect(node.target.kind, declaredEffects),
-        label,
-      };
-    // Start, transform and return nodes perform no read, change or durable start; they are not
-    // substituted and are never presented as effectful.
-    case "start":
-    case "transform":
-    case "return":
-      return undefined;
+const simulateTasks = (
+  tasks: readonly FlowTask[],
+  into: ApplicationPreviewFlowTaskSimulation[],
+): void => {
+  for (const task of tasks) {
+    const simulatedEffect = simulatedEffectOf(task);
+    if (simulatedEffect !== undefined)
+      into.push({ taskId: task.id, taskType: task.type, simulatedEffect, label: task.id });
+    for (const child of flowTaskChildLists(task)) simulateTasks(child.tasks, into);
   }
 };
 
 const buildInteraction = (
   binding: ComponentFlowBinding,
-  flow: CurrentUserFlow | undefined,
+  flow: FlowDefinition | undefined,
   outcomes: ApplicationPreviewOutcome[],
 ): ApplicationPreviewInteraction | undefined => {
   const flowId = String(binding.flow.flowId);
   if (flow === undefined) {
     outcomes.push({ kind: "flow_unavailable", controlId: String(binding.controlId), flowId });
   }
-  const simulatedNodes =
-    flow === undefined
-      ? []
-      : flow.nodes.flatMap((node) => {
-          const simulation = simulateNode(node, binding.declaredEffects);
-          return simulation === undefined ? [] : [simulation];
-        });
-  const effectful =
-    simulatedNodes.length > 0 || binding.declaredEffects.some((effect) => effect !== "pure");
-  if (!effectful) return undefined;
+  const simulatedTasks: ApplicationPreviewFlowTaskSimulation[] = [];
+  if (flow !== undefined) {
+    simulateTasks(flow.tasks, simulatedTasks);
+    simulateTasks(flow.errors, simulatedTasks);
+    simulateTasks(flow.finally, simulatedTasks);
+  }
+  if (simulatedTasks.length === 0) return undefined;
   return {
     bindingId: String(binding.bindingId),
     controlId: String(binding.controlId),
     eventId: String(binding.eventId),
     event: binding.event,
-    flowKind: binding.flow.kind,
     flowId,
-    declaredEffects: binding.declaredEffects,
-    simulatedNodes,
+    declaredEffects: [...new Set(simulatedTasks.map((task) => task.simulatedEffect))].sort(),
+    simulatedTasks,
     simulated: true,
   };
 };
 
 /**
- * Replaces every effectful flow node with an explicit simulation. An application-owned flow that
+ * Replaces every effectful flow task with an explicit simulation. An application-owned flow that
  * the draft cannot resolve is reported as a preview outcome instead of being silently replaced.
  * When `controlIds` is given, only bindings on those placements are considered.
  */
@@ -269,7 +241,7 @@ export const substituteApplicationPreviewInteractions = (
   outcomes: readonly ApplicationPreviewOutcome[];
   suppressedEffects: readonly FlowEffectKind[];
 }> => {
-  const flowsById = new Map(content.flows.map((flow) => [String(flow.flowId), flow]));
+  const flowsById = new Map(content.flows.map((flow) => [String(flow.id), flow]));
   const outcomes: ApplicationPreviewOutcome[] = [];
   const interactions: ApplicationPreviewInteraction[] = [];
   for (const binding of content.flowBindings) {
@@ -280,8 +252,7 @@ export const substituteApplicationPreviewInteractions = (
   }
   const suppressed = new Set<FlowEffectKind>();
   for (const interaction of interactions)
-    for (const effect of interaction.declaredEffects)
-      if (effect !== "pure") suppressed.add(effect);
+    for (const effect of interaction.declaredEffects) suppressed.add(effect);
   return {
     interactions,
     outcomes,

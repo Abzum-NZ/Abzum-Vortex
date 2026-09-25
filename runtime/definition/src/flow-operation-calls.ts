@@ -5,6 +5,8 @@ import {
   type DefinitionRuleFailureFamily,
   type FlowDefinition,
   type FlowTask,
+  type PlatformServiceOperationCatalogueEntry,
+  type SourceFlow,
 } from "@vortex/contracts";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
 
@@ -90,4 +92,29 @@ export function findOperationCallIssue(
           return issue("vortex.definition.workflow_action_inputs", "required_value");
     }
   return undefined;
+}
+
+/**
+ * The registered platform-service operations a set of flows calls, each once, in the order first
+ * called. Publication pins the exact release of each in the dependency manifest, because a flow
+ * names the operation only by its key.
+ */
+export function platformOperationsCalledBy(
+  flows: readonly (FlowDefinition | SourceFlow)[],
+): PlatformServiceOperationCatalogueEntry[] {
+  const byKey = new Map(
+    Object.values(PLATFORM_SERVICE_OPERATIONS).map((entry) => [platformOperationKey(entry.key), entry]),
+  );
+  const called = new Map<string, PlatformServiceOperationCatalogueEntry>();
+  for (const flow of flows)
+    for (const task of [
+      ...calls(flow.tasks as unknown as FlowTask[]),
+      ...calls(flow.errors as unknown as FlowTask[]),
+      ...calls(flow.finally as unknown as FlowTask[]),
+    ]) {
+      const key = operationKeyOf(task);
+      const entry = key === undefined ? undefined : byKey.get(key);
+      if (entry !== undefined) called.set(entry.key, entry);
+    }
+  return [...called.values()];
 }
