@@ -124,6 +124,11 @@ const uniquePermissions = (
  * required permission is decided by the same `runOrganizationAccessOperation` path the other
  * protected operations use, so permission, recent authentication and delegated scope are decided
  * by the database from trusted context. The first refusal is returned; any doubt throws.
+ *
+ * The transaction must be the authenticated human's own request transaction, still open when a
+ * builder operation runs. Definition storage runs over a separate system-bound transaction; an
+ * authority built over that one cannot evaluate a human decision and throws, so a wrong
+ * composition fails closed rather than allowing the operation.
  */
 export const createBuilderAuthority = (
   dependencies: BuilderAuthorityDependencies,
