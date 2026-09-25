@@ -296,7 +296,7 @@ begin
     end,
     array[p_execution_binding_id]::uuid[],
     array[]::uuid[],
-    'web',
+    vortex_context.channel(),
     authority.correlation_id,
     'completed'
   );
@@ -325,7 +325,6 @@ revoke all on function vortex_access.register_flow_execution_binding(
   jsonb, jsonb, jsonb, timestamptz, bigint, uuid
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
-
 grant execute on function vortex_access.register_flow_execution_binding(
   uuid, uuid, uuid, uuid, uuid, uuid, text, uuid, uuid, text, uuid, uuid, text, uuid, uuid,
   jsonb, jsonb, jsonb, timestamptz, bigint, uuid
