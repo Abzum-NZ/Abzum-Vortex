@@ -114,9 +114,15 @@ export function validateApplicationSourceCatalogue(
       report("vortex.definition.application_dependency_manifest", "incompatible_version");
   }
 
-  // The data source of a Records table or Record detail is its placement's bound query, matched
-  // by the query's authored id exactly as the compiler resolves it.
-  const queriesById = new Map(source.body.queries.map((query) => [query.id, query]));
+  // The data source of a Records table or Record detail is its placement's bound query. A
+  // placement names the query by its builder key, while the compiler resolves either the builder
+  // key or the authored id as the query's alias, so both are looked up here.
+  const queriesById = new Map(
+    source.body.queries.flatMap((query) => [
+      [query.id, query] as const,
+      [query.key, query] as const,
+    ]),
+  );
   let pageRecordType: string | undefined;
 
   /**
