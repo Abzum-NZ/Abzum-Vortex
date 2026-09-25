@@ -32,6 +32,7 @@ import {
   protectedQueryCommandSchema,
   protectedQueryRefusalReasonCodes,
   protectedQueryResultSchema,
+  protectedQueryRowCapabilitiesSchema,
   type ProtectedQueryCommand,
   type ProtectedQueryPage,
   type ProtectedQueryRefusalReasonCode,
@@ -163,6 +164,8 @@ const pageReadSchema = z.discriminatedUnion("outcome", [
           z
             .object({
               recordId: recordIdSchema,
+              revision: revisionSchema,
+              capabilities: protectedQueryRowCapabilitiesSchema,
               values: z.record(fieldIdSchema, jsonValueSchema),
               systemValues: recordSystemValuesSchema.optional(),
             })
