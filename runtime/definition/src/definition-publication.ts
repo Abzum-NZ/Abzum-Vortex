@@ -364,7 +364,7 @@ const subjectOf = (dependency: ExactDefinitionDependency): string =>
   dependency.kind === "platform_theme"
     ? `${dependency.kind}:${dependency.catalogueThemeId}`
     : dependency.kind === "platform_block"
-      ? `${dependency.kind}:${dependency.blockId}`
+      ? `${dependency.kind}:${dependency.blockId}@${dependency.releaseVersion}`
       : dependency.kind === "application_flow"
           ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}`
           : dependency.kind === "application_flow_node"
@@ -576,6 +576,7 @@ const findPinned = <Kind extends ExactDefinitionDependency["kind"]>(
   manifest: readonly ExactDefinitionDependency[],
   kind: Kind,
   subject: string,
+  releaseVersion?: string,
 ): Extract<ExactDefinitionDependency, { kind: Kind }> => {
   const matches = manifest.filter(
     (entry) =>
@@ -583,7 +584,8 @@ const findPinned = <Kind extends ExactDefinitionDependency["kind"]>(
       (entry.kind === "platform_theme"
         ? entry.catalogueThemeId === subject
         : entry.kind === "platform_block"
-          ? entry.blockId === subject
+          ? entry.blockId === subject &&
+            (releaseVersion === undefined || entry.releaseVersion === releaseVersion)
           : entry.kind === "protected_operation"
             ? entry.operation.operationId === subject
             : entry.key === subject),
@@ -619,12 +621,15 @@ const resolveApplicationCompositionV2 = async (
   });
   if (snapshot.fingerprint !== fingerprint) refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
   const blocks = new Map(
-    snapshot.platformBlocks.releases.map((release) => [String(release.blockId), release] as const),
+    snapshot.platformBlocks.releases.map((release) => [
+      `${release.blockId}@${release.releaseVersion}`,
+      release,
+    ] as const),
   );
   if (blocks.size !== source.body.platform_block_dependencies.length)
     refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
   for (const authored of source.body.platform_block_dependencies) {
-    const release = blocks.get(String(authored.block_id));
+    const release = blocks.get(`${authored.block_id}@${authored.release_version}`);
     if (
       release === undefined ||
       !stable(release.releaseVersion) ||
@@ -634,7 +639,12 @@ const resolveApplicationCompositionV2 = async (
     )
       return refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
     if (pinned !== undefined) {
-      const exact = findPinned(pinned, "platform_block", String(authored.block_id));
+      const exact = findPinned(
+        pinned,
+        "platform_block",
+        String(authored.block_id),
+        String(authored.release_version),
+      );
       if (
         exact.releaseVersion !== release.releaseVersion ||
         exact.contentFingerprint !== release.contentFingerprint ||
@@ -782,7 +792,7 @@ const resolveDependencies = async (
       ? []
       : [
           ...compositionV2.platformBlocks.releases.map(
-            (release) => `platform_block:${release.blockId}`,
+            (release) => `platform_block:${release.blockId}@${release.releaseVersion}`,
           ),
           `platform_theme:${compositionV2.platformTheme.catalogueThemeId}`,
         ]),

@@ -1886,9 +1886,66 @@
                 "notices_table": {
                   "block": {
                     "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.0.0"
+                    "release_version": "1.2.0"
                   },
                   "settings": {
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organisation_notice.title"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Title"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organisation_notice.body"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Body"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organisation_notice.state"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "State"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organisation_notice.published_at"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Published"
+                            }
+                          }
+                        }
+                      ]
+                    },
                     "title": {
                       "kind": "text",
                       "value": "Organisation notices"
@@ -2126,9 +2183,79 @@
                 "privacy_cases_table": {
                   "block": {
                     "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.0.0"
+                    "release_version": "1.2.0"
                   },
                   "settings": {
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:privacy_request_case.subject"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Subject"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:privacy_request_case.request_kind"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Request kind"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:privacy_request_case.state"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "State"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:privacy_request_case.received_at"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Received"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:privacy_request_case.closed_at"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Closed"
+                            }
+                          }
+                        }
+                      ]
+                    },
                     "title": {
                       "kind": "text",
                       "value": "Privacy request cases"

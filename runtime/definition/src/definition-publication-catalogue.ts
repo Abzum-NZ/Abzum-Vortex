@@ -408,10 +408,11 @@ export const createImmutableDefinitionPublicationCatalogue = (
         .strict()
         .safeParse(selection);
       if (!parsedSelection.success) return undefined;
-      const selectedBlockIds = parsedSelection.data.platformBlocks.map((reference) =>
-        String(reference.blockId),
+      const selectedBlockIdentities = parsedSelection.data.platformBlocks.map(
+        (reference) => `${reference.blockId}@${reference.releaseVersion}`,
       );
-      if (new Set(selectedBlockIds).size !== selectedBlockIds.length) return undefined;
+      if (new Set(selectedBlockIdentities).size !== selectedBlockIdentities.length)
+        return undefined;
       const selectedBlocks = await Promise.all(
         parsedSelection.data.platformBlocks.map((reference) =>
           readPlatformBlockReleaseV2(reference.blockId, reference.releaseVersion),
@@ -424,7 +425,10 @@ export const createImmutableDefinitionPublicationCatalogue = (
       );
       if (selectedTheme === undefined) return undefined;
       const releases = (selectedBlocks as PlatformBlockReleaseV2[]).sort((left, right) =>
-        compareCanonicalStrings(String(left.blockId), String(right.blockId)),
+        compareCanonicalStrings(
+          `${left.blockId}@${left.releaseVersion}`,
+          `${right.blockId}@${right.releaseVersion}`,
+        ),
       );
       const evidence = {
         contractVersion: "2.0.0" as const,

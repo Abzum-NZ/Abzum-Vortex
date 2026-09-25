@@ -173,14 +173,17 @@ const compareKeyed = (
   reasons: VersionImpactReason[],
   previous: RecordValue[],
   candidate: RecordValue[],
-  identity: string,
+  identity: string | ((item: RecordValue) => string),
   componentKind: ComponentKind,
   compareExisting: (previousItem: RecordValue, candidateItem: RecordValue) => void,
   additionImpact: (item: RecordValue) => VersionImpact = () => "minor",
-  locationId: (item: RecordValue) => unknown = (item) => item[identity],
+  locationId: (item: RecordValue) => unknown = (item) =>
+    typeof identity === "function" ? identity(item) : item[identity],
 ): void => {
-  const previousById = new Map(previous.map((item) => [String(item[identity]), item]));
-  const candidateById = new Map(candidate.map((item) => [String(item[identity]), item]));
+  const identityOf = (item: RecordValue): string =>
+    typeof identity === "function" ? identity(item) : String(item[identity]);
+  const previousById = new Map(previous.map((item) => [identityOf(item), item]));
+  const candidateById = new Map(candidate.map((item) => [identityOf(item), item]));
   for (const [key, item] of candidateById)
     if (!previousById.has(key)) {
       const impact = additionImpact(item);
@@ -1931,17 +1934,27 @@ export const finaliseReasons = (reasons: VersionImpactReason[]): VersionImpactRe
   });
 };
 
-const sorted = (values: unknown[], identity?: string): unknown[] =>
-  [...values].sort((left, right) => {
-    if (identity) {
-      const result = compareText(
-        String(asRecord(left)[identity]),
-        String(asRecord(right)[identity]),
-      );
+const sorted = (
+  values: unknown[],
+  identity?: string | ((item: RecordValue) => string),
+): unknown[] => {
+  const identityOf: ((item: RecordValue) => string) | undefined =
+    typeof identity === "function"
+      ? identity
+      : identity === undefined
+        ? undefined
+        : (item) => String(item[identity]);
+  return [...values].sort((left, right) => {
+    if (identityOf) {
+      const result = compareText(identityOf(asRecord(left)), identityOf(asRecord(right)));
       if (result !== 0) return result;
     }
     return compareText(canonicalJson(left), canonicalJson(right));
   });
+};
+
+const blockDependencyIdentity = (item: RecordValue): string =>
+  `${String(item.blockId)}@${String(item.releaseVersion)}`;
 
 const normaliseField = (field: RecordValue): RecordValue => ({
   ...field,
@@ -2107,8 +2120,13 @@ const normaliseApplicationSharedContent = (content: ApplicationContentV2): Recor
   };
 };
 
-const assertUnique = (values: RecordValue[], key: string): void => {
-  const identities = values.map((value) => String(value[key]));
+const assertUnique = (
+  values: RecordValue[],
+  key: string | ((value: RecordValue) => string),
+): void => {
+  const identities = values.map((value) =>
+    typeof key === "function" ? key(value) : String(value[key]),
+  );
   if (new Set(identities).size !== identities.length)
     refuseVersionImpact("ambiguous_component_identity");
 };
@@ -2776,7 +2794,7 @@ export const compareApplicationContentsV2 = (
     reasons,
     previous.platformBlockDependencies as RecordValue[],
     candidate.platformBlockDependencies as RecordValue[],
-    "blockId",
+    blockDependencyIdentity,
     "platform_block_dependency",
     (before, after) =>
       compareSimpleComponent(reasons, "platform_block_dependency", after.blockId, before, after),
@@ -2833,7 +2851,10 @@ export const normaliseApplicationContentV2 = (
     connectionBindings: common.connectionBindings,
     interfaces: common.interfaces,
     publicAddresses: common.publicAddresses,
-    platformBlockDependencies: sorted(value.platformBlockDependencies as unknown[], "blockId"),
+    platformBlockDependencies: sorted(
+      value.platformBlockDependencies as unknown[],
+      blockDependencyIdentity,
+    ),
     shells: sorted(
       (value.shells as RecordValue[]).map((shell) => ({
         ...shell,
@@ -2863,7 +2884,7 @@ export const assertUnambiguousApplicationContentV2 = (content: unknown): void =>
   const value = asRecord(content);
   assertUnambiguousApplicationSharedContent(value);
   assertUnique(value.pages as RecordValue[], "pageId");
-  assertUnique(value.platformBlockDependencies as RecordValue[], "blockId");
+  assertUnique(value.platformBlockDependencies as RecordValue[], blockDependencyIdentity);
   assertUnique(value.shells as RecordValue[], "shellId");
   assertUnique(value.shells as RecordValue[], "key");
   const contentSlots = (value.shells as RecordValue[]).flatMap((shell) => {
