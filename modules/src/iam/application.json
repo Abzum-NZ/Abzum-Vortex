@@ -68,7 +68,7 @@
         "id": "role_iam_reviewer",
         "key": "iam_reviewer",
         "name": "IAM reviewer",
-        "home_page": "iam_overview",
+        "home_page": "iam_access_requests",
         "permissions": [
           "application.iam.open"
         ]
@@ -77,7 +77,7 @@
         "id": "role_iam_administrator",
         "key": "iam_administrator",
         "name": "IAM administrator",
-        "home_page": "iam_overview",
+        "home_page": "iam_access_requests",
         "permissions": [
           "application.iam.open",
           "application.iam.request",
@@ -103,7 +103,7 @@
         "type": "page",
         "label": "Overview",
         "page": "iam_overview",
-        "permission": "application.iam.open"
+        "permission": "platform.organization.permissions.read"
       },
       {
         "id": "nav_iam_people_heading",
@@ -115,7 +115,7 @@
             "type": "page",
             "label": "People",
             "page": "iam_people",
-            "permission": "application.iam.open"
+            "permission": "platform.organization.accounts.read"
           }
         ]
       },
@@ -129,28 +129,28 @@
             "type": "page",
             "label": "Roles and Groups",
             "page": "iam_roles_groups",
-            "permission": "application.iam.open"
+            "permission": "platform.organization.roles.read"
           },
           {
             "id": "nav_iam_manage_roles_groups",
             "type": "page",
             "label": "Manage roles and Groups",
             "page": "iam_manage_roles_groups",
-            "permission": "application.iam.manage"
+            "permission": "platform.organization.roles.manage"
           },
           {
             "id": "nav_iam_assignments",
             "type": "page",
             "label": "Assignments",
             "page": "iam_assignments",
-            "permission": "application.iam.open"
+            "permission": "platform.organization.assignments.read"
           },
           {
             "id": "nav_iam_manage_assignments",
             "type": "page",
             "label": "Manage assignments",
             "page": "iam_manage_assignments",
-            "permission": "application.iam.manage"
+            "permission": "platform.organization.assignments.manage"
           }
         ]
       },
@@ -178,14 +178,14 @@
             "type": "page",
             "label": "Eligible roles",
             "page": "iam_privileged_eligible",
-            "permission": "application.iam.open"
+            "permission": "platform.organization.roles.read"
           },
           {
             "id": "nav_iam_active",
             "type": "page",
             "label": "Active roles",
             "page": "iam_privileged_active",
-            "permission": "application.iam.open"
+            "permission": "platform.organization.roles.read"
           }
         ]
       }
@@ -253,7 +253,7 @@
         "key": "iam_overview",
         "name": "IAM overview",
         "type": "dashboard",
-        "permission": "application.iam.open",
+        "permission": "platform.organization.permissions.read",
         "states": [
           "normal",
           "loading",
@@ -309,7 +309,7 @@
         "key": "iam_people",
         "name": "People",
         "type": "dashboard",
-        "permission": "application.iam.open",
+        "permission": "platform.organization.accounts.read",
         "states": [
           "normal",
           "loading",
@@ -392,7 +392,7 @@
         "key": "iam_roles_groups",
         "name": "Roles and Groups",
         "type": "dashboard",
-        "permission": "application.iam.open",
+        "permission": "platform.organization.roles.read",
         "states": [
           "normal",
           "loading",
@@ -502,7 +502,7 @@
         "key": "iam_assignments",
         "name": "Assignments",
         "type": "dashboard",
-        "permission": "application.iam.open",
+        "permission": "platform.organization.assignments.read",
         "states": [
           "normal",
           "loading",
@@ -586,7 +586,7 @@
         "key": "iam_manage_roles_groups",
         "name": "Manage roles and Groups",
         "type": "dashboard",
-        "permission": "application.iam.manage",
+        "permission": "platform.organization.roles.manage",
         "states": [
           "normal",
           "loading",
@@ -1816,7 +1816,7 @@
         "key": "iam_manage_assignments",
         "name": "Manage assignments",
         "type": "dashboard",
-        "permission": "application.iam.manage",
+        "permission": "platform.organization.assignments.manage",
         "states": [
           "normal",
           "loading",
@@ -2719,7 +2719,7 @@
         "key": "iam_privileged_eligible",
         "name": "Eligible roles",
         "type": "dashboard",
-        "permission": "application.iam.open",
+        "permission": "platform.organization.roles.read",
         "states": [
           "normal",
           "loading",
@@ -2775,7 +2775,7 @@
         "key": "iam_privileged_active",
         "name": "Active roles",
         "type": "dashboard",
-        "permission": "application.iam.open",
+        "permission": "platform.organization.roles.read",
         "states": [
           "normal",
           "loading",

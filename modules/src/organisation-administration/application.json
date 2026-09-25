@@ -42,7 +42,7 @@
         "id": "role_organisation_administrator",
         "key": "organisation_administrator",
         "name": "Organisation administrator",
-        "home_page": "organisation_overview",
+        "home_page": "organisation_notices",
         "permissions": [
           "application.organisation_administration.open",
           "vortex.organisation_administration.organisation_notice.create",
@@ -76,28 +76,28 @@
             "type": "page",
             "label": "Overview",
             "page": "organisation_overview",
-            "permission": "application.organisation_administration.open"
+            "permission": "platform.organization.accounts.read"
           },
           {
             "id": "nav_accounts",
             "type": "page",
             "label": "Organisation accounts",
             "page": "organisation_accounts",
-            "permission": "application.organisation_administration.open"
+            "permission": "platform.organization.accounts.read"
           },
           {
             "id": "nav_invitations",
             "type": "page",
             "label": "Invitations",
             "page": "organisation_invitations",
-            "permission": "application.organisation_administration.open"
+            "permission": "platform.organization.invitations.read"
           },
           {
             "id": "nav_runtime_settings",
             "type": "page",
             "label": "Runtime settings",
             "page": "organisation_runtime_settings",
-            "permission": "application.organisation_administration.open"
+            "permission": "platform.organization.runtime_settings.read"
           }
         ]
       },
@@ -287,7 +287,7 @@
         "key": "organisation_overview",
         "name": "Organisation overview",
         "type": "dashboard",
-        "permission": "application.organisation_administration.open",
+        "permission": "platform.organization.accounts.read",
         "states": [
           "normal",
           "loading",
@@ -346,7 +346,7 @@
         "key": "organisation_accounts",
         "name": "Organisation accounts",
         "type": "dashboard",
-        "permission": "application.organisation_administration.open",
+        "permission": "platform.organization.accounts.read",
         "states": [
           "normal",
           "loading",
@@ -867,7 +867,7 @@
         "key": "organisation_invitations",
         "name": "Invitations",
         "type": "dashboard",
-        "permission": "application.organisation_administration.open",
+        "permission": "platform.organization.invitations.read",
         "states": [
           "normal",
           "loading",
@@ -1235,7 +1235,7 @@
         "key": "organisation_runtime_settings",
         "name": "Runtime settings",
         "type": "dashboard",
-        "permission": "application.organisation_administration.open",
+        "permission": "platform.organization.runtime_settings.read",
         "states": [
           "normal",
           "loading",
