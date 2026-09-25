@@ -1,10 +1,14 @@
 -- #1076: keep each validation rule in one place.
 --
 -- Semantic lists that SQL must enforce at the storage boundary are read from
--- one reference table instead of a hand-copied literal inside each function.
--- The TypeScript contracts stay the authored source; every seed row below names
--- the symbol it is generated from, so a contract change is a single seed edit
--- and never a second list to keep in step.
+-- one reference table instead of a literal copied into each function. The
+-- TypeScript contracts stay the authored source; every seeded list below names
+-- the symbol it is copied from, so a contract change is one seed change in one
+-- place rather than an edit to every function that repeats the list.
+--
+-- Every function this migration creates or replaces has an identical canonical
+-- source under supabase/schemas/<schema>/<function>.sql, with its comment and
+-- privileges restated here.
 --
 -- Moved into the reference table:
 --   * metering_forbidden_dimension_word
@@ -63,8 +67,8 @@ revoke all on table vortex_access.validation_reference_values
 from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
--- Seeded from the TypeScript symbols named above; the list is the single SQL
--- home for each value and no function repeats a literal.
+-- Copied from the TypeScript symbols named above; this is the single SQL home
+-- for each value and no function repeats a literal.
 insert into vortex_access.validation_reference_values (
   reference_list, reference_value, reference_ordinal
 ) values
@@ -92,33 +96,47 @@ insert into vortex_access.validation_reference_values (
   ('private_invalidation_change_kind', 'access_changed', 5);
 
 comment on table vortex_access.validation_reference_values is
-  'Single SQL home for the semantic lists SQL must enforce; each row is generated from the named TypeScript contract symbol, so a contract change is one seed edit.';
+  'Single SQL home for the semantic lists SQL must enforce; each list is copied from the named TypeScript contract symbol, so a contract change is one seed change.';
 
--- The ordered values of one list. Security definer so callers never hold direct
--- table access, and stable because it reads the reference table.
-create function vortex_access.validation_reference_list(p_list text)
+create or replace function vortex_access.validation_reference_list(p_list text)
 returns text[]
-language sql
+language plpgsql
 stable
 security definer
 set search_path = ''
 as $function$
-  select coalesce(
-    pg_catalog.array_agg(reference.reference_value order by reference.reference_ordinal),
-    array[]::text[]
+declare
+  selected_values text[];
+begin
+  select pg_catalog.array_agg(
+    reference.reference_value order by reference.reference_ordinal
   )
+  into selected_values
   from vortex_access.validation_reference_values as reference
   where reference.reference_list = p_list;
+
+  -- An unknown or empty list is an internal inconsistency. Refusing it keeps
+  -- every check that reads a list closed instead of silently admitting values
+  -- because the list it compares against came back empty.
+  if selected_values is null then
+    raise exception using errcode = '55000',
+      message = 'Validation reference list is unavailable';
+  end if;
+
+  return selected_values;
+end
 $function$;
 
 alter function vortex_access.validation_reference_list(text) owner to postgres;
 
 revoke all on function vortex_access.validation_reference_list(text)
-from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
-
 grant execute on function vortex_access.validation_reference_list(text)
-to vortex_request, vortex_runtime, vortex_record_owner, vortex_record_adapter;
+  to vortex_request, vortex_runtime;
+
+comment on function vortex_access.validation_reference_list(text) is
+  'Returns the ordered values of one seeded validation reference list; refuses an unknown or empty list so no check can pass against a missing list.';
 
 -- ----------------------------------------------------------------------------
 -- 1. Metering dimensions: forbidden words now come from the reference table.
@@ -160,6 +178,13 @@ as $function$
     );
 $function$;
 
+revoke all on function vortex_access.metering_event_dimensions_are_valid(jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+
+comment on function vortex_access.metering_event_dimensions_are_valid(jsonb) is
+  'Storage check for safe metering dimensions: a small flat map of bounded scalars whose keys name no word in the metering_forbidden_dimension_word reference list.';
+
 -- ----------------------------------------------------------------------------
 -- 2. Private invalidation topic: prefix now comes from the reference table.
 -- Complete live bodies from 20260924380000_private_invalidation_channels.sql,
@@ -185,6 +210,14 @@ as $function$
   end
 $function$;
 
+revoke all on function vortex_invalidation.change_topic(uuid, uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_invalidation.change_topic(uuid, uuid)
+  to vortex_request, vortex_runtime;
+
+comment on function vortex_invalidation.change_topic(uuid, uuid) is
+  'Returns the deterministic private Broadcast topic for one organisation and application.';
+
 create or replace function vortex_invalidation.topic_organization_id(p_topic text)
 returns uuid
 language sql
@@ -206,6 +239,14 @@ as $function$
   end
 $function$;
 
+revoke all on function vortex_invalidation.topic_organization_id(text)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_invalidation.topic_organization_id(text)
+  to vortex_request, vortex_runtime;
+
+comment on function vortex_invalidation.topic_organization_id(text) is
+  'Extracts the organisation from a well-formed private topic, or null.';
+
 create or replace function vortex_invalidation.topic_application_root_id(p_topic text)
 returns uuid
 language sql
@@ -226,6 +267,14 @@ as $function$
     else null
   end
 $function$;
+
+revoke all on function vortex_invalidation.topic_application_root_id(text)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_invalidation.topic_application_root_id(text)
+  to vortex_request, vortex_runtime;
+
+comment on function vortex_invalidation.topic_application_root_id(text) is
+  'Extracts the application from a well-formed private topic, or null.';
 
 create or replace function vortex_invalidation.publish_change_notice(
   p_organization_id uuid,
@@ -323,6 +372,18 @@ begin
 end
 $function$;
 
+revoke all on function vortex_invalidation.publish_change_notice(
+  uuid, uuid, uuid, uuid, bigint, text, bigint, bigint, uuid
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_invalidation.publish_change_notice(
+  uuid, uuid, uuid, uuid, bigint, text, bigint, bigint, uuid
+) to vortex_request, vortex_runtime, vortex_record_adapter;
+
+comment on function vortex_invalidation.publish_change_notice(
+  uuid, uuid, uuid, uuid, bigint, text, bigint, bigint, uuid
+) is
+  'Protected post-commit broadcast of the bounded content-free invalidation envelope on the private topic for one organisation and application.';
+
 -- ----------------------------------------------------------------------------
 -- 3. Search entries: the priority/weight mapping is removed. Complete live body
 -- from 20260924020000_organisation_search_documents.sql, unchanged except that
@@ -359,6 +420,13 @@ as $function$
       )
   end;
 $function$;
+
+revoke all on function vortex_search.document_entries_are_valid(jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+
+comment on function vortex_search.document_entries_are_valid(jsonb) is
+  'Storage check for search document entries: bounded array of unique field entries with the exact entry shape, types and text sizes; ranking weights are derived by the runtime producer.';
 
 -- ----------------------------------------------------------------------------
 -- 4. Field-bounds resolver: the stale parity comment is removed. Complete live
@@ -509,6 +577,13 @@ begin
   );
 end
 $function$;
+
+revoke execute on function vortex_access.resolve_record_field_bounds_internal(jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_module_owner, vortex_record_owner, vortex_record_adapter;
+
+comment on function vortex_access.resolve_record_field_bounds_internal(jsonb) is
+  'Private field-bounds resolution over one allowed exact-record access decision; looks each contribution''s field policy up from the live permission catalogue itself, never from a caller-supplied declaration.';
 
 -- ----------------------------------------------------------------------------
 -- 5. Connection destination key: drop the keyword blacklist that can never
