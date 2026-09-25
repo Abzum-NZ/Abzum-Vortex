@@ -428,14 +428,14 @@ begin
   end;
   allow_unlimited_retention_value := (p_limits -> 'allowUnlimitedRetentionDays') = 'true'::jsonb;
   allow_unlimited_count_value := (p_limits -> 'allowUnlimitedRecordCount') = 'true'::jsonb;
-  select coalesce(
+  select pg_catalog.coalesce(
     pg_catalog.array_agg(item.value #>> '{}' order by item.ordinal),
     array[]::text[]
   )
     into allowed_actions_value
   from pg_catalog.jsonb_array_elements(p_limits -> 'allowedActions')
     with ordinality as item(value, ordinal);
-  select coalesce(
+  select pg_catalog.coalesce(
     pg_catalog.array_agg(item.value #>> '{}' order by item.ordinal),
     array[]::text[]
   )
@@ -653,7 +653,7 @@ begin
     )
   limit 1
   for share;
-  return coalesce(matched, false);
+  return pg_catalog.coalesce(matched, false);
 end
 $function$;
 
@@ -745,7 +745,7 @@ begin
     )
   for share of application_release, application_root;
 
-  return coalesce(matched, false);
+  return pg_catalog.coalesce(matched, false);
 end
 $function$;
 
