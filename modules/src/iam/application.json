@@ -2906,9 +2906,105 @@
               "iam_access_request_detail_body": {
                 "block": {
                   "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
-                  "release_version": "1.0.0"
+                  "release_version": "1.2.0"
                 },
                 "settings": {
+                  "detail_fields": {
+                    "kind": "list",
+                    "items": [
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.request_number"},
+                          "label": {"kind":"text","value":"Request number"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.title"},
+                          "label": {"kind":"text","value":"Title"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.request_type"},
+                          "label": {"kind":"text","value":"Request type"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.state"},
+                          "label": {"kind":"text","value":"State"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.beneficiary"},
+                          "label": {"kind":"text","value":"Beneficiary"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.target_role_key"},
+                          "label": {"kind":"text","value":"Target role"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.target_group_key"},
+                          "label": {"kind":"text","value":"Target group"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.application_context"},
+                          "label": {"kind":"text","value":"Application context"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.reason"},
+                          "label": {"kind":"text","value":"Reason"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.starts_on"},
+                          "label": {"kind":"text","value":"Starts on"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.expires_on"},
+                          "label": {"kind":"text","value":"Expires on"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.submitted_at"},
+                          "label": {"kind":"text","value":"Submitted at"}
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.decided_at"},
+                          "label": {"kind":"text","value":"Decided at"}
+                        }
+                      }
+                    ]
+                  },
                   "title": {
                     "kind": "text",
                     "value": "Access request"

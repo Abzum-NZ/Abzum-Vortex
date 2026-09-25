@@ -47,14 +47,7 @@ begin
   -- Receipt identity remains authoritative for replay and changed-input
   -- duplicate classification. A completed command must reach that owner even
   -- if a caller supplies no longer-current relationship mutations.
-  if not exists (
-    select 1 from vortex_record.save_command_receipts receipt
-    where receipt.organization_id = (context_value ->> 'organizationId')::uuid
-      and receipt.application_root_id = (context_value ->> 'applicationRootId')::uuid
-      and receipt.actor_organization_account_id =
-        (context_value ->> 'organizationAccountId')::uuid
-      and receipt.command_id = p_command_id
-  ) then
+  if not vortex_record.command_receipt_exists_internal('record_save', p_command_id) then
     -- The writer repeats the protected preparation itself.  Closure identity,
     -- revisions and the complete generated-field set therefore never depend
     -- on caller-controlled transaction state or a replayable preparation token.
@@ -66,14 +59,7 @@ begin
     if preparation_value ->> 'outcome' in ('restart', 'conflict', 'refused', 'refused_recorded') then
       return preparation_value;
     end if;
-    if preparation_value ->> 'outcome' = 'defer' and exists (
-      select 1 from vortex_record.save_command_receipts receipt
-      where receipt.organization_id = (context_value ->> 'organizationId')::uuid
-        and receipt.application_root_id = (context_value ->> 'applicationRootId')::uuid
-        and receipt.actor_organization_account_id =
-          (context_value ->> 'organizationAccountId')::uuid
-        and receipt.command_id = p_command_id
-    ) then
+    if preparation_value ->> 'outcome' = 'defer' and vortex_record.command_receipt_exists_internal('record_save', p_command_id) then
       preparation_value := null;
     elsif preparation_value ->> 'outcome' = 'defer' then
       catalogue := vortex_record.relationship_total_catalogue_internal();
@@ -251,7 +237,6 @@ begin
   return result_value;
 end
 $function$;
-
 
 revoke all on function vortex_record.save_base_record_with_relationship_totals(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid,jsonb)
 from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
