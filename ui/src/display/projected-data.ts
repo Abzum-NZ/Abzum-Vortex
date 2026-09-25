@@ -1,5 +1,6 @@
 import {
   builderKeySchema,
+  fieldIdSchema,
   richTextDocumentV2Schema,
   safeHttpsUrlSchema,
   timestampSchema,
@@ -140,24 +141,45 @@ export type DisplayDataState<Values> =
 /** Declared semantic event names this display family can emit. */
 export type DisplaySemanticEventName = Extract<
   ComponentSemanticEventKind,
-  "refresh" | "row_action" | "selection_changed" | "sort_changed" | "page_changed"
+  | "refresh"
+  | "row_clicked"
+  | "row_action"
+  | "selection_changed"
+  | "sort_changed"
+  | "page_changed"
+  | "bulk_action"
+  | "inline_edit"
 >;
 
 /**
  * One declared semantic event. Row and item events always carry stable identity;
  * no event is ever emitted without a real user interaction. The bound flow, not the
  * component, decides what a row action does.
+ *
+ * A row click, row action, bulk action and inline-edit commit carry the stable `eventId` of the
+ * exact configured control that fired, because one table placement may declare several named
+ * commands that each bind to a different flow. A legacy `row_action` from an earlier release that
+ * declares only one command may leave it absent.
  */
 export type DisplaySemanticEvent =
   | Readonly<{ event: "refresh" }>
-  | Readonly<{ event: "row_action"; recordId: string }>
+  | Readonly<{ event: "row_clicked"; eventId: string; recordId: string }>
+  | Readonly<{ event: "row_action"; eventId?: string; recordId: string }>
   | Readonly<{ event: "selection_changed"; recordId: string; selected: boolean }>
   | Readonly<{
       event: "sort_changed";
       columnKey: string;
       direction: "ascending" | "descending";
     }>
-  | Readonly<{ event: "page_changed"; page: number }>;
+  | Readonly<{ event: "page_changed"; page: number }>
+  | Readonly<{ event: "bulk_action"; eventId: string; recordIds: readonly string[] }>
+  | Readonly<{
+      event: "inline_edit";
+      eventId: string;
+      recordId: string;
+      field: string;
+      value: DisplayCellValue;
+    }>;
 
 export type DisplayEventHandler = (event: DisplaySemanticEvent) => void;
 
@@ -175,10 +197,13 @@ const DISPLAY_REFUSAL_REASONS: readonly DisplayRefusalReason[] = [
 /** Every event name a display block accepts; each block further narrows this to its own binding. */
 export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.freeze([
   "refresh",
+  "row_clicked",
   "row_action",
   "selection_changed",
   "sort_changed",
   "page_changed",
+  "bulk_action",
+  "inline_edit",
 ]);
 
 // The data-free states carry no values, so one frozen instance serves every block's state type.
@@ -248,6 +273,18 @@ const requireBuilderKey = (
 ): string => {
   const parsed = builderKeySchema.safeParse(value);
   return parsed.success ? parsed.data : fail(message, location);
+};
+
+/** A row cell, column, detail field or sort key: a builder key or a declared field identity. */
+const requireFieldKey = (
+  value: unknown,
+  message: string,
+  location: DefinitionRenderErrorLocation,
+): string => {
+  const parsed = builderKeySchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  const field = fieldIdSchema.safeParse(value);
+  return field.success ? field.data : fail(message, location);
 };
 
 const requirePositiveInteger = (
@@ -389,7 +426,7 @@ const parseRows = (
       );
       const cells: Record<string, DisplayCellValue> = {};
       for (const [key, cell] of Object.entries(cellsRecord)) {
-        const cellKey = requireBuilderKey(key, `Invalid projected cell key '${key}'`, rowLocation);
+        const cellKey = requireFieldKey(key, `Invalid projected cell key '${key}'`, rowLocation);
         cells[cellKey] = parseCellValue(cell, { ...rowLocation, propertyPath: [cellKey] });
       }
       return Object.freeze({ recordId, cells: Object.freeze(cells) });
@@ -408,7 +445,7 @@ const parseColumns = (
       const columnLocation = { ...location, propertyPath: [`columns[${index}]`] };
       const record = requireRecord(item, "A projected column must be an object", columnLocation);
       requireExactKeys(record, ["key", "label"], columnLocation);
-      const key = requireBuilderKey(
+      const key = requireFieldKey(
         record.key,
         "A projected column requires a stable key",
         columnLocation,
@@ -518,7 +555,7 @@ const parseFields = (
       const fieldLocation = { ...location, propertyPath: [`fields[${index}]`] };
       const record = requireRecord(item, "A detail field must be an object", fieldLocation);
       requireExactKeys(record, ["key", "label", "value"], fieldLocation);
-      const key = requireBuilderKey(
+      const key = requireFieldKey(
         record.key,
         "A detail field requires a stable key",
         fieldLocation,
@@ -675,7 +712,7 @@ export const parseTablePayload = (
   if (record.sort !== undefined) {
     const sortRecord = requireRecord(record.sort, "Projected sort is invalid", location);
     requireExactKeys(sortRecord, ["columnKey", "direction"], location);
-    const columnKey = requireBuilderKey(
+    const columnKey = requireFieldKey(
       sortRecord.columnKey,
       "A projected sort requires a column key",
       location,

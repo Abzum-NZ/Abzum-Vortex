@@ -1,4 +1,4 @@
-create or replace function vortex_record.save_base_record(
+create or replace function vortex_record.save_named_action_set_fields_internal(
   p_command_id uuid,
   p_operation text,
   p_record_type_id uuid,
@@ -8,7 +8,12 @@ create or replace function vortex_record.save_base_record(
   p_final_values jsonb,
   p_selected_group_id uuid,
   p_activity_id uuid,
-  p_occurrence_id uuid
+  p_occurrence_id uuid,
+  p_action_owner_kind text,
+  p_action_owner_id uuid,
+  p_action_release_revision bigint,
+  p_action_id uuid,
+  p_inputs jsonb
 )
 returns jsonb
 language plpgsql
@@ -58,7 +63,13 @@ declare
 begin
   if p_command_id is null
     or p_command_id = '00000000-0000-0000-0000-000000000000'::uuid
-    or p_operation not in ('create', 'update')
+    or p_operation is distinct from 'update'
+    or p_action_owner_kind is null
+    or p_action_owner_kind not in ('application', 'module')
+    or p_action_owner_id is null or p_action_id is null
+    or p_action_release_revision is null
+    or p_action_release_revision not between 1 and 9007199254740991
+    or pg_catalog.jsonb_typeof(p_inputs) is distinct from 'object'
     or p_record_type_id is null
     or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
     or pg_catalog.jsonb_typeof(p_submitted_values) is distinct from 'object'
@@ -72,6 +83,7 @@ begin
     ))
     or (p_operation = 'update' and (
       p_record_id is null
+      or p_expected_concurrency_number is null
       or p_expected_concurrency_number not between 1 and 9007199254740990
       or p_selected_group_id is not null
     )) then
@@ -90,14 +102,20 @@ begin
   actor_id_value := (context_value ->> 'organizationAccountId')::uuid;
   correlation_id_value := (context_value ->> 'correlationId')::uuid;
 
-  command_fingerprint_value := vortex_record.base_save_command_fingerprint_internal(
-    p_command_id, p_operation, p_record_type_id, p_record_id,
-    p_expected_concurrency_number, p_submitted_values, p_selected_group_id
+  command_fingerprint_value := vortex_record.named_action_command_fingerprint_internal(
+    p_command_id, p_action_owner_kind, p_action_owner_id,
+    p_action_release_revision, p_action_id, p_record_type_id, p_record_id,
+    p_expected_concurrency_number, p_inputs
   );
 
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'record_save', p_command_id, p_operation, command_fingerprint_value,
-    p_record_type_id, null, '{}'::jsonb, '{}'::jsonb, false
+    'named_action', p_command_id, 'named_action', command_fingerprint_value,
+    p_record_type_id, p_record_id, pg_catalog.jsonb_build_object(
+      'actionOwnerKind', p_action_owner_kind,
+      'actionOwnerId', p_action_owner_id,
+      'actionReleaseRevision', p_action_release_revision,
+      'actionId', p_action_id
+    ), '{}'::jsonb, false
   );
   if receipt_claim ->> 'status' is distinct from 'claimed' then
     if receipt_claim ->> 'status' = 'identity_conflict' then
@@ -108,10 +126,11 @@ begin
     if receipt_claim ->> 'status' is distinct from 'completed' then
       return pg_catalog.jsonb_build_object('outcome', 'conflict');
     end if;
-    projection := vortex_record.read_record(
-      p_record_type_id, (receipt_claim ->> 'recordId')::uuid
+    projection := vortex_record.project_named_action_record_internal(
+      p_action_owner_kind, p_action_owner_id, p_action_release_revision,
+      p_action_id, p_record_type_id, (receipt_claim ->> 'recordId')::uuid
     );
-    if projection ->> 'outcome' <> 'allowed' then
+    if projection ->> 'outcome' <> 'completed' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'record_unavailable'
       );
@@ -127,11 +146,12 @@ begin
     );
   end if;
 
-  meta := vortex_record.resolve_record_action_context_internal(
-    p_record_type_id, p_operation
+  meta := vortex_record.resolve_named_action_context_internal(
+    p_action_owner_kind, p_action_owner_id, p_action_release_revision,
+    p_action_id, p_record_type_id
   );
   if pg_catalog.jsonb_typeof(meta -> 'recordType') <> 'object' then
-    perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+    perform vortex_record.release_command_receipt_internal('named_action', p_command_id);
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'record_unavailable'
     );
@@ -149,7 +169,7 @@ begin
     from pg_catalog.jsonb_array_elements(meta -> 'recordType' -> 'fields') as item(value)
     where pg_catalog.lower(item.value ->> 'fieldId') = entry_key;
     if not found then
-      perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+      perform vortex_record.release_command_receipt_internal('named_action', p_command_id);
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'unknown_field'
       );
@@ -163,7 +183,7 @@ begin
         or not (relationship_value ? case field_value ->> 'type'
           when 'link' then 'toRecordType' else 'toRecordTypes' end)
         or relationship_value ->> 'cardinality' not in ('one_to_one', 'many_to_one') then
-        perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+        perform vortex_record.release_command_receipt_internal('named_action', p_command_id);
         return pg_catalog.jsonb_build_object(
           'outcome', 'refused', 'reasonCode', 'relationship_shape_unsupported'
         );
@@ -191,7 +211,7 @@ begin
     from pg_catalog.jsonb_array_elements(meta -> 'recordType' -> 'fields') as item(value)
     where (item.value ->> 'fieldId')::uuid = submitted_field_id;
     if not found then
-      perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+      perform vortex_record.release_command_receipt_internal('named_action', p_command_id);
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'unknown_field'
       );
@@ -205,7 +225,7 @@ begin
       from pg_catalog.jsonb_array_elements(relationship_changes) as change(value)
       where (change.value ->> 'fieldId')::uuid = submitted_field_id
     ) then
-      perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+      perform vortex_record.release_command_receipt_internal('named_action', p_command_id);
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'relationship_value_unavailable'
       );
@@ -213,11 +233,12 @@ begin
   end loop;
 
   if p_operation = 'update' then
-    loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number
+    loaded := vortex_record.load_named_action_facts_internal(
+      p_action_owner_kind, p_action_owner_id, p_action_release_revision,
+      p_action_id, p_record_type_id, p_record_id, p_expected_concurrency_number
     );
     if loaded ->> 'outcome' = 'conflict' then
-      perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+      perform vortex_record.release_command_receipt_internal('named_action', p_command_id);
       return pg_catalog.jsonb_build_object(
         'outcome', 'conflict',
         'concurrencyNumber', loaded -> 'concurrencyNumber'
@@ -225,7 +246,7 @@ begin
     end if;
     if loaded ->> 'outcome' <> 'loaded'
       or pg_catalog.jsonb_typeof(meta -> 'declaration') <> 'object' then
-      perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+      perform vortex_record.release_command_receipt_internal('named_action', p_command_id);
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'record_unavailable'
       );
@@ -237,11 +258,10 @@ begin
       )
     );
     if decision ->> 'outcome' = 'refused' then
-      activity_time := vortex_record.append_base_save_activity_internal(
-        p_activity_id, 'update', organization_id_value,
-        array[]::uuid[], 'refused'
+      activity_time := vortex_record.append_named_action_activity_internal(
+        p_activity_id, p_record_id, array[]::uuid[], 'refused'
       );
-      perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+      perform vortex_record.release_command_receipt_internal('named_action', p_command_id);
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused_recorded', 'reasonCode', 'record_unavailable'
       );
@@ -263,7 +283,7 @@ begin
         where pg_catalog.lower(allowed.value) =
           pg_catalog.lower(relationship_change ->> 'fieldId')
       ) then
-        perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+        perform vortex_record.release_command_receipt_internal('named_action', p_command_id);
         return pg_catalog.jsonb_build_object(
           'outcome', 'refused', 'reasonCode', 'field_not_changeable'
         );
@@ -298,7 +318,7 @@ begin
             '00000000-0000-0000-0000-000000000000'::uuid
           or (relationship_change -> 'value' ->> 'recordId')::uuid =
             '00000000-0000-0000-0000-000000000000'::uuid then
-          perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+          perform vortex_record.release_command_receipt_internal('named_action', p_command_id);
           return pg_catalog.jsonb_build_object(
             'outcome', 'refused', 'reasonCode', 'relationship_unavailable'
           );
@@ -308,7 +328,7 @@ begin
         if not vortex_record.relationship_declares_target_internal(
           relationship_change -> 'relationship', target_record_type_id
         ) then
-          perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+          perform vortex_record.release_command_receipt_internal('named_action', p_command_id);
           return pg_catalog.jsonb_build_object(
             'outcome', 'refused', 'reasonCode', 'relationship_unavailable'
           );
@@ -319,7 +339,7 @@ begin
         );
         if target_loaded ->> 'outcome' <> 'loaded'
           or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then
-          perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+          perform vortex_record.release_command_receipt_internal('named_action', p_command_id);
           return pg_catalog.jsonb_build_object(
             'outcome', 'refused', 'reasonCode', 'relationship_unavailable'
           );
@@ -328,7 +348,7 @@ begin
           target_loaded -> 'declaration', target_record_id, target_loaded -> 'facts'
         );
         if target_decision ->> 'outcome' <> 'allowed' then
-          perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+          perform vortex_record.release_command_receipt_internal('named_action', p_command_id);
           return pg_catalog.jsonb_build_object(
             'outcome', 'refused', 'reasonCode', 'relationship_unavailable'
           );
@@ -413,11 +433,10 @@ begin
       loaded -> 'declaration', p_record_id, proposed_facts
     );
     if decision ->> 'outcome' <> 'allowed' then
-      activity_time := vortex_record.append_base_save_activity_internal(
-        p_activity_id, 'update', organization_id_value,
-        array[]::uuid[], 'refused'
+      activity_time := vortex_record.append_named_action_activity_internal(
+        p_activity_id, p_record_id, array[]::uuid[], 'refused'
       );
-      perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+      perform vortex_record.release_command_receipt_internal('named_action', p_command_id);
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused_recorded', 'reasonCode', 'proposed_record_refused'
       );
@@ -434,15 +453,16 @@ begin
     );
   else
     if p_final_values = '{}'::jsonb then
-      perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+      perform vortex_record.release_command_receipt_internal('named_action', p_command_id);
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'empty_base_update'
       );
     end if;
     if value_final_values <> '{}'::jsonb then
-      mutation := vortex_record.change_record(
+      mutation := vortex_record.change_record_by_named_action_internal(
         p_record_type_id, p_record_id, p_expected_concurrency_number,
-        value_final_values, value_submitted_field_ids
+        value_final_values, value_submitted_field_ids,
+        p_action_owner_kind, p_action_owner_id, p_action_release_revision, p_action_id
       );
       increment_for_relationship := false;
     else
@@ -471,15 +491,14 @@ begin
 
   if mutation ->> 'outcome' not in ('completed', 'allowed') then
     if p_operation = 'create' and mutation ->> 'reasonCode' = 'access_refused' then
-      activity_time := vortex_record.append_base_save_activity_internal(
-        p_activity_id, 'create', organization_id_value,
-        array[]::uuid[], 'refused'
+      activity_time := vortex_record.append_named_action_activity_internal(
+        p_activity_id, p_record_id, array[]::uuid[], 'refused'
       );
       mutation := mutation || pg_catalog.jsonb_build_object(
         'outcome', 'refused_recorded'
       );
     end if;
-    perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+    perform vortex_record.release_command_receipt_internal('named_action', p_command_id);
     return mutation;
   end if;
 
@@ -492,9 +511,8 @@ begin
       else p_final_values end
   ) as key;
 
-  activity_time := vortex_record.append_base_save_activity_internal(
-    p_activity_id, p_operation, saved_record_id,
-    changed_field_ids, 'completed'
+  activity_time := vortex_record.append_named_action_activity_internal(
+    p_activity_id, saved_record_id, changed_field_ids, 'completed'
   );
 
   event_kind := case when p_operation = 'create' then 'created' else 'changed' end;
@@ -521,14 +539,17 @@ begin
   end if;
 
   perform vortex_record.complete_command_receipt_internal(
-    'record_save', p_command_id, saved_record_id, saved_concurrency_number,
+    'named_action', p_command_id, saved_record_id, saved_concurrency_number,
     'Record save receipt is stale'
   );
 
-  projection := vortex_record.read_record(p_record_type_id, saved_record_id);
-  if projection ->> 'outcome' <> 'allowed' then
+  projection := vortex_record.project_named_action_record_internal(
+    p_action_owner_kind, p_action_owner_id, p_action_release_revision,
+    p_action_id, p_record_type_id, saved_record_id
+  );
+  if projection ->> 'outcome' <> 'completed' then
     raise exception using errcode = '55000',
-      message = 'Saved Record projection is unavailable';
+      message = 'Named action Record projection is unavailable';
   end if;
   return pg_catalog.jsonb_build_object(
     'outcome', 'saved',
@@ -542,14 +563,11 @@ begin
 end
 $function$;
 
-revoke all on function vortex_record.save_base_record(
-  uuid, text, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid, uuid
+revoke all on function vortex_record.save_named_action_set_fields_internal(
+  uuid, text, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid, uuid, text, uuid, bigint, uuid, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_module_owner;
-revoke execute on function vortex_record.save_base_record(uuid, text, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid, uuid)
-from vortex_runtime;
-
-comment on function vortex_record.save_base_record(
-  uuid, text, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid, uuid
+comment on function vortex_record.save_named_action_set_fields_internal(
+  uuid, text, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid, uuid, text, uuid, bigint, uuid, jsonb
 ) is
-  'The one fixed base human Record save: rechecks authority and atomically writes Record, Activity, Event/queue and receipt.';
+  'Named-action set_field writer: rechecks authority and atomically writes the Record change, Activity, Event/queue and command receipt.';

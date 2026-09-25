@@ -14,6 +14,7 @@ import {
   TABLE_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE_1_1_0,
   TABLE_BLOCK_RELEASE_1_2_0,
+  TABLE_BLOCK_RELEASE_1_3_0,
   TEXT_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE_1_1_0,
 } from "@vortex/contracts";
@@ -173,6 +174,12 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       metadata: RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
       render: RecordDetailDisplay,
       parsePayload: RECORD_DETAIL_PAYLOAD_PARSER,
+    }),
+    // Release 1.3.0 adds configured row behaviours to the Records table; the same parser reads them.
+    Object.freeze({
+      metadata: TABLE_BLOCK_RELEASE_1_3_0,
+      render: TableDisplay,
+      parsePayload: TABLE_PAYLOAD_PARSER,
     }),
   ]);
 

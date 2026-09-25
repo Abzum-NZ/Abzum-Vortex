@@ -257,7 +257,7 @@ Lifecycle and ownership entry points:
 
 Receipt ledgers and helpers:
 
-- `vortex_record.save_command_receipts`, `vortex_record.named_action_command_receipts`, `vortex_record.record_lifecycle_command_receipts`.
+- `vortex_record.command_receipts`, the one receipt table for record saves and ownership transfers, named actions and lifecycle commands, keyed by actor scope, command kind and command identity, with the helpers `claim_command_receipt_internal`, `complete_command_receipt_internal`, `release_command_receipt_internal`, `lock_command_receipt_internal` and `command_receipt_exists_internal`.
 - `base_save_command_fingerprint_internal`, `named_action_command_fingerprint_internal`, `record_lifecycle_command_fingerprint_internal`, `ownership_transfer_command_fingerprint_internal`.
 - `append_base_save_activity_internal`, `append_named_action_activity_internal`, `append_record_lifecycle_activity_internal`, `append_ownership_transfer_activity_internal`.
 

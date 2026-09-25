@@ -1,9 +1,11 @@
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import type { PlatformBlockRenderProps } from "../registry";
 import { cellValueToText } from "./cell";
 import { getAccessibleName } from "./display-state-container";
 import type {
+  DisplayCellValue,
   DisplayDataState,
+  DisplayEventHandler,
   DisplayEventHandlers,
   DisplayRow,
 } from "./projected-data";
@@ -134,6 +136,7 @@ export function SelectionControl({
       className="vortex-selection-checkbox"
       aria-label={`Select ${name}`}
       checked={selected}
+      onClick={(event) => event.stopPropagation()}
       onChange={(event) =>
         onSelection({
           event: "selection_changed",
@@ -145,27 +148,159 @@ export function SelectionControl({
   );
 }
 
-/** Row command bound to the declared `row_action` event; the bound flow decides its meaning. */
+/**
+ * Row command bound to the declared `row_action` event; the bound flow decides its meaning. A
+ * declared action carries the stable identity of its own binding, so several named commands on one
+ * table reach different flows. An earlier release that declares no named action keeps the one
+ * legacy control, identified by the placement itself.
+ */
 export function RowActionControl({
   recordId,
   name,
+  eventId,
+  label,
   events,
 }: Readonly<{
   recordId: string;
   name: string;
+  eventId?: string;
+  label?: string;
   events: DisplayEventHandlers | undefined;
 }>): ReactElement | null {
   const onRowAction = events?.row_action;
   if (onRowAction === undefined) return null;
+  const text = label ?? "Open";
   return (
     <button
       type="button"
       className="vortex-button-row-action"
-      aria-label={`Open ${name}`}
-      onClick={() => onRowAction({ event: "row_action", recordId })}
+      aria-label={`${text} ${name}`}
+      onClick={(clickEvent) => {
+        clickEvent.stopPropagation();
+        onRowAction(
+          eventId === undefined
+            ? { event: "row_action", recordId }
+            : { event: "row_action", eventId, recordId },
+        );
+      }}
     >
-      Open
+      {text}
     </button>
+  );
+}
+
+/**
+ * One bulk command over the current selection. It is disabled until at least one row is selected,
+ * and it sends the selected record identities as a bounded list, never an implicit first record.
+ */
+export function BulkActionControl({
+  eventId,
+  label,
+  recordIds,
+  events,
+}: Readonly<{
+  eventId: string;
+  label: string;
+  recordIds: readonly string[];
+  events: DisplayEventHandlers | undefined;
+}>): ReactElement | null {
+  const onBulkAction = events?.bulk_action;
+  if (onBulkAction === undefined) return null;
+  return (
+    <button
+      type="button"
+      className="vortex-button-bulk-action"
+      disabled={recordIds.length === 0}
+      onClick={() =>
+        onBulkAction({ event: "bulk_action", eventId, recordIds: [...recordIds] })
+      }
+    >
+      {label}
+    </button>
+  );
+}
+
+/**
+ * One in-place editor for a declared permitted field. It commits the edited value as the table's
+ * declared `inline_edit` event carrying the stable identity of the commit binding, the record, the
+ * field and the new closed value. Record revisions are not part of the query rows today, so no
+ * revision is sent and the server re-checks the change and refuses a stale one.
+ */
+export function InlineEditCell({
+  eventId,
+  recordId,
+  field,
+  label,
+  value,
+  handler,
+}: Readonly<{
+  eventId: string;
+  recordId: string;
+  field: string;
+  label: string;
+  value: DisplayCellValue;
+  handler: DisplayEventHandler;
+}>): ReactElement {
+  const [text, setText] = useState(() =>
+    value.kind === "number" ? String(value.value) : value.kind === "text" ? value.text : "",
+  );
+  const [checked, setChecked] = useState(value.kind === "boolean" ? value.value : false);
+  // Commits only a real change of a text or number cell; leaving the editor unchanged, or with a
+  // value that is not a number, sends nothing.
+  const commitText = (): void => {
+    if (value.kind === "number") {
+      const parsed = Number(text);
+      if (!Number.isFinite(parsed) || text.trim().length === 0 || parsed === value.value) return;
+      handler({
+        event: "inline_edit",
+        eventId,
+        recordId,
+        field,
+        value: { kind: "number", value: parsed },
+      });
+      return;
+    }
+    if (value.kind !== "text" || text === value.text) return;
+    handler({ event: "inline_edit", eventId, recordId, field, value: { kind: "text", text } });
+  };
+  if (value.kind === "boolean")
+    return (
+      <input
+        type="checkbox"
+        className="vortex-inline-edit-checkbox"
+        aria-label={`Edit ${label}`}
+        checked={checked}
+        onClick={(event) => event.stopPropagation()}
+        onChange={(event) => {
+          const next = event.currentTarget.checked;
+          setChecked(next);
+          handler({
+            event: "inline_edit",
+            eventId,
+            recordId,
+            field,
+            value: { kind: "boolean", value: next },
+          });
+        }}
+      />
+    );
+  return (
+    <input
+      type={value.kind === "number" ? "number" : "text"}
+      className="vortex-inline-edit-input"
+      aria-label={`Edit ${label}`}
+      value={text}
+      onClick={(event) => event.stopPropagation()}
+      onChange={(event) => setText(event.currentTarget.value)}
+      onBlur={commitText}
+      onKeyDown={(event) => {
+        event.stopPropagation();
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commitText();
+        }
+      }}
+    />
   );
 }
 

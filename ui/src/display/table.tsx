@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import type { KeyboardEvent, ReactElement } from "react";
 import {
   readRecordsTableContract,
   type RecordsTableColumnContract,
@@ -6,7 +6,9 @@ import {
 } from "@vortex/contracts";
 import { DisplayCellView } from "./cell";
 import {
+  BulkActionControl,
   DisplayHeader,
+  InlineEditCell,
   PaginationControl,
   resolveDisplayContext,
   RowActionControl,
@@ -15,7 +17,7 @@ import {
   type DisplayRenderProps,
 } from "./controls";
 import { DisplayStateContainer } from "./display-state-container";
-import type { DisplayColumn, TablePayload } from "./projected-data";
+import type { DisplayCellValue, DisplayColumn, TablePayload } from "./projected-data";
 
 type RenderedColumn = Readonly<{
   key: string;
@@ -81,6 +83,35 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     contract === undefined || contract.sortableFields.includes(column.key);
   const selectable = events?.selection_changed !== undefined && contract?.selectionMode !== "none";
 
+  // Configured row behaviours: a row click, named row actions, bulk actions over the selection and
+  // inline edit of permitted fields. Each declared control carries the stable identity of its own
+  // flow binding, so one table placement can run several different flows.
+  const behaviours = contract?.rowBehaviours;
+  const rowClickEventId = behaviours?.rowClick?.eventId;
+  const onRowClick = rowClickEventId === undefined ? undefined : events?.row_clicked;
+  const activateRow =
+    onRowClick === undefined || rowClickEventId === undefined
+      ? undefined
+      : (recordId: string) =>
+          onRowClick({ event: "row_clicked", eventId: rowClickEventId, recordId });
+  const declaredRowActions = behaviours?.rowActions ?? [];
+  const declaredBulkActions = behaviours?.bulkActions ?? [];
+  const inlineEdit = behaviours?.inlineEdit;
+  const inlineEventId = inlineEdit?.eventId;
+  const onInlineEdit = inlineEdit === undefined ? undefined : events?.inline_edit;
+  const inlineFields = inlineEdit?.fields ?? [];
+  // Only a text, number or yes/no cell has a closed value the editor can commit without guessing;
+  // any other cell of a permitted field stays read-only.
+  const editable = (columnKey: string, value: DisplayCellValue): boolean =>
+    onInlineEdit !== undefined &&
+    inlineEventId !== undefined &&
+    inlineFields.includes(columnKey) &&
+    (value.kind === "text" || value.kind === "number" || value.kind === "boolean");
+  const showActionsColumn = events?.row_action !== undefined;
+  const selectedRecordIds = values?.selectedRecordIds ?? [];
+  const showBulkActions =
+    selectable && declaredBulkActions.length > 0 && events?.bulk_action !== undefined;
+
   return (
     <DisplayStateContainer
       accessibleName={accessibleName}
@@ -97,6 +128,23 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
           className="vortex-display-table"
         >
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
+          {!showBulkActions ? null : (
+            <div
+              className="vortex-table-bulk-actions"
+              role="group"
+              aria-label={`Bulk actions for ${accessibleName}`}
+            >
+              {declaredBulkActions.map((action) => (
+                <BulkActionControl
+                  key={action.eventId}
+                  eventId={action.eventId}
+                  label={action.label}
+                  recordIds={selectedRecordIds}
+                  events={events}
+                />
+              ))}
+            </div>
+          )}
           <table className="vortex-table" aria-label={accessibleName}>
             <thead>
               <tr className="vortex-table-header-row">
@@ -142,7 +190,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                     </th>
                   );
                 })}
-                {events?.row_action === undefined ? null : (
+                {!showActionsColumn ? null : (
                   <th scope="col" className="vortex-table-col-actions">
                     <span className="vortex-sr-only">Actions</span>
                   </th>
@@ -152,11 +200,33 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
             <tbody>
               {values.rows.map((row) => {
                 const name = rowName(row, columns[0]?.key);
+                const activate = activateRow;
+                const rowInteraction =
+                  activate === undefined
+                    ? {}
+                    : {
+                        tabIndex: 0,
+                        onClick: () => activate(row.recordId),
+                        // Only a key pressed on the focused row itself opens it; Enter or Space on
+                        // a row command, selection checkbox or inline editor keeps its own meaning.
+                        onKeyDown: (event: KeyboardEvent<HTMLTableRowElement>) => {
+                          if (event.target !== event.currentTarget) return;
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            activate(row.recordId);
+                          }
+                        },
+                      };
                 return (
                   <tr
                     key={row.recordId}
                     data-vortex-record-id={row.recordId}
-                    className="vortex-table-row"
+                    className={
+                      activate === undefined
+                        ? "vortex-table-row"
+                        : "vortex-table-row vortex-table-row-clickable"
+                    }
+                    {...rowInteraction}
                   >
                     {!selectable ? null : (
                       <td className="vortex-table-cell-select">
@@ -168,18 +238,49 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                         />
                       </td>
                     )}
-                    {columns.map((column) => (
-                      <td
-                        key={column.key}
-                        className="vortex-table-cell"
-                        {...columnAttributes(column)}
-                      >
-                        <DisplayCellView value={row.cells[column.key] ?? { kind: "empty" }} />
-                      </td>
-                    ))}
-                    {events?.row_action === undefined ? null : (
+                    {columns.map((column) => {
+                      const cell: DisplayCellValue = row.cells[column.key] ?? { kind: "empty" };
+                      return (
+                        <td
+                          key={column.key}
+                          className="vortex-table-cell"
+                          {...columnAttributes(column)}
+                        >
+                          {editable(column.key, cell) &&
+                          onInlineEdit !== undefined &&
+                          inlineEventId !== undefined ? (
+                            // Keyed by the projected value so a refreshed row resets the editor.
+                            <InlineEditCell
+                              key={JSON.stringify(cell)}
+                              eventId={inlineEventId}
+                              recordId={row.recordId}
+                              field={column.key}
+                              label={column.label}
+                              value={cell}
+                              handler={onInlineEdit}
+                            />
+                          ) : (
+                            <DisplayCellView value={cell} />
+                          )}
+                        </td>
+                      );
+                    })}
+                    {!showActionsColumn ? null : (
                       <td className="vortex-table-cell-action">
-                        <RowActionControl recordId={row.recordId} name={name} events={events} />
+                        {declaredRowActions.length === 0 ? (
+                          <RowActionControl recordId={row.recordId} name={name} events={events} />
+                        ) : (
+                          declaredRowActions.map((action) => (
+                            <RowActionControl
+                              key={action.eventId}
+                              recordId={row.recordId}
+                              name={name}
+                              eventId={action.eventId}
+                              label={action.label}
+                              events={events}
+                            />
+                          ))
+                        )}
                       </td>
                     )}
                   </tr>
