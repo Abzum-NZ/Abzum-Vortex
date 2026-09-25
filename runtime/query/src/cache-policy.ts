@@ -28,6 +28,9 @@ import { protectedQueryCommandSchema } from "./protected-query-contracts";
  * It never reads a store, a clock or a database and never grants anything: a
  * hit still passes the current permission and field recheck that
  * `readThroughQueryCache` requires before reuse.
+ * A query that reads a read-time computed field (such as deadline-passed) always
+ * bypasses: its value changes with the clock and no data change, so no data-result
+ * cache entry may hold it.
  * Anything that cannot be established (a missing or repeated dependency, an
  * unproven authority window, sensitive fields, a shared-source result, or a
  * malformed input) bypasses, so the ordinary authorised query runs instead.
@@ -40,6 +43,7 @@ export const queryCacheMaxRecordDependencies = 50;
 export const queryCacheBypassReasons = [
   "policy_invalid",
   "cache_not_allowed",
+  "read_time_fields",
   "sensitive_fields",
   "shared_source",
   "dependencies_unknown",
@@ -94,6 +98,11 @@ export const queryCacheInputSchema = z
       .object({
         /** True only when the Query declaration explicitly allows result caching. */
         cachingAllowed: z.boolean(),
+        /**
+         * True when any requested, filtered or sorted field is a read-time computed field, or a
+         * calculation that depends on one. Its value changes without a data change.
+         */
+        readTimeFieldsPresent: z.boolean(),
         /** True when any requested or filtered field is sensitive or its sensitivity is unknown. */
         sensitiveFieldsPresent: z.boolean(),
         /** True when any row can come from another organisation's shared source. */
@@ -148,6 +157,7 @@ export const decideQueryCache = (input: unknown): QueryCacheDecision => {
   if (!parsed.success) return bypass("policy_invalid");
   const { request, scope, definition, recordDependencies, eligibility, lifetime } = parsed.data;
 
+  if (eligibility.readTimeFieldsPresent) return bypass("read_time_fields");
   if (!eligibility.cachingAllowed) return bypass("cache_not_allowed");
   if (eligibility.sensitiveFieldsPresent) return bypass("sensitive_fields");
   if (eligibility.sharedSourceOwnership !== "none") return bypass("shared_source");

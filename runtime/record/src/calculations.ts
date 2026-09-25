@@ -543,3 +543,71 @@ export const evaluateRecordCalculationsV2 = (
     ? { success: false, issues }
     : { success: true, setValues, clearFieldIds };
 };
+
+const isReadTimeCalculationField = (field: CalculationFieldV2): boolean =>
+  field.settings.evaluation === "read_time" || field.settings.expression.kind === "deadline_passed";
+
+/**
+ * The calculated fields of a record type that are worked out whenever a record
+ * is read: those declared `read_time`, every deadline-passed calculation, and
+ * every calculation that depends, through any chain, on one of those.
+ */
+export const readTimeCalculationFieldIdsV2 = (
+  recordType: RecordTypeDefinitionV2,
+): readonly string[] => {
+  const calculations = recordType.fields.filter(
+    (field): field is CalculationFieldV2 => field.type === "calculation",
+  );
+  const readTime = new Set<string>(
+    calculations.filter(isReadTimeCalculationField).map((field) => field.fieldId),
+  );
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const field of calculations)
+      if (
+        !readTime.has(field.fieldId) &&
+        calculationDependencies(field.settings.expression).some((fieldId) => readTime.has(fieldId))
+      ) {
+        readTime.add(field.fieldId);
+        changed = true;
+      }
+  }
+  return calculations.filter((field) => readTime.has(field.fieldId)).map((field) => field.fieldId);
+};
+
+export type EvaluateReadTimeCalculationsV2Result =
+  | Readonly<{
+      success: true;
+      /** The current value of every read-time field that has one; never stored. */
+      values: Readonly<Record<string, JsonValue>>;
+      /** Read-time fields that have no value now. */
+      emptyFieldIds: readonly string[];
+    }>
+  | Readonly<{
+      success: false;
+      issues: readonly RecordCalculationIssue[];
+    }>;
+
+/**
+ * Works out the read-time calculated fields of one record with the same typed
+ * evaluator a save uses, from the record's stored values and one read clock:
+ * the statement instant and the current date in the organisation's time zone.
+ * The result is never written back. It performs no reads or access decisions.
+ */
+export const evaluateReadTimeCalculationsV2 = (
+  input: EvaluateRecordCalculationsV2Input,
+): EvaluateReadTimeCalculationsV2Result => {
+  const evaluated = evaluateRecordCalculationsV2(input);
+  if (!evaluated.success) return evaluated;
+  const parsed = recordTypeDefinitionV2Schema.safeParse(input.recordType);
+  if (!parsed.success) return { success: false, issues: [issue("invalid_input")] };
+  const readTimeIds = new Set(readTimeCalculationFieldIdsV2(parsed.data));
+  return {
+    success: true,
+    values: Object.fromEntries(
+      Object.entries(evaluated.setValues).filter(([fieldId]) => readTimeIds.has(fieldId)),
+    ),
+    emptyFieldIds: evaluated.clearFieldIds.filter((fieldId) => readTimeIds.has(fieldId)),
+  };
+};
