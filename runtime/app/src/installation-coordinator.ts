@@ -188,6 +188,23 @@ export type ApplicationInstallationCoordinatorDependencies<InstalledEvents> = Re
     readonly installation: ActiveApplicationInstallationSummary;
   }) => InstalledEvents;
   activityId?: () => string;
+  /**
+   * Builder permission assertion. The caller must supply a function that verifies the
+   * installer holds `applications.manage` (and additionally `custom_code.manage` when the
+   * package contains custom components) before the operation proceeds. It must throw when
+   * the permission is not held; the thrown error is mapped by toCoordinatorError.
+   */
+  assertInstallerPermission?: (
+    session: IdentitySession,
+    requiredPermissionKeys: readonly string[],
+  ) => Promise<void>;
+  /**
+   * Recent-authentication assertion. The caller must supply a function that verifies the
+   * installer's session satisfies the recent-authentication requirement for installing
+   * custom components or accepting role templates. It must throw when the requirement is
+   * not met.
+   */
+  assertRecentAuthentication?: (session: IdentitySession) => Promise<void>;
 }>;
 
 type BindingRow = Readonly<{ bindings: unknown }>;

@@ -162,8 +162,20 @@ const safeStoreOperation = async <Result>(
   }
 };
 
-export const createDefinitionStore = (transaction: RequestDatabaseTransaction) => ({
+/**
+ * Caller-supplied assertion that verifies the session context's caller holds the required
+ * builder permission before the operation proceeds. The assertion must throw when the
+ * permission is not held. The caller provides this because it has the database transaction
+ * and scope the permission check needs.
+ */
+export type DefinitionStorePermissionAssertion = () => Promise<void>;
+
+export const createDefinitionStore = (
+  transaction: RequestDatabaseTransaction,
+  assertBuilderPermission?: DefinitionStorePermissionAssertion,
+) => ({
   async createRoot(candidate: CreateDefinitionRootCommand): Promise<StoredDefinitionDraft> {
+    if (assertBuilderPermission) await assertBuilderPermission();
     return safeStoreOperation("create_root", async () => {
       const command = createDefinitionRootCommandSchema.safeParse(candidate);
       if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
@@ -186,6 +198,7 @@ export const createDefinitionStore = (transaction: RequestDatabaseTransaction) =
   },
 
   async saveDraft(candidate: SaveDefinitionDraftCommand): Promise<StoredDefinitionDraft> {
+    if (assertBuilderPermission) await assertBuilderPermission();
     return safeStoreOperation("save_draft", async () => {
       const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
       if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");

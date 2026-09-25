@@ -1275,17 +1275,38 @@ const safely = async <Result>(operation: () => Promise<Result>): Promise<Result>
 };
 
 /**
+ * Caller-supplied assertion that verifies the session context's caller holds the required
+ * builder permission before the operation proceeds. The assertion must throw when the
+ * permission is not held; the thrown error is wrapped by the safely() handler. The caller
+ * provides this because it has the database transaction and scope the permission check needs.
+ */
+export type BuilderPermissionAssertion = (
+  context: SessionContext,
+  requiredPermissionKey: string,
+) => Promise<void>;
+
+/**
  * Publication orchestration over private injected stores. Preparation exposes only safe JSON
  * evidence; every byte that matters is recomputed inside the publish transaction.
+ *
+ * The `assertBuilderPermission` callback is called at the entry of every publication method
+ * to verify the caller holds `platform.organization.definition_releases.manage`. Designer,
+ * API and MCP paths all provide the same server-side check through this callback.
  */
 export const createDefinitionPublicationService = (
   repository: DefinitionPublicationRepository,
   catalogue: DefinitionPublicationCatalogue,
+  assertBuilderPermission?: BuilderPermissionAssertion,
 ) => ({
   prepare: async (
     context: SessionContext,
     input: unknown,
   ): Promise<PreparedDefinitionPublication> => {
+    if (assertBuilderPermission)
+      await assertBuilderPermission(
+        context,
+        "platform.organization.definition_releases.manage",
+      );
     const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
     if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
@@ -1315,6 +1336,11 @@ export const createDefinitionPublicationService = (
     context: SessionContext,
     input: unknown,
   ): Promise<ApplicationDraftCompilation> => {
+    if (assertBuilderPermission)
+      await assertBuilderPermission(
+        context,
+        "platform.organization.definition_drafts.manage",
+      );
     const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
     if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
@@ -1348,6 +1374,11 @@ export const createDefinitionPublicationService = (
   },
 
   publish: async (context: SessionContext, input: unknown): Promise<PublishDefinitionResult> => {
+    if (assertBuilderPermission)
+      await assertBuilderPermission(
+        context,
+        "platform.organization.definition_releases.manage",
+      );
     const command = publishDefinitionCommandSchema.safeParse(input);
     if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     const parsedCommand = command.data as PublishDefinitionCommand;
