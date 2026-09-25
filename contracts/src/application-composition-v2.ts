@@ -551,6 +551,35 @@ export type RecordsDisplayMessages = Readonly<{
 }>;
 
 /**
+ * One named row action or bulk action. `eventId` is the stable identity of the flow binding the
+ * command runs; it is unique across one placement's declared behaviours, so a click reaches
+ * exactly one flow.
+ */
+export type RecordsTableActionContract = Readonly<{
+  eventId: string;
+  label: string;
+}>;
+
+/** A row click held as a binding to a flow; the bound flow decides what opening the row does. */
+export type RecordsTableRowClickContract = Readonly<{
+  eventId: string;
+}>;
+
+/** Inline edit of permitted fields, with one commit binding shared by those fields. */
+export type RecordsTableInlineEditContract = Readonly<{
+  eventId: string;
+  fields: readonly string[];
+}>;
+
+/** The configured row behaviours of one Records table placement. */
+export type RecordsTableRowBehaviourContract = Readonly<{
+  rowClick?: RecordsTableRowClickContract;
+  rowActions: readonly RecordsTableActionContract[];
+  bulkActions: readonly RecordsTableActionContract[];
+  inlineEdit?: RecordsTableInlineEditContract;
+}>;
+
+/**
  * The data contract a Records table placement declares in its settings (decision 5). The data
  * source is the placement's own bound query; every field here must be a field that query allows.
  */
@@ -565,6 +594,8 @@ export type RecordsTableContract = Readonly<{
   selectionMode: (typeof recordsTableSelectionModes)[number];
   parameters: readonly RecordsTableParameterContract[];
   messages: RecordsDisplayMessages;
+  /** Configured row behaviours; empty for a placement that declares none. */
+  rowBehaviours: RecordsTableRowBehaviourContract;
 }>;
 
 export type RecordDetailFieldContract = Readonly<{
@@ -619,6 +650,42 @@ const displayMessages = (settings: SettingsRecord): RecordsDisplayMessages => {
 
 const fieldList = (value: ComponentSettingValue | undefined): string[] =>
   (settingItems(value) ?? []).flatMap((item) => settingField(item) ?? []);
+
+const settingEventId = (value: ComponentSettingValue | undefined): string | undefined =>
+  settingText(value);
+
+/** Reads one declared row-action or bulk-action list, keeping only entries with both parts. */
+const readRowActionList = (
+  value: ComponentSettingValue | undefined,
+): RecordsTableActionContract[] =>
+  (settingItems(value) ?? []).flatMap((item): RecordsTableActionContract[] => {
+    const action = settingGroup(item);
+    if (action === undefined) return [];
+    const eventId = settingEventId(action["event_id"]);
+    const label = settingText(action["label"]);
+    return eventId === undefined || label === undefined ? [] : [{ eventId, label }];
+  });
+
+/**
+ * Reads the configured row behaviours from settings that already passed the shared validator. A
+ * behaviour appears only when it carries the event identity that names its flow binding, so a
+ * partially authored setting never invents a control.
+ */
+const readRowBehaviours = (settings: SettingsRecord): RecordsTableRowBehaviourContract => {
+  const click = settingGroup(settings["row_click"]);
+  const clickEventId = click === undefined ? undefined : settingEventId(click["event_id"]);
+  const inline = settingGroup(settings["inline_edit"]);
+  const inlineEventId = inline === undefined ? undefined : settingEventId(inline["event_id"]);
+  const inlineFields = inline === undefined ? [] : fieldList(inline["fields"]);
+  return {
+    ...(clickEventId === undefined ? {} : { rowClick: { eventId: clickEventId } }),
+    rowActions: readRowActionList(settings["row_actions"]),
+    bulkActions: readRowActionList(settings["bulk_actions"]),
+    ...(inlineEventId === undefined || inlineFields.length === 0
+      ? {}
+      : { inlineEdit: { eventId: inlineEventId, fields: inlineFields } }),
+  };
+};
 
 /**
  * Reads a Records table placement's declared data contract from its settings, applying the
@@ -690,6 +757,7 @@ export const readRecordsTableContract = (
     selectionMode: settingChoice(settings["selection_mode"], recordsTableSelectionModes, "none"),
     parameters,
     messages: displayMessages(settings),
+    rowBehaviours: readRowBehaviours(settings),
   };
 };
 

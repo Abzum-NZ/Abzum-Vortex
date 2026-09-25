@@ -14,6 +14,7 @@ import {
   TABLE_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE_1_1_0,
   TABLE_BLOCK_RELEASE_1_2_0,
+  TABLE_BLOCK_RELEASE_1_3_0,
   TEXT_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE_1_1_0,
 } from "@vortex/contracts";
@@ -67,6 +68,8 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
     // Release 1.2.0 declares the data contract as settings; the same renderers read it.
     Object.freeze({ metadata: TABLE_BLOCK_RELEASE_1_2_0, render: TableDisplay }),
     Object.freeze({ metadata: RECORD_DETAIL_BLOCK_RELEASE_1_2_0, render: RecordDetailDisplay }),
+    // Release 1.3.0 adds configured row behaviours to the Records table; the same renderer reads them.
+    Object.freeze({ metadata: TABLE_BLOCK_RELEASE_1_3_0, render: TableDisplay }),
   ]);
 
 /** Creates an immutable PlatformComponentRegistry populated with every display block release. */

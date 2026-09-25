@@ -13,7 +13,7 @@ set search_path = ''
 as $function$
 declare
   context_value jsonb;
-  receipt vortex_record.record_lifecycle_command_receipts%rowtype;
+  receipt vortex_record.command_receipts%rowtype;
   preparation jsonb;
   effect_row vortex_record.record_lifecycle_command_effects%rowtype;
   event_kind text;
@@ -21,15 +21,8 @@ declare
   subject_ids uuid[];
 begin
   context_value := vortex_access.validated_human_request_context();
-  select stored.* into receipt
-  from vortex_record.record_lifecycle_command_receipts as stored
-  where stored.organization_id = (context_value ->> 'organizationId')::uuid
-    and stored.application_root_id = (context_value ->> 'applicationRootId')::uuid
-    and stored.actor_organization_account_id =
-      (context_value ->> 'organizationAccountId')::uuid
-    and stored.command_id = p_command_id
-  for update;
-  if not found
+  receipt := vortex_record.lock_command_receipt_internal('record_lifecycle', p_command_id);
+  if receipt.command_id is null
     or receipt.state is distinct from 'pending'
     or receipt.operation is distinct from 'delete'
     or receipt.record_type_id is distinct from p_record_type_id
@@ -102,19 +95,10 @@ begin
     receipt.activity_id, 'delete', subject_ids
   );
 
-  update vortex_record.record_lifecycle_command_receipts as stored
-  set state = 'completed',
-    completed_concurrency_number = p_expected_concurrency_number + 1,
-    completed_at = pg_catalog.statement_timestamp()
-  where stored.organization_id = receipt.organization_id
-    and stored.application_root_id = receipt.application_root_id
-    and stored.actor_organization_account_id = receipt.actor_organization_account_id
-    and stored.command_id = receipt.command_id
-    and stored.state = 'pending';
-  if not found then
-    raise exception using errcode = '40001',
-      message = 'Protected record delete receipt is stale';
-  end if;
+  perform vortex_record.complete_command_receipt_internal(
+    'record_lifecycle', p_command_id, null, p_expected_concurrency_number + 1,
+    'Protected record delete receipt is stale'
+  );
 
   return pg_catalog.jsonb_build_object(
     'outcome', 'deleted',
