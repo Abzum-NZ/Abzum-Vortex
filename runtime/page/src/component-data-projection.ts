@@ -21,7 +21,11 @@ export type ProjectedCellValue =
   | Readonly<{ kind: "date"; iso: string }>
   | Readonly<{ kind: "empty" }>;
 
-/** One row addressed by the record identity the Query engine returned; cells are keyed by field. */
+/**
+ * One row addressed by the record identity the Query engine returned; cells are keyed by field.
+ * The engine returns no record revision or per-row capabilities today, so the row carries neither
+ * and none is ever inferred; a row action names the record and the server re-checks it.
+ */
 export type ProjectedTableRow = Readonly<{
   recordId: string;
   cells: Readonly<Record<string, ProjectedCellValue>>;
@@ -105,17 +109,37 @@ const projectCell = (value: JsonValue, format: RecordsDisplayFormat): ProjectedC
     : empty;
 };
 
+/**
+ * Field identities are UUIDs compared without regard to case: the Query engine keys row values by
+ * the lowercase identity, while a declaration may spell it in either case.
+ */
+const sameField = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
+
+/** The row's value for a declared field, or undefined when the engine withheld it (absent). */
+const valueOf = (row: ProtectedQueryRow, field: string): { value: JsonValue } | undefined => {
+  const values: Readonly<Record<string, JsonValue>> = row.values;
+  const key = hasOwn(values, field)
+    ? field
+    : Object.keys(values).find((candidate) => sameField(candidate, field));
+  return key === undefined ? undefined : { value: values[key] as JsonValue };
+};
+
 const headingFor = (
   field: string,
   declared: string | undefined,
   fieldLabels: ComponentDataProjectionInput["fieldLabels"],
 ): string | undefined => {
-  const label = declared ?? (fieldLabels !== undefined && hasOwn(fieldLabels, field) ? fieldLabels[field] : undefined);
+  const key =
+    fieldLabels === undefined
+      ? undefined
+      : Object.keys(fieldLabels).find((candidate) => sameField(candidate, field));
+  const label = declared ?? (key === undefined ? undefined : fieldLabels?.[key]);
   return label !== undefined && label.trim().length > 0 ? label : undefined;
 };
 
 const isReadable = (field: string, input: ComponentDataProjectionInput): boolean =>
-  input.readableFieldIds === undefined || input.readableFieldIds.includes(field);
+  input.readableFieldIds === undefined ||
+  input.readableFieldIds.some((readable) => sameField(readable, field));
 
 /**
  * Projects a Records table's query rows into its display payload. Columns and headings come only
@@ -137,9 +161,9 @@ export const projectRecordsTableData = (
 
   const columns: { key: string; label: string; format: RecordsDisplayFormat }[] = [];
   for (const column of contract.columns) {
-    if (columns.some((shown) => shown.key === column.field)) continue;
+    if (columns.some((shown) => sameField(shown.key, column.field))) continue;
     if (!isReadable(column.field, input)) continue;
-    if (!rows.every((row) => hasOwn(row.values, column.field))) continue;
+    if (!rows.every((row) => valueOf(row, column.field) !== undefined)) continue;
     const label = headingFor(column.field, column.label, input.fieldLabels);
     if (label === undefined) return undefined;
     columns.push({ key: column.field, label, format: column.format });
@@ -156,7 +180,7 @@ export const projectRecordsTableData = (
         cells: Object.fromEntries(
           columns.map((column) => [
             column.key,
-            projectCell(row.values[column.key] as JsonValue, column.format),
+            projectCell(valueOf(row, column.key)?.value ?? null, column.format),
           ]),
         ),
       })),
@@ -181,15 +205,12 @@ export const projectRecordDetailData = (
 
   const fields: { key: string; label: string; value: ProjectedCellValue }[] = [];
   for (const declared of contract.fields) {
-    if (fields.some((shown) => shown.key === declared.field)) continue;
-    if (!isReadable(declared.field, input) || !hasOwn(row.values, declared.field)) continue;
+    if (fields.some((shown) => sameField(shown.key, declared.field))) continue;
+    const stored = isReadable(declared.field, input) ? valueOf(row, declared.field) : undefined;
+    if (stored === undefined) continue;
     const label = headingFor(declared.field, declared.label, input.fieldLabels);
     if (label === undefined) return undefined;
-    fields.push({
-      key: declared.field,
-      label,
-      value: projectCell(row.values[declared.field] as JsonValue, declared.format),
-    });
+    fields.push({ key: declared.field, label, value: projectCell(stored.value, declared.format) });
   }
   return fields.length === 0
     ? { status: "empty" }
