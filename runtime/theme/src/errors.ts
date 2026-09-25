@@ -35,7 +35,7 @@ export function createLocatedFailure(params: {
   family?: DefinitionRuleFailureFamily;
   message: string;
   tokenKey?: string;
-  documentKey?: string;
+  documentKey?: string | undefined;
   location?: DefinitionValidationLocation;
 }): { failure: ThemeValidationFailure; ruleFailure: DefinitionRuleFailure } {
   const ruleCode = params.ruleCode ?? THEME_DEFAULT_RULE_CODE;

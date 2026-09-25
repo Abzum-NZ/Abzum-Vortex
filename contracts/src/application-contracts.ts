@@ -82,20 +82,20 @@ export const queryDefinitionSchema = z
 
 type NavigationItemValue =
   | {
-      id: typeof containedComponentIdSchema._output;
+      id: z.output<typeof containedComponentIdSchema>;
       type: "heading";
       label: string;
       children: NavigationItemValue[];
     }
   | {
-      id: typeof containedComponentIdSchema._output;
+      id: z.output<typeof containedComponentIdSchema>;
       type: "page";
       label: string;
-      pageId: typeof pageIdSchema._output;
+      pageId: z.output<typeof pageIdSchema>;
       permissionKey: string;
     }
   | {
-      id: typeof containedComponentIdSchema._output;
+      id: z.output<typeof containedComponentIdSchema>;
       type: "external";
       label: string;
       address: string;

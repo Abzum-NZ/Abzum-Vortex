@@ -1,13 +1,7 @@
 import type { ReactElement } from "react";
 import { DisplayCellView } from "./cell";
-import {
-  DisplayHeader,
-  resolveDisplayContext,
-  RowActionControl,
-  rowName,
-  SelectionControl,
-  type DisplayRenderProps,
-} from "./controls";
+import { DisplayHeader, RowActionControl, SelectionControl } from "./controls";
+import { resolveDisplayContext, rowName, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import type { GroupedPayload } from "./projected-data";
 

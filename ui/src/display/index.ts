@@ -66,7 +66,7 @@ export { GroupedDataDisplay } from "./grouped-data";
 export { SummaryValuesDisplay } from "./summary-values";
 
 // Per-Block Render Props
-export { type DisplayRenderProps } from "./controls";
+export { type DisplayRenderProps } from "./context";
 
 // Display Registrations & Registry
 export {

@@ -89,6 +89,7 @@ export const definitionCompilerRefusalCodes = Object.freeze([
   "vortex.definition.sharing_condition_parameter_refused",
   "vortex.definition.source_shape",
   "vortex.definition.source_type_compatibility",
+  "vortex.definition.system_record_write_refused",
   "vortex.definition.trigger_record_required",
   "vortex.definition.unsafe_duplicate_protection",
   "vortex.definition.unsupported_field_type",

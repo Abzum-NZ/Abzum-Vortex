@@ -14,7 +14,10 @@ import {
   timestampSchema,
   type BlockedRemovalRecord,
   type DueRecordHandoffItem,
+  type ApplicationRootId,
   type IdentitySession,
+  type OrganizationId,
+  type StorageContractId,
   type LifecycleCandidateRecord,
   type OrganizationSelectionCandidate,
   type RecordLifecycleHandoff,
@@ -34,9 +37,9 @@ export interface LifecyclePreviewCursor {
   readonly afterCreatedAt: string;
   readonly afterRecordId: string;
   readonly afterRecordPosition: number;
-  readonly organizationId: string;
-  readonly storageContractId: string;
-  readonly applicationRootId: string | null;
+  readonly organizationId: OrganizationId;
+  readonly storageContractId: StorageContractId;
+  readonly applicationRootId: ApplicationRootId | null;
   readonly policyId: string;
   readonly policyRevision: number;
   readonly evaluatedAt: string;
@@ -198,11 +201,11 @@ export const decodeLifecyclePreviewCursor = (token: string): LifecyclePreviewCur
  * Input command for previewing record lifecycle evaluation and #117 handoff preparation.
  */
 export interface RecordLifecyclePreviewCommand {
-  readonly organizationId: string;
-  readonly storageContractId: string;
-  readonly applicationRootId: string | null;
-  readonly limit?: number;
-  readonly cursor?: string;
+  readonly organizationId: OrganizationId;
+  readonly storageContractId: StorageContractId;
+  readonly applicationRootId: ApplicationRootId | null;
+  readonly limit?: number | undefined;
+  readonly cursor?: string | undefined;
 }
 
 /**
@@ -347,9 +350,9 @@ export interface LifecyclePreviewStoredCandidate {
 
 export interface LifecycleCandidateProtectionRequest {
   readonly transaction: RequestDatabaseTransaction;
-  readonly organizationId: string;
-  readonly storageContractId: string;
-  readonly applicationRootId: string | null;
+  readonly organizationId: OrganizationId;
+  readonly storageContractId: StorageContractId;
+  readonly applicationRootId: ApplicationRootId | null;
   readonly evaluatedAt: string;
   readonly records: readonly LifecyclePreviewStoredCandidate[];
 }
