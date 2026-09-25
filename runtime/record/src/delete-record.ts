@@ -633,10 +633,6 @@ export const createRecordDeleteService = (dependencies: RecordDeleteServiceDepen
         restoredRootMutation(preparation, calculated.sourceFinalValues),
         ...calculated.parentMutations,
       ];
-      const mutations = [
-        restoredRootMutation(preparation, calculated.sourceFinalValues),
-        ...calculated.parentMutations,
-      ];
 
       const finalized = parseDatabaseOutcome(
         one(
