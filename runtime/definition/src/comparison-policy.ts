@@ -1444,6 +1444,26 @@ const compareApplicationSharedContent = (
       compareSimpleComponent(reasons, "flow_binding", right._flowBindingKey, left, right),
     () => "major",
   );
+  compareKeyed(
+    reasons,
+    (previous.experiences as RecordValue[] | undefined) ?? [],
+    (candidate.experiences as RecordValue[] | undefined) ?? [],
+    "state",
+    "application",
+    (left, right) =>
+      pushChange(
+        reasons,
+        left.pageId,
+        right.pageId,
+        "patch",
+        "presentation_changed",
+        "application",
+        "configuration",
+        right.state,
+      ),
+    () => "patch",
+    (item) => item.state,
+  );
   pushChange(
     reasons,
     previous.homePageId,
@@ -2031,6 +2051,7 @@ const normaliseApplicationSharedContent = (content: ApplicationContentV2): Recor
   return {
     ...value,
     moduleBindings: sorted(value.moduleBindings as unknown[], "moduleRootId"),
+    experiences: sorted((value.experiences as unknown[] | undefined) ?? [], "state"),
     roles: sorted(
       (value.roles as RecordValue[]).map((role) => ({
         ...role,
@@ -2851,6 +2872,8 @@ export const assertUnambiguousApplicationContentV2 = (content: unknown): void =>
     return slots;
   });
   assertUnique(contentSlots, "slotId");
+  if (Array.isArray(value.experiences))
+    assertUnique(value.experiences as RecordValue[], "state");
   for (const page of value.pages as RecordValue[]) {
     if (Array.isArray(page.steps)) assertUnique(page.steps as RecordValue[], "id");
     if (Array.isArray(page.publicFieldIds)) assertUniqueValues(page.publicFieldIds as unknown[]);

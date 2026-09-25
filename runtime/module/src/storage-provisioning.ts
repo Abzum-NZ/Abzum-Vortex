@@ -27,9 +27,6 @@ type ProvisionRow = DatabaseRow & {
   readonly application_release_revision: unknown;
   readonly module_root_id: unknown;
   readonly module_release_revision: unknown;
-  readonly content_fingerprint: unknown;
-  readonly resolution_fingerprint: unknown;
-  readonly generator_contract_version: unknown;
   readonly storage_contract_ids: unknown;
 };
 
@@ -54,9 +51,6 @@ const parseResult = (row: ProvisionRow): ModuleInstallationStorageResult => {
     applicationReleaseRevision: safeRevision(row.application_release_revision),
     moduleRootId: row.module_root_id,
     moduleReleaseRevision: safeRevision(row.module_release_revision),
-    contentFingerprint: row.content_fingerprint,
-    resolutionFingerprint: row.resolution_fingerprint,
-    generatorContractVersion: row.generator_contract_version,
     storageContractIds: row.storage_contract_ids,
   });
   if (!result.success)
