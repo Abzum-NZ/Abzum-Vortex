@@ -127,6 +127,7 @@ type ResolvedInputs = Extract<z.infer<typeof inputsReadSchema>, { outcome: "reso
 
 type ResultRow = DatabaseRow & { readonly result: unknown };
 type InstallationRow = DatabaseRow & { readonly active_installation: unknown };
+type RecheckRow = ResultRow & { readonly capabilities: unknown };
 
 const refusal = (reasonCode: ProtectedQueryRefusalReasonCode): ProtectedQueryResult => ({
   outcome: "refused",
@@ -496,15 +497,18 @@ const sameJson = (left: unknown, right: unknown): boolean => {
 
 const readableRecordSchema = z.object({
   outcome: z.literal("allowed"),
+  concurrencyNumber: revisionSchema,
   values: z.record(z.string(), jsonValueSchema),
 });
 
 /**
  * The current-Access recheck for a hit. Every stored row goes back through
- * vortex_record.read_record, the same per-row projection the ordinary query
- * applies: the row must still be readable, every filtered or sorted field must
- * still be readable on it, and its values must be exactly the requested fields
- * readable now, with their current values. Anything else discards the hit.
+ * vortex_record.read_record and vortex_record.read_record_capabilities, the
+ * same per-row projection and capabilities the ordinary query applies: the row
+ * must still be readable, every filtered or sorted field must still be readable
+ * on it, its values must be exactly the requested fields readable now, with
+ * their current values, and its revision and capabilities must be exactly the
+ * current ones. Anything else discards the hit.
  */
 const recheckHit = async (
   transaction: RequestDatabaseTransaction,
@@ -517,8 +521,12 @@ const recheckHit = async (
   if (stored.rows.length === 0) return true;
   const checked = await isolated(
     transaction,
-    () => transaction.query<ResultRow>`
-      select vortex_record.read_record(${plan.recordTypeId}::uuid, item.record_id::uuid) as result
+    () => transaction.query<RecheckRow>`
+      select
+        vortex_record.read_record(${plan.recordTypeId}::uuid, item.record_id::uuid) as result,
+        vortex_record.read_record_capabilities(
+          ${plan.recordTypeId}::uuid, item.record_id::uuid
+        ) as capabilities
       from pg_catalog.jsonb_array_elements_text(
         ${JSON.stringify(stored.rows.map((row) => row.recordId))}::text::jsonb
       ) with ordinality as item(record_id, position)
@@ -529,7 +537,14 @@ const recheckHit = async (
   const requestedFieldIds = command.requestedFieldIds.map((fieldId) => fieldId.toLowerCase());
   return stored.rows.every((row, index) => {
     const current = readableRecordSchema.safeParse(checked[index]?.result);
-    if (!current.success) return false;
+    const capabilities = protectedQueryRowCapabilitiesSchema.safeParse(checked[index]?.capabilities);
+    if (
+      !current.success ||
+      !capabilities.success ||
+      row.revision !== current.data.concurrencyNumber ||
+      !sameJson(row.capabilities, capabilities.data)
+    )
+      return false;
     const readable = new Map(
       Object.entries(current.data.values).map(([fieldId, value]) => [fieldId.toLowerCase(), value]),
     );

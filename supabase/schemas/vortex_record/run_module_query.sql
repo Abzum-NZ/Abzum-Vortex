@@ -640,12 +640,13 @@ begin
             more_rows := true;
             exit;
           end if;
-          -- Every returned row carries the record's concurrency number and its
-          -- per-row capabilities, both from the same exact per-row access
-          -- decision read_record applies. The capabilities are computed only for
-          -- a returned row; a row whose capabilities cannot be computed is
-          -- withheld rather than exposed without them.
-          row_capabilities := vortex_record.read_record_row_capabilities_internal(
+          -- Every returned row carries the record's concurrency number from
+          -- read_record and its per-row capabilities, each action decided exactly
+          -- as its own writer decides it and only for a row read_record admits.
+          -- The capabilities are computed only for a returned row; a row whose
+          -- capabilities cannot be computed is withheld rather than exposed
+          -- without them.
+          row_capabilities := vortex_record.read_record_capabilities(
             record_type_id_value, scan_record.record_id
           );
           if row_capabilities is not null then
@@ -706,4 +707,4 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
   to vortex_request;
 
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb) is
-  'One bounded keyset page of rows readable through read_record for one installed Module query, each carrying the record''s concurrency number and the per-row capabilities computed by the same exact per-row access decision read_record applies, with only the declared Record system values, or one refusal before any row is exposed; requires every filtered field to be declared filterable, pushes supported typed conditions into the candidate scan with bound values, narrows the scan to the caller''s owner, owner-group and direct-share records where those routes have an exact table form, and still decides every returned row through read_record; works out read-time fields, such as a deadline-passed calculation, inside the query at one statement timestamp in the organisation time zone, so no query is refused for freshness.';
+  'One bounded keyset page of rows readable through read_record for one installed Module query, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; requires every filtered field to be declared filterable, pushes supported typed conditions into the candidate scan with bound values, narrows the scan to the caller''s owner, owner-group and direct-share records where those routes have an exact table form, and still decides every returned row through read_record; works out read-time fields, such as a deadline-passed calculation, inside the query at one statement timestamp in the organisation time zone, so no query is refused for freshness.';
