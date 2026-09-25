@@ -1,4 +1,4 @@
-create or replace function vortex_module.issue_flow_continuation(
+create or replace function vortex_workflow.issue_flow_continuation(
   p_token_hash text,
   p_run_id uuid,
   p_organization_id uuid,
@@ -37,17 +37,17 @@ begin
 
   -- Expired continuations are useless; remove a bounded few on every issue so the table never
   -- needs a separate sweeper.
-  delete from vortex_module.flow_continuations as stale
+  delete from vortex_workflow.flow_continuations as stale
   where stale.ctid in (
     select candidate.ctid
-    from vortex_module.flow_continuations as candidate
+    from vortex_workflow.flow_continuations as candidate
     where candidate.expires_at < pg_catalog.statement_timestamp() - interval '1 day'
     limit 100
   );
 
   expiry := pg_catalog.statement_timestamp() + pg_catalog.make_interval(secs => p_lifetime_seconds);
 
-  insert into vortex_module.flow_continuations (
+  insert into vortex_workflow.flow_continuations (
     token_hash, run_id, organization_id, identity_id, flow_id, release_key, state,
     elapsed_milliseconds, created_at, expires_at
   ) values (
@@ -59,15 +59,14 @@ begin
 end
 $function$;
 
-revoke all on function vortex_module.issue_flow_continuation(
+revoke all on function vortex_workflow.issue_flow_continuation(
   text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner, vortex_record_adapter;
-grant execute on function vortex_module.issue_flow_continuation(
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_workflow.issue_flow_continuation(
   text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
 ) to vortex_runtime;
 
-comment on function vortex_module.issue_flow_continuation(
+comment on function vortex_workflow.issue_flow_continuation(
   text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
 ) is
   'Private flow-continuation issue: stores the suspended state of one server-driven flow run bound to its run, initiator, organisation and exact flow release, expiring, under the hash of a server-generated token.';

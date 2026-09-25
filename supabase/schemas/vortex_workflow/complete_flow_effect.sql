@@ -1,4 +1,4 @@
-create or replace function vortex_module.complete_flow_effect(
+create or replace function vortex_workflow.complete_flow_effect(
   p_run_id uuid,
   p_organization_id uuid,
   p_identity_id uuid,
@@ -25,7 +25,7 @@ begin
     return false;
   end if;
 
-  update vortex_module.flow_effect_ledger as ledger
+  update vortex_workflow.flow_effect_ledger as ledger
   set state = 'completed',
       outcome = p_outcome,
       outputs = p_outputs,
@@ -41,15 +41,14 @@ begin
 end
 $function$;
 
-revoke all on function vortex_module.complete_flow_effect(
+revoke all on function vortex_workflow.complete_flow_effect(
   uuid, uuid, uuid, text, text, text, jsonb
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner, vortex_record_adapter;
-grant execute on function vortex_module.complete_flow_effect(
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_workflow.complete_flow_effect(
   uuid, uuid, uuid, text, text, text, jsonb
 ) to vortex_runtime;
 
-comment on function vortex_module.complete_flow_effect(
+comment on function vortex_workflow.complete_flow_effect(
   uuid, uuid, uuid, text, text, text, jsonb
 ) is
   'Private flow-effect completion: records the safe outcome of the one claimed protected effect of a run, task path and iteration so a repeat replays it.';

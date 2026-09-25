@@ -1,4 +1,4 @@
-create or replace function vortex_module.consume_flow_continuation(
+create or replace function vortex_workflow.consume_flow_continuation(
   p_token_hash text,
   p_organization_id uuid,
   p_identity_id uuid,
@@ -25,7 +25,7 @@ begin
   -- One statement both checks every binding and marks the row used, so two concurrent resumes can
   -- never both succeed, and an unknown, expired, replayed, foreign or wrong-release token is one
   -- neutral result.
-  update vortex_module.flow_continuations as continuation
+  update vortex_workflow.flow_continuations as continuation
   set consumed_at = pg_catalog.statement_timestamp()
   where continuation.token_hash = p_token_hash
     and continuation.organization_id = p_organization_id
@@ -50,15 +50,14 @@ begin
 end
 $function$;
 
-revoke all on function vortex_module.consume_flow_continuation(
+revoke all on function vortex_workflow.consume_flow_continuation(
   text, uuid, uuid, uuid, text
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner, vortex_record_adapter;
-grant execute on function vortex_module.consume_flow_continuation(
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_workflow.consume_flow_continuation(
   text, uuid, uuid, uuid, text
 ) to vortex_runtime;
 
-comment on function vortex_module.consume_flow_continuation(
+comment on function vortex_workflow.consume_flow_continuation(
   text, uuid, uuid, uuid, text
 ) is
   'Private flow-continuation consume: returns the stored run state once, and only to the exact initiator, organisation and flow release it was issued for while it has not expired; every other case is one neutral unavailable result.';

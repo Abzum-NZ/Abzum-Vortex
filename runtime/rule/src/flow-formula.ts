@@ -28,6 +28,13 @@ export type FlowFormulaScope = Readonly<{
   reference: (reference: FlowReference) => FlowRuntimeValue | undefined;
 }>;
 
+/**
+ * Bounds on one computed value. A For each of set-variable tasks could otherwise square a number or
+ * double a text on every item; a result beyond these bounds is `undefined`, so the run refuses.
+ */
+const maximumDecimalDigits = 100;
+const maximumTextCharacters = 65_536;
+
 const numericTypes = new Set(["whole_number", "decimal_number", "money"]);
 const textTypes = new Set(["text", "formatted_text", "choice"]);
 
@@ -129,6 +136,7 @@ const arithmetic = (
       }
     }
     const scaled = rescale(coefficient, currentScale, scale, mode);
+    if (absolute(scaled) >= powerOfTen(maximumDecimalDigits)) return undefined;
     return value(resultType(operands), decimalText(scaled, scale));
   } catch {
     return undefined;
@@ -366,9 +374,9 @@ export const evaluateFlowFormula = (
       case "join": {
         const parts = node.parts.map(evaluate);
         const texts = parts.map((part) => (part === undefined ? undefined : joined(part)));
-        return texts.some((text) => text === undefined)
-          ? undefined
-          : value("text", (texts as string[]).join(node.separator ?? ""));
+        if (texts.some((text) => text === undefined)) return undefined;
+        const result = (texts as string[]).join(node.separator ?? "");
+        return result.length > maximumTextCharacters ? undefined : value("text", result);
       }
       case "date_add": {
         const date = evaluate(node.date);

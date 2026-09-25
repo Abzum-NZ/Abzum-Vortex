@@ -4,7 +4,11 @@
 -- ledger keys every protected effect by (run id, task path, iteration), so a replayed continuation
 -- or a redelivered run never repeats an effect. Nothing here is reachable except through the four
 -- functions below, which only the runtime role may execute.
-create table vortex_module.flow_continuations (
+--
+-- Everything lives in `vortex_workflow`, the flow engine's private schema: it is owned by the
+-- migration role, and the private runtime already holds usage on it (20260924470000), while
+-- `vortex_module` is closed to the runtime role and to new objects of the migration role.
+create table vortex_workflow.flow_continuations (
   token_hash text not null check (token_hash ~ '^[a-f0-9]{64}$'),
   run_id uuid not null check (vortex_context.is_non_nil_uuid(run_id::text)),
   organization_id uuid not null
@@ -23,9 +27,9 @@ create table vortex_module.flow_continuations (
 );
 
 create index flow_continuations_expiry_idx
-  on vortex_module.flow_continuations (expires_at);
+  on vortex_workflow.flow_continuations (expires_at);
 
-create table vortex_module.flow_effect_ledger (
+create table vortex_workflow.flow_effect_ledger (
   run_id uuid not null check (vortex_context.is_non_nil_uuid(run_id::text)),
   task_path text not null check (pg_catalog.length(task_path) between 1 and 1000),
   iteration text not null check (pg_catalog.length(iteration) between 1 and 200),
@@ -57,13 +61,12 @@ create table vortex_module.flow_effect_ledger (
 -- runtime, request or Data API role reads or writes a row directly, so a continuation cannot be
 -- forged, read across a person or organisation, or reused, and a protected effect cannot be
 -- recorded twice.
-alter table vortex_module.flow_continuations enable row level security;
-alter table vortex_module.flow_effect_ledger enable row level security;
-revoke all on table vortex_module.flow_continuations, vortex_module.flow_effect_ledger
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner, vortex_record_adapter;
+alter table vortex_workflow.flow_continuations enable row level security;
+alter table vortex_workflow.flow_effect_ledger enable row level security;
+revoke all on table vortex_workflow.flow_continuations, vortex_workflow.flow_effect_ledger
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
-create or replace function vortex_module.issue_flow_continuation(
+create or replace function vortex_workflow.issue_flow_continuation(
   p_token_hash text,
   p_run_id uuid,
   p_organization_id uuid,
@@ -102,17 +105,17 @@ begin
 
   -- Expired continuations are useless; remove a bounded few on every issue so the table never
   -- needs a separate sweeper.
-  delete from vortex_module.flow_continuations as stale
+  delete from vortex_workflow.flow_continuations as stale
   where stale.ctid in (
     select candidate.ctid
-    from vortex_module.flow_continuations as candidate
+    from vortex_workflow.flow_continuations as candidate
     where candidate.expires_at < pg_catalog.statement_timestamp() - interval '1 day'
     limit 100
   );
 
   expiry := pg_catalog.statement_timestamp() + pg_catalog.make_interval(secs => p_lifetime_seconds);
 
-  insert into vortex_module.flow_continuations (
+  insert into vortex_workflow.flow_continuations (
     token_hash, run_id, organization_id, identity_id, flow_id, release_key, state,
     elapsed_milliseconds, created_at, expires_at
   ) values (
@@ -124,20 +127,19 @@ begin
 end
 $function$;
 
-revoke all on function vortex_module.issue_flow_continuation(
+revoke all on function vortex_workflow.issue_flow_continuation(
   text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner, vortex_record_adapter;
-grant execute on function vortex_module.issue_flow_continuation(
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_workflow.issue_flow_continuation(
   text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
 ) to vortex_runtime;
 
-comment on function vortex_module.issue_flow_continuation(
+comment on function vortex_workflow.issue_flow_continuation(
   text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
 ) is
   'Private flow-continuation issue: stores the suspended state of one server-driven flow run bound to its run, initiator, organisation and exact flow release, expiring, under the hash of a server-generated token.';
 
-create or replace function vortex_module.consume_flow_continuation(
+create or replace function vortex_workflow.consume_flow_continuation(
   p_token_hash text,
   p_organization_id uuid,
   p_identity_id uuid,
@@ -164,7 +166,7 @@ begin
   -- One statement both checks every binding and marks the row used, so two concurrent resumes can
   -- never both succeed, and an unknown, expired, replayed, foreign or wrong-release token is one
   -- neutral result.
-  update vortex_module.flow_continuations as continuation
+  update vortex_workflow.flow_continuations as continuation
   set consumed_at = pg_catalog.statement_timestamp()
   where continuation.token_hash = p_token_hash
     and continuation.organization_id = p_organization_id
@@ -189,20 +191,19 @@ begin
 end
 $function$;
 
-revoke all on function vortex_module.consume_flow_continuation(
+revoke all on function vortex_workflow.consume_flow_continuation(
   text, uuid, uuid, uuid, text
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner, vortex_record_adapter;
-grant execute on function vortex_module.consume_flow_continuation(
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_workflow.consume_flow_continuation(
   text, uuid, uuid, uuid, text
 ) to vortex_runtime;
 
-comment on function vortex_module.consume_flow_continuation(
+comment on function vortex_workflow.consume_flow_continuation(
   text, uuid, uuid, uuid, text
 ) is
   'Private flow-continuation consume: returns the stored run state once, and only to the exact initiator, organisation and flow release it was issued for while it has not expired; every other case is one neutral unavailable result.';
 
-create or replace function vortex_module.begin_flow_effect(
+create or replace function vortex_workflow.begin_flow_effect(
   p_run_id uuid,
   p_organization_id uuid,
   p_identity_id uuid,
@@ -229,7 +230,7 @@ begin
     return pg_catalog.jsonb_build_object('kind', 'unavailable');
   end if;
 
-  insert into vortex_module.flow_effect_ledger (
+  insert into vortex_workflow.flow_effect_ledger (
     run_id, task_path, iteration, organization_id, identity_id, state, started_at
   ) values (
     p_run_id, p_task_path, p_iteration, p_organization_id, p_identity_id, 'started',
@@ -244,7 +245,7 @@ begin
 
   select ledger.organization_id, ledger.identity_id, ledger.state, ledger.outcome, ledger.outputs
   into existing
-  from vortex_module.flow_effect_ledger as ledger
+  from vortex_workflow.flow_effect_ledger as ledger
   where ledger.run_id = p_run_id
     and ledger.task_path = p_task_path
     and ledger.iteration = p_iteration;
@@ -268,20 +269,19 @@ begin
 end
 $function$;
 
-revoke all on function vortex_module.begin_flow_effect(
+revoke all on function vortex_workflow.begin_flow_effect(
   uuid, uuid, uuid, text, text
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner, vortex_record_adapter;
-grant execute on function vortex_module.begin_flow_effect(
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_workflow.begin_flow_effect(
   uuid, uuid, uuid, text, text
 ) to vortex_runtime;
 
-comment on function vortex_module.begin_flow_effect(
+comment on function vortex_workflow.begin_flow_effect(
   uuid, uuid, uuid, text, text
 ) is
   'Private flow-effect claim: the first call for one run, task path and iteration claims the protected effect; every repeat replays the recorded safe outcome or reports it in progress, so a replayed flow can never repeat an effect.';
 
-create or replace function vortex_module.complete_flow_effect(
+create or replace function vortex_workflow.complete_flow_effect(
   p_run_id uuid,
   p_organization_id uuid,
   p_identity_id uuid,
@@ -308,7 +308,7 @@ begin
     return false;
   end if;
 
-  update vortex_module.flow_effect_ledger as ledger
+  update vortex_workflow.flow_effect_ledger as ledger
   set state = 'completed',
       outcome = p_outcome,
       outputs = p_outputs,
@@ -324,15 +324,14 @@ begin
 end
 $function$;
 
-revoke all on function vortex_module.complete_flow_effect(
+revoke all on function vortex_workflow.complete_flow_effect(
   uuid, uuid, uuid, text, text, text, jsonb
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner, vortex_record_adapter;
-grant execute on function vortex_module.complete_flow_effect(
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_workflow.complete_flow_effect(
   uuid, uuid, uuid, text, text, text, jsonb
 ) to vortex_runtime;
 
-comment on function vortex_module.complete_flow_effect(
+comment on function vortex_workflow.complete_flow_effect(
   uuid, uuid, uuid, text, text, text, jsonb
 ) is
   'Private flow-effect completion: records the safe outcome of the one claimed protected effect of a run, task path and iteration so a repeat replays it.';

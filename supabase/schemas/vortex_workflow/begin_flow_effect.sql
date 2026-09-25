@@ -1,4 +1,4 @@
-create or replace function vortex_module.begin_flow_effect(
+create or replace function vortex_workflow.begin_flow_effect(
   p_run_id uuid,
   p_organization_id uuid,
   p_identity_id uuid,
@@ -25,7 +25,7 @@ begin
     return pg_catalog.jsonb_build_object('kind', 'unavailable');
   end if;
 
-  insert into vortex_module.flow_effect_ledger (
+  insert into vortex_workflow.flow_effect_ledger (
     run_id, task_path, iteration, organization_id, identity_id, state, started_at
   ) values (
     p_run_id, p_task_path, p_iteration, p_organization_id, p_identity_id, 'started',
@@ -40,7 +40,7 @@ begin
 
   select ledger.organization_id, ledger.identity_id, ledger.state, ledger.outcome, ledger.outputs
   into existing
-  from vortex_module.flow_effect_ledger as ledger
+  from vortex_workflow.flow_effect_ledger as ledger
   where ledger.run_id = p_run_id
     and ledger.task_path = p_task_path
     and ledger.iteration = p_iteration;
@@ -64,15 +64,14 @@ begin
 end
 $function$;
 
-revoke all on function vortex_module.begin_flow_effect(
+revoke all on function vortex_workflow.begin_flow_effect(
   uuid, uuid, uuid, text, text
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner, vortex_record_adapter;
-grant execute on function vortex_module.begin_flow_effect(
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_workflow.begin_flow_effect(
   uuid, uuid, uuid, text, text
 ) to vortex_runtime;
 
-comment on function vortex_module.begin_flow_effect(
+comment on function vortex_workflow.begin_flow_effect(
   uuid, uuid, uuid, text, text
 ) is
   'Private flow-effect claim: the first call for one run, task path and iteration claims the protected effect; every repeat replays the recorded safe outcome or reports it in progress, so a replayed flow can never repeat an effect.';

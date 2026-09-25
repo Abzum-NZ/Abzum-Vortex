@@ -107,7 +107,7 @@ export const createDatabaseFlowStores = (): Readonly<{
       async issue(input) {
         const rows = await withRuntimeTransaction((transaction) =>
           transaction.query`
-            select vortex_module.issue_flow_continuation(
+            select vortex_workflow.issue_flow_continuation(
               ${input.tokenHash}::text,
               ${input.runId}::uuid,
               ${input.organizationId}::uuid,
@@ -131,7 +131,7 @@ export const createDatabaseFlowStores = (): Readonly<{
       async consume(input) {
         const rows = await withRuntimeTransaction((transaction) =>
           transaction.query`
-            select vortex_module.consume_flow_continuation(
+            select vortex_workflow.consume_flow_continuation(
               ${input.tokenHash}::text,
               ${input.organizationId}::uuid,
               ${input.identityId}::uuid,
@@ -155,7 +155,7 @@ export const createDatabaseFlowStores = (): Readonly<{
       async begin(key) {
         const rows = await withRuntimeTransaction((transaction) =>
           transaction.query`
-            select vortex_module.begin_flow_effect(
+            select vortex_workflow.begin_flow_effect(
               ${key.runId}::uuid,
               ${key.organizationId}::uuid,
               ${key.identityId}::uuid,
@@ -172,7 +172,7 @@ export const createDatabaseFlowStores = (): Readonly<{
       async complete(key, outcome, outputs) {
         const rows = await withRuntimeTransaction((transaction) =>
           transaction.query`
-            select vortex_module.complete_flow_effect(
+            select vortex_workflow.complete_flow_effect(
               ${key.runId}::uuid,
               ${key.organizationId}::uuid,
               ${key.identityId}::uuid,

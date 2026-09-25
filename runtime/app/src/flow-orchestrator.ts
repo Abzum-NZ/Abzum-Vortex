@@ -6,10 +6,12 @@ import {
   flowIdSchema,
   flowMaximumServerSeconds,
   flowSchema,
+  flowTaskChildLists,
   identitySessionSchema,
   organizationSelectionCandidateSchema,
   platformOperationKey,
   type FlowDefinition,
+  type FlowTask,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -85,8 +87,9 @@ export type FlowOrchestratorDependencies = Readonly<{
     flowId: string,
   ) => Promise<FlowRelease | undefined>;
   /**
-   * Checks the flow's invocation permission for the initiator. Required whenever a flow declares
-   * one; a flow that declares one is refused when this is not supplied.
+   * Checks a flow's invocation permission for the initiator. Required whenever the started flow, or
+   * any flow it can reach through Run flow, declares one; such a flow is unavailable to the run when
+   * this is not supplied.
    */
   authorizeInvocation?: (
     session: IdentitySession,
@@ -207,6 +210,22 @@ const withinPayload = (candidate: unknown): boolean => {
   } catch {
     return false;
   }
+};
+
+/** The flows one flow starts through Run flow, anywhere in its tasks, errors or finally lists. */
+const runFlowTargets = (flow: FlowDefinition): string[] => {
+  const targets: string[] = [];
+  const visit = (tasks: readonly FlowTask[]) => {
+    for (const task of tasks) {
+      if (task.type === "run_flow")
+        targets.push((task as Extract<FlowTask, { type: "run_flow" }>).flowId);
+      for (const child of flowTaskChildLists(task)) visit(child.tasks);
+    }
+  };
+  visit(flow.tasks);
+  visit(flow.errors);
+  visit(flow.finally);
+  return targets;
 };
 
 const safeIntent = (intent: FlowInterfaceIntent): SafeIntent => ({
@@ -443,17 +462,38 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     selection: OrganizationSelectionCandidate,
     flowId: string,
   ): Promise<Omit<Run, "carriedMilliseconds" | "segmentStart" | "unavailable"> | undefined> => {
+    // An expired session is not a verified initiator, on a start or on any resume.
+    if (!(Date.parse(session.accessTokenExpiresAt) > now().valueOf())) return undefined;
     const release = await dependencies.resolveRelease(selection.organizationId, flowId);
     if (release === undefined) return undefined;
-    const library = libraryOf(release);
-    const flow = library(flowId);
+    const validated = libraryOf(release);
+    const permitted = async (flow: FlowDefinition): Promise<boolean> =>
+      flow.invocationPermissionId === undefined ||
+      (dependencies.authorizeInvocation !== undefined &&
+        (await dependencies.authorizeInvocation(session, selection, flow)));
+
+    const flow = validated(flowId);
     // A flow the platform runs for a person runs as that person, and only that.
     if (flow === undefined || flow.execution !== "interactive" || flow.runAs.kind !== "initiator")
       return undefined;
-    if (flow.invocationPermissionId !== undefined) {
-      if (dependencies.authorizeInvocation === undefined) return undefined;
-      if (!(await dependencies.authorizeInvocation(session, selection, flow))) return undefined;
+    if (!(await permitted(flow))) return undefined;
+
+    // Run flow never starts a flow the initiator may not invoke: every flow the run can reach is
+    // checked now, and one that is refused is unavailable to the run, so its Run flow task fails.
+    const available = new Set<string>([flowId]);
+    const visited = new Set<string>([flowId]);
+    const pending = runFlowTargets(flow);
+    while (pending.length > 0) {
+      const targetId = pending.shift()!;
+      if (visited.has(targetId)) continue;
+      visited.add(targetId);
+      const target = validated(targetId);
+      if (target === undefined || !(await permitted(target))) continue;
+      available.add(targetId);
+      pending.push(...runFlowTargets(target));
     }
+    const library: FlowLibrary = (candidate) =>
+      available.has(candidate) ? validated(candidate) : undefined;
     return { session, selection, flowId, release, library };
   };
 
