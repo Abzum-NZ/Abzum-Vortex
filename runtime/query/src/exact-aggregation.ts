@@ -125,7 +125,7 @@ const computeAggregate = (
 
   switch (fieldType) {
     case "money": {
-      const money = present as readonly Money[];
+      const money = present as unknown as readonly Money[];
       const currency = money[0]!.currency;
       if (money.some((value) => value.currency !== currency))
         return { outcome: "refused", reasonCode: "mixed_currency" };

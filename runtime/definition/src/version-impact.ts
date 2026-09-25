@@ -392,7 +392,10 @@ const compareParsedDefinitionVersionImpact = (
     reasons = compareModuleContents(comparablePrevious, comparableCandidate);
   } else {
     const latestApplication = latest! as PublishedApplicationDefinition;
-    normalisedPrevious = normaliseApplicationContentV2(latestApplication.content);
+    const latestApplicationContent = latestApplication.content as Parameters<
+      typeof normaliseApplicationContentV2
+    >[0];
+    normalisedPrevious = normaliseApplicationContentV2(latestApplicationContent);
     assertUnambiguousApplicationContentV2(latestApplication.content);
     reasons = compareApplicationContentsV2(
       normalisedPrevious as ReturnType<typeof normaliseApplicationContentV2>,

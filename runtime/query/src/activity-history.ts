@@ -19,6 +19,7 @@ import {
   organizationIdSchema,
   platformIdSchema,
   timestampSchema,
+  type IdentityId,
   type IdentitySession,
   type OrganizationSelectionCandidate,
   type SelectedOrganizationScope,
@@ -257,7 +258,7 @@ const decodeActivityContinuationToken = (
 const runPage = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
-  identityId: string,
+  identityId: IdentityId,
   command: z.infer<typeof activityHistoryPageCommandSchema>,
   continuationKey: QueryContinuationKey,
 ): Promise<ActivityHistoryResult> => {
