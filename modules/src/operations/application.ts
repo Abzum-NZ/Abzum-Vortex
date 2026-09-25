@@ -16,12 +16,56 @@ import {
   type PlatformBlockReleaseV2,
   type SourceBlockPropertyValueV2Contract,
 } from "@vortex/contracts";
+import {
+  operationsRunbooks,
+  runbookPageKey,
+  runbookPageText,
+} from "./runbooks";
 
 type JsonObject = Record<string, unknown>;
 
 const incidentRecordType = "vortex.operations.incidents:incident";
 const createAction = "vortex.operations.incidents.incident.create";
 const attachAction = "vortex.operations.incidents.incident.attach";
+const incidentActionEventId = "event_operations_incident_action";
+
+/**
+ * The bounded operator actions on an open incident. Each is one detail-page button, shown only to
+ * the holder of its own named-action permission, whose action event starts one flow of one Call
+ * protected operation task on that named action.
+ */
+const incidentOperations = [
+  {
+    action: "vortex.operations.incidents.incident.acknowledge",
+    button: "button_operations_incident_acknowledge",
+    flow: "operations_acknowledge_incident",
+    name: "Acknowledge incident",
+    label: "Acknowledge",
+    variant: "primary",
+    description:
+      "Acknowledges the current open incident through the bound incident.acknowledge named action.",
+  },
+  {
+    action: "vortex.operations.incidents.incident.escalate",
+    button: "button_operations_incident_escalate",
+    flow: "operations_escalate_incident",
+    name: "Escalate incident",
+    label: "Escalate",
+    variant: "danger",
+    description:
+      "Escalates the current open incident to its owning role through the bound incident.escalate named action.",
+  },
+  {
+    action: "vortex.operations.incidents.incident.resolve",
+    button: "button_operations_incident_resolve",
+    flow: "operations_resolve_incident",
+    name: "Resolve incident",
+    label: "Resolve",
+    variant: "secondary",
+    description:
+      "Resolves the current open incident through the bound incident.resolve named action.",
+  },
+] as const;
 
 const placementLayout = {
   visible: true,
@@ -99,6 +143,20 @@ const submitButton = (label: string) =>
     variant: { kind: "choice", value: "primary" },
   });
 
+/** A button whose action event starts one bound named-action flow; shown only to its permission. */
+const actionButton = (
+  label: string,
+  variant: "primary" | "secondary" | "danger",
+  permission: string,
+) => ({
+  ...placement(BUTTON_BLOCK_RELEASE, {
+    label: { kind: "text", value: label },
+    action_kind: { kind: "choice", value: "action" },
+    variant: { kind: "choice", value: variant },
+  }),
+  view_permission: permission,
+});
+
 /** A form container holding its inputs followed by its one submit button. */
 const form = (title: string, inputs: Record<string, unknown>) =>
   placement(FORM_CONTAINER_BLOCK_RELEASE, { title: { kind: "text", value: title } }, {
@@ -122,7 +180,32 @@ const detailStates = [
 const createForm = "form_operations_new_incident";
 const attachForm = "form_operations_incident_attach";
 
+/**
+ * One reachable dashboard page per spec 19 runbook, keyed by its exact `runbookReference` tail. The
+ * page text carries the reference, its owning role, concrete operator steps and the bounded action
+ * set, so an operator reading an incident's `runbook_reference` can follow it without opening
+ * customer content.
+ */
+const runbookPages = operationsRunbooks.map((runbook) => {
+  const pageKey = runbookPageKey(runbook);
+  return {
+    id: `page_operations_${pageKey}`,
+    key: pageKey,
+    name: runbook.title,
+    type: "dashboard",
+    permission: "application.operations.open",
+    states: dashboardStates,
+    composition: {
+      shell_kind: "default",
+      main: slot({
+        [`${pageKey}_text`]: textBlock(runbook.title, runbookPageText(runbook)),
+      }),
+    },
+  };
+});
+
 const pages = [
+  ...runbookPages,
   {
     id: "page_operations_signals",
     key: "operations_signals",
@@ -176,7 +259,8 @@ const pages = [
           title: { kind: "text", value: "Incident" },
         }),
         // Attach runs on the open incident as its subject; operators without the attach
-        // permission never see the form, and the action refuses a resolved or closed incident.
+        // permission never see the form, and the action refuses a resolved or closed incident and
+        // a signal whose deduplication key does not match the incident's own.
         [attachForm]: {
           ...form("Attach a signal to this incident", {
             input_operations_attach_deduplication_key: textInput(
@@ -192,6 +276,15 @@ const pages = [
           }),
           view_permission: attachAction,
         },
+        // The bounded operator actions run on the open incident as their subject. Each button is
+        // shown only to its own permission holder, and every action refuses a resolved or closed
+        // incident in the module.
+        ...Object.fromEntries(
+          incidentOperations.map((operation) => [
+            operation.button,
+            actionButton(operation.label, operation.variant, operation.action),
+          ]),
+        ),
       }),
     },
     standard_page_replacement: { standard_page: "detail", record_type: incidentRecordType },
@@ -271,11 +364,16 @@ const theme = {
 
 /**
  * The Operations application. Incidents are ordinary application-contained records that change only
- * when a signed-in operator submits a form: Create incident commits the standard create action, and
- * Attach commits the incident's named attach action from its detail page. No workflow, schedule or
- * system path creates or changes an incident. Open alert signals are recorded by the alert sink, but
- * no record type or protected read model exposes them yet, so the open-signals page is honest text
- * rather than an unbound table. No page or action grants customer-content access.
+ * when a signed-in operator acts: Create incident commits the standard create action; Attach, and
+ * the bounded Acknowledge, Escalate and Resolve actions, commit the incident's named actions from
+ * its detail page. Each action runs as the operator, is gated by its own module permission and field
+ * policy, and refuses a resolved or closed incident; Attach also refuses a signal whose
+ * deduplication key does not match the incident's, so a repeated signal updates the one incident it
+ * belongs to. One Runbooks page per spec 19 critical code carries concrete operator steps keyed by
+ * the incident's `runbook_reference`. No workflow, schedule or system path creates or changes an
+ * incident. Open alert signals are recorded by the alert sink, but no record type or protected read
+ * model exposes them yet, so the open-signals page is honest text rather than an unbound table. No
+ * page or action grants customer-content access, and no action approves itself.
  */
 export const operationsApplication: ApplicationSourceDocumentV2 =
   applicationSourceDocumentV2Schema.parse({
@@ -286,7 +384,7 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
     body: {
       name: "Operations",
       description:
-        "Operational incidents with timelines, scope, containment, recovery, evidence, communication, cause, follow-up and verification. Operators create incidents and attach alert signals to open incidents by hand.",
+        "Operational incidents with timelines, scope, containment, recovery, evidence, communication, cause, follow-up and verification, plus one reachable runbook for each critical alert code. Operators create incidents, attach alert signals to open incidents, and acknowledge, escalate or resolve them under their own permission.",
       icon: "activity",
       home_page: "operations_signals",
       module_bindings: [
@@ -322,6 +420,7 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
             "vortex.operations.incidents.incident.restore",
             "vortex.operations.incidents.incident.export",
             attachAction,
+            ...incidentOperations.map((operation) => operation.action),
           ],
         },
       ],
@@ -353,6 +452,18 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
               permission: createAction,
             },
           ],
+        },
+        {
+          id: "nav_operations_runbooks",
+          type: "heading",
+          label: "Runbooks",
+          children: operationsRunbooks.map((runbook) => ({
+            id: `nav_operations_${runbookPageKey(runbook)}`,
+            type: "page",
+            label: runbook.title,
+            page: runbookPageKey(runbook),
+            permission: "application.operations.open",
+          })),
         },
       ],
       queries: [
@@ -398,15 +509,23 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
           carries: [],
           personal_or_sensitive_values_allowed: false,
         },
+        {
+          id: incidentActionEventId,
+          key: "vortex.app.events.vortex_app_operations_incident_action",
+          record_type: incidentRecordType,
+          carries: [],
+          personal_or_sensitive_values_allowed: false,
+        },
       ],
       public_addresses: [],
       platform_block_dependencies: platformBlockDependencies,
       shells: [],
       pages,
       theme,
-      // Each form commits through one flow with one task: the default Save of the incident form and
-      // a call of the incident.attach named action. The flows run as the signed-in operator, so the
-      // action's own permission, field policy and precondition decide the result.
+      // Each form or operator button commits through one flow with one task: the default Save of
+      // the incident form, or a call of the incident's attach, acknowledge, escalate or resolve
+      // named action. The flows run as the signed-in operator, so the action's own permission,
+      // field policy and precondition decide the result.
       flows: [
         {
           ...defaultSaveFlowSource({
@@ -433,6 +552,16 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
           }),
           labels: { name: "Attach signal" },
         },
+        ...incidentOperations.map((operation) => ({
+          ...defaultOperationFlowSource({
+            id: operation.flow,
+            key: operation.flow,
+            description: operation.description,
+            operation: operation.action,
+            inputs: {},
+          }),
+          labels: { name: operation.name },
+        })),
       ],
       flow_bindings: [
         {
@@ -454,6 +583,17 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
             evidence: { kind: "caller", name: "evidence" },
           },
         },
+        // Each operator button starts its own one-task flow with no inputs: the incident is the
+        // detail page's subject, and the named action's own permission, field policy and
+        // precondition decide the result.
+        ...incidentOperations.map((operation) => ({
+          id: `button_binding_${operation.flow}`,
+          control: operation.button,
+          event_id: incidentActionEventId,
+          event: "action" as const,
+          flow: operation.flow,
+          inputs: {},
+        })),
       ],
     },
   });

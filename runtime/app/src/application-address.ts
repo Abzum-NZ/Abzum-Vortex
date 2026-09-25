@@ -339,7 +339,7 @@ const readPermittedApplications = async (
   try {
     const read = await withRuntimeTransaction(async (transaction) => {
       const rows = await transaction.query<AddressRow>`
-        select vortex_module.read_application_address_candidates(
+        select vortex_access.read_application_address_candidates(
           ${parsedSession.data.identityId}::uuid,
           ${tenantShortName.data}::text,
           ${organizationShortName.data}::text

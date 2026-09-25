@@ -1,11 +1,14 @@
 import "server-only";
 
-import { revisionSchema, type NavigationItem } from "@vortex/contracts";
+import {
+  revisionSchema,
+  type NavigationItem,
+  type ProjectedNavigation,
+} from "@vortex/contracts";
 import type { ResolvedPageComposition } from "./page-composition-resolution";
 import {
   projectNavigation,
   type NavigationPermissionDecisions,
-  type ProjectedNavigation,
 } from "./navigation-projection";
 import {
   projectPageCapability,

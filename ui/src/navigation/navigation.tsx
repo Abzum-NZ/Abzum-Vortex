@@ -1,25 +1,11 @@
 "use client";
 
 import { useId, useState, type MouseEvent, type ReactElement } from "react";
+import type { ProjectedNavigation, ProjectedNavigationItem } from "@vortex/contracts";
 import type { Breakpoint } from "../definition-error";
 import { NAVIGATION_STYLES_CSS } from "./navigation-styles";
 
-/**
- * The navigation tree projected by `runtime/page` for one viewer. It is the compiled contract
- * shape without permission keys: the server already removed every item the viewer may not use
- * and every heading those removals left empty.
- */
-export type ProjectedNavigationItem =
-  | Readonly<{
-      type: "heading";
-      id: string;
-      label: string;
-      children: readonly ProjectedNavigationItem[];
-    }>
-  | Readonly<{ type: "page"; id: string; label: string; pageId: string }>
-  | Readonly<{ type: "external"; id: string; label: string; address: string }>;
-
-export type ProjectedNavigation = readonly ProjectedNavigationItem[];
+export type { ProjectedNavigation, ProjectedNavigationItem };
 
 export type ApplicationNavigationProps = Readonly<{
   /** The viewer's already permission-filtered navigation, in definition order. */

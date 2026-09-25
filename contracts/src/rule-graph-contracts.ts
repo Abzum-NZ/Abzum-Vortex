@@ -24,9 +24,13 @@ export {
 export type { RuleTableColumn } from "./rule-table-values";
 
 /**
- * @deprecated The node-and-edge rule graph is replaced by the one flow definition in
- * `flow-contracts.ts` (a `BeforeSave` trigger with `transaction` execution). Conversion and removal
- * of this format belong to #986 and #988; do not extend it.
+ * @deprecated The node-and-edge rule graph is no longer authored. #986 converted every shipped
+ * definition to the one flow definition in `flow-contracts.ts` (a `BeforeSave` trigger with
+ * `transaction` execution). This graph now exists only as the executable form of a `BeforeSave`
+ * flow in canonical `content.rules`, which the save transaction still reads and
+ * `rule-graph-validation.ts` still validates until #1007 replaces the rule-graph evaluator and the
+ * database read of `content.rules`. #988 removed the unused authored parts; do not extend the
+ * format, and delete it in #1007.
  */
 export const ruleGraphContractVersion = "1.0.0" as const;
 export const ruleGraphNodeContractVersion = "1.0.0" as const;
@@ -416,7 +420,6 @@ export const ruleGraphEdgeSchema = z
     toNodeId: containedComponentIdSchema,
   })
   .strict();
-export type RuleGraphEdge = z.infer<typeof ruleGraphEdgeSchema>;
 
 const reportDuplicate = (
   values: readonly string[],

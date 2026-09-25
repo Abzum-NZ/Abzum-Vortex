@@ -4,11 +4,12 @@ import {
   blockPropertyValueV2Schema,
   immutablePlatformBlockCatalogueV2Schema,
   placementSlotV2Schema,
+  validateComponentSettings,
   type ApplicationShellV2,
   type BlockPropertySchemaV2Contract,
   type BlockPropertyValueV2Contract,
+  type ComponentSettingFailure,
   type PlatformBlockReleaseV2,
-  type richTextDocumentV2Schema,
 } from "@vortex/contracts";
 
 /** Actual Puck Data. Page, shell, and guided-step selection remain Vortex orchestration. */
@@ -96,142 +97,25 @@ const bestOrderHint = (
 };
 
 type VortexSlot = ReturnType<typeof placementSlotV2Schema.parse>;
-type RichTextDocument = ReturnType<typeof richTextDocumentV2Schema.parse>;
-type RichTextInline = { kind: string; children?: RichTextInline[] };
 
-const richTextKinds = (document: RichTextDocument): Set<string> => {
-  const kinds = new Set<string>();
-  const visitInline = (inline: RichTextInline): void => {
-    if (inline.kind === "text") return;
-    kinds.add(inline.kind);
-    for (const child of inline.children ?? []) visitInline(child);
-  };
-  for (const block of document.blocks) {
-    kinds.add(block.kind);
-    if ("children" in block) {
-      for (const child of block.children) visitInline(child);
-    } else {
-      for (const item of block.items) {
-        for (const child of item) visitInline(child);
-      }
-    }
-  }
-  return kinds;
-};
-
-const validatePropertyValue = (
-  value: unknown,
-  declaration: BlockPropertySchemaV2Contract,
-  at: string,
-): void => {
-  let parsed: BlockPropertyValueV2Contract;
-  try {
-    parsed = blockPropertyValueV2Schema.parse(value);
-  } catch (error) {
-    throw new VortexPuckAdapterError(`Invalid property value at ${at}`, { cause: error });
-  }
-
-  if (parsed.kind !== declaration.kind) {
-    throw new VortexPuckAdapterError(
-      `Property value kind mismatch at ${at}: expected ${declaration.kind}, got ${parsed.kind}`,
-    );
-  }
-
-  switch (declaration.kind) {
-    case "text": {
-      const textVal = (parsed as { kind: "text"; value: string }).value;
-      if (textVal.length < declaration.minLength || textVal.length > declaration.maxLength) {
-        throw new VortexPuckAdapterError(
-          `Text property length out of range [${declaration.minLength}, ${declaration.maxLength}] at ${at}`,
-        );
-      }
-      break;
-    }
-    case "number": {
-      const numVal = (parsed as { kind: "number"; value: number }).value;
-      if (declaration.integer && !Number.isInteger(numVal)) {
-        throw new VortexPuckAdapterError(`Number property at ${at} must be an integer`);
-      }
-      if (declaration.minimum !== undefined && numVal < declaration.minimum) {
-        throw new VortexPuckAdapterError(
-          `Number property below minimum ${declaration.minimum} at ${at}`,
-        );
-      }
-      if (declaration.maximum !== undefined && numVal > declaration.maximum) {
-        throw new VortexPuckAdapterError(
-          `Number property above maximum ${declaration.maximum} at ${at}`,
-        );
-      }
-      break;
-    }
-    case "choice": {
-      const choiceVal = (parsed as { kind: "choice"; value: string }).value;
-      if (!declaration.options.some((opt) => opt.key === choiceVal)) {
-        throw new VortexPuckAdapterError(
-          `Choice value "${choiceVal}" not in declared options at ${at}`,
-        );
-      }
-      break;
-    }
-    case "rich_text": {
-      const doc = (
-        parsed as {
-          kind: "rich_text";
-          value: RichTextDocument;
-        }
-      ).value;
-      const allowed = new Set(declaration.allowedElements);
-      for (const kind of richTextKinds(doc)) {
-        if (!allowed.has(kind as never)) {
-          throw new VortexPuckAdapterError(`Disallowed rich text element "${kind}" at ${at}`);
-        }
-      }
-      break;
-    }
-    case "group": {
-      const groupVal = parsed as {
-        kind: "group";
-        properties: Record<string, BlockPropertyValueV2Contract>;
-      };
-      const declaredProps = new Map(
-        declaration.properties.map((property) => [property.key, property]),
-      );
-      for (const key of Object.keys(groupVal.properties)) {
-        if (!declaredProps.has(key)) {
-          throw new VortexPuckAdapterError(`Undeclared group property key "${key}" at ${at}`);
-        }
-      }
-      for (const property of declaration.properties) {
-        const nested = groupVal.properties[property.key];
-        if (nested === undefined) {
-          if (property.required) {
-            throw new VortexPuckAdapterError(
-              `Missing required group property "${property.key}" at ${at}`,
-            );
-          }
-        } else {
-          validatePropertyValue(nested, property, `${at}.${property.key}`);
-        }
-      }
-      break;
-    }
-    case "list": {
-      const listVal = parsed as { kind: "list"; items: BlockPropertyValueV2Contract[] };
-      if (
-        listVal.items.length < declaration.minimumItems ||
-        listVal.items.length > declaration.maximumItems
-      ) {
-        throw new VortexPuckAdapterError(
-          `List item count out of bounds [${declaration.minimumItems}, ${declaration.maximumItems}] at ${at}`,
-        );
-      }
-      for (const [idx, item] of listVal.items.entries()) {
-        validatePropertyValue(item, declaration.item, `${at}[${idx}]`);
-      }
-      break;
-    }
+/** The exact setting a shared failure names, for an operator-readable adapter error. */
+const describeSettingFailure = (failure: ComponentSettingFailure, at: string): string => {
+  const located = failure.path.length === 0 ? at : `${at}.${failure.path.join(".")}`;
+  switch (failure.family) {
+    case "unknown_property":
+      return `Undeclared property key at ${located}`;
+    case "unsafe_content":
+      return `Unsafe property value at ${located}`;
+    case "required_value":
+      return `Missing required property at ${located}`;
+    case "unsupported_choice":
+      return `Unsupported property choice at ${located}`;
+    case "too_few_items":
+      return `Too few list items at ${located}`;
+    case "too_many_items":
+      return `Too many list items at ${located}`;
     default:
-      break;
+      return `Invalid property value at ${located}`;
   }
 };
 
@@ -241,24 +125,24 @@ const validateSettings = (
   at: string,
 ): Record<string, unknown> => {
   const settings = asObject(rawSettings, at);
-  const declaredProperties = new Map(declarations.map((property) => [property.key, property]));
-
-  for (const key of Object.keys(settings)) {
-    if (!declaredProperties.has(key)) {
-      throw new VortexPuckAdapterError(`Undeclared property key "${key}" at ${at}`);
-    }
-  }
 
   for (const declaration of declarations) {
     const value = settings[declaration.key];
-    if (value === undefined) {
-      if (declaration.required) {
-        throw new VortexPuckAdapterError(`Missing required property "${declaration.key}" at ${at}`);
-      }
-    } else {
-      validatePropertyValue(value, declaration, `${at}.${declaration.key}`);
+    if (value === undefined) continue;
+    try {
+      blockPropertyValueV2Schema.parse(value);
+    } catch (error) {
+      throw new VortexPuckAdapterError(`Invalid property value at ${at}.${declaration.key}`, {
+        cause: error,
+      });
     }
   }
+
+  for (const failure of validateComponentSettings(
+    settings as Readonly<Record<string, BlockPropertyValueV2Contract>>,
+    declarations,
+  ))
+    throw new VortexPuckAdapterError(describeSettingFailure(failure, at));
 
   return settings;
 };

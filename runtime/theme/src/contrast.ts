@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { DefinitionRuleFailure } from "@vortex/contracts";
+import { platformThemeTokenRolesV2, type DefinitionRuleFailure } from "@vortex/contracts";
 import { createLocatedFailure } from "./errors";
 import type {
   ThemeResolutionOptions,
@@ -11,6 +11,9 @@ import type {
 export const WCAG_AA_NORMAL_TEXT_MIN_CONTRAST = 4.5;
 export const WCAG_AA_LARGE_TEXT_MIN_CONTRAST = 3.0;
 export const WCAG_AA_NON_TEXT_MIN_CONTRAST = 3.0;
+
+/** The vocabulary's brand fill, which the renderer also paints on the surface as the accent. */
+const ACCENT_TOKEN_KEY = "primary";
 
 export const DEFAULT_LIGHT_SURFACE = "#FFFFFF";
 export const DEFAULT_DARK_SURFACE = "#000000";
@@ -88,8 +91,10 @@ export function contrastRatio(
 }
 
 /**
- * A theme whose catalogue declares any colour role is judged only by declared roles.
- * Themes without roles keep the key-name conventions below.
+ * Whether a theme's catalogue declares any colour role. Every materialised theme comes from a
+ * platform release that declares the shared vocabulary's roles, so readability is judged only
+ * by those declarations and never by token names. A theme that declares no roles, or declares
+ * one other than the vocabulary's, is refused by `validateThemeContrast`.
  */
 export function declaresColorRoles(tokens: Readonly<Record<string, ThemeTokenValueV2>>): boolean {
   return Object.values(tokens).some(
@@ -97,27 +102,27 @@ export function declaresColorRoles(tokens: Readonly<Record<string, ThemeTokenVal
   );
 }
 
+/**
+ * The surface a theme paints text and brand colours on: the colour pair the shared vocabulary
+ * declares with the `background` role. The priority order only settles which declared
+ * background role wins; token names never decide whether a colour is a surface.
+ */
 export function findThemeSurface(
   tokens: Readonly<Record<string, ThemeTokenValueV2>>,
 ): Readonly<{ key?: string; light: string; dark: string; name: string }> {
-  const colorEntries = Object.keys(tokens)
+  const backgrounds = Object.keys(tokens)
     .sort()
     .flatMap((key) => {
       const token = tokens[key];
-      return token?.kind === "color_pair" ? [[key, token] as const] : [];
+      return token?.kind === "color_pair" && token.role === "background"
+        ? [[key, token] as const]
+        : [];
     });
   const exactPriority = ["background", "canvas", "surface", "bg", "page_background", "app_background"];
-  const byPriority = (entries: typeof colorEntries) =>
+  const selected =
     exactPriority.flatMap((candidate) =>
-      entries.filter(([key]) => key.toLowerCase() === candidate),
-    )[0];
-  let selected: (typeof colorEntries)[number] | undefined;
-  if (declaresColorRoles(tokens)) {
-    const backgrounds = colorEntries.filter(([, token]) => token.role === "background");
-    selected = byPriority(backgrounds) ?? backgrounds[0];
-  } else {
-    selected = byPriority(colorEntries) ?? colorEntries.find(([key]) => isBackgroundTokenKey(key));
-  }
+      backgrounds.filter(([key]) => key.toLowerCase() === candidate),
+    )[0] ?? backgrounds[0];
   if (selected === undefined)
     return {
       light: DEFAULT_LIGHT_SURFACE,
@@ -130,50 +135,6 @@ export function findThemeSurface(
     dark: selected[1].dark,
     name: selected[0],
   };
-}
-
-function isBackgroundTokenKey(key: string): boolean {
-  const lower = key.toLowerCase();
-  return (
-    lower === "background" ||
-    lower === "canvas" ||
-    lower === "surface" ||
-    lower === "bg" ||
-    lower === "page_background" ||
-    lower === "app_background" ||
-    lower.endsWith("_background") ||
-    lower.endsWith("_bg") ||
-    lower.endsWith("_surface") ||
-    lower.endsWith("_canvas")
-  );
-}
-
-function isTextTokenKey(key: string): boolean {
-  const lower = key.toLowerCase();
-  return (
-    lower === "text" ||
-    lower === "foreground" ||
-    lower === "body" ||
-    lower === "heading" ||
-    lower === "label" ||
-    lower === "caption" ||
-    lower === "title" ||
-    lower.endsWith("_text") ||
-    lower.endsWith("_foreground")
-  );
-}
-
-function isBrandOrPrimaryTokenKey(key: string): boolean {
-  const lower = key.toLowerCase();
-  return (
-    lower === "brand" ||
-    lower === "primary" ||
-    lower === "secondary" ||
-    lower === "accent" ||
-    lower === "action" ||
-    lower.endsWith("_brand") ||
-    lower.endsWith("_primary")
-  );
 }
 
 export function validateThemeContrast(
@@ -198,29 +159,46 @@ export function validateThemeContrast(
     ruleFailures.push(located.ruleFailure);
   };
 
-  const roleAware = declaresColorRoles(tokens);
+  // The renderer paints each vocabulary colour by its key, so a vocabulary colour must carry
+  // exactly the role the vocabulary declares for it; otherwise the checks below would judge it
+  // as something other than what is painted.
+  for (const role of platformThemeTokenRolesV2) {
+    const token = tokens[role.key];
+    if (token?.kind !== "color_pair") continue;
+    const declared: string | undefined = "colorRole" in role ? role.colorRole : undefined;
+    if (token.role !== declared)
+      addFailure({
+        code: "COLOR_ROLE_MISMATCH",
+        family: "invalid_value",
+        message:
+          declared === undefined
+            ? `Colour token "${role.key}" must not declare a colour role; the shared token vocabulary gives it none`
+            : `Colour token "${role.key}" must declare the "${declared}" colour role the shared token vocabulary gives it`,
+        tokenKey: role.key,
+      });
+  }
+
   const surface = findThemeSurface(tokens);
-  if (roleAware && surface.key === undefined) {
+  if (surface.key === undefined) {
     addFailure({
       code: "MISSING_BACKGROUND_ROLE",
       family: "invalid_value",
-      message: "A theme that declares colour roles must declare a background colour",
+      message: "A theme must declare a colour with the background role",
     });
   }
   const lightSurface = surface.light;
   const darkSurface = surface.dark;
   const surfaceName = surface.name;
+  // A fill's foreground is the vocabulary pair `<fill>_foreground`; nothing else marks it.
   const pairedForegroundKeys = new Set<string>();
   for (const key of Object.keys(tokens).sort()) {
-    const token = tokens[key];
-    if (token?.kind !== "color_pair") continue;
-    const suffixPair = tokens[`${key}_foreground`];
-    if (suffixPair?.kind === "color_pair") pairedForegroundKeys.add(`${key}_foreground`);
-    const prefixPair = tokens[`on_${key}`];
-    if (prefixPair?.kind === "color_pair") pairedForegroundKeys.add(`on_${key}`);
+    if (tokens[key]?.kind !== "color_pair") continue;
+    if (tokens[`${key}_foreground`]?.kind === "color_pair")
+      pairedForegroundKeys.add(`${key}_foreground`);
   }
 
-  // Validate text & brand color pairs against surface
+  // Validate each declared text/foreground colour against what it is painted on, and each
+  // declared foreground against its paired fill. Token names never decide a colour's role.
   for (const key of Object.keys(tokens).sort()) {
     const token = tokens[key];
     if (token === undefined) continue;
@@ -229,9 +207,7 @@ export function validateThemeContrast(
 
     // A paired foreground is evaluated against its declared companion below. It
     // need not also contrast with the application surface on which it is not used.
-    const isForeground = roleAware ? token.role === "foreground" : isTextTokenKey(key);
-
-    if (isForeground && !pairedForegroundKeys.has(key)) {
+    if (token.role === "foreground" && !pairedForegroundKeys.has(key)) {
       const lightRatio = contrastRatio(token.light, lightSurface, DEFAULT_LIGHT_SURFACE);
       if (lightRatio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST) {
         addFailure({
@@ -250,7 +226,11 @@ export function validateThemeContrast(
           tokenKey: key,
         });
       }
-    } else if (!roleAware && isBrandOrPrimaryTokenKey(key)) {
+    }
+
+    // The renderer also paints the brand fill directly on the surface as the accent
+    // (selection bars, checked controls, active tabs), so it must stay visible there.
+    if (key === ACCENT_TOKEN_KEY) {
       const lightRatio = contrastRatio(token.light, lightSurface, DEFAULT_LIGHT_SURFACE);
       if (lightRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
         addFailure({
@@ -271,7 +251,7 @@ export function validateThemeContrast(
       }
     }
 
-    // Check paired tokens: e.g. "brand" and "brand_foreground"
+    // Check paired tokens: the vocabulary names a fill's foreground `<fill>_foreground`.
     const foregroundKey = `${key}_foreground`;
     const pairedForeground = tokens[foregroundKey];
     if (pairedForeground !== undefined && pairedForeground.kind === "color_pair") {
@@ -291,30 +271,6 @@ export function validateThemeContrast(
           family: "invalid_value",
           message: `Paired color token "${foregroundKey}" has insufficient dark mode contrast ratio (${darkRatio.toFixed(2)}:1 < ${WCAG_AA_NORMAL_TEXT_MIN_CONTRAST}:1) against "${key}"`,
           tokenKey: foregroundKey,
-        });
-      }
-    }
-
-    // Check paired tokens: e.g. "on_primary" vs "primary"
-    const onKey = `on_${key}`;
-    const pairedOn = tokens[onKey];
-    if (pairedOn !== undefined && pairedOn.kind === "color_pair") {
-      const lightRatio = contrastRatio(pairedOn.light, token.light, lightSurface);
-      if (lightRatio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST) {
-        addFailure({
-          code: "INSUFFICIENT_CONTRAST",
-          family: "invalid_value",
-          message: `Paired color token "${onKey}" has insufficient light mode contrast ratio (${lightRatio.toFixed(2)}:1 < ${WCAG_AA_NORMAL_TEXT_MIN_CONTRAST}:1) against "${key}"`,
-          tokenKey: onKey,
-        });
-      }
-      const darkRatio = contrastRatio(pairedOn.dark, token.dark, darkSurface);
-      if (darkRatio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST) {
-        addFailure({
-          code: "INSUFFICIENT_CONTRAST",
-          family: "invalid_value",
-          message: `Paired color token "${onKey}" has insufficient dark mode contrast ratio (${darkRatio.toFixed(2)}:1 < ${WCAG_AA_NORMAL_TEXT_MIN_CONTRAST}:1) against "${key}"`,
-          tokenKey: onKey,
         });
       }
     }

@@ -1,4 +1,5 @@
-import { builderKeySchema, type BlockPropertyValueV2Contract } from "@vortex/contracts";
+import { builderKeySchema } from "@vortex/contracts";
+import { createDeclaredSettingsReader } from "../controls/control-context";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import { getAccessibleName } from "../display/display-state-container";
 import type {
@@ -95,26 +96,7 @@ export function readLauncherSettings(
   props: PlatformBlockRenderProps,
   location: DefinitionRenderErrorLocation,
 ): LauncherSettings {
-  const { settings, metadata } = props;
-  const read = (
-    key: string,
-    kind: BlockPropertyValueV2Contract["kind"],
-  ): BlockPropertyValueV2Contract | undefined => {
-    const property = metadata.properties.find((candidate) => candidate.key === key);
-    if (property === undefined || property.kind !== kind)
-      fail(`Block '${metadata.key}' declares no ${kind} property '${key}'`, location);
-    const value = Object.hasOwn(settings, key) ? settings[key] : undefined;
-    if (value !== undefined && value.kind !== kind)
-      fail(`Setting '${key}' must be a ${kind} value`, { ...location, propertyPath: [key] });
-    return value;
-  };
-
-  const text = (key: string): string | undefined => {
-    const value = read(key, "text");
-    return value?.kind === "text" && value.value.trim().length > 0
-      ? value.value.trim()
-      : undefined;
-  };
+  const { read, text, boolean } = createDeclaredSettingsReader(props, location);
 
   const optionalCellKey = (key: string): string | undefined => {
     const authored = text(key);
@@ -130,10 +112,7 @@ export function readLauncherSettings(
 
   return {
     text,
-    boolean: (key) => {
-      const value = read(key, "boolean");
-      return value?.kind === "boolean" ? value.value : false;
-    },
+    boolean,
     choice: <Option extends string>(
       key: string,
       options: readonly Option[],
