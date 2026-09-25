@@ -1,7 +1,5 @@
 import {
   type PlatformBlockReleaseV2,
-  type CustomComponentOwnerV2,
-  type CustomComponentReleaseV2,
   platformBlockReleaseV2Schema,
   type ImmutablePlatformBlockCatalogueV2,
   immutablePlatformBlockCatalogueV2Schema,
@@ -268,35 +266,3 @@ export const IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2: ImmutablePlatformBlockCatalo
       releases: PLATFORM_BLOCK_RELEASES,
     }),
   );
-
-/** The custom-component payload of one release, when it is a custom component release. */
-export const customComponentReleaseOf = (
-  release: Readonly<{ customComponent?: CustomComponentReleaseV2 | undefined }>,
-): CustomComponentReleaseV2 | undefined => release.customComponent;
-
-/** The owner of one custom component release; undefined for a platform block release. */
-export const customComponentOwnerOf = (
-  release: Readonly<{ customComponent?: CustomComponentReleaseV2 | undefined }>,
-): CustomComponentOwnerV2 | undefined => release.customComponent?.owner;
-
-/**
- * Combines the registered platform block releases with the exact custom component releases a
- * caller supplies (each already materialised with its content and catalogue fingerprints by the
- * publication catalogue) into one immutable component catalogue. The custom releases are not part
- * of the static platform catalogue, because they are owned by a customer application or module
- * release rather than by the platform; this is the one place the two are joined for validation and
- * renderer lookup.
- */
-export const createComponentCatalogueV2 = (
-  customComponentReleases: readonly PlatformBlockReleaseV2[],
-): ImmutablePlatformBlockCatalogueV2 => {
-  for (const release of customComponentReleases)
-    if (release.customComponent === undefined)
-      throw new Error("A custom component catalogue entry must be a custom component release");
-  return deepFreeze(
-    immutablePlatformBlockCatalogueV2Schema.parse({
-      compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.compositionPolicy,
-      releases: [...PLATFORM_BLOCK_RELEASES, ...customComponentReleases],
-    }),
-  );
-};

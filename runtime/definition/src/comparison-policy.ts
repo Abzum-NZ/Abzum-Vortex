@@ -994,50 +994,6 @@ const compareFlow = (
     );
 };
 
-/**
- * A custom component a release carries is executable browser code, not presentation: adding or
- * removing it is major, and any change to its typed properties, typed events, data contract,
- * accessible name, text alternative, owner or bundle manifest (digest, entry file or allowed
- * hosts) is major. Only its display name may be a patch change. This is the version-impact rule
- * that makes any change to a custom component bundle a major version change.
- */
-const compareCustomComponents = (
-  reasons: VersionImpactReason[],
-  previousValue: unknown,
-  candidateValue: unknown,
-): void =>
-  compareKeyed(
-    reasons,
-    (previousValue as RecordValue[] | undefined) ?? [],
-    (candidateValue as RecordValue[] | undefined) ?? [],
-    "key",
-    "block_registration",
-    (before, after) => {
-      pushChange(
-        reasons,
-        before.name,
-        after.name,
-        "patch",
-        "presentation_changed",
-        "block_registration",
-        "name",
-        after.key,
-      );
-      const ignored = new Set(["key", "name"]);
-      pushChange(
-        reasons,
-        Object.fromEntries(Object.entries(before).filter(([key]) => !ignored.has(key))),
-        Object.fromEntries(Object.entries(after).filter(([key]) => !ignored.has(key))),
-        "major",
-        "existing_behavior_changed",
-        "block_registration",
-        "behavior",
-        after.key,
-      );
-    },
-    () => "major",
-  );
-
 export const compareModuleContents = (
   previousContent: ModuleContent | ModuleContentV2 | ModuleContentV3,
   candidateContent: ModuleContent | ModuleContentV2 | ModuleContentV3,
@@ -1166,7 +1122,6 @@ export const compareModuleContents = (
     "extension_point",
     (left, right) => compareContribution(reasons, left, right),
   );
-  compareCustomComponents(reasons, previous.customComponents, candidate.customComponents);
   return finaliseReasons(reasons);
 };
 
@@ -2866,7 +2821,6 @@ export const compareApplicationContentsV2 = (
     "theme",
     "theme",
   );
-  compareCustomComponents(reasons, previous.customComponents, candidate.customComponents);
   return finaliseReasons(reasons);
 };
 

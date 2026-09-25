@@ -17,7 +17,6 @@ import {
   platformThemeReleaseV2Schema,
   platformServiceOperationReleaseSchema,
   stableDefinitionReleaseVersionSchema,
-  validateCustomComponentReleaseV2,
   type ApplicationCompositionCatalogueSnapshotV2,
   type ApplicationCompositionPolicyV2,
   type BlockId,
@@ -60,7 +59,7 @@ export type ImmutableDefinitionPublicationCatalogueDefinition = Readonly<{
 
 export type PlatformBlockReleaseDefinitionV2 = Omit<
   PlatformBlockReleaseV2,
-  "contentFingerprint" | "catalogueFingerprint"
+  "contentFingerprint" | "catalogueFingerprint" | "customComponent"
 >;
 
 export type PlatformThemeReleaseDefinitionV2 = Omit<
@@ -125,9 +124,11 @@ const connectionTypeReleaseDefinitionSchema = z
   })
   .strict();
 
+// A platform block release never carries a custom component payload; custom component releases
+// arrive only through `customComponentReleases`, where their ownership and bundle rules apply.
 const platformBlockReleaseDefinitionV2Schema = z
   .object(platformBlockReleaseV2Schema.shape)
-  .omit({ contentFingerprint: true, catalogueFingerprint: true })
+  .omit({ contentFingerprint: true, catalogueFingerprint: true, customComponent: true })
   .extend({ releaseVersion: stableDefinitionReleaseVersionSchema })
   .strict();
 
@@ -137,9 +138,9 @@ const platformThemeReleaseDefinitionV2Schema = z
   .extend({ releaseVersion: stableDefinitionReleaseVersionSchema })
   .strict();
 
-const customComponentReleaseDefinitionV2Schema = platformBlockReleaseDefinitionV2Schema.extend({
-  customComponent: customComponentReleaseV2Schema,
-});
+const customComponentReleaseDefinitionV2Schema = platformBlockReleaseDefinitionV2Schema
+  .extend({ customComponent: customComponentReleaseV2Schema })
+  .strict();
 
 const applicationCompositionCatalogueDefinitionV2Schema = z
   .object({
@@ -221,22 +222,41 @@ const ensureUniqueApplicationCompositionReleases = (
     if (themeVersions.has(versionKey)) duplicate();
     themeVersions.add(versionKey);
   }
-  // A custom component release joins the same identity space as the platform blocks, and its
-  // typed properties, typed events, data contract, accessible name and bundle manifest must be
-  // complete here: an untyped property or event refuses before it is ever publishable.
-  for (const release of definition.customComponentReleases ?? []) {
+  // A custom component release joins the same identity space as the platform blocks but never
+  // shares a block identity or key with a platform block, and every release of one custom component
+  // keeps the same owner. Its typed contract is refused at materialisation when incomplete.
+  const platformIds = new Set(keysById.keys());
+  const platformKeys = new Set(idsByKey.keys());
+  const customReleases = definition.customComponentReleases ?? [];
+  const ownersById = new Map<string, string>();
+  for (const release of customReleases) {
     const id = String(release.blockId);
     const versionKey = `${id}:${release.releaseVersion}`;
+    const owner = release.customComponent.owner;
+    const ownerIdentity = `${owner.kind}:${owner.definitionKey}`;
     if (
+      platformIds.has(id) ||
+      platformKeys.has(release.key) ||
       blockVersions.has(versionKey) ||
       (keysById.has(id) && keysById.get(id) !== release.key) ||
-      (idsByKey.has(release.key) && idsByKey.get(release.key) !== id)
+      (idsByKey.has(release.key) && idsByKey.get(release.key) !== id) ||
+      (ownersById.has(id) && ownersById.get(id) !== ownerIdentity)
     )
       duplicate();
     blockVersions.add(versionKey);
     keysById.set(id, release.key);
     idsByKey.set(release.key, id);
-    if (validateCustomComponentReleaseV2(release).length > 0) duplicate();
+    ownersById.set(id, ownerIdentity);
+  }
+  // Any bundle change is a major version change: two releases of one custom component that share
+  // a major version must carry the identical bundle manifest.
+  const bundlesByMajor = new Map<string, string>();
+  for (const release of customReleases) {
+    const major = release.releaseVersion.split(".")[0];
+    const identity = `${String(release.blockId)}@${major}`;
+    const bundle = fingerprintCanonicalValue(release.customComponent.bundle);
+    if (bundlesByMajor.has(identity) && bundlesByMajor.get(identity) !== bundle) duplicate();
+    bundlesByMajor.set(identity, bundle);
   }
 };
 

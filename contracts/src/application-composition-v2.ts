@@ -1092,20 +1092,30 @@ export const customComponentDataContractV2Schema = z
       });
   });
 
-/** A relative module entry file inside the bundle, with no absolute or parent path. */
+/** A relative module entry file inside the bundle: no scheme, absolute path, dot step or escape. */
 const customComponentEntryFileSchema = z
   .string()
   .min(1)
   .max(500)
-  .regex(/^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*\.(?:m?js)$/, "Use a relative JavaScript module path")
-  .refine((value) => !value.split("/").includes(".."), "Use a relative path without parent steps");
+  .regex(/^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*\.m?js$/, "Use a relative JavaScript module path")
+  .refine(
+    (value) => value.split("/").every((segment) => !/^\.+$/.test(segment)),
+    "Use a relative path without dot or parent steps",
+  );
 
-/** A registrable host a custom component bundle may load from, never a URL or a scheme. */
+/**
+ * One external host the sandboxed frame may reach: a bare lowercase DNS name with at least two
+ * labels, never a wildcard, a scheme or URL (so never a `data:` or `javascript:` source), a port,
+ * an IP literal or a single-label name such as `localhost`.
+ */
 const customComponentHostSchema = z
   .string()
   .min(1)
   .max(253)
-  .regex(/^[a-z0-9.-]+$/, "Use a bare lowercase host name");
+  .regex(
+    /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
+    "Use a bare lowercase host name",
+  );
 
 /**
  * The bundle manifest of a custom component: the Subresource Integrity digest the bootstrap
@@ -1117,11 +1127,19 @@ export const customComponentBundleV2Schema = z
   .object({
     digest: z
       .string()
-      .regex(/^sha384-[A-Za-z0-9+/]+={0,2}$/, "Use a base64 SHA-384 Subresource Integrity digest"),
+      .regex(/^sha384-[A-Za-z0-9+/]{64}$/, "Use a base64 SHA-384 Subresource Integrity digest"),
     entryFile: customComponentEntryFileSchema,
     allowedHosts: z.array(customComponentHostSchema).max(50),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.allowedHosts).size !== value.allowedHosts.length)
+      context.addIssue({
+        code: "custom",
+        path: ["allowedHosts"],
+        message: "Allowed hosts must be unique",
+      });
+  });
 
 /**
  * The custom-component-specific part of a release: its owning release, its typed declared events,
@@ -1150,61 +1168,6 @@ export const customComponentReleaseV2Schema = z
 export type CustomComponentOwnerV2 = z.infer<typeof customComponentOwnerV2Schema>;
 export type CustomComponentReleaseV2 = z.infer<typeof customComponentReleaseV2Schema>;
 
-/** A setting or event a custom component release failed to type or complete. */
-export type CustomComponentReleaseFailure = Readonly<{
-  family: Extract<
-    DefinitionRuleFailureFamily,
-    "required_value" | "invalid_value" | "unsafe_content" | "unsupported_choice" | "duplicate_key"
-  >;
-  path: readonly (string | number)[];
-}>;
-
-/**
- * Judges a custom component release as built-in component releases are judged: every property is a
- * closed typed declaration (already guaranteed by `blockPropertySchemaV2Schema`), every event
- * carries a typed payload, the accessible name resolves through declared text properties, and the
- * bundle manifest is complete. An untyped property or event refuses here, before publication.
- */
-export const validateCustomComponentReleaseV2 = (
-  release: Readonly<{
-    properties: readonly BlockPropertySchemaV2Contract[];
-    capabilities: Readonly<{
-      accessibleName: "not_applicable" | "required" | "optional";
-      accessibleNamePropertyPath?: readonly string[];
-    }>;
-    customComponent: CustomComponentReleaseV2;
-  }>,
-): CustomComponentReleaseFailure[] => {
-  const failures: CustomComponentReleaseFailure[] = [];
-  const report = (
-    family: CustomComponentReleaseFailure["family"],
-    path: readonly (string | number)[],
-  ): void => {
-    failures.push({ family, path });
-  };
-  const custom = release.customComponent;
-  if (release.capabilities.accessibleName !== "not_applicable") {
-    const propertyPath = release.capabilities.accessibleNamePropertyPath ?? [];
-    let properties: readonly BlockPropertySchemaV2Contract[] = release.properties;
-    for (const [index, key] of propertyPath.entries()) {
-      const property = properties.find((candidate) => candidate.key === key);
-      const last = index === propertyPath.length - 1;
-      if (property === undefined || (last ? property.kind !== "text" : property.kind !== "group")) {
-        report("invalid_value", ["capabilities", "accessibleNamePropertyPath", index]);
-        break;
-      }
-      if (property.kind === "group") properties = property.properties;
-    }
-  }
-  for (const [index, event] of custom.events.entries())
-    for (const [fieldIndex, field] of event.payload.entries())
-      if (field.type === undefined)
-        report("required_value", ["customComponent", "events", index, "payload", fieldIndex, "type"]);
-  if (custom.bundle.entryFile.length === 0)
-    report("required_value", ["customComponent", "bundle", "entryFile"]);
-  return failures;
-};
-
 /**
  * The context in which one application release places custom components: the placing application's
  * key and the exact module releases it binds. A custom component is placeable only by its owning
@@ -1216,22 +1179,29 @@ export type CustomComponentPlacementContextV2 = Readonly<{
 }>;
 
 /**
- * True when the placing application may place the custom component: it owns the component, or it
- * binds the exact module release that owns it. Any other application is refused, so a custom
+ * True when the placing application may place the custom component: it is the owning application,
+ * or it binds the exact module release that owns it. Any other application is refused, so a custom
  * component never leaks into an unrelated application.
  */
 export const customComponentPlacementAllowedV2 = (
   owner: CustomComponentOwnerV2,
   context: CustomComponentPlacementContextV2,
-): boolean => {
-  if (owner.definitionKey === context.applicationKey) return true;
-  if (owner.kind !== "module") return false;
-  return context.boundModuleReleases.some(
-    (binding) =>
-      binding.moduleKey === owner.definitionKey &&
-      binding.releaseVersion === owner.releaseVersion,
-  );
-};
+): boolean =>
+  owner.kind === "application"
+    ? owner.definitionKey === context.applicationKey
+    : context.boundModuleReleases.some(
+        (binding) =>
+          binding.moduleKey === owner.definitionKey &&
+          binding.releaseVersion === owner.releaseVersion,
+      );
+
+/**
+ * True when any of the releases is a custom component release. Installation uses this on the exact
+ * resolved releases so a package carrying custom components also requires `custom_code.manage`.
+ */
+export const containsCustomComponentReleasesV2 = (
+  releases: readonly Readonly<{ customComponent?: CustomComponentReleaseV2 | undefined }>[],
+): boolean => releases.some((release) => release.customComponent !== undefined);
 
 /** One immutable, platform-owned block release used by validation and renderer lookup. */
 export const platformBlockReleaseV2Schema = z
@@ -1261,12 +1231,28 @@ export const platformBlockReleaseV2Schema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.customComponent !== undefined && value.supportedEvents.length > 0)
-      context.addIssue({
-        code: "custom",
-        path: ["supportedEvents"],
-        message: "A custom component declares its own events, not built-in semantic events",
-      });
+    if (value.customComponent !== undefined) {
+      if (value.supportedEvents.length > 0)
+        context.addIssue({
+          code: "custom",
+          path: ["supportedEvents"],
+          message: "A custom component declares its own events, not built-in semantic events",
+        });
+      // A custom component is a page-level block rendered in a sandboxed frame: it hosts no child
+      // placements, and the frame's title is always its accessible name.
+      if (value.slots.length > 0)
+        context.addIssue({
+          code: "custom",
+          path: ["slots"],
+          message: "A custom component cannot contain other components",
+        });
+      if (value.capabilities.accessibleName !== "required")
+        context.addIssue({
+          code: "custom",
+          path: ["capabilities", "accessibleName"],
+          message: "A custom component requires an accessible name",
+        });
+    }
     if (new Set(value.supportedEvents).size !== value.supportedEvents.length)
       context.addIssue({
         code: "custom",
