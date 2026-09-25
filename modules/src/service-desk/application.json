@@ -2688,8 +2688,8 @@
                                                                "maximum_request_bytes":  1000000,
                                                                "duplicate_protection":  "required",
                                                                "target":  {
-                                                                              "kind":  "action",
-                                                                              "key":  "vortex.service_desk.cases.case.assign"
+                                                                              "kind":  "flow",
+                                                                              "flow":  "sd_named_action_case_assign"
                                                                           },
                                                                "error_codes":  [
                                                                                    "request_refused",
@@ -2763,8 +2763,8 @@
                                                                "maximum_request_bytes":  1000000,
                                                                "duplicate_protection":  "required",
                                                                "target":  {
-                                                                              "kind":  "action",
-                                                                              "key":  "vortex.service_desk.cases.case.add_public_comment"
+                                                                              "kind":  "flow",
+                                                                              "flow":  "sd_named_action_case_public_comment"
                                                                           },
                                                                "error_codes":  [
                                                                                    "request_refused",
@@ -3039,6 +3039,42 @@
                                          "literal": {
                                              "type": "text",
                                              "value": "vortex.service_desk.cases.case.add_public_comment"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "sd_named_action_case_assign",
+                         "key": "sd_named_action_case_assign",
+                         "description": "Assigns the current case to the selected owner through the bound case.assign named action.",
+                         "labels": {
+                             "name": "Assign case"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "owner": {
+                                 "type": "organization_account_reference",
+                                 "required": true
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "call",
+                                 "type": "operation.call",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "operation": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.service_desk.cases.case.assign"
                                          }
                                      }
                                  }
