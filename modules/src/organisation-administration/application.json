@@ -229,7 +229,7 @@
               "settings": {
                 "direction": {
                   "kind": "choice",
-                  "value": "row"
+                  "value": "column"
                 },
                 "gap": {
                   "kind": "choice",
@@ -287,17 +287,21 @@
                     ]
                   }
                 },
-                "menu": {
+                "content": {
                   "placements": {
-                    "shell_navigation": {
+                    "shell_body": {
                       "block": {
-                        "block_id": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
+                        "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
                         "release_version": "1.0.0"
                       },
                       "settings": {
-                        "title": {
-                          "kind": "text",
-                          "value": "Organisation Administration"
+                        "direction": {
+                          "kind": "choice",
+                          "value": "row"
+                        },
+                        "gap": {
+                          "kind": "choice",
+                          "value": "medium"
                         }
                       },
                       "theme_overrides": {},
@@ -312,19 +316,54 @@
                           }
                         }
                       },
-                      "slots": {}
+                      "slots": {
+                        "menu": {
+                          "placements": {
+                            "shell_navigation": {
+                              "block": {
+                                "block_id": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
+                                "release_version": "1.0.0"
+                              },
+                              "settings": {
+                                "title": {
+                                  "kind": "text",
+                                  "value": "Organisation Administration"
+                                }
+                              },
+                              "theme_overrides": {},
+                              "responsive": {
+                                "desktop": {
+                                  "visible": true,
+                                  "width": {
+                                    "kind": "fill"
+                                  },
+                                  "height": {
+                                    "kind": "content"
+                                  }
+                                }
+                              },
+                              "slots": {}
+                            }
+                          },
+                          "order": {
+                            "desktop": [
+                              "shell_navigation"
+                            ]
+                          }
+                        },
+                        "content": {
+                          "placements": {},
+                          "order": {
+                            "desktop": []
+                          }
+                        }
+                      }
                     }
                   },
                   "order": {
                     "desktop": [
-                      "shell_navigation"
+                      "shell_body"
                     ]
-                  }
-                },
-                "content": {
-                  "placements": {},
-                  "order": {
-                    "desktop": []
                   }
                 }
               }
@@ -351,7 +390,7 @@
               "input",
               "layout"
             ],
-            "parent_placement": "shell_root",
+            "parent_placement": "shell_body",
             "parent_slot": "content"
           }
         ]

@@ -4331,207 +4331,187 @@
 
                                                  ],
                  "shells":  [
-                            {
-
-                            "id":  "shell_crm",
-                            "key":  "crm_shell",
-                            "name":  "CRM shell",
-                            "layout":  {
-
-                                        "placements":  {
-
-                                                        "shell_root":  {
-
-                                                                        "block":  {
-
-                                                                                   "block_id":  "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                                                                                   "release_version":  "1.0.0"
-                                                                                   },
-                                                                        "settings":  {
-
-                                                                                      "direction":  {
-
-                                                                                                     "kind":  "choice",
-                                                                                                     "value":  "row"
-                                                                                                     },
-                                                                                      "gap":  {
-
-                                                                                               "kind":  "choice",
-                                                                                               "value":  "medium"
-                                                                                               }
-                                                                                      },
-                                                                        "theme_overrides":  {
-
-                                                                                             },
-                                                                        "responsive":  {
-
-                                                                                        "desktop":  {
-
-                                                                                                     "visible":  true,
-                                                                                                     "width":  {
-
-                                                                                                                "kind":  "fill"
-                                                                                                                },
-                                                                                                     "height":  {
-
-                                                                                                                 "kind":  "content"
-                                                                                                                 }
-                                                                                                     }
-                                                                                        },
-                                                                        "slots":  {
-
-                                                                                   "header":  {
-
-                                                                                               "placements":  {
-
-                                                                                                               "shell_heading":  {
-
-                                                                                                                                  "block":  {
-
-                                                                                                                                             "block_id":  "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                                                                                                                                             "release_version":  "1.0.0"
-                                                                                                                                             },
-                                                                                                                                  "settings":  {
-
-                                                                                                                                                "text":  {
-
-                                                                                                                                                          "kind":  "text",
-                                                                                                                                                          "value":  "CRM"
-                                                                                                                                                          },
-                                                                                                                                                "level":  {
-
-                                                                                                                                                           "kind":  "choice",
-                                                                                                                                                           "value":  "one"
-                                                                                                                                                           }
-                                                                                                                                                },
-                                                                                                                                  "theme_overrides":  {
-
-                                                                                                                                                       },
-                                                                                                                                  "responsive":  {
-
-                                                                                                                                                  "desktop":  {
-
-                                                                                                                                                               "visible":  true,
-                                                                                                                                                               "width":  {
-
-                                                                                                                                                                          "kind":  "fill"
-                                                                                                                                                                          },
-                                                                                                                                                               "height":  {
-
-                                                                                                                                                                           "kind":  "content"
-                                                                                                                                                                           }
-                                                                                                                                                               }
-                                                                                                                                                  },
-                                                                                                                                  "slots":  {
-
-                                                                                                                                             }
-                                                                                                                                  }
-                                                                                                               },
-                                                                                               "order":  {
-
-                                                                                                          "desktop":  [
-
-                                                                                                                       "shell_heading"
-                                                                                                                       ]
-                                                                                                          }
-                                                                                               },
-                                                                                   "menu":  {
-
-                                                                                             "placements":  {
-
-                                                                                                             "shell_navigation":  {
-
-                                                                                                                                   "block":  {
-
-                                                                                                                                              "block_id":  "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
-                                                                                                                                              "release_version":  "1.0.0"
-                                                                                                                                              },
-                                                                                                                                   "settings":  {
-
-                                                                                                                                                 "title":  {
-
-                                                                                                                                                            "kind":  "text",
-                                                                                                                                                            "value":  "CRM"
-                                                                                                                                                            }
-                                                                                                                                                 },
-                                                                                                                                   "theme_overrides":  {
-
-                                                                                                                                                        },
-                                                                                                                                   "responsive":  {
-
-                                                                                                                                                   "desktop":  {
-
-                                                                                                                                                                "visible":  true,
-                                                                                                                                                                "width":  {
-
-                                                                                                                                                                           "kind":  "fill"
-                                                                                                                                                                           },
-                                                                                                                                                                "height":  {
-
-                                                                                                                                                                            "kind":  "content"
-                                                                                                                                                                            }
-                                                                                                                                                                }
-                                                                                                                                                   },
-                                                                                                                                   "slots":  {
-
-                                                                                                                                              }
-                                                                                                                                   }
-                                                                                                             },
-                                                                                             "order":  {
-
-                                                                                                        "desktop":  [
-
-                                                                                                                     "shell_navigation"
-                                                                                                                     ]
-                                                                                                        }
-                                                                                             },
-                                                                                   "content":  {
-
-                                                                                                "placements":  {
-
-                                                                                                                },
-                                                                                                "order":  {
-
-                                                                                                           "desktop":  [
-
-                                                                                                                        ]
-                                                                                                           }
-                                                                                                }
-                                                                                   }
-                                                                        }
-                                                        },
-                                        "order":  {
-
-                                                   "desktop":  [
-
-                                                                "shell_root"
-                                                                ]
-                                                   }
-                                        },
-                            "content_slots":  [
-
-                                               {
-
-                                               "id":  "slot_primary",
-                                               "key":  "primary",
-                                               "label":  "Primary",
-                                               "required":  true,
-                                               "allowed_child_categories":  [
-
-                                                                             "content",
-                                                                             "data",
-                                                                             "figures",
-                                                                             "record",
-                                                                             "actions",
-                                                                             "input",
-                                                                             "layout"
-                                                                             ],
-                                               "parent_placement":  "shell_root",
-                                               "parent_slot":  "content"
+                   {
+                     "id": "shell_crm",
+                     "key": "crm_shell",
+                     "name": "CRM shell",
+                     "layout": {
+                       "placements": {
+                         "shell_root": {
+                           "block": {
+                             "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                             "release_version": "1.0.0"
+                           },
+                           "settings": {
+                             "direction": {
+                               "kind": "choice",
+                               "value": "column"
+                             },
+                             "gap": {
+                               "kind": "choice",
+                               "value": "medium"
+                             }
+                           },
+                           "theme_overrides": {},
+                           "responsive": {
+                             "desktop": {
+                               "visible": true,
+                               "width": {
+                                 "kind": "fill"
+                               },
+                               "height": {
+                                 "kind": "content"
+                               }
+                             }
+                           },
+                           "slots": {
+                             "header": {
+                               "placements": {
+                                 "shell_heading": {
+                                   "block": {
+                                     "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                                     "release_version": "1.0.0"
+                                   },
+                                   "settings": {
+                                     "text": {
+                                       "kind": "text",
+                                       "value": "CRM"
+                                     },
+                                     "level": {
+                                       "kind": "choice",
+                                       "value": "one"
+                                     }
+                                   },
+                                   "theme_overrides": {},
+                                   "responsive": {
+                                     "desktop": {
+                                       "visible": true,
+                                       "width": {
+                                         "kind": "fill"
+                                       },
+                                       "height": {
+                                         "kind": "content"
+                                       }
+                                     }
+                                   },
+                                   "slots": {}
+                                 }
+                               },
+                               "order": {
+                                 "desktop": [
+                                   "shell_heading"
+                                 ]
+                               }
+                             },
+                             "content": {
+                               "placements": {
+                                 "shell_body": {
+                                   "block": {
+                                     "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                     "release_version": "1.0.0"
+                                   },
+                                   "settings": {
+                                     "direction": {
+                                       "kind": "choice",
+                                       "value": "row"
+                                     },
+                                     "gap": {
+                                       "kind": "choice",
+                                       "value": "medium"
+                                     }
+                                   },
+                                   "theme_overrides": {},
+                                   "responsive": {
+                                     "desktop": {
+                                       "visible": true,
+                                       "width": {
+                                         "kind": "fill"
+                                       },
+                                       "height": {
+                                         "kind": "content"
+                                       }
+                                     }
+                                   },
+                                   "slots": {
+                                     "menu": {
+                                       "placements": {
+                                         "shell_navigation": {
+                                           "block": {
+                                             "block_id": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
+                                             "release_version": "1.0.0"
+                                           },
+                                           "settings": {
+                                             "title": {
+                                               "kind": "text",
+                                               "value": "CRM"
+                                             }
+                                           },
+                                           "theme_overrides": {},
+                                           "responsive": {
+                                             "desktop": {
+                                               "visible": true,
+                                               "width": {
+                                                 "kind": "fill"
+                                               },
+                                               "height": {
+                                                 "kind": "content"
                                                }
-                                               ]
-                            }
-                            ],
+                                             }
+                                           },
+                                           "slots": {}
+                                         }
+                                       },
+                                       "order": {
+                                         "desktop": [
+                                           "shell_navigation"
+                                         ]
+                                       }
+                                     },
+                                     "content": {
+                                       "placements": {},
+                                       "order": {
+                                         "desktop": []
+                                       }
+                                     }
+                                   }
+                                 }
+                               },
+                               "order": {
+                                 "desktop": [
+                                   "shell_body"
+                                 ]
+                               }
+                             }
+                           }
+                         }
+                       },
+                       "order": {
+                         "desktop": [
+                           "shell_root"
+                         ]
+                       }
+                     },
+                     "content_slots": [
+                       {
+                         "id": "slot_primary",
+                         "key": "primary",
+                         "label": "Primary",
+                         "required": true,
+                         "allowed_child_categories": [
+                           "content",
+                           "data",
+                           "figures",
+                           "record",
+                           "actions",
+                           "input",
+                           "layout"
+                         ],
+                         "parent_placement": "shell_body",
+                         "parent_slot": "content"
+                       }
+                     ]
+                   }
+                 ],
                  "flows":  [
                      {
                          "contractVersion": "1.0.0",

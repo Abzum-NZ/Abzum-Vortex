@@ -3009,357 +3009,294 @@
 
                                                  ],
                  "shells":  [
-                            {
-
-                            "id":  "shell_service_desk",
-                            "key":  "service_desk_shell",
-                            "name":  "Service Desk shell",
-                            "layout":  {
-
-                                        "placements":  {
-
-                                                        "shell_root":  {
-
-                                                                        "block":  {
-
-                                                                                   "block_id":  "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                                                                                   "release_version":  "1.0.0"
-                                                                                   },
-                                                                        "settings":  {
-
-                                                                                      "direction":  {
-
-                                                                                                     "kind":  "choice",
-                                                                                                     "value":  "row"
-                                                                                                     },
-                                                                                      "gap":  {
-
-                                                                                               "kind":  "choice",
-                                                                                               "value":  "medium"
-                                                                                               }
-                                                                                      },
-                                                                        "theme_overrides":  {
-
-                                                                                             },
-                                                                        "responsive":  {
-
-                                                                                        "desktop":  {
-
-                                                                                                     "visible":  true,
-                                                                                                     "width":  {
-
-                                                                                                                "kind":  "fill"
-                                                                                                                },
-                                                                                                     "height":  {
-
-                                                                                                                 "kind":  "content"
-                                                                                                                 }
-                                                                                                     }
-                                                                                        },
-                                                                        "slots":  {
-
-                                                                                   "header":  {
-
-                                                                                               "placements":  {
-
-                                                                                                               "shell_heading":  {
-
-                                                                                                                                  "block":  {
-
-                                                                                                                                             "block_id":  "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                                                                                                                                             "release_version":  "1.0.0"
-                                                                                                                                             },
-                                                                                                                                  "settings":  {
-
-                                                                                                                                                "text":  {
-
-                                                                                                                                                          "kind":  "text",
-                                                                                                                                                          "value":  "Service Desk"
-                                                                                                                                                          },
-                                                                                                                                                "level":  {
-
-                                                                                                                                                           "kind":  "choice",
-                                                                                                                                                           "value":  "one"
-                                                                                                                                                           }
-                                                                                                                                                },
-                                                                                                                                  "theme_overrides":  {
-
-                                                                                                                                                       },
-                                                                                                                                  "responsive":  {
-
-                                                                                                                                                  "desktop":  {
-
-                                                                                                                                                               "visible":  true,
-                                                                                                                                                               "width":  {
-
-                                                                                                                                                                          "kind":  "fill"
-                                                                                                                                                                          },
-                                                                                                                                                               "height":  {
-
-                                                                                                                                                                           "kind":  "content"
-                                                                                                                                                                           }
-                                                                                                                                                               }
-                                                                                                                                                  },
-                                                                                                                                  "slots":  {
-
-                                                                                                                                             }
-                                                                                                                                  }
-                                                                                                               },
-                                                                                               "order":  {
-
-                                                                                                          "desktop":  [
-
-                                                                                                                       "shell_heading"
-                                                                                                                       ]
-                                                                                                          }
-                                                                                               },
-                                                                                   "menu":  {
-
-                                                                                             "placements":  {
-
-                                                                                                             "shell_navigation":  {
-
-                                                                                                                                   "block":  {
-
-                                                                                                                                              "block_id":  "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
-                                                                                                                                              "release_version":  "1.0.0"
-                                                                                                                                              },
-                                                                                                                                   "settings":  {
-
-                                                                                                                                                 "title":  {
-
-                                                                                                                                                            "kind":  "text",
-                                                                                                                                                            "value":  "Service Desk"
-                                                                                                                                                            }
-                                                                                                                                                 },
-                                                                                                                                   "theme_overrides":  {
-
-                                                                                                                                                        },
-                                                                                                                                   "responsive":  {
-
-                                                                                                                                                   "desktop":  {
-
-                                                                                                                                                                "visible":  true,
-                                                                                                                                                                "width":  {
-
-                                                                                                                                                                           "kind":  "fill"
-                                                                                                                                                                           },
-                                                                                                                                                                "height":  {
-
-                                                                                                                                                                            "kind":  "content"
-                                                                                                                                                                            }
-                                                                                                                                                                }
-                                                                                                                                                   },
-                                                                                                                                   "slots":  {
-
-                                                                                                                                              }
-                                                                                                                                   }
-                                                                                                             },
-                                                                                             "order":  {
-
-                                                                                                        "desktop":  [
-
-                                                                                                                     "shell_navigation"
-                                                                                                                     ]
-                                                                                                        }
-                                                                                             },
-                                                                                   "content":  {
-
-                                                                                                "placements":  {
-
-                                                                                                                },
-                                                                                                "order":  {
-
-                                                                                                           "desktop":  [
-
-                                                                                                                        ]
-                                                                                                           }
-                                                                                                }
-                                                                                   }
-                                                                        }
-                                                        },
-                                        "order":  {
-
-                                                   "desktop":  [
-
-                                                                "shell_root"
-                                                                ]
-                                                   }
-                                        },
-                            "content_slots":  [
-
-                                               {
-
-                                               "id":  "slot_primary",
-                                               "key":  "primary",
-                                               "label":  "Primary",
-                                               "required":  true,
-                                               "allowed_child_categories":  [
-
-                                                                             "content",
-                                                                             "data",
-                                                                             "figures",
-                                                                             "record",
-                                                                             "actions",
-                                                                             "input",
-                                                                             "layout"
-                                                                             ],
-                                               "parent_placement":  "shell_root",
-                                               "parent_slot":  "content"
+                   {
+                     "id": "shell_service_desk",
+                     "key": "service_desk_shell",
+                     "name": "Service Desk shell",
+                     "layout": {
+                       "placements": {
+                         "shell_root": {
+                           "block": {
+                             "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                             "release_version": "1.0.0"
+                           },
+                           "settings": {
+                             "direction": {
+                               "kind": "choice",
+                               "value": "column"
+                             },
+                             "gap": {
+                               "kind": "choice",
+                               "value": "medium"
+                             }
+                           },
+                           "theme_overrides": {},
+                           "responsive": {
+                             "desktop": {
+                               "visible": true,
+                               "width": {
+                                 "kind": "fill"
+                               },
+                               "height": {
+                                 "kind": "content"
+                               }
+                             }
+                           },
+                           "slots": {
+                             "header": {
+                               "placements": {
+                                 "shell_heading": {
+                                   "block": {
+                                     "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                                     "release_version": "1.0.0"
+                                   },
+                                   "settings": {
+                                     "text": {
+                                       "kind": "text",
+                                       "value": "Service Desk"
+                                     },
+                                     "level": {
+                                       "kind": "choice",
+                                       "value": "one"
+                                     }
+                                   },
+                                   "theme_overrides": {},
+                                   "responsive": {
+                                     "desktop": {
+                                       "visible": true,
+                                       "width": {
+                                         "kind": "fill"
+                                       },
+                                       "height": {
+                                         "kind": "content"
+                                       }
+                                     }
+                                   },
+                                   "slots": {}
+                                 }
+                               },
+                               "order": {
+                                 "desktop": [
+                                   "shell_heading"
+                                 ]
+                               }
+                             },
+                             "content": {
+                               "placements": {
+                                 "shell_body": {
+                                   "block": {
+                                     "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                     "release_version": "1.0.0"
+                                   },
+                                   "settings": {
+                                     "direction": {
+                                       "kind": "choice",
+                                       "value": "row"
+                                     },
+                                     "gap": {
+                                       "kind": "choice",
+                                       "value": "medium"
+                                     }
+                                   },
+                                   "theme_overrides": {},
+                                   "responsive": {
+                                     "desktop": {
+                                       "visible": true,
+                                       "width": {
+                                         "kind": "fill"
+                                       },
+                                       "height": {
+                                         "kind": "content"
+                                       }
+                                     }
+                                   },
+                                   "slots": {
+                                     "menu": {
+                                       "placements": {
+                                         "shell_navigation": {
+                                           "block": {
+                                             "block_id": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
+                                             "release_version": "1.0.0"
+                                           },
+                                           "settings": {
+                                             "title": {
+                                               "kind": "text",
+                                               "value": "Service Desk"
+                                             }
+                                           },
+                                           "theme_overrides": {},
+                                           "responsive": {
+                                             "desktop": {
+                                               "visible": true,
+                                               "width": {
+                                                 "kind": "fill"
+                                               },
+                                               "height": {
+                                                 "kind": "content"
                                                }
-                                               ]
-                            },
-                            {
-
-                            "id":  "shell_service_desk_public",
-                            "key":  "service_desk_public_shell",
-                            "name":  "Service Desk public shell",
-                            "layout":  {
-
-                                        "placements":  {
-
-                                                        "shell_public_root":  {
-
-                                                                               "block":  {
-
-                                                                                          "block_id":  "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                                                                                          "release_version":  "1.0.0"
-                                                                                          },
-                                                                               "settings":  {
-
-                                                                                             "direction":  {
-
-                                                                                                            "kind":  "choice",
-                                                                                                            "value":  "column"
-                                                                                                            },
-                                                                                             "gap":  {
-
-                                                                                                      "kind":  "choice",
-                                                                                                      "value":  "medium"
-                                                                                                      }
-                                                                                             },
-                                                                               "theme_overrides":  {
-
-                                                                                                    },
-                                                                               "responsive":  {
-
-                                                                                               "desktop":  {
-
-                                                                                                            "visible":  true,
-                                                                                                            "width":  {
-
-                                                                                                                       "kind":  "fill"
-                                                                                                                       },
-                                                                                                            "height":  {
-
-                                                                                                                        "kind":  "content"
-                                                                                                                        }
-                                                                                                            }
-                                                                                               },
-                                                                               "slots":  {
-
-                                                                                          "header":  {
-
-                                                                                                      "placements":  {
-
-                                                                                                                      "shell_public_heading":  {
-
-                                                                                                                                                "block":  {
-
-                                                                                                                                                           "block_id":  "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                                                                                                                                                           "release_version":  "1.0.0"
-                                                                                                                                                           },
-                                                                                                                                                "settings":  {
-
-                                                                                                                                                              "text":  {
-
-                                                                                                                                                                        "kind":  "text",
-                                                                                                                                                                        "value":  "Service Desk"
-                                                                                                                                                                        },
-                                                                                                                                                              "level":  {
-
-                                                                                                                                                                         "kind":  "choice",
-                                                                                                                                                                         "value":  "one"
-                                                                                                                                                                         }
-                                                                                                                                                              },
-                                                                                                                                                "theme_overrides":  {
-
-                                                                                                                                                                     },
-                                                                                                                                                "responsive":  {
-
-                                                                                                                                                                "desktop":  {
-
-                                                                                                                                                                             "visible":  true,
-                                                                                                                                                                             "width":  {
-
-                                                                                                                                                                                        "kind":  "fill"
-                                                                                                                                                                                        },
-                                                                                                                                                                             "height":  {
-
-                                                                                                                                                                                         "kind":  "content"
-                                                                                                                                                                                         }
-                                                                                                                                                                             }
-                                                                                                                                                                },
-                                                                                                                                                "slots":  {
-
-                                                                                                                                                           }
-                                                                                                                                                }
-                                                                                                                      },
-                                                                                                      "order":  {
-
-                                                                                                                 "desktop":  [
-
-                                                                                                                              "shell_public_heading"
-                                                                                                                              ]
-                                                                                                                 }
-                                                                                                      },
-                                                                                          "content":  {
-
-                                                                                                       "placements":  {
-
-                                                                                                                       },
-                                                                                                       "order":  {
-
-                                                                                                                  "desktop":  [
-
-                                                                                                                               ]
-                                                                                                                  }
-                                                                                                       }
-                                                                                          }
-                                                                               }
-                                                        },
-                                        "order":  {
-
-                                                   "desktop":  [
-
-                                                                "shell_public_root"
-                                                                ]
-                                                   }
-                                        },
-                            "content_slots":  [
-
-                                               {
-
-                                               "id":  "slot_public",
-                                               "key":  "public",
-                                               "label":  "Public content",
-                                               "required":  true,
-                                               "allowed_child_categories":  [
-
-                                                                             "content",
-                                                                             "data",
-                                                                             "figures",
-                                                                             "record",
-                                                                             "actions",
-                                                                             "input",
-                                                                             "layout"
-                                                                             ],
-                                               "parent_placement":  "shell_public_root",
-                                               "parent_slot":  "content"
-                                               }
-                                               ]
-                            }
-                            ],
+                                             }
+                                           },
+                                           "slots": {}
+                                         }
+                                       },
+                                       "order": {
+                                         "desktop": [
+                                           "shell_navigation"
+                                         ]
+                                       }
+                                     },
+                                     "content": {
+                                       "placements": {},
+                                       "order": {
+                                         "desktop": []
+                                       }
+                                     }
+                                   }
+                                 }
+                               },
+                               "order": {
+                                 "desktop": [
+                                   "shell_body"
+                                 ]
+                               }
+                             }
+                           }
+                         }
+                       },
+                       "order": {
+                         "desktop": [
+                           "shell_root"
+                         ]
+                       }
+                     },
+                     "content_slots": [
+                       {
+                         "id": "slot_primary",
+                         "key": "primary",
+                         "label": "Primary",
+                         "required": true,
+                         "allowed_child_categories": [
+                           "content",
+                           "data",
+                           "figures",
+                           "record",
+                           "actions",
+                           "input",
+                           "layout"
+                         ],
+                         "parent_placement": "shell_body",
+                         "parent_slot": "content"
+                       }
+                     ]
+                   },
+                   {
+                     "id": "shell_service_desk_public",
+                     "key": "service_desk_public_shell",
+                     "name": "Service Desk public shell",
+                     "layout": {
+                       "placements": {
+                         "shell_public_root": {
+                           "block": {
+                             "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                             "release_version": "1.0.0"
+                           },
+                           "settings": {
+                             "direction": {
+                               "kind": "choice",
+                               "value": "column"
+                             },
+                             "gap": {
+                               "kind": "choice",
+                               "value": "medium"
+                             }
+                           },
+                           "theme_overrides": {},
+                           "responsive": {
+                             "desktop": {
+                               "visible": true,
+                               "width": {
+                                 "kind": "fill"
+                               },
+                               "height": {
+                                 "kind": "content"
+                               }
+                             }
+                           },
+                           "slots": {
+                             "header": {
+                               "placements": {
+                                 "shell_public_heading": {
+                                   "block": {
+                                     "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                                     "release_version": "1.0.0"
+                                   },
+                                   "settings": {
+                                     "text": {
+                                       "kind": "text",
+                                       "value": "Service Desk"
+                                     },
+                                     "level": {
+                                       "kind": "choice",
+                                       "value": "one"
+                                     }
+                                   },
+                                   "theme_overrides": {},
+                                   "responsive": {
+                                     "desktop": {
+                                       "visible": true,
+                                       "width": {
+                                         "kind": "fill"
+                                       },
+                                       "height": {
+                                         "kind": "content"
+                                       }
+                                     }
+                                   },
+                                   "slots": {}
+                                 }
+                               },
+                               "order": {
+                                 "desktop": [
+                                   "shell_public_heading"
+                                 ]
+                               }
+                             },
+                             "content": {
+                               "placements": {},
+                               "order": {
+                                 "desktop": []
+                               }
+                             }
+                           }
+                         }
+                       },
+                       "order": {
+                         "desktop": [
+                           "shell_public_root"
+                         ]
+                       }
+                     },
+                     "content_slots": [
+                       {
+                         "id": "slot_public",
+                         "key": "public",
+                         "label": "Public content",
+                         "required": true,
+                         "allowed_child_categories": [
+                           "content",
+                           "data",
+                           "figures",
+                           "record",
+                           "actions",
+                           "input",
+                           "layout"
+                         ],
+                         "parent_placement": "shell_public_root",
+                         "parent_slot": "content"
+                       }
+                     ]
+                   }
+                 ],
                  "flows":  [
                      {
                          "contractVersion": "1.0.0",
