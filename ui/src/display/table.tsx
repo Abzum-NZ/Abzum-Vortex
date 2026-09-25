@@ -17,7 +17,7 @@ import {
   SelectionControl,
 } from "./controls";
 import { DisplayStateContainer } from "./display-state-container";
-import type { DisplayColumn } from "./projected-data";
+import type { DisplayCellValue, DisplayColumn } from "./projected-data";
 
 type RenderedColumn = Readonly<{
   key: string;
@@ -96,8 +96,13 @@ export function TableDisplay(props: PlatformBlockRenderProps): ReactElement {
   const inlineEventId = inlineEdit?.eventId;
   const onInlineEdit = inlineEdit === undefined ? undefined : events?.inline_edit;
   const inlineFields = inlineEdit?.fields ?? [];
-  const editable = (columnKey: string): boolean =>
-    onInlineEdit !== undefined && inlineEventId !== undefined && inlineFields.includes(columnKey);
+  // Only a text, number or yes/no cell has a closed value the editor can commit without guessing;
+  // any other cell of a permitted field stays read-only.
+  const editable = (columnKey: string, value: DisplayCellValue): boolean =>
+    onInlineEdit !== undefined &&
+    inlineEventId !== undefined &&
+    inlineFields.includes(columnKey) &&
+    (value.kind === "text" || value.kind === "number" || value.kind === "boolean");
   const showActionsColumn = events?.row_action !== undefined;
   const selectedRecordIds = values?.selectedRecordIds ?? [];
   const showBulkActions =
@@ -198,7 +203,10 @@ export function TableDisplay(props: PlatformBlockRenderProps): ReactElement {
                     : {
                         tabIndex: 0,
                         onClick: () => activate(row.recordId),
+                        // Only a key pressed on the focused row itself opens it; Enter or Space on
+                        // a row command, selection checkbox or inline editor keeps its own meaning.
                         onKeyDown: (event: KeyboardEvent<HTMLTableRowElement>) => {
+                          if (event.target !== event.currentTarget) return;
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
                             activate(row.recordId);
@@ -226,28 +234,33 @@ export function TableDisplay(props: PlatformBlockRenderProps): ReactElement {
                         />
                       </td>
                     )}
-                    {columns.map((column) => (
-                      <td
-                        key={column.key}
-                        className="vortex-table-cell"
-                        {...columnAttributes(column)}
-                      >
-                        {editable(column.key) &&
-                        onInlineEdit !== undefined &&
-                        inlineEventId !== undefined ? (
-                          <InlineEditCell
-                            eventId={inlineEventId}
-                            recordId={row.recordId}
-                            field={column.key}
-                            label={column.label}
-                            value={row.cells[column.key] ?? { kind: "empty" }}
-                            handler={onInlineEdit}
-                          />
-                        ) : (
-                          <DisplayCellView value={row.cells[column.key] ?? { kind: "empty" }} />
-                        )}
-                      </td>
-                    ))}
+                    {columns.map((column) => {
+                      const cell: DisplayCellValue = row.cells[column.key] ?? { kind: "empty" };
+                      return (
+                        <td
+                          key={column.key}
+                          className="vortex-table-cell"
+                          {...columnAttributes(column)}
+                        >
+                          {editable(column.key, cell) &&
+                          onInlineEdit !== undefined &&
+                          inlineEventId !== undefined ? (
+                            // Keyed by the projected value so a refreshed row resets the editor.
+                            <InlineEditCell
+                              key={JSON.stringify(cell)}
+                              eventId={inlineEventId}
+                              recordId={row.recordId}
+                              field={column.key}
+                              label={column.label}
+                              value={cell}
+                              handler={onInlineEdit}
+                            />
+                          ) : (
+                            <DisplayCellView value={cell} />
+                          )}
+                        </td>
+                      );
+                    })}
                     {!showActionsColumn ? null : (
                       <td className="vortex-table-cell-action">
                         {declaredRowActions.length === 0 ? (

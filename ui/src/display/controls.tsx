@@ -255,13 +255,15 @@ export function InlineEditCell({
   handler: DisplayEventHandler;
 }>): ReactElement {
   const [text, setText] = useState(() =>
-    value.kind === "number" ? String(value.value) : value.kind === "boolean" ? "" : cellValueToText(value),
+    value.kind === "number" ? String(value.value) : value.kind === "text" ? value.text : "",
   );
   const [checked, setChecked] = useState(value.kind === "boolean" ? value.value : false);
+  // Commits only a real change of a text or number cell; leaving the editor unchanged, or with a
+  // value that is not a number, sends nothing.
   const commitText = (): void => {
     if (value.kind === "number") {
       const parsed = Number(text);
-      if (!Number.isFinite(parsed) || text.trim().length === 0) return;
+      if (!Number.isFinite(parsed) || text.trim().length === 0 || parsed === value.value) return;
       handler({
         event: "inline_edit",
         eventId,
@@ -271,6 +273,7 @@ export function InlineEditCell({
       });
       return;
     }
+    if (value.kind !== "text" || text === value.text) return;
     handler({ event: "inline_edit", eventId, recordId, field, value: { kind: "text", text } });
   };
   if (value.kind === "boolean")

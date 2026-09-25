@@ -263,8 +263,18 @@ export function validateApplicationSourceCatalogue(
         checkRowBehaviour("row_actions", action.eventId, "row_action", "record_reference");
       for (const action of behaviours.bulkActions)
         checkRowBehaviour("bulk_actions", action.eventId, "bulk_action", "record_reference_list");
-      if (behaviours.inlineEdit !== undefined)
+      if (behaviours.inlineEdit !== undefined) {
         checkRowBehaviour("inline_edit", behaviours.inlineEdit.eventId, "inline_edit", "record_reference");
+        // An editable field must be one the bound query selects and one of the declared columns;
+        // a field that is never shown could never be edited in place.
+        const columnFields = new Set(table.columns.map((column) => column.field));
+        checkFields(
+          "inline_edit",
+          behaviours.inlineEdit.fields,
+          (field) => columnFields.has(field),
+          "invalid_value",
+        );
+      }
     } else if (detail !== undefined)
       checkFields("detail_fields", detail.fields.map((entry) => entry.field), () => true, "invalid_value");
   };
