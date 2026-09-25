@@ -179,17 +179,33 @@ const rejectSettingFailures = (failures: readonly ComponentSettingFailure[]): vo
     reject("vortex.definition.application_block_settings", first.family);
 };
 
+/** Every theme token a canonical value names, including inside groups and lists, must resolve. */
+const validateThemeTokenSettings = (
+  value: BlockPropertyValueV2Contract,
+  schema: BlockPropertySchemaV2Contract,
+  theme: CanonicalTheme,
+): void => {
+  if (schema.kind === "theme_token" && value.kind === "theme_token") {
+    const token = theme.tokens[value.tokenKey];
+    if (token === undefined || token.kind !== schema.tokenKind)
+      reject("vortex.definition.application_block_settings", "broken_reference");
+  } else if (schema.kind === "group" && value.kind === "group") {
+    for (const property of schema.properties) {
+      const nested = value.properties[property.key];
+      if (nested !== undefined) validateThemeTokenSettings(nested, property, theme);
+    }
+  } else if (schema.kind === "list" && value.kind === "list") {
+    for (const item of value.items) validateThemeTokenSettings(item, schema.item, theme);
+  }
+};
+
 const validateCanonicalPropertyValue = (
   value: BlockPropertyValueV2Contract,
   schema: BlockPropertySchemaV2Contract,
   theme: CanonicalTheme,
 ): void => {
   rejectSettingFailures(validateComponentSettingValue(value, schema));
-  if (schema.kind === "theme_token" && value.kind === "theme_token") {
-    const token = theme.tokens[value.tokenKey];
-    if (token === undefined || token.kind !== schema.tokenKind)
-      reject("vortex.definition.application_block_settings", "broken_reference");
-  }
+  validateThemeTokenSettings(value, schema, theme);
 };
 
 const compilePropertyValue = (

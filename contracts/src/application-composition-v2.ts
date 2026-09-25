@@ -363,198 +363,6 @@ const richTextSettingViolations = (
   return { kinds, unsafe };
 };
 
-const richTextKinds = (document: z.infer<typeof richTextDocumentV2Schema>): Set<string> =>
-  new Set(richTextSettingViolations(document).kinds);
-
-const defaultMatchesProperty = (schema: BlockPropertySchemaV2Contract): boolean => {
-  const value = schema.defaultValue;
-  if (value === undefined) return true;
-  if (value.kind !== schema.kind) return false;
-  switch (schema.kind) {
-    case "text": {
-      const text = (value as { value: string }).value;
-      return text.length >= schema.minLength && text.length <= schema.maxLength;
-    }
-    case "number": {
-      const number = (value as { value: number }).value;
-      return (
-        (schema.minimum === undefined || number >= schema.minimum) &&
-        (schema.maximum === undefined || number <= schema.maximum) &&
-        (!schema.integer || Number.isInteger(number))
-      );
-    }
-    case "choice":
-      return schema.options.some((option) => option.key === (value as { value: string }).value);
-    case "rich_text": {
-      const allowed = new Set<string>(schema.allowedElements);
-      return [
-        ...richTextKinds((value as { value: z.infer<typeof richTextDocumentV2Schema> }).value),
-      ].every((kind) => allowed.has(kind));
-    }
-    case "group": {
-      const properties = schema.properties;
-      const values = (value as { properties: Record<string, BlockPropertyValueV2Contract> })
-        .properties;
-      if (Object.keys(values).some((key) => !properties.some((property) => property.key === key)))
-        return false;
-      return properties.every((property) => {
-        const nested = values[property.key];
-        return nested === undefined
-          ? !property.required && property.defaultValue === undefined
-          : defaultMatchesProperty({ ...property, defaultValue: nested });
-      });
-    }
-    case "list": {
-      const items = (value as { items: BlockPropertyValueV2Contract[] }).items;
-      return (
-        items.length >= schema.minimumItems &&
-        items.length <= schema.maximumItems &&
-        items.every((item) => defaultMatchesProperty({ ...schema.item, defaultValue: item }))
-      );
-    }
-    case "field_reference":
-    case "relationship_reference":
-    case "action_reference":
-    case "page_reference":
-    case "query_reference":
-    case "pipeline_reference":
-    case "record_type_reference":
-    case "record_reference":
-      // Platform-owned registrations cannot choose an application-scoped authority reference.
-      return false;
-    default:
-      return true;
-  }
-};
-
-/** Recursive platform-owned property declaration, including only closed safe value kinds. */
-export const blockPropertySchemaV2Schema: z.ZodType<BlockPropertySchemaV2Contract> = z.lazy(() =>
-  z
-    .discriminatedUnion("kind", [
-      z
-        .object({
-          ...propertySchemaBase,
-          kind: z.literal("text"),
-          minLength: z.number().int().nonnegative(),
-          maxLength: z.number().int().positive(),
-        })
-        .strict()
-        .refine((value) => value.maxLength >= value.minLength, {
-          path: ["maxLength"],
-          message: "Maximum text length cannot be shorter than minimum length",
-        }),
-      z
-        .object({
-          ...propertySchemaBase,
-          kind: z.literal("number"),
-          integer: z.boolean(),
-          minimum: z.number().finite().optional(),
-          maximum: z.number().finite().optional(),
-        })
-        .strict()
-        .refine(
-          (value) =>
-            value.minimum === undefined ||
-            value.maximum === undefined ||
-            value.maximum >= value.minimum,
-          { path: ["maximum"], message: "Maximum number cannot be less than minimum" },
-        ),
-      z.object({ ...propertySchemaBase, kind: z.literal("boolean") }).strict(),
-      z
-        .object({
-          ...propertySchemaBase,
-          kind: z.literal("choice"),
-          options: z.array(z.object({ key: builderKeySchema, label: labelSchema }).strict()).min(1),
-        })
-        .strict()
-        .refine(
-          (value) =>
-            new Set(value.options.map((option) => option.key)).size === value.options.length,
-          { path: ["options"], message: "Choice keys must be unique" },
-        ),
-      z
-        .object({
-          ...propertySchemaBase,
-          kind: z.literal("rich_text"),
-          allowedElements: z.array(richTextElementKindV2Schema).min(1),
-        })
-        .strict()
-        .refine((value) => new Set(value.allowedElements).size === value.allowedElements.length, {
-          path: ["allowedElements"],
-          message: "Allowed rich-text elements must be unique",
-        }),
-      z.object({ ...propertySchemaBase, kind: z.literal("url") }).strict(),
-      z.object({ ...propertySchemaBase, kind: z.literal("asset_reference") }).strict(),
-      z.object({ ...propertySchemaBase, kind: z.literal("icon") }).strict(),
-      z
-        .object({
-          ...propertySchemaBase,
-          kind: z.literal("theme_token"),
-          tokenKind: z.enum([
-            "color_pair",
-            "typography",
-            "spacing",
-            "corners",
-            "border",
-            "elevation",
-            "focus",
-            "asset",
-            "density",
-          ]),
-        })
-        .strict(),
-      z
-        .object({
-          ...propertySchemaBase,
-          kind: z.enum([
-            "field_reference",
-            "relationship_reference",
-            "action_reference",
-            "page_reference",
-            "query_reference",
-            "pipeline_reference",
-            "record_type_reference",
-            "record_reference",
-          ]),
-        })
-        .strict(),
-      z
-        .object({
-          ...propertySchemaBase,
-          kind: z.literal("group"),
-          properties: z.array(blockPropertySchemaV2Schema),
-        })
-        .strict()
-        .refine(
-          (value) =>
-            new Set(value.properties.map((property) => property.key)).size ===
-            value.properties.length,
-          { path: ["properties"], message: "Grouped property keys must be unique" },
-        ),
-      z
-        .object({
-          ...propertySchemaBase,
-          kind: z.literal("list"),
-          minimumItems: z.number().int().nonnegative(),
-          maximumItems: z.number().int().positive(),
-          item: blockPropertySchemaV2Schema,
-        })
-        .strict()
-        .refine((value) => value.maximumItems >= value.minimumItems, {
-          path: ["maximumItems"],
-          message: "Maximum list length cannot be shorter than minimum length",
-        }),
-    ])
-    .superRefine((value, context) => {
-      if (!defaultMatchesProperty(value))
-        context.addIssue({
-          code: "custom",
-          path: ["defaultValue"],
-          message: "Default value must satisfy its declared property schema",
-        });
-    }),
-);
-
 /** Setting-value or setting-key violation families the shared component-setting validator emits. */
 export type ComponentSettingFailureFamily = Extract<
   DefinitionRuleFailureFamily,
@@ -696,6 +504,174 @@ export const validateComponentSettings = (
   }
   return failures;
 };
+
+/** Kinds naming application-scoped authority, which a platform-owned default cannot choose. */
+const authorityReferenceKinds: ReadonlySet<string> = new Set([
+  "field_reference",
+  "relationship_reference",
+  "action_reference",
+  "page_reference",
+  "query_reference",
+  "pipeline_reference",
+  "record_type_reference",
+  "record_reference",
+]);
+
+/**
+ * A platform-owned default must pass the shared setting validator and name no application-scoped
+ * authority reference. Compilation copies a declared default verbatim without filling nested
+ * defaults, so a grouped default must also spell every nested setting that is required or
+ * declares its own default.
+ */
+const defaultMatchesProperty = (schema: BlockPropertySchemaV2Contract): boolean => {
+  const value = schema.defaultValue;
+  if (value === undefined) return true;
+  const complete = (
+    nested: BlockPropertyValueV2Contract,
+    declaration: BlockPropertySchemaV2Contract,
+  ): boolean => {
+    if (authorityReferenceKinds.has(nested.kind)) return false;
+    if (nested.kind === "group" && declaration.kind === "group")
+      return declaration.properties.every((property) => {
+        const child = nested.properties[property.key];
+        return child === undefined
+          ? !property.required && property.defaultValue === undefined
+          : complete(child, property);
+      });
+    if (nested.kind === "list" && declaration.kind === "list")
+      return nested.items.every((item) => complete(item, declaration.item));
+    return true;
+  };
+  return validateComponentSettingValue(value, schema).length === 0 && complete(value, schema);
+};
+
+/** Recursive platform-owned property declaration, including only closed safe value kinds. */
+export const blockPropertySchemaV2Schema: z.ZodType<BlockPropertySchemaV2Contract> = z.lazy(() =>
+  z
+    .discriminatedUnion("kind", [
+      z
+        .object({
+          ...propertySchemaBase,
+          kind: z.literal("text"),
+          minLength: z.number().int().nonnegative(),
+          maxLength: z.number().int().positive(),
+        })
+        .strict()
+        .refine((value) => value.maxLength >= value.minLength, {
+          path: ["maxLength"],
+          message: "Maximum text length cannot be shorter than minimum length",
+        }),
+      z
+        .object({
+          ...propertySchemaBase,
+          kind: z.literal("number"),
+          integer: z.boolean(),
+          minimum: z.number().finite().optional(),
+          maximum: z.number().finite().optional(),
+        })
+        .strict()
+        .refine(
+          (value) =>
+            value.minimum === undefined ||
+            value.maximum === undefined ||
+            value.maximum >= value.minimum,
+          { path: ["maximum"], message: "Maximum number cannot be less than minimum" },
+        ),
+      z.object({ ...propertySchemaBase, kind: z.literal("boolean") }).strict(),
+      z
+        .object({
+          ...propertySchemaBase,
+          kind: z.literal("choice"),
+          options: z.array(z.object({ key: builderKeySchema, label: labelSchema }).strict()).min(1),
+        })
+        .strict()
+        .refine(
+          (value) =>
+            new Set(value.options.map((option) => option.key)).size === value.options.length,
+          { path: ["options"], message: "Choice keys must be unique" },
+        ),
+      z
+        .object({
+          ...propertySchemaBase,
+          kind: z.literal("rich_text"),
+          allowedElements: z.array(richTextElementKindV2Schema).min(1),
+        })
+        .strict()
+        .refine((value) => new Set(value.allowedElements).size === value.allowedElements.length, {
+          path: ["allowedElements"],
+          message: "Allowed rich-text elements must be unique",
+        }),
+      z.object({ ...propertySchemaBase, kind: z.literal("url") }).strict(),
+      z.object({ ...propertySchemaBase, kind: z.literal("asset_reference") }).strict(),
+      z.object({ ...propertySchemaBase, kind: z.literal("icon") }).strict(),
+      z
+        .object({
+          ...propertySchemaBase,
+          kind: z.literal("theme_token"),
+          tokenKind: z.enum([
+            "color_pair",
+            "typography",
+            "spacing",
+            "corners",
+            "border",
+            "elevation",
+            "focus",
+            "asset",
+            "density",
+          ]),
+        })
+        .strict(),
+      z
+        .object({
+          ...propertySchemaBase,
+          kind: z.enum([
+            "field_reference",
+            "relationship_reference",
+            "action_reference",
+            "page_reference",
+            "query_reference",
+            "pipeline_reference",
+            "record_type_reference",
+            "record_reference",
+          ]),
+        })
+        .strict(),
+      z
+        .object({
+          ...propertySchemaBase,
+          kind: z.literal("group"),
+          properties: z.array(blockPropertySchemaV2Schema),
+        })
+        .strict()
+        .refine(
+          (value) =>
+            new Set(value.properties.map((property) => property.key)).size ===
+            value.properties.length,
+          { path: ["properties"], message: "Grouped property keys must be unique" },
+        ),
+      z
+        .object({
+          ...propertySchemaBase,
+          kind: z.literal("list"),
+          minimumItems: z.number().int().nonnegative(),
+          maximumItems: z.number().int().positive(),
+          item: blockPropertySchemaV2Schema,
+        })
+        .strict()
+        .refine((value) => value.maximumItems >= value.minimumItems, {
+          path: ["maximumItems"],
+          message: "Maximum list length cannot be shorter than minimum length",
+        }),
+    ])
+    .superRefine((value, context) => {
+      if (!defaultMatchesProperty(value))
+        context.addIssue({
+          code: "custom",
+          path: ["defaultValue"],
+          message: "Default value must satisfy its declared property schema",
+        });
+    }),
+);
 
 export const blockSlotDeclarationV2Schema = z
   .object({
