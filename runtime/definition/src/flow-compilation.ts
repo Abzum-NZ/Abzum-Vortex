@@ -479,6 +479,15 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
     resolved: Context["resolved"];
   }[] = [];
 
+  // A Run flow target is one of these flows, found by its permanent identity however it is written.
+  const ownFlows = new Map(input.flows.map((flow) => [resolver.flow(flow.id).identifier, flow]));
+  const targetFlow = (reference: string): SourceFlow | undefined => {
+    const identity = resolver.flow(reference);
+    return identity.definitionKey === resolver.definitionKey
+      ? ownFlows.get(identity.identifier)
+      : undefined;
+  };
+
   input.flows.forEach((source, sourceIndex) => {
     const location = resolver.locate?.(source.key);
     const ctx: Context = {
@@ -491,9 +500,25 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
       triggerRecordType: triggerRecordType(source),
     };
 
-    // Structure, run locations, typed references, outputs and error handling, in one pass. The
-    // sibling flows let Run flow check its target's inputs and outputs by readable alias.
-    const invalid = validateFlow(source, { siblingFlows: input.flows })[0];
+    // Structure, run locations, typed references, outputs and error handling, in one pass. Run
+    // flow is checked against its target's declared inputs and outputs, and a trigger record
+    // field must exist on every record type the flow's record triggers name.
+    const recordTypes = source.triggers.flatMap((trigger) =>
+      trigger.type === "BeforeSave" || trigger.type === "Event" ? [trigger.recordTypeId] : [],
+    );
+    const invalid = validateFlow(source, {
+      targetFlow,
+      triggerRecordFieldExists: (field) =>
+        recordTypes.every((recordType) => {
+          try {
+            resolver.field(recordType, field);
+            return true;
+          } catch (error) {
+            if (error instanceof DefinitionCompilationError) return false;
+            throw error;
+          }
+        }),
+    })[0];
     if (invalid !== undefined)
       throw new DefinitionCompilationError(
         invalid.ruleCode,

@@ -39,7 +39,10 @@ import type { DefinitionCompilerRefusalCode } from "./compilation-error";
  *   `validateFlowTaskPlacement`, which stays the one placement rule;
  * - every typed reference: it must name a declared input or variable, a record trigger, or the
  *   output of a task that has already run in scope, and its type must fit where it is used, by
- *   the one value-type compatibility function (`valueTypesCompatible`, the `flow` context);
+ *   the one value-type compatibility function (`valueTypesCompatible`, the `flow` context). Run
+ *   flow and Run background flow must name a flow compiled with this one, so the target's inputs,
+ *   outputs and execution kind are known. Two values stay typed only at run time: a trigger
+ *   record field (the caller checks it exists) and a person's answers to Wait for person;
  * - outputs and error handling: an output's value must fit its declared type, and `outcome` is
  *   readable only from a task that sets `allowRefusal`.
  *
@@ -47,7 +50,8 @@ import type { DefinitionCompilerRefusalCode } from "./compilation-error";
  * default error handler presents those results safely, and `errors` only adds behaviour.
  *
  * The validator reads a flow in either shape: the authored source (readable aliases) or the
- * canonical flow (permanent identities). It never resolves an alias, so it invents no identity.
+ * canonical flow (permanent identities). It never resolves an alias itself, so it invents no
+ * identity; the caller's `targetFlow` and `triggerRecordFieldExists` do any resolution.
  * It returns every issue with a path relative to the flow; callers place them on the definition.
  */
 
@@ -67,11 +71,17 @@ export type FlowSetValidationIssue = FlowValidationIssue & Readonly<{ flowId: st
 
 export type FlowValidationOptions = Readonly<{
   /**
-   * The other flows the same owner compiles, in either shape. `run_flow` and
-   * `flow.run_background` are checked against a target found here by its `id` or `key`; a target
-   * that is not here belongs to a dependency and is checked when the dependency is compiled.
+   * Finds a flow compiled together with this one, in either shape, from the reference a `run_flow`
+   * or `flow.run_background` task names. A target it does not return has no declared inputs,
+   * outputs or execution kind here, so the call is refused rather than left untyped.
    */
-  siblingFlows?: readonly (FlowDefinition | FlowSource | SourceFlow)[];
+  targetFlow?: (reference: string) => FlowDefinition | FlowSource | SourceFlow | undefined;
+  /**
+   * Whether every record type a record trigger names has this field. `trigger.record.x` and
+   * `trigger.previous.x` naming a field it rejects are refused. Without it, the field is not
+   * checked; its value type belongs to the record type and is checked by the evaluator.
+   */
+  triggerRecordFieldExists?: (field: string) => boolean;
 }>;
 
 const placementCodes: Readonly<
@@ -194,8 +204,15 @@ export function validateFlow(
   ) => {
     for (const [name, declaration] of Object.entries(declarations)) {
       checkDeclaration(declaration, [...path, name], add);
-      // A name declared twice with different types has no single static type.
-      into.set(name, into.has(name) && into.get(name) !== declaration.type ? undefined : declaration.type);
+      // A name declared twice must keep one type, or no reference to it could be typed.
+      if (into.has(name) && into.get(name) !== declaration.type)
+        add(
+          [...path, name, "type"],
+          "vortex.definition.source_type_compatibility",
+          "invalid_value",
+          `The input ${name} is already declared with the type ${into.get(name)}`,
+        );
+      else into.set(name, declaration.type);
     }
   };
   declare(flow.inputs, inputTypes, ["inputs"]);
@@ -212,9 +229,13 @@ export function validateFlow(
   // ── Typed references. ──
   type Where = { nowAllowed: boolean; scope: ReadonlyMap<string, FlowTask>; triggerOnly: boolean };
 
-  const outputType = (task: FlowTask, key: string, siblings: ReadonlyMap<string, FlowSource>) => {
+  const findFlow = (reference: string): FlowSource | undefined =>
+    options.targetFlow?.(reference) as FlowSource | undefined;
+
+  const outputType = (task: FlowTask, key: string) => {
     if (task.type === "run_flow") {
-      const target = siblings.get((task as { flowId: string }).flowId);
+      // An unknown target is refused on the task itself.
+      const target = findFlow((task as { flowId: string }).flowId);
       if (target === undefined) return { known: true as const, type: undefined };
       const declared = Object.hasOwn(target.outputs, key) ? target.outputs[key] : undefined;
       return declared === undefined
@@ -237,13 +258,6 @@ export function validateFlow(
       ? { known: false as const }
       : { known: true as const, type: declared.type as StaticType };
   };
-
-  const siblings = new Map<string, FlowSource>();
-  for (const other of options.siblingFlows ?? []) {
-    const view = other as unknown as FlowSource;
-    siblings.set(view.id, view);
-    siblings.set(view.key, view);
-  }
 
   const allTasks = new Map<string, FlowTask>();
   const collect = (tasks: readonly FlowTask[]) => {
@@ -291,6 +305,13 @@ export function validateFlow(
             "required_value",
             "Only a flow with a BeforeSave or Event trigger has a trigger record",
           );
+        else if (options.triggerRecordFieldExists?.(reference.field) === false)
+          add(
+            path,
+            "vortex.definition.workflow_node_references",
+            "broken_reference",
+            `The trigger record has no field ${reference.field}`,
+          );
         // A record field's type belongs to the record type, which the flow does not carry.
         return undefined;
       case "execution_actor":
@@ -325,7 +346,7 @@ export function validateFlow(
             );
           return undefined;
         }
-        const output = outputType(task, reference.key, siblings);
+        const output = outputType(task, reference.key);
         if (!output.known) {
           add(
             path,
@@ -469,7 +490,18 @@ export function validateFlow(
         );
         const then = child(formula.then, "then");
         const otherwise = child(formula.else, "else");
-        return then === otherwise ? then : undefined;
+        if (then === undefined || otherwise === undefined || then === "json" || otherwise === "json")
+          return undefined;
+        if (then === otherwise) return then;
+        if (numericTypes.has(then) && numericTypes.has(otherwise))
+          return then === "money" || otherwise === "money" ? "money" : "decimal_number";
+        add(
+          [...path, "else"],
+          "vortex.definition.source_type_compatibility",
+          "invalid_value",
+          `Both results of if must have one type, found ${then} and ${otherwise}`,
+        );
+        return undefined;
       }
       case "join":
         formula.parts.forEach((part, index) => child(part, "parts", index));
@@ -522,6 +554,14 @@ export function validateFlow(
       `Expected ${describe(accepted)}, found ${actual}`,
     );
   };
+
+  const refuseUnknownTarget = (path: Path) =>
+    add(
+      path,
+      "vortex.definition.workflow_child_reference",
+      "broken_reference",
+      "The flow to run must be compiled with this flow, so its inputs, outputs and execution kind are known",
+    );
 
   const checkInputMap = (
     values: Readonly<Record<string, FlowValue>>,
@@ -582,6 +622,21 @@ export function validateFlow(
           "invalid_value",
           `${name} must be written as a readable name, never computed`,
         );
+      else if (declared.type === "flow_id") {
+        const target = findFlow(String((value as { literal: { value: unknown } }).literal.value));
+        if (target === undefined) refuseUnknownTarget(path);
+        else if (
+          task.type === "flow.run_background" &&
+          target.execution !== "background" &&
+          target.execution !== "durable"
+        )
+          add(
+            path,
+            "vortex.definition.workflow_child_reference",
+            "invalid_value",
+            "Run background flow starts only a background or durable flow",
+          );
+      }
       return;
     }
     checkValue(value, acceptedTypes(declared.type), where, path);
@@ -601,20 +656,6 @@ export function validateFlow(
           checkValue(value, variableType === undefined ? undefined : [variableType], where, path);
         }
       }
-    }
-    if (
-      task.type === "flow.run_background" &&
-      name === "flow" &&
-      isTextLiteral(value)
-    ) {
-      const target = siblings.get(String((value as { literal: { value: unknown } }).literal.value));
-      if (target !== undefined && target.execution !== "background" && target.execution !== "durable")
-        add(
-          path,
-          "vortex.definition.workflow_child_reference",
-          "invalid_value",
-          "Run background flow starts only a background or durable flow",
-        );
     }
   };
 
@@ -655,7 +696,9 @@ export function validateFlow(
       }
       case "run_flow": {
         const node = task as Extract<FlowTask, { type: "run_flow" }>;
-        checkInputMap(node.inputs, siblings.get(node.flowId as string), where, [...path, "inputs"]);
+        const target = findFlow(node.flowId as string);
+        if (target === undefined) refuseUnknownTarget([...path, "flowId"]);
+        checkInputMap(node.inputs, target, where, [...path, "inputs"]);
         return;
       }
       case "wait_until": {
