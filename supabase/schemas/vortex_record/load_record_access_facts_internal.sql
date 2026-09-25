@@ -684,7 +684,8 @@ $function$;
 
 revoke all on function vortex_record.load_record_access_facts_internal(
   uuid, text, uuid, bigint
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_record_owner, vortex_module_owner;
 
 comment on function vortex_record.load_record_access_facts_internal(
   uuid, text, uuid, bigint

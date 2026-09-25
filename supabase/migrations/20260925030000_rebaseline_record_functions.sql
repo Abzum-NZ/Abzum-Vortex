@@ -919,8 +919,6 @@ alter function vortex_record.save_base_record_with_relationship_totals(uuid,text
 revoke all on function vortex_record.save_base_record_with_relationship_totals(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid,jsonb)
 from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_module_owner;
-grant execute on function vortex_record.save_base_record_with_relationship_totals(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid,jsonb)
-to vortex_runtime;
 comment on function vortex_record.save_base_record_with_relationship_totals(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid,jsonb) is
   'Existing protected base save composed with revision-checked generated parent totals, Activity and standard Events in the same transaction.';
 
@@ -1756,7 +1754,8 @@ alter function vortex_record.load_record_access_facts_internal(uuid, text, uuid,
 
 revoke all on function vortex_record.load_record_access_facts_internal(
   uuid, text, uuid, bigint
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_record_owner, vortex_module_owner;
 
 comment on function vortex_record.load_record_access_facts_internal(
   uuid, text, uuid, bigint
@@ -1828,6 +1827,9 @@ grant execute on function vortex_record.read_record(uuid, uuid) to vortex_reques
 comment on function vortex_record.read_record(uuid, uuid) is
   'Fixed record read adapter: returns the readable field projection of one record under the caller''s own current authority, or an identical refusal for a missing, foreign or unreachable record.';
 
+-- 20260924010000 dropped the seven-parameter signature inside a do block; this
+-- explicit drop is a no-op on the live database that states the signature change.
+drop function if exists vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb);
 create or replace function vortex_record.run_module_query(
   p_module_root_id uuid,
   p_query_id uuid,
@@ -3084,7 +3086,7 @@ revoke all on function vortex_record.write_relationship_value_internal(uuid, uui
     vortex_record_owner, vortex_module_owner;
 
 comment on function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean) is
-  'Private relationship writer: resolves the declared storage mapping and target eligibility, locks the target row and shared edge identities, then replaces the source link edge and typed value atomically.';
+  'Private relationship writer: validates the declared relationship and target eligibility, share-locks the target row, then takes the source data version and the shared edge identities before replacing the source link edge and typed value atomically. Owner-only.';
 
 reset role;
 set local role vortex_record_owner;

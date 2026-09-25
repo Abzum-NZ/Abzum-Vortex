@@ -259,4 +259,4 @@ revoke all on function vortex_record.write_relationship_value_internal(uuid, uui
     vortex_record_owner, vortex_module_owner;
 
 comment on function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean) is
-  'Private relationship writer: resolves the declared storage mapping and target eligibility, locks the target row and shared edge identities, then replaces the source link edge and typed value atomically.';
+  'Private relationship writer: validates the declared relationship and target eligibility, share-locks the target row, then takes the source data version and the shared edge identities before replacing the source link edge and typed value atomically. Owner-only.';
