@@ -363,8 +363,8 @@ begin
     end if;
     left_array_sql := case when left_type = 'text_collection' then left_sql else null end;
   else
-    left_sql := case shared_type
-      when 'money', 'text_collection', 'opaque_json' then
+    left_sql := case
+      when shared_type in ('money', 'text_collection', 'opaque_json') then
         pg_catalog.format('($%s::jsonb -> %s)', p_parameter_sql_parameter,
           p_parameter_offset + operand_parameter_indices[1])
       else pg_catalog.format('($%s::jsonb #>> ''{%s}'')', p_parameter_sql_parameter,
@@ -382,8 +382,8 @@ begin
     end if;
     right_array_sql := case when right_type = 'text_collection' then right_sql else null end;
   else
-    right_sql := case shared_type
-      when 'money', 'text_collection', 'opaque_json' then
+    right_sql := case
+      when shared_type in ('money', 'text_collection', 'opaque_json') then
         pg_catalog.format('($%s::jsonb -> %s)', p_parameter_sql_parameter,
           p_parameter_offset + operand_parameter_indices[2])
       else pg_catalog.format('($%s::jsonb #>> ''{%s}'')', p_parameter_sql_parameter,
@@ -430,7 +430,10 @@ begin
         when 'uuid' then pg_catalog.format(
           '(%s::uuid is not distinct from %s::uuid)', left_sql, right_sql
         )
-        when 'record_reference', 'organization_account_reference' then pg_catalog.format(
+        when 'record_reference' then pg_catalog.format(
+          '(lower(%s) is not distinct from lower(%s))', left_sql, right_sql
+        )
+        when 'organization_account_reference' then pg_catalog.format(
           '(lower(%s) is not distinct from lower(%s))', left_sql, right_sql
         )
         else pg_catalog.format('(%s is not distinct from %s)', left_sql, right_sql)
@@ -477,7 +480,10 @@ begin
         when 'uuid' then pg_catalog.format(
           '(%s::uuid is not distinct from (item.value #>> ''{}'')::uuid)', left_sql
         )
-        when 'record_reference', 'organization_account_reference' then pg_catalog.format(
+        when 'record_reference' then pg_catalog.format(
+          '(lower(%s) is not distinct from lower(item.value #>> ''{}''))', left_sql
+        )
+        when 'organization_account_reference' then pg_catalog.format(
           '(lower(%s) is not distinct from lower(item.value #>> ''{}''))', left_sql
         )
         else pg_catalog.format(
