@@ -1213,34 +1213,11 @@ function explicitSourceTargets(
       return leafPaths(valueAtPath(canonical, recordTypePath), recordTypePath);
     }
     if (
-      sourcePath[3] === "standard_page_replacement" &&
-      sourcePath[4] === "record_type" &&
-      sourcePath.length === 5
-    ) {
-      const recordTypePath = [...pageBase, "standardPageReplacement", "recordType"];
-      return leafPaths(valueAtPath(canonical, recordTypePath), recordTypePath);
-    }
-    if (
       sourcePath[3] === "public_fields" &&
       typeof sourcePath[4] === "number" &&
       sourcePath.length === 5
     )
       return [[...pageBase, "publicFieldIds", sourcePath[4]]];
-    if (sourcePath[3] === "calendar_mapping" && typeof sourcePath[4] === "string") {
-      const calendarKey: Readonly<Record<string, string>> = {
-        start: "startFieldId",
-        end: "endFieldId",
-        duration_field: "durationFieldId",
-      };
-      const key = calendarKey[sourcePath[4]];
-      if (key)
-        return [
-          [...pageBase, "calendarMapping", key],
-          ...(["end", "duration_field"].includes(String(sourcePath[4]))
-            ? [[...pageBase, "calendarMapping", "kind"] as Path]
-            : []),
-        ];
-    }
     const blockCoordinates =
       sourcePath[3] === "blocks" && typeof sourcePath[4] === "number"
         ? { canonical: [...pageBase, "blocks", sourcePath[4]] as Path, propertyIndex: 5 }
@@ -1610,8 +1587,6 @@ const applicationSourceTransformPatterns = [
   /^body\/queries\/#\/sort\/#\/field$/,
   /^body\/queries\/#\/aggregates\/#\/field$/,
   /^body\/pages\/#\/(?:id|record_type|query|permission|commit_action|public_action|public_fields\/#)$/,
-  /^body\/pages\/#\/standard_page_replacement\/record_type$/,
-  /^body\/pages\/#\/calendar_mapping\/(?:start|end|duration_field)$/,
   /^body\/pages\/#\/layout\/(?:desktop|phone)\/component_order\/#$/,
   /^body\/pages\/#\/(?:blocks\/#|steps\/#\/blocks\/#)\/(?:id|block|query|view_permission|use_permission)$/,
   /^body\/pipelines\/#\/(?:id|record_type|stage_field)$/,
@@ -4198,45 +4173,15 @@ function compileApplicationPagesV2(
         String(page.permission),
         allowedPermissionOwners,
       ),
-      states: page.states,
       composition: compiledComposition.composition,
-      ...(page.standard_page_replacement
-        ? {
-            standardPageReplacement: {
-              standardPage: asObject(page.standard_page_replacement).standard_page,
-              recordType: resolution.recordType(
-                String(asObject(page.standard_page_replacement).record_type),
-              ),
-            },
-          }
-        : {}),
     };
     if (page.type === "list") {
       const record = String(page.record_type);
-      const mapping = page.calendar_mapping ? asObject(page.calendar_mapping) : undefined;
       return {
         ...base,
         type: "list",
         recordType: resolution.recordType(record),
         queryId: queryId(String(page.query)),
-        arrangements: page.arrangements,
-        ...(mapping
-          ? {
-              calendarMapping:
-                "end" in mapping
-                  ? {
-                      kind: "start_end",
-                      startFieldId: resolution.field(record, String(mapping.start)),
-                      endFieldId: resolution.field(record, String(mapping.end)),
-                    }
-                  : {
-                      kind: "start_duration",
-                      startFieldId: resolution.field(record, String(mapping.start)),
-                      durationFieldId: resolution.field(record, String(mapping.duration_field)),
-                      durationUnit: mapping.duration_unit,
-                    },
-            }
-          : {}),
       };
     }
     if (page.type === "dashboard") return { ...base, type: "dashboard" };

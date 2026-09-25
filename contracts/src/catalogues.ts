@@ -33,7 +33,6 @@ export const pageTypeKeys = [
   "guided_form",
   "public",
 ] as const;
-export const listArrangementKeys = ["table", "board", "calendar", "summary"] as const;
 export const blockPaletteGroupKeys = [
   "data",
   "figures",
@@ -92,7 +91,6 @@ export const workflowNodeTypeKeys = [
 
 export const fieldTypeSchema = z.enum(fieldTypeKeys);
 export const pageTypeSchema = z.enum(pageTypeKeys);
-export const listArrangementSchema = z.enum(listArrangementKeys);
 export const blockPaletteGroupSchema = z.enum(blockPaletteGroupKeys);
 export const blockSettingControlSchema = z.enum(blockSettingControlKeys);
 export const workflowNodeTypeSchema = z.enum(workflowNodeTypeKeys);
@@ -179,30 +177,16 @@ export const workflowNodeOutputKeysByType = Object.freeze({
   acknowledge_message: [],
 } as const satisfies Record<(typeof workflowNodeTypeKeys)[number], readonly string[]>);
 export const lifecycleStateSchema = z.enum(["active", "soft_deleted", "removal_pending"]);
-export const pageStateSchema = z.enum([
-  "normal",
-  "loading",
-  "empty",
-  "not_found",
-  "validation",
-  "refused",
-  "access_ended",
-  "conflict",
-  "failure",
-  "recovery",
-]);
 export const personalDataClassSchema = z.enum(["none", "personal", "sensitive"]);
 export const publicDisplaySchema = z.enum(["refused", "allowed"]);
 export const searchPrioritySchema = z.enum(["first", "normal", "last"]);
 
 export type FieldType = z.infer<typeof fieldTypeSchema>;
 export type PageType = z.infer<typeof pageTypeSchema>;
-export type ListArrangement = z.infer<typeof listArrangementSchema>;
 export type BlockPaletteGroup = z.infer<typeof blockPaletteGroupSchema>;
 export type BlockSettingControl = z.infer<typeof blockSettingControlSchema>;
 export type WorkflowNodeType = z.infer<typeof workflowNodeTypeSchema>;
 export type LifecycleState = z.infer<typeof lifecycleStateSchema>;
-export type PageState = z.infer<typeof pageStateSchema>;
 export type PersonalDataClass = z.infer<typeof personalDataClassSchema>;
 export type PublicDisplay = z.infer<typeof publicDisplaySchema>;
 export type SearchPriority = z.infer<typeof searchPrioritySchema>;
