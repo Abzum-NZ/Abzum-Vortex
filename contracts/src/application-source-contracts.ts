@@ -597,13 +597,13 @@ const sourceInterfaceOutputFieldSchema = z
       });
   });
 /**
- * The one target an interface operation may name: an application-owned flow entry point. An
- * operation never binds a lower-level action, query or workflow directly; the flow it starts
- * carries that work, so the web, integrations and agents share one start path.
+ * What an interface operation calls: an application-owned flow entry point for a change or a
+ * background start, never a lower-level action or workflow, or a declared query for a read.
  */
-const sourceInterfaceTargetSchema = z
-  .object({ kind: z.literal("flow"), flow: flowAliasSchema })
-  .strict();
+const sourceInterfaceTargetSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("flow"), flow: flowAliasSchema }).strict(),
+  z.object({ kind: z.literal("query"), key: builderKeySchema }).strict(),
+]);
 const sourceInterfaceOperationSchema = z
   .object({
     key: builderKeySchema,
@@ -622,7 +622,37 @@ const sourceInterfaceOperationSchema = z
     target: sourceInterfaceTargetSchema,
     error_codes: z.array(builderKeySchema),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const inputKinds = new Set(
+      Object.values(value.input_shape).map((field) => field.target_binding.kind),
+    );
+    const outputKinds = new Set(
+      Object.values(value.output_shape).map((field) => field.target_binding.kind),
+    );
+    const allowedInputKinds: Record<typeof value.target.kind, ReadonlySet<string>> = {
+      flow: new Set(["action_subject", "action_input"]),
+      query: new Set(),
+    };
+    const allowedOutputKinds: Record<typeof value.target.kind, ReadonlySet<string>> = {
+      flow: new Set(["workflow_run_id"]),
+      query: new Set(["query_field", "query_page_information"]),
+    };
+    for (const kind of inputKinds)
+      if (!allowedInputKinds[value.target.kind].has(kind))
+        context.addIssue({
+          code: "custom",
+          path: ["input_shape"],
+          message: `A ${value.target.kind} interface accepts only ${value.target.kind} input bindings`,
+        });
+    for (const kind of outputKinds)
+      if (!allowedOutputKinds[value.target.kind].has(kind))
+        context.addIssue({
+          code: "custom",
+          path: ["output_shape"],
+          message: `A ${value.target.kind} interface accepts only ${value.target.kind} output bindings`,
+        });
+  });
 export const sourceApplicationBodyV2Schema = z
   .object({
     name: z.string().min(1).max(120),

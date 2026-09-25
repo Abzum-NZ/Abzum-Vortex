@@ -4812,17 +4812,20 @@ function compileApplication(
           rateLimitPerMinute: operation.rate_limit_per_minute,
           maximumRequestBytes: operation.maximum_request_bytes,
           duplicateProtection: operation.duplicate_protection,
-          // An interface operation names only an application-owned flow entry point; the flow it
-          // starts carries the work, so web, integrations and agents share one start path.
-          target: (() => {
-            const target = asObject(operation.target);
-            if (target.kind !== "flow")
-              fail("vortex.definition.application_interface_references", "broken_reference");
-            return {
-              kind: "flow" as const,
-              flowId: resolution.id(definitionKey, "flow", String(target.flow), "content"),
-            };
-          })(),
+          // A change or background start names an application-owned flow entry point, resolved to
+          // its permanent flow identity; a read keeps its declared query key.
+          target:
+            asObject(operation.target).kind === "flow"
+              ? {
+                  kind: "flow",
+                  flowId: resolution.id(
+                    definitionKey,
+                    "flow",
+                    String(asObject(operation.target).flow),
+                    "content",
+                  ),
+                }
+              : operation.target,
           errorCodes: operation.error_codes,
         })),
       })),
@@ -5661,22 +5664,40 @@ function compileApplicationToolBundle(
     ),
   );
   const applicationActionKeys = new Set(content.actions.map((action) => String(action.key)));
-  // A named action an Application flow already calls has its one flow tool, so a form commit to
-  // the same action never adds a second, action-targeted tool that would bypass the flow.
-  const flowCommittedOperationKeys = new Set<string>();
-  const collectFlowCommittedOperationKeys = (tasks: FlowDefinition["tasks"]): void => {
-    for (const task of tasks) {
-      if (task.type !== "operation.call") continue;
-      const value = (task as { properties?: Record<string, JsonObject> }).properties?.operation;
-      if (value?.kind === "literal" && typeof asObject(value.literal).value === "string")
-        flowCommittedOperationKeys.add(String(asObject(value.literal).value));
-    }
-  };
+  // A named action that an Application one-task entry-point flow calls with the flow's own inputs
+  // is reachable through that flow's tool, the same start path a button or an interface uses, so
+  // it gets no second, action-targeted tool that would bypass the flow. An action a flow calls
+  // among other work, or with fewer inputs than the action declares, keeps its own tool, so no
+  // permitted action or input is dropped.
+  const flowEntryInputNames = new Map<string, Set<string>[]>();
   for (const flow of content.flows) {
-    collectFlowCommittedOperationKeys(flow.tasks);
-    collectFlowCommittedOperationKeys(flow.errors);
-    collectFlowCommittedOperationKeys(flow.finally);
+    const [task] = flow.tasks;
+    if (
+      flow.execution !== "interactive" ||
+      flow.tasks.length !== 1 ||
+      flow.errors.length > 0 ||
+      flow.finally.length > 0 ||
+      task?.type !== "operation.call"
+    )
+      continue;
+    const properties = (task as { properties?: Record<string, JsonObject> }).properties;
+    const value = properties?.operation;
+    if (
+      properties?.inputs !== undefined ||
+      value?.kind !== "literal" ||
+      typeof asObject(value.literal).value !== "string"
+    )
+      continue;
+    const key = String(asObject(value.literal).value);
+    flowEntryInputNames.set(key, [
+      ...(flowEntryInputNames.get(key) ?? []),
+      new Set(Object.keys(flow.inputs)),
+    ]);
   }
+  const reachedThroughFlow = (actionKey: string, inputs: readonly unknown[]): boolean =>
+    (flowEntryInputNames.get(actionKey) ?? []).some((names) =>
+      inputs.every((input) => names.has(String(asObject(input).key))),
+    );
   const pagesById = new Map(content.pages.map((page) => [String(page.pageId), page]));
   const tools = new Map<string, ApplicationToolDraft>();
   const add = (tool: ApplicationToolDraft): void => {
@@ -5685,18 +5706,19 @@ function compileApplicationToolBundle(
   const actionPermission = { discover: "page_access", use: "operation_permission" } as const;
 
   for (const action of content.actions)
-    add({
-      name: applicationToolName(applicationKey, "action", String(action.key)),
-      ...applicationToolDescription(action.label),
-      inputSchema: { kind: "action_inputs", inputs: action.inputs },
-      operation: {
-        kind: "action",
-        owner: applicationOwner,
-        key: action.key,
-        actionId: action.actionId,
-      },
-      permission: actionPermission,
-    });
+    if (!reachedThroughFlow(String(action.key), action.inputs))
+      add({
+        name: applicationToolName(applicationKey, "action", String(action.key)),
+        ...applicationToolDescription(action.label),
+        inputSchema: { kind: "action_inputs", inputs: action.inputs },
+        operation: {
+          kind: "action",
+          owner: applicationOwner,
+          key: action.key,
+          actionId: action.actionId,
+        },
+        permission: actionPermission,
+      });
 
   // Resolved in the same order as the form commit itself: a bound Module's standard record action,
   // then an Application action (already a tool), then a bound Module's named action.
@@ -5706,7 +5728,6 @@ function compileApplicationToolBundle(
     allowStandardRecordAction: boolean,
   ): void => {
     const name = applicationToolName(applicationKey, "action", actionKey);
-    if (flowCommittedOperationKeys.has(actionKey)) return;
     const standard = /^(.+)\.([^.]+)\.([^.]+)$/.exec(actionKey);
     const standardAction = standard?.[3];
     if (
@@ -5733,7 +5754,8 @@ function compileApplicationToolBundle(
     }
     if (applicationActionKeys.has(actionKey)) return;
     const moduleAction = moduleActionsByKey.get(actionKey);
-    if (moduleAction === undefined) return;
+    if (moduleAction === undefined || reachedThroughFlow(actionKey, moduleAction.action.inputs))
+      return;
     add({
       name,
       ...applicationToolDescription(moduleAction.action.label, pageName),

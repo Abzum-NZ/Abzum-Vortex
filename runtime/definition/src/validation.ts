@@ -32,6 +32,7 @@ import {
   canonicalWorkflowValueType,
   valueTypesCompatible,
   flowTaskChildLists,
+  flowTaskRegistry,
   type DefinitionCompilationOutput,
   type DefinitionCompilationRequest,
   type ApplicationCompilationRequestV2,
@@ -871,6 +872,7 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
       for (const definition of array(body.interfaces))
         for (const operation of array(definition.operations)) {
           const target = object(operation.target);
+          if (target.kind === "query" && !queries.has(String(target.key))) valid = false;
           if (target.kind === "flow" && !flows.has(String(target.flow))) valid = false;
         }
       for (const address of array(body.public_addresses))
@@ -4357,6 +4359,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     const allInterfaceOperationKeys = array(content.interfaces).flatMap((definition) =>
       array(definition.operations).map((operation) => String(operation.key)),
     );
+    const queriesByKey = new Map([...queries.values()].map((query) => [String(query.key), query]));
     const interfaceActionInputType = (type: unknown, moduleV2 = false): string | undefined => {
       const value = String(type);
       if (moduleV2 && ["decimal_number", "money"].includes(value)) return undefined;
@@ -4394,10 +4397,13 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         );
       for (const operation of array(definition.operations)) {
         const target = object(operation.target);
-        // An interface operation names one application-owned flow entry point. The flow's own
-        // tasks decide the shape: a Call protected operation task is a named-action entry point,
-        // a Query records task is a declared query read, and a Run background flow task commits a
-        // background start. Nothing but a flow may be named as the target.
+        // A change or background start names one application-owned interactive flow entry point.
+        // The flow commits exactly one piece of work besides pure and read steps, which decides
+        // the shape: a Call protected operation task naming a named action is a named-action
+        // entry point, and a Run background flow task is an interface-started flow. A read names
+        // a declared query.
+        const targetQuery =
+          target.kind === "query" ? queriesByKey.get(String(target.key)) : undefined;
         const targetFlow =
           target.kind === "flow" ? flowsForCommits.get(String(target.flowId)) : undefined;
         const targetFlowTasks: FlowTask[] = [];
@@ -4412,41 +4418,50 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           collectTargetFlowTasks(targetFlow.errors);
           collectTargetFlowTasks(targetFlow.finally);
         }
-        const targetFlowLiteral = (task: FlowTask, name: string): string | undefined => {
-          const properties = (task as { properties?: Record<string, JsonObject> }).properties;
+        // Running another flow, or any task that is not a pure or read step (an unregistered one
+        // included), is work the operation commits.
+        const committingTasks = targetFlowTasks.filter(
+          (task) =>
+            task.type === "run_flow" ||
+            !Object.hasOwn(flowTaskRegistry, task.type) ||
+            !["pure", "read"].includes(
+              flowTaskRegistry[task.type as keyof typeof flowTaskRegistry].effect,
+            ),
+        );
+        const committingTask = committingTasks.length === 1 ? committingTasks[0] : undefined;
+        const committingLiteral = (name: string): string | undefined => {
+          const properties = (
+            committingTask as { properties?: Record<string, JsonObject> } | undefined
+          )?.properties;
           const value = properties?.[name];
           return value?.kind === "literal" && typeof object(value.literal).value === "string"
             ? String(object(value.literal).value)
             : undefined;
         };
-        const calledOperationKey = targetFlowTasks
-          .filter((task) => task.type === "operation.call")
-          .map((task) => targetFlowLiteral(task, "operation"))
-          .find((key): key is string => key !== undefined && actions.has(key));
+        const calledOperationKey =
+          committingTask?.type === "operation.call" ? committingLiteral("operation") : undefined;
         const targetAction =
           calledOperationKey === undefined ? undefined : actions.get(calledOperationKey);
         const targetActionPair =
           calledOperationKey === undefined
             ? undefined
             : moduleActionValuePairs.get(calledOperationKey);
-        const queryTask = targetFlowTasks.find((task) => task.type === "record.query");
-        const targetQueryKey =
-          queryTask === undefined ? undefined : targetFlowLiteral(queryTask, "query");
-        const targetQuery = targetQueryKey === undefined ? undefined : queries.get(targetQueryKey);
-        const startsBackgroundFlow = targetFlowTasks.some(
-          (task) => task.type === "flow.run_background",
-        );
+        const startedFlowId =
+          committingTask?.type === "flow.run_background" ? committingLiteral("flow") : undefined;
         const targetKind: "action" | "query" | "start" | undefined =
-          targetFlow === undefined
-            ? undefined
-            : targetAction !== undefined
-              ? "action"
-              : targetQuery !== undefined
-                ? "query"
-                : startsBackgroundFlow
+          target.kind === "query"
+            ? "query"
+            : targetFlow === undefined
+              ? undefined
+              : targetAction !== undefined
+                ? "action"
+                : startedFlowId !== undefined && flowsForCommits.has(startedFlowId)
                   ? "start"
                   : undefined;
-        const targetExists = targetKind !== undefined;
+        const targetExists =
+          target.kind === "query"
+            ? targetQuery !== undefined
+            : targetFlow !== undefined && targetFlow.execution === "interactive";
         if (
           !targetExists ||
           (operation.permissionKey && !permissions.has(String(operation.permissionKey)))
@@ -4468,8 +4483,8 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
             failure(output, "vortex.definition.application_interface_exposure", "unsafe_content"),
           );
         if (
-          (targetKind === "query" && operation.method !== "GET") ||
-          (targetKind !== "query" && operation.method === "GET")
+          (target.kind === "query" && operation.method !== "GET") ||
+          (target.kind !== "query" && operation.method === "GET")
         )
           failures.push(
             failure(output, "vortex.definition.application_interface_method", "scope_conflict"),
@@ -4477,7 +4492,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
 
         const inputShape = object(operation.inputShape);
         const outputShape = object(operation.outputShape);
-        let shapeMatchesTarget = targetExists;
+        let shapeMatchesTarget = targetExists && targetKind !== undefined;
         if (targetKind === "action") {
           const subjectBindings = Object.values(inputShape).filter(
             (descriptor) => object(object(descriptor).targetBinding).kind === "action_subject",
@@ -4516,11 +4531,25 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
                   interfaceActionInputType(input.type, targetActionPair?.moduleV2 ?? false)
               );
             });
-          // The interface supplies the flow's inputs to the named action by name, so every bound
-          // input must be one the target flow declares.
-          if (shapeMatchesTarget && targetFlow !== undefined)
-            for (const key of bindingsByInputKey.keys())
-              if (!Object.hasOwn(targetFlow.inputs, key)) shapeMatchesTarget = false;
+          // The interface supplies the flow's inputs, which the flow passes to the named action by
+          // name, so every bound input is a flow input of the same type and every required flow
+          // input is bound.
+          if (targetFlow !== undefined) {
+            const flowInputs = Object.entries(targetFlow.inputs);
+            shapeMatchesTarget =
+              shapeMatchesTarget &&
+              [...bindingsByInputKey].every(([key, bindingsForInput]) => {
+                const declaration = targetFlow.inputs[key];
+                return (
+                  declaration !== undefined &&
+                  object(bindingsForInput[0]).type ===
+                    interfaceActionInputType(declaration.type, targetActionPair?.moduleV2 ?? false)
+                );
+              }) &&
+              flowInputs.every(
+                ([key, declaration]) => !declaration.required || bindingsByInputKey.has(key),
+              );
+          }
         }
         if (targetKind === "query") {
           const selectedFields = new Set(
@@ -4559,7 +4588,8 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         if (targetKind === "start") {
           const outputs = Object.values(outputShape);
           shapeMatchesTarget =
-            startsBackgroundFlow &&
+            startedFlowId !== undefined &&
+            Object.keys(targetFlow?.inputs ?? {}).length === 0 &&
             Object.keys(inputShape).length === 0 &&
             outputs.length === 1 &&
             object(object(outputs[0]).targetBinding).kind === "workflow_run_id" &&
@@ -4569,6 +4599,16 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         if (!shapeMatchesTarget)
           failures.push(
             failure(output, "vortex.definition.application_interface_shape", "scope_conflict"),
+          );
+        // The flow's own invocation permission is checked before any start, so an interface
+        // operation must require exactly that permission and can never start the flow without it.
+        if (
+          targetFlow?.invocationPermissionId !== undefined &&
+          String(permissionMap.get(String(operation.permissionKey))?.permissionId) !==
+            String(targetFlow.invocationPermissionId)
+        )
+          failures.push(
+            failure(output, "vortex.definition.application_interface_exposure", "unsafe_content"),
           );
 
         if (operation.visibility === "public") {
@@ -4606,17 +4646,9 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         array(workflow.nodes).map((node) => [String(node.nodeId), node]),
       );
       const trigger = object(workflow.trigger);
-      const interfaceOperations = array(content.interfaces).flatMap((definition) =>
-        array(definition.operations),
-      );
-      const interfaceTriggerOperations = interfaceOperations.filter((operation) => {
-        const target = object(operation.target);
-        return (
-          operation.key === trigger.operationKey &&
-          target.kind === "workflow" &&
-          target.key === workflow.key
-        );
-      });
+      // An interface operation starts a flow entry point (which may run a background flow) and
+      // never a workflow directly, so no operation can satisfy an interface workflow trigger.
+      const interfaceTriggerOperations: JsonObject[] = [];
       const boundIncomingMessageContracts = [...connectionBindings.values()].flatMap((binding) => {
         const connection = connectionMap.get(String(binding.connectionTypeId));
         if (!connection) return [];

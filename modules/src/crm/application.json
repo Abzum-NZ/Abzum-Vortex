@@ -3388,8 +3388,8 @@
                                                                "maximum_request_bytes":  1000000,
                                                                "duplicate_protection":  "not_required",
                                                                "target":  {
-                                                                              "kind":  "flow",
-                                                                              "flow":  "crm_query_flow_companies"
+                                                                              "kind":  "query",
+                                                                              "key":  "crm_companies"
                                                                           },
                                                                "error_codes":  [
                                                                                    "request_refused",
@@ -3425,7 +3425,15 @@
                                                                                                                             "kind":  "action_input",
                                                                                                                             "key":  "last_name"
                                                                                                                         }
-                                                                                                 }
+                                                                                                 },
+                                                                                   "company":  {
+                                                                                                   "type":  "record_reference",
+                                                                                                   "required":  false,
+                                                                                                   "target_binding":  {
+                                                                                                                          "kind":  "action_input",
+                                                                                                                          "key":  "company"
+                                                                                                                      }
+                                                                                               }
                                                                                },
                                                                "output_shape":  {
 
@@ -3471,8 +3479,8 @@
                                                                "maximum_request_bytes":  1000000,
                                                                "duplicate_protection":  "not_required",
                                                                "target":  {
-                                                                              "kind":  "flow",
-                                                                              "flow":  "crm_query_flow_pipeline"
+                                                                              "kind":  "query",
+                                                                              "key":  "crm_pipeline"
                                                                           },
                                                                "error_codes":  [
                                                                                    "request_refused",
@@ -3765,6 +3773,13 @@
                              "last_name": {
                                  "type": "text",
                                  "required": true
+                             },
+                             "company": {
+                                 "type": "record_reference",
+                                 "required": false,
+                                 "recordTypeIds": [
+                                     "vortex.crm.organisations:company"
+                                 ]
                              }
                          },
                          "tasks": [
@@ -4235,69 +4250,7 @@
                                  }
                              }
                          ],
-                          "outputs": {}
-                     },
-                     {
-                          "contractVersion": "1.0.0",
-                          "id": "crm_query_flow_companies",
-                          "key": "crm_query_flow_companies",
-                          "description": "Reads companies through the declared crm_companies query.",
-                          "labels": {
-                              "name": "List companies"
-                          },
-                          "execution": "interactive",
-                          "runAs": {
-                              "kind": "initiator"
-                          },
-                          "inputs": {},
-                          "tasks": [
-                              {
-                                  "id": "query",
-                                  "type": "record.query",
-                                  "version": "1.0.0",
-                                  "properties": {
-                                      "query": {
-                                          "kind": "literal",
-                                          "literal": {
-                                              "type": "text",
-                                              "value": "crm_companies"
-                                          }
-                                      }
-                                  }
-                              }
-                          ],
-                          "outputs": {}
-                     },
-                     {
-                          "contractVersion": "1.0.0",
-                          "id": "crm_query_flow_pipeline",
-                          "key": "crm_query_flow_pipeline",
-                          "description": "Reads open opportunities through the declared crm_pipeline query.",
-                          "labels": {
-                              "name": "List opportunities"
-                          },
-                          "execution": "interactive",
-                          "runAs": {
-                              "kind": "initiator"
-                          },
-                          "inputs": {},
-                          "tasks": [
-                              {
-                                  "id": "query",
-                                  "type": "record.query",
-                                  "version": "1.0.0",
-                                  "properties": {
-                                      "query": {
-                                          "kind": "literal",
-                                          "literal": {
-                                              "type": "text",
-                                              "value": "crm_pipeline"
-                                          }
-                                      }
-                                  }
-                              }
-                          ],
-                          "outputs": {}
+                         "outputs": {}
                      }
                  ],
                  "flow_bindings":  [
