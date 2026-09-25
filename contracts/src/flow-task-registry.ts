@@ -149,6 +149,13 @@ export const flowTaskTypeDefinitionSchema = z
      * names them, because the task applies to the saved record, and every other flow must.
      */
     transactionScope: z.literal("saved_record").optional(),
+    /**
+     * A `change` task that may also run in an action flow: a `transaction` flow with no trigger,
+     * started through its binding for the record a named action runs on. Its changes to
+     * other records are one apply record changes call. A BeforeSave flow shares its run with every
+     * other rule and may change only the record being saved, so this task is never placed there.
+     */
+    actionFlowTransaction: z.literal(true).optional(),
     /** The one protected operation the task calls, when the registry fixes it. */
     protectedOperationKey: namespacedKeySchema.optional(),
     properties: z.record(builderKeySchema, flowTaskPropertyDeclarationSchema),
@@ -190,6 +197,15 @@ export const flowTaskTypeDefinitionSchema = z
     }
     if (value.transactionScope !== undefined && !locations.has("transaction"))
       issue(["transactionScope"], "A transaction scope applies only to a transaction task");
+    if (value.actionFlowTransaction === true) {
+      if (value.effect !== "change")
+        issue(["actionFlowTransaction"], "Only a change task may be placed in an action flow");
+      if (locations.has("transaction"))
+        issue(
+          ["actionFlowTransaction"],
+          "A task that already runs in a save transaction has no separate action flow placement",
+        );
+    }
     if (value.transactionScope === "saved_record") {
       if (value.properties.record === undefined)
         issue(["properties", "record"], "A saved-record task declares the record it changes outside transactions");
@@ -300,6 +316,7 @@ type DefinitionInput = {
   effect: FlowTaskEffectClass;
   effectDeclaredBy?: "operation_descriptor";
   transactionScope?: "saved_record";
+  actionFlowTransaction?: true;
   protectedOperationKey?: string;
   properties?: Record<string, Property>;
   outputs?: readonly Output[];
@@ -414,6 +431,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     summary: "Creates a record.",
     runLocations: protectedLocations,
     effect: "change",
+    actionFlowTransaction: true,
     protectedOperationKey: applyRecordChanges,
     properties: { record_type: required("record_type_id"), values: required("field_values") },
     outputs: [output("record", "record_reference")],
@@ -456,6 +474,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     summary: "Soft-deletes a record.",
     runLocations: protectedLocations,
     effect: "change",
+    actionFlowTransaction: true,
     protectedOperationKey: applyRecordChanges,
     properties: recordProperties,
     kestra: "protected_callback",
@@ -478,6 +497,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       "Applies several record changes that must succeed or fail together, in one transaction.",
     runLocations: protectedLocations,
     effect: "change",
+    actionFlowTransaction: true,
     protectedOperationKey: applyRecordChanges,
     properties: { changes: required("record_change_list") },
     outputs: [output("records", "record_reference_list")],
@@ -708,6 +728,7 @@ const buildDefinition = (type: string, input: DefinitionInput): FlowTaskTypeDefi
     effect: input.effect,
     effectDeclaredBy: input.effectDeclaredBy ?? "task",
     ...(input.transactionScope ? { transactionScope: input.transactionScope } : {}),
+    ...(input.actionFlowTransaction ? { actionFlowTransaction: true as const } : {}),
     ...(input.protectedOperationKey ? { protectedOperationKey: input.protectedOperationKey } : {}),
     properties: input.properties ?? {},
     outputs: [...(input.outputs ?? [])],
@@ -856,6 +877,9 @@ export const validateFlowTaskPlacement = (
 ): FlowTaskPlacementIssue[] => {
   const issues: FlowTaskPlacementIssue[] = [];
   const allowedHere = flowExecutionRunLocations[flow.execution] as readonly FlowTaskRunLocation[];
+  // An action flow is a transaction flow with no trigger, started only through its binding; every
+  // BeforeSave flow shares its run with the other rules and never places an action-flow task.
+  const actionFlow = flow.execution === "transaction" && flow.triggers.length === 0;
   const visit = (tasks: readonly FlowTask[], path: (string | number)[]) => {
     tasks.forEach((flowTask, index) => {
       const taskPath = [...path, index];
@@ -867,7 +891,10 @@ export const validateFlowTaskPlacement = (
           message: `${flowTask.type} is not a registered task type`,
         });
       } else {
-        if (!definition.runLocations.some((location) => allowedHere.includes(location)))
+        if (
+          !definition.runLocations.some((location) => allowedHere.includes(location)) &&
+          !(actionFlow && definition.actionFlowTransaction === true)
+        )
           issues.push({
             path: [...taskPath, "type"],
             code: "wrong_run_location",
