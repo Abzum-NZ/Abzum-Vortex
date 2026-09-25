@@ -52,8 +52,8 @@ import { z } from "zod";
  *
  * Builder authority is required on top of that. Every installer transaction first passes the
  * installer's own builder authority: `applications.manage`, plus `custom_code.manage` when the
- * exact package contains custom components and `system_applications.manage` for a system
- * application. Installing custom components or accepting role templates additionally needs the
+ * exact package contains custom components; uninstalling a system application is always refused.
+ * Installing custom components or accepting role templates additionally needs the
  * installer's recent authentication, and accepting role templates is refused unless every
  * permission they confer lies inside the installer's delegated assignment scope.
  *

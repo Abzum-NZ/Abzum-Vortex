@@ -72,6 +72,8 @@ export type BuilderRequirements = Readonly<{
   recentAuthentication: boolean;
   /** Every one of these must lie inside the actor's delegated assignment scope. */
   delegatedPermissions: readonly BuilderConferredPermission[];
+  /** True when the operation is refused whatever the actor holds. */
+  refused: boolean;
 }>;
 
 const unique = <Value>(values: readonly Value[]): readonly Value[] => [...new Set(values)];
@@ -82,7 +84,11 @@ const unique = <Value>(values: readonly Value[]): readonly Value[] => [...new Se
  * - Draft changes need `definition_drafts.manage`; publication needs `definition_releases.manage`.
  * - Installation, upgrade and uninstallation need `applications.manage`, plus `custom_code.manage`
  *   when the package contains custom components.
- * - Changing a system application additionally needs `system_applications.manage`.
+ * - Changing a system application's drafts or publishing its releases additionally needs
+ *   `system_applications.manage`. Installing or upgrading a system application needs only the
+ *   installation permissions: the platform installs it when an organisation is created, by a
+ *   steward who holds no builder permission by default.
+ * - Uninstalling a system application is always refused.
  * - Installing or upgrading custom components, or accepting role templates, needs recent
  *   authentication, and accepted role templates must lie inside the actor's delegated scope.
  */
@@ -99,12 +105,14 @@ export const deriveBuilderRequirements = (
         permissionKeys: unique([builderPermissionKeys.definitionDraftsManage, ...system]),
         recentAuthentication: false,
         delegatedPermissions: [],
+        refused: false,
       };
     case "publication":
       return {
         permissionKeys: unique([builderPermissionKeys.definitionReleasesManage, ...system]),
         recentAuthentication: false,
         delegatedPermissions: [],
+        refused: false,
       };
     case "installation": {
       const installs = operation.change === "install_or_upgrade";
@@ -112,12 +120,12 @@ export const deriveBuilderRequirements = (
         permissionKeys: unique([
           builderPermissionKeys.applicationsManage,
           ...(operation.containsCustomComponents ? [builderPermissionKeys.customCodeManage] : []),
-          ...system,
         ]),
         recentAuthentication:
           installs &&
           (operation.containsCustomComponents || operation.acceptedPermissions.length > 0),
         delegatedPermissions: installs ? operation.acceptedPermissions : [],
+        refused: !installs && facts.isSystemApplication,
       };
     }
   }

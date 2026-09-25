@@ -160,7 +160,7 @@ export const createBuilderAuthority = (
         dependencies.transaction,
         dependencies.scope,
         declaration,
-        async () => true,
+        async (decision) => decision.correlationId,
       );
       if (checked.outcome !== "completed")
         return {
@@ -171,7 +171,12 @@ export const createBuilderAuthority = (
               : "permission_refused",
           correlationId: checked.correlationId,
         };
+      // An operation refused whatever the actor holds (uninstalling a system application) is
+      // refused under the trusted correlation of the first decision.
+      if (requirements.refused)
+        return { outcome: "refused", reason: "permission_refused", correlationId: checked.value };
     }
+    if (requirements.refused || declarations.length === 0) throw unavailable();
     return { outcome: "allowed" };
   },
 });
