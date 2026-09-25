@@ -9,6 +9,8 @@ import {
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
   type PermissionRegistryEntryCandidate,
+  type ProjectedNavigation,
+  type ProjectedNavigationItem,
   type SelectedOrganizationScope,
 } from "@vortex/contracts";
 import type { RequestDatabaseTransaction } from "@vortex/db";
@@ -21,21 +23,10 @@ import {
 import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "@vortex/app";
 
 /**
- * The navigation an authorised viewer may use, in definition order. A heading is retained only
- * when it still has at least one permitted descendant. Permission keys are never projected: the
- * client receives items only, so it can neither see nor replay the withheld evidence.
+ * The projected navigation shape is shared with the browser renderer in `@vortex/contracts`: the
+ * server projects into it and the client renders it, so both use the same type.
  */
-export type ProjectedNavigationItem =
-  | Readonly<{
-      type: "heading";
-      id: string;
-      label: string;
-      children: readonly ProjectedNavigationItem[];
-    }>
-  | Readonly<{ type: "page"; id: string; label: string; pageId: string }>
-  | Readonly<{ type: "external"; id: string; label: string; address: string }>;
-
-export type ProjectedNavigation = readonly ProjectedNavigationItem[];
+export type { ProjectedNavigation, ProjectedNavigationItem };
 
 /** One permission decision per distinct navigation permission key, from the viewer's live access. */
 export type NavigationPermissionDecisions = Readonly<Record<string, boolean>>;

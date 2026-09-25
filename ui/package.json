@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*",
-    "@vortex/modules": "workspace:*",
     "react": "19.3.0"
   },
   "devDependencies": {
