@@ -106,7 +106,7 @@ begin
     affected_authority := pg_catalog.jsonb_build_object(
       'kind', 'bounded', 'permissions', affected_permissions
     );
-  elsif current_role_lifecycle = 'unavailable' then
+  elsif current_role_lifecycle in ('unavailable', 'acceptance_required', 'retired') then
     affected_authority := pg_catalog.jsonb_build_object(
       'kind', 'organization_catalogue'
     );
@@ -242,4 +242,4 @@ grant execute on function vortex_access.revoke_organization_role_assignment_for_
 to vortex_request;
 
 comment on function vortex_access.revoke_organization_role_assignment_for_administration(uuid, bigint, uuid) is
-  'Standalone request entry: performs revoke_role_assignment after fixed protected checks, records one atomic completed Activity or returns one content-free refused Activity row; no SQL function composes this result.';
+  'Standalone request entry: performs revoke_role_assignment after fixed protected checks; a current zero-entry unavailable, acceptance_required or retired role uses catalogue delegation, with one atomic completed Activity or one content-free refused Activity row; no SQL function composes this result.';

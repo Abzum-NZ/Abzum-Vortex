@@ -123,26 +123,44 @@ begin
     and permission.role_id = p_role_id
     and permission.role_revision = role_fact.live_revision;
 
-  if affected_permissions is null and exists (
-    select 1
-    from vortex_access.organization_role_assignments as assignment
-    where assignment.organization_id = context_organization_id
-      and assignment.role_id = p_role_id
-      and assignment.state = 'live'
+  if affected_permissions is null
+    and revision_fact.lifecycle not in ('unavailable', 'acceptance_required')
+    and exists (
+      select 1
+      from vortex_access.organization_role_assignments as assignment
+      where assignment.organization_id = context_organization_id
+        and assignment.role_id = p_role_id
+        and assignment.state = 'live'
   ) then
     raise exception using errcode = '40001',
       message = 'Organization role retained authority is stale or unavailable';
   end if;
 
-  authority_requirement := case when affected_permissions is null
-    then pg_catalog.jsonb_build_object('kind', 'permission')
-    else pg_catalog.jsonb_build_object(
-      'kind', 'delegated_management',
-      'before', pg_catalog.jsonb_build_object(
-        'kind', 'bounded', 'permissions', affected_permissions
-      ),
-      'after', pg_catalog.jsonb_build_object('kind', 'none')
-    )
+  authority_requirement := case
+    when affected_permissions is not null
+      then pg_catalog.jsonb_build_object(
+        'kind', 'delegated_management',
+        'before', pg_catalog.jsonb_build_object(
+          'kind', 'bounded', 'permissions', affected_permissions
+        ),
+        'after', pg_catalog.jsonb_build_object('kind', 'none')
+      )
+    when revision_fact.lifecycle in ('unavailable', 'acceptance_required')
+      and exists (
+        select 1
+        from vortex_access.organization_role_assignments as assignment
+        where assignment.organization_id = context_organization_id
+          and assignment.role_id = p_role_id
+          and assignment.state = 'live'
+      )
+      then pg_catalog.jsonb_build_object(
+        'kind', 'delegated_management',
+        'before', pg_catalog.jsonb_build_object(
+          'kind', 'organization_catalogue'
+        ),
+        'after', pg_catalog.jsonb_build_object('kind', 'none')
+      )
+    else pg_catalog.jsonb_build_object('kind', 'permission')
   end;
 
   select evaluated.* into strict decision
@@ -234,4 +252,4 @@ grant execute on function vortex_access.retire_organization_role_for_administrat
 to vortex_request;
 
 comment on function vortex_access.retire_organization_role_for_administration(uuid, bigint, jsonb, uuid) is
-  'Standalone request entry: performs retire_role after fixed protected checks, records one atomic completed Activity or returns one content-free refused Activity row; no SQL function composes this result.';
+  'Standalone request entry: performs retire_role after fixed protected checks; a zero-entry unavailable or acceptance_required role with live assignments uses catalogue delegation, with one atomic completed Activity or one content-free refused Activity row; no SQL function composes this result.';
