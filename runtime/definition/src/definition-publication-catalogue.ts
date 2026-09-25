@@ -29,6 +29,11 @@ import {
 import { compare } from "semver";
 import { z } from "zod";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
+import {
+  platformBlockReleaseFingerprints,
+  platformServiceOperationReleaseFingerprints,
+  platformThemeReleaseFingerprints,
+} from "./catalogue-release-fingerprints";
 import { compileDefinitionSet } from "./validation";
 import type {
   DefinitionPublicationCatalogue,
@@ -225,20 +230,13 @@ const ensurePlatformThemeReleasesCoverEveryRole = (
  */
 const ensureRegisteredPlatformServiceOperationsAuthentic = (): void => {
   for (const { release, descriptor } of Object.values(PLATFORM_SERVICE_OPERATIONS)) {
-    const contentFingerprint = fingerprintCanonicalValue(descriptor);
+    const expected = platformServiceOperationReleaseFingerprints(release, descriptor);
     if (
       descriptor.operation.owner.kind !== "platform_service" ||
       descriptor.operation.owner.serviceId !== release.serviceId ||
       descriptor.operation.operationId !== release.operationId ||
-      release.contentFingerprint !== contentFingerprint ||
-      release.catalogueFingerprint !==
-        fingerprintCanonicalValue({
-          kind: "platform_service_operation",
-          serviceId: release.serviceId,
-          operationId: release.operationId,
-          releaseVersion: release.releaseVersion,
-          contentFingerprint,
-        })
+      release.contentFingerprint !== expected.contentFingerprint ||
+      release.catalogueFingerprint !== expected.catalogueFingerprint
     )
       duplicate();
   }
@@ -295,29 +293,10 @@ const compileConnectionTypeRelease = (
 const materialisePlatformBlockReleaseV2 = (
   definition: PlatformBlockReleaseDefinitionV2,
 ): PlatformBlockReleaseV2 => {
-  const content = {
-    name: definition.name,
-    icon: definition.icon,
-    paletteGroup: definition.paletteGroup,
-    rendererKey: definition.rendererKey,
-    properties: definition.properties,
-    slots: definition.slots,
-    capabilities: definition.capabilities,
-    supportedEvents: definition.supportedEvents,
-    supportedStateOperations: definition.supportedStateOperations,
-  };
-  const contentFingerprint = fingerprintCanonicalValue(content);
   return deepFreeze(
     platformBlockReleaseV2Schema.parse({
       ...definition,
-      contentFingerprint,
-      catalogueFingerprint: fingerprintCanonicalValue({
-        kind: "platform_block",
-        blockId: definition.blockId,
-        key: definition.key,
-        releaseVersion: definition.releaseVersion,
-        contentFingerprint,
-      }),
+      ...platformBlockReleaseFingerprints(definition),
     }),
   );
 };
@@ -325,17 +304,10 @@ const materialisePlatformBlockReleaseV2 = (
 const materialisePlatformThemeReleaseV2 = (
   definition: PlatformThemeReleaseDefinitionV2,
 ): PlatformThemeReleaseV2 => {
-  const contentFingerprint = fingerprintCanonicalValue(definition.tokens);
   return deepFreeze(
     platformThemeReleaseV2Schema.parse({
       ...definition,
-      contentFingerprint,
-      catalogueFingerprint: fingerprintCanonicalValue({
-        kind: "platform_theme",
-        catalogueThemeId: definition.catalogueThemeId,
-        releaseVersion: definition.releaseVersion,
-        contentFingerprint,
-      }),
+      ...platformThemeReleaseFingerprints(definition),
     }),
   );
 };

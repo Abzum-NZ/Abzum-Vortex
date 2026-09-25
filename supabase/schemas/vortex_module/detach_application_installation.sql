@@ -124,17 +124,13 @@ begin
       binding.state = 'active'
       and binding.binding_revision = expected.binding_revision
       and binding.application_release_revision = p_application_release_revision
-      and binding.module_release_revision = required.target_release_revision
-      and binding.content_fingerprint = required.dependency_content_fingerprint
-      and binding.resolution_fingerprint = required.evidence_fingerprint, false
+      and binding.module_release_revision = required.target_release_revision, false
     )),
     pg_catalog.bool_and(coalesce(
       binding.state = 'detached'
       and binding.binding_revision = expected.binding_revision
       and binding.application_release_revision = p_application_release_revision
-      and binding.module_release_revision = required.target_release_revision
-      and binding.content_fingerprint = required.dependency_content_fingerprint
-      and binding.resolution_fingerprint = required.evidence_fingerprint, false
+      and binding.module_release_revision = required.target_release_revision, false
     ))
   into all_active, all_detached
   from vortex_definition.reachable_module_dependency_edges(
