@@ -8,6 +8,7 @@ export * from "./application-flow-bindings";
 export * from "./flow-contracts";
 export * from "./flow-source-contracts";
 export * from "./flow-task-registry";
+export * from "./default-flow-sources";
 export * from "./application-access-coordination";
 export * from "./automation-contracts";
 export * from "./catalogues";
