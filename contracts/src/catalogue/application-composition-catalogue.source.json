@@ -3444,5 +3444,577 @@
     },
     "supportedEvents": [],
     "supportedStateOperations": []
+  },
+  "TABLE_BLOCK_RELEASE_1_4_0": {
+    "blockId": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+    "key": "platform.display.table",
+    "releaseVersion": "1.4.0",
+    "name": "Records table",
+    "icon": "table",
+    "paletteGroup": "data",
+    "rendererKey": "platform.renderer.table",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "title",
+        "label": "Title",
+        "help": "Accessible name shown as the block heading",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "text",
+        "key": "empty_message",
+        "label": "Empty message",
+        "help": "Text shown when the query returns no records",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      },
+      {
+        "kind": "text",
+        "key": "refused_message",
+        "label": "Refused message",
+        "help": "Text shown when the viewer may not read this data",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      },
+      {
+        "kind": "text",
+        "key": "error_message",
+        "label": "Error message",
+        "help": "Text shown when the data could not be read",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      },
+      {
+        "kind": "list",
+        "key": "columns",
+        "label": "Columns",
+        "help": "Ordered columns; every field must be a field of the bound query",
+        "required": true,
+        "minimumItems": 1,
+        "maximumItems": 50,
+        "item": {
+          "kind": "group",
+          "key": "column",
+          "label": "Column",
+          "help": "One displayed column mapped to a field of the bound query",
+          "required": true,
+          "properties": [
+            {
+              "kind": "field_reference",
+              "key": "field",
+              "label": "Field",
+              "help": "Field of the bound query shown in this column",
+              "required": true
+            },
+            {
+              "kind": "text",
+              "key": "label",
+              "label": "Label",
+              "help": "Column heading; the field name is used when absent",
+              "required": false,
+              "minLength": 1,
+              "maxLength": 120
+            },
+            {
+              "kind": "choice",
+              "key": "format",
+              "label": "Format",
+              "help": "How the value is presented",
+              "required": false,
+              "options": [
+                {
+                  "key": "automatic",
+                  "label": "Automatic"
+                },
+                {
+                  "key": "text",
+                  "label": "Text"
+                },
+                {
+                  "key": "number",
+                  "label": "Number"
+                },
+                {
+                  "key": "currency",
+                  "label": "Currency"
+                },
+                {
+                  "key": "percent",
+                  "label": "Percent"
+                },
+                {
+                  "key": "date",
+                  "label": "Date"
+                },
+                {
+                  "key": "date_time",
+                  "label": "Date and time"
+                },
+                {
+                  "key": "boolean",
+                  "label": "Yes or no"
+                }
+              ]
+            },
+            {
+              "kind": "choice",
+              "key": "width",
+              "label": "Width",
+              "help": "Relative column width",
+              "required": false,
+              "options": [
+                {
+                  "key": "auto",
+                  "label": "Automatic"
+                },
+                {
+                  "key": "narrow",
+                  "label": "Narrow"
+                },
+                {
+                  "key": "medium",
+                  "label": "Medium"
+                },
+                {
+                  "key": "wide",
+                  "label": "Wide"
+                }
+              ]
+            },
+            {
+              "kind": "choice",
+              "key": "alignment",
+              "label": "Alignment",
+              "help": "Horizontal alignment of the column",
+              "required": false,
+              "options": [
+                {
+                  "key": "start",
+                  "label": "Start"
+                },
+                {
+                  "key": "center",
+                  "label": "Centre"
+                },
+                {
+                  "key": "end",
+                  "label": "End"
+                }
+              ]
+            },
+            {
+              "kind": "choice",
+              "key": "priority",
+              "label": "Responsive priority",
+              "help": "Low priority columns hide first on small screens; essential columns never hide",
+              "required": false,
+              "options": [
+                {
+                  "key": "essential",
+                  "label": "Essential"
+                },
+                {
+                  "key": "high",
+                  "label": "High"
+                },
+                {
+                  "key": "medium",
+                  "label": "Medium"
+                },
+                {
+                  "key": "low",
+                  "label": "Low"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "kind": "group",
+        "key": "default_sort",
+        "label": "Default sort",
+        "help": "Sort applied before a person chooses one",
+        "required": false,
+        "properties": [
+          {
+            "kind": "field_reference",
+            "key": "field",
+            "label": "Field",
+            "help": "Field of the bound query to sort by",
+            "required": true
+          },
+          {
+            "kind": "choice",
+            "key": "direction",
+            "label": "Direction",
+            "help": "Sort direction",
+            "required": true,
+            "options": [
+              {
+                "key": "ascending",
+                "label": "Ascending"
+              },
+              {
+                "key": "descending",
+                "label": "Descending"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "list",
+        "key": "sortable_fields",
+        "label": "Sortable fields",
+        "help": "Fields a person may sort by; each must be sortable in the bound query",
+        "required": false,
+        "minimumItems": 0,
+        "maximumItems": 50,
+        "item": {
+          "kind": "field_reference",
+          "key": "field",
+          "label": "Field",
+          "help": "Field of the bound query",
+          "required": true
+        }
+      },
+      {
+        "kind": "list",
+        "key": "filterable_fields",
+        "label": "Filterable fields",
+        "help": "Fields a person may filter by; each must be filterable in the bound query",
+        "required": false,
+        "minimumItems": 0,
+        "maximumItems": 50,
+        "item": {
+          "kind": "field_reference",
+          "key": "field",
+          "label": "Field",
+          "help": "Field of the bound query",
+          "required": true
+        }
+      },
+      {
+        "kind": "boolean",
+        "key": "search",
+        "label": "Search",
+        "help": "Show a search box",
+        "required": false,
+        "defaultValue": {
+          "kind": "boolean",
+          "value": false
+        }
+      },
+      {
+        "kind": "boolean",
+        "key": "saved_views",
+        "label": "Saved views",
+        "help": "Let people save and reopen filter and sort combinations",
+        "required": false,
+        "defaultValue": {
+          "kind": "boolean",
+          "value": false
+        }
+      },
+      {
+        "kind": "number",
+        "key": "page_size",
+        "label": "Page size",
+        "help": "Records shown per page",
+        "required": false,
+        "integer": true,
+        "minimum": 1,
+        "maximum": 200,
+        "defaultValue": {
+          "kind": "number",
+          "value": 25
+        }
+      },
+      {
+        "kind": "choice",
+        "key": "selection_mode",
+        "label": "Selection",
+        "help": "Whether rows can be selected",
+        "required": false,
+        "options": [
+          {
+            "key": "none",
+            "label": "None"
+          },
+          {
+            "key": "single",
+            "label": "Single"
+          },
+          {
+            "key": "multiple",
+            "label": "Multiple"
+          }
+        ],
+        "defaultValue": {
+          "kind": "choice",
+          "value": "none"
+        }
+      },
+      {
+        "kind": "list",
+        "key": "query_parameters",
+        "label": "Query parameters",
+        "help": "Values for the bound query's inputs, fixed or taken from the page",
+        "required": false,
+        "minimumItems": 0,
+        "maximumItems": 20,
+        "item": {
+          "kind": "group",
+          "key": "parameter",
+          "label": "Parameter",
+          "help": "One query input value",
+          "required": true,
+          "properties": [
+            {
+              "kind": "text",
+              "key": "input",
+              "label": "Input",
+              "help": "Key of the query input",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 60
+            },
+            {
+              "kind": "choice",
+              "key": "source",
+              "label": "Source",
+              "help": "Where the value comes from",
+              "required": true,
+              "options": [
+                {
+                  "key": "fixed",
+                  "label": "Fixed value"
+                },
+                {
+                  "key": "page",
+                  "label": "Page parameter"
+                }
+              ]
+            },
+            {
+              "kind": "text",
+              "key": "fixed_value",
+              "label": "Fixed value",
+              "help": "Value used when the source is fixed",
+              "required": false,
+              "minLength": 0,
+              "maxLength": 500
+            },
+            {
+              "kind": "text",
+              "key": "page_parameter",
+              "label": "Page parameter",
+              "help": "Key of the page parameter used when the source is a page parameter",
+              "required": false,
+              "minLength": 1,
+              "maxLength": 60
+            }
+          ]
+        }
+      },
+      {
+        "kind": "group",
+        "key": "row_click",
+        "label": "Row click",
+        "help": "What clicking a row does; the click is held as a binding to a flow, which decides whether it opens the record page, opens a panel or runs another flow",
+        "required": false,
+        "properties": [
+          {
+            "kind": "text",
+            "key": "event_id",
+            "label": "Event identity",
+            "help": "Stable identity of the flow binding the row click runs",
+            "required": true,
+            "minLength": 1,
+            "maxLength": 60
+          }
+        ]
+      },
+      {
+        "kind": "list",
+        "key": "row_actions",
+        "label": "Row actions",
+        "help": "Named commands shown on every row, each bound to a flow",
+        "required": false,
+        "minimumItems": 0,
+        "maximumItems": 20,
+        "item": {
+          "kind": "group",
+          "key": "row_action",
+          "label": "Row action",
+          "help": "One named row command",
+          "required": true,
+          "properties": [
+            {
+              "kind": "text",
+              "key": "event_id",
+              "label": "Event identity",
+              "help": "Stable identity of the flow binding this command runs",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 60
+            },
+            {
+              "kind": "text",
+              "key": "label",
+              "label": "Label",
+              "help": "Text shown on the command",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 60
+            },
+            {
+              "kind": "choice",
+              "key": "capability",
+              "label": "Required capability",
+              "help": "Record action the viewer must be permitted on a row for this command to appear; leave unset for an open or custom command",
+              "required": false,
+              "options": [
+                {
+                  "key": "update",
+                  "label": "Update"
+                },
+                {
+                  "key": "delete",
+                  "label": "Delete"
+                },
+                {
+                  "key": "restore",
+                  "label": "Restore"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "kind": "list",
+        "key": "bulk_actions",
+        "label": "Bulk actions",
+        "help": "Named commands that run one flow over the selected rows",
+        "required": false,
+        "minimumItems": 0,
+        "maximumItems": 20,
+        "item": {
+          "kind": "group",
+          "key": "bulk_action",
+          "label": "Bulk action",
+          "help": "One named command over the selection",
+          "required": true,
+          "properties": [
+            {
+              "kind": "text",
+              "key": "event_id",
+              "label": "Event identity",
+              "help": "Stable identity of the flow binding this command runs",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 60
+            },
+            {
+              "kind": "text",
+              "key": "label",
+              "label": "Label",
+              "help": "Text shown on the command",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 60
+            },
+            {
+              "kind": "choice",
+              "key": "capability",
+              "label": "Required capability",
+              "help": "Record action the viewer must be permitted on a row for this command to appear; leave unset for an open or custom command",
+              "required": false,
+              "options": [
+                {
+                  "key": "update",
+                  "label": "Update"
+                },
+                {
+                  "key": "delete",
+                  "label": "Delete"
+                },
+                {
+                  "key": "restore",
+                  "label": "Restore"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "kind": "group",
+        "key": "inline_edit",
+        "label": "Inline edit",
+        "help": "Fields a person may edit in place; a commit is held as a binding to a flow",
+        "required": false,
+        "properties": [
+          {
+            "kind": "text",
+            "key": "event_id",
+            "label": "Event identity",
+            "help": "Stable identity of the flow binding an inline-edit commit runs",
+            "required": true,
+            "minLength": 1,
+            "maxLength": 60
+          },
+          {
+            "kind": "list",
+            "key": "fields",
+            "label": "Editable fields",
+            "help": "Fields a person may edit inline; each must be a field of the bound query",
+            "required": true,
+            "minimumItems": 1,
+            "maximumItems": 50,
+            "item": {
+              "kind": "field_reference",
+              "key": "field",
+              "label": "Field",
+              "help": "Field of the bound query edited in place",
+              "required": true
+            }
+          }
+        ]
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content_or_bounded",
+      "publicSurface": "allowed",
+      "accessibleName": "optional",
+      "accessibleNamePropertyPath": [
+        "title"
+      ]
+    },
+    "supportedEvents": [
+      "refresh",
+      "row_clicked",
+      "row_action",
+      "selection_changed",
+      "filter_changed",
+      "search_changed",
+      "sort_changed",
+      "page_changed",
+      "bulk_action",
+      "inline_edit"
+    ],
+    "supportedStateOperations": []
   }
 }

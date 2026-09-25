@@ -23,6 +23,7 @@ const SHARED_COMPONENT_STYLES_CSS = `
 .vortex-button,
 .vortex-button-refresh,
 .vortex-button-row-action,
+.vortex-button-bulk-action,
 .vortex-pagination-prev,
 .vortex-pagination-next {
   box-sizing: border-box;
@@ -64,6 +65,7 @@ const SHARED_COMPONENT_STYLES_CSS = `
 .vortex-button:hover:not(:disabled),
 .vortex-button-refresh:hover:not(:disabled),
 .vortex-button-row-action:hover:not(:disabled),
+.vortex-button-bulk-action:hover:not(:disabled),
 .vortex-pagination-prev:hover:not(:disabled),
 .vortex-pagination-next:hover:not(:disabled) {
   box-shadow: inset 0 0 0 0.125rem currentColor;
@@ -72,6 +74,7 @@ const SHARED_COMPONENT_STYLES_CSS = `
 .vortex-button:active:not(:disabled),
 .vortex-button-refresh:active:not(:disabled),
 .vortex-button-row-action:active:not(:disabled),
+.vortex-button-bulk-action:active:not(:disabled),
 .vortex-pagination-prev:active:not(:disabled),
 .vortex-pagination-next:active:not(:disabled) {
   box-shadow: inset 0 0 0 0.25rem currentColor;
@@ -80,6 +83,7 @@ const SHARED_COMPONENT_STYLES_CSS = `
 .vortex-button:disabled,
 .vortex-button-refresh:disabled,
 .vortex-button-row-action:disabled,
+.vortex-button-bulk-action:disabled,
 .vortex-pagination-prev:disabled,
 .vortex-pagination-next:disabled {
   opacity: 0.55;
@@ -205,7 +209,8 @@ const SHARED_COMPONENT_STYLES_CSS = `
 
 .vortex-checkbox,
 .vortex-radio,
-.vortex-selection-checkbox {
+.vortex-selection-checkbox,
+.vortex-selection-radio {
   width: 1.125rem;
   height: 1.125rem;
   margin: 0;
@@ -215,7 +220,8 @@ const SHARED_COMPONENT_STYLES_CSS = `
 
 .vortex-checkbox:hover:not(:disabled),
 .vortex-radio:hover:not(:disabled),
-.vortex-selection-checkbox:hover:not(:disabled) {
+.vortex-selection-checkbox:hover:not(:disabled),
+.vortex-selection-radio:hover:not(:disabled) {
   box-shadow: 0 0 0 0.125rem var(--vortex-border-color);
 }
 
@@ -264,6 +270,7 @@ const SHARED_COMPONENT_STYLES_CSS = `
 .vortex-checkbox:disabled,
 .vortex-radio:disabled,
 .vortex-selection-checkbox:disabled,
+.vortex-selection-radio:disabled,
 .vortex-switch:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -511,6 +518,64 @@ const SHARED_COMPONENT_STYLES_CSS = `
 
 .vortex-pagination-info {
   color: var(--vortex-text-muted);
+}
+
+/* Records table interactive controls: search box, filters and selection */
+.vortex-table-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--vortex-space-md);
+  margin-bottom: var(--vortex-space-sm);
+}
+
+.vortex-table-search {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--vortex-space-xs);
+  margin: 0;
+}
+
+.vortex-table-search-input {
+  width: auto;
+  min-width: 12rem;
+}
+
+.vortex-table-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vortex-space-sm);
+}
+
+.vortex-filter-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vortex-space-xs);
+  min-width: 8rem;
+}
+
+.vortex-filter-label {
+  font-weight: 600;
+}
+
+.vortex-table-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vortex-space-xs);
+  margin-bottom: var(--vortex-space-sm);
+}
+
+/* Low priority columns hide first on small screens; essential columns never hide. */
+@media (max-width: 64rem) {
+  .vortex-table [data-vortex-column-priority="low"] {
+    display: none;
+  }
+}
+
+@media (max-width: 48rem) {
+  .vortex-table [data-vortex-column-priority="medium"] {
+    display: none;
+  }
 }
 
 /* Lists, grouped data, record detail and summary values */

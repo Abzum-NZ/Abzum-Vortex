@@ -77,6 +77,7 @@ export const componentSemanticEventKindSchema = z.enum([
   "load",
   "refresh",
   "filter_changed",
+  "search_changed",
   "sort_changed",
   "page_changed",
   "selection_changed",

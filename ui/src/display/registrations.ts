@@ -15,6 +15,7 @@ import {
   TABLE_BLOCK_RELEASE_1_1_0,
   TABLE_BLOCK_RELEASE_1_2_0,
   TABLE_BLOCK_RELEASE_1_3_0,
+  TABLE_BLOCK_RELEASE_1_4_0,
   TEXT_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE_1_1_0,
 } from "@vortex/contracts";
@@ -70,6 +71,8 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
     Object.freeze({ metadata: RECORD_DETAIL_BLOCK_RELEASE_1_2_0, render: RecordDetailDisplay }),
     // Release 1.3.0 adds configured row behaviours to the Records table; the same renderer reads them.
     Object.freeze({ metadata: TABLE_BLOCK_RELEASE_1_3_0, render: TableDisplay }),
+    // Release 1.4.0 adds the interactive filter, search, sort, paging and selection controls; the same renderer reads them.
+    Object.freeze({ metadata: TABLE_BLOCK_RELEASE_1_4_0, render: TableDisplay }),
   ]);
 
 /** Creates an immutable PlatformComponentRegistry populated with every display block release. */

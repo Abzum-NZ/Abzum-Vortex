@@ -98,10 +98,15 @@ export type ApplicationPreviewArtifact = Readonly<{
 
 const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.freeze([
   "refresh",
+  "row_clicked",
   "row_action",
   "selection_changed",
+  "filter_changed",
+  "search_changed",
   "sort_changed",
   "page_changed",
+  "bulk_action",
+  "inline_edit",
 ]);
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
