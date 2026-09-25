@@ -199,8 +199,10 @@ export const flowRuntimeValueOf = (type: string, value: unknown): FlowRuntimeVal
 const literalAs = (type: string, value: JsonValue): JsonValue | undefined => {
   let candidate: unknown = value;
   // An authored number compared with a decimal or an amount is the exact decimal it spells.
-  if ((type === "decimal_number" || type === "money") && typeof value === "number")
+  if ((type === "decimal_number" || type === "money") && typeof value === "number") {
     candidate = normalizeExactDecimal(String(value));
+    if (candidate === undefined) return undefined;
+  }
   if (type === "money" && typeof candidate === "string")
     return parseExactDecimal(candidate) === undefined ? undefined : candidate;
   const typed = flowRuntimeValueOf(type, candidate);

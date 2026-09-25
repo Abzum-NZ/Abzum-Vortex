@@ -129,6 +129,7 @@ begin
     ))
     or (p_operation = 'update' and (
       p_record_id is null
+      or p_expected_concurrency_number is null
       or p_expected_concurrency_number not between 1 and 9007199254740990
       or p_selected_group_id is not null
     ))

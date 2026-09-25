@@ -150,8 +150,8 @@ export const flowTaskTypeDefinitionSchema = z
      */
     transactionScope: z.literal("saved_record").optional(),
     /**
-     * A `change` task that may also run in an action flow: a `transaction` flow with no BeforeSave
-     * trigger, started through its binding for the record a named action runs on. Its changes to
+     * A `change` task that may also run in an action flow: a `transaction` flow with no trigger,
+     * started through its binding for the record a named action runs on. Its changes to
      * other records are one apply record changes call. A BeforeSave flow shares its run with every
      * other rule and may change only the record being saved, so this task is never placed there.
      */
@@ -877,11 +877,9 @@ export const validateFlowTaskPlacement = (
 ): FlowTaskPlacementIssue[] => {
   const issues: FlowTaskPlacementIssue[] = [];
   const allowedHere = flowExecutionRunLocations[flow.execution] as readonly FlowTaskRunLocation[];
-  // An action flow is a transaction flow with no BeforeSave trigger; every BeforeSave flow shares
-  // its run with the other rules and never places an action-flow task.
-  const actionFlow =
-    flow.execution === "transaction" &&
-    !flow.triggers.some((trigger) => trigger.type === "BeforeSave");
+  // An action flow is a transaction flow with no trigger, started only through its binding; every
+  // BeforeSave flow shares its run with the other rules and never places an action-flow task.
+  const actionFlow = flow.execution === "transaction" && flow.triggers.length === 0;
   const visit = (tasks: readonly FlowTask[], path: (string | number)[]) => {
     tasks.forEach((flowTask, index) => {
       const taskPath = [...path, index];
