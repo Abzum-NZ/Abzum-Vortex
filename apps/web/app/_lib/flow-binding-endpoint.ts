@@ -237,7 +237,16 @@ const bindingInputs = (
 const finishedResult = (
   response: Extract<FlowOrchestratorResponse, { kind: "finished" }>,
 ): FlowBindingEndpointResult => {
-  const descriptor = safeFlowResultDescriptors[response.outcome];
+  // Effects that committed before a later stop are never reported as a plain failure: the run is
+  // `partial`. An uncertain effect stays `uncertain` (the same mapping as the form continuation).
+  const outcome =
+    response.outcome === "committed" ||
+    response.outcome === "completed" ||
+    response.outcome === "uncertain" ||
+    response.committedEffects === 0
+      ? response.outcome
+      : "partial";
+  const descriptor = safeFlowResultDescriptors[outcome];
   return {
     kind: "result",
     runId: response.runId,

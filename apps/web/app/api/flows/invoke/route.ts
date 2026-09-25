@@ -20,7 +20,10 @@ import {
   flowBindingInvocationSchema,
   type InstalledFlowBindings,
 } from "../../../_lib/flow-binding-endpoint";
-import { getIdentityAuthorityConfiguration } from "../../../auth/_lib/authority-configuration";
+import {
+  getIdentityAuthorityConfiguration,
+  getIdentityJourneyConfiguration,
+} from "../../../auth/_lib/authority-configuration";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 
 export const runtime = "nodejs";
@@ -62,8 +65,23 @@ const telemetry = createAppTelemetryCollector({ downstream: createOperationsAler
  */
 const definitionCatalogue = { connectionTypeReleases: [] } as const;
 
+/**
+ * The session is a cookie, so a run is accepted only from this site's own pages: a browser always
+ * sends Origin on a POST, and a JSON body cannot be sent cross-site without a preflight.
+ */
+const fromOwnSite = (request: NextRequest): boolean => {
+  const origin = request.headers.get("origin");
+  const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+  return (
+    origin !== null &&
+    origin === new URL(getIdentityJourneyConfiguration().siteUrl).origin &&
+    contentType === "application/json"
+  );
+};
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    if (!fromOwnSite(request)) return privateResponse({ kind: "refused" }, 403);
     const declaredLength = Number(request.headers.get("content-length") ?? 0);
     if (declaredLength > maximumRequestBodyLength) return privateResponse({ kind: "refused" }, 413);
     const text = await request.text();
@@ -123,8 +141,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           for (const flow of [
             ...application.content.flows,
             ...releaseSet.modules.flatMap((module) => module.content.flows),
-          ])
+          ]) {
+            // One flow per identity: a Module flow never shadows an Application flow, and an
+            // ambiguous release is refused rather than run.
+            if (flows.has(String(flow.id))) throw new Error("FLOW_IDENTITY_AMBIGUOUS");
             flows.set(String(flow.id), flow);
+          }
           const installed: InstalledFlowBindings = {
             organizationId: installation.organizationId,
             installationRevision: installation.applicationReleaseRevision,
