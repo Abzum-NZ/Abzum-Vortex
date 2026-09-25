@@ -68,7 +68,7 @@
         "id": "role_iam_reviewer",
         "key": "iam_reviewer",
         "name": "IAM reviewer",
-        "home_page": "iam_overview",
+        "home_page": "iam_access_requests",
         "permissions": [
           "application.iam.open"
         ]
@@ -77,7 +77,7 @@
         "id": "role_iam_administrator",
         "key": "iam_administrator",
         "name": "IAM administrator",
-        "home_page": "iam_overview",
+        "home_page": "iam_access_requests",
         "permissions": [
           "application.iam.open",
           "application.iam.request",
@@ -164,7 +164,7 @@
             "type": "page",
             "label": "Access Requests",
             "page": "iam_access_requests",
-            "permission": "platform.organization.assignments.read"
+            "permission": "application.iam.open"
           }
         ]
       },
@@ -2832,7 +2832,7 @@
         "name": "Access Requests",
         "type": "list",
         "record_type": "vortex.iam.core:access_request",
-        "permission": "platform.organization.assignments.read",
+        "permission": "application.iam.open",
         "query": "iam_access_requests",
         "arrangements": [
           "table"
@@ -2890,7 +2890,7 @@
         "name": "Access request",
         "type": "detail",
         "record_type": "vortex.iam.core:access_request",
-        "permission": "platform.organization.assignments.read",
+        "permission": "application.iam.open",
         "states": [
           "normal",
           "loading",

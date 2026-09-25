@@ -42,7 +42,7 @@
         "id": "role_organisation_administrator",
         "key": "organisation_administrator",
         "name": "Organisation administrator",
-        "home_page": "organisation_overview",
+        "home_page": "organisation_notices",
         "permissions": [
           "application.organisation_administration.open",
           "vortex.organisation_administration.organisation_notice.create",

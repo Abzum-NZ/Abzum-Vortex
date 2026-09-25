@@ -7,7 +7,7 @@
     "name": "Tenant Administration",
     "description": "Tenant structure and organisation lifecycle for a tenant administrator, entirely definition-led.",
     "icon": "building-2",
-    "home_page": "tenant_overview",
+    "home_page": "tenant_administrators",
     "module_bindings": [
       {
         "module": "vortex.tenant_administration",
@@ -66,14 +66,14 @@
             "type": "page",
             "label": "Overview",
             "page": "tenant_overview",
-            "permission": "platform.organization.assignments.read"
+            "permission": "application.tenant_administration.open"
           },
           {
             "id": "nav_structure",
             "type": "page",
             "label": "Tenant structure",
             "page": "tenant_structure",
-            "permission": "platform.organization.assignments.read"
+            "permission": "application.tenant_administration.open"
           },
           {
             "id": "nav_requests",
@@ -213,7 +213,7 @@
         "key": "tenant_overview",
         "name": "Tenant overview",
         "type": "dashboard",
-        "permission": "platform.organization.assignments.read",
+        "permission": "application.tenant_administration.open",
         "states": [
           "normal",
           "loading",
@@ -272,7 +272,7 @@
         "key": "tenant_structure",
         "name": "Tenant structure",
         "type": "dashboard",
-        "permission": "platform.organization.assignments.read",
+        "permission": "application.tenant_administration.open",
         "states": [
           "normal",
           "loading",
