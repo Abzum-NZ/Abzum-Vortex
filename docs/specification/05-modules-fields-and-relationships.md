@@ -104,7 +104,7 @@ Unknown properties are refused. Type-specific properties belong inside `settings
 
 ## Field types
 
-The platform supports these twenty-two types:
+The platform supports these twenty-one types:
 
 | Type key                 | Meaning                             | Main settings                                                                            |
 | ------------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------- |
@@ -124,9 +124,8 @@ The platform supports these twenty-two types:
 | `phone_number`           | Telephone number                    | Default country                                                                          |
 | `web_address`            | Web address                         | HTTPS only, no embedded credentials, at most 2,048 characters                            |
 | `table`                  | Repeating structured rows           | Columns and minimum/maximum rows                                                         |
-| `link`                   | Link to one record type             | Target, delete behaviour, reverse name                                                   |
+| `link`                   | Link to one record type, including the People or Group system record type | Target, delete behaviour, reverse name, optional application-access requirement          |
 | `link_to_one_of_several` | Link to one of several record types | Allowed targets                                                                          |
-| `link_to_person`         | Link to an organisation account     | Optional application-access requirement through an application binding                   |
 | `calculation`            | Value calculated from the record    | Expression and result type                                                               |
 | `total`                  | Aggregate across a relationship     | Relationship, operation, field, filter                                                   |
 | `attachment`             | One or more files                   | The canonical settings in [files and attachments](11-files-and-attachments.md)           |
@@ -176,9 +175,11 @@ claim that Record execution is already delivered.
   fields. A single-file field permits at most one entry; clearing remains subject
   to whether the field is required.
 - A record link carries its target record-type identifier and record identifier.
-  Its target must match the compiled field targets. A person link instead names
-  an organisation account. Correct identifier shapes alone prove neither
-  existence nor access.
+  Its target must match the compiled field targets. A link to the People system
+  record type instead names an organisation account in the current organisation,
+  and a link to the Group system record type names a group there; both are
+  ordinary links to those record types. Correct identifier shapes alone prove
+  neither existence nor access.
 - A whole-number step is measured from the declared minimum, otherwise zero.
   Neither the field default nor an edited value changes that origin.
 - Text format keys initially are `email_address`, `web_address` and `uuid`. They
@@ -308,6 +309,8 @@ integration remains with
 
 A link field may target a record type in another module. The owning module declares a dependency on the target module with an exact version or an allowed [npm semantic-version range](https://github.com/npm/node-semver#ranges). In builder-facing contracts, the link uses the target module's full namespaced key followed by a colon and the target record-type key, for example `vortex.example.people:contact`. The declared dependency key remains the local identity of the dependency entry; it is not substituted into a record-type reference. Published contracts resolve the module and record type to stable platform identifiers, so a text key is never sufficient identity by itself.
 
+A link to a person or a group is an ordinary `link` field. Its target is the People or the Group system record type, resolved through that system module's declared dependency like any other cross-module link; it is not a special field type. Only the link's optional application-access setting is specific to a person target, as described in [people, organisations and sign-in](02-people-organisations-and-sign-in.md#application-access).
+
 Cross-module links follow the same relationship rules as intra-module links: one owning field, a generated or named reverse path, and a declared parent-deletion behaviour. The dependency graph built during [publication](03-composition-and-publication.md#dependency-graph) validates that the target module exists, the version is compatible, and the target record type is present.
 
 Removing a record type from a new release is an incompatible change, but does not by itself prevent publishing an inert breaking release. Existing external consumers keep their exact older dependency pins. Publication refuses a dangling link inside the candidate release's own resolved dependency set; an explicit upgrade refuses adoption where that consumer's required target would be missing. See [publication and adoption](03-composition-and-publication.md).
@@ -326,6 +329,8 @@ A module may open named extension points on selected record types for additional
 - Uninstalling a contributor hides its fields and actions but preserves stored values through the ordinary [retention](14-activity-privacy-and-retention.md) policy so reinstall can restore them.
 - A target-module upgrade is refused when it would break an installed contribution, and the refusal links every affected organisation definition.
 
+A [system record type](appendices/core-contract-boundary.md#system-modules) — the read-only People, Group and organisation-profile projections of protected Identity and Access facts — is extended the same way. An organisation adds its own fields to it through the system module's declared extension point. Those fields are ordinary organisation data keyed to the system record and stored beside the protected fact; they are changed through the [record-change command](06-records-and-lifecycle.md#record-change-command) under their own field permissions and are usable in lists, filters, rules, queries and access conditions like any other field. They never change the protected fact, and neither the protected storage nor its protected-operation write path widens. A link to a person or a group is an ordinary `link` to the People or Group system record type, not a special field type; the optional application-access requirement lives in the link setting and is checked against the linked organisation account in the current organisation.
+
 When several allowed sources provide presentation defaults, the resolution order is module, publisher contribution, application binding, then organisation contribution. A later source may add or narrow presentation but cannot weaken access, validation, privacy, or required business meaning.
 
 ## Field changes after publication
@@ -342,5 +347,7 @@ Changing stored meaning is never an arbitrary in-place retype. Only a proven wid
 - A workflow-backed choice belongs to an application binding, not to the reusable module.
 - Every reference in the [CRM and Service Desk examples](appendices/worked-examples.md) resolves to a published module, application component, or documented platform definition.
 - A link field targeting a record type in another module requires a declared module dependency.
+- A record links to a person or a group with an ordinary link to the People or Group system record type; no special person-link field type exists.
+- An organisation adds a Department field to the People system record type; it appears in that organisation's People lists, filters, rules and access conditions and never changes the protected account fact or its protected-operation write path.
 - A breaking release may omit a record type while existing external consumers remain pinned. A dangling link in the candidate's own dependency set or in an explicitly proposed consumer upgrade is refused with the affected reference; publication never silently retargets consumers.
 - A cross-organisation grant does not bypass the same-organisation rule for stored relationships.
