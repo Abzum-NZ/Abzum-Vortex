@@ -922,6 +922,22 @@ export const activityActorKindSchema = z.enum([
   "public_session",
 ]);
 
+/**
+ * The one channel vocabulary. It is the channel through which a protected operation, and the flow
+ * surface that invoked it, was reached. The trusted server entry point sets the channel in the
+ * request context; a caller never supplies it. Activity source and flow execution binding surface
+ * are the same list, so a recorded source and a permitted surface always agree.
+ */
+export const protectedOperationChannelSchema = z.enum([
+  "web",
+  "mcp",
+  "programmatic_interface",
+  "connection",
+  "federation",
+  "durable_workflow",
+  "system",
+]);
+
 export const activityEntrySchema = z
   .object({
     organizationId: organizationIdSchema,
@@ -932,20 +948,13 @@ export const activityEntrySchema = z
     action: builderKeySchema,
     subjectIds: canonicalActivitySubjectIdsSchema,
     changedFieldIds: canonicalActivityChangedFieldIdsSchema,
-    source: z.enum(["web", "workflow", "interface", "connection", "federation", "system"]),
+    source: protectedOperationChannelSchema,
     correlationId: correlationIdSchema,
     outcome: z.enum(["completed", "refused", "failed"]),
   })
   .strict();
 
-export const activitySourceSchema = z.enum([
-  "web",
-  "workflow",
-  "interface",
-  "connection",
-  "federation",
-  "system",
-]);
+export const activitySourceSchema = protectedOperationChannelSchema;
 
 export const activityOutcomeSchema = z.enum(["completed", "refused", "failed"]);
 
@@ -1259,6 +1268,7 @@ export type FileRecord = z.infer<typeof fileRecordSchema>;
 export type UploadGrant = z.infer<typeof uploadGrantSchema>;
 export type DownloadGrant = z.infer<typeof downloadGrantSchema>;
 export type ActivityEntry = z.infer<typeof activityEntrySchema>;
+export type ProtectedOperationChannel = z.infer<typeof protectedOperationChannelSchema>;
 export type ActivitySource = z.infer<typeof activitySourceSchema>;
 export type ActivityOutcome = z.infer<typeof activityOutcomeSchema>;
 export type ActivityProjection = z.infer<typeof activityProjectionSchema>;
