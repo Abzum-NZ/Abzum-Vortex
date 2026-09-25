@@ -1,3 +1,297 @@
+-- #995: work out read-time computed fields (the deadline-passed calculation) whenever records
+-- are read, filtered or sorted, and remove the freshness refusal.
+--
+-- read_record projects the value from the record's stored deadline and status, and
+-- run_module_query compiles it to SQL for filtering and sorting, both at one statement
+-- timestamp in the organisation's time zone. The value is never read from storage, and no
+-- query is refused while a due transition is unapplied. Each statement below is identical to
+-- the canonical file supabase/schemas/<schema>/<function>.sql changed in this commit.
+
+begin;
+
+create or replace function vortex_identity.read_organization_time_zone_internal(
+  p_organization_id uuid
+)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $function$
+declare
+  zone_value text;
+begin
+  if p_organization_id is null
+    or p_organization_id = '00000000-0000-0000-0000-000000000000'::uuid then
+    raise exception using errcode = '22023',
+      message = 'Organization time zone read is invalid';
+  end if;
+  select settings.time_zone
+  into zone_value
+  from vortex_identity.organization_runtime_settings as settings
+  where settings.organization_id = p_organization_id;
+  return zone_value;
+end
+$function$;
+
+revoke all on function vortex_identity.read_organization_time_zone_internal(uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_module_owner, vortex_record_adapter;
+grant execute on function vortex_identity.read_organization_time_zone_internal(uuid)
+  to vortex_record_adapter;
+
+comment on function vortex_identity.read_organization_time_zone_internal(uuid) is
+  'Private reader of one organisation''s configured time zone, or null when its runtime settings are not set up; callable only by the record adapter with the organisation of its own validated request context.';
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+
+create or replace function vortex_record.read_time_clock_internal()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  zone_value text;
+  instant_value timestamp with time zone := pg_catalog.statement_timestamp();
+begin
+  context_value := vortex_access.validated_human_request_context();
+  -- No time zone is ever assumed: without the organisation's own settings the
+  -- local date is unknown, so a date deadline is withheld or refused rather
+  -- than worked out in the wrong zone. Exact-instant deadlines need no zone.
+  zone_value := vortex_identity.read_organization_time_zone_internal(
+    (context_value ->> 'organizationId')::uuid
+  );
+  return pg_catalog.jsonb_build_object(
+    'instant', pg_catalog.to_char(
+      pg_catalog.timezone('UTC', instant_value), 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+    ),
+    'organizationLocalDate', case when zone_value is null then null else pg_catalog.to_char(
+      pg_catalog.timezone(zone_value, instant_value), 'YYYY-MM-DD'
+    ) end,
+    'timeZone', zone_value
+  );
+end
+$function$;
+
+revoke all on function vortex_record.read_time_clock_internal()
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_module_owner;
+
+comment on function vortex_record.read_time_clock_internal() is
+  'The one statement timestamp and the current date in the organisation time zone of the validated request context (null when the organisation has no time zone), which every read-time calculation in a statement uses; owner-only.';
+
+create or replace function vortex_record.read_time_deadline_expression_internal(
+  p_storage_contract_id uuid,
+  p_expression jsonb,
+  p_clock jsonb
+)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $function$
+declare
+  due_mapping vortex_record.field_storage_mappings%rowtype;
+  status_mapping vortex_record.field_storage_mappings%rowtype;
+  terminal_values jsonb;
+  terminal_sql text := 'false';
+  comparison_sql text;
+begin
+  if p_storage_contract_id is null or p_clock is null
+    or pg_catalog.jsonb_typeof(p_expression) is distinct from 'object'
+    or p_expression ->> 'kind' is distinct from 'deadline_passed'
+    or pg_catalog.jsonb_typeof(p_expression -> 'dueFieldId') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(p_clock -> 'instant') is distinct from 'string' then
+    return null;
+  end if;
+  select mapping.* into due_mapping
+  from vortex_record.field_storage_mappings as mapping
+  where mapping.storage_contract_id = p_storage_contract_id
+    and mapping.field_id = (pg_catalog.lower(p_expression ->> 'dueFieldId'))::uuid;
+  if not found or due_mapping.state <> 'active' then
+    raise exception using errcode = '55000',
+      message = 'Record storage disagrees with the installed definition';
+  end if;
+  if due_mapping.database_value_type not in ('date', 'timestamp_with_time_zone')
+    or (due_mapping.database_value_type = 'date'
+      and pg_catalog.jsonb_typeof(p_clock -> 'organizationLocalDate') is distinct from 'string') then
+    return null;
+  end if;
+  if pg_catalog.jsonb_typeof(p_expression -> 'statusFieldId') = 'string' then
+    terminal_values := coalesce(p_expression -> 'terminalStatusValues', '[]'::jsonb);
+    if pg_catalog.jsonb_typeof(terminal_values) <> 'array' then
+      return null;
+    end if;
+    select mapping.* into status_mapping
+    from vortex_record.field_storage_mappings as mapping
+    where mapping.storage_contract_id = p_storage_contract_id
+      and mapping.field_id = (pg_catalog.lower(p_expression ->> 'statusFieldId'))::uuid;
+    if not found or status_mapping.state <> 'active' then
+      raise exception using errcode = '55000',
+        message = 'Record storage disagrees with the installed definition';
+    end if;
+    if status_mapping.database_value_type not in ('text', 'integer', 'boolean', 'uuid') then
+      return null;
+    end if;
+    if pg_catalog.jsonb_array_length(terminal_values) > 0 then
+      terminal_sql := pg_catalog.format(
+        '(stored.%I is not null and pg_catalog.to_jsonb(stored.%I) in (%s))',
+        status_mapping.physical_column_token, status_mapping.physical_column_token,
+        (select pg_catalog.string_agg(pg_catalog.format('%L::jsonb', terminal.value::text), ', ')
+         from pg_catalog.jsonb_array_elements(terminal_values) as terminal(value))
+      );
+    end if;
+  end if;
+  comparison_sql := case due_mapping.database_value_type
+    when 'date' then pg_catalog.format(
+      '%L::date > stored.%I', p_clock ->> 'organizationLocalDate', due_mapping.physical_column_token)
+    else pg_catalog.format(
+      '%L::timestamp with time zone >= stored.%I', p_clock ->> 'instant', due_mapping.physical_column_token)
+  end;
+  return pg_catalog.format(
+    '(case when %s then false when stored.%I is null then null else %s end)',
+    terminal_sql, due_mapping.physical_column_token, comparison_sql
+  );
+end
+$function$;
+
+revoke all on function vortex_record.read_time_deadline_expression_internal(uuid, jsonb, jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_module_owner;
+
+comment on function vortex_record.read_time_deadline_expression_internal(uuid, jsonb, jsonb) is
+  'Compiles one deadline-passed calculation to a boolean SQL expression over the stored due and status columns of the record alias, using the supplied statement clock, or returns null when the calculation cannot be compiled; owner-only.';
+
+create or replace function vortex_record.read_record(
+  p_record_type_id uuid,
+  p_record_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  loaded jsonb;
+  decision jsonb;
+  bounds jsonb;
+  columns_value jsonb;
+  values_value jsonb := '{}'::jsonb;
+  field_id text;
+  read_time_fields jsonb;
+  read_time_clock jsonb;
+  read_time_expression jsonb;
+  read_time_value jsonb;
+  due_key text;
+  status_key text;
+  due_value jsonb;
+  status_value jsonb;
+begin
+  if p_record_type_id is null or p_record_id is null
+    or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_record_id = '00000000-0000-0000-0000-000000000000'::uuid then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
+  loaded := vortex_record.load_record_access_facts_internal(p_record_type_id, 'read', p_record_id, null);
+  if loaded ->> 'outcome' <> 'loaded'
+    or pg_catalog.jsonb_typeof(loaded -> 'declaration') <> 'object' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
+  decision := vortex_access.evaluate_organization_record_access_internal(
+    loaded -> 'declaration', p_record_id, loaded -> 'facts'
+  );
+  if decision ->> 'outcome' <> 'allowed' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
+  bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+  bounds := bounds || pg_catalog.jsonb_build_object('readableFieldIds',
+    vortex_record.project_derived_readable_field_ids_internal(
+      loaded, p_record_type_id, p_record_id, bounds -> 'readableFieldIds',
+      bounds -> 'readableFieldIds', '[]'::jsonb
+    )
+  );
+  columns_value := loaded -> 'columns';
+  -- Read-time calculations are worked out here, at one statement timestamp in
+  -- the organisation's time zone, from the record's stored values. They are
+  -- never read from storage.
+  select coalesce(pg_catalog.jsonb_object_agg(pg_catalog.lower(field.value ->> 'fieldId'), field.value), '{}'::jsonb)
+  into read_time_fields
+  from pg_catalog.jsonb_array_elements(loaded -> 'facts' -> 'recordTypes') as record_type(value)
+  cross join lateral pg_catalog.jsonb_array_elements(record_type.value -> 'fields') as field(value)
+  where pg_catalog.lower(record_type.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
+    and field.value ->> 'type' = 'calculation'
+    and (field.value #>> '{settings,evaluation}' = 'read_time'
+      or field.value #>> '{settings,expression,kind}' = 'deadline_passed');
+  if read_time_fields <> '{}'::jsonb then
+    read_time_clock := vortex_record.read_time_clock_internal();
+  end if;
+  for field_id in
+    select item.value #>> '{}' from pg_catalog.jsonb_array_elements(bounds -> 'readableFieldIds') as item(value)
+  loop
+    if not (columns_value ? field_id) then
+      continue;
+    end if;
+    if read_time_fields ? pg_catalog.lower(field_id) then
+      read_time_expression := read_time_fields -> pg_catalog.lower(field_id) #> '{settings,expression}';
+      -- Only the deadline-passed form is defined; another read-time form is
+      -- withheld rather than disclosed from a stored column.
+      if read_time_expression ->> 'kind' is distinct from 'deadline_passed' then
+        continue;
+      end if;
+      due_key := pg_catalog.lower(read_time_expression ->> 'dueFieldId');
+      status_key := pg_catalog.lower(read_time_expression ->> 'statusFieldId');
+      due_value := loaded -> 'fieldValues' -> due_key;
+      status_value := case when status_key is null then null else loaded -> 'fieldValues' -> status_key end;
+      if status_value is not null and status_value <> 'null'::jsonb and exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(coalesce(read_time_expression -> 'terminalStatusValues', '[]'::jsonb))
+          as terminal(value)
+        where terminal.value = status_value
+      ) then
+        read_time_value := 'false'::jsonb;
+      elsif pg_catalog.jsonb_typeof(due_value) = 'string'
+        and loaded -> 'columns' -> due_key ->> 'databaseValueType' = 'date' then
+        -- Without the organisation's time zone the local date is unknown.
+        if read_time_clock ->> 'organizationLocalDate' is null then
+          continue;
+        end if;
+        read_time_value := pg_catalog.to_jsonb((read_time_clock ->> 'organizationLocalDate') > (due_value #>> '{}'));
+      elsif pg_catalog.jsonb_typeof(due_value) = 'string'
+        and loaded -> 'columns' -> due_key ->> 'databaseValueType' = 'timestamp_with_time_zone' then
+        read_time_value := pg_catalog.to_jsonb(
+          (read_time_clock ->> 'instant')::timestamp with time zone
+            >= (due_value #>> '{}')::timestamp with time zone
+        );
+      else
+        read_time_value := 'null'::jsonb;
+      end if;
+      values_value := values_value || pg_catalog.jsonb_build_object(field_id, read_time_value);
+    else
+      values_value := values_value || pg_catalog.jsonb_build_object(field_id, loaded -> 'fieldValues' -> field_id);
+    end if;
+  end loop;
+  return pg_catalog.jsonb_build_object('outcome', 'allowed', 'recordId', p_record_id,
+    'concurrencyNumber', loaded -> 'concurrencyNumber', 'values', values_value);
+end
+$function$;
+
+
+revoke all on function vortex_record.read_record(uuid, uuid)
+  from public, anon, authenticated, service_role, vortex_runtime,
+  vortex_record_owner, vortex_module_owner;
+grant execute on function vortex_record.read_record(uuid, uuid) to vortex_request;
+
+comment on function vortex_record.read_record(uuid, uuid) is
+  'Fixed record read adapter: returns the readable field projection of one record under the caller''s own current authority, or an identical refusal for a missing, foreign or unreachable record.';
+
 create or replace function vortex_record.run_module_query(
   p_module_root_id uuid,
   p_query_id uuid,
@@ -624,3 +918,10 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
 
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb) is
   'One bounded keyset page of rows readable through read_record for one installed Module query, with only the declared Record system values, or one refusal before any row is exposed; works out read-time fields, such as a deadline-passed calculation, inside the query at one statement timestamp in the organisation time zone, so no query is refused for freshness.';
+
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+
+commit;
