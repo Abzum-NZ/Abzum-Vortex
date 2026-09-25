@@ -6,6 +6,24 @@ Roadmap phases and numeric Pickup Order are planning and reporting metadata: the
 
 The GitHub project roadmap is the execution plan. Issue bodies and native dependencies define bounded work. This page explains the phases; it does not duplicate live owner, status or estimate records. The [21 September architecture review](architecture-review-2026-09-21.md) records what was actually present on main at `e4cd4375958b91c55a5bd93b00c86656b98a8d13`.
 
+## Architecture decisions of 25 September 2026
+
+The [architecture decisions](architecture-decisions-2026-09-25.md) govern all remaining work: one Kestra-shaped flow definition run by the in-house Vortex flow engine, saving through one atomic operation, read-time computed fields, one configurable Records table, system modules for people, groups, roles and settings, application packages with sandboxed custom components, clean install and uninstall, and agent building through the same operations. Their work is placed in these scopes:
+
+| Scope | Phase | Covers |
+| --- | ---: | --- |
+| [#990](https://github.com/Abzum-NZ/Abzum-Vortex/issues/990) | 4 | Readable database programs, read-time deadline values, access plan cache |
+| [#976](https://github.com/Abzum-NZ/Abzum-Vortex/issues/976) | 4 | One Kestra-shaped flow language, protected-operation executor, flow runner prerequisites |
+| [#999](https://github.com/Abzum-NZ/Abzum-Vortex/issues/999) | 5 | Theme vocabulary, Records table, layout and navigation blocks, responsive layout, interface tasks |
+| [#1015](https://github.com/Abzum-NZ/Abzum-Vortex/issues/1015) | 6 | Entry routing, administration access and operation wiring |
+| [#1051](https://github.com/Abzum-NZ/Abzum-Vortex/issues/1051) | 7 | Access operations, approvals as Kestra workflows, builder permissions |
+| [#1025](https://github.com/Abzum-NZ/Abzum-Vortex/issues/1025) | 7 | System modules for people, groups, roles, organisations and settings |
+| [#1059](https://github.com/Abzum-NZ/Abzum-Vortex/issues/1059) | 7 | One record-change path and leaner engine evidence |
+| [#1079](https://github.com/Abzum-NZ/Abzum-Vortex/issues/1079) | 8 | Access and filters inside list queries, runtime bundle cache |
+| [#1085](https://github.com/Abzum-NZ/Abzum-Vortex/issues/1085) | 9 | Runnable Kestra flows, one system actor, background jobs, custom scripts |
+| [#112](https://github.com/Abzum-NZ/Abzum-Vortex/issues/112) | 11 | Application packages, custom components, clean uninstall |
+| [#200](https://github.com/Abzum-NZ/Abzum-Vortex/issues/200) | 10 | Agent building and use through MCP |
+
 ## Phases
 
 | Phase | Functionality | Scope epic |
