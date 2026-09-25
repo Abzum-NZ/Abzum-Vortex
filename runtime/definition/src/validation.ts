@@ -30,6 +30,8 @@ import {
   translateDefinitionSchemaError,
   workflowNodeOutputKeysByType,
   workflowNodeOutputsByType,
+  canonicalWorkflowValueType,
+  valueTypesCompatible,
   type DefinitionCompilationOutput,
   type DefinitionCompilationRequest,
   type ApplicationCompilationRequestV2,
@@ -1473,18 +1475,6 @@ function fieldValueMatchesV2(
   );
 }
 
-const typesCompatibleV2 = (actual: string | undefined, expected: string | undefined): boolean =>
-  actual !== undefined &&
-  expected !== undefined &&
-  (actual === expected || (expected === "text" && (actual === "date" || actual === "date_time")));
-
-const conditionTypesCompatibleV2 = (left: string | undefined, right: string | undefined): boolean =>
-  left !== undefined &&
-  right !== undefined &&
-  (left === right ||
-    (["number", "whole_number", "decimal_number"].includes(left) &&
-      ["number", "whole_number", "decimal_number"].includes(right)));
-
 const conditionCollectionElementTypeV2 = (type: string | undefined): type is string =>
   type !== undefined && type !== "text_collection" && type !== "opaque_json";
 
@@ -1617,12 +1607,12 @@ function conditionTypesValidV2(
     ["greater_than", "greater_than_or_equal", "less_than", "less_than_or_equal"].includes(operator)
   )
     return (
-      conditionTypesCompatibleV2(leftType, rightType) &&
+      valueTypesCompatible(leftType, rightType, "condition") &&
       ["number", "whole_number", "decimal_number", "money", "date", "date_time", "text"].includes(
         leftType,
       )
     );
-  return conditionTypesCompatibleV2(leftType, rightType);
+  return valueTypesCompatible(leftType, rightType, "condition");
 }
 
 function fieldRecordTypeIds(field: JsonObject | undefined): string[] | undefined {
@@ -1768,7 +1758,7 @@ function actionValueCompatibleV2(
   const compatible =
     entry.source === "literal"
       ? fieldValueMatchesV2(entry.value, targetField, dialect)
-      : typesCompatibleV2(actionValueTypeV2(value, fields, inputs, dialect), expectedType);
+      : valueTypesCompatible(actionValueTypeV2(value, fields, inputs, dialect), expectedType, "exact");
   const expectedRecordTypeIds = fieldRecordTypeIds(targetField);
   if (!compatible || expectedRecordTypeIds === undefined) return compatible;
   if (entry.source === "literal") return compatible;
@@ -1787,9 +1777,10 @@ function actionValueCompatible(
   inputs: ReadonlyMap<string, JsonObject>,
   subjectRecordTypeId: string,
 ): boolean {
-  const compatible = valueTypeCompatible(
+  const compatible = valueTypesCompatible(
     actionValueType(value, fields, inputs),
     fieldValueType(targetField),
+    "value",
   );
   const expectedRecordTypeIds = fieldRecordTypeIds(targetField);
   if (!compatible || expectedRecordTypeIds === undefined) return compatible;
@@ -1822,28 +1813,11 @@ const crossFormatFieldTypesCompatible = (
     fieldDeclaredResultType(target.field) === "whole_number"
   )
     return true;
-  const sourceType = applicationFieldType(source);
-  const targetType = applicationFieldType(target);
-  return (
-    sourceType !== undefined &&
-    sourceType === targetType &&
-    ["text", "number", "boolean", "date", "date_time"].includes(sourceType)
+  return valueTypesCompatible(
+    applicationFieldType(source),
+    applicationFieldType(target),
+    "cross_format",
   );
-};
-
-const applicationMappingTypesCompatible = (
-  actual: string | undefined,
-  expected: string | undefined,
-): boolean => {
-  if (!actual || !expected) return false;
-  if (
-    ["decimal_number", "money"].includes(actual) ||
-    ["decimal_number", "money"].includes(expected)
-  )
-    return actual === expected;
-  if (["number", "whole_number"].includes(actual) && ["number", "whole_number"].includes(expected))
-    return true;
-  return typesCompatibleV2(actual, expected);
 };
 
 function applicationActionValueCompatible(
@@ -1859,7 +1833,7 @@ function applicationActionValueCompatible(
   if (entry.source === "literal")
     return target.moduleV2
       ? fieldValueMatchesV2(entry.value, target.field, "canonical")
-      : valueTypeCompatible(literalValueType(entry.value), fieldValueType(target.field));
+      : valueTypesCompatible(literalValueType(entry.value), fieldValueType(target.field), "value");
   if (entry.source === "subject_field" && subjectModuleV2 !== target.moduleV2) {
     const sourceField = subjectFields.get(String(entry.fieldId));
     if (
@@ -1878,9 +1852,10 @@ function applicationActionValueCompatible(
     return false;
   if (
     target.moduleV2 &&
-    !applicationMappingTypesCompatible(
+    !valueTypesCompatible(
       actionValueTypeV2(value, subjectFields, inputs, "canonical"),
       applicationFieldType(target),
+      "mapping",
     )
   )
     return false;
@@ -1940,14 +1915,6 @@ const applicationInterfaceFieldType = (
   if (["text", "date", "date_time", "record_reference"].includes(String(type))) return type;
   return undefined;
 };
-
-const valueTypeCompatible = (actual: string | undefined, expected: string | undefined): boolean =>
-  actual !== undefined &&
-  expected !== undefined &&
-  (actual === expected ||
-    (expected === "text" && (actual === "date" || actual === "date_time")) ||
-    (expected === "record_reference" && actual === "organization_account_reference") ||
-    expected === "json");
 
 function permissionRecordScopesValid(
   permissions: readonly JsonObject[],
@@ -3694,17 +3661,6 @@ function validateWorkflow(output: Output, workflow: JsonObject): DefinitionRuleF
   return failures;
 }
 
-const normalizeWorkflowType = (type: string): string =>
-  ["whole_number", "decimal_number", "money"].includes(type)
-    ? "number"
-    : type === "yes_no"
-      ? "boolean"
-      : ["choice", "formatted_text"].includes(type)
-        ? "text"
-        : type === "several_choices"
-          ? "json"
-          : type;
-
 export function workflowValueCompatible(
   value: JsonObject,
   expected: string,
@@ -3715,7 +3671,7 @@ export function workflowValueCompatible(
   expectedRecordTypeIds?: readonly string[],
   triggerInputs: ReadonlyMap<string, JsonObject> = new Map(),
 ): boolean {
-  const normalizedExpected = normalizeWorkflowType(expected);
+  const normalizedExpected = canonicalWorkflowValueType(expected);
   let actual: string | undefined;
   let actualRecordTypeIds: string[] | undefined;
   if (value.source === "literal") {
@@ -3741,7 +3697,7 @@ export function workflowValueCompatible(
     actualRecordTypeIds = fieldRecordTypeIds(field);
   } else if (value.source === "trigger_input") {
     const input = triggerInputs.get(String(value.inputKey));
-    actual = input ? normalizeWorkflowType(String(input.type)) : undefined;
+    actual = input ? canonicalWorkflowValueType(String(input.type)) : undefined;
     actualRecordTypeIds = input?.recordTypeIds as string[] | undefined;
   } else if (value.source === "current_record") {
     actual = "record_reference";
@@ -3755,13 +3711,13 @@ export function workflowValueCompatible(
       const output = array(object(producer.config).outputs).find(
         (entry) => entry.key === outputKey,
       );
-      actual = output ? normalizeWorkflowType(String(output.type)) : undefined;
+      actual = output ? canonicalWorkflowValueType(String(output.type)) : undefined;
       actualRecordTypeIds = output?.recordTypeIds as string[] | undefined;
     } else if (producer) {
       const declaration = workflowNodeOutputsByType[
         producer.type as keyof typeof workflowNodeOutputsByType
       ]?.find((candidate) => candidate.key === outputKey);
-      actual = declaration ? normalizeWorkflowType(declaration.type) : undefined;
+      actual = declaration ? canonicalWorkflowValueType(declaration.type) : undefined;
       const producerConfig = object(producer.config);
       if (declaration?.target === "configured_record" && producerConfig.recordTypeId !== undefined)
         actualRecordTypeIds = [String(producerConfig.recordTypeId)];
@@ -3783,8 +3739,7 @@ export function workflowValueCompatible(
   }
   if (normalizedExpected === "json") return actual !== undefined;
   return (
-    (actual === normalizedExpected ||
-      (normalizedExpected === "record_reference" && actual === "organization_account_reference")) &&
+    valueTypesCompatible(actual, normalizedExpected, "flow") &&
     (expectedRecordTypeIds === undefined ||
       (actualRecordTypeIds !== undefined &&
         actualRecordTypeIds.length > 0 &&
@@ -3806,7 +3761,7 @@ function applicationWorkflowFieldValueCompatible(
   if (value.source === "literal")
     return target.moduleV2
       ? fieldValueMatchesV2(value.value, target.field, "canonical")
-      : valueTypeCompatible(literalValueType(value.value), fieldValueType(target.field));
+      : valueTypesCompatible(literalValueType(value.value), fieldValueType(target.field), "value");
   if (value.source === "trigger_field") {
     const source = fieldPairs.get(String(value.fieldId));
     if (!source) return false;
@@ -3814,11 +3769,16 @@ function applicationWorkflowFieldValueCompatible(
       source.moduleV2 !== target.moduleV2
         ? crossFormatFieldTypesCompatible(source, target)
         : target.moduleV2
-          ? applicationMappingTypesCompatible(
+          ? valueTypesCompatible(
               applicationFieldType(source),
               applicationFieldType(target),
+              "mapping",
             )
-          : valueTypeCompatible(applicationFieldType(source), applicationFieldType(target));
+          : valueTypesCompatible(
+              applicationFieldType(source),
+              applicationFieldType(target),
+              "value",
+            );
     if (!compatible || expectedRecordTypeIds === undefined) return compatible;
     const actualRecordTypeIds = fieldRecordTypeIds(source.field);
     return (
@@ -3866,16 +3826,16 @@ function applicationWorkflowInputCompatible(
       ? input.type === "formatted_text"
         ? "formatted_text"
         : semanticFieldTypeV2(input.type)
-      : normalizeWorkflowType(String(input.type));
+      : canonicalWorkflowValueType(String(input.type));
     if (!expectedType) return false;
     const actualType = applicationFieldType(source);
     const compatible = moduleV2
       ? source.moduleV2
-        ? applicationMappingTypesCompatible(actualType, expectedType)
+        ? valueTypesCompatible(actualType, expectedType, "mapping")
         : (expectedType === "whole_number" && actualType === "number") ||
           (actualType === expectedType &&
             ["text", "boolean", "date", "date_time", "record_reference"].includes(actualType))
-      : valueTypeCompatible(applicationInterfaceFieldType(source), expectedType);
+      : valueTypesCompatible(applicationInterfaceFieldType(source), expectedType, "value");
     if (!compatible || expectedRecordTypeIds === undefined) return compatible;
     const actualRecordTypeIds = fieldRecordTypeIds(source.field);
     return (
@@ -5353,7 +5313,8 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           const expectedRecordTypes = new Set(expected?.recordTypeIds ?? []);
           return (
             expected !== undefined &&
-            normalizeWorkflowType(String(input.type)) === normalizeWorkflowType(expected.type) &&
+            canonicalWorkflowValueType(String(input.type)) ===
+              canonicalWorkflowValueType(expected.type) &&
             actualRecordTypes.size === expectedRecordTypes.size &&
             [...actualRecordTypes].every((recordTypeId) => expectedRecordTypes.has(recordTypeId))
           );
@@ -5381,8 +5342,8 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
                 field !== undefined &&
                 triggerFieldIds.has(String(input.fieldId)) &&
                 fieldInputType !== undefined &&
-                normalizeWorkflowType(String(input.type)) ===
-                  normalizeWorkflowType(fieldInputType) &&
+                canonicalWorkflowValueType(String(input.type)) ===
+                  canonicalWorkflowValueType(fieldInputType) &&
                 referenceTargetsValid
               );
             })
