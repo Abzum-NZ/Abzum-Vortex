@@ -7,6 +7,7 @@ import {
   moduleInstallationBindingEvidenceSchema,
   moduleRootIdSchema,
   organizationIdSchema,
+  projectLiveApplicationRolePermissions,
   revisionSchema,
   sessionContextSchema,
   type ApplicationInstallationLifecycleResult,
@@ -17,11 +18,17 @@ import {
   type ModuleRootId,
   type OrganizationId,
   type PreparedApplicationRoleTemplates,
+  type SelectedOrganizationScope,
   type SessionContext,
   type SystemApplicationBoundReleaseSetResult,
 } from "@vortex/contracts";
 import {
+  BuilderAuthorityError,
   createApplicationRoleTemplateAdapter,
+  requireBuilderAuthority,
+  type BuilderAuthority,
+  type BuilderConferredPermission,
+  type BuilderOperation,
   type createHumanOrganizationRequestService,
   type PermissionRegistryDefinitionSetReader,
 } from "@vortex/access";
@@ -31,6 +38,7 @@ import {
   createApplicationInstallationLifecycleRepository,
   createModuleInstallationStorageRepository,
 } from "@vortex/module";
+import type { RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
 
 /**
@@ -41,6 +49,13 @@ import { z } from "zod";
  * installer invokes it. Every write runs in that installer's own human request transaction, so the
  * database derives organisation, actor, correlation and the application-management decision from
  * trusted context. Nothing here accepts identity, authority or readiness from the caller.
+ *
+ * Builder authority is required on top of that. Every installer transaction first passes the
+ * installer's own builder authority: `applications.manage`, plus `custom_code.manage` when the
+ * exact package contains custom components; uninstalling a system application is always refused.
+ * Installing custom components or accepting role templates additionally needs the
+ * installer's recent authentication, and accepting role templates is refused unless every
+ * permission they confer lies inside the installer's delegated assignment scope.
  *
  * The fixed activation requires the Application permission registration to name the exact release
  * it activates, and pins the organisation Access version that a registration change advances. The
@@ -70,6 +85,8 @@ type InstallerTransaction = Parameters<typeof createModuleInstallationStorageRep
 export const applicationInstallationCoordinatorErrorCodes = [
   "INVALID_APPLICATION_INSTALLATION_COMMAND",
   "APPLICATION_INSTALLATION_REFUSED",
+  "APPLICATION_INSTALLATION_PERMISSION_REFUSED",
+  "APPLICATION_INSTALLATION_RECENT_AUTHENTICATION_REQUIRED",
   "APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE",
   "APPLICATION_INSTALLATION_STALE",
   "APPLICATION_INSTALLATION_INCOMPLETE",
@@ -188,6 +205,20 @@ export type ApplicationInstallationCoordinatorDependencies<InstalledEvents> = Re
     readonly installation: ActiveApplicationInstallationSummary;
   }) => InstalledEvents;
   activityId?: () => string;
+  /**
+   * Builds the installer's builder authority over the installer's own transaction and selected
+   * organisation scope. It is required: no installation operation runs without the check.
+   */
+  builderAuthority: (
+    transaction: RequestDatabaseTransaction,
+    scope: SelectedOrganizationScope,
+  ) => BuilderAuthority;
+  /**
+   * Whether the exact package contains custom components or scripts, from immutable release
+   * evidence. It is required so a package form that can carry custom code must be recognised by
+   * the deployment rather than assumed absent.
+   */
+  containsCustomComponents: (releaseSet: SystemApplicationBoundReleaseSetResult) => boolean;
 }>;
 
 type BindingRow = Readonly<{ bindings: unknown }>;
@@ -247,6 +278,13 @@ const databaseCode = (error: unknown): string | undefined =>
 
 const toCoordinatorError = (error: unknown): ApplicationInstallationCoordinatorError => {
   if (error instanceof ApplicationInstallationCoordinatorError) return error;
+  if (error instanceof BuilderAuthorityError)
+    return fail(
+      error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
+        ? "APPLICATION_INSTALLATION_RECENT_AUTHENTICATION_REQUIRED"
+        : "APPLICATION_INSTALLATION_PERMISSION_REFUSED",
+      error,
+    );
   if (error instanceof ModuleInstallationStorageError)
     switch (error.code) {
       case "INVALID_MODULE_INSTALLATION_STORAGE_COMMAND":
@@ -473,13 +511,20 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
   const inInstallerTransaction = async <Result>(
     session: IdentitySession,
     organizationId: OrganizationId,
-    operation: (transaction: InstallerTransaction) => Promise<Result>,
+    builderOperation: BuilderOperation,
+    operation: (transaction: InstallerTransaction, authority: BuilderAuthority) => Promise<Result>,
   ): Promise<Result> => {
     const captured: { failure?: ApplicationInstallationCoordinatorError } = {};
     const outcome = await dependencies.installerRequests
-      .runChange(session, { organizationId }, async (transaction) => {
+      .runChange(session, { organizationId }, async (transaction, scope) => {
         try {
-          return await operation(transaction);
+          // The builder authority is decided first, from the installer's own request scope, before
+          // anything is read or written in this transaction.
+          const authority = dependencies.builderAuthority(transaction, scope);
+          if (!sameId(authority.organizationId, organizationId))
+            throw fail("APPLICATION_INSTALLATION_REFUSED");
+          await requireBuilderAuthority(authority, builderOperation);
+          return await operation(transaction, authority);
         } catch (error) {
           captured.failure = toCoordinatorError(error);
           throw error;
@@ -497,8 +542,51 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     );
   };
 
-  /** Loads the exact Application and its resolved Module pin set, never the latest release. */
-  const readExactRelease = async (target: ReleaseTarget): Promise<ExactRelease> => {
+  /** Every permission the prepared role templates would confer on a live role. */
+  const conferredPermissions = (
+    preparedTemplates: PreparedApplicationRoleTemplates,
+  ): BuilderConferredPermission[] => {
+    const permissions = new Map<string, BuilderConferredPermission>();
+    for (const prepared of preparedTemplates.templates)
+      for (const entry of [
+        ...projectLiveApplicationRolePermissions(
+          prepared.template.permissionSelection,
+          preparedTemplates.permissionRegistration.applicationRootId,
+          prepared.sourcePermissions,
+        ),
+        ...prepared.livePermissions,
+      ]) {
+        const permission: BuilderConferredPermission = {
+          applicationRootId: String(entry.applicationRootId),
+          ownerKind: entry.ownerKind,
+          ownerId: String(entry.ownerId),
+          permissionId: String(entry.permission.permissionId),
+        };
+        permissions.set(
+          [permission.applicationRootId, permission.ownerKind, permission.ownerId, permission.permissionId]
+            .join(":")
+            .toLowerCase(),
+          permission,
+        );
+      }
+    return [...permissions.values()];
+  };
+
+  /** The builder operation for installing or upgrading to one exact release. */
+  const installOperation = (
+    applicationRootId: ApplicationRootId,
+    exact: ExactRelease,
+    accepting: boolean,
+  ): BuilderOperation => ({
+    kind: "installation",
+    applicationRootId,
+    change: "install_or_upgrade",
+    containsCustomComponents: dependencies.containsCustomComponents(exact.releaseSet),
+    acceptedPermissions: accepting ? conferredPermissions(exact.preparedTemplates) : [],
+  });
+
+  /** The live system context for the target organisation, or a refusal. */
+  const definitionContext = (target: ReleaseTarget): SessionContext => {
     const context = sessionContextSchema.safeParse(dependencies.definitionSystemContext());
     if (
       !context.success ||
@@ -506,14 +594,35 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       !sameId(context.data.organizationId, target.organizationId)
     )
       throw fail("APPLICATION_INSTALLATION_REFUSED");
-    let releaseSet: SystemApplicationBoundReleaseSetResult;
-    let preparedTemplates: PreparedApplicationRoleTemplates;
+    return context.data;
+  };
+
+  /** Reads only the exact release set, the evidence the builder authority derives its facts from. */
+  const readReleaseSet = async (
+    target: ReleaseTarget,
+  ): Promise<SystemApplicationBoundReleaseSetResult> => {
+    const context = definitionContext(target);
     try {
-      releaseSet = await dependencies.definitionReader.read(context.data, {
+      return await dependencies.definitionReader.read(context, {
         applicationRootId: target.applicationRootId,
         applicationReleaseRevision: target.applicationReleaseRevision,
       });
-      preparedTemplates = await roleTemplates.prepareRegistrationCandidate(context.data, {
+    } catch (error) {
+      throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE", error);
+    }
+  };
+
+  /** Loads the exact Application and its resolved Module pin set, never the latest release. */
+  const readExactRelease = async (target: ReleaseTarget): Promise<ExactRelease> => {
+    const context = definitionContext(target);
+    let releaseSet: SystemApplicationBoundReleaseSetResult;
+    let preparedTemplates: PreparedApplicationRoleTemplates;
+    try {
+      releaseSet = await dependencies.definitionReader.read(context, {
+        applicationRootId: target.applicationRootId,
+        applicationReleaseRevision: target.applicationReleaseRevision,
+      });
+      preparedTemplates = await roleTemplates.prepareRegistrationCandidate(context, {
         applicationRootId: target.applicationRootId,
         releaseRevision: target.applicationReleaseRevision,
       });
@@ -552,18 +661,30 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
    */
   const alignAccess = async (
     transaction: InstallerTransaction,
+    authority: BuilderAuthority,
     state: InstallationBindings,
     applicationRootId: ApplicationRootId,
     applicationReleaseRevision: number,
-    preparedTemplates: PreparedApplicationRoleTemplates,
+    exact: ExactRelease,
+    acceptance: "accept_role_templates" | "restore_accepted_role_templates",
   ): Promise<boolean> => {
     if (state.registeredReleaseRevision === applicationReleaseRevision) return false;
+    // Registering the release accepts its role templates. That needs the installer's recent
+    // authentication and every permission the templates confer inside the installer's delegated
+    // assignment scope, whatever any approval workflow says. It is decided in the same
+    // transaction and before registration: registering advances the Access version the request
+    // context is pinned to, so no decision can be made after it, and a permission the current
+    // registration does not yet hold lies outside every bounded delegated scope. Restoring the
+    // registration of a release that was already accepted grants nothing new and is not a fresh
+    // acceptance.
+    if (acceptance === "accept_role_templates")
+      await requireBuilderAuthority(authority, installOperation(applicationRootId, exact, true));
     const access = await changeAccess(
       transaction,
       newActivityId(),
       applicationRootId,
       "prepare",
-      preparedTemplates,
+      exact.preparedTemplates,
     );
     return access.outcome === "changed";
   };
@@ -583,21 +704,28 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       applicationRootId: request.applicationRootId,
       applicationReleaseRevision: activeReleaseRevision,
     });
-    await inInstallerTransaction(session, request.organizationId, async (transaction) => {
-      const state = await readInstallationBindings(
-        transaction,
-        request.organizationId,
-        request.applicationRootId,
-      );
-      if (activeRelease(state)?.releaseRevision !== activeReleaseRevision) return;
-      await alignAccess(
-        transaction,
-        state,
-        request.applicationRootId,
-        activeReleaseRevision,
-        prior.preparedTemplates,
-      );
-    });
+    await inInstallerTransaction(
+      session,
+      request.organizationId,
+      installOperation(request.applicationRootId, prior, false),
+      async (transaction, authority) => {
+        const state = await readInstallationBindings(
+          transaction,
+          request.organizationId,
+          request.applicationRootId,
+        );
+        if (activeRelease(state)?.releaseRevision !== activeReleaseRevision) return;
+        await alignAccess(
+          transaction,
+          authority,
+          state,
+          request.applicationRootId,
+          activeReleaseRevision,
+          prior,
+          "restore_accepted_role_templates",
+        );
+      },
+    );
   };
 
   /** Projected after commit; a missing or failing optional reader never undoes the change. */
@@ -654,13 +782,15 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       if (!verifiedSession.success || !parsed.success)
         throw fail("INVALID_APPLICATION_INSTALLATION_COMMAND");
       const request = parsed.data;
-      const { preparedTemplates, pins } = await readExactRelease(request);
+      const exact = await readExactRelease(request);
+      const { pins } = exact;
 
       // 1. Access must name the release before its provisioned setup can be administered.
       const accessChanged = await inInstallerTransaction(
         verifiedSession.data,
         request.organizationId,
-        async (transaction) => {
+        installOperation(request.applicationRootId, exact, false),
+        async (transaction, authority) => {
           const state = await readInstallationBindings(
             transaction,
             request.organizationId,
@@ -669,10 +799,12 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           if (activeRelease(state) !== null) throw fail("APPLICATION_INSTALLATION_STALE");
           return alignAccess(
             transaction,
+            authority,
             state,
             request.applicationRootId,
             request.applicationReleaseRevision,
-            preparedTemplates,
+            exact,
+            "accept_role_templates",
           );
         },
       );
@@ -681,6 +813,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       return inInstallerTransaction(
         verifiedSession.data,
         request.organizationId,
+        installOperation(request.applicationRootId, exact, false),
         async (transaction) => {
           const state = await readInstallationBindings(
             transaction,
@@ -741,7 +874,8 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       if (!verifiedSession.success || !parsed.success)
         throw fail("INVALID_APPLICATION_INSTALLATION_COMMAND");
       const request = parsed.data;
-      const { releaseSet, preparedTemplates, pins } = await readExactRelease(request);
+      const exact = await readExactRelease(request);
+      const { releaseSet, pins } = exact;
 
       // 1. Align Access with the exact target release. This must commit before the switch: it
       //    advances the Access version that the fixed lifecycle operations pin to. An already
@@ -749,7 +883,8 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       const alreadyActive = await inInstallerTransaction(
         verifiedSession.data,
         request.organizationId,
-        async (transaction) => {
+        installOperation(request.applicationRootId, exact, false),
+        async (transaction, authority) => {
           const state = await readInstallationBindings(
             transaction,
             request.organizationId,
@@ -758,10 +893,12 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           const mode = requireExpectedActive(request, activeRelease(state));
           await alignAccess(
             transaction,
+            authority,
             state,
             request.applicationRootId,
             request.applicationReleaseRevision,
-            preparedTemplates,
+            exact,
+            "accept_role_templates",
           );
           return mode === "already_active" ? activeSummary(request, state) : null;
         },
@@ -783,6 +920,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         switched = await inInstallerTransaction(
           verifiedSession.data,
           request.organizationId,
+          installOperation(request.applicationRootId, exact, false),
           async (transaction) => {
             const state = await readInstallationBindings(
               transaction,
@@ -870,10 +1008,18 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       if (!verifiedSession.success || !parsed.success)
         throw fail("INVALID_APPLICATION_INSTALLATION_COMMAND");
       const request = parsed.data;
+      const packageFacts = await readReleaseSet(request);
 
       return inInstallerTransaction(
         verifiedSession.data,
         request.organizationId,
+        {
+          kind: "installation",
+          applicationRootId: request.applicationRootId,
+          change: "uninstall",
+          containsCustomComponents: dependencies.containsCustomComponents(packageFacts),
+          acceptedPermissions: [],
+        },
         async (transaction) => {
           const state = await readInstallationBindings(
             transaction,
