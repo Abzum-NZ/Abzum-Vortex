@@ -21,10 +21,11 @@ export function PlainTextDisplay(props: PlatformBlockRenderProps): ReactElement 
           },
         }
       : props;
-  const { title, accessibleName, values, state, events } = resolveDisplayContext(
+  const { title, accessibleName, values, state, emptyMessage, events } = resolveDisplayContext(
     effectiveProps,
     "text",
     (text) => text.value.kind === "empty",
+    "No text to show",
   );
 
   return (
@@ -32,7 +33,7 @@ export function PlainTextDisplay(props: PlatformBlockRenderProps): ReactElement 
       accessibleName={accessibleName}
       availability={props.availability}
       projectedData={state}
-      emptyMessage="No text to show"
+      emptyMessage={emptyMessage}
     >
       {values === undefined ? null : (
         <div

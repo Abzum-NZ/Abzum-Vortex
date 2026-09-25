@@ -11,10 +11,11 @@ import { DisplayStateContainer } from "./display-state-container";
  */
 export function RecordDetailDisplay(props: PlatformBlockRenderProps): ReactElement {
   const { placementId, availability } = props;
-  const { title, accessibleName, values, state, events } = resolveDisplayContext(
+  const { title, accessibleName, values, state, emptyMessage, events } = resolveDisplayContext(
     props,
     "record_detail",
     (detail) => detail.fields.length === 0,
+    "No details to show",
   );
 
   return (
@@ -22,7 +23,7 @@ export function RecordDetailDisplay(props: PlatformBlockRenderProps): ReactEleme
       accessibleName={accessibleName}
       availability={availability}
       projectedData={state}
-      emptyMessage="No details to show"
+      emptyMessage={emptyMessage}
     >
       {values === undefined ? null : (
         <section

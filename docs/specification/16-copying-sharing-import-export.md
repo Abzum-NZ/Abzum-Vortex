@@ -22,7 +22,7 @@ flowchart TD
 
 A package contains published [modules or applications](03-composition-and-publication.md#definition-ownership-and-versions), a manifest, dependency ranges, stable identifiers, source version, publisher, content fingerprint, required capabilities, and installation notes.
 
-Application-owned Frontend Flows are copied or installed only as part of their immutable application release. A platform-managed flow remains an exact locked catalogue dependency. Neither operation copies a live specified-user/system execution grant, and a missing or incompatible flow dependency leaves the candidate unready rather than substituting another version.
+Flows are copied or installed only as part of the immutable release of the module or application that owns them; every flow has exactly one owner. Neither operation copies a live specified-user/system execution grant, and a missing or incompatible flow dependency leaves the candidate unready rather than substituting another version.
 
 A package never contains organisation records, organisation accounts, secrets, access tokens, private files, commercial-system identifiers, activity history, or live connection instances.
 

@@ -23,6 +23,8 @@ export type DisplayContext<Kind extends ProjectedDisplayValueKind> = Readonly<{
   values: Extract<ProjectedDisplayValues, { kind: Kind }> | undefined;
   /** State passed to the state container; ready-but-empty content becomes the empty state. */
   state: ProjectedDisplayData;
+  /** Authored empty message, or the block family's fixed neutral default. */
+  emptyMessage: string;
   /** Semantic callbacks; always absent while the placement's use is unavailable. */
   events: DisplayEventHandlers | undefined;
 }>;
@@ -35,6 +37,7 @@ export function resolveDisplayContext<Kind extends ProjectedDisplayValueKind>(
   props: PlatformBlockRenderProps,
   kind: Kind,
   isEmpty: (values: Extract<ProjectedDisplayValues, { kind: Kind }>) => boolean,
+  defaultEmptyMessage: string,
 ): DisplayContext<Kind> {
   const { projectedData, metadata, settings, placementId } = props;
   if (props.controlData !== undefined || props.controlEvents !== undefined) {
@@ -56,6 +59,13 @@ export function resolveDisplayContext<Kind extends ProjectedDisplayValueKind>(
     values = projectedData.values as Extract<ProjectedDisplayValues, { kind: Kind }>;
   }
   const title = getAccessibleName(settings, metadata);
+  const authoredEmptyMessage = settings["empty_message"];
+  const emptyMessage =
+    authoredEmptyMessage !== undefined &&
+    authoredEmptyMessage.kind === "text" &&
+    authoredEmptyMessage.value.trim().length > 0
+      ? authoredEmptyMessage.value.trim()
+      : defaultEmptyMessage;
   return {
     title,
     accessibleName: title ?? metadata.name,
@@ -64,6 +74,7 @@ export function resolveDisplayContext<Kind extends ProjectedDisplayValueKind>(
       projectedData === undefined || (values !== undefined && isEmpty(values))
         ? EMPTY_STATE
         : projectedData,
+    emptyMessage,
     events: props.availability === "available" ? props.displayEvents : undefined,
   };
 }
