@@ -6,6 +6,7 @@ import {
   addOrganizationAdministrationMembershipCommandSchema,
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   changeOrganizationAdministrationMembershipResultSchema,
+  changeOrganizationAdministrationRoleAuthorityCommandSchema,
   changeOrganizationAdministrationRoleResultSchema,
   changeOrganizationAdministrationDelegationAuthorityResultSchema,
   changeOrganizationAdministrationRoleAssignmentResultSchema,
@@ -59,6 +60,7 @@ import {
   type AssignOrganizationAdministrationRoleAssignmentCommand,
   type ChangeOrganizationAdministrationGroupResult,
   type ChangeOrganizationAdministrationMembershipResult,
+  type ChangeOrganizationAdministrationRoleAuthorityCommand,
   type ChangeOrganizationAdministrationRoleResult,
   type ChangeOrganizationAdministrationRoleAssignmentResult,
   type ChangeOrganizationAdministrationDelegationAuthorityResult,
@@ -82,6 +84,7 @@ import {
   type ListOrganizationAdministrationRoleAssignmentsCommand,
   type ListOrganizationAdministrationRoleAssignmentsResult,
   type OrganizationSelectionCandidate,
+  type PreparedOrganizationRoleChange,
   type ReadOrganizationAdministrationGroupCommand,
   type ReadOrganizationAdministrationGroupResult,
   type ReadOrganizationAdministrationApplicationRoleTemplateCommand,
@@ -113,7 +116,10 @@ import {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "./human-organization-request";
-import { prepareOrganizationRoleChangeEvidence } from "./organization-role-change-evidence";
+import {
+  prepareOrganizationRoleChangeEvidence,
+  verifyPreparedOrganizationRoleChangeEvidence,
+} from "./organization-role-change-evidence";
 
 type GroupPageRow = DatabaseRow & {
   organization_id: unknown;
@@ -503,6 +509,76 @@ export const createOrganizationAccessAdministrationService = (
     return parsed.data;
   };
 
+  /**
+   * Runs one prepared role-authority change (create a custom role or accept an application role
+   * template) through the protected request entry. The browser-submitted evidence is re-derived and
+   * verified with the canonical preparation verifier before the database rechecks current
+   * authority, affected assignments and acceptance; the owning composition keeps the
+   * permanent-steward safeguard, so this entry never becomes a raw grant endpoint.
+   */
+  const changeRoleAuthority = async (
+    expectedOperations: readonly PreparedOrganizationRoleChange["candidate"]["operation"][],
+    session: IdentitySession,
+    candidate: OrganizationSelectionCandidate,
+    commandCandidate: ChangeOrganizationAdministrationRoleAuthorityCommand,
+  ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationRoleResult>> => {
+    const command =
+      changeOrganizationAdministrationRoleAuthorityCommandSchema.safeParse(commandCandidate);
+    if (!command.success) return { kind: "unavailable" };
+    let evidence: PreparedOrganizationRoleChange;
+    try {
+      evidence = verifyPreparedOrganizationRoleChangeEvidence(command.data.evidence);
+    } catch {
+      return { kind: "unavailable" };
+    }
+    if (!expectedOperations.includes(evidence.candidate.operation)) return { kind: "unavailable" };
+    // A new role starts at revision 1; an accepted revision advances the reviewed live revision.
+    const expectedLiveRevision =
+      "expectedRoleRevision" in evidence.candidate
+        ? evidence.candidate.expectedRoleRevision + 1
+        : 1;
+    let activityId: string;
+    try {
+      activityId = activityIdSchema.parse(newActivityId());
+    } catch {
+      return { kind: "temporarily_unavailable" };
+    }
+
+    return mapRecordedRefusal(
+      requests.runChange(session, candidate, async (transaction, scope) => {
+        // The evidence names its organisation; it must be the one the request context selected.
+        if (!sameUuid(evidence.candidate.organizationId, scope.organizationId))
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+        const row = requireOne(
+          await transaction.query<RoleChangeRow>`
+            select outcome, organization_id, role_summary, access_version
+            from vortex_access.change_organization_role_authority_for_administration(
+              ${JSON.stringify(evidence)}::text::jsonb,
+              ${activityId}::uuid
+            )
+          `,
+        );
+        if (isRecordedRefusal(row, row.role_summary, scope.organizationId, scope.accessVersion))
+          return recordedRefusal;
+        const parsed = changeOrganizationAdministrationRoleResultSchema.safeParse({
+          role: row.role_summary,
+          accessVersion: revision(row.access_version),
+        });
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          row.outcome !== "completed" ||
+          !parsed.success ||
+          parsed.data.accessVersion !== scope.accessVersion + 1 ||
+          !sameUuid(parsed.data.role.roleId, evidence.candidate.roleId) ||
+          parsed.data.role.liveRevision !== expectedLiveRevision
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+        return parsed.data;
+      }),
+    );
+  };
+
   return Object.freeze({
     createGroup: async (
       session: IdentitySession,
@@ -866,6 +942,39 @@ export const createOrganizationAccessAdministrationService = (
         }),
       );
     },
+
+    createCustomRole: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ChangeOrganizationAdministrationRoleAuthorityCommand,
+    ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationRoleResult>> =>
+      changeRoleAuthority(["create_custom"], session, candidate, commandCandidate),
+
+    createCustomRoleFromTemplate: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ChangeOrganizationAdministrationRoleAuthorityCommand,
+    ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationRoleResult>> =>
+      changeRoleAuthority(["create_custom_from_template"], session, candidate, commandCandidate),
+
+    acceptApplicationRoleTemplate: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ChangeOrganizationAdministrationRoleAuthorityCommand,
+    ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationRoleResult>> =>
+      changeRoleAuthority(["accept_new_application_role"], session, candidate, commandCandidate),
+
+    acceptApplicationRoleRevision: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ChangeOrganizationAdministrationRoleAuthorityCommand,
+    ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationRoleResult>> =>
+      changeRoleAuthority(
+        ["accept_application_role_revision"],
+        session,
+        candidate,
+        commandCandidate,
+      ),
 
     assignRoleAssignment: async (
       session: IdentitySession,
