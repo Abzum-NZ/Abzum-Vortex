@@ -5,6 +5,7 @@ import {
   actorIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
+  containedComponentIdSchema,
   delegationAuthorityIdSchema,
   fingerprintSchema,
   groupIdSchema,
@@ -161,7 +162,8 @@ export const roleActivationPolicyRevisionSchema = z
     maximumActivationDurationSeconds: javascriptSafeDurationSecondsSchema,
     reasonRequired: z.boolean(),
     recentAuthentication: roleRecentAuthenticationRequirementSchema,
-    independentApprovalRequired: z.boolean(),
+    /** The one published flow execution binding permitted to activate; absent means any eligible caller. */
+    requiredCallerExecutionBindingId: containedComponentIdSchema.optional(),
     changedByActorId: actorIdSchema,
     changedAt: timestampSchema,
     changeCorrelationId: correlationIdSchema,

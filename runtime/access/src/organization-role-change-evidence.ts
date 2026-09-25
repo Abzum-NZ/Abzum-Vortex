@@ -108,6 +108,13 @@ const normalizePolicyChoice = (
             policy: {
               ...policy.activationPolicy.policy,
               activationPolicyId: normalizedUuid(policy.activationPolicy.policy.activationPolicyId),
+              ...(policy.activationPolicy.policy.requiredCallerExecutionBindingId === undefined
+                ? {}
+                : {
+                    requiredCallerExecutionBindingId: normalizedUuid(
+                      policy.activationPolicy.policy.requiredCallerExecutionBindingId,
+                    ),
+                  }),
             },
           },
         };

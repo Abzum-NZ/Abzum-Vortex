@@ -76,7 +76,6 @@ import {
   type ListOrganizationAdministrationRoleAssignmentsCommand,
   type ListOrganizationAdministrationRoleAssignmentsResult,
   type OrganizationSelectionCandidate,
-  organizationRoleChangeCandidateSchema,
   type ReadOrganizationAdministrationGroupCommand,
   type ReadOrganizationAdministrationGroupResult,
   type ReadOrganizationAdministrationApplicationRoleTemplateCommand,
@@ -181,13 +180,6 @@ type RoleDetailRow = DatabaseRow & {
   organization_id: unknown;
   outcome: unknown;
   role_summary: unknown;
-  access_version: unknown;
-};
-
-type RoleMetadataPreparationRow = DatabaseRow & {
-  outcome: unknown;
-  organization_id: unknown;
-  candidate_basis: unknown;
   access_version: unknown;
 };
 
@@ -471,7 +463,7 @@ export const createOrganizationAccessAdministrationService = (
       !sameUuid(row.organization_id, organizationId) ||
       row.outcome !== "completed" ||
       !parsed.success ||
-      parsed.data.accessVersion !== priorAccessVersion + 1 ||
+      parsed.data.accessVersion !== priorAccessVersion ||
       !sameUuid(parsed.data.group.groupId, expected.groupId) ||
       parsed.data.group.label !== expected.label ||
       parsed.data.group.revision !== expected.revision ||
@@ -687,48 +679,6 @@ export const createOrganizationAccessAdministrationService = (
 
       return mapRecordedRefusal(
         requests.runChange(session, candidate, async (transaction, scope) => {
-          const preparationRow = requireOne(
-            await transaction.query<RoleMetadataPreparationRow>`
-            select outcome, organization_id, candidate_basis, access_version
-            from vortex_access.prepare_organization_role_metadata_change_for_administration(
-              ${command.data.roleId}::uuid,
-              ${command.data.expectedRoleRevision}::bigint,
-              ${activityId}::uuid
-            )
-          `,
-          );
-          if (
-            isRecordedRefusal(
-              preparationRow,
-              preparationRow.candidate_basis,
-              scope.organizationId,
-              scope.accessVersion,
-            )
-          )
-            return recordedRefusal;
-          const basis = organizationRoleChangeCandidateSchema.safeParse(
-            preparationRow.candidate_basis,
-          );
-          if (
-            typeof preparationRow.organization_id !== "string" ||
-            !sameUuid(preparationRow.organization_id, scope.organizationId) ||
-            preparationRow.outcome !== "completed" ||
-            revision(preparationRow.access_version) !== scope.accessVersion ||
-            !basis.success ||
-            basis.data.operation !== "revise_metadata_policy" ||
-            !sameUuid(basis.data.organizationId, scope.organizationId) ||
-            !sameUuid(basis.data.roleId, command.data.roleId) ||
-            basis.data.expectedRoleRevision !== command.data.expectedRoleRevision
-          )
-            throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-
-          const prepared = prepareOrganizationRoleChangeEvidence({
-            candidate: {
-              ...basis.data,
-              label: command.data.label,
-              description: command.data.description,
-            },
-          });
           const row = requireOne(
             await transaction.query<RoleChangeRow>`
             select outcome, organization_id, role_summary, access_version
@@ -737,7 +687,6 @@ export const createOrganizationAccessAdministrationService = (
               ${command.data.expectedRoleRevision}::bigint,
               ${command.data.label}::text,
               ${command.data.description}::text,
-              ${JSON.stringify(prepared)}::text::jsonb,
               ${activityId}::uuid
             )
           `,
@@ -753,7 +702,7 @@ export const createOrganizationAccessAdministrationService = (
             !sameUuid(row.organization_id, scope.organizationId) ||
             row.outcome !== "completed" ||
             !parsed.success ||
-            parsed.data.accessVersion !== scope.accessVersion + 1 ||
+            parsed.data.accessVersion !== scope.accessVersion ||
             !sameUuid(parsed.data.role.roleId, command.data.roleId) ||
             parsed.data.role.liveRevision !== command.data.expectedRoleRevision + 1 ||
             parsed.data.role.label !== command.data.label

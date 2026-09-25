@@ -25,7 +25,7 @@ Phase labels and Pickup Order are preserved as planning/reporting metadata, whil
 | Bounded UI components, pages and wiring | Gemini 3.8 Flash (Antigravity - Max or High) or GPT-6 Luna (Codex - Max, never below High) |
 | Alternative implementation | Claude Sonnet 5 (High) |
 | Complex architecture, authorization or transactions | Claude Opus 5.5 (High) or GPT-6 Sol (High), whichever has capacity |
-| All final reviews, fixes and re-reviews | Claude Opus 5.5 (High) or GPT-6 Sol (High), separate session from implementer, spread across both |
+| All final reviews, fixes and re-reviews | Claude Opus 5.5 at Medium reasoning effort, or GPT-6 Sol (High) when Codex has capacity; separate session from implementer, spread across both |
 
 Choose the cheapest capable model. Before dispatch, review handoff and each 30-minute active checkpoint, read `orca account list --json` for Claude and Codex session and weekly usage, reset times, freshness and errors. GLM and Antigravity capacity may require observing the actual provider response. Unknown quota is not unlimited. Capacity guidance does not permit ignoring real dependencies, unresolved scope or exclusive ownership. Avoid routine implementation below 25% weekly remaining; preserve 15% for essential coordination/review. No automatic credit purchases or resets. If both qualified reviewers are unavailable, remain In review with a capacity blocker; do not substitute a cheaper reviewer or claim Done.
 
@@ -128,6 +128,8 @@ Build: <bounded change and owning paths>. Exclude: <non-goals>.
 Dependencies: <completed prerequisites>. Acceptance: <inspectable code behavior>.
 Actual model/effort, estimate, worktree/branch, task/dispatch: <values>.
 Implement this issue, commit/push candidate, then stop editing.
+Write everything in English only: code, comments, strings, commit messages, PR text and issue comments.
+Never write Chinese or any other non-English text; rewrite any such output in English before committing.
 No tests or test edits, builds/typechecks/lint, DB execution/review,
 hosted verification, Kestra or deployment. Do not change permissions or protections.
 Board row: <Project item ID and Status/Current owner/start field IDs>.
@@ -146,6 +148,10 @@ Board row: <Project item ID and Status/Current owner/finish field IDs>. Record y
 First read the complete live GitHub issue, every comment and linked spec.
 Then review the entire candidate change, current main and affected callers against bounded acceptance.
 Fix findings yourself; commit and re-review the final candidate.
+Check the whole change, its commit messages, the PR title and body, and your issue comments for
+non-English text, and replace every occurrence with English. Search the diff with:
+  git diff origin/main...HEAD | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{s.split('\n').forEach((l,i)=>{if(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uff00-\uffef]/.test(l))console.log(i+1+': '+l)})})"
+A change with non-English text is not ready to merge.
 No tests or test edits, builds/typechecks/lint, DB/hosted reviews,
 proof receipts, Kestra or deployment. Do not change permissions or protections.
 Open the candidate PR if absent. Integrate reviewed PR into main through permitted repository operations.

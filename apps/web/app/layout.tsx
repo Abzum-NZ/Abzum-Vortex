@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Vortex Foundation",
-  description: "The enforceable foundation for the Vortex platform.",
+  title: "Vortex",
+  description: "The Vortex application platform.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

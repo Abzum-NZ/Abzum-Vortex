@@ -1540,10 +1540,16 @@
     ],
     "flows": [
       {
+        "contractVersion": "1.0.0",
         "id": "flow_update_runtime_settings",
         "key": "update_runtime_settings",
-        "name": "Update runtime settings",
-        "run_as": "current_user",
+        "labels": {
+          "name": "Update runtime settings"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
         "inputs": {
           "expected_revision": {
             "type": "whole_number",
@@ -1570,202 +1576,51 @@
             "required": true
           }
         },
-        "outputs": {
-          "revision": {
-            "type": "whole_number",
-            "required": false
-          }
-        },
         "variables": {},
-        "nodes": [
+        "triggers": [],
+        "tasks": [
           {
-            "id": "node_start",
-            "key": "start",
-            "kind": "start",
-            "outputs": {
-              "expected_revision": {
-                "type": "whole_number",
-                "required": true
-              },
-              "language": {
-                "type": "text",
-                "required": true
-              },
-              "time_zone": {
-                "type": "text",
-                "required": true
-              },
-              "currency": {
-                "type": "text",
-                "required": true
-              },
-              "date_format": {
-                "type": "choice",
-                "required": true
-              },
-              "number_format": {
-                "type": "choice",
-                "required": true
-              }
-            }
-          },
-          {
-            "id": "node_operation",
-            "key": "operation",
-            "kind": "action",
-            "target": {
-              "kind": "protected_operation",
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
               "operation": {
-                "owner": {
-                  "kind": "platform_service",
-                  "serviceId": "e0a60e5a-cb5c-449d-ab9d-4a47ab344e3f"
-                },
-                "operationId": "4de3ad3d-c6d2-4523-9113-255093526b45"
-              },
-              "release_version": "1.0.0"
-            },
-            "inputs": {
-              "expected_revision": {
-                "type": "whole_number",
-                "value": {
-                  "source": "flow_input",
-                  "input": "expected_revision"
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.update_runtime_settings"
                 }
-              },
-              "language": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "language"
-                }
-              },
-              "time_zone": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "time_zone"
-                }
-              },
-              "currency": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "currency"
-                }
-              },
-              "date_format": {
-                "type": "choice",
-                "value": {
-                  "source": "flow_input",
-                  "input": "date_format"
-                }
-              },
-              "number_format": {
-                "type": "choice",
-                "value": {
-                  "source": "flow_input",
-                  "input": "number_format"
-                }
-              }
-            },
-            "outputs": {
-              "revision": {
-                "type": "whole_number",
-                "required": false
-              }
-            },
-            "results": {
-              "revision": {
-                "output": "revision",
-                "type": "whole_number"
               }
             }
-          },
-          {
-            "id": "node_committed",
-            "key": "return_committed",
-            "kind": "return",
-            "outcome": "committed",
-            "results": {
-              "revision": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "revision"
-              }
-            }
-          },
-          {
-            "id": "node_refused",
-            "key": "return_refused",
-            "kind": "return",
-            "outcome": "refused",
-            "results": {}
-          },
-          {
-            "id": "node_conflict",
-            "key": "return_conflict",
-            "kind": "return",
-            "outcome": "conflict",
-            "results": {}
-          },
-          {
-            "id": "node_validation",
-            "key": "return_validation",
-            "kind": "return",
-            "outcome": "validation",
-            "results": {}
-          },
-          {
-            "id": "node_failed",
-            "key": "return_failed",
-            "kind": "return",
-            "outcome": "failed",
-            "results": {}
           }
         ],
-        "edges": [
-          {
-            "id": "edge_start",
-            "from_node": "node_start",
-            "to_node": "node_operation"
-          },
-          {
-            "id": "edge_committed",
-            "from_node": "node_operation",
-            "to_node": "node_committed",
-            "outcome": "committed"
-          },
-          {
-            "id": "edge_refused",
-            "from_node": "node_operation",
-            "to_node": "node_refused",
-            "outcome": "refused"
-          },
-          {
-            "id": "edge_conflict",
-            "from_node": "node_operation",
-            "to_node": "node_conflict",
-            "outcome": "conflict"
-          },
-          {
-            "id": "edge_validation",
-            "from_node": "node_operation",
-            "to_node": "node_validation",
-            "outcome": "validation"
-          },
-          {
-            "id": "edge_failed",
-            "from_node": "node_operation",
-            "to_node": "node_failed",
-            "outcome": "failed"
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
           }
-        ]
+        },
+        "errors": [],
+        "finally": []
       },
       {
+        "contractVersion": "1.0.0",
         "id": "flow_set_default_application",
         "key": "set_default_application",
-        "name": "Set default application",
-        "run_as": "current_user",
+        "labels": {
+          "name": "Set default application"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
         "inputs": {
           "expected_revision": {
             "type": "whole_number",
@@ -1776,169 +1631,39 @@
             "required": false
           }
         },
-        "outputs": {
-          "default_application_root_id": {
-            "type": "text",
-            "required": false
-          },
-          "revision": {
-            "type": "whole_number",
-            "required": false
-          }
-        },
         "variables": {},
-        "nodes": [
+        "triggers": [],
+        "tasks": [
           {
-            "id": "node_start",
-            "key": "start",
-            "kind": "start",
-            "outputs": {
-              "expected_revision": {
-                "type": "whole_number",
-                "required": true
-              },
-              "default_application_root_id": {
-                "type": "text",
-                "required": false
-              }
-            }
-          },
-          {
-            "id": "node_operation",
-            "key": "operation",
-            "kind": "action",
-            "target": {
-              "kind": "protected_operation",
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
               "operation": {
-                "owner": {
-                  "kind": "platform_service",
-                  "serviceId": "e0a60e5a-cb5c-449d-ab9d-4a47ab344e3f"
-                },
-                "operationId": "9116e660-375d-4157-b3be-d0943a1c988a"
-              },
-              "release_version": "1.0.0"
-            },
-            "inputs": {
-              "expected_revision": {
-                "type": "whole_number",
-                "value": {
-                  "source": "flow_input",
-                  "input": "expected_revision"
-                }
-              },
-              "default_application_root_id": {
-                "type": "text",
-                "value": {
-                  "source": "flow_input",
-                  "input": "default_application_root_id"
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.set_default_application"
                 }
               }
-            },
-            "outputs": {
-              "default_application_root_id": {
-                "type": "text",
-                "required": false
-              },
-              "revision": {
-                "type": "whole_number",
-                "required": false
-              }
-            },
-            "results": {
-              "default_application_root_id": {
-                "output": "default_application_root_id",
-                "type": "text"
-              },
-              "revision": {
-                "output": "revision",
-                "type": "whole_number"
-              }
             }
-          },
-          {
-            "id": "node_committed",
-            "key": "return_committed",
-            "kind": "return",
-            "outcome": "committed",
-            "results": {
-              "default_application_root_id": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "default_application_root_id"
-              },
-              "revision": {
-                "source": "node_output",
-                "node": "node_operation",
-                "output": "revision"
-              }
-            }
-          },
-          {
-            "id": "node_refused",
-            "key": "return_refused",
-            "kind": "return",
-            "outcome": "refused",
-            "results": {}
-          },
-          {
-            "id": "node_conflict",
-            "key": "return_conflict",
-            "kind": "return",
-            "outcome": "conflict",
-            "results": {}
-          },
-          {
-            "id": "node_validation",
-            "key": "return_validation",
-            "kind": "return",
-            "outcome": "validation",
-            "results": {}
-          },
-          {
-            "id": "node_failed",
-            "key": "return_failed",
-            "kind": "return",
-            "outcome": "failed",
-            "results": {}
           }
         ],
-        "edges": [
-          {
-            "id": "edge_start",
-            "from_node": "node_start",
-            "to_node": "node_operation"
-          },
-          {
-            "id": "edge_committed",
-            "from_node": "node_operation",
-            "to_node": "node_committed",
-            "outcome": "committed"
-          },
-          {
-            "id": "edge_refused",
-            "from_node": "node_operation",
-            "to_node": "node_refused",
-            "outcome": "refused"
-          },
-          {
-            "id": "edge_conflict",
-            "from_node": "node_operation",
-            "to_node": "node_conflict",
-            "outcome": "conflict"
-          },
-          {
-            "id": "edge_validation",
-            "from_node": "node_operation",
-            "to_node": "node_validation",
-            "outcome": "validation"
-          },
-          {
-            "id": "edge_failed",
-            "from_node": "node_operation",
-            "to_node": "node_failed",
-            "outcome": "failed"
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
           }
-        ]
+        },
+        "errors": [],
+        "finally": []
       }
     ],
     "flow_bindings": [
@@ -1947,110 +1672,50 @@
         "control": "button_update_runtime_settings",
         "event_id": "event_organisation_settings_action",
         "event": "action",
-        "flow": {
-          "kind": "application_owned",
-          "flow": "flow_update_runtime_settings"
-        },
+        "flow": "flow_update_runtime_settings",
         "inputs": {
           "expected_revision": {
-            "type": "whole_number",
-            "value": {
-              "source": "form_input",
-              "form": "form_update_runtime_settings",
-              "input": "expected_revision"
-            }
+            "kind": "caller",
+            "name": "expected_revision"
           },
           "language": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_update_runtime_settings",
-              "input": "language"
-            }
+            "kind": "caller",
+            "name": "language"
           },
           "time_zone": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_update_runtime_settings",
-              "input": "time_zone"
-            }
+            "kind": "caller",
+            "name": "time_zone"
           },
           "currency": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_update_runtime_settings",
-              "input": "currency"
-            }
+            "kind": "caller",
+            "name": "currency"
           },
           "date_format": {
-            "type": "choice",
-            "value": {
-              "source": "form_input",
-              "form": "form_update_runtime_settings",
-              "input": "date_format"
-            }
+            "kind": "caller",
+            "name": "date_format"
           },
           "number_format": {
-            "type": "choice",
-            "value": {
-              "source": "form_input",
-              "form": "form_update_runtime_settings",
-              "input": "number_format"
-            }
+            "kind": "caller",
+            "name": "number_format"
           }
-        },
-        "results": {
-          "revision": {
-            "output": "revision",
-            "type": "whole_number"
-          }
-        },
-        "declared_effects": [
-          "change"
-        ]
+        }
       },
       {
         "id": "binding_set_default_application",
         "control": "button_set_default_application",
         "event_id": "event_organisation_settings_action",
         "event": "action",
-        "flow": {
-          "kind": "application_owned",
-          "flow": "flow_set_default_application"
-        },
+        "flow": "flow_set_default_application",
         "inputs": {
           "expected_revision": {
-            "type": "whole_number",
-            "value": {
-              "source": "form_input",
-              "form": "form_set_default_application",
-              "input": "expected_revision"
-            }
+            "kind": "caller",
+            "name": "expected_revision"
           },
           "default_application_root_id": {
-            "type": "text",
-            "value": {
-              "source": "form_input",
-              "form": "form_set_default_application",
-              "input": "default_application_root_id"
-            }
+            "kind": "caller",
+            "name": "default_application_root_id"
           }
-        },
-        "results": {
-          "default_application_root_id": {
-            "output": "default_application_root_id",
-            "type": "text"
-          },
-          "revision": {
-            "output": "revision",
-            "type": "whole_number"
-          }
-        },
-        "declared_effects": [
-          "change"
-        ]
+        }
       }
     ]
   }

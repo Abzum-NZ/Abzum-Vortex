@@ -11,10 +11,11 @@ import { DisplayStateContainer } from "./display-state-container";
  */
 export function SummaryValuesDisplay(props: PlatformBlockRenderProps): ReactElement {
   const { placementId, availability } = props;
-  const { title, accessibleName, values, state, events } = resolveDisplayContext(
+  const { title, accessibleName, values, state, emptyMessage, events } = resolveDisplayContext(
     props,
     "summary_values",
     (summary) => summary.values.length === 0,
+    "No values to show",
   );
 
   return (
@@ -22,7 +23,7 @@ export function SummaryValuesDisplay(props: PlatformBlockRenderProps): ReactElem
       accessibleName={accessibleName}
       availability={availability}
       projectedData={state}
-      emptyMessage="No values to show"
+      emptyMessage={emptyMessage}
     >
       {values === undefined ? null : (
         <section

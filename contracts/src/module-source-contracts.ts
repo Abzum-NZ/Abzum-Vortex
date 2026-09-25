@@ -26,7 +26,7 @@ import {
   type FormattedTextAllowedBlockV2,
 } from "./module-field-values-v2";
 import { moduleSourceRecordOwnershipModeSchema } from "./record-ownership-compatibility";
-import { sourceRuleGraphSchema } from "./rule-graph-source-contracts";
+import { sourceFlowCollectionSchema } from "./flow-source-contracts";
 
 /** The one current Module source/validation contract pair. */
 export const moduleSourceContractVersion = "3.0.0" as const;
@@ -662,6 +662,7 @@ const sourceCalculationSettingsSchema = z
       "date",
       "date_time",
     ]),
+    evaluation: z.enum(["read_time", "stored"]).optional(),
     decimal_places: z.number().int().min(0).max(12).optional(),
     expression: sourceCalculationExpressionSchema,
   })
@@ -681,6 +682,12 @@ const sourceCalculationSettingsSchema = z
         code: "custom",
         path: ["result_type"],
         message: "Calculation result type must match its operation",
+      });
+    if (value.evaluation === "stored" && operation === "deadline_passed")
+      context.addIssue({
+        code: "custom",
+        path: ["evaluation"],
+        message: "A deadline-passed calculation uses the current time and is read-time",
       });
     if (
       value.decimal_places !== undefined &&
@@ -1476,7 +1483,12 @@ const moduleSourceBodySchema = z
         })
         .strict(),
     ).max(100),
-    rules: z.array(sourceRuleGraphSchema).max(100),
+    /**
+     * The flows this Module owns (architecture decision 1): its save rules are flows with a
+     * `BeforeSave` trigger and `transaction` execution, and its record actions and reactions are
+     * flows too. Each is authored once, as the same nested task list every flow uses.
+     */
+    flows: sourceFlowCollectionSchema,
     extension_points: z.array(
       z
         .object({
