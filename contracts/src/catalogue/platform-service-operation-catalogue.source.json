@@ -798,5 +798,218 @@
         "failed"
       ]
     }
+  },
+  "create_custom_role": {
+    "key": "create_custom_role",
+    "name": "Create custom role",
+    "release": {
+      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
+      "operationId": "23b80a07-e41c-4b22-93a1-b8f088a8738e",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
+        },
+        "operationId": "23b80a07-e41c-4b22-93a1-b8f088a8738e"
+      },
+      "inputs": {
+        "evidence": {
+          "type": "json",
+          "required": true
+        }
+      },
+      "outputs": {
+        "role_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "access_version": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "permission": {
+        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
+        "key": "platform.organization.roles.manage"
+      },
+      "effect": "change",
+      "expectedRevision": "not_required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "validation",
+        "failed"
+      ]
+    }
+  },
+  "create_custom_role_from_template": {
+    "key": "create_custom_role_from_template",
+    "name": "Create custom role from template",
+    "release": {
+      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
+      "operationId": "e77b43bb-2bec-4845-81f8-ded19e9c7435",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
+        },
+        "operationId": "e77b43bb-2bec-4845-81f8-ded19e9c7435"
+      },
+      "inputs": {
+        "evidence": {
+          "type": "json",
+          "required": true
+        }
+      },
+      "outputs": {
+        "role_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "access_version": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "permission": {
+        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
+        "key": "platform.organization.roles.manage"
+      },
+      "effect": "change",
+      "expectedRevision": "not_required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "validation",
+        "failed"
+      ]
+    }
+  },
+  "accept_application_role_template": {
+    "key": "accept_application_role_template",
+    "name": "Accept application role template",
+    "release": {
+      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
+      "operationId": "1ec2bafd-aae8-4ebe-bf89-f6969a77ff37",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
+        },
+        "operationId": "1ec2bafd-aae8-4ebe-bf89-f6969a77ff37"
+      },
+      "inputs": {
+        "evidence": {
+          "type": "json",
+          "required": true
+        }
+      },
+      "outputs": {
+        "role_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "access_version": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "permission": {
+        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
+        "key": "platform.organization.roles.manage"
+      },
+      "effect": "change",
+      "expectedRevision": "not_required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "validation",
+        "failed"
+      ]
+    }
+  },
+  "accept_application_role_revision": {
+    "key": "accept_application_role_revision",
+    "name": "Accept application role revision",
+    "release": {
+      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
+      "operationId": "1545959f-7005-4751-85e9-3e877c3a3fd6",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
+        },
+        "operationId": "1545959f-7005-4751-85e9-3e877c3a3fd6"
+      },
+      "inputs": {
+        "evidence": {
+          "type": "json",
+          "required": true
+        }
+      },
+      "outputs": {
+        "role_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "access_version": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "permission": {
+        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
+        "key": "platform.organization.roles.manage"
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "conflict",
+        "validation",
+        "failed"
+      ]
+    }
   }
 }

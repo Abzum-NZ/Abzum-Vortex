@@ -4,10 +4,12 @@ import {
   addOrganizationAdministrationMembershipCommandSchema,
   applicationRootIdSchema,
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
+  changeOrganizationAdministrationRoleAuthorityCommandSchema,
   createOrganizationAdministrationGroupCommandSchema,
   deactivateOrganizationAdministrationRoleActivationCommandSchema,
   findPlatformServiceOperation,
   identitySessionSchema,
+  jsonValueSchema,
   organizationRuntimeSettingsSchema,
   organizationSelectionCandidateSchema,
   removeOrganizationAdministrationMembershipCommandSchema,
@@ -19,6 +21,7 @@ import {
   reviseOrganizationAdministrationRoleMetadataCommandSchema,
   stableDefinitionReleaseVersionSchema,
   type IdentitySession,
+  type JsonValue,
   type OrganizationSelectionCandidate,
   type PlatformServiceOperationKey,
   type ProtectedOperationDescriptor,
@@ -63,7 +66,7 @@ export type ProtectedOperationExecutionRequest = Readonly<{
 }>;
 
 /** A value a descriptor can declare for an input or output of a registered operation. */
-export type ProtectedOperationValue = string | number;
+export type ProtectedOperationValue = JsonValue;
 
 /**
  * The safe results the executor itself can report. `conflict` is not reported separately: the
@@ -90,6 +93,10 @@ export type ProtectedOperationExecutorDependencies = Readonly<{
     | "removeGroupMembership"
     | "reviseRoleMetadata"
     | "retireRole"
+    | "createCustomRole"
+    | "createCustomRoleFromTemplate"
+    | "acceptApplicationRoleTemplate"
+    | "acceptApplicationRoleRevision"
     | "assignRoleAssignment"
     | "revokeRoleAssignment"
     | "deactivateRoleActivation"
@@ -271,6 +278,74 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         }),
       ),
   }),
+  create_custom_role: operation({
+    schema: changeOrganizationAdministrationRoleAuthorityCommandSchema,
+    command: (inputs) => ({ evidence: inputs.evidence }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.createCustomRole(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          role_id: value.role.roleId,
+          revision: value.role.liveRevision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
+  create_custom_role_from_template: operation({
+    schema: changeOrganizationAdministrationRoleAuthorityCommandSchema,
+    command: (inputs) => ({ evidence: inputs.evidence }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.createCustomRoleFromTemplate(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          role_id: value.role.roleId,
+          revision: value.role.liveRevision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
+  accept_application_role_template: operation({
+    schema: changeOrganizationAdministrationRoleAuthorityCommandSchema,
+    command: (inputs) => ({ evidence: inputs.evidence }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.acceptApplicationRoleTemplate(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          role_id: value.role.roleId,
+          revision: value.role.liveRevision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
+  accept_application_role_revision: operation({
+    schema: changeOrganizationAdministrationRoleAuthorityCommandSchema,
+    command: (inputs) => ({ evidence: inputs.evidence }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.acceptApplicationRoleRevision(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          role_id: value.role.roleId,
+          revision: value.role.liveRevision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
   assign_role_assignment: operation({
     schema: assignOrganizationAdministrationRoleAssignmentCommandSchema,
     command: (inputs) => ({
@@ -414,6 +489,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
 const valueMatches = (type: string, value: unknown): value is ProtectedOperationValue => {
   if (type === "text" || type === "choice") return typeof value === "string";
   if (type === "whole_number") return typeof value === "number" && Number.isSafeInteger(value);
+  if (type === "json") return jsonValueSchema.safeParse(value).success;
   return false;
 };
 
