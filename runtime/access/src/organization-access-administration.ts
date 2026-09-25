@@ -65,8 +65,13 @@ import {
   type ChangeOrganizationAdministrationRoleAssignmentResult,
   type ChangeOrganizationAdministrationDelegationAuthorityResult,
   type ChangeOrganizationAdministrationRoleActivationResult,
+  type CloseOrganizationAccountCommand,
   type CreateOrganizationAdministrationGroupCommand,
+  type CreateOrganizationInvitationForAdministrationCommand,
   type IdentitySession,
+  type ReactivateOrganizationAccountCommand,
+  type RevokeOrganizationInvitationForAdministrationCommand,
+  type SuspendOrganizationAccountCommand,
   type ListOrganizationAdministrationGroupsCommand,
   type ListOrganizationAdministrationGroupsResult,
   type ListOrganizationAdministrationApplicationRoleTemplatesCommand,
@@ -116,6 +121,7 @@ import {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "./human-organization-request";
+import { createOrganizationLocalAdministrationService } from "./organization-local-administration";
 import {
   prepareOrganizationRoleChangeEvidence,
   verifyPreparedOrganizationRoleChangeEvidence,
@@ -476,6 +482,10 @@ export const createOrganizationAccessAdministrationService = (
   const newMembershipId = dependencies.membershipId ?? randomUUID;
   const newRoleAssignmentId = dependencies.roleAssignmentId ?? randomUUID;
   const newActivityId = dependencies.activityId ?? randomUUID;
+  // Organisation-account lifecycle and invitation operations are complete in the local
+  // administration service; this service exposes them beside the group, role and assignment
+  // operations so one executor dependency reaches every protected Access administration change.
+  const localAdministration = createOrganizationLocalAdministrationService(dependencies);
 
   const changedGroup = (
     rows: readonly GroupChangeRow[],
@@ -1221,6 +1231,38 @@ export const createOrganizationAccessAdministrationService = (
         }),
       );
     },
+
+    suspendOrganizationAccount: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: SuspendOrganizationAccountCommand,
+    ) => localAdministration.suspendOrganizationAccount(session, candidate, commandCandidate),
+
+    reactivateOrganizationAccount: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ReactivateOrganizationAccountCommand,
+    ) => localAdministration.reactivateOrganizationAccount(session, candidate, commandCandidate),
+
+    closeOrganizationAccount: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: CloseOrganizationAccountCommand,
+    ) => localAdministration.closeOrganizationAccount(session, candidate, commandCandidate),
+
+    createOrganizationInvitation: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: CreateOrganizationInvitationForAdministrationCommand,
+    ) =>
+      localAdministration.createOrganizationInvitation(session, candidate, commandCandidate),
+
+    revokeOrganizationInvitation: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: RevokeOrganizationInvitationForAdministrationCommand,
+    ) =>
+      localAdministration.revokeOrganizationInvitation(session, candidate, commandCandidate),
 
     listGroups: async (
       session: IdentitySession,

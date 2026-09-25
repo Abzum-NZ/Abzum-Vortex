@@ -257,6 +257,23 @@ const safeIntent = (intent: FlowInterfaceIntent): SafeIntent => ({
   ),
 });
 
+/**
+ * A declared sensitive output (for example a raw invitation secret) is returned once in the live
+ * result but never persisted: the stored effect records only `<output>_issued: true` in its place,
+ * so replaying the same run reports the same outcome without re-revealing the value.
+ */
+const redactSensitiveOutputs = (
+  outputs: Readonly<Record<string, JsonValue>>,
+  sensitive: readonly string[],
+): Record<string, JsonValue> => {
+  if (sensitive.length === 0) return { ...outputs };
+  const stored: Record<string, JsonValue> = {};
+  for (const name of sensitive) stored[`${name}_issued`] = true;
+  for (const [name, value] of Object.entries(outputs))
+    if (!sensitive.includes(name)) stored[name] = value;
+  return stored;
+};
+
 export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencies) => {
   const now = dependencies.now ?? (() => new Date());
   const clock = dependencies.clock ?? (() => performance.now());
@@ -408,12 +425,22 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       session: run.session,
       selection: run.selection,
       inputs,
+      effectKey: { runId: key.runId, taskPath: key.taskPath, iteration: key.iteration },
     });
     const outcome: FlowTaskOutcome = executed.outcome;
     const outputs: Record<string, JsonValue> =
       executed.outcome === "committed" ? { result: { ...executed.outputs } } : {};
+    const storedOutputs: Record<string, JsonValue> =
+      executed.outcome === "committed"
+        ? {
+            result: redactSensitiveOutputs(
+              executed.outputs,
+              entry.descriptor.sensitiveOutputs ?? [],
+            ),
+          }
+        : {};
     try {
-      await dependencies.ledger.complete(key, outcome, outputs);
+      await dependencies.ledger.complete(key, outcome, storedOutputs);
     } catch {
       // The effect ran. Leaving the claim open makes any repeat report it uncertain, never re-run it.
     }

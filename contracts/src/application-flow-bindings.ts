@@ -348,6 +348,13 @@ export const protectedOperationDescriptorSchema = z
     operation: protectedOperationReferenceSchema,
     inputs: z.record(builderKeySchema, flowValueDeclarationSchema),
     outputs: z.record(builderKeySchema, flowValueDeclarationSchema),
+    /**
+     * The declared outputs whose raw value must never be persisted or replayed: the runtime returns
+     * them once in the live result and records only that they were issued when it stores the effect.
+     * Each name must be one of the operation's own declared outputs; nothing is named here for a
+     * business reason, so a generic engine never special-cases an operation.
+     */
+    sensitiveOutputs: z.array(builderKeySchema).max(20).optional(),
     permission: protectedOperationPermissionReferenceSchema,
     effect: protectedOperationEffectKindSchema,
     expectedRevision: z.enum(["not_required", "required"]),
@@ -392,6 +399,20 @@ export const protectedOperationDescriptorSchema = z
         path: ["safeResults"],
         message: "An uncertain result requires duplicate protection for receipt reconciliation",
       });
+    const sensitiveOutputs = value.sensitiveOutputs ?? [];
+    if (new Set(sensitiveOutputs).size !== sensitiveOutputs.length)
+      context.addIssue({
+        code: "custom",
+        path: ["sensitiveOutputs"],
+        message: "Sensitive outputs must be unique",
+      });
+    for (const name of sensitiveOutputs)
+      if (!Object.hasOwn(value.outputs, name))
+        context.addIssue({
+          code: "custom",
+          path: ["sensitiveOutputs"],
+          message: "A sensitive output must be one of the operation's declared outputs",
+        });
   });
 
 /** Current user always means the original verified initiator. Other modes name Access-owned bindings. */
