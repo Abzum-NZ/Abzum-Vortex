@@ -39,12 +39,16 @@ export type DisplayStateContainerProps = Readonly<{
   availability: "available" | "unavailable";
   projectedData: ProjectedDisplayData;
   emptyMessage: string;
+  /** Authored refused text shown in place of the fixed reason text. */
+  refusedMessage?: string;
+  /** Authored error text shown in place of the fixed neutral error text. */
+  errorMessage?: string;
   children: ReactNode;
 }>;
 
 /**
- * Standard container for display component states. Loading, empty and refused states
- * render fixed data-free text announced politely at the component. A viewable placement
+ * Standard container for display component states. Loading, empty, refused and error states
+ * render data-free text (fixed, or authored for a block that declares it) announced at the component. A viewable placement
  * whose use is unavailable keeps its permitted content with a fixed unavailable note;
  * its components receive no semantic callbacks.
  */
@@ -53,6 +57,8 @@ export function DisplayStateContainer({
   availability,
   projectedData,
   emptyMessage,
+  refusedMessage,
+  errorMessage,
   children,
 }: DisplayStateContainerProps): ReactElement {
   if (projectedData.status === "loading") {
@@ -91,7 +97,22 @@ export function DisplayStateContainer({
         className="vortex-display-state vortex-display-refused"
         aria-label={`${accessibleName}: unavailable`}
       >
-        <span className="vortex-state-message">{REFUSAL_MESSAGES[projectedData.reason]}</span>
+        <span className="vortex-state-message">
+          {refusedMessage ?? REFUSAL_MESSAGES[projectedData.reason]}
+        </span>
+      </div>
+    );
+  }
+
+  if (projectedData.status === "error") {
+    return (
+      <div
+        role="alert"
+        data-vortex-display-state="error"
+        className="vortex-display-state vortex-display-error"
+        aria-label={`${accessibleName}: could not be loaded`}
+      >
+        <span className="vortex-state-message">{errorMessage ?? "Content could not be loaded"}</span>
       </div>
     );
   }

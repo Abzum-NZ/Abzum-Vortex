@@ -505,6 +505,216 @@ export const validateComponentSettings = (
   return failures;
 };
 
+export const recordsDisplayFormats = [
+  "automatic",
+  "text",
+  "number",
+  "currency",
+  "percent",
+  "date",
+  "date_time",
+  "boolean",
+] as const;
+export type RecordsDisplayFormat = (typeof recordsDisplayFormats)[number];
+
+export const recordsTableColumnWidths = ["auto", "narrow", "medium", "wide"] as const;
+export const recordsTableColumnAlignments = ["start", "center", "end"] as const;
+/** Low priority columns hide first on small screens; an essential column never hides. */
+export const recordsTableColumnPriorities = ["essential", "high", "medium", "low"] as const;
+export const recordsTableSelectionModes = ["none", "single", "multiple"] as const;
+
+/**
+ * One declared Records table column. `field` is the authored qualified field when read from a
+ * source document and the canonical field identity when read from compiled settings.
+ */
+export type RecordsTableColumnContract = Readonly<{
+  field: string;
+  label?: string;
+  format: RecordsDisplayFormat;
+  width: (typeof recordsTableColumnWidths)[number];
+  alignment: (typeof recordsTableColumnAlignments)[number];
+  priority: (typeof recordsTableColumnPriorities)[number];
+}>;
+
+export type RecordsTableParameterContract = Readonly<{
+  input: string;
+  source: "fixed" | "page";
+  fixedValue?: string;
+  pageParameter?: string;
+}>;
+
+/** Authored messages a Records table or Record detail shows in place of its fixed neutral text. */
+export type RecordsDisplayMessages = Readonly<{
+  empty?: string;
+  refused?: string;
+  error?: string;
+}>;
+
+/**
+ * The data contract a Records table placement declares in its settings (decision 5). The data
+ * source is the placement's own bound query; every field here must be a field that query allows.
+ */
+export type RecordsTableContract = Readonly<{
+  columns: readonly RecordsTableColumnContract[];
+  defaultSort?: Readonly<{ field: string; direction: "ascending" | "descending" }>;
+  sortableFields: readonly string[];
+  filterableFields: readonly string[];
+  search: boolean;
+  savedViews: boolean;
+  pageSize: number;
+  selectionMode: (typeof recordsTableSelectionModes)[number];
+  parameters: readonly RecordsTableParameterContract[];
+  messages: RecordsDisplayMessages;
+}>;
+
+export type RecordDetailFieldContract = Readonly<{
+  field: string;
+  label?: string;
+  format: RecordsDisplayFormat;
+}>;
+
+/** The declared list of detail fields a Record detail placement shows. */
+export type RecordDetailContract = Readonly<{
+  fields: readonly RecordDetailFieldContract[];
+  messages: RecordsDisplayMessages;
+}>;
+
+type SettingsRecord = Readonly<Record<string, ComponentSettingValue>>;
+
+const settingGroup = (value: ComponentSettingValue | undefined): SettingsRecord | undefined =>
+  value?.kind === "group" ? value.properties : undefined;
+const settingItems = (
+  value: ComponentSettingValue | undefined,
+): readonly ComponentSettingValue[] | undefined =>
+  value?.kind === "list" ? value.items : undefined;
+const settingText = (value: ComponentSettingValue | undefined): string | undefined =>
+  value?.kind === "text" && value.value.trim().length > 0 ? value.value.trim() : undefined;
+const settingChoice = <Choice extends string>(
+  value: ComponentSettingValue | undefined,
+  allowed: readonly Choice[],
+  fallback: Choice,
+): Choice =>
+  value?.kind === "choice" && (allowed as readonly string[]).includes(value.value)
+    ? (value.value as Choice)
+    : fallback;
+const settingField = (value: ComponentSettingValue | undefined): string | undefined =>
+  value?.kind !== "field_reference"
+    ? undefined
+    : "fieldId" in value
+      ? String(value.fieldId)
+      : String(value.field);
+const settingFlag = (value: ComponentSettingValue | undefined): boolean =>
+  value?.kind === "boolean" && value.value;
+
+const displayMessages = (settings: SettingsRecord): RecordsDisplayMessages => {
+  const empty = settingText(settings["empty_message"]);
+  const refused = settingText(settings["refused_message"]);
+  const error = settingText(settings["error_message"]);
+  return {
+    ...(empty === undefined ? {} : { empty }),
+    ...(refused === undefined ? {} : { refused }),
+    ...(error === undefined ? {} : { error }),
+  };
+};
+
+const fieldList = (value: ComponentSettingValue | undefined): string[] =>
+  (settingItems(value) ?? []).flatMap((item) => settingField(item) ?? []);
+
+/**
+ * Reads a Records table placement's declared data contract from its settings, applying the
+ * declared defaults. Returns undefined for a release that declares no `columns` setting, so the
+ * earlier table releases keep their exact behaviour. It reads settings that already passed the
+ * shared setting validator and never widens what a release declares; the same reader serves the
+ * publication rule, the server query request and the renderer.
+ */
+export const readRecordsTableContract = (
+  settings: SettingsRecord,
+): RecordsTableContract | undefined => {
+  const columnItems = settingItems(settings["columns"]);
+  if (columnItems === undefined) return undefined;
+  const columns = columnItems.flatMap((item): RecordsTableColumnContract[] => {
+    const column = settingGroup(item);
+    const field = column === undefined ? undefined : settingField(column["field"]);
+    if (column === undefined || field === undefined) return [];
+    const label = settingText(column["label"]);
+    return [
+      {
+        field,
+        ...(label === undefined ? {} : { label }),
+        format: settingChoice(column["format"], recordsDisplayFormats, "automatic"),
+        width: settingChoice(column["width"], recordsTableColumnWidths, "auto"),
+        alignment: settingChoice(column["alignment"], recordsTableColumnAlignments, "start"),
+        priority: settingChoice(column["priority"], recordsTableColumnPriorities, "medium"),
+      },
+    ];
+  });
+  const sort = settingGroup(settings["default_sort"]);
+  const sortField = sort === undefined ? undefined : settingField(sort["field"]);
+  const pageSize = settings["page_size"];
+  const parameters = (settingItems(settings["query_parameters"]) ?? []).flatMap(
+    (item): RecordsTableParameterContract[] => {
+      const parameter = settingGroup(item);
+      const input = parameter === undefined ? undefined : settingText(parameter["input"]);
+      if (parameter === undefined || input === undefined) return [];
+      const fixed = parameter["fixed_value"];
+      const pageParameter = settingText(parameter["page_parameter"]);
+      return [
+        {
+          input,
+          source: settingChoice(parameter["source"], ["fixed", "page"] as const, "fixed"),
+          ...(fixed?.kind === "text" ? { fixedValue: fixed.value } : {}),
+          ...(pageParameter === undefined ? {} : { pageParameter }),
+        },
+      ];
+    },
+  );
+  const direction = sort?.["direction"];
+  return {
+    columns,
+    ...(sortField === undefined
+      ? {}
+      : {
+          defaultSort: {
+            field: sortField,
+            direction:
+              direction?.kind === "choice" && direction.value === "descending"
+                ? "descending"
+                : "ascending",
+          },
+        }),
+    sortableFields: fieldList(settings["sortable_fields"]),
+    filterableFields: fieldList(settings["filterable_fields"]),
+    search: settingFlag(settings["search"]),
+    savedViews: settingFlag(settings["saved_views"]),
+    pageSize: pageSize?.kind === "number" ? pageSize.value : 25,
+    selectionMode: settingChoice(settings["selection_mode"], recordsTableSelectionModes, "none"),
+    parameters,
+    messages: displayMessages(settings),
+  };
+};
+
+/** Reads a Record detail placement's declared detail fields; undefined for earlier releases. */
+export const readRecordDetailContract = (
+  settings: SettingsRecord,
+): RecordDetailContract | undefined => {
+  const items = settingItems(settings["detail_fields"]);
+  if (items === undefined) return undefined;
+  const fields = items.flatMap((item): RecordDetailFieldContract[] => {
+    const entry = settingGroup(item);
+    const field = entry === undefined ? undefined : settingField(entry["field"]);
+    if (entry === undefined || field === undefined) return [];
+    const label = settingText(entry["label"]);
+    return [
+      {
+        field,
+        ...(label === undefined ? {} : { label }),
+        format: settingChoice(entry["format"], recordsDisplayFormats, "automatic"),
+      },
+    ];
+  });
+  return { fields, messages: displayMessages(settings) };
+};
+
 /** Kinds naming application-scoped authority, which a platform-owned default cannot choose. */
 const authorityReferenceKinds: ReadonlySet<string> = new Set([
   "field_reference",
