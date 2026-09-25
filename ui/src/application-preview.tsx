@@ -67,7 +67,7 @@ export type ApplicationPreviewInteraction = Readonly<{
   controlId: string;
   eventId: string;
   event: ComponentSemanticEventKind;
-  flowKind: "application_owned" | "platform_managed";
+  flowKind: "application_owned";
   flowId: string;
   declaredEffects: readonly FlowEffectKind[];
   simulatedNodes: readonly ApplicationPreviewFlowNodeSimulation[];
@@ -154,7 +154,7 @@ const parseInteraction = (value: unknown): ApplicationPreviewInteraction => {
   const record = requireObject(value, "A preview interaction must be an object");
   if (record.simulated !== true) fail("A preview interaction must be explicitly simulated");
   const flowKind = record.flowKind;
-  if (flowKind !== "application_owned" && flowKind !== "platform_managed")
+  if (flowKind !== "application_owned")
     fail("A preview interaction requires a known flow kind");
   return {
     bindingId: requireString(record.bindingId, "A preview interaction requires a binding identity"),
