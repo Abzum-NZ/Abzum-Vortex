@@ -124,7 +124,7 @@ export type ApplicationPreviewInteraction = Readonly<{
   controlId: string;
   eventId: string;
   event: ComponentSemanticEventKind;
-  flowKind: "application_owned" | "platform_managed";
+  flowKind: "application_owned";
   flowId: string;
   declaredEffects: readonly FlowEffectKind[];
   simulatedNodes: readonly ApplicationPreviewFlowNodeSimulation[];
@@ -230,7 +230,7 @@ const buildInteraction = (
   outcomes: ApplicationPreviewOutcome[],
 ): ApplicationPreviewInteraction | undefined => {
   const flowId = String(binding.flow.flowId);
-  if (binding.flow.kind === "application_owned" && flow === undefined) {
+  if (flow === undefined) {
     outcomes.push({ kind: "flow_unavailable", controlId: String(binding.controlId), flowId });
   }
   const simulatedNodes =
@@ -274,10 +274,7 @@ export const substituteApplicationPreviewInteractions = (
   const interactions: ApplicationPreviewInteraction[] = [];
   for (const binding of content.flowBindings) {
     if (controlIds !== undefined && !controlIds.has(String(binding.controlId))) continue;
-    const flow =
-      binding.flow.kind === "application_owned"
-        ? flowsById.get(String(binding.flow.flowId))
-        : undefined;
+    const flow = flowsById.get(String(binding.flow.flowId));
     const interaction = buildInteraction(binding, flow, outcomes);
     if (interaction !== undefined) interactions.push(interaction);
   }

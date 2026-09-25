@@ -688,7 +688,7 @@ const actionValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("current_actor") }).strict(),
   z.object({ source: z.literal("current_time") }).strict(),
 ]);
-const actionEffectSchema = z.discriminatedUnion("kind", [
+export const actionEffectSchema = z.discriminatedUnion("kind", [
   z
     .object({ kind: z.literal("set_field"), fieldId: fieldIdSchema, value: actionValueSchema })
     .strict(),
