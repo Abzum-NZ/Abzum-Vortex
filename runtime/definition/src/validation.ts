@@ -2,6 +2,7 @@ import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
   applicationDraftV2Schema,
   protectedReadModelKeys,
+  isPlatformPermissionKey,
   applicationSourceDocumentV2Schema,
   applicationCompilationRequestV2Schema,
   moduleDraftV3Schema,
@@ -3487,6 +3488,21 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       ),
     ]);
     const permissions = new Set(permissionMap.keys());
+    // A page access requirement or navigation item may name an exact application or bound-Module
+    // permission, or an exact platform administration permission from the shipped platform
+    // catalogue. Every other permission requirement stays limited to the application's own
+    // permissions, so a key this release cannot enforce is refused rather than accepted.
+    const pageNavigationPermissionKnown = (permissionKey: unknown): boolean => {
+      const key = String(permissionKey);
+      return permissions.has(key) || isPlatformPermissionKey(key);
+    };
+    // A requirement key names exactly one permission, and the runtime reads a platform catalogue
+    // key as platform authority. An application or bound-Module permission reusing a platform key
+    // would make that reference ambiguous, so it is refused.
+    if ([...permissions].some(isPlatformPermissionKey))
+      failures.push(
+        failure(output, "vortex.definition.application_identity_unique", "duplicate_key"),
+      );
     const applicationPermissions = new Map(
       array(content.permissions).map((permission) => [String(permission.key), permission]),
     );
@@ -3867,11 +3883,21 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       const inputTypes = new Map(
         [...inputMap].map(([key, input]) => [key, semanticFieldType(input.type) ?? ""]),
       );
+      // A record action changes a record under a record-scoped permission, so a platform
+      // administration permission cannot gate it: the runtime record-access decision refuses
+      // platform authority for a record target. The reference is refused here rather than
+      // compiled into a release that cannot enforce it.
+      const usesPlatformPermission = actionPermissionKeys(action).some(isPlatformPermissionKey);
+      if (usesPlatformPermission)
+        failures.push(
+          failure(output, "vortex.definition.application_action_references", "unsupported_choice"),
+        );
       let valid =
         subject !== undefined &&
         actionPermissionKeys(action).length > 0 &&
         permissionEntries.length === permissionMap.size &&
-        actionPermissionsMatch(action, permissionMap, permissionOwnersByKey) &&
+        (usesPlatformPermission ||
+          actionPermissionsMatch(action, permissionMap, permissionOwnersByKey)) &&
         applicationFieldReferencesValid(action.precondition, fields) &&
         (action.precondition === undefined ||
           applicationConditionTypesValid(
@@ -4061,7 +4087,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     walkValues(content.navigation, (item) => {
       if (
         item.type === "page" &&
-        (!pages.has(String(item.pageId)) || !permissions.has(String(item.permissionKey)))
+        (!pages.has(String(item.pageId)) || !pageNavigationPermissionKnown(item.permissionKey))
       )
         failures.push(
           failure(
@@ -4129,7 +4155,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         ? (actions.get(String(page.commitActionKey))?.subjectRecordTypeId ??
           standardActionRecordTypes.get(String(page.commitActionKey)))
         : undefined;
-      if (!permissions.has(String(page.accessPermissionKey)))
+      if (!pageNavigationPermissionKnown(page.accessPermissionKey))
         failures.push(
           failure(output, "vortex.definition.application_page_permission", "broken_reference"),
         );

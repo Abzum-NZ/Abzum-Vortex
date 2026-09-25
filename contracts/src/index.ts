@@ -5,6 +5,7 @@ export * from "./application-composition-catalogue";
 export * from "./projected-navigation";
 export * from "./platform-theme-catalogue";
 export * from "./platform-service-operation-catalogue";
+export * from "./platform-permission-catalogue";
 export * from "./application-flow-bindings";
 export * from "./flow-contracts";
 export * from "./form-continuation-contracts";

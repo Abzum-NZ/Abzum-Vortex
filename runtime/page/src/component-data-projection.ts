@@ -23,13 +23,23 @@ export type ProjectedCellValue =
 
 /**
  * One row addressed by the record identity the Query engine returned; cells are keyed by field.
- * The engine returns no record revision or per-row capabilities today, so the row carries neither
- * and none is ever inferred; a row action names the record and the server re-checks it.
+ * The row carries the record revision the engine returned and the per-row capabilities the engine
+ * computed from the same exact access decision it read the row with, so an inline edit can send a
+ * revision and a row action can be hidden for a row the viewer cannot act on. Neither is ever
+ * inferred: a row the engine returned without them withholds the whole projection.
  */
 export type ProjectedTableRow = Readonly<{
   recordId: string;
+  revision: number;
+  capabilities: NonNullable<ProtectedQueryRow["capabilities"]>;
   cells: Readonly<Record<string, ProjectedCellValue>>;
 }>;
+
+/** A query row proven to carry the revision and capabilities the engine decided for a list row. */
+type ListRow = ProtectedQueryRow & Pick<ProjectedTableRow, "revision" | "capabilities">;
+
+const isListRow = (row: ProtectedQueryRow): row is ListRow =>
+  row.revision !== undefined && row.capabilities !== undefined;
 
 export type ProjectedTableValues = Readonly<{
   kind: "table";
@@ -146,9 +156,10 @@ const isReadable = (field: string, input: ComponentDataProjectionInput): boolean
  * from the declared contract. A declared column appears only when every returned row carries its
  * field, because the Query engine omits a field the viewer cannot read; a column with any missing
  * value is withheld whole, heading included, and is never blanked. Undeclared fields the engine
- * returned are dropped, and each row keeps only the record identity the engine returned. Returns
- * undefined when the placement declares no data contract, a heading is missing, or the rows are
- * not a valid page (a repeated record identity), so the caller refuses neutrally.
+ * returned are dropped, and each row keeps only the record identity, revision and per-row
+ * capabilities the engine returned. Returns undefined when the placement declares no data
+ * contract, a heading is missing, a row carries no revision or capabilities, or the rows are not a
+ * valid page (a repeated record identity), so the caller refuses neutrally.
  */
 export const projectRecordsTableData = (
   input: ComponentDataProjectionInput,
@@ -158,6 +169,10 @@ export const projectRecordsTableData = (
   if (contract === undefined || contract.columns.length === 0) return undefined;
   if (new Set(rows.map((row) => row.recordId)).size !== rows.length) return undefined;
   if (rows.length === 0) return { status: "empty" };
+  // A list row must carry the revision and capabilities the engine decided for it; a row without
+  // them is withheld whole, never displayed with an inferred or absent capability.
+  const completeRows = rows.filter(isListRow);
+  if (completeRows.length !== rows.length) return undefined;
 
   const columns: { key: string; label: string; format: RecordsDisplayFormat }[] = [];
   for (const column of contract.columns) {
@@ -175,8 +190,10 @@ export const projectRecordsTableData = (
     values: {
       kind: "table",
       columns: columns.map(({ key, label }) => ({ key, label })),
-      rows: rows.map((row) => ({
+      rows: completeRows.map((row) => ({
         recordId: row.recordId,
+        revision: row.revision,
+        capabilities: row.capabilities,
         cells: Object.fromEntries(
           columns.map((column) => [
             column.key,

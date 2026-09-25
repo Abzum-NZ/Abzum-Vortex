@@ -8,6 +8,7 @@ import {
   moduleRootIdSchema,
   queryIdSchema,
   recordIdSchema,
+  revisionSchema,
   stableDefinitionReleaseVersionSchema,
 } from "@vortex/contracts";
 import {
@@ -52,19 +53,82 @@ export const protectedQueryCommandSchema = z
   .strict();
 export type ProtectedQueryCommand = z.infer<typeof protectedQueryCommandSchema>;
 
+/**
+ * The record action kinds one list row can expose per row. Read is implied by the
+ * row's own presence; create is not a per-existing-record action and is never listed.
+ */
+export const protectedQueryRowActionKinds = ["update", "delete", "restore"] as const;
+export const protectedQueryRowActionKindSchema = z.enum(protectedQueryRowActionKinds);
+export type ProtectedQueryRowActionKind = z.infer<typeof protectedQueryRowActionKindSchema>;
+
+/** One row revision is a JavaScript-safe positive integer, exactly as a concurrency number is. */
+const rowRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
+
+/**
+ * The per-row capabilities the Query engine returns, always from the same exact per-row access
+ * decision read_record applies and never looser: the field identities the viewer may change on
+ * this row, and the record action kinds the viewer may take on it.
+ */
+export const protectedQueryRowCapabilitiesSchema = z
+  .object({
+    changeableFieldIds: z.array(fieldIdSchema).max(500),
+    actions: z.array(protectedQueryRowActionKindSchema).max(protectedQueryRowActionKinds.length),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.actions).size !== value.actions.length)
+      context.addIssue({
+        code: "custom",
+        path: ["actions"],
+        message: "Each row action is reported once",
+      });
+    const changeable = value.changeableFieldIds.map((fieldId) => fieldId.toLowerCase());
+    if (new Set(changeable).size !== changeable.length)
+      context.addIssue({
+        code: "custom",
+        path: ["changeableFieldIds"],
+        message: "Each changeable field is reported once",
+      });
+  });
+export type ProtectedQueryRowCapabilities = z.infer<typeof protectedQueryRowCapabilitiesSchema>;
+
+const protectedQueryRowFields = {
+  recordId: recordIdSchema,
+  /** Readable requested fields only; a withheld field is absent rather than blank. */
+  values: z.record(fieldIdSchema, jsonValueSchema),
+  /**
+   * The declared supported system metadata values for this row, or absent when
+   * the request declares none. Undeclared values never appear.
+   */
+  systemValues: recordSystemValuesSchema.optional(),
+};
+
+/**
+ * One row of any query result. A list row additionally carries its revision and
+ * capabilities; the fields stay optional here so an arrangement that reshapes rows
+ * without them remains a valid query row.
+ */
 export const protectedQueryRowSchema = z
   .object({
-    recordId: recordIdSchema,
-    /** Readable requested fields only; a withheld field is absent rather than blank. */
-    values: z.record(fieldIdSchema, jsonValueSchema),
-    /**
-     * The declared supported system metadata values for this row, or absent when
-     * the request declares none. Undeclared values never appear.
-     */
-    systemValues: recordSystemValuesSchema.optional(),
+    ...protectedQueryRowFields,
+    revision: rowRevisionSchema.optional(),
+    capabilities: protectedQueryRowCapabilitiesSchema.optional(),
   })
   .strict();
 export type ProtectedQueryRow = z.infer<typeof protectedQueryRowSchema>;
+
+/**
+ * One row of one list query page. The Query engine returns every page row with
+ * its record revision and its per-row capabilities, so both are required here.
+ */
+export const protectedQueryPageRowSchema = z
+  .object({
+    ...protectedQueryRowFields,
+    revision: rowRevisionSchema,
+    capabilities: protectedQueryRowCapabilitiesSchema,
+  })
+  .strict();
+export type ProtectedQueryPageRow = z.infer<typeof protectedQueryPageRowSchema>;
 
 export const protectedQueryRefusalReasonCodes = [
   "request_invalid",
@@ -96,7 +160,7 @@ export const protectedQueryPageSchema = z
     moduleRootId: moduleRootIdSchema,
     moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
     queryId: queryIdSchema,
-    rows: z.array(protectedQueryRowSchema).max(200),
+    rows: z.array(protectedQueryPageRowSchema).max(200),
     /** Opaque; present only when a later page may hold further permitted rows. */
     nextContinuationToken: z.string().optional(),
   })
