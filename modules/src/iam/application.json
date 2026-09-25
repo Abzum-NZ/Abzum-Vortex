@@ -1603,39 +1603,6 @@
                 "slots": {
                   "content": {
                     "placements": {
-                      "input_add_group_membership_membership_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "membership_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Membership id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
                       "input_add_group_membership_group_id": {
                         "block": {
                           "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
@@ -1804,7 +1771,6 @@
                     },
                     "order": {
                       "desktop": [
-                        "input_add_group_membership_membership_id",
                         "input_add_group_membership_group_id",
                         "input_add_group_membership_organization_account_id",
                         "input_add_group_membership_starts_at",
@@ -2337,39 +2303,6 @@
                 "slots": {
                   "content": {
                     "placements": {
-                      "input_assign_role_assignment_role_assignment_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "role_assignment_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Role assignment id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
                       "input_assign_role_assignment_role_id": {
                         "block": {
                           "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
@@ -2740,7 +2673,6 @@
                     },
                     "order": {
                       "desktop": [
-                        "input_assign_role_assignment_role_assignment_id",
                         "input_assign_role_assignment_role_id",
                         "input_assign_role_assignment_expected_role_revision",
                         "input_assign_role_assignment_assignee_kind",
@@ -4378,10 +4310,6 @@
           "kind": "initiator"
         },
         "inputs": {
-          "membership_id": {
-            "type": "text",
-            "required": true
-          },
           "group_id": {
             "type": "text",
             "required": true
@@ -4441,10 +4369,6 @@
           "kind": "initiator"
         },
         "inputs": {
-          "role_assignment_id": {
-            "type": "text",
-            "required": true
-          },
           "role_id": {
             "type": "text",
             "required": true
@@ -4682,10 +4606,6 @@
         "event": "action",
         "flow": "flow_add_group_membership",
         "inputs": {
-          "membership_id": {
-            "kind": "caller",
-            "name": "membership_id"
-          },
           "group_id": {
             "kind": "caller",
             "name": "group_id"
@@ -4711,10 +4631,6 @@
         "event": "action",
         "flow": "flow_assign_role_assignment",
         "inputs": {
-          "role_assignment_id": {
-            "kind": "caller",
-            "name": "role_assignment_id"
-          },
           "role_id": {
             "kind": "caller",
             "name": "role_id"

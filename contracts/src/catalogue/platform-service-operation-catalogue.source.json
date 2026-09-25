@@ -670,10 +670,6 @@
         "operationId": "368bb023-3059-48b9-82e2-45df9832e65d"
       },
       "inputs": {
-        "membership_id": {
-          "type": "text",
-          "required": true
-        },
         "group_id": {
           "type": "text",
           "required": true
@@ -739,10 +735,6 @@
         "operationId": "0913006c-ea2a-49a9-bff9-6e1d53c8f2db"
       },
       "inputs": {
-        "role_assignment_id": {
-          "type": "text",
-          "required": true
-        },
         "role_id": {
           "type": "text",
           "required": true

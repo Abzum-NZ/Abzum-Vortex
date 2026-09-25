@@ -193,13 +193,20 @@ export const changeOrganizationAdministrationMembershipResultSchema = z
 
 export const addOrganizationAdministrationMembershipCommandSchema = z
   .object({
-    membershipId: membershipIdSchema,
     groupId: groupIdSchema,
     organizationAccountId: organizationAccountIdSchema,
     startsAt: timestampSchema,
     expiresAt: timestampSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.expiresAt !== undefined && Date.parse(value.expiresAt) <= Date.parse(value.startsAt))
+      context.addIssue({
+        code: "custom",
+        path: ["expiresAt"],
+        message: "Membership expiry must follow its start",
+      });
+  });
 
 export const organizationAdministrationPermissionSchema = z
   .object({
@@ -584,7 +591,6 @@ export const changeOrganizationAdministrationRoleAssignmentResultSchema = z
 
 export const assignOrganizationAdministrationRoleAssignmentCommandSchema = z
   .object({
-    roleAssignmentId: roleAssignmentIdSchema,
     roleId: roleIdSchema,
     expectedRoleRevision: javascriptSafeRevisionSchema,
     assigneeKind: z.enum(["organization_account", "group"]),
@@ -594,7 +600,28 @@ export const assignOrganizationAdministrationRoleAssignmentCommandSchema = z
     startsAt: timestampSchema,
     expiresAt: timestampSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const accountAssignee = value.assigneeKind === "organization_account";
+    if (accountAssignee !== (value.organizationAccountId !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["organizationAccountId"],
+        message: "Only an organisation-account assignee names an organisation account",
+      });
+    if (accountAssignee === (value.groupId !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["groupId"],
+        message: "Only a Group assignee names a Group",
+      });
+    if (value.expiresAt !== undefined && Date.parse(value.expiresAt) <= Date.parse(value.startsAt))
+      context.addIssue({
+        code: "custom",
+        path: ["expiresAt"],
+        message: "Assignment expiry must follow its start",
+      });
+  });
 
 export const organizationAdministrationDelegationScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("organization_catalogue") }).strict(),

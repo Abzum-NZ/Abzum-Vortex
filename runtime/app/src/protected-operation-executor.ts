@@ -128,6 +128,10 @@ const operation =
     return definition.run(services, caller, command.data);
   };
 
+/** A blank optional text input, as an empty form field submits it, is the same as an absent one. */
+const optionalText = (value: ProtectedOperationValue | undefined) =>
+  typeof value === "string" && value.trim() === "" ? undefined : value;
+
 const mapAvailable = <Value>(
   result: HumanOrganizationRequestResult<Value>,
   project: (value: Value) => Outputs,
@@ -190,11 +194,10 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
   add_group_membership: operation({
     schema: addOrganizationAdministrationMembershipCommandSchema,
     command: (inputs) => ({
-      membershipId: inputs.membership_id,
       groupId: inputs.group_id,
       organizationAccountId: inputs.organization_account_id,
       startsAt: inputs.starts_at,
-      expiresAt: inputs.expires_at,
+      expiresAt: optionalText(inputs.expires_at),
     }),
     run: async (services, caller, command) =>
       mapAvailable(
@@ -271,15 +274,14 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
   assign_role_assignment: operation({
     schema: assignOrganizationAdministrationRoleAssignmentCommandSchema,
     command: (inputs) => ({
-      roleAssignmentId: inputs.role_assignment_id,
       roleId: inputs.role_id,
       expectedRoleRevision: inputs.expected_role_revision,
       assigneeKind: inputs.assignee_kind,
-      organizationAccountId: inputs.organization_account_id,
-      groupId: inputs.group_id,
+      organizationAccountId: optionalText(inputs.organization_account_id),
+      groupId: optionalText(inputs.group_id),
       assignmentKind: inputs.assignment_kind,
       startsAt: inputs.starts_at,
-      expiresAt: inputs.expires_at,
+      expiresAt: optionalText(inputs.expires_at),
     }),
     run: async (services, caller, command) =>
       mapAvailable(

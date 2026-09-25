@@ -13,6 +13,8 @@ import {
   changeOrganizationAdministrationGroupResultSchema,
   createOrganizationAdministrationGroupCommandSchema,
   groupIdSchema,
+  membershipIdSchema,
+  roleAssignmentIdSchema,
   listOrganizationAdministrationApplicationRoleTemplatesCommandSchema,
   listOrganizationAdministrationApplicationRoleTemplatesResultSchema,
   listOrganizationAdministrationDelegationAuthoritiesCommandSchema,
@@ -365,6 +367,25 @@ const normalizeRoleActivation = (value: unknown): unknown => {
 const sameUuid = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
+const sameAssignee = (
+  assignee: Readonly<
+    | { kind: "organization_account"; organizationAccountId: string }
+    | { kind: "group"; groupId: string }
+  >,
+  requested: Readonly<{
+    assigneeKind: "organization_account" | "group";
+    organizationAccountId?: string | undefined;
+    groupId?: string | undefined;
+  }>,
+): boolean =>
+  assignee.kind === "organization_account"
+    ? requested.assigneeKind === "organization_account" &&
+      requested.organizationAccountId !== undefined &&
+      sameUuid(assignee.organizationAccountId, requested.organizationAccountId)
+    : requested.assigneeKind === "group" &&
+      requested.groupId !== undefined &&
+      sameUuid(assignee.groupId, requested.groupId);
+
 const samePermissionReference = (
   left: Readonly<{
     applicationRootId?: string | undefined;
@@ -436,6 +457,8 @@ const mapRecordedRefusal = async <Result>(
 export type OrganizationAccessAdministrationDependencies = HumanOrganizationRequestDependencies &
   Readonly<{
     groupId?: () => string;
+    membershipId?: () => string;
+    roleAssignmentId?: () => string;
     activityId?: () => string;
   }>;
 
@@ -444,6 +467,8 @@ export const createOrganizationAccessAdministrationService = (
 ) => {
   const requests = createHumanOrganizationRequestService(dependencies);
   const newGroupId = dependencies.groupId ?? randomUUID;
+  const newMembershipId = dependencies.membershipId ?? randomUUID;
+  const newRoleAssignmentId = dependencies.roleAssignmentId ?? randomUUID;
   const newActivityId = dependencies.activityId ?? randomUUID;
 
   const changedGroup = (
@@ -617,8 +642,10 @@ export const createOrganizationAccessAdministrationService = (
       const command =
         addOrganizationAdministrationMembershipCommandSchema.safeParse(commandCandidate);
       if (!command.success) return { kind: "unavailable" };
+      let membershipId: string;
       let activityId: string;
       try {
+        membershipId = membershipIdSchema.parse(newMembershipId());
         activityId = activityIdSchema.parse(newActivityId());
       } catch {
         return { kind: "temporarily_unavailable" };
@@ -630,7 +657,7 @@ export const createOrganizationAccessAdministrationService = (
             await transaction.query<MembershipChangeRow>`
             select outcome, organization_id, membership_summary, access_version
             from vortex_access.add_organization_group_membership_for_administration(
-              ${command.data.membershipId}::uuid,
+              ${membershipId}::uuid,
               ${command.data.groupId}::uuid,
               ${command.data.organizationAccountId}::uuid,
               ${command.data.startsAt}::timestamptz,
@@ -658,7 +685,12 @@ export const createOrganizationAccessAdministrationService = (
             row.outcome !== "completed" ||
             !parsed.success ||
             parsed.data.accessVersion !== scope.accessVersion + 1 ||
-            !sameUuid(parsed.data.membership.membershipId, command.data.membershipId) ||
+            !sameUuid(parsed.data.membership.membershipId, membershipId) ||
+            !sameUuid(parsed.data.membership.groupId, command.data.groupId) ||
+            !sameUuid(
+              parsed.data.membership.organizationAccountId,
+              command.data.organizationAccountId,
+            ) ||
             parsed.data.membership.revision !== 1 ||
             parsed.data.membership.state !== "live"
           )
@@ -845,8 +877,10 @@ export const createOrganizationAccessAdministrationService = (
       const command =
         assignOrganizationAdministrationRoleAssignmentCommandSchema.safeParse(commandCandidate);
       if (!command.success) return { kind: "unavailable" };
+      let roleAssignmentId: string;
       let activityId: string;
       try {
+        roleAssignmentId = roleAssignmentIdSchema.parse(newRoleAssignmentId());
         activityId = activityIdSchema.parse(newActivityId());
       } catch {
         return { kind: "temporarily_unavailable" };
@@ -857,7 +891,7 @@ export const createOrganizationAccessAdministrationService = (
             await transaction.query<RoleAssignmentChangeRow>`
           select outcome, organization_id, assignment_summary, access_version
           from vortex_access.assign_organization_role_assignment_for_administration(
-            ${command.data.roleAssignmentId}::uuid,
+            ${roleAssignmentId}::uuid,
             ${command.data.roleId}::uuid,
             ${command.data.expectedRoleRevision}::bigint,
             ${command.data.assigneeKind}::text,
@@ -889,7 +923,10 @@ export const createOrganizationAccessAdministrationService = (
             row.outcome !== "completed" ||
             !parsed.success ||
             parsed.data.accessVersion !== scope.accessVersion + 1 ||
-            !sameUuid(parsed.data.assignment.roleAssignmentId, command.data.roleAssignmentId) ||
+            !sameUuid(parsed.data.assignment.roleAssignmentId, roleAssignmentId) ||
+            !sameUuid(parsed.data.assignment.role.roleId, command.data.roleId) ||
+            !sameAssignee(parsed.data.assignment.assignee, command.data) ||
+            parsed.data.assignment.assignmentKind !== command.data.assignmentKind ||
             parsed.data.assignment.revision !== 1 ||
             parsed.data.assignment.state !== "live"
           )
