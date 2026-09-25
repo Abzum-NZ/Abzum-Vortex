@@ -89,7 +89,7 @@ Every current element is authored as part of the one flow shape. The table maps 
 | Current-user flow Return node | The flow's typed `outputs`; a **Stop** task for an early outcome. |
 | Current-user flow edges and their outcomes | The ordered task list; a task's refused, conflict or invalid outcome goes to the `errors` handler, or, with `allowRefusal: true`, to an **If** or **Switch** on `{{ outputs.task.outcome }}`. |
 | Current-user flow node run-as | The flow's `runAs` (the initiating person); a task never overrides it. |
-| Workflow Start node and trigger | The flow declaration. An event trigger becomes an `Event` trigger, a schedule a `Schedule` trigger and a connection message an `IncomingMessage` trigger; a button, interface or parent-workflow start becomes a binding or a **Run flow** or **Run background flow** task. |
+| Workflow Start node and trigger | The flow declaration. An event trigger becomes an `Event` trigger, a schedule a `Schedule` trigger and a connection message an `IncomingMessage` trigger; a button, menu, record gesture, agent tool or interface start becomes a **binding** to a frontend flow, and a parent-flow start becomes a **Run flow** or **Run background flow** task. |
 | Workflow run-as (`initiating_person`, `system_with_source_authority`) | The flow's `runAs`: the initiating person when started through Run background flow from an interactive flow, otherwise a declared specified account or System. |
 | Workflow `condition` node | An **If** control task. |
 | Workflow `decision_table` node | A **Switch** control task. |
@@ -239,9 +239,9 @@ values remain omitted while the safe record and field identifiers are retained.
 
 ## Starting durable work
 
-An interactive flow requests durable [work](09-workflows-and-pipelines.md) only through a Run background flow task, and a committed record change reaches durable work only through an `Event`-triggered flow; neither calls Kestra while a record transaction is open. If the operation saves a record, the record changes, declared event, and exact durable workflow-start intent or event are written in the same transaction. A refusal, stale revision, validation failure, or rollback writes none of them. After commit, the dispatcher hands the recorded fact to the private workflow adapter with duplicate protection.
+Every user-facing action starts a frontend flow through its binding, and a frontend flow requests durable [work](09-workflows-and-pipelines.md) only through a Run background flow task with declared typed inputs; a committed record change reaches durable work only through an `Event`-triggered flow; neither calls Kestra while a record transaction is open. The start is committed whether or not a record is involved. If the operation saves a record, the record changes, declared event, and exact durable workflow-start intent or event are written in the same transaction. A refusal, stale revision, validation failure, or rollback writes none of them. After commit, the dispatcher hands the recorded fact to the private workflow adapter with duplicate protection.
 
-An authorised button that uses the published button/action trigger but makes no record change still opens a short Vortex transaction and persists its exact start intent before returning success. A browser preview or direct call to Kestra cannot substitute for that transaction. The current first-release trigger contract is action- and subject-record-bound. A future record-free start requires a separately declared protected Workflow operation plus explicit versioned descriptor, trigger, input, and execution-reference contracts; until those exist, it is unavailable rather than represented by a fabricated action, placeholder record, or arbitrary payload.
+An authorised button, menu command, record gesture, agent tool call or interface operation that makes no record change still opens a short Vortex transaction and persists its exact start intent before returning success; a binding never calls Kestra directly. A browser preview or direct call to Kestra cannot substitute for that transaction. No form, interface operation or agent tool binds a lower-level operation directly, and a record-free start is never represented by a fabricated action, placeholder record, or arbitrary payload.
 
 A Kestra outage after commit leaves the event or start intent pending for retry. Vortex reports the record save as committed and the background start as pending; it never turns a committed save into a false failure. Conversely, a rejected or rolled-back save can never produce a workflow run.
 
@@ -309,11 +309,11 @@ sequenceDiagram
 - Re-delivering an event does not create a second workflow run for the same trigger.
 - A later change cannot overtake an earlier failed event for the same record.
 - A rule that drops an unsafe condition cannot publish; it must express a safe condition or refuse the operation.
-- Actions called from pages, MCP, programmable interfaces, and workflows follow the same validation and permission path. MCP does not provide a second action executor.
+- Actions called from pages, MCP, programmable interfaces and workflows all start a flow through a binding and follow the same validation and permission path. No form, interface or tool binds a lower-level operation directly, and MCP does not provide a second action executor.
 
 ## Page binding boundary
 
-[Typed page/form/operation bindings](appendices/page-builder-contracts.md#forms-actions-and-semantic-controls) map each surfaced action to a binding: the exact flow id plus a typed input map. The flow's record, Run flow or protected-operation task invokes apply record changes, a named action, or a closed protected platform operation for an authorised administration form. No component silently saves, and no frontend binding permits arbitrary RPC or bypasses current access, validation, revisions or duplicate protection. Mandatory business rules must also hold for every permitted direct service/interface invocation; hiding or replacing a button never changes them.
+[Typed page, form and flow bindings](appendices/page-builder-contracts.md#forms-actions-and-semantic-controls) map each surfaced action to a flow binding: the exact flow id plus a typed input map. A record, Run flow or protected-operation task inside that flow invokes apply record changes, a named action, or a closed protected platform operation for an authorised administration form. A form, interface operation or agent tool binds the flow entry point (a one-task flow by default) and never the operation directly. No component silently saves, and no frontend binding permits arbitrary RPC or bypasses current access, validation, revisions or duplicate protection. Mandatory business rules must also hold for every permitted direct service/interface invocation; hiding or replacing a button never changes them.
 
 ## Configured effects and execution identity
 
