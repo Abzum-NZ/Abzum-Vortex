@@ -7,7 +7,13 @@
 -- binding revision, its Module release revision and the Application release
 -- revision). A binding revision advances on every installation lifecycle
 -- transition and a release revision is immutable, so a stale plan can never be
--- selected and a plan can never grant access the live pins do not.
+-- selected and a plan can never grant access the live pins do not. Only an
+-- all-active pin set is stored: storage adoption never retires a field mapping
+-- an active binding's release declares, but it can retire one a detached
+-- binding's release declares, so a detached pin set is resolved afresh on each
+-- call and keeps refusing retired storage exactly as before. The table is
+-- append-only and not yet evicted; eviction belongs to the runtime-bundle
+-- lifecycle (architecture Decision 9).
 --
 -- The plan is stored in vortex_record.installation_access_plans and built by
 -- vortex_record.resolve_installation_access_plan_internal. Both fact loaders
@@ -88,12 +94,15 @@ declare
   columns_value jsonb;
   value_expression text;
   plan jsonb;
+  cacheable boolean;
 begin
   -- The plan is keyed by the exact installation pins. A binding revision is
   -- advanced by every installation lifecycle transition, and a release revision
   -- is immutable, so any change to definitions, bindings, permissions or saved
   -- conditions yields a different key and therefore a different plan. A plan
-  -- that no longer matches the live pins can never be selected.
+  -- that no longer matches the live pins can never be selected. The plan holds
+  -- declared requirements only: role grants and every other decision input are
+  -- read live by Access, never from the plan.
   if p_installation is null
     or pg_catalog.jsonb_typeof(p_installation) is distinct from 'object'
     or pg_catalog.jsonb_typeof(p_installation -> 'moduleBindings') is distinct from 'array'
@@ -141,11 +150,26 @@ begin
     'hex'
   );
 
-  select stored.plan into cached_plan
-  from vortex_record.installation_access_plans as stored
-  where stored.plan_key = plan_key_value;
-  if cached_plan is not null then
-    return cached_plan;
+  -- Only an all-active pin set is cached. The storage catalogue and field
+  -- mappings the plan resolves are not part of the key; storage adoption can
+  -- retire a field mapping only while no provisioned or active binding pins a
+  -- release that declares the field, so an active plan's mappings cannot
+  -- change under it. A detached binding is not counted there, so a detached
+  -- pin set is resolved afresh on every call and still refuses a retired
+  -- mapping exactly as before.
+  cacheable := not exists (
+    select 1
+    from pg_catalog.jsonb_array_elements(p_installation -> 'moduleBindings') as item(value)
+    where (item.value ->> 'state') is distinct from 'active'
+  );
+
+  if cacheable then
+    select stored.plan into cached_plan
+    from vortex_record.installation_access_plans as stored
+    where stored.plan_key = plan_key_value;
+    if cached_plan is not null then
+      return cached_plan;
+    end if;
   end if;
 
   -- Step 1: the pinned definitions. Record types, relationships and saved
@@ -410,8 +434,13 @@ begin
     'permissions', permission_by_id
   );
 
-  -- A concurrent builder may have stored the same immutable plan first; in that
-  -- case its row is the one every reader returns.
+  if not cacheable then
+    return plan;
+  end if;
+
+  -- A concurrent builder may have stored the same plan first. Both were built
+  -- from the same immutable pins, so either row is the same plan; this call's
+  -- own plan is returned when that row is not yet visible to its snapshot.
   insert into vortex_record.installation_access_plans (
     plan_key, organization_id, application_root_id,
     application_release_revision, plan
@@ -424,7 +453,7 @@ begin
   select stored.plan into cached_plan
   from vortex_record.installation_access_plans as stored
   where stored.plan_key = plan_key_value;
-  return cached_plan;
+  return coalesce(cached_plan, plan);
 exception
   when no_data_found then
     raise exception using errcode = '55000',
@@ -442,7 +471,7 @@ grant execute on function vortex_record.resolve_installation_access_plan_interna
   to vortex_record_adapter;
 
 comment on function vortex_record.resolve_installation_access_plan_internal(jsonb) is
-  'Private installation access plan builder and cache: resolves definitions, column maps, permission alternatives and saved conditions once per installation binding revision.';
+  'Private installation access plan builder and cache: resolves definitions, column maps, permission alternatives and saved conditions once per all-active installation binding revision; a detached pin set is resolved afresh.';
 
 create or replace function vortex_record.load_record_access_facts_from_installation_internal(
   p_record_type_id uuid,
@@ -936,6 +965,13 @@ begin
   return vortex_record.load_record_access_facts_from_installation_internal(
     p_record_type_id, p_action_kind, p_record_id, p_expected_concurrency_number, installation
   );
+exception
+  when no_data_found then
+    raise exception using errcode = '55000',
+      message = 'Installed Module definition is unavailable';
+  when too_many_rows then
+    raise exception using errcode = '55000',
+      message = 'Installed Module definition is ambiguous';
 end
 $function$;
 

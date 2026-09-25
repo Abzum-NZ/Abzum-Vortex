@@ -46,6 +46,13 @@ begin
   return vortex_record.load_record_access_facts_from_installation_internal(
     p_record_type_id, p_action_kind, p_record_id, p_expected_concurrency_number, installation
   );
+exception
+  when no_data_found then
+    raise exception using errcode = '55000',
+      message = 'Installed Module definition is unavailable';
+  when too_many_rows then
+    raise exception using errcode = '55000',
+      message = 'Installed Module definition is ambiguous';
 end
 $function$;
 
