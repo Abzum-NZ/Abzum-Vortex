@@ -7,11 +7,11 @@ import {
   connectionTypeSourceDocumentSchema,
   platformBlockReferenceV2Schema,
   platformBlockReleaseV2Schema,
+  platformThemeTokenRolesV2,
   PLATFORM_SERVICE_OPERATION_RELEASES,
   PLATFORM_SERVICE_OPERATIONS,
   platformIdSchema,
   platformThemeReleaseV2Schema,
-  platformManagedFlowDependencySchema,
   platformServiceOperationReleaseSchema,
   stableDefinitionReleaseVersionSchema,
   type ApplicationCompositionCatalogueSnapshotV2,
@@ -22,7 +22,7 @@ import {
   type PlatformId,
   type PlatformBlockReleaseV2,
   type PlatformThemeReleaseV2,
-  type PlatformManagedFlowDependency,
+  type PlatformThemeTokenRoleV2,
   type PlatformServiceOperationRelease,
   type SemanticVersion,
 } from "@vortex/contracts";
@@ -44,7 +44,6 @@ export type PlatformConnectionTypeReleaseDefinition = Readonly<{
 export type ImmutableDefinitionPublicationCatalogueDefinition = Readonly<{
   connectionTypeReleases: readonly PlatformConnectionTypeReleaseDefinition[];
   applicationCompositionV2?: ApplicationCompositionCatalogueDefinitionV2;
-  platformManagedFlowReleases?: readonly PlatformManagedFlowDependency[];
   platformServiceOperationReleases?: readonly PlatformServiceOperationRelease[];
 }>;
 
@@ -124,10 +123,6 @@ const catalogueDefinitionSchema = z
   .object({
     connectionTypeReleases: z.array(connectionTypeReleaseDefinitionSchema).max(10_000),
     applicationCompositionV2: applicationCompositionCatalogueDefinitionV2Schema.optional(),
-    platformManagedFlowReleases: z
-      .array(platformManagedFlowDependencySchema)
-      .max(10_000)
-      .optional(),
     platformServiceOperationReleases: z
       .array(platformServiceOperationReleaseSchema)
       .max(10_000)
@@ -194,6 +189,31 @@ const ensureUniqueApplicationCompositionReleases = (
     const versionKey = `${release.catalogueThemeId}:${release.releaseVersion}`;
     if (themeVersions.has(versionKey)) duplicate();
     themeVersions.add(versionKey);
+  }
+};
+
+/**
+ * A platform theme release is complete only when it maps every role in the shared
+ * token-role vocabulary with the kind that vocabulary requires, and marks each colour pair
+ * with exactly the declared colour role (none where the vocabulary declares none). An
+ * incomplete or mismarked release refuses here instead of publishing a theme that would
+ * leave the renderer or the readability checks on another convention.
+ */
+const ensurePlatformThemeReleasesCoverEveryRole = (
+  definition: ApplicationCompositionCatalogueDefinitionV2 | undefined,
+): void => {
+  if (definition === undefined) return;
+  const roles: readonly PlatformThemeTokenRoleV2[] = platformThemeTokenRolesV2;
+  for (const release of definition.platformThemeReleases) {
+    for (const role of roles) {
+      const token = release.tokens[role.key];
+      if (
+        token === undefined ||
+        token.kind !== role.kind ||
+        (token.kind === "color_pair" && token.role !== role.colorRole)
+      )
+        duplicate();
+    }
   }
 };
 
@@ -333,11 +353,7 @@ export const createImmutableDefinitionPublicationCatalogue = (
   const definition = parsed.success ? parsed.data : duplicate();
   ensureUniqueConnectionTypeReleases(definition.connectionTypeReleases);
   ensureUniqueApplicationCompositionReleases(definition.applicationCompositionV2);
-  const managedFlowReleases = definition.platformManagedFlowReleases ?? [];
-  const managedFlowIdentities = new Set(
-    managedFlowReleases.map((release) => `${release.flowId}:${release.releaseVersion}`),
-  );
-  if (managedFlowIdentities.size !== managedFlowReleases.length) duplicate();
+  ensurePlatformThemeReleasesCoverEveryRole(definition.applicationCompositionV2);
   ensureRegisteredPlatformServiceOperationsAuthentic();
   const operationReleases = [
     ...PLATFORM_SERVICE_OPERATION_RELEASES,
@@ -380,12 +396,6 @@ export const createImmutableDefinitionPublicationCatalogue = (
       release,
     ]),
   );
-  const managedFlowsByIdentity = new Map(
-    managedFlowReleases.map((release) => [
-      `${release.flowId}:${release.releaseVersion}`,
-      deepFreeze({ ...release }),
-    ]),
-  );
   const operationsByIdentity = new Map(
     operationReleases.map((release) => [
       `${release.serviceId}:${release.operationId}:${release.releaseVersion}`,
@@ -404,8 +414,6 @@ export const createImmutableDefinitionPublicationCatalogue = (
       connectionsByIdentity.get(`${rootId}:${releaseVersion}`),
     readPlatformBlockReleaseV2,
     readPlatformThemeReleaseV2,
-    readPlatformManagedFlowRelease: async (flowId: string, releaseVersion: string) =>
-      managedFlowsByIdentity.get(`${flowId}:${releaseVersion}`),
     readPlatformServiceOperationRelease: async (
       serviceId: string,
       operationId: string,

@@ -2174,6 +2174,50 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
     });
     return valid;
   };
+  /**
+   * Every field of one record type that the engines must work out when a record is read. A
+   * deadline-passed calculation is read-time by its expression, and any calculation that
+   * depends on a read-time calculation is itself read-time. Stored values may never depend on
+   * one, so publication refuses a calculation declared `stored` in this set, and a total whose
+   * aggregate source or filter reads it. Content without an evaluation is classified here.
+   */
+  const readTimeFieldIdsFor = (recordFields: readonly JsonObject[]): ReadonlySet<string> => {
+    const fieldById = new Map(recordFields.map((field) => [String(field.fieldId), field] as const));
+    const classification = new Map<string, boolean>();
+    const isReadTime = (fieldId: string, visiting: ReadonlySet<string>): boolean => {
+      const cached = classification.get(fieldId);
+      if (cached !== undefined) return cached;
+      const field = fieldById.get(fieldId);
+      if (!field || field.type !== "calculation" || visiting.has(fieldId)) return false;
+      const settings = object(field.settings);
+      const expression = object(settings.expression);
+      const nextVisiting = new Set(visiting).add(fieldId);
+      const readTime =
+        expression.kind === "deadline_passed" ||
+        settings.evaluation === "read_time" ||
+        array(settings.dependencyFieldIds).some((dependency) =>
+          isReadTime(String(dependency), nextVisiting),
+        );
+      classification.set(fieldId, readTime);
+      return readTime;
+    };
+    const result = new Set<string>();
+    for (const field of recordFields) {
+      const fieldId = String(field.fieldId);
+      if (isReadTime(fieldId, new Set())) result.add(fieldId);
+    }
+    return result;
+  };
+  const conditionReadsReadTime = (
+    value: unknown,
+    readTimeFieldIds: ReadonlySet<string>,
+  ): boolean => {
+    let found = false;
+    walkValues(value, (entry) => {
+      if (entry.source === "field" && readTimeFieldIds.has(String(entry.fieldId))) found = true;
+    });
+    return found;
+  };
 
   for (const output of moduleOutputs) {
     const moduleV2 = "validationContractVersion" in output;
@@ -2286,6 +2330,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
             failure(output, "vortex.definition.module_relationship_references", "broken_reference"),
           );
       }
+      const readTimeFieldIds = readTimeFieldIdsFor(array(record.fields));
       for (const field of array(record.fields)) {
         const settings = object(field.settings);
         const moduleFieldValueType = (candidate: JsonObject | undefined) =>
@@ -2338,6 +2383,8 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
               (["decimal_number", "money"].includes(String(settings.resultType))
                 ? settings.decimalPlaces !== undefined
                 : settings.decimalPlaces === undefined));
+          if (settings.evaluation === "stored" && readTimeFieldIds.has(String(field.fieldId)))
+            valid = false;
           if (expression.kind === "join_text")
             valid =
               valid &&
@@ -2463,10 +2510,19 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
           const currencyValid =
             settings.currency === undefined ||
             (settings.operation === "sum" && aggregateResultType === "money");
+          const aggregateReadTimeFieldIds = aggregateRelationship
+            ? readTimeFieldIdsFor(array(aggregateRelationship.sourceRecord.fields))
+            : new Set<string>();
+          const readTimeDependent =
+            (settings.fieldId !== undefined &&
+              aggregateReadTimeFieldIds.has(String(settings.fieldId))) ||
+            (settings.filter !== undefined &&
+              conditionReadsReadTime(settings.filter, aggregateReadTimeFieldIds));
           valid =
             aggregateRelationship !== undefined &&
             reachesCurrentRecord &&
             filterValid &&
+            !readTimeDependent &&
             currencyValid &&
             (settings.operation === "count"
               ? settings.fieldId === undefined
@@ -2627,36 +2683,6 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       if (!actionDeleteEffectsSupported(action))
         failures.push(
           failure(output, "vortex.definition.module_action_references", "unsupported_choice"),
-        );
-    }
-
-    for (const rule of array(content.rules)) {
-      if ("validationContractVersion" in output && output.validationContractVersion === "3.0.0")
-        continue;
-      const subject = moduleRecords.get(String(rule.subjectRecordTypeId));
-      const fieldMap = new Map(
-        subject ? array(subject.fields).map((field) => [String(field.fieldId), field]) : [],
-      );
-      const fields = new Set(fieldMap.keys());
-      const effect = object(rule.effect);
-      if (
-        !subject ||
-        !fieldReferencesValid(rule.condition, fields) ||
-        !fieldReferencesValid(rule.effect, fields) ||
-        !(moduleV2
-          ? conditionTypesValidV2(rule.condition, fieldMap)
-          : conditionTypesValid(rule.condition, fieldMap)) ||
-        ["show_or_hide", "start_background_work"].includes(String(effect.kind)) ||
-        (effect.kind === "set_value" &&
-          !(moduleV2
-            ? fieldValueMatchesV2(effect.value, fieldMap.get(String(effect.fieldId)), "canonical")
-            : valueTypeCompatible(
-                literalValueType(effect.value),
-                fieldValueType(fieldMap.get(String(effect.fieldId))),
-              )))
-      )
-        failures.push(
-          failure(output, "vortex.definition.module_rule_references", "broken_reference"),
         );
     }
     for (const event of array(content.events)) {
@@ -4586,34 +4612,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         pageSubjectRecordTypesByPlacement.set(placementId, recordTypes);
       }
     }
-    for (const rule of array(content.rules)) {
-      const record = records.get(String(rule.subjectRecordTypeId));
-      const moduleV2 = recordValuePairs.get(String(rule.subjectRecordTypeId)) ?? false;
-      const fieldMap = new Map(
-        record ? array(record.fields).map((field) => [String(field.fieldId), field]) : [],
-      );
-      const fields = new Set(fieldMap.keys());
-      const effect = object(rule.effect);
-      if (
-        !record ||
-        !applicationFieldReferencesValid(rule.condition, fields) ||
-        !applicationFieldReferencesValid(effect, fields) ||
-        !applicationConditionTypesValid(rule.condition, fieldMap, moduleV2) ||
-        (effect.kind === "start_background_work" && !workflows.has(String(effect.workflowId))) ||
-        (effect.kind === "show_or_hide" &&
-          !applicationPlacementIds.has(String(effect.componentId))) ||
-        (effect.kind === "set_value" &&
-          !(moduleV2
-            ? fieldValueMatchesV2(effect.value, fieldMap.get(String(effect.fieldId)), "canonical")
-            : valueTypeCompatible(
-                literalValueType(effect.value),
-                fieldValueType(fieldMap.get(String(effect.fieldId))),
-              )))
-      )
-        failures.push(
-          failure(output, "vortex.definition.application_rule_references", "broken_reference"),
-        );
-    }
     const identityCollections: readonly (readonly [JsonObject[], string, string])[] = [
       [array(content.pages), "pageId", "key"],
       [array(content.roles), "roleId", "key"],
@@ -4621,7 +4619,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       [array(content.pipelines), "pipelineId", "key"],
       [array(content.permissions), "permissionId", "key"],
       [array(content.actions), "actionId", "key"],
-      [array(content.rules), "ruleId", "key"],
       [array(content.events), "eventId", "key"],
       [array(content.workflows), "workflowId", "key"],
       [array(content.connectionBindings), "bindingId", "key"],
@@ -6150,7 +6147,6 @@ const moduleRuleCodes = [
   "vortex.definition.module_field_references",
   "vortex.definition.module_calculation_acyclic",
   "vortex.definition.module_action_references",
-  "vortex.definition.module_rule_references",
   "vortex.definition.module_event_references",
   "vortex.definition.module_extension_capabilities",
   "vortex.definition.module_extension_references",
@@ -6163,7 +6159,6 @@ const applicationRuleCodes = [
   "vortex.definition.application_module_bindings",
   "vortex.definition.application_action_references",
   "vortex.definition.application_event_references",
-  "vortex.definition.application_rule_references",
   "vortex.definition.application_home_page",
   "vortex.definition.application_role_references",
   "vortex.definition.application_navigation_references",

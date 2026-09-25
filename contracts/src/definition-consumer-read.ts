@@ -53,9 +53,7 @@ const dependencySubject = (entry: z.infer<typeof exactDefinitionDependencySchema
       ? `${entry.kind}:${entry.catalogueThemeId}`
       : entry.kind === "platform_block"
         ? `${entry.kind}:${entry.blockId}`
-        : entry.kind === "platform_flow"
-          ? `${entry.kind}:${entry.flowId}`
-          : entry.kind === "application_flow"
+        : entry.kind === "application_flow"
             ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}`
             : entry.kind === "application_flow_node"
               ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}:${entry.nodeId}`

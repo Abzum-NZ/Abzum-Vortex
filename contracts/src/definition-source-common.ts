@@ -227,22 +227,6 @@ export const sourceActionEffectSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("soft_delete_subject") }).strict(),
   z.object({ kind: z.literal("announce_event"), event: namespacedKeySchema }).strict(),
 ]);
-export const sourceRuleEffectSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("refuse"), reason_code: builderKeySchema }).strict(),
-  z
-    .object({ kind: z.literal("set_value"), field: builderKeySchema, value: jsonValueSchema })
-    .strict(),
-  z.object({ kind: z.literal("require"), field: builderKeySchema }).strict(),
-  z
-    .object({
-      kind: z.literal("show_or_hide"),
-      component: sourceAliasSchema,
-      visibility: z.enum(["show", "hide"]),
-    })
-    .strict(),
-  z.object({ kind: z.literal("warn"), message: builderKeySchema }).strict(),
-  z.object({ kind: z.literal("start_background_work"), workflow: builderKeySchema }).strict(),
-]);
 
 export const authoredSourceBase = {
   source_contract_version: z.literal(definitionSourceContractVersion),

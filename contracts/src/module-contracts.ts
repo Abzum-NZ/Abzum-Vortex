@@ -21,7 +21,6 @@ import {
   platformIdSchema,
   recordTypeIdSchema,
   revisionSchema,
-  ruleIdSchema,
   semanticVersionSchema,
   storageContractIdSchema,
   workflowIdSchema,
@@ -689,7 +688,7 @@ const actionValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("current_actor") }).strict(),
   z.object({ source: z.literal("current_time") }).strict(),
 ]);
-const actionEffectSchema = z.discriminatedUnion("kind", [
+export const actionEffectSchema = z.discriminatedUnion("kind", [
   z
     .object({ kind: z.literal("set_field"), fieldId: fieldIdSchema, value: actionValueSchema })
     .strict(),
@@ -879,34 +878,6 @@ export const actionDefinitionSchema = z
       });
   });
 
-const ruleEffectSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("refuse"), reasonCode: builderKeySchema }).strict(),
-  z
-    .object({ kind: z.literal("set_value"), fieldId: fieldIdSchema, value: jsonValueSchema })
-    .strict(),
-  z.object({ kind: z.literal("require"), fieldId: fieldIdSchema }).strict(),
-  z
-    .object({
-      kind: z.literal("show_or_hide"),
-      componentId: containedComponentIdSchema,
-      visibility: z.enum(["show", "hide"]),
-    })
-    .strict(),
-  z.object({ kind: z.literal("warn"), messageKey: builderKeySchema }).strict(),
-  z.object({ kind: z.literal("start_background_work"), workflowId: workflowIdSchema }).strict(),
-]);
-export const ruleDefinitionSchema = z
-  .object({
-    ruleId: ruleIdSchema,
-    key: builderKeySchema,
-    subjectRecordTypeId: recordTypeIdSchema,
-    trigger: z.enum(["create", "change", "delete", "form_change", "action"]),
-    condition: conditionNodeSchema,
-    priority: z.number().int().min(0).max(10_000),
-    effect: ruleEffectSchema,
-  })
-  .strict();
-
 export const eventDefinitionSchema = z
   .object({
     eventId: eventIdSchema,
@@ -1087,7 +1058,6 @@ export const moduleContentSchema = z
     permissions: z.array(permissionDeclarationSchema),
     actions: z.array(actionDefinitionSchema),
     events: z.array(eventDefinitionSchema),
-    rules: z.array(ruleDefinitionSchema),
     sharingConditions: z.array(savedSharingConditionSchema),
     extensionPoints: z.array(
       z
@@ -1136,7 +1106,6 @@ export type ModuleContent = z.infer<typeof moduleContentSchema>;
 export type ModuleDraft = z.infer<typeof moduleDraftSchema>;
 export type PublishedModuleDefinition = z.infer<typeof publishedModuleDefinitionSchema>;
 export type ActionDefinition = z.infer<typeof actionDefinitionSchema>;
-export type RuleDefinition = z.infer<typeof ruleDefinitionSchema>;
 export type EventDefinition = z.infer<typeof eventDefinitionSchema>;
 export type StandardInstalledEventKind = z.infer<typeof standardInstalledEventKindSchema>;
 export type StandardInstalledEventDescriptor = z.infer<
