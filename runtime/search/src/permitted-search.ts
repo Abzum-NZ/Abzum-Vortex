@@ -37,8 +37,11 @@ import {
  * recursive calculation input, and every total input, to be readable before a
  * derived field is admitted. The index text of a field that is not readable now
  * is dropped, so titles, highlights, counts and filters stay inside the current
- * projection. Opening a result is a separate ordinary current read by the
- * caller; this module never returns authoritative stored values.
+ * projection. The caller must evaluate query matching, ranking, highlights,
+ * counts, filters and paging only over the returned entries, never over the
+ * original index document, so a match on a withheld field cannot surface.
+ * Opening a result is a separate ordinary current read by the caller; this
+ * module never returns authoritative stored values.
  */
 
 /** Bounded work per request; a larger candidate set is refused rather than silently truncated. */
@@ -127,8 +130,11 @@ export type PermittedSearchCandidate = Readonly<{
   applicationRootId: string;
   sourceRecordVersion: number;
   concurrencyNumber: number;
-  contentFingerprint: string;
-  /** Readable, requested searchable entries only; a withheld field is absent. */
+  /**
+   * Readable, requested searchable entries only; a withheld field is absent.
+   * The index content fingerprint is not carried, because it covers withheld
+   * entries and could reveal a hidden value or change.
+   */
   entries: readonly SearchDocumentEntry[];
 }>;
 
@@ -146,9 +152,11 @@ export type PermittedSearchResult =
       organizationId: string;
       applicationRootId: string;
       recordTypeId: string;
+      /**
+       * Deliberately carries no count of excluded candidates: that number would
+       * reveal how many hidden records matched.
+       */
       candidates: readonly PermittedSearchCandidate[];
-      /** Candidates dropped as out of scope, unreadable now or without a readable entry. */
-      excludedCount: number;
     }>
   | Readonly<{ outcome: "refused"; reasonCode: PermittedSearchRefusalReasonCode }>;
 
@@ -307,8 +315,8 @@ const refusal = (reasonCode: PermittedSearchRefusalReasonCode): PermittedSearchR
  * Application scope or another Application, targets another record type, is
  * unreadable under current access, or has no requested field still readable.
  * Access removal therefore affects the next request without any index change. A
- * malformed candidate document refuses the whole request, because a set built
- * from the index must be exact.
+ * malformed candidate document, or the same record twice, refuses the whole
+ * request, because a set built from the index must be exact.
  */
 export const permittedSearchCandidates = async (
   input: PermittedSearchInput,
@@ -331,21 +339,22 @@ export const permittedSearchCandidates = async (
 
   const requestedFieldIds = new Set(request.requestedFieldIds.map(lower));
   const candidates: PermittedSearchCandidate[] = [];
-  let excludedCount = 0;
+  const seenRecords = new Set<string>();
 
   for (const rawCandidate of input.candidates) {
     const document = parseCandidateDocument(rawCandidate);
     if (document === undefined) return refusal("candidate_document_invalid");
+    const recordKey = `${lower(document.organisationId)}:${lower(document.recordId)}`;
+    if (seenRecords.has(recordKey)) return refusal("candidate_set_invalid");
+    seenRecords.add(recordKey);
 
     if (
       !sameId(document.organisationId, access.data.organizationId) ||
       document.applicationRootId === undefined ||
       !sameId(document.applicationRootId, request.applicationRootId) ||
       !sameId(document.recordTypeId, request.recordTypeId)
-    ) {
-      excludedCount += 1;
+    )
       continue;
-    }
     const applicationRootId = document.applicationRootId;
 
     const currentCandidate = await dependencies.readCurrentRecord({
@@ -354,15 +363,9 @@ export const permittedSearchCandidates = async (
       recordTypeId: request.recordTypeId,
       recordId: document.recordId,
     });
-    if (currentCandidate === undefined) {
-      excludedCount += 1;
-      continue;
-    }
+    if (currentCandidate === undefined) continue;
     const current = parseCurrentRead(currentCandidate);
-    if (current === undefined || current.outcome === "refused") {
-      excludedCount += 1;
-      continue;
-    }
+    if (current === undefined || current.outcome === "refused") continue;
 
     const readableFieldIds = new Set(current.readableFieldIds.map(lower));
     const seen = new Set<string>();
@@ -374,12 +377,9 @@ export const permittedSearchCandidates = async (
       seen.add(fieldId);
       entries.push(entry);
     }
-    // A record whose matching text is not readable now must not appear at all,
-    // or a count or filter would reveal that a hidden field matched.
-    if (entries.length === 0) {
-      excludedCount += 1;
-      continue;
-    }
+    // A record with no requested field readable now must not appear at all, or
+    // a count or filter would reveal that only hidden text could have matched.
+    if (entries.length === 0) continue;
 
     candidates.push(
       Object.freeze({
@@ -388,7 +388,6 @@ export const permittedSearchCandidates = async (
         applicationRootId,
         sourceRecordVersion: document.sourceRecordVersion,
         concurrencyNumber: current.concurrencyNumber,
-        contentFingerprint: document.contentFingerprint,
         entries: Object.freeze(entries),
       }),
     );
@@ -400,6 +399,5 @@ export const permittedSearchCandidates = async (
     applicationRootId: request.applicationRootId,
     recordTypeId: request.recordTypeId,
     candidates: Object.freeze(candidates),
-    excludedCount,
   });
 };
