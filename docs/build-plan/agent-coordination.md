@@ -72,6 +72,7 @@ These rules keep work flowing when one agent, provider or queue is slow. They ap
 5. **Reviewers integrate without waiting.** The reviewer updates its branch from main, resolves conflicts, re-reviews changed code and merges through permitted repository operations. It does not wait for the orchestrator to merge.
 6. **Mail is processed every cycle.** The orchestrator reads and acknowledges its Orca mailbox every cycle. A completion report, question or correction left unprocessed for more than one cycle is drift that the monitor reports.
 7. **Stalls are visible.** If the orchestrator has made no progress for 30 minutes while work is pending, the monitor alerts the user with the exact state and the action needed. Workers send questions and completion reports through the Orca mailbox rather than waiting on a reply the orchestrator cannot see, and follow the stall-recovery table in fleet operations.
+8. **No stale branches or worktrees.** The repository deletes a pull request's branch automatically when it merges (`delete_branch_on_merge`). When an issue closes, or its pull request closes unmerged, the orchestrator deletes that remote branch in the same cycle, first saving any unmerged commits as an `archive/<branch>` tag, and removes the worktree. A remote branch exists only for an open pull request or a running lane, and a worktree only for a running lane; every cycle the orchestrator flags and resolves any worktree without an agent, or agent idle, for more than 15 minutes. `main` and `testing` are never deleted.
 
 ## Status meanings
 
