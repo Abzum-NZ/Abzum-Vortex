@@ -30,10 +30,8 @@ import {
   sourcePlacementEntriesV2,
   sourcePlatformBlockDependenciesV2Schema,
 } from "./application-composition-v2";
-import {
-  sourceComponentFlowBindingSchema,
-  sourceCurrentUserFlowSchema,
-} from "./application-flow-bindings";
+import { sourceComponentFlowBindingSchema } from "./application-flow-bindings";
+import { sourceFlowCollectionSchema } from "./flow-source-contracts";
 
 const maximumSourceDocumentNodes = 50_000;
 const maximumSourceNestingDepth = 32;
@@ -926,7 +924,8 @@ export const sourceApplicationBodyV2Schema = z
     shells: z.array(sourceApplicationShellV2Schema).max(100),
     pages: z.array(sourcePageDefinitionV2Schema).min(1).max(100),
     theme: sourceApplicationThemeV2Schema,
-    flows: z.array(sourceCurrentUserFlowSchema).max(100),
+    /** Every flow this Application owns (architecture decision 1); each has one owner. */
+    flows: sourceFlowCollectionSchema,
     flow_bindings: z.array(sourceComponentFlowBindingSchema).max(100),
   })
   .strict()
@@ -1064,14 +1063,8 @@ export const sourceApplicationBodyV2Schema = z
         message: "The platform-block dependency list cannot contain unused releases",
       });
 
-    const flowAliases = value.flows.map((flow) => flow.id);
-    const flowKeys = value.flows.map((flow) => flow.key);
-    if (new Set(flowAliases).size !== flowAliases.length)
-      context.addIssue({ code: "custom", path: ["flows"], message: "Flow aliases must be unique" });
-    if (new Set(flowKeys).size !== flowKeys.length)
-      context.addIssue({ code: "custom", path: ["flows"], message: "Flow keys must be unique" });
-
-    const flowsByAlias = new Map(value.flows.map((flow) => [flow.id, flow]));
+    // Flow aliases and keys are unique in the collection schema; a binding names its flow by either.
+    const flowReferences = new Set(value.flows.flatMap((flow) => [flow.id, flow.key]));
     const placementAliasSet = new Set(placementEntries.map(([alias]) => alias));
     const flowBindingAliases = value.flow_bindings.map((binding) => binding.id);
     const flowBindingEvents = value.flow_bindings.map(
@@ -1090,23 +1083,18 @@ export const sourceApplicationBodyV2Schema = z
         message: "A control event can have only one flow binding",
       });
     for (const [bindingIndex, binding] of value.flow_bindings.entries()) {
-      if (binding.flow.kind === "application_owned") {
-        const flow = flowsByAlias.get(binding.flow.flow);
-        if (flow === undefined) {
-          context.addIssue({
-            code: "custom",
-            path: ["flow_bindings", bindingIndex, "flow"],
-            message: "A flow binding must resolve inside the same application",
-          });
-        }
-      }
-      if (!placementAliasSet.has(binding.control)) {
+      if (!flowReferences.has(binding.flow))
+        context.addIssue({
+          code: "custom",
+          path: ["flow_bindings", bindingIndex, "flow"],
+          message: "A flow binding must resolve inside the same application",
+        });
+      if (!placementAliasSet.has(binding.control))
         context.addIssue({
           code: "custom",
           path: ["flow_bindings", bindingIndex, "control"],
           message: "A flow binding control must resolve to a placement inside the application",
         });
-      }
     }
   });
 
