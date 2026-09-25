@@ -3,7 +3,6 @@ import "server-only";
 import {
   readRecordsTableContract,
   type BlockPropertyValueV2Contract,
-  type ConditionNode,
   type IdentitySession,
   type JsonValue,
   type ModuleRootId,
@@ -134,13 +133,14 @@ const utcDayBounds = (raw: string): readonly [string, string] | undefined => {
  * format, which is also what picks the filter control. A text-like field matches a substring; a
  * number, date or yes/no field must equal the value the control reports; a date-and-time field
  * matches the whole reported calendar day, taken in UTC. An unparsable value yields undefined so the
- * command is refused rather than filtered loosely.
+ * command is refused rather than filtered loosely. The condition is plain JSON: the Query command
+ * schema parses it into a typed condition, so a malformed one refuses the command.
  */
 const filterConditionFor = (
   format: RecordsDisplayFormat,
   fieldId: string,
   raw: string,
-): ConditionNode | undefined => {
+): JsonValue | undefined => {
   const left = { source: "field" as const, fieldId: fieldId.toLowerCase() };
   switch (format) {
     case "number":
@@ -229,7 +229,7 @@ export const buildRecordsTableQueryCommand = (
     if (!sortableFieldIds.includes(request.sort.fieldId.toLowerCase())) return undefined;
     sort.push({ fieldId: request.sort.fieldId, direction: request.sort.direction });
   }
-  const conditions: ConditionNode[] = [];
+  const conditions: JsonValue[] = [];
   for (const filter of request.filters ?? []) {
     if (filter.value === "") continue;
     const fieldId = filter.fieldId.toLowerCase();
@@ -240,7 +240,7 @@ export const buildRecordsTableQueryCommand = (
     if (condition === undefined) return undefined;
     conditions.push(condition);
   }
-  const filter: ConditionNode | undefined =
+  const filter: JsonValue | undefined =
     conditions.length === 0
       ? undefined
       : conditions.length === 1
