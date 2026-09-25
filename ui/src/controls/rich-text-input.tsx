@@ -13,6 +13,7 @@ import {
   useSeededState,
 } from "./field-parts";
 import { useFormField } from "./form-context";
+import type { RichTextInputPayload, TypedRichTextDocument } from "./projected-data";
 import type { TypedRichTextDocument } from "./projected-data";
 
 export type RichTextInputProps = PlatformBlockRenderProps;
@@ -56,7 +57,7 @@ const toDocument = (text: string): TypedRichTextDocument | null => {
  * executable content.
  */
 export function RichTextInput(props: RichTextInputProps): ReactElement {
-  const context = resolveControlContext(props, "rich_text_input", ["field_changed"]);
+  const context = resolveControlContext<RichTextInputPayload>(props, ["field_changed"]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();

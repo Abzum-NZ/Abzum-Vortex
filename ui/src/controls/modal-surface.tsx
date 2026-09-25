@@ -8,8 +8,7 @@ import {
   type ReactElement,
   type SyntheticEvent,
 } from "react";
-import type { PlatformBlockRenderProps } from "../registry";
-import { readControlSettings, resolveControlContext } from "./control-context";
+import { readControlSettings, resolveControlContext, type ControlRenderProps } from "./control-context";
 import { useSeededState } from "./field-parts";
 
 export type ModalSurfaceKind = "dialog" | "drawer";
@@ -26,18 +25,18 @@ const focusIfConnected = (element: HTMLElement | null): void => {
  * `open` value drives the declared `open` and `close` state operations, and the rendered surface
  * advertises exactly those declared operations for the placement's flow tasks.
  */
-export function ModalSurface({
+export function ModalSurface<Values>({
   props,
   kind,
   surfaceStyle,
   dataAttributes,
 }: Readonly<{
-  props: PlatformBlockRenderProps;
+  props: ControlRenderProps<Values>;
   kind: ModalSurfaceKind;
   surfaceStyle: (size: "small" | "medium" | "large") => CSSProperties;
   dataAttributes?: Readonly<Record<`data-${string}`, string>>;
 }>): ReactElement {
-  const context = resolveControlContext(props, kind, ["action"]);
+  const context = resolveControlContext<Values>(props, ["action"]);
   const settings = readControlSettings(props, context.location);
   const size = settings.choice<"small" | "medium" | "large">("size", "medium");
   const title = context.accessibleName ?? props.metadata.name;

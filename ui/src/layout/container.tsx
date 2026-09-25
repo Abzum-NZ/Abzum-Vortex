@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactElement, ReactNode } from "react";
-import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
+import type { DefinitionRenderErrorLocation } from "../definition-error";
 import type { PlatformBlockRenderProps } from "../registry";
 import { readControlSettings } from "../controls/control-context";
 
@@ -31,7 +31,8 @@ const CONTAINER_GAPS: Readonly<Record<ContainerGap, string>> = Object.freeze({
  * General layout container: arranges its declared header, menu and content slots in a row or a
  * column with a token-driven gap. It carries no data and emits no events; it only lays out the
  * placements an author supplies or a shell binds as page content. A shell can therefore expose
- * header, menu and content slots without borrowing the tabs block.
+ * header, menu and content slots without borrowing the tabs block. Its registration refuses every
+ * supplied runtime input.
  */
 export function Container(props: ContainerProps): ReactElement {
   const location: DefinitionRenderErrorLocation = {
@@ -39,17 +40,6 @@ export function Container(props: ContainerProps): ReactElement {
     blockId: props.metadata.blockId,
     releaseVersion: props.metadata.releaseVersion,
   };
-  if (
-    props.projectedData !== undefined ||
-    props.displayEvents !== undefined ||
-    props.controlData !== undefined ||
-    props.controlEvents !== undefined
-  )
-    throw new DefinitionRenderError(
-      "INVALID_COMPOSITION",
-      "The container block does not accept data or semantic events",
-      location,
-    );
 
   const settings = readControlSettings(props, location);
   const direction = settings.choice<ContainerDirection>("direction", "column");

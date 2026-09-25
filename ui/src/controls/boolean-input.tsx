@@ -2,6 +2,7 @@
 
 import type { ReactElement } from "react";
 import type { PlatformBlockRenderProps } from "../registry";
+import type { BooleanInputPayload } from "./projected-data";
 import { readControlSettings, resolveControlContext } from "./control-context";
 import {
   describedBy,
@@ -21,7 +22,7 @@ export type BooleanInputProps = PlatformBlockRenderProps;
  * Both variants are native controls, so Space (and Enter for the switch button) toggles once.
  */
 export function BooleanInput(props: BooleanInputProps): ReactElement {
-  const context = resolveControlContext(props, "boolean_input", ["field_changed"]);
+  const context = resolveControlContext<BooleanInputPayload>(props, ["field_changed"]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();

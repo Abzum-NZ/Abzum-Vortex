@@ -174,8 +174,8 @@ export default async function ApplicationAddressPage({ params }: ApplicationAddr
               breakpoint="desktop"
               metadata={APPLICATION_LAUNCHER_BLOCK_RELEASE}
               availability="available"
-              projectedData={{ status: "ready", values: launcherValues }}
-              displayEvents={{ row_action: openApplication }}
+              data={{ status: "ready", values: launcherValues }}
+              events={{ row_action: openApplication }}
             />
           </div>
         )}

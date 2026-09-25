@@ -4,6 +4,7 @@ import { builderKeySchema } from "@vortex/contracts";
 import type { ReactElement } from "react";
 import { DefinitionRenderError } from "../definition-error";
 import type { PlatformBlockRenderProps } from "../registry";
+import type { ValidationPayload } from "./projected-data";
 import { readControlSettings, resolveControlContext } from "./control-context";
 
 export type ValidationMessageProps = PlatformBlockRenderProps;
@@ -14,7 +15,7 @@ export type ValidationMessageProps = PlatformBlockRenderProps;
  * It declares no semantic events.
  */
 export function ValidationMessage(props: ValidationMessageProps): ReactElement {
-  const context = resolveControlContext(props, "validation", []);
+  const context = resolveControlContext<ValidationPayload>(props, []);
   const settings = readControlSettings(props, context.location);
   const severity = settings.choice<"error" | "warning" | "info">("severity", "error");
   const message = settings.text("message");

@@ -5,6 +5,7 @@ import {
 } from "@vortex/contracts";
 import {
   createPlatformComponentRegistry,
+  noRuntimeInputs,
   type PlatformComponentRegistration,
   type PlatformComponentRegistry,
 } from "../registry";
@@ -18,11 +19,22 @@ import { Heading } from "./heading";
  */
 export { CONTAINER_BLOCK_RELEASE, HEADING_BLOCK_RELEASE, LAYOUT_BLOCK_RELEASES };
 
-/** Exact registrations pairing each general layout block release with its React renderer. */
+/**
+ * Exact registrations pairing each general layout block release with its React renderer. A layout
+ * block carries no data and emits no event, so its parser refuses every supplied runtime input.
+ */
 export const LAYOUT_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistration[] =
   Object.freeze([
-    Object.freeze({ metadata: CONTAINER_BLOCK_RELEASE, render: Container }),
-    Object.freeze({ metadata: HEADING_BLOCK_RELEASE, render: Heading }),
+    Object.freeze({
+      metadata: CONTAINER_BLOCK_RELEASE,
+      render: Container,
+      parsePayload: noRuntimeInputs,
+    }),
+    Object.freeze({
+      metadata: HEADING_BLOCK_RELEASE,
+      render: Heading,
+      parsePayload: noRuntimeInputs,
+    }),
   ]);
 
 /** Creates an immutable PlatformComponentRegistry populated with all general layout components. */

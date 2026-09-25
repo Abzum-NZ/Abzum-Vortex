@@ -2,18 +2,21 @@ import { builderKeySchema } from "@vortex/contracts";
 import { createDeclaredSettingsReader } from "../controls/control-context";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import { getAccessibleName } from "../display/display-state-container";
-import type {
-  DisplayEventHandlers,
-  ProjectedDisplayData,
-  ProjectedDisplayValues,
-} from "../display/projected-data";
+import type { DisplayDataState, DisplayEventHandlers, ListPayload } from "../display/projected-data";
 import type { PlatformBlockRenderProps } from "../registry";
 
-const EMPTY_STATE: ProjectedDisplayData = Object.freeze({ status: "empty" });
+const EMPTY_STATE: DisplayDataState<never> = Object.freeze({ status: "empty" });
 
 const fail = (message: string, location: DefinitionRenderErrorLocation): never => {
   throw new DefinitionRenderError("INVALID_COMPOSITION", message, location);
 };
+
+/**
+ * The props a launcher or tile block's renderer receives: the base props every block has, plus the
+ * one closed `list` payload and its semantic callbacks its own registration validated fail-closed.
+ */
+export type LauncherRenderProps = PlatformBlockRenderProps &
+  Readonly<{ data?: DisplayDataState<ListPayload>; events?: DisplayEventHandlers }>;
 
 /**
  * Resolved context shared by the launcher and tile blocks. Each is a read-only display surface: it
@@ -26,37 +29,27 @@ export type LauncherListContext = Readonly<{
   /** Authored name, or the block's palette name when the optional name is absent. */
   accessibleName: string;
   /** Ready `list` values, or undefined for any other projected state. */
-  values: Extract<ProjectedDisplayValues, { kind: "list" }> | undefined;
+  values: ListPayload | undefined;
   /** State passed to the state container; a ready-but-empty list becomes the empty state. */
-  state: ProjectedDisplayData;
+  state: DisplayDataState<ListPayload>;
   /** Declared callbacks; always absent while the placement's use is unavailable. */
   events: DisplayEventHandlers | undefined;
 }>;
 
 /**
- * Resolves one launcher or tile block's props. It fails closed on any control projection or on ready
- * values of another kind, and never requests data: an absent projection renders the empty state.
+ * Resolves one launcher or tile block's props. It never requests data: an absent projection renders
+ * the empty state, and any value its own registration does not accept was already refused there.
  */
 export function resolveLauncherListContext(
-  props: PlatformBlockRenderProps,
+  props: LauncherRenderProps,
 ): LauncherListContext {
-  const { metadata, placementId, projectedData, availability } = props;
+  const { metadata, placementId, data, availability } = props;
   const location: DefinitionRenderErrorLocation = {
     placementId,
     blockId: metadata.blockId,
     releaseVersion: metadata.releaseVersion,
   };
-  if (props.controlData !== undefined || props.controlEvents !== undefined)
-    fail(`Launcher block '${metadata.key}' does not accept control data or control events`, location);
-
-  let values: Extract<ProjectedDisplayValues, { kind: "list" }> | undefined;
-  if (projectedData?.status === "ready") {
-    const ready = projectedData.values;
-    values =
-      ready.kind === "list"
-        ? ready
-        : fail(`Block '${metadata.key}' expected 'list' projected values, got '${ready.kind}'`, location);
-  }
+  const values = data?.status === "ready" ? data.values : undefined;
 
   const title = getAccessibleName(props.settings, metadata);
   return {
@@ -65,10 +58,10 @@ export function resolveLauncherListContext(
     accessibleName: title ?? metadata.name,
     values,
     state:
-      projectedData === undefined || (values !== undefined && values.rows.length === 0)
+      data === undefined || (values !== undefined && values.rows.length === 0)
         ? EMPTY_STATE
-        : projectedData,
-    events: availability === "available" ? props.displayEvents : undefined,
+        : data,
+    events: availability === "available" ? props.events : undefined,
   };
 }
 

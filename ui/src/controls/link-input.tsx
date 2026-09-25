@@ -13,6 +13,7 @@ import {
   useSeededState,
 } from "./field-parts";
 import { useFormField } from "./form-context";
+import type { LinkInputPayload, TypedRecordReference } from "./projected-data";
 import type { TypedRecordReference } from "./projected-data";
 
 export type LinkInputProps = PlatformBlockRenderProps;
@@ -51,7 +52,7 @@ const parseReferenceKey = (
  * form; it never fetches or discloses the referenced record.
  */
 export function LinkInput(props: LinkInputProps): ReactElement {
-  const context = resolveControlContext(props, "link_input", ["field_changed"]);
+  const context = resolveControlContext<LinkInputPayload>(props, ["field_changed"]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();

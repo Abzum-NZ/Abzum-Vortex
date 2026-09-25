@@ -13,6 +13,7 @@ import {
   useSeededState,
 } from "./field-parts";
 import { useFormField } from "./form-context";
+import { isIsoCalendarDate, type DateInputPayload } from "./projected-data";
 import { isIsoCalendarDate } from "./projected-data";
 
 export type DateInputProps = PlatformBlockRenderProps;
@@ -22,7 +23,7 @@ export type DateInputProps = PlatformBlockRenderProps;
  * a real `YYYY-MM-DD` date or `null` for empty or incomplete entry.
  */
 export function DateInput(props: DateInputProps): ReactElement {
-  const context = resolveControlContext(props, "date_input", ["field_changed"]);
+  const context = resolveControlContext<DateInputPayload>(props, ["field_changed"]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();

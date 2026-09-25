@@ -3,6 +3,7 @@
 import { useState, type ReactElement } from "react";
 import { DefinitionRenderError } from "../definition-error";
 import type { PlatformBlockRenderProps } from "../registry";
+import type { ChoiceInputPayload } from "./projected-data";
 import { readControlSettings, resolveControlContext } from "./control-context";
 import {
   describedBy,
@@ -29,7 +30,7 @@ const SEARCHABLE_OPTION_THRESHOLD = 7;
  * registered or emitted.
  */
 export function ChoiceInput(props: ChoiceInputProps): ReactElement {
-  const context = resolveControlContext(props, "choice_input", ["field_changed"]);
+  const context = resolveControlContext<ChoiceInputPayload>(props, ["field_changed"]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();

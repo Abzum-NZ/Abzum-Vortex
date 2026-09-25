@@ -17,20 +17,15 @@ import {
   type MaterialisedApplicationCompositionV2,
   type PlacementSlotV2,
 } from "./layout-renderer";
-import type { PlatformComponentRegistry } from "./registry";
-import {
-  parseProjectedDataByPlacement,
-  type DisplayEventsByPlacement,
-  type DisplaySemanticEventName,
-  type ProjectedDataByPlacement,
-} from "./display/projected-data";
+import type { PlatformComponentRegistry, RuntimeInputsByPlacement } from "./registry";
 import {
   CONTROL_EVENT_NAMES,
-  parseProjectedControlDataByPlacement,
-  type ControlEventsByPlacement,
   type ControlSemanticEventName,
-  type ProjectedControlDataByPlacement,
 } from "./controls/projected-data";
+import {
+  DISPLAY_EVENT_NAMES,
+  type DisplaySemanticEventName,
+} from "./display/projected-data";
 import type { ThemeMode } from "./theme";
 
 /**
@@ -396,17 +391,25 @@ export function ApplicationPreview({
   const availablePlacementIds = new Set<string>();
   if (resolvedSlot !== undefined) collectPlacementIds(resolvedSlot, availablePlacementIds);
 
-  let projectedData: ProjectedDataByPlacement = {};
-  let controlData: ProjectedControlDataByPlacement = {};
+  // One generic runtime-input map per placement. The renderer passes each entry to the placement's
+  // own registration, which is the only thing that decides what the block accepts.
+  const runtimeInputs: RuntimeInputsByPlacement = {};
+  const addInput = (placementId: string, data: unknown, events: unknown): void => {
+    if (data === undefined && events === undefined) return;
+    runtimeInputs[placementId] = Object.freeze({
+      ...(data === undefined ? {} : { data }),
+      ...(events === undefined ? {} : { events }),
+    });
+  };
   try {
-    projectedData = parseProjectedDataByPlacement(
+    for (const [placementId, data] of Object.entries(
       onlyKnownPlacements(artifact.displaySampleDataByPlacement, availablePlacementIds),
-      location,
-    );
-    controlData = parseProjectedControlDataByPlacement(
+    ))
+      addInput(placementId, data, undefined);
+    for (const [placementId, data] of Object.entries(
       onlyKnownPlacements(artifact.controlSampleDataByPlacement, availablePlacementIds),
-      location,
-    );
+    ))
+      addInput(placementId, data, undefined);
   } catch (error) {
     renderFailure ??=
       error instanceof DefinitionRenderError
@@ -435,8 +438,10 @@ export function ApplicationPreview({
         [interaction.event as ControlSemanticEventName]: handler,
       });
   }
-  const displayEvents: DisplayEventsByPlacement = Object.fromEntries(displayHandlers);
-  const controlEvents: ControlEventsByPlacement = Object.fromEntries(controlHandlers);
+  for (const [placementId, events] of displayHandlers)
+    addInput(placementId, undefined, events);
+  for (const [placementId, events] of controlHandlers)
+    addInput(placementId, undefined, events);
 
   return (
     <div
@@ -475,10 +480,7 @@ export function ApplicationPreview({
           themeMode={themeMode}
           locale={locale}
           timeZone={timeZone}
-          projectedData={projectedData}
-          displayEvents={displayEvents}
-          controlData={controlData}
-          controlEvents={controlEvents}
+          runtimeInputs={runtimeInputs}
         />
       ) : (
         <div data-vortex-preview-unavailable="">

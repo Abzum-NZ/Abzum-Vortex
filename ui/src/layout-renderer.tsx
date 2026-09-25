@@ -36,22 +36,14 @@ import {
   slotDeclaresGridChildren,
 } from "./layout-styles";
 import { BreakpointOrderedChildren, LayoutBreakpointProvider } from "./breakpoint";
-import type { PlatformComponentRegistry } from "./registry";
+import {
+  assertRuntimeInputKeysArePlacements,
+  EMPTY_RUNTIME_INPUTS,
+  type PlatformBlockRuntimeInputs,
+  type PlatformComponentRegistry,
+  type RuntimeInputsByPlacement,
+} from "./registry";
 import { DateFormatProvider } from "./display/date-format-context";
-import {
-  assertProjectionKeysArePlacements,
-  parseDisplayEventHandlers,
-  parseProjectedDisplayData,
-  type DisplayEventsByPlacement,
-  type ProjectedDataByPlacement,
-} from "./display/projected-data";
-import {
-  assertControlProjectionKeysArePlacements,
-  parseControlEventHandlers,
-  parseProjectedControlData,
-  type ControlEventsByPlacement,
-  type ProjectedControlDataByPlacement,
-} from "./controls/projected-data";
 
 export type PlacementSlotV2 = ApplicationShellV2["layout"];
 
@@ -377,14 +369,12 @@ export type PlacementRendererProps = Readonly<{
   location?: DefinitionRenderErrorLocation;
   /** Permission projection may remove otherwise required child content. */
   allowEmptyRequiredSlots?: boolean;
-  /** Permission-projected display data keyed by stable placement identity. */
-  projectedData?: ProjectedDataByPlacement | undefined;
-  /** Semantic callbacks keyed by stable placement identity. */
-  displayEvents?: DisplayEventsByPlacement | undefined;
-  /** Permission-projected control data keyed by stable placement identity. */
-  controlData?: ProjectedControlDataByPlacement | undefined;
-  /** Control semantic callbacks keyed by stable placement identity. */
-  controlEvents?: ControlEventsByPlacement | undefined;
+  /**
+   * Raw component runtime inputs keyed by stable placement identity. Each entry is validated
+   * fail-closed by that placement's own registration, which is the only thing that knows what the
+   * block accepts; the renderer itself names no input.
+   */
+  runtimeInputs?: RuntimeInputsByPlacement | undefined;
   /** Theme tokens in force where this placement renders. */
   themeScope?: PlacementThemeScope | undefined;
 }>;
@@ -425,10 +415,7 @@ function PlacementView({
   style,
   location = {},
   allowEmptyRequiredSlots = false,
-  projectedData,
-  displayEvents,
-  controlData,
-  controlEvents,
+  runtimeInputs,
   projectedNavigation,
   resolvePageHref,
   currentPageId,
@@ -479,34 +466,15 @@ function PlacementView({
     allowEmptyRequiredSlots,
   });
 
-  // 5. Parse this placement's own projected data and callbacks, fail-closed. A placement whose
-  //    use is unavailable stays viewable but never receives an invocable callback.
+  // 5. Parse this placement's own runtime inputs with its own registration's parser, fail-closed.
+  //    A placement whose use is unavailable stays viewable but never receives an invocable callback,
+  //    which each block's own context enforces from the availability it already receives.
   const availability = projectedAvailability(placement, currentLocation);
-  const suppliedData = ownPlacementEntry(projectedData, placementId);
-  const placementData =
-    suppliedData === undefined ? undefined : parseProjectedDisplayData(suppliedData, currentLocation);
-  const suppliedEvents =
-    availability.availability === "available"
-      ? ownPlacementEntry(displayEvents, placementId)
-      : undefined;
-  const placementEvents =
-    suppliedEvents === undefined
-      ? undefined
-      : parseDisplayEventHandlers(suppliedEvents, currentLocation);
-
-  const suppliedControlData = ownPlacementEntry(controlData, placementId);
-  const placementControlData =
-    suppliedControlData === undefined
-      ? undefined
-      : parseProjectedControlData(suppliedControlData, currentLocation);
-  const suppliedControlEvents =
-    availability.availability === "available"
-      ? ownPlacementEntry(controlEvents, placementId)
-      : undefined;
-  const placementControlEvents =
-    suppliedControlEvents === undefined
-      ? undefined
-      : parseControlEventHandlers(suppliedControlEvents, currentLocation);
+  const suppliedInputs = ownPlacementEntry(runtimeInputs, placementId);
+  const parsedInputs: PlatformBlockRuntimeInputs =
+    suppliedInputs === undefined
+      ? EMPTY_RUNTIME_INPUTS
+      : registration.parsePayload(suppliedInputs, currentLocation);
 
   // Declared theme overrides apply to this placement and its subtree. A re-themed placement is
   // also a theme root, so its surface, text and typography repaint from its own variables
@@ -527,10 +495,7 @@ function PlacementView({
           parentPlacementId={placementId}
           location={{ ...currentLocation, slotKey: declaredSlot.key }}
           allowEmptyRequiredSlots={allowEmptyRequiredSlots}
-          projectedData={projectedData}
-          displayEvents={displayEvents}
-          controlData={controlData}
-          controlEvents={controlEvents}
+          runtimeInputs={runtimeInputs}
           projectedNavigation={projectedNavigation}
           resolvePageHref={resolvePageHref}
           currentPageId={currentPageId}
@@ -588,10 +553,7 @@ function PlacementView({
           metadata={metadata}
           themeOverrides={placement.themeOverrides}
           {...availability}
-          {...(placementData === undefined ? {} : { projectedData: placementData })}
-          {...(placementEvents === undefined ? {} : { displayEvents: placementEvents })}
-          {...(placementControlData === undefined ? {} : { controlData: placementControlData })}
-          {...(placementControlEvents === undefined ? {} : { controlEvents: placementControlEvents })}
+          {...parsedInputs}
           {...(projectedNavigation === undefined ? {} : { projectedNavigation })}
           {...(resolvePageHref === undefined ? {} : { resolvePageHref })}
           {...(currentPageId === undefined ? {} : { currentPageId })}
@@ -621,14 +583,11 @@ export type PlacementSlotRendererProps = Readonly<{
   location?: DefinitionRenderErrorLocation;
   /** Permission projection may remove otherwise required child content. */
   allowEmptyRequiredSlots?: boolean;
-  /** Permission-projected display data keyed by stable placement identity. */
-  projectedData?: ProjectedDataByPlacement | undefined;
-  /** Semantic callbacks keyed by stable placement identity. */
-  displayEvents?: DisplayEventsByPlacement | undefined;
-  /** Permission-projected control data keyed by stable placement identity. */
-  controlData?: ProjectedControlDataByPlacement | undefined;
-  /** Control semantic callbacks keyed by stable placement identity. */
-  controlEvents?: ControlEventsByPlacement | undefined;
+  /**
+   * Raw component runtime inputs keyed by stable placement identity, validated fail-closed by each
+   * placement's own registration.
+   */
+  runtimeInputs?: RuntimeInputsByPlacement | undefined;
   /** Theme tokens in force where this slot renders. */
   themeScope?: PlacementThemeScope | undefined;
 }>;
@@ -663,10 +622,7 @@ function PlacementSlotView({
   style,
   location = {},
   allowEmptyRequiredSlots = false,
-  projectedData,
-  displayEvents,
-  controlData,
-  controlEvents,
+  runtimeInputs,
   projectedNavigation,
   resolvePageHref,
   currentPageId,
@@ -735,10 +691,7 @@ function PlacementSlotView({
         location={currentLocation}
         {...(gridItemStyle === undefined ? {} : { style: gridItemStyle })}
         allowEmptyRequiredSlots={allowEmptyRequiredSlots}
-        projectedData={projectedData}
-        displayEvents={displayEvents}
-        controlData={controlData}
-        controlEvents={controlEvents}
+        runtimeInputs={runtimeInputs}
         projectedNavigation={projectedNavigation}
         resolvePageHref={resolvePageHref}
         currentPageId={currentPageId}
@@ -795,20 +748,12 @@ export type PageLayoutRendererProps = Readonly<{
   className?: string;
   style?: CSSProperties;
   /**
-   * Permission-projected display data keyed by stable placement identity. Every key must
-   * name a placement in the resolved tree; each entry is parsed fail-closed at its placement.
+   * Raw component runtime inputs keyed by stable placement identity. Every key must name a
+   * placement in the resolved tree, and each entry is validated fail-closed by that placement's own
+   * registration, so the renderer itself names no payload field, event or callback.
    */
-  projectedData?: ProjectedDataByPlacement;
-  /** Semantic callbacks keyed by stable placement identity; the renderer never invokes them. */
-  displayEvents?: DisplayEventsByPlacement;
-  /**
-   * Permission-projected control data keyed by stable placement identity.
-   */
-  controlData?: ProjectedControlDataByPlacement;
-  /** Control semantic callbacks keyed by stable placement identity. */
-  controlEvents?: ControlEventsByPlacement;
-  /**
-   * The viewer's permission-filtered application menu, threaded to every navigation placement in
+  runtimeInputs?: RuntimeInputsByPlacement;
+  /** The viewer's permission-filtered application menu, threaded to every navigation placement in
    * the resolved tree. It is server-projected viewer data, never an authored setting.
    */
   projectedNavigation?: ProjectedNavigation;
@@ -842,10 +787,7 @@ export function PageLayoutRenderer({
   activeStepId,
   className,
   style,
-  projectedData,
-  displayEvents,
-  controlData,
-  controlEvents,
+  runtimeInputs,
   projectedNavigation,
   resolvePageHref,
   currentPageId,
@@ -881,21 +823,8 @@ export function PageLayoutRenderer({
   });
   validateProjectedAvailabilityTree(resolved.slot, location);
 
-  if (projectedData !== undefined || displayEvents !== undefined)
-    assertProjectionKeysArePlacements(
-      collectPlacementIds(resolved.slot),
-      projectedData,
-      displayEvents,
-      location,
-    );
-
-  if (controlData !== undefined || controlEvents !== undefined)
-    assertControlProjectionKeysArePlacements(
-      collectPlacementIds(resolved.slot),
-      controlData,
-      controlEvents,
-      location,
-    );
+  if (runtimeInputs !== undefined)
+    assertRuntimeInputKeysArePlacements(collectPlacementIds(resolved.slot), runtimeInputs, location);
 
   const applicationTheme = theme ?? ("theme" in composition ? composition.theme : undefined);
   const applicationTokens = applicationTheme?.tokens ?? {};
@@ -904,10 +833,7 @@ export function PageLayoutRenderer({
     registry,
     location,
     allowEmptyRequiredSlots: resolved.permissionProjected,
-    projectedData,
-    displayEvents,
-    controlData,
-    controlEvents,
+    runtimeInputs,
     projectedNavigation,
     resolvePageHref,
     currentPageId,
