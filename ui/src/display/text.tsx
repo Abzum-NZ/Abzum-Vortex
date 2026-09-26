@@ -1,4 +1,6 @@
 import type { ReactElement } from "react";
+import { Card, CardContent } from "../components/card";
+import { cn } from "../lib/utils";
 import { DisplayCellView } from "./cell";
 import { DisplayHeader } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
@@ -6,7 +8,7 @@ import { DisplayStateContainer } from "./display-state-container";
 import type { TextPayload } from "./projected-data";
 
 /**
- * Shared browser-safe display component for plain text.
+ * Shared browser-safe display component for plain text, rendered with a shadcn Card.
  * Renders caller-supplied projected text, or the block's declared literal `text` setting when
  * no projection is supplied. Never executes or fetches a Query.
  */
@@ -37,16 +39,18 @@ export function PlainTextDisplay(props: DisplayRenderProps<TextPayload>): ReactE
       emptyMessage={emptyMessage}
     >
       {values === undefined ? null : (
-        <div
+        <Card
           data-vortex-display="text"
           data-vortex-placement-id={props.placementId}
-          className="vortex-display-text"
+          className={cn("vortex-display-text")}
         >
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
-          <div className="vortex-text-value">
-            <DisplayCellView value={values.value} />
-          </div>
-        </div>
+          <CardContent>
+            <div className={cn("text-sm", "vortex-text-value")}>
+              <DisplayCellView value={values.value} />
+            </div>
+          </CardContent>
+        </Card>
       )}
     </DisplayStateContainer>
   );
