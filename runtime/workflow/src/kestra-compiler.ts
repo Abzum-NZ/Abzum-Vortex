@@ -149,8 +149,12 @@ export type KestraCompiledTask = Readonly<Record<string, JsonValue>>;
  */
 export type KestraFlowTrigger = Readonly<{
   id: string;
-  /** The legacy trigger kind the registration and readiness contracts understand. */
-  kind: "schedule" | "incoming_message" | "workflow";
+  /**
+   * The start kind the registration and readiness contracts understand. Durable flows use
+   * `schedule`, `incoming_message` or `workflow` (started only by Run background flow);
+   * legacy node-and-edge workflows keep their own published start kind.
+   */
+  kind: "schedule" | "incoming_message" | "workflow" | WorkflowTrigger["kind"];
   disabled: true;
   trigger: FlowTrigger | null;
 }>;
@@ -338,6 +342,8 @@ type CompileContext = {
   readonly childFlowRevisions: ReadonlyMap<string, number>;
   readonly allowedTemplateTokens: Set<string>;
   readonly nodes: KestraFlowNodeBinding[];
+  /** True inside a loop body, where each iteration reads its own sibling outputs. */
+  readonly insideLoop: boolean;
 };
 
 type CompileOutcome<Value> =
@@ -384,6 +390,22 @@ type CallbackContext = {
   readonly identity: KestraFlowIdentity;
   readonly allowedTemplateTokens: Set<string>;
   readonly nodes: KestraFlowNodeBinding[];
+  readonly insideLoop: boolean;
+};
+
+/** The compiler-generated reference to the current loop item, sent with every callback in a loop. */
+const loopItemReference = "{{ taskrun.value }}";
+
+/**
+ * The compiler-generated reference to one evaluator callback's result. Inside a loop body Kestra
+ * keys sibling outputs by iteration, so the reference reads the current iteration's output.
+ */
+const resultReference = (ctx: CallbackContext, taskId: string): string => {
+  const reference = ctx.insideLoop
+    ? `{{ currentEachOutput(outputs.${taskId}).value }}`
+    : `{{ outputs.${taskId}.value }}`;
+  ctx.allowedTemplateTokens.add(reference);
+  return reference;
 };
 
 const callbackBinding = (
@@ -421,11 +443,13 @@ const protectedCallbackTask = (
     nodeId: binding.nodeId as string,
     operationKey: binding.operationKey,
   });
+  if (ctx.insideLoop) ctx.allowedTemplateTokens.add(loopItemReference);
   return {
     id: taskId,
     type: kestraProtectedCallbackTaskType,
     envelope: rawJson(binding as unknown as JsonValue),
     callbackKey: kestraCallbackKeyReference,
+    ...(ctx.insideLoop ? { loopItem: loopItemReference } : {}),
   };
 };
 
@@ -444,14 +468,18 @@ type ValueExpression = Readonly<{ tasks: KestraCompiledTask[]; expression: JsonV
  * Kestra reference to its result. Kestra's native control tasks branch only on
  * this reference; the Vortex evaluator owns the typed semantics.
  */
-const evaluateValue = (ctx: CompileContext, seed: string, value: FlowValue): EvaluatedValue => {
+const evaluateValue = (
+  ctx: CompileContext,
+  seed: string,
+  value: FlowValue,
+  limits: Record<string, JsonValue> = {},
+): EvaluatedValue => {
   const taskId = kestraTaskId("e", seed);
   const task = protectedCallbackTask(ctx, taskId, derivedNodeId(ctx, taskId), kestraEvaluatorOperationKey, {
     expression: jsonOf(value),
+    ...limits,
   });
-  const reference = `{{ outputs.${taskId}.value }}`;
-  ctx.allowedTemplateTokens.add(reference);
-  return { tasks: [task], reference };
+  return { tasks: [task], reference: resultReference(ctx, taskId) };
 };
 
 const evaluateFormula = (ctx: CompileContext, seed: string, formula: FlowFormula): EvaluatedValue =>
@@ -521,6 +549,26 @@ const valueInputType = (value: FlowValue): string =>
 
 const flowTriggers = (flow: FlowDefinition): readonly FlowTrigger[] => flow.triggers;
 
+/**
+ * True when cron can express the recurrence exactly. A cron step restarts at each larger unit, so
+ * only hour steps dividing a day, month steps dividing a year and single-day or single-week
+ * intervals repeat evenly; anything else is refused rather than approximated.
+ */
+const scheduleIsExpressible = (recurrence: {
+  cadence: "hourly" | "daily" | "weekly" | "monthly";
+  interval: number;
+}): boolean => {
+  switch (recurrence.cadence) {
+    case "hourly":
+      return 24 % recurrence.interval === 0;
+    case "daily":
+    case "weekly":
+      return recurrence.interval === 1;
+    case "monthly":
+      return 12 % recurrence.interval === 0;
+  }
+};
+
 /** The Kestra cron expression one closed recurrence value owns. */
 const scheduleCron = (recurrence: {
   cadence: "hourly" | "daily" | "weekly" | "monthly";
@@ -570,6 +618,11 @@ const compileTrigger = (
   trigger: FlowTrigger,
 ): CompileOutcome<KestraFlowTrigger> => {
   const id = `trigger_${trigger.id}`;
+  // Kestra cannot evaluate a Vortex entry condition, and an unenforced condition would start runs
+  // the builder excluded, so a conditioned trigger is refused until Vortex gates the start.
+  if (trigger.condition !== undefined) return stop("unsupported_trigger");
+  if (trigger.type === "Schedule" && !scheduleIsExpressible(trigger.recurrence))
+    return stop("unsupported_trigger");
   if (trigger.type === "Schedule")
     return ok({
       id,
@@ -629,6 +682,19 @@ const compileTaskList = (
   return ok(compiled);
 };
 
+/**
+ * A Stop: the published outcome (a builder key) is recorded as an output value, then the
+ * execution exits successfully. Kestra's Exit task carries no outputs of its own.
+ */
+const stopTasks = (seed: string, outcome: string): KestraCompiledTask[] => [
+  {
+    id: kestraTaskId("o", seed),
+    type: "io.kestra.plugin.core.output.OutputValues",
+    values: { vortex_outcome: outcome },
+  },
+  { id: kestraTaskId("c", seed), type: "io.kestra.plugin.core.execution.Exit", state: "SUCCESS" },
+];
+
 const compileControlTask = (
   ctx: CompileContext,
   task: ControlTask,
@@ -678,15 +744,18 @@ const compileControlTask = (
       ]);
     }
     case "for_each": {
-      const items = evaluateValue(ctx, `${task.id}__items`, task.items);
-      const body = compileTaskList(ctx, task.tasks);
+      // The evaluator refuses a list longer than the published maximum before any iteration runs.
+      const items = evaluateValue(ctx, `${task.id}__items`, task.items, {
+        maximum_items: task.maximumItems,
+      });
+      const body = compileTaskList({ ...ctx, insideLoop: true }, task.tasks);
       if (body.outcome === "refused") return body;
       return ok([
         ...items.tasks,
         {
           id: kestraTaskId("c", task.id),
-          type: "io.kestra.plugin.core.flow.ForEachItem",
-          items: items.reference,
+          type: "io.kestra.plugin.core.flow.ForEach",
+          values: items.reference,
           tasks: body.value,
         },
       ]);
@@ -738,14 +807,7 @@ const compileControlTask = (
       ]);
     }
     case "stop":
-      return ok([
-        {
-          id: kestraTaskId("c", task.id),
-          type: "io.kestra.plugin.core.execution.Exit",
-          state: "SUCCESS",
-          outputs: { vortex_outcome: task.outcome },
-        },
-      ]);
+      return ok(stopTasks(task.id, task.outcome));
     case "wait_until": {
       const until = evaluateValue(ctx, `${task.id}__until`, task.until);
       return ok([
@@ -809,22 +871,48 @@ const compileRegisteredTask = (
   ]);
 };
 
-const compileTask = (ctx: CompileContext, task: FlowTask): CompileOutcome<KestraCompiledTask[]> =>
-  isFlowControlTask(task)
+/**
+ * Compiles one task and applies its published retry and timeout to the Kestra task that runs it.
+ * Kestra retries only runnable tasks, so a retry on a control task is refused, never dropped.
+ */
+const compileTask = (ctx: CompileContext, task: FlowTask): CompileOutcome<KestraCompiledTask[]> => {
+  const control = isFlowControlTask(task);
+  if (control && task.retry !== undefined) return stop("unsupported_task");
+  const compiled = control
     ? compileControlTask(ctx, task as ControlTask)
     : compileRegisteredTask(ctx, task as RegisteredTask);
+  if (compiled.outcome === "refused" || (task.retry === undefined && task.timeout === undefined))
+    return compiled;
+  const ownId = kestraTaskId(control ? "c" : "t", task.id);
+  return ok(
+    compiled.value.map((step) =>
+      step.id === ownId
+        ? {
+            ...step,
+            ...(task.retry === undefined ? {} : { retry: renderRetry(task.retry) }),
+            ...(task.timeout === undefined ? {} : { timeout: `PT${task.timeout.seconds}S` }),
+          }
+        : step,
+    ),
+  );
+};
 
 // ─── Retry, timeout and concurrency ──────────────────────────────────────────────────────────
 
-const renderRetry = (retry: NonNullable<FlowDefinition["retry"]>): Record<string, JsonValue> => ({
-  type:
-    retry.backoff === "exponential"
-      ? "io.kestra.plugin.core.retry.Exponential"
-      : "io.kestra.plugin.core.retry.Constant",
-  interval: `PT${retry.initialDelaySeconds}S`,
-  maxInterval: `PT${retry.maximumDelaySeconds}S`,
-  maxAttempts: retry.maximumAttempts,
-});
+/** Kestra's retry policy: `constant` has one interval; `exponential` grows up to its maximum. */
+const renderRetry = (retry: NonNullable<FlowDefinition["retry"]>): Record<string, JsonValue> =>
+  retry.backoff === "exponential"
+    ? {
+        type: "exponential",
+        interval: `PT${retry.initialDelaySeconds}S`,
+        maxInterval: `PT${retry.maximumDelaySeconds}S`,
+        maxAttempts: retry.maximumAttempts,
+      }
+    : {
+        type: "constant",
+        interval: `PT${retry.initialDelaySeconds}S`,
+        maxAttempts: retry.maximumAttempts,
+      };
 
 // ─── YAML rendering and the post-compilation check ───────────────────────────────────────────
 
@@ -835,6 +923,12 @@ const yamlScalar = (value: JsonValue): string => {
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : "null";
   return JSON.stringify(value);
 };
+
+/** A plain YAML mapping key, or the JSON-quoted key when builder text could change the structure. */
+const plainYamlKeyPattern = /^[A-Za-z_][A-Za-z0-9_.-]*$/;
+const yamlResolvedWordPattern = /^(y|yes|n|no|true|false|on|off|null)$/i;
+const yamlKey = (key: string): string =>
+  plainYamlKeyPattern.test(key) && !yamlResolvedWordPattern.test(key) ? key : JSON.stringify(key);
 
 /** Renders plain JSON data as deterministic block-style YAML. */
 const renderYaml = (value: JsonValue, indent: string): string => {
@@ -849,8 +943,8 @@ const renderYaml = (value: JsonValue, indent: string): string => {
             .map(([key, member], index) => {
               const prefix = index === 0 ? `${indent}- ` : `${indent}  `;
               return Array.isArray(member) || (member !== null && typeof member === "object")
-                ? `${prefix}${key}:\n${renderYaml(member as JsonValue, `${indent}    `)}`
-                : `${prefix}${key}: ${yamlScalar(member as JsonValue)}`;
+                ? `${prefix}${yamlKey(key)}:\n${renderYaml(member as JsonValue, `${indent}    `)}`
+                : `${prefix}${yamlKey(key)}: ${yamlScalar(member as JsonValue)}`;
             })
             .join("\n");
         }
@@ -865,8 +959,8 @@ const renderYaml = (value: JsonValue, indent: string): string => {
     return entries
       .map(([key, member]) =>
         Array.isArray(member) || (member !== null && typeof member === "object")
-          ? `${indent}${key}:\n${renderYaml(member as JsonValue, `${indent}  `)}`
-          : `${indent}${key}: ${yamlScalar(member as JsonValue)}`,
+          ? `${indent}${yamlKey(key)}:\n${renderYaml(member as JsonValue, `${indent}  `)}`
+          : `${indent}${yamlKey(key)}: ${yamlScalar(member as JsonValue)}`,
       )
       .join("\n");
   }
@@ -890,8 +984,12 @@ const containsOnlyGeneratedTemplateText = (
       braces === -1 ? blocks : blocks === -1 ? braces : Math.min(braces, blocks);
     if (next === -1) return true;
     if (yaml.startsWith("{% raw %}", next)) {
-      const end = yaml.indexOf("{% endraw %}", next + "{% raw %}".length);
+      const start = next + "{% raw %}".length;
+      const end = yaml.indexOf("{% endraw %}", start);
       if (end === -1) return false;
+      // Pebble also ends a raw block at spacing or whitespace-control variants such as
+      // `{%endraw%}` or `{%- endraw %}`, so a raw body may hold no `{%` at all.
+      if (yaml.slice(start, end).includes("{%")) return false;
       cursor = end + "{% endraw %}".length;
       continue;
     }
@@ -945,8 +1043,12 @@ const neutralizeLabelDelimiters = (definition: unknown): unknown => {
 const inertLabelText = (value: string): string =>
   hasTemplateDelimiter(value) ? `{% raw %}${value}{% endraw %}` : value;
 
-/** True when the raw block would be broken by an embedded end marker, so it cannot be made inert. */
-const labelIsRenderable = (value: string): boolean => !value.includes("{% endraw %}");
+/**
+ * True when builder text can sit inside a raw block. Pebble ends a raw block at any `{% endraw %}`
+ * spelling, including `{%endraw%}` and `{%- endraw %}`, so text holding `{%` cannot be made inert.
+ */
+const rawBreakPattern = /\{%/;
+const labelIsRenderable = (value: string): boolean => !rawBreakPattern.test(value);
 
 /** True for the retired node-and-edge workflow shape, refused explicitly, never silently dropped. */
 const isLegacyWorkflowDefinition = (definition: unknown): boolean =>
@@ -1162,6 +1264,7 @@ type LegacyContext = {
   readonly nodeById: ReadonlyMap<string, WorkflowNode>;
   readonly outgoing: ReadonlyMap<string, readonly WorkflowEdge[]>;
   readonly loopBackEdges: ReadonlySet<WorkflowEdge>;
+  readonly insideLoop: boolean;
   refusal: KestraFlowCompilerRefusalReason | undefined;
 };
 
@@ -1213,12 +1316,8 @@ const legacyPauseTask = (nodeId: string, durationSeconds: number): KestraCompile
   pauseDuration: `PT${durationSeconds}S`,
 });
 
-const legacyStopTask = (node: WorkflowNode): KestraCompiledTask => ({
-  id: `c_${node.nodeId.toLowerCase()}`,
-  type: "io.kestra.plugin.core.execution.Exit",
-  state: "SUCCESS",
-  outputs: { vortex_outcome: (node.config as LegacyStopConfig).reasonCode },
-});
+const legacyStopTasks = (node: WorkflowNode): KestraCompiledTask[] =>
+  stopTasks(node.nodeId.toLowerCase(), (node.config as LegacyStopConfig).reasonCode);
 
 const legacyEffectTask = (ctx: LegacyContext, node: WorkflowNode): KestraCompiledTask =>
   protectedCallbackTask(
@@ -1254,13 +1353,12 @@ const legacyWaitUntilTasks = (ctx: LegacyContext, node: WorkflowNode): KestraCom
     kestraEvaluatorOperationKey,
     { field: (node.config as LegacyWaitUntilConfig).dateTimeFieldId },
   );
-  ctx.allowedTemplateTokens.add(`{{ outputs.e_${node.nodeId.toLowerCase()}.value }}`);
   return [
     evaluator,
     {
       id: `c_${node.nodeId.toLowerCase()}`,
       type: "io.kestra.plugin.core.flow.Pause",
-      pauseDuration: `{{ outputs.e_${node.nodeId.toLowerCase()}.value }}`,
+      pauseDuration: resultReference(ctx, `e_${node.nodeId.toLowerCase()}`),
     },
   ];
 };
@@ -1291,8 +1389,7 @@ const legacyCompileBranch = (
       kestraEvaluatorOperationKey,
       { condition: jsonOf((node.config as { condition: unknown }).condition) },
     );
-    const reference = `{{ outputs.e_${node.nodeId.toLowerCase()}.value }}`;
-    ctx.allowedTemplateTokens.add(reference);
+    const reference = resultReference(ctx, `e_${node.nodeId.toLowerCase()}`);
     const then = compileLegacyLinear(ctx, matched.toNodeId, branchStop).tasks;
     const otherwise = compileLegacyLinear(ctx, notMatched.toNodeId, branchStop).tasks;
     return {
@@ -1332,8 +1429,7 @@ const legacyCompileBranch = (
       kestraEvaluatorOperationKey,
       { decisions: jsonOf(decisions) },
     );
-    const reference = `{{ outputs.e_${node.nodeId.toLowerCase()}.value }}`;
-    ctx.allowedTemplateTokens.add(reference);
+    const reference = resultReference(ctx, `e_${node.nodeId.toLowerCase()}`);
     return {
       tasks: [
         evaluator,
@@ -1359,7 +1455,9 @@ const legacyCompileBranch = (
     }
     const bodyStop = new Set(stop);
     bodyStop.add(node.nodeId);
-    const body = compileLegacyLinear(ctx, record.toNodeId, bodyStop).tasks;
+    const bodyCtx: LegacyContext = { ...ctx, insideLoop: true };
+    const body = compileLegacyLinear(bodyCtx, record.toNodeId, bodyStop).tasks;
+    if (bodyCtx.refusal !== undefined) ctx.refusal = bodyCtx.refusal;
     const config = node.config as LegacyBoundedLoopConfig;
     const evaluator = protectedCallbackTask(
       ctx,
@@ -1368,15 +1466,14 @@ const legacyCompileBranch = (
       kestraEvaluatorOperationKey,
       { query_id: config.queryId, maximum_records: config.maximumRecords },
     );
-    const reference = `{{ outputs.e_${node.nodeId.toLowerCase()}.value }}`;
-    ctx.allowedTemplateTokens.add(reference);
+    const reference = resultReference(ctx, `e_${node.nodeId.toLowerCase()}`);
     return {
       tasks: [
         evaluator,
         {
           id: `c_${node.nodeId.toLowerCase()}`,
-          type: "io.kestra.plugin.core.flow.ForEachItem",
-          items: reference,
+          type: "io.kestra.plugin.core.flow.ForEach",
+          values: reference,
           tasks: body,
         },
       ],
@@ -1416,8 +1513,7 @@ const legacyCompileBranch = (
     kestraEvaluatorOperationKey,
     { form_id: config.pageId, timeout_outcome: config.timeoutOutcome },
   );
-  const reference = `{{ outputs.e_${node.nodeId.toLowerCase()}__outcome.value }}`;
-  ctx.allowedTemplateTokens.add(reference);
+  const reference = resultReference(ctx, `e_${node.nodeId.toLowerCase()}__outcome`);
   const submittedTasks = compileLegacyLinear(ctx, submitted.toNodeId, branchStop).tasks;
   const timedOutTasks = compileLegacyLinear(ctx, timedOut.toNodeId, branchStop).tasks;
   const onResume = config.outputs
@@ -1466,7 +1562,7 @@ const compileLegacyLinear = (
       current = branch.next;
       continue;
     } else if (node.type === "stop") {
-      tasks.push(legacyStopTask(node));
+      tasks.push(...legacyStopTasks(node));
       return { tasks, next: undefined };
     } else if (node.type === "delay") {
       tasks.push(legacyPauseTask(node.nodeId, (node.config as LegacyDelayConfig).seconds));
@@ -1487,7 +1583,9 @@ const legacyTriggerSummary = (
   identity: KestraFlowIdentity,
   workflowId: string,
   trigger: WorkflowTrigger,
-): Readonly<{ summary: KestraFlowTrigger; yaml: Record<string, JsonValue> | undefined }> => {
+): Readonly<{ summary: KestraFlowTrigger; yaml: Record<string, JsonValue> | undefined }> | undefined => {
+  if (trigger.condition !== null) return undefined;
+  if (trigger.kind === "schedule" && !scheduleIsExpressible(trigger.schedule)) return undefined;
   if (trigger.kind === "schedule")
     return {
       summary: { id: "trigger_schedule", kind: "schedule", disabled: true, trigger: null },
@@ -1509,7 +1607,11 @@ const legacyTriggerSummary = (
         disabled: true,
       },
     };
-  return { summary: { id: "trigger_none", kind: "workflow", disabled: true, trigger: null }, yaml: undefined };
+  // Event, button, interface and workflow starts are dispatched by Vortex, never a Kestra trigger.
+  return {
+    summary: { id: `trigger_${trigger.kind}`, kind: trigger.kind, disabled: true, trigger: null },
+    yaml: undefined,
+  };
 };
 
 const compileLegacyKestraFlow = (
@@ -1529,6 +1631,7 @@ const compileLegacyKestraFlow = (
     nodeById: graph.nodeById,
     outgoing: graph.outgoing,
     loopBackEdges: graph.loopBackEdges,
+    insideLoop: false,
     refusal: undefined,
   };
 
@@ -1541,6 +1644,7 @@ const compileLegacyKestraFlow = (
     return refused("invalid_identity");
 
   const trigger = legacyTriggerSummary(identity, definition.workflowId, definition.trigger);
+  if (trigger === undefined) return refused("unsupported_trigger");
   const fixedLabels: Record<string, string> = {
     vortex_environment: identity.environment,
     vortex_organization_id: identity.organizationId,
@@ -1632,14 +1736,14 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
   if (isLegacyWorkflowDefinition(inputCandidate.definition)) {
     const legacy = legacyWorkflowDefinitionSchema.safeParse(inputCandidate.definition);
     if (!legacy.success) return refused("invalid_definition");
-    if (JSON.stringify(legacy.data).includes("{% endraw %}")) return refused("unsafe_builder_text");
+    if (rawBreakPattern.test(JSON.stringify(legacy.data))) return refused("unsafe_builder_text");
     return compileLegacyKestraFlow(identity, legacy.data, childFlowRevisions);
   }
 
   const builderLabels = readBuilderLabels(inputCandidate.definition);
   for (const value of Object.values(builderLabels))
     if (!labelIsRenderable(value)) return refused("unsafe_builder_text");
-  if (JSON.stringify(inputCandidate.definition).includes("{% endraw %}"))
+  if (rawBreakPattern.test(JSON.stringify(inputCandidate.definition) ?? ""))
     return refused("unsafe_builder_text");
 
   const parsedDefinition = flowSchema.safeParse(neutralizeLabelDelimiters(inputCandidate.definition));
@@ -1660,6 +1764,7 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
     childFlowRevisions,
     allowedTemplateTokens: new Set<string>(),
     nodes: [],
+    insideLoop: false,
   };
 
   const tasks = compileTaskList(ctx, definition.tasks);
@@ -1718,7 +1823,8 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
     vortex_workflow_key: definition.key,
     vortex_workflow_revision: String(identity.workflowRevision),
   };
-  const candidateLabels: Record<string, string> = { ...fixedLabels, ...builderLabels };
+  // Builder labels never replace the identity labels the compiler derives.
+  const candidateLabels: Record<string, string> = { ...builderLabels, ...fixedLabels };
   const allLabelKeys = Object.keys(candidateLabels).sort();
   const yamlLabels: Record<string, JsonValue> = {};
   for (const key of allLabelKeys) yamlLabels[key] = inertLabelText(candidateLabels[key]!);
