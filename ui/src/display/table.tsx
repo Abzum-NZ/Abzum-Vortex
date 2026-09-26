@@ -5,15 +5,20 @@ import {
   type RecordsTableColumnContract,
   type RecordsTableContract,
 } from "@vortex/contracts";
+import { Button } from "../components/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/table";
+import { cn } from "../lib/utils";
 import { DisplayCellView } from "./cell";
 import {
-  BulkActionControl,
+  BulkActionsMenu,
   DisplayHeader,
   FilterControl,
   type FilterInputKind,
   InlineEditCell,
   PaginationControl,
-  RowActionControl,
+  RecordsEmptyState,
+  RecordsLoadingState,
+  RowActionsMenu,
   SearchControl,
   SelectAllControl,
   SelectionControl,
@@ -71,6 +76,22 @@ const columnAttributes = (
         style: { textAlign: column.declared.alignment },
       };
 
+/**
+ * Declared column priority as a responsive utility: a low priority column hides first on a narrow
+ * viewport, a medium priority one next, and an essential or high priority column never hides. The
+ * declared priority stays a data attribute for the platform's own styling hooks.
+ */
+const priorityClass = (column: RenderedColumn): string | undefined => {
+  switch (column.declared?.priority) {
+    case "low":
+      return "max-lg:hidden";
+    case "medium":
+      return "max-md:hidden";
+    default:
+      return undefined;
+  }
+};
+
 /** Field identities compare without regard to case, as the Query engine keys them. */
 const sameFieldKey = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
@@ -106,11 +127,12 @@ const rowShowsAction = (
   row.capabilities?.actions.includes(action.capability) === true;
 
 /**
- * Shared browser-safe display component for tabular data.
- * Renders only declared columns and permitted rows, preserving stable identities and declared events.
- * A Records table placement declares its columns, sortable and filterable fields, search, page size,
- * selection mode and row behaviours as settings. Every control reports a declared data event; the
- * component never sorts, filters or pages the returned rows itself.
+ * Shared browser-safe display component for tabular data, rendered with the shadcn Table, Checkbox,
+ * Dropdown Menu, Pagination, Input, Skeleton and Empty parts. It renders only declared columns and
+ * permitted rows, preserving stable identities and declared events. A Records table placement
+ * declares its columns, sortable and filterable fields, search, page size, selection mode and row
+ * behaviours as settings. Every control reports a declared data event; the component never sorts,
+ * filters or pages the returned rows itself.
  */
 export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElement {
   const { placementId, availability } = props;
@@ -192,6 +214,14 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     );
   };
 
+  // The table's own loading and no-rows presentations keep the state identity, role and accessible
+  // name the standard state container gives them, and the container still owns the refused, error
+  // and unavailable states of this placement.
+  if (state.status === "loading")
+    return <RecordsLoadingState accessibleName={accessibleName} />;
+  if (state.status === "empty")
+    return <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />;
+
   return (
     <DisplayStateContainer
       accessibleName={accessibleName}
@@ -202,20 +232,16 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
       {...(errorMessage === undefined ? {} : { errorMessage })}
     >
       {values === undefined ? null : (
-        <div
-          data-vortex-display="table"
-          data-vortex-placement-id={placementId}
-          className="vortex-display-table"
-        >
+        <div data-vortex-display="table" data-vortex-placement-id={placementId}>
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
           {!showSearch && !showFilters ? null : (
-            <div className="vortex-table-controls">
+            <div className="mb-2 flex flex-wrap items-start gap-4">
               {!showSearch ? null : (
                 <SearchControl accessibleName={accessibleName} events={events} />
               )}
               {!showFilters ? null : (
                 <div
-                  className="vortex-table-filters"
+                  className="flex flex-wrap gap-2"
                   role="group"
                   aria-label={`Filters for ${accessibleName}`}
                 >
@@ -233,28 +259,21 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
             </div>
           )}
           {!showBulkActions ? null : (
-            <div
-              className="vortex-table-bulk-actions"
-              role="group"
-              aria-label={`Bulk actions for ${accessibleName}`}
-            >
-              {declaredBulkActions.map((action) => (
-                <BulkActionControl
-                  key={action.eventId}
-                  eventId={action.eventId}
-                  label={action.label}
-                  recordIds={selectedRecordIds}
-                  capable={bulkCapable(action.capability)}
-                  events={events}
-                />
-              ))}
+            <div className="mb-2">
+              <BulkActionsMenu
+                accessibleName={accessibleName}
+                actions={declaredBulkActions}
+                recordIds={selectedRecordIds}
+                canRun={(action) => bulkCapable(action.capability)}
+                events={events}
+              />
             </div>
           )}
-          <table className="vortex-table" aria-label={accessibleName}>
-            <thead>
-              <tr className="vortex-table-header-row">
+          <Table aria-label={accessibleName}>
+            <TableHeader>
+              <TableRow>
                 {!selectable ? null : (
-                  <th scope="col" className="vortex-table-col-select">
+                  <TableHead scope="col" className="w-px">
                     {selectionMode === "multiple" ? (
                       <SelectAllControl
                         allSelected={allSelected}
@@ -263,28 +282,29 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                         events={events}
                       />
                     ) : (
-                      <span className="vortex-sr-only">Selected</span>
+                      <span className="sr-only">Selected</span>
                     )}
-                  </th>
+                  </TableHead>
                 )}
                 {columns.map((column) => {
                   const direction =
                     values.sort?.columnKey === column.key ? values.sort.direction : undefined;
                   const onSort = sortable(column) ? events?.sort_changed : undefined;
                   return (
-                    <th
+                    <TableHead
                       key={column.key}
                       scope="col"
                       aria-sort={direction ?? "none"}
-                      className="vortex-table-header-cell"
+                      className={cn(priorityClass(column))}
                       {...columnAttributes(column)}
                     >
                       {onSort === undefined ? (
                         column.label
                       ) : (
-                        <button
+                        <Button
                           type="button"
-                          className="vortex-sort-button"
+                          variant="ghost"
+                          size="sm"
                           onClick={() =>
                             onSort({
                               event: "sort_changed",
@@ -299,21 +319,25 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                               {direction === "ascending" ? " ▲" : " ▼"}
                             </span>
                           )}
-                        </button>
+                        </Button>
                       )}
-                    </th>
+                    </TableHead>
                   );
                 })}
                 {!showActionsColumn ? null : (
-                  <th scope="col" className="vortex-table-col-actions">
-                    <span className="vortex-sr-only">Actions</span>
-                  </th>
+                  <TableHead scope="col" className="w-px">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
                 )}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {values.rows.map((row) => {
                 const name = rowName(row, columns[0]?.key);
+                const selected = selectedRecordIds.includes(row.recordId);
+                const shownActions = declaredRowActions.filter((action) =>
+                  rowShowsAction(row, action),
+                );
                 const activate = activateRow;
                 const rowInteraction =
                   activate === undefined
@@ -332,34 +356,31 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                         },
                       };
                 return (
-                  <tr
+                  <TableRow
                     key={row.recordId}
                     data-vortex-record-id={row.recordId}
-                    className={
-                      activate === undefined
-                        ? "vortex-table-row"
-                        : "vortex-table-row vortex-table-row-clickable"
-                    }
+                    data-state={selected ? "selected" : undefined}
+                    className={cn(activate === undefined ? undefined : "cursor-pointer")}
                     {...rowInteraction}
                   >
                     {!selectable ? null : (
-                      <td className="vortex-table-cell-select">
+                      <TableCell className="w-px">
                         <SelectionControl
                           row={row}
                           name={name}
-                          selected={selectedRecordIds.includes(row.recordId)}
+                          selected={selected}
                           mode={selectionMode === "single" ? "single" : "multiple"}
                           groupName={`vortex-selection-${placementId}`}
                           events={events}
                         />
-                      </td>
+                      </TableCell>
                     )}
                     {columns.map((column) => {
                       const cell: DisplayCellValue = row.cells[column.key] ?? { kind: "empty" };
                       return (
-                        <td
+                        <TableCell
                           key={column.key}
-                          className="vortex-table-cell"
+                          className={cn(priorityClass(column))}
                           {...columnAttributes(column)}
                         >
                           {editable(row, column.key, cell) &&
@@ -379,34 +400,24 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                           ) : (
                             <DisplayCellView value={cell} />
                           )}
-                        </td>
+                        </TableCell>
                       );
                     })}
                     {!showActionsColumn ? null : (
-                      <td className="vortex-table-cell-action">
-                        {declaredRowActions.length === 0 ? (
-                          <RowActionControl recordId={row.recordId} name={name} events={events} />
-                        ) : (
-                          declaredRowActions
-                            .filter((action) => rowShowsAction(row, action))
-                            .map((action) => (
-                              <RowActionControl
-                                key={action.eventId}
-                                recordId={row.recordId}
-                                name={name}
-                                eventId={action.eventId}
-                                label={action.label}
-                                events={events}
-                              />
-                            ))
-                        )}
-                      </td>
+                      <TableCell className="w-px">
+                        <RowActionsMenu
+                          recordId={row.recordId}
+                          name={name}
+                          actions={shownActions}
+                          events={events}
+                        />
+                      </TableCell>
                     )}
-                  </tr>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
           <PaginationControl
             page={values.page}
             pageCount={values.pageCount}
