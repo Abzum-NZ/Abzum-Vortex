@@ -501,9 +501,10 @@
                                                                                        "content_1":  {
                                                                                                          "block":  {
                                                                                                                        "block_id":  "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                                                                                                                       "release_version":  "1.2.0"
+                                                                                                                       "release_version":  "1.3.0"
                                                                                                                    },
                                                                                                          "settings":  {
+                                                                                                                          "row_click": { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "event_crm_open_company" } } },
                                                                                                                           "columns": {
                                                                                                                             "kind": "list",
                                                                                                                             "items": [
@@ -595,9 +596,10 @@
                                                                                        "content_2":  {
                                                                                                          "block":  {
                                                                                                                        "block_id":  "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                                                                                                                       "release_version":  "1.2.0"
+                                                                                                                       "release_version":  "1.3.0"
                                                                                                                    },
                                                                                                          "settings":  {
+                                                                                                                          "row_click": { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "event_crm_open_contact" } } },
                                                                                                                           "columns": {
                                                                                                                             "kind": "list",
                                                                                                                             "items": [
@@ -689,9 +691,10 @@
                                                                                        "content_3":  {
                                                                                                          "block":  {
                                                                                                                        "block_id":  "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                                                                                                                       "release_version":  "1.2.0"
+                                                                                                                       "release_version":  "1.3.0"
                                                                                                                    },
                                                                                                          "settings":  {
+                                                                                                                          "row_click": { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "event_crm_open_lead" } } },
                                                                                                                           "columns": {
                                                                                                                             "kind": "list",
                                                                                                                             "items": [
@@ -797,9 +800,10 @@
                                                                                        "content_4":  {
                                                                                                          "block":  {
                                                                                                                        "block_id":  "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                                                                                                                       "release_version":  "1.2.0"
+                                                                                                                       "release_version":  "1.3.0"
                                                                                                                    },
                                                                                                          "settings":  {
+                                                                                                                          "row_click": { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "event_crm_open_opportunity" } } },
                                                                                                                           "columns": {
                                                                                                                             "kind": "list",
                                                                                                                             "items": [
@@ -905,9 +909,10 @@
                                                                                        "content_5":  {
                                                                                                          "block":  {
                                                                                                                        "block_id":  "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                                                                                                                       "release_version":  "1.2.0"
+                                                                                                                       "release_version":  "1.3.0"
                                                                                                                    },
                                                                                                          "settings":  {
+                                                                                                                          "row_click": { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "event_crm_open_activity" } } },
                                                                                                                           "columns": {
                                                                                                                             "kind": "list",
                                                                                                                             "items": [
@@ -3695,6 +3700,41 @@
         "record_type": "vortex.crm.activities:activity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
+    },
+    {
+        "id": "event_crm_open_company",
+        "key": "vortex.app.events.vortex_app_crm_open_company",
+        "record_type": "vortex.crm.organisations:company",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+    },
+    {
+        "id": "event_crm_open_contact",
+        "key": "vortex.app.events.vortex_app_crm_open_contact",
+        "record_type": "vortex.crm.people:contact",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+    },
+    {
+        "id": "event_crm_open_lead",
+        "key": "vortex.app.events.vortex_app_crm_open_lead",
+        "record_type": "vortex.crm.people:lead",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+    },
+    {
+        "id": "event_crm_open_opportunity",
+        "key": "vortex.app.events.vortex_app_crm_open_opportunity",
+        "record_type": "vortex.crm.opportunities:opportunity",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+    },
+    {
+        "id": "event_crm_open_activity",
+        "key": "vortex.app.events.vortex_app_crm_open_activity",
+        "record_type": "vortex.crm.activities:activity",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
     }
                             ],
                  "public_addresses":  [
@@ -4516,6 +4556,231 @@
                              }
                          ],
                          "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_open_company",
+                         "key": "crm_open_company",
+                         "description": "Opens the clicked company's own detail page with the record identity the clicked row carries.",
+                         "labels": {
+                             "name": "Open company"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record_id": {
+                                 "type": "record_reference",
+                                 "required": true,
+                                 "recordTypeIds": [
+                                     "vortex.crm.organisations:company"
+                                 ]
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "open_detail",
+                                 "type": "interface.navigate",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "page": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "crm_company_detail"
+                                         }
+                                     },
+                                     "parameters": {
+                                         "kind": "map",
+                                         "entries": {
+                                             "record_id": "{{ inputs.record_id }}"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_open_contact",
+                         "key": "crm_open_contact",
+                         "description": "Opens the clicked contact's own detail page with the record identity the clicked row carries.",
+                         "labels": {
+                             "name": "Open contact"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record_id": {
+                                 "type": "record_reference",
+                                 "required": true,
+                                 "recordTypeIds": [
+                                     "vortex.crm.people:contact"
+                                 ]
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "open_detail",
+                                 "type": "interface.navigate",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "page": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "crm_contact_detail"
+                                         }
+                                     },
+                                     "parameters": {
+                                         "kind": "map",
+                                         "entries": {
+                                             "record_id": "{{ inputs.record_id }}"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_open_lead",
+                         "key": "crm_open_lead",
+                         "description": "Opens the clicked lead's own detail page with the record identity the clicked row carries.",
+                         "labels": {
+                             "name": "Open lead"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record_id": {
+                                 "type": "record_reference",
+                                 "required": true,
+                                 "recordTypeIds": [
+                                     "vortex.crm.people:lead"
+                                 ]
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "open_detail",
+                                 "type": "interface.navigate",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "page": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "crm_lead_detail"
+                                         }
+                                     },
+                                     "parameters": {
+                                         "kind": "map",
+                                         "entries": {
+                                             "record_id": "{{ inputs.record_id }}"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_open_opportunity",
+                         "key": "crm_open_opportunity",
+                         "description": "Opens the clicked opportunity's own detail page with the record identity the clicked row carries.",
+                         "labels": {
+                             "name": "Open opportunity"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record_id": {
+                                 "type": "record_reference",
+                                 "required": true,
+                                 "recordTypeIds": [
+                                     "vortex.crm.opportunities:opportunity"
+                                 ]
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "open_detail",
+                                 "type": "interface.navigate",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "page": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "crm_opportunity_detail"
+                                         }
+                                     },
+                                     "parameters": {
+                                         "kind": "map",
+                                         "entries": {
+                                             "record_id": "{{ inputs.record_id }}"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_open_activity",
+                         "key": "crm_open_activity",
+                         "description": "Opens the clicked activity's own detail page with the record identity the clicked row carries.",
+                         "labels": {
+                             "name": "Open activity"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record_id": {
+                                 "type": "record_reference",
+                                 "required": true,
+                                 "recordTypeIds": [
+                                     "vortex.crm.activities:activity"
+                                 ]
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "open_detail",
+                                 "type": "interface.navigate",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "page": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "crm_activity_detail"
+                                         }
+                                     },
+                                     "parameters": {
+                                         "kind": "map",
+                                         "entries": {
+                                             "record_id": "{{ inputs.record_id }}"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
                      }
                  ],
                  "flow_bindings":  [
@@ -4678,6 +4943,71 @@
                          "event": "action",
                          "flow": "crm_named_action_activity_complete",
                          "inputs": {}
+                     },
+                     {
+                         "id": "row_binding_crm_open_company",
+                         "control": "content_1",
+                         "event_id": "event_crm_open_company",
+                         "event": "row_clicked",
+                         "flow": "crm_open_company",
+                         "inputs": {
+                             "record_id": {
+                                 "kind": "caller",
+                                 "name": "record_id"
+                             }
+                         }
+                     },
+                     {
+                         "id": "row_binding_crm_open_contact",
+                         "control": "content_2",
+                         "event_id": "event_crm_open_contact",
+                         "event": "row_clicked",
+                         "flow": "crm_open_contact",
+                         "inputs": {
+                             "record_id": {
+                                 "kind": "caller",
+                                 "name": "record_id"
+                             }
+                         }
+                     },
+                     {
+                         "id": "row_binding_crm_open_lead",
+                         "control": "content_3",
+                         "event_id": "event_crm_open_lead",
+                         "event": "row_clicked",
+                         "flow": "crm_open_lead",
+                         "inputs": {
+                             "record_id": {
+                                 "kind": "caller",
+                                 "name": "record_id"
+                             }
+                         }
+                     },
+                     {
+                         "id": "row_binding_crm_open_opportunity",
+                         "control": "content_4",
+                         "event_id": "event_crm_open_opportunity",
+                         "event": "row_clicked",
+                         "flow": "crm_open_opportunity",
+                         "inputs": {
+                             "record_id": {
+                                 "kind": "caller",
+                                 "name": "record_id"
+                             }
+                         }
+                     },
+                     {
+                         "id": "row_binding_crm_open_activity",
+                         "control": "content_5",
+                         "event_id": "event_crm_open_activity",
+                         "event": "row_clicked",
+                         "flow": "crm_open_activity",
+                         "inputs": {
+                             "record_id": {
+                                 "kind": "caller",
+                                 "name": "record_id"
+                             }
+                         }
                      }
                  ]
              }

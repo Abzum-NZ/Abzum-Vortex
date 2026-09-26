@@ -248,6 +248,13 @@
         "personal_or_sensitive_values_allowed": false
       },
       {
+        "id": "event_iam_open_access_request",
+        "key": "vortex.app.iam.open_access_request",
+        "record_type": "vortex.iam.core:access_request",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
         "id": "event_retire_role",
         "key": "vortex.app.iam.retire_role",
         "record_type": "vortex.organisation_administration:role",
@@ -3473,9 +3480,10 @@
               "iam_access_requests_list": {
                 "block": {
                   "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                  "release_version": "1.2.0"
+                  "release_version": "1.3.0"
                 },
                 "settings": {
+                  "row_click": { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "event_iam_open_access_request" } } },
                   "columns": {
                     "kind": "list",
                     "items": [
@@ -5590,6 +5598,51 @@
           }
         ],
         "outputs": {}
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "iam_open_access_request",
+        "key": "iam_open_access_request",
+        "description": "Opens the clicked access request's own detail page with the record identity the clicked row carries.",
+        "labels": {
+          "name": "Open access request"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.iam.core:access_request"
+            ]
+          }
+        },
+        "tasks": [
+          {
+            "id": "open_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "iam_access_request_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {}
       }
     ],
     "flow_bindings": [
@@ -5868,6 +5921,19 @@
               "type": "choice",
               "value": "accept"
             }
+          }
+        }
+      },
+      {
+        "id": "row_binding_iam_open_access_request",
+        "control": "iam_access_requests_list",
+        "event_id": "event_iam_open_access_request",
+        "event": "row_clicked",
+        "flow": "iam_open_access_request",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
           }
         }
       },
