@@ -425,7 +425,9 @@ export const composeFlowEffects = (
   }
   if (byId.size !== tasks.length) return undefined;
 
-  const fields = new Map(prepared.recordType.fields.map((field) => [field.fieldId, field]));
+  const fields = new Map<string, (typeof prepared.recordType.fields)[number]>(
+    prepared.recordType.fields.map((field) => [field.fieldId, field]),
+  );
   const targets = new Map(prepared.createTargets.map((target) => [target.ordinal, target]));
   const submittedValues: Record<string, JsonValue | null> = {};
   const creations: NamedActionCreation[] = [];

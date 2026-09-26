@@ -80,6 +80,10 @@
       "contentFingerprint": "sha256:21efadc956d6b115fb29fb8e689c390bfe83c1373686491c29df3d21a2fecb56",
       "catalogueFingerprint": "sha256:2c633e51559df8402df12005bcf9147b2c187d98702c2e500603ff77b5fad461"
     },
+    "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64:1.0.0": {
+      "contentFingerprint": "sha256:2d9f322d1267a2731dd6537f1d5a813ff106f73e6f4355fdc01bd574d2524bcb",
+      "catalogueFingerprint": "sha256:d87b03d984e85233c8f840b5200a9f0ece25944153e72051d9ef5ca7d18d4034"
+    },
     "a399ff74-5716-4411-bca8-c5ab87ec2e7d:1.0.0": {
       "contentFingerprint": "sha256:a879ded51d1b1e46506b497c9b837166123ddfa2d3728830469c1ed1b216cf31",
       "catalogueFingerprint": "sha256:e0bf34948b8082fe307b3983bf0f4bb767f1c720bfe2fb9368df87044f12ae3a"

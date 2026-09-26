@@ -160,7 +160,7 @@ export const componentEventDispatchRequestSchema = z
       .default({}),
     /** Values the page supplies for the placement's declared page parameters. */
     pageParameters: z.record(builderKeySchema, z.unknown()).default({}),
-    view: componentEventViewSchema.default({}),
+    view: componentEventViewSchema.default({ sort: [] }),
     localFilter: componentLocalDisplayFilterSchema.optional(),
   })
   .strict();
@@ -332,8 +332,8 @@ const rowValueOf = (
   row: ProtectedQueryPageRow,
   fieldId: string,
 ): JsonValue | undefined => {
-  const key = Object.keys(row.values).find((candidate) => sameId(candidate, fieldId));
-  return key === undefined ? undefined : (row.values[key] as JsonValue);
+  const entry = Object.entries(row.values).find(([candidate]) => sameId(candidate, fieldId));
+  return entry === undefined ? undefined : entry[1];
 };
 
 /** The display text of one field for a local filter: strings, numbers and booleans, else undefined. */
