@@ -2087,25 +2087,13 @@
                       "placements": {
                         "notice_title_input": {
                           "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                             "release_version": "1.0.0"
                           },
                           "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "title"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Title"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            },
-                            "multiline": {
-                              "kind": "boolean",
-                              "value": false
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organisation_notice.title"
                             }
                           },
                           "theme_overrides": {},
@@ -2124,25 +2112,13 @@
                         },
                         "notice_body_input": {
                           "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                             "release_version": "1.0.0"
                           },
                           "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "body"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Notice text"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            },
-                            "multiline": {
-                              "kind": "boolean",
-                              "value": true
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organisation_notice.body"
                             }
                           },
                           "theme_overrides": {},
@@ -2374,25 +2350,13 @@
                       "placements": {
                         "privacy_subject_input": {
                           "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                             "release_version": "1.0.0"
                           },
                           "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "subject"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Subject"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            },
-                            "multiline": {
-                              "kind": "boolean",
-                              "value": false
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:privacy_request_case.subject"
                             }
                           },
                           "theme_overrides": {},
@@ -2411,25 +2375,13 @@
                         },
                         "privacy_details_input": {
                           "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                             "release_version": "1.0.0"
                           },
                           "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "details"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Request details"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            },
-                            "multiline": {
-                              "kind": "boolean",
-                              "value": true
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:privacy_request_case.details"
                             }
                           },
                           "theme_overrides": {},
