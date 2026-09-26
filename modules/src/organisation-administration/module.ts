@@ -34,7 +34,9 @@ const invitationAllFields = [
 // of protected Access facts. They declare only safe, projected fields; their
 // changes go through the registered protected operations that re-check the
 // target revision, so the group renames and retires and the membership removes
-// each carry the subject row's identity and revision automatically. Row
+// each carry the subject row's identity and revision automatically. Creating a
+// group and adding a membership have no existing row and revision, so the
+// module contract admits no system record action for them. Row
 // visibility stays inside each registered reader, which applies the fixed
 // platform.organization.groups.read decision.
 const groupAllFields = ["organization_id", "revision", "key", "label", "state"];
@@ -1285,7 +1287,17 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           record_type: "group",
           permission: "vortex.organisation_administration.group.rename",
           shareable: false,
-          inputs: [],
+          // The subject group's identity and revision reach the operation automatically; the new
+          // label is the one value the rename operation needs from the actor.
+          inputs: [
+            {
+              key: "label",
+              label: "New label",
+              required: true,
+              type: "text",
+              validation: { minimum_length: 1, maximum_length: 60 },
+            },
+          ],
           tasks: [],
           protected_operation: "rename_group",
         },
