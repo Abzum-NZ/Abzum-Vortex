@@ -36,8 +36,10 @@ declare
   rules_unsupported boolean := false;
   matched_count integer;
 begin
-  if p_action_owner_kind not in ('application', 'module')
+  if p_action_owner_kind is null
+    or p_action_owner_kind not in ('application', 'module')
     or p_action_owner_id is null or p_action_owner_id = nil_uuid
+    or p_action_release_revision is null
     or p_action_release_revision not between 1 and 9007199254740991
     or p_action_id is null or p_action_id = nil_uuid
     or p_record_type_id is null or p_record_type_id = nil_uuid then
@@ -115,12 +117,17 @@ begin
         )
       );
     end loop;
-    if exists (
-      select 1 from pg_catalog.jsonb_array_elements(
-        coalesce(release_content -> 'rules', '[]'::jsonb)
-      ) as item(value)
-      where (item.value ->> 'recordTypeId')::uuid = p_record_type_id
-    ) then
+    -- #578: the owning Module release's rules are evaluated by Record
+    -- (`beforeSaveRules`); a rule for the subject in any other release is not.
+    if (binding_value ->> 'moduleRootId')::uuid <>
+        (base_context ->> 'moduleRootId')::uuid
+      and exists (
+        select 1 from pg_catalog.jsonb_array_elements(
+          coalesce(release_content -> 'rules', '[]'::jsonb)
+        ) as item(value)
+        where pg_catalog.lower(item.value ->> 'subjectRecordTypeId') =
+          pg_catalog.lower(p_record_type_id::text)
+      ) then
       rules_unsupported := true;
     end if;
   end loop;
@@ -146,7 +153,8 @@ begin
     select 1 from pg_catalog.jsonb_array_elements(
       coalesce(application_content -> 'rules', '[]'::jsonb)
     ) as item(value)
-    where (item.value ->> 'recordTypeId')::uuid = p_record_type_id
+    where pg_catalog.lower(item.value ->> 'subjectRecordTypeId') =
+      pg_catalog.lower(p_record_type_id::text)
   ) then
     rules_unsupported := true;
   end if;

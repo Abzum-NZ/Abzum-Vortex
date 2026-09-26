@@ -4,7 +4,11 @@
 -- with `id`, `type` and `properties`) instead of flat `effects`, exactly as the
 -- compiled contract, the flow compiler and the shipped Sources now author them.
 -- The live database functions that read the installed action are rewritten here
--- to read `tasks`, `type` and the task properties; no behaviour changes. No
+-- to read `tasks`, `type` and the task properties; no behaviour changes. Each
+-- body is its live definition (including the in-place rewrites of earlier
+-- migrations) with only those reads changed. An installed release whose stored
+-- action still carries `effects` and no `tasks` list is refused as unsupported
+-- until its Module or Application is republished. No
 -- per-effect writer remains to drop: #1063 already dropped
 -- save_named_action_effects_with_relationship_totals, save_named_action_set_announce
 -- and save_named_action_set_fields_internal, and
@@ -56,8 +60,10 @@ declare
   rules_unsupported boolean := false;
   matched_count integer;
 begin
-  if p_action_owner_kind not in ('application', 'module')
+  if p_action_owner_kind is null
+    or p_action_owner_kind not in ('application', 'module')
     or p_action_owner_id is null or p_action_owner_id = nil_uuid
+    or p_action_release_revision is null
     or p_action_release_revision not between 1 and 9007199254740991
     or p_action_id is null or p_action_id = nil_uuid
     or p_record_type_id is null or p_record_type_id = nil_uuid then
@@ -135,12 +141,17 @@ begin
         )
       );
     end loop;
-    if exists (
-      select 1 from pg_catalog.jsonb_array_elements(
-        coalesce(release_content -> 'rules', '[]'::jsonb)
-      ) as item(value)
-      where (item.value ->> 'recordTypeId')::uuid = p_record_type_id
-    ) then
+    -- #578: the owning Module release's rules are evaluated by Record
+    -- (`beforeSaveRules`); a rule for the subject in any other release is not.
+    if (binding_value ->> 'moduleRootId')::uuid <>
+        (base_context ->> 'moduleRootId')::uuid
+      and exists (
+        select 1 from pg_catalog.jsonb_array_elements(
+          coalesce(release_content -> 'rules', '[]'::jsonb)
+        ) as item(value)
+        where pg_catalog.lower(item.value ->> 'subjectRecordTypeId') =
+          pg_catalog.lower(p_record_type_id::text)
+      ) then
       rules_unsupported := true;
     end if;
   end loop;
@@ -166,7 +177,8 @@ begin
     select 1 from pg_catalog.jsonb_array_elements(
       coalesce(application_content -> 'rules', '[]'::jsonb)
     ) as item(value)
-    where (item.value ->> 'recordTypeId')::uuid = p_record_type_id
+    where pg_catalog.lower(item.value ->> 'subjectRecordTypeId') =
+      pg_catalog.lower(p_record_type_id::text)
   ) then
     rules_unsupported := true;
   end if;
@@ -606,42 +618,12 @@ begin
     p_action_id, p_record_type_id
   );
 
-  -- Refusal 5, and the one place this slice narrows what an action may
-  -- express. `save_named_action_set_fields_internal:591` writes the subject's
-  -- own relationship edge inside the same call that claims the command
-  -- receipt, so it necessarily takes the relationship advisory key (L6) before
-  -- any creation can allocate a reference-number counter (L4). Ordinary create
-  -- takes those in the opposite order (`20260913030000:787-806` before
-  -- `:868-877`), which is a hard cycle: this command would hold
-  -- `A(relS, X)` and wait for `C(storage(S), refField)` while a concurrent
-  -- ordinary create of `S` linked to `X` holds that counter and waits for
-  -- `A(relS, X)`. Lifting this needs an explicit named-action subject writer
-  -- that allocates the creations' reference numbers between claiming the
-  -- receipt and writing the subject's edges; that is deliberately not done
-  -- here rather than hidden.
-  if exists (
-    select 1 from pg_catalog.jsonb_array_elements(
-      action_context -> 'action' -> 'tasks'
-    ) task_item(value)
-    where task_item.value ->> 'type' = 'record.create'
-  ) and exists (
-    select 1
-    from pg_catalog.jsonb_array_elements(action_context -> 'action' -> 'tasks') task_item(value)
-    cross join lateral pg_catalog.jsonb_object_keys(
-      task_item.value -> 'properties' -> 'values'
-    ) key(field_key)
-    join pg_catalog.jsonb_array_elements(
-      action_context -> 'recordType' -> 'fields'
-    ) field(value)
-      on pg_catalog.lower(field.value ->> 'fieldId') =
-        pg_catalog.lower(key.field_key)
-    where task_item.value ->> 'type' = 'record.set_fields'
-      and field.value ->> 'type' in ('link', 'link_to_one_of_several')
-  ) then
-    return pg_catalog.jsonb_build_object(
-      'outcome', 'unsupported', 'reasonCode', 'create_with_subject_link_unsupported'
-    );
-  end if;
+  -- #569: a create-bearing command may also change the subject's own links.
+  -- The inversion this used to guard against (the subject's relationship edge
+  -- identities L6 before a created record's reference-number counter L4 and
+  -- data version) is closed by the terminal writer, which reserves every
+  -- creation's counters and every affected data version before the subject
+  -- writer runs.
 
   for task_value, task_ordinal in
     select item.value, (item.ordinality - 1)::integer
@@ -707,16 +689,16 @@ begin
           'outcome', 'unsupported', 'reasonCode', 'create_target_generated_field'
         );
       end if;
-      -- Refusal 3: only the delivered #402 single-target to-one link semantics
-      -- are implemented. Polymorphic targets remain #49 and must refuse, never
-      -- be silently skipped.
+      -- Refusal 3: only to-one link semantics are implemented. A link names its
+      -- single declared target and a link to one of several record types its
+      -- declared list; the edge writer proves the concrete target a member.
       if field_value ->> 'type' in ('link', 'link_to_one_of_several') then
         select item.value into relationship_value
         from pg_catalog.jsonb_array_elements(target_type -> 'relationships') item(value)
         where pg_catalog.lower(item.value ->> 'fromFieldId') = field_key;
-        if field_value ->> 'type' <> 'link'
-          or relationship_value is null
-          or not (relationship_value ? 'toRecordType')
+        if relationship_value is null
+          or not (relationship_value ? case field_value ->> 'type'
+            when 'link' then 'toRecordType' else 'toRecordTypes' end)
           or relationship_value ->> 'cardinality' not in ('one_to_one', 'many_to_one') then
           return pg_catalog.jsonb_build_object(
             'outcome', 'unsupported', 'reasonCode', 'create_target_relationship_unsupported'
