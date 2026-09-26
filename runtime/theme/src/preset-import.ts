@@ -10,6 +10,7 @@ import {
 import { findShadcnThemeRelease } from "@vortex/contracts/shadcn-theme-releases";
 import {
   decodePreset,
+  encodePreset,
   isPresetCode,
   V1_CHART_COLOR_MAP,
   type PresetConfig,
@@ -23,9 +24,15 @@ type ParsedPresetInput = Readonly<{
 }>;
 
 type PresetInputFailure = Readonly<{
-  code: "INVALID_PRESET_SOURCE" | "INVALID_PRESET_CODE" | "UNSUPPORTED_PRESET_URL";
+  code:
+    | "INVALID_PRESET_SOURCE"
+    | "INVALID_PRESET_CODE"
+    | "UNSUPPORTED_PRESET_URL"
+    | "PRESET_SOURCE_TOO_LONG";
   message: string;
 }>;
+
+const MAX_PRESET_SOURCE_LENGTH = 2048;
 
 const RELEASE_BACKED_DIMENSIONS: ReadonlySet<ShadcnThemeCatalogueDimensionKey> = new Set([
   "baseColor",
@@ -78,6 +85,13 @@ const parsePresetInput = (input: unknown): ParsedPresetInput | PresetInputFailur
     return {
       code: "INVALID_PRESET_SOURCE",
       message: "The preset input must be a string containing a preset code or URL.",
+    };
+  }
+
+  if (input.length > MAX_PRESET_SOURCE_LENGTH) {
+    return {
+      code: "PRESET_SOURCE_TOO_LONG",
+      message: "The preset code or URL must be no longer than 2048 characters.",
     };
   }
 
@@ -194,7 +208,10 @@ export const draftShadcnPresetImport = (input: unknown): ShadcnPresetImportDraft
   const { kind, code } = parsedInput;
   const version = code[0] === "a" ? "a" : "b";
   const decoded = decodePreset(code);
-  if (decoded === null) {
+  // The pinned decoder substitutes defaults for out-of-range field indexes. Re-encoding must
+  // reproduce the exact payload so malformed indexes, overflow bits and aliases are refused.
+  // Version "a" has no chart colour or heading font, so its decoded defaults add only zero bits.
+  if (decoded === null || encodePreset(decoded).slice(1) !== code.slice(1)) {
     return {
       status: "refused",
       applied: false,
@@ -204,7 +221,7 @@ export const draftShadcnPresetImport = (input: unknown): ShadcnPresetImportDraft
       failures: [
         {
           code: "INVALID_PRESET_CODE",
-          message: "The shadcn preset package could not decode this preset code.",
+          message: "The shadcn preset code is invalid or not in its canonical form.",
         },
       ],
       notYetImportable: [],
