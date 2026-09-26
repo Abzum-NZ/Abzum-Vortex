@@ -41,6 +41,25 @@ export {
 } from "./permitted-search";
 
 export {
+  sharedResultGroupDecisions,
+  sharedResultGroupExclusionReasonCodes,
+  sharedResultPolicyLimits,
+  sharedResultRecordExclusionReasonCodes,
+  sharedResultRefusalReasonCodes,
+  type SharedResultGroupDecision,
+  type SharedResultGroupExclusionReasonCode,
+  type SharedResultGroupIdentity,
+  type SharedResultPolicyInput,
+  type SharedResultPolicyRequest,
+  type SharedResultPolicyResult,
+  type SharedResultRecipientScope,
+  type SharedResultRecordDecision,
+  type SharedResultRecordExclusionReasonCode,
+  type SharedResultRefusalReasonCode,
+  type SharedSearchableProjection,
+} from "./shared-result-policy";
+
+export {
   consumeSearchEvents,
   createSearchEventConsumer,
   planSearchRebuildPage,

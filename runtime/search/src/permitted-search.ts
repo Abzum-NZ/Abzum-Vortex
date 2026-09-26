@@ -17,6 +17,12 @@ import {
   type SearchDocument,
   type SearchDocumentEntry,
 } from "./document-store";
+import {
+  sharedResultGroupDecisions,
+  type SharedResultGroupDecision,
+  type SharedResultPolicyRequest,
+  type SharedResultPolicyResult,
+} from "./shared-result-policy";
 
 /**
  * Current-access filtering for search candidates (#645).
@@ -42,6 +48,15 @@ import {
  * original index document, so a match on a withheld field cannot surface.
  * Opening a result is a separate ordinary current read by the caller; this
  * module never returns authoritative stored values.
+ *
+ * A shared source is not in the index at all, so its results arrive as the
+ * request's own Shared result groups and are decided by #646 in the same
+ * pre-ranking step. Those decisions are returned beside the local candidates:
+ * they are request-only projections carrying their own source identities, they
+ * are never documents, and the caller ranks and pages over both sets for the
+ * current response only. A group set that is not exact refuses the request;
+ * every other shared refusal is per group or per record, so an inactive mirror
+ * or an unreachable source never removes the recipient's own results.
  */
 
 /** Bounded work per request; a larger candidate set is refused rather than silently truncated. */
@@ -110,6 +125,14 @@ export type PermittedSearchInput = Readonly<{
   access: PermittedSearchAccessContext;
   request: PermittedSearchRequest;
   candidates: readonly SearchDocument[];
+  /**
+   * The request's shared-source groups, when the response includes a Shared
+   * result group. The requested field identities are taken from this module's
+   * own parsed request, never from the caller, so a shared group cannot widen
+   * the fields this search matches. Omitted when the response has no shared
+   * content; running the source search itself is #739.
+   */
+  shared?: SharedResultPolicyRequest;
 }>;
 
 export type PermittedSearchDependencies = Readonly<{
@@ -143,6 +166,7 @@ export const permittedSearchRefusalReasonCodes = [
   "search_request_invalid",
   "candidate_set_invalid",
   "candidate_document_invalid",
+  "shared_result_invalid",
 ] as const;
 export type PermittedSearchRefusalReasonCode = (typeof permittedSearchRefusalReasonCodes)[number];
 
@@ -157,6 +181,12 @@ export type PermittedSearchResult =
        * reveal how many hidden records matched.
        */
       candidates: readonly PermittedSearchCandidate[];
+      /**
+       * The request's own shared-source decisions, one per group, still before
+       * ranking. An admitted projection is a request-only source result, never
+       * a document, and is never written into the recipient index.
+       */
+      sharedGroups: readonly SharedResultGroupDecision[];
     }>
   | Readonly<{ outcome: "refused"; reasonCode: PermittedSearchRefusalReasonCode }>;
 
@@ -307,6 +337,12 @@ const parseCurrentRead = (value: unknown): PermittedSearchCurrentRead | undefine
 const refusal = (reasonCode: PermittedSearchRefusalReasonCode): PermittedSearchResult =>
   Object.freeze({ outcome: "refused", reasonCode });
 
+/** A request with no Shared result group has no shared decision to make. */
+const noSharedGroups: SharedResultPolicyResult = Object.freeze({
+  outcome: "completed",
+  groups: Object.freeze([]),
+});
+
 /**
  * Filters one bounded candidate set to the records the current reader may see
  * and the exact searchable fields it may see on them.
@@ -316,7 +352,11 @@ const refusal = (reasonCode: PermittedSearchRefusalReasonCode): PermittedSearchR
  * unreadable under current access, or has no requested field still readable.
  * Access removal therefore affects the next request without any index change. A
  * malformed candidate document, or the same record twice, refuses the whole
- * request, because a set built from the index must be exact.
+ * request, because a set built from the index must be exact. Shared-source
+ * results are decided by #646 from the request's own groups and returned as
+ * `sharedGroups`; a malformed group refuses the request for the same reason,
+ * while an excluded, unavailable or refused group leaves the local candidates
+ * untouched.
  */
 export const permittedSearchCandidates = async (
   input: PermittedSearchInput,
@@ -336,6 +376,24 @@ export const permittedSearchCandidates = async (
     input.candidates.length > permittedSearchLimits.maximumCandidates
   )
     return refusal("candidate_set_invalid");
+
+  // Shared-source content is decided by #646 in the same pre-ranking step, from
+  // the source's own approved projection and the recipient's current grant
+  // capability, so a shared result can never reach ranking, counting or paging
+  // before the same boundary that filters the recipient's own index.
+  const shared =
+    input.shared === undefined
+      ? noSharedGroups
+      : sharedResultGroupDecisions({
+          ...input.shared,
+          recipient: Object.freeze({
+            organizationId: access.data.organizationId,
+            applicationRootId: request.applicationRootId,
+          }),
+          requestedFieldIds: request.requestedFieldIds,
+        });
+  if (shared.outcome === "refused") return refusal("shared_result_invalid");
+  const sharedGroups = shared.groups;
 
   const requestedFieldIds = new Set(request.requestedFieldIds.map(lower));
   const candidates: PermittedSearchCandidate[] = [];
@@ -399,5 +457,6 @@ export const permittedSearchCandidates = async (
     applicationRootId: request.applicationRootId,
     recordTypeId: request.recordTypeId,
     candidates: Object.freeze(candidates),
+    sharedGroups,
   });
 };
