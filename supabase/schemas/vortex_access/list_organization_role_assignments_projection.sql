@@ -82,4 +82,4 @@ grant execute on function vortex_access.list_organization_role_assignments_proje
 ) to vortex_record_owner, vortex_record_adapter;
 
 comment on function vortex_access.list_organization_role_assignments_projection(uuid, integer) is
-  'Registered role-assignment projection: returns every current standing or eligible assignment of the viewer''s organisation under the fixed platform.organization.assignments.read decision, with the organisation, the assignment identity, the assignment revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer. Grant and revocation evidence is never projected.';
+  'Registered role-assignment projection: returns every standing or eligible assignment of the viewer''s organisation, whether active, scheduled, expired or revoked, under the fixed platform.organization.assignments.read decision, with the organisation, the assignment identity, the assignment revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer. Grant and revocation evidence is never projected.';

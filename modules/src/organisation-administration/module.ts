@@ -929,6 +929,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
                   { value: "export", label: "Export" },
                   { value: "share", label: "Share" },
                   { value: "manage", label: "Manage" },
+                  { value: "transfer", label: "Transfer" },
                   { value: "named", label: "Named" },
                 ],
               },
