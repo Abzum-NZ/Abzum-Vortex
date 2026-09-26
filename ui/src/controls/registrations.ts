@@ -6,6 +6,7 @@ import {
   DATE_INPUT_BLOCK_RELEASE,
   DIALOG_BLOCK_RELEASE,
   DRAWER_BLOCK_RELEASE,
+  FIELD_INPUT_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
   LINK_INPUT_BLOCK_RELEASE,
   NUMBER_INPUT_BLOCK_RELEASE,
@@ -32,6 +33,7 @@ import {
   parseDateInputPayload,
   parseDialogPayload,
   parseDrawerPayload,
+  parseFieldInputPayload,
   parseFormPayload,
   parseLinkInputPayload,
   parseNumberInputPayload,
@@ -46,6 +48,7 @@ import {
   type DateInputPayload,
   type DialogPayload,
   type DrawerPayload,
+  type FieldInputPayload,
   type FormPayload,
   type LinkInputPayload,
   type NumberInputPayload,
@@ -63,6 +66,7 @@ import { NumberInput } from "./number-input";
 import { BooleanInput } from "./boolean-input";
 import { DateInput } from "./date-input";
 import { ChoiceInput } from "./choice-input";
+import { FieldInput } from "./field-input";
 import { ValidationMessage } from "./validation-message";
 import { Button } from "./button";
 import { Tabs } from "./tabs";
@@ -83,6 +87,7 @@ export {
   DATE_INPUT_BLOCK_RELEASE,
   DIALOG_BLOCK_RELEASE,
   DRAWER_BLOCK_RELEASE,
+  FIELD_INPUT_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
   LINK_INPUT_BLOCK_RELEASE,
   NUMBER_INPUT_BLOCK_RELEASE,
@@ -343,6 +348,11 @@ export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       metadata: CHOICE_INPUT_BLOCK_RELEASE,
       render: ChoiceInput,
       parsePayload: controlPayloadParser<ChoiceInputPayload>(parseChoiceInputPayload),
+    }),
+    Object.freeze({
+      metadata: FIELD_INPUT_BLOCK_RELEASE,
+      render: FieldInput,
+      parsePayload: controlPayloadParser<FieldInputPayload>(parseFieldInputPayload),
     }),
     Object.freeze({
       metadata: VALIDATION_MESSAGE_BLOCK_RELEASE,

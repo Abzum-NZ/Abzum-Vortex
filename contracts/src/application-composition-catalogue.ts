@@ -1,4 +1,5 @@
 import {
+  type FieldInputControlKey,
   type PlatformBlockReleaseV2,
   platformBlockReleaseV2Schema,
   type ImmutablePlatformBlockCatalogueV2,
@@ -187,6 +188,29 @@ export const LINK_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.
 /** Exact immutable metadata release for the structured rich text input block. */
 export const RICH_TEXT_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.RICH_TEXT_INPUT_BLOCK_RELEASE);
 
+/**
+ * Exact immutable metadata release for the automatic field input. It binds one record field; the
+ * compiler derives its name, label, requirement, choices and control from that module field, so an
+ * input can never publish against a missing field and a label follows a field rename.
+ */
+export const FIELD_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.FIELD_INPUT_BLOCK_RELEASE);
+
+/**
+ * The existing input release each derived automatic field control delegates to. The compiler
+ * validates the derived settings against this release's declared properties, and the renderer
+ * draws the placement with this release's metadata, so both read one mapping.
+ */
+export const FIELD_INPUT_CONTROL_RELEASES: Readonly<Record<FieldInputControlKey, PlatformBlockReleaseV2>> =
+  Object.freeze({
+    text: TEXT_INPUT_BLOCK_RELEASE,
+    rich_text: RICH_TEXT_INPUT_BLOCK_RELEASE,
+    number: NUMBER_INPUT_BLOCK_RELEASE,
+    boolean: BOOLEAN_INPUT_BLOCK_RELEASE,
+    date: DATE_INPUT_BLOCK_RELEASE,
+    choice: CHOICE_INPUT_BLOCK_RELEASE,
+    link: LINK_INPUT_BLOCK_RELEASE,
+  });
+
 /** Exact immutable metadata release for the application launcher block. */
 export const APPLICATION_LAUNCHER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.APPLICATION_LAUNCHER_BLOCK_RELEASE);
 
@@ -218,11 +242,12 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   TABLE_BLOCK_RELEASE_1_4_0,
 ]);
 
-/** All fourteen immutable form, layout and action block releases. */
+/** All fifteen immutable form, layout and action block releases. */
 export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   TEXT_INPUT_BLOCK_RELEASE,
   LINK_INPUT_BLOCK_RELEASE,
   RICH_TEXT_INPUT_BLOCK_RELEASE,
+  FIELD_INPUT_BLOCK_RELEASE,
   NUMBER_INPUT_BLOCK_RELEASE,
   BOOLEAN_INPUT_BLOCK_RELEASE,
   DATE_INPUT_BLOCK_RELEASE,
@@ -254,7 +279,7 @@ export const NAVIGATION_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Obje
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
 ]);
 
-/** All thirty-eight immutable platform block releases registered for the page builder. */
+/** All thirty-nine immutable platform block releases registered for the page builder. */
 export const PLATFORM_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   ...DISPLAY_BLOCK_RELEASES,
   ...CONTROL_BLOCK_RELEASES,
