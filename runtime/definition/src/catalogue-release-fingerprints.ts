@@ -1,4 +1,5 @@
 import { fingerprintCanonicalValue } from "./canonical-json";
+import type { ConnectionTypeSourceDocument } from "@vortex/contracts";
 
 /**
  * The one derivation of every platform catalogue release fingerprint. The publication catalogue
@@ -11,6 +12,76 @@ export type CatalogueReleaseFingerprints = Readonly<{
   contentFingerprint: `sha256:${string}`;
   catalogueFingerprint: `sha256:${string}`;
 }>;
+
+/** A provider-neutral connection release hashes the same canonical content the compiler emits. */
+export const platformConnectionTypeReleaseFingerprints = (definition: {
+  source: ConnectionTypeSourceDocument;
+  rootId: string;
+  releaseVersion: string;
+}): CatalogueReleaseFingerprints => {
+  const source = definition.source;
+  const body = source.body;
+  const authentication = body.authentication;
+  const canonical = {
+    connectionTypeId: definition.rootId,
+    key: source.key,
+    version: definition.releaseVersion,
+    name: body.name,
+    purpose: body.purpose,
+    provider: body.provider,
+    authentication:
+      authentication.kind === "oauth2"
+        ? {
+            kind: "oauth2",
+            secretFieldKeys: authentication.secret_fields,
+            scopes: authentication.scopes,
+          }
+        : authentication.kind === "signed_secret"
+          ? {
+              kind: "signed_secret",
+              secretFieldKeys: authentication.secret_fields,
+              algorithm: authentication.algorithm,
+            }
+          : {
+              kind: "api_key",
+              secretFieldKeys: authentication.secret_fields,
+              placement: authentication.placement,
+            },
+    allowedHosts: body.allowed_hosts,
+    allowRedirects: body.allow_redirects,
+    shapes: body.shapes.map((shape) => ({ key: shape.key, fields: shape.fields })),
+    operations: body.operations.map((operation) => ({
+      key: operation.key,
+      method: operation.method,
+      pathTemplate: operation.path,
+      inputShapeKey: operation.input,
+      outputShapeKey: operation.output,
+      timeoutSeconds: operation.timeout_seconds,
+      maximumAttempts: operation.max_attempts,
+      maximumResponseBytes: operation.maximum_response_bytes,
+    })),
+    incomingMessages: body.incoming_messages.map((message) => ({
+      key: message.key,
+      signature: message.signature,
+      replayWindowSeconds: message.replay_window_seconds,
+      inputShapeKey: message.input,
+      workflowTriggerKey: message.workflow_trigger,
+    })),
+    ...(body.health_operation ? { healthOperationKey: body.health_operation } : {}),
+    ...(body.revocation_operation ? { revocationOperationKey: body.revocation_operation } : {}),
+  };
+  const contentFingerprint = fingerprintCanonicalValue(canonical);
+  return {
+    contentFingerprint,
+    catalogueFingerprint: fingerprintCanonicalValue({
+      kind: "connection_type",
+      key: source.key,
+      rootId: definition.rootId,
+      releaseVersion: definition.releaseVersion,
+      sourceFingerprint: fingerprintCanonicalValue(source),
+    }),
+  };
+};
 
 /** A block release's content is its own metadata; its catalogue fingerprint binds identity to it. */
 export const platformBlockReleaseFingerprints = (definition: {

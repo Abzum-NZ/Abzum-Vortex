@@ -267,6 +267,20 @@
       "catalogueFingerprint": "sha256:1688ea6fb70729a2b84ebdfe5787355f25dc47052a374c1093e89bf71bdbad7a"
     }
   },
+  "platformConnectionTypes": {
+    "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d16:1.0.0": {
+      "contentFingerprint": "sha256:288022b0bd29f4984d34692fdb8ab32811fd4bb88194ee982b7b8503b8eb257b",
+      "catalogueFingerprint": "sha256:311b245cc6aa1dddbe3afc79741f27b18ccfccd87de89c40b8d244144d512e29"
+    },
+    "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d17:1.0.0": {
+      "contentFingerprint": "sha256:ae142a9cfd38958a720fcda3ac882384ae499401d846b79a8026fe384a42c8be",
+      "catalogueFingerprint": "sha256:3aea2f14db28f8b252142fffd9fa01a5e2785128bd80ec2eebf73242c33611dd"
+    },
+    "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d18:1.0.0": {
+      "contentFingerprint": "sha256:9fea436234caeafd3377ad9227f81f4ebd137523537ed4d321fbd66c8f535913",
+      "catalogueFingerprint": "sha256:adea0cff4594aa086ed8585aba1078fb2b49e115d40e7dd4a96201263e5634a0"
+    }
+  },
   "platformThemes": {
     "0972b977-eb84-5dd5-a3cb-962e86a6f51a:4.21.0": {
       "contentFingerprint": "sha256:17a617e7c9a9ec7497e8890a9f71ba04d990640e7124f11500b2f3e55b177ec8",
