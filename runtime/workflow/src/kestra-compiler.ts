@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 
 import {
   applicationRootIdSchema,
+  flowControlTaskTypeKeys,
   flowSchema,
   flowTaskRegistry,
   isFlowControlTask,
@@ -560,7 +561,7 @@ const compileTrigger = (
 const renderTriggerYaml = (
   ctx: CompileContext,
   trigger: FlowTrigger,
-): Readonly<Record<string, JsonValue>> => {
+): Record<string, JsonValue> => {
   const id = `trigger_${trigger.id}`;
   if (trigger.type === "Schedule")
     return {
@@ -582,32 +583,9 @@ const renderTriggerYaml = (
 
 // ─── Task compilation ────────────────────────────────────────────────────────────────────────
 
-type ControlTask =
-  | (FlowTask & { type: "if"; condition: FlowFormula; then: FlowTask[]; else?: FlowTask[] })
-  | (FlowTask & {
-      type: "switch";
-      value: FlowValue;
-      cases: { key: string; when: FlowLiteral; tasks: FlowTask[] }[];
-      default?: FlowTask[];
-    })
-  | (FlowTask & { type: "for_each"; items: FlowValue; maximumItems: number; tasks: FlowTask[] })
-  | (FlowTask & { type: "sequential"; tasks: FlowTask[] })
-  | (FlowTask & { type: "run_flow"; flowId: string; inputs: Record<string, FlowValue> })
-  | (FlowTask & { type: "stop"; outcome: string })
-  | (FlowTask & { type: "parallel"; branches: FlowTask[][] })
-  | (FlowTask & { type: "wait_until"; until: FlowValue })
-  | (FlowTask & {
-      type: "wait_for_person";
-      formId: string;
-      assignee: FlowValue;
-      inputs: Record<string, FlowValue>;
-    });
+type ControlTask = Extract<FlowTask, { type: (typeof flowControlTaskTypeKeys)[number] }>;
 
-type RegisteredTask = FlowTask & {
-  version: string;
-  properties: Record<string, FlowValue>;
-  allowRefusal?: boolean;
-};
+type RegisteredTask = Extract<FlowTask, { properties: unknown }>;
 
 const compileTaskList = (
   ctx: CompileContext,
@@ -1036,7 +1014,7 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
     });
 
   const compiledTriggers: KestraFlowTrigger[] = [];
-  const triggerYaml: Record<string, JsonValue>[] = [];
+  const triggerYaml: JsonValue[] = [];
   for (const trigger of flowTriggers(definition)) {
     const compiled = compileTrigger(ctx, trigger);
     if (compiled.outcome === "refused") return refused(compiled.reason);
