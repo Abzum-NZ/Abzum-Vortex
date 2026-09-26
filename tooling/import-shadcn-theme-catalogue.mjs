@@ -431,8 +431,9 @@ const main = async () => {
   const currentTheme = await readFile(themeFile, "utf8");
   const currentIndex = await readFile(indexFile, "utf8").catch(() => "");
 
-  if (currentTheme !== themeOutput) await writeFile(themeFile, themeOutput, "utf8");
-  if (currentIndex !== indexOutput) await writeFile(indexFile, indexOutput, "utf8");
+  // --check only compares; it never rewrites the files it is judging.
+  if (!check && currentTheme !== themeOutput) await writeFile(themeFile, themeOutput, "utf8");
+  if (!check && currentIndex !== indexOutput) await writeFile(indexFile, indexOutput, "utf8");
   console.log(`Imported ${releaseKeys.size} platform theme releases from shadcn ${snapshot.registry.packageVersion}.`);
   console.log(
     `Covered every option shown on shadcn/create: ${snapshot.styles.length} styles, ${snapshot.baseColors.length} base colours, ` +
