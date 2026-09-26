@@ -207,15 +207,46 @@ export type ApplicationInstallationDrainResult = Readonly<{
   moduleBindings: readonly ModuleInstallationBindingEvidence[];
 }>;
 
+/** The exact organisation, application and release an installation operation targets. */
+export type InstallationReleaseTarget = Readonly<{
+  organizationId: OrganizationId;
+  applicationRootId: ApplicationRootId;
+  applicationReleaseRevision: number;
+}>;
+
+/**
+ * The Definition evidence for one installation operation, read under the installer's own verified
+ * human request instead of a server-minted system context. A deployment that cannot mint a system
+ * context (see #610) supplies this; the protected Definition reads still run through governed
+ * database functions under the human's own authority. When supplied it replaces the system-context
+ * reader for every release read.
+ */
+export type HumanInstallationDefinitionAccess = Readonly<{
+  readReleaseSet(
+    session: IdentitySession,
+    target: InstallationReleaseTarget,
+  ): Promise<SystemApplicationBoundReleaseSetResult>;
+  prepareRegistrationCandidate(
+    target: InstallationReleaseTarget,
+    releaseSet: SystemApplicationBoundReleaseSetResult,
+  ): Promise<PreparedApplicationRoleTemplates>;
+}>;
+
 export type ApplicationInstallationCoordinatorDependencies<InstalledEvents> = Readonly<{
   /** Installer request runner; each call opens one human change transaction. */
   installerRequests: InstallerRequests;
   /**
    * Server-minted live system context and reader for immutable Definition evidence. The target
    * organisation is still proved by the installer's own transaction and the Access coordinator.
+   * Required unless {@link humanDefinitionAccess} supplies the same evidence.
    */
-  definitionSystemContext: () => SessionContext;
-  definitionReader: PermissionRegistryDefinitionSetReader;
+  definitionSystemContext?: () => SessionContext;
+  definitionReader?: PermissionRegistryDefinitionSetReader;
+  /**
+   * Definition evidence read under the installer's own human request. When supplied it is used
+   * for every release read instead of the system-context reader.
+   */
+  humanDefinitionAccess?: HumanInstallationDefinitionAccess;
   /**
    * Optional installed-event catalogue projector, run after the installation change commits. It
    * is reported unavailable when not supplied or when it cannot project the committed release.
@@ -283,11 +314,7 @@ type ExactRelease = Readonly<{
   preparedTemplates: PreparedApplicationRoleTemplates;
   pins: readonly ModulePin[];
 }>;
-type ReleaseTarget = Readonly<{
-  organizationId: OrganizationId;
-  applicationRootId: ApplicationRootId;
-  applicationReleaseRevision: number;
-}>;
+type ReleaseTarget = InstallationReleaseTarget;
 
 const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
@@ -573,15 +600,19 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
   dependencies: ApplicationInstallationCoordinatorDependencies<InstalledEvents>,
 ) => {
   const newActivityId = dependencies.activityId ?? randomUUID;
-  const roleTemplates = createApplicationRoleTemplateAdapter({
-    definitionReader: dependencies.definitionReader,
-    // Registration-candidate preparation reads only immutable Definition evidence; the live
-    // registry is read and locked by the Access coordinator inside the installer's transaction.
-    permissionRegistryFacts: {
-      lookup: () => Promise.reject(fail("APPLICATION_INSTALLATION_FAILED")),
-      readApplicationSnapshot: () => Promise.reject(fail("APPLICATION_INSTALLATION_FAILED")),
-    },
-  });
+  const humanDefinitionAccess = dependencies.humanDefinitionAccess;
+  const roleTemplates =
+    humanDefinitionAccess !== undefined || dependencies.definitionReader === undefined
+      ? undefined
+      : createApplicationRoleTemplateAdapter({
+          definitionReader: dependencies.definitionReader,
+          // Registration-candidate preparation reads only immutable Definition evidence; the live
+          // registry is read and locked by the Access coordinator inside the installer's transaction.
+          permissionRegistryFacts: {
+            lookup: () => Promise.reject(fail("APPLICATION_INSTALLATION_FAILED")),
+            readApplicationSnapshot: () => Promise.reject(fail("APPLICATION_INSTALLATION_FAILED")),
+          },
+        });
 
   /**
    * Runs one installer change transaction. The request runner reports only a coarse outcome, so
@@ -666,7 +697,11 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
 
   /** The live system context for the target organisation, or a refusal. */
   const definitionContext = (target: ReleaseTarget): SessionContext => {
-    const context = sessionContextSchema.safeParse(dependencies.definitionSystemContext());
+    const context = sessionContextSchema.safeParse(
+      dependencies.definitionSystemContext === undefined
+        ? undefined
+        : dependencies.definitionSystemContext(),
+    );
     if (
       !context.success ||
       context.data.callerKind !== "system" ||
@@ -678,9 +713,19 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
 
   /** Reads only the exact release set, the evidence the builder authority derives its facts from. */
   const readReleaseSet = async (
+    session: IdentitySession,
     target: ReleaseTarget,
   ): Promise<SystemApplicationBoundReleaseSetResult> => {
+    if (humanDefinitionAccess !== undefined) {
+      try {
+        return await humanDefinitionAccess.readReleaseSet(session, target);
+      } catch (error) {
+        throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE", error);
+      }
+    }
     const context = definitionContext(target);
+    if (dependencies.definitionReader === undefined)
+      throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
     try {
       return await dependencies.definitionReader.read(context, {
         applicationRootId: target.applicationRootId,
@@ -692,20 +737,31 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
   };
 
   /** Loads the exact Application and its resolved Module pin set, never the latest release. */
-  const readExactRelease = async (target: ReleaseTarget): Promise<ExactRelease> => {
-    const context = definitionContext(target);
+  const readExactRelease = async (
+    session: IdentitySession,
+    target: ReleaseTarget,
+  ): Promise<ExactRelease> => {
     let releaseSet: SystemApplicationBoundReleaseSetResult;
     let preparedTemplates: PreparedApplicationRoleTemplates;
     try {
-      releaseSet = await dependencies.definitionReader.read(context, {
-        applicationRootId: target.applicationRootId,
-        applicationReleaseRevision: target.applicationReleaseRevision,
-      });
-      preparedTemplates = await roleTemplates.prepareRegistrationCandidate(context, {
-        applicationRootId: target.applicationRootId,
-        releaseRevision: target.applicationReleaseRevision,
-      });
+      if (humanDefinitionAccess !== undefined) {
+        releaseSet = await humanDefinitionAccess.readReleaseSet(session, target);
+        preparedTemplates = await humanDefinitionAccess.prepareRegistrationCandidate(target, releaseSet);
+      } else if (roleTemplates !== undefined) {
+        const context = definitionContext(target);
+        releaseSet = await dependencies.definitionReader!.read(context, {
+          applicationRootId: target.applicationRootId,
+          applicationReleaseRevision: target.applicationReleaseRevision,
+        });
+        preparedTemplates = await roleTemplates.prepareRegistrationCandidate(context, {
+          applicationRootId: target.applicationRootId,
+          releaseRevision: target.applicationReleaseRevision,
+        });
+      } else {
+        throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
+      }
     } catch (error) {
+      if (error instanceof ApplicationInstallationCoordinatorError) throw error;
       throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE", error);
     }
     const application = releaseSet.application;
@@ -778,7 +834,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     request: ApplicationInstallationActivationRequest,
     activeReleaseRevision: number,
   ): Promise<void> => {
-    const prior = await readExactRelease({
+    const prior = await readExactRelease(session, {
       organizationId: request.organizationId,
       applicationRootId: request.applicationRootId,
       applicationReleaseRevision: activeReleaseRevision,
@@ -861,7 +917,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       if (!verifiedSession.success || !parsed.success)
         throw fail("INVALID_APPLICATION_INSTALLATION_COMMAND");
       const request = parsed.data;
-      const exact = await readExactRelease(request);
+      const exact = await readExactRelease(verifiedSession.data, request);
       const { pins } = exact;
 
       // 1. Access must name the release before its provisioned setup can be administered.
@@ -955,7 +1011,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       if (!verifiedSession.success || !parsed.success)
         throw fail("INVALID_APPLICATION_INSTALLATION_COMMAND");
       const request = parsed.data;
-      const exact = await readExactRelease(request);
+      const exact = await readExactRelease(verifiedSession.data, request);
       const { releaseSet, pins } = exact;
 
       // 1. Align Access with the exact target release. This must commit before the switch: it
@@ -1092,7 +1148,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       if (!verifiedSession.success || !parsed.success)
         throw fail("INVALID_APPLICATION_INSTALLATION_COMMAND");
       const request = parsed.data;
-      const packageFacts = await readReleaseSet(request);
+      const packageFacts = await readReleaseSet(verifiedSession.data, request);
 
       return inInstallerTransaction(
         verifiedSession.data,
@@ -1193,7 +1249,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       if (!verifiedSession.success || !parsed.success)
         throw fail("INVALID_APPLICATION_INSTALLATION_COMMAND");
       const request = parsed.data;
-      const packageFacts = await readReleaseSet(request);
+      const packageFacts = await readReleaseSet(verifiedSession.data, request);
 
       return inInstallerTransaction(
         verifiedSession.data,

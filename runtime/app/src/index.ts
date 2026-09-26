@@ -146,6 +146,8 @@ export {
   type ApplicationInstallationPreparationResult,
   type ApplicationInstallationWithdrawalRequest,
   type ApplicationInstallationWithdrawalResult,
+  type HumanInstallationDefinitionAccess,
+  type InstallationReleaseTarget,
   type OptionalInstallationReader,
 } from "./installation-coordinator";
 

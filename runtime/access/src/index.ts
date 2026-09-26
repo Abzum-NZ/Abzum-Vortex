@@ -9,6 +9,7 @@ export {
   applicationRoleTemplatePreparationErrorCodes,
   ApplicationRoleTemplatePreparationError,
   createApplicationRoleTemplateAdapter,
+  prepareApplicationRoleTemplatesForHumanRequest,
   verifyPreparedApplicationRoleTemplates,
   type ApplicationRoleTemplateAdapterDependencies,
   type ApplicationRoleTemplatePreparationErrorCode,

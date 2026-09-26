@@ -661,25 +661,13 @@
                       "placements": {
                         "request_reason": {
                           "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                             "release_version": "1.0.0"
                           },
                           "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "reason"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Reason"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            },
-                            "multiline": {
-                              "kind": "boolean",
-                              "value": true
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.tenant_administration:organization_lifecycle_request.reason"
                             }
                           },
                           "theme_overrides": {},

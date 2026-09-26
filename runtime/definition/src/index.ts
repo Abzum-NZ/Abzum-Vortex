@@ -41,6 +41,7 @@ export {
 } from "./definition-consumer-read";
 export { createDatabaseDefinitionConsumerReadService } from "./definition-consumer-read-composition";
 export * from "./application-bound-release-set";
+export * from "./application-release-adoption";
 export * from "./application-lifecycle";
 export * from "./application-tool-bundle-projection";
 export {

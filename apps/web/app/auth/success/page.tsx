@@ -16,9 +16,16 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
           ? "Your new password is ready to use."
           : "Your email address has been confirmed. You can now sign in."
       }
-      footer={<Link href="/auth/sign-in">Continue to sign in</Link>}
+      footer={
+        <Link className="font-medium underline underline-offset-4" href="/auth/sign-in">
+          Continue to sign in
+        </Link>
+      }
     >
-      <div className="auth-state-mark" aria-hidden="true">
+      <div
+        className="flex size-12 items-center justify-center rounded-full bg-primary text-2xl font-semibold text-primary-foreground"
+        aria-hidden="true"
+      >
         ✓
       </div>
     </AuthShell>
