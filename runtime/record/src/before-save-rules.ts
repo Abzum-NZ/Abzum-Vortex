@@ -4,7 +4,7 @@ import {
   ruleGraphSchema,
   type JsonValue,
   type ModuleDefinitionConsumerReadResultV3,
-  type RecordTypeDefinitionV2,
+  type RecordTypeDefinitionV3,
   type RuleGraph,
 } from "@vortex/contracts";
 import {
@@ -99,7 +99,7 @@ export const parseBeforeSaveRuleSet = (
  */
 export const applyBeforeSaveRules = (input: {
   execution: BeforeSaveRuleExecution;
-  recordType: RecordTypeDefinitionV2;
+  recordType: RecordTypeDefinitionV3;
   initialCandidate: InitialRecordFieldCandidateV2;
   organizationCurrency?: string;
 }): BeforeSaveRuleApplication => {

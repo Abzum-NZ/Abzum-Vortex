@@ -2,13 +2,13 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
-  actionDefinitionV2Schema,
+  actionDefinitionV3Schema,
   activityIdSchema,
   eventOccurrenceIdSchema,
   executeNamedActionCommandV2Schema,
   executeNamedActionResultV2Schema,
   moduleValidationContractVersionV3,
-  recordTypeDefinitionV2Schema,
+  recordTypeDefinitionV3Schema,
   saveRecordCommandV2Schema,
   type ExecuteNamedActionCommandV2,
   type ExecuteNamedActionResultV2,
@@ -124,9 +124,10 @@ const parseCreateTargets = (candidate: unknown): readonly NamedActionCreateTarge
   for (const entry of candidate) {
     if (typeof entry !== "object" || entry === null) return undefined;
     const value = entry as Record<string, unknown>;
-    const recordType = recordTypeDefinitionV2Schema.safeParse(value.recordType);
+    const recordType = recordTypeDefinitionV3Schema.safeParse(value.recordType);
     if (
       !recordType.success ||
+      recordType.data.systemProjection !== undefined ||
       typeof value.ordinal !== "number" ||
       !Number.isSafeInteger(value.ordinal) ||
       value.ordinal < 0 ||
@@ -167,12 +168,17 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     return { outcome: value.outcome, ...(correlationId ? { correlationId } : {}) };
   if (value.outcome !== "prepared" && value.outcome !== "previewed")
     return { outcome: "refused", ...(correlationId ? { correlationId } : {}) };
-  const actionV2 = actionDefinitionV2Schema.safeParse(value.action);
-  const recordType = recordTypeDefinitionV2Schema.safeParse(value.recordType);
+  const actionV2 = actionDefinitionV3Schema.safeParse(value.action);
+  const recordType = recordTypeDefinitionV3Schema.safeParse(value.recordType);
   const createTargets = parseCreateTargets(value.createTargets);
+  // An action that targets a registered protected operation, and every action of a system
+  // projection record type, runs through that operation's owning service, never through ordered
+  // record effects.
   if (
     !actionV2.success ||
+    actionV2.data.protectedOperation !== undefined ||
     !recordType.success ||
+    recordType.data.systemProjection !== undefined ||
     createTargets === undefined ||
     value.validationContractVersion !== moduleValidationContractVersionV3 ||
     typeof value.recordId !== "string" ||

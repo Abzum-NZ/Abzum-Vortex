@@ -1,11 +1,11 @@
 import {
   jsonValueSchema,
   moneyValueV2Schema,
-  recordTypeDefinitionV2Schema,
+  recordTypeDefinitionV3Schema,
   type ConditionNode,
   type JsonValue,
-  type ModuleFieldV2,
-  type RecordTypeDefinitionV2,
+  type ModuleFieldV3,
+  type RecordTypeDefinitionV3,
 } from "@vortex/contracts";
 import { evaluateTypedConditionV2 } from "@vortex/rule";
 import {
@@ -21,16 +21,16 @@ import {
 } from "./exact-arithmetic";
 import { persistedRecordFieldValueMatches } from "./field-values";
 
-type TotalFieldV2 = Extract<ModuleFieldV2, { type: "total" }>;
+type TotalFieldV2 = Extract<ModuleFieldV3, { type: "total" }>;
 
 export type RecordRelationshipTotalSourceV2 = Readonly<{
   relationshipId: string;
-  sourceRecordType: RecordTypeDefinitionV2;
+  sourceRecordType: RecordTypeDefinitionV3;
   records: readonly Readonly<{ fieldValues: Readonly<Record<string, unknown>> }>[];
 }>;
 
 export type EvaluateRecordTotalsV2Input = Readonly<{
-  recordType: RecordTypeDefinitionV2;
+  recordType: RecordTypeDefinitionV3;
   relationshipSources: readonly RecordRelationshipTotalSourceV2[];
 }>;
 
@@ -65,7 +65,7 @@ export type EvaluateRecordTotalsV2Result =
     }>;
 
 type ParsedRelationshipSource = Readonly<{
-  sourceRecordType: RecordTypeDefinitionV2;
+  sourceRecordType: RecordTypeDefinitionV3;
   records: readonly Readonly<{ fieldValues: Readonly<Record<string, unknown>> }>[];
 }>;
 
@@ -89,7 +89,7 @@ const issue = (
 const isValueMap = (value: unknown): value is Readonly<Record<string, unknown>> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
-const fieldResultType = (field: ModuleFieldV2 | undefined): string | undefined =>
+const fieldResultType = (field: ModuleFieldV3 | undefined): string | undefined =>
   field?.type === "calculation" || field?.type === "total"
     ? field.settings.resultType
     : field?.type;
@@ -159,7 +159,7 @@ const instantParts = (value: unknown): { seconds: number; fraction: string } | u
   };
 };
 
-const numericValue = (field: ModuleFieldV2, value: JsonValue): NumericValue | undefined => {
+const numericValue = (field: ModuleFieldV3, value: JsonValue): NumericValue | undefined => {
   const type = fieldResultType(field);
   if (type === "whole_number") {
     const amount = rationalFromWholeNumber(value);
@@ -178,7 +178,7 @@ const numericValue = (field: ModuleFieldV2, value: JsonValue): NumericValue | un
   return undefined;
 };
 
-const sourceCompatible = (field: TotalFieldV2, sourceField: ModuleFieldV2 | undefined): boolean => {
+const sourceCompatible = (field: TotalFieldV2, sourceField: ModuleFieldV3 | undefined): boolean => {
   const sourceType = fieldResultType(sourceField);
   if (field.settings.operation === "count") return sourceField === undefined;
   if (sourceField === undefined) return false;
@@ -197,7 +197,7 @@ const sourceCompatible = (field: TotalFieldV2, sourceField: ModuleFieldV2 | unde
 };
 
 const relationshipReaches = (
-  sourceRecordType: RecordTypeDefinitionV2,
+  sourceRecordType: RecordTypeDefinitionV3,
   relationshipId: string,
   targetRecordTypeId: string,
 ): boolean => {
@@ -218,7 +218,7 @@ const compareValues = (
   resultType: TotalFieldV2["settings"]["resultType"],
   left: JsonValue,
   right: JsonValue,
-  sourceField: ModuleFieldV2,
+  sourceField: ModuleFieldV3,
 ): number | undefined => {
   if (resultType === "whole_number" || resultType === "decimal_number") {
     const leftNumber = numericValue(sourceField, left);
@@ -258,7 +258,7 @@ const compareValues = (
 
 const totalResult = (
   field: TotalFieldV2,
-  sourceField: ModuleFieldV2 | undefined,
+  sourceField: ModuleFieldV3 | undefined,
   values: readonly JsonValue[],
 ): Readonly<{ value?: JsonValue; issue?: RecordTotalIssue }> => {
   const { operation, resultType } = field.settings;
@@ -330,7 +330,7 @@ const totalResult = (
 export const evaluateRecordTotalsV2 = (
   input: EvaluateRecordTotalsV2Input,
 ): EvaluateRecordTotalsV2Result => {
-  const parsedTarget = recordTypeDefinitionV2Schema.safeParse(input.recordType);
+  const parsedTarget = recordTypeDefinitionV3Schema.safeParse(input.recordType);
   if (!parsedTarget.success || !Array.isArray(input.relationshipSources))
     return { success: false, issues: [issue("invalid_input")] };
 
@@ -339,7 +339,7 @@ export const evaluateRecordTotalsV2 = (
   const requiredRelationships = new Set(totals.map((field) => field.settings.relationshipId));
   const sources = new Map<string, ParsedRelationshipSource>();
   for (const [sourceIndex, candidate] of input.relationshipSources.entries()) {
-    const parsedSource = recordTypeDefinitionV2Schema.safeParse(candidate?.sourceRecordType);
+    const parsedSource = recordTypeDefinitionV3Schema.safeParse(candidate?.sourceRecordType);
     if (
       !candidate ||
       typeof candidate.relationshipId !== "string" ||
@@ -373,7 +373,7 @@ export const evaluateRecordTotalsV2 = (
   const issues: RecordTotalIssue[] = [];
   for (const field of totals) {
     const source = sources.get(field.settings.relationshipId)!;
-    const sourceFields = new Map<string, ModuleFieldV2>(
+    const sourceFields = new Map<string, ModuleFieldV3>(
       source.sourceRecordType.fields.map((candidate) => [candidate.fieldId, candidate]),
     );
     const aggregateField =
