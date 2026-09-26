@@ -9,6 +9,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
 import { Empty, EmptyHeader, EmptyTitle } from "../components/empty";
@@ -112,10 +114,10 @@ export function RecordsEmptyState({
 /**
  * The per-row selection control bound to the declared `selection_changed` event and stable record
  * identity. `multiple` renders a shadcn Checkbox. `single` renders one radio group scoped to the
- * table by `groupName`, so choosing another row replaces the choice; the pinned base-nova registry
- * has no radio part bound to a per-row group, so that mode keeps the platform's own radio. Either
- * way the control only reports the viewer's choice; the host owns the selection and the projected
- * `selectedRecordIds`.
+ * table by `groupName`, so choosing another row replaces the choice; the shadcn radio group must
+ * wrap all of its radios in one element, which table rows cannot share, so that mode keeps the
+ * platform's own radio. Either way the control only reports the viewer's choice; the host owns the
+ * selection and the projected `selectedRecordIds`.
  */
 export function SelectionControl({
   row,
@@ -231,8 +233,9 @@ export function RowActionControl({
 /**
  * Every row command the row shows, as one Dropdown Menu bound to the declared `row_action` event.
  * Each declared action carries the stable identity of its own binding, so several named commands on
- * one table reach different flows. A release that declares no named action keeps the one legacy
- * control, identified by the placement itself, as the menu's single command.
+ * one table reach different flows. `actions` is undefined only for a release that declares no named
+ * action: that release keeps the one legacy control, identified by the placement itself, as the
+ * menu's single command. Declared actions the row does not show leave no command at all.
  */
 export function RowActionsMenu({
   recordId,
@@ -242,7 +245,7 @@ export function RowActionsMenu({
 }: Readonly<{
   recordId: string;
   name: string;
-  actions: readonly RecordsTableActionContract[];
+  actions: readonly RecordsTableActionContract[] | undefined;
   events: DisplayEventHandlers | undefined;
 }>): ReactElement | null {
   const onRowAction = events?.row_action;
@@ -252,7 +255,7 @@ export function RowActionsMenu({
     label: string;
     eventId: string | undefined;
   }[] =
-    actions.length === 0
+    actions === undefined
       ? [{ key: "row_action", label: "Open", eventId: undefined }]
       : actions.map((action) => ({
           key: action.eventId,
@@ -276,7 +279,9 @@ export function RowActionsMenu({
       >
         <MoreHorizontalIcon />
       </DropdownMenuTrigger>
-      <DropdownMenuContent>
+      {/* The menu is portalled, but React still bubbles its clicks through the row; choosing a
+          command is not a request to open the row itself. */}
+      <DropdownMenuContent onClick={(event) => event.stopPropagation()}>
         {commands.map((command) => (
           <DropdownMenuItem
             key={command.key}
@@ -359,7 +364,8 @@ const BOOLEAN_FILTER_OPTIONS = [
 
 /**
  * A yes/no filter as a Dropdown Menu of its three closed values, keeping the committed value as the
- * trigger's label. It reports only a real change, exactly as the native choice list did.
+ * trigger's label and in its accessible name. It reports only a real change, exactly as the native
+ * choice list did.
  */
 function BooleanFilterControl({
   id,
@@ -372,7 +378,9 @@ function BooleanFilterControl({
   value: string;
   onCommit: (next: string) => void;
 }>): ReactElement {
-  const current = BOOLEAN_FILTER_OPTIONS.find((option) => option.value === value);
+  const current = (
+    BOOLEAN_FILTER_OPTIONS.find((option) => option.value === value) ?? BOOLEAN_FILTER_OPTIONS[0]
+  ).label;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -381,20 +389,22 @@ function BooleanFilterControl({
             id={id}
             variant="outline"
             size="default"
-            aria-label={`Filter by ${label}`}
+            aria-label={`Filter by ${label}: ${current}`}
             className="w-full justify-between"
           />
         }
       >
-        {current?.label ?? BOOLEAN_FILTER_OPTIONS[0].label}
+        {current}
         <ChevronDownIcon data-icon="inline-end" />
       </DropdownMenuTrigger>
       <DropdownMenuContent>
-        {BOOLEAN_FILTER_OPTIONS.map((option) => (
-          <DropdownMenuItem key={option.value} onClick={() => onCommit(option.value)}>
-            {option.label}
-          </DropdownMenuItem>
-        ))}
+        <DropdownMenuRadioGroup value={value} onValueChange={(next: string) => onCommit(next)}>
+          {BOOLEAN_FILTER_OPTIONS.map((option) => (
+            <DropdownMenuRadioItem key={option.value} value={option.value} closeOnClick>
+              {option.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

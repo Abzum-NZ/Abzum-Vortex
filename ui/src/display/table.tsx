@@ -335,9 +335,11 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
               {values.rows.map((row) => {
                 const name = rowName(row, columns[0]?.key);
                 const selected = selectedRecordIds.includes(row.recordId);
-                const shownActions = declaredRowActions.filter((action) =>
-                  rowShowsAction(row, action),
-                );
+                // A release that declares no named action keeps the legacy command (undefined).
+                const shownActions =
+                  declaredRowActions.length === 0
+                    ? undefined
+                    : declaredRowActions.filter((action) => rowShowsAction(row, action));
                 const activate = activateRow;
                 const rowInteraction =
                   activate === undefined
