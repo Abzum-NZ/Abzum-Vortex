@@ -20,7 +20,6 @@
     "@vortex/rule": "workspace:*",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "cn": "catalog:",
     "date-fns": "catalog:",
     "lucide-react": "1.48.0",
     "react": "19.3.0",

@@ -1,6 +1,12 @@
 "use client";
 
-import type { ChangeEvent, ReactElement } from "react";
+import { useState, type ReactElement } from "react";
+import { format } from "date-fns";
+import { Button } from "../components/button";
+import { Calendar } from "../components/calendar";
+import { Field, FieldLabel } from "../components/field";
+import { Popover, PopoverContent, PopoverTrigger } from "../components/popover";
+import { FormattedDate } from "../display/date-format-context";
 import {
   readControlSettings,
   resolveControlContext,
@@ -20,9 +26,20 @@ import { isIsoCalendarDate, type DateInputPayload } from "./projected-data";
 
 export type DateInputProps = ControlRenderProps<DateInputPayload>;
 
+/** Fixed hint for a date nobody has chosen yet; this control declares no placeholder property. */
+const EMPTY_DATE = "Select a date";
+
+/** The projected ISO calendar date as the local calendar day the month grid shows. */
+const toCalendarDay = (iso: string): Date | undefined =>
+  isIsoCalendarDate(iso) ? new Date(`${iso}T00:00:00`) : undefined;
+
+/** The day a person chose in the month grid as an ISO calendar date, in the browser's own zone. */
+const toIsoCalendarDate = (day: Date): string => format(day, "yyyy-MM-dd");
+
 /**
- * ISO calendar date input emitting only its declared `field_changed` event. The typed value is
- * a real `YYYY-MM-DD` date or `null` for empty or incomplete entry.
+ * ISO calendar date input emitting only its declared `field_changed` event. The typed value is a
+ * real `YYYY-MM-DD` date or `null` until a day is chosen; the chosen day is shown and announced
+ * in the surrounding locale through the date-format context, and the month grid opens in a popover.
  */
 export function DateInput(props: DateInputProps): ReactElement {
   const context = resolveControlContext<DateInputPayload>(props, ["field_changed"]);
@@ -42,38 +59,46 @@ export function DateInput(props: DateInputProps): ReactElement {
   const [raw, setRaw] = useSeededState(context.values?.value ?? "");
   const toTyped = (text: string): string | null => (isIsoCalendarDate(text) ? text : null);
   useFormField(fieldKey, props.placementId, toTyped(raw));
+  const [open, setOpen] = useState(false);
 
-  const onChange = (event: ChangeEvent<HTMLInputElement>): void => {
+  const choose = (day: Date | undefined): void => {
     if (disabled || readOnly) return;
-    const next = event.target.value;
-    setRaw(next);
-    context.events?.field_changed?.({ event: "field_changed", fieldKey, value: toTyped(next) });
+    const chosen = day === undefined ? "" : toIsoCalendarDate(day);
+    setOpen(false);
+    setRaw(chosen);
+    context.events?.field_changed?.({ event: "field_changed", fieldKey, value: toTyped(chosen) });
   };
 
   return (
-    <div
+    <Field
       data-vortex-control="date-input"
       hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
-      className="vortex-field"
     >
-      <label htmlFor={ids.control} className="vortex-field-label">
+      <FieldLabel id={ids.label} htmlFor={ids.control}>
         <FieldLabelText label={label} required={required} />
-      </label>
-      <input
-        id={ids.control}
-        type="date"
-        name={fieldKey}
-        value={raw}
-        onChange={onChange}
-        disabled={disabled}
-        readOnly={readOnly}
-        required={required}
-        aria-invalid={error !== undefined}
-        {...describedBy(ids, help, error, note, draftFeedback)}
-        className="vortex-input"
-      />
+      </FieldLabel>
+      <Popover open={!readOnly && open} onOpenChange={(next) => setOpen(next)}>
+        <PopoverTrigger
+          id={ids.control}
+          render={<Button variant="outline" className="w-full justify-start font-normal" />}
+          disabled={disabled}
+          aria-labelledby={ids.label}
+          aria-invalid={error !== undefined}
+          {...(required ? { "aria-required": true } : {})}
+          {...describedBy(ids, help, error, note, draftFeedback)}
+        >
+          {raw === "" ? (
+            <span className="text-muted-foreground">{EMPTY_DATE}</span>
+          ) : (
+            <FormattedDate iso={raw} />
+          )}
+        </PopoverTrigger>
+        <PopoverContent>
+          <Calendar mode="single" selected={toCalendarDay(raw)} onSelect={choose} />
+        </PopoverContent>
+      </Popover>
       <FieldMessages
         ids={ids}
         help={help}
@@ -81,6 +106,6 @@ export function DateInput(props: DateInputProps): ReactElement {
         note={note}
         draftFeedback={draftFeedback}
       />
-    </div>
+    </Field>
   );
 }
