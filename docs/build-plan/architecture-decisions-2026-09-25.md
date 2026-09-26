@@ -42,6 +42,7 @@ Where these sections conflict with this document, this document wins until each 
 | 9 | An immutable runtime bundle per installation revision | Compiled installations are cached by an immutable key, so opening a page reads no definition. |
 | 10 | Agents build applications through the same operations | Every builder operation is one typed, permission-checked operation used by the designer, the API and MCP, including preview installation. |
 | 11 | Building, installing and system applications are permission-gated | Only roles with the builder permissions can change definitions. System applications are customisable by them, but cannot be uninstalled. |
+| 12 | shadcn/ui on Base UI is the component base | Every Vortex interface primitive is a shadcn/ui component built on Base UI, styled with Tailwind CSS and themed by the existing Vortex theme engine. |
 
 ## Decision 1 — One flow definition, one Vortex flow engine, Kestra for durable work
 
@@ -352,6 +353,18 @@ Changing an operation's required-caller policy is itself a protected access-admi
 - People holding `system_applications.manage` customise them through extension fields, theme, navigation and their own dependent applications, or through an organisation-owned customised copy (#1058). A customised copy replaces the system application's installation and never exists alongside it. It cannot add, remove or retarget protected-operation bindings, and it receives platform fixes through compare-and-merge (#721).
 - Platform upgrades never overwrite customisations.
 - The organisation always keeps a working way for its steward to manage access.
+
+## Decision 12 — shadcn/ui on Base UI is the component base
+
+Owner decision, 26 September 2026.
+
+- **Base.** Vortex interface primitives are [shadcn/ui](https://ui.shadcn.com) components initialised with Base UI primitives (`shadcn init --base base`, a `base-*` style), not Radix. They are styled with Tailwind CSS v4 and live as source in the shared `ui` workspace package, which `apps/web` and `studio` consume. The CLI's `--monorepo` layout is followed: one `components.json` per workspace, one shared `globals.css`.
+- **Theme.** The existing theme engine (Decision 6) stays the only source of design values. A theme bridge maps its resolved tokens to the shadcn CSS variables (`--background`, `--foreground`, `--primary`, `--ring`, `--radius` and the rest, light and dark). Contrast and focus checks still run on the Vortex tokens. No component hard-codes a colour, radius or spacing value.
+- **Scope.** Registered platform blocks keep their definition contracts, settings, events and permission behaviour. Only their rendering moves to shadcn components. Application definitions, flows and access rules do not change.
+- **Composition.** The Records table (Decision 5) uses the shadcn Table, Checkbox, Dropdown Menu and Pagination parts for presentation; its data, sorting, filtering, actions and states stay configured inputs. Forms use the shadcn Field, Input, Select, Combobox, Checkbox, Switch, Radio Group, Textarea, Calendar and Popover parts. Overlays use Dialog, Sheet and Drawer.
+- **Designers.** The flow designer's conditions editor uses react-querybuilder's shadcn compatibility layer on the same Base UI components.
+- **Custom components.** Package custom components (Decision 7) may use the same `ui` package through the sandbox bootstrap, but never receive Vortex credentials.
+- **Migration.** Each existing bespoke control, display, layout, navigation and launcher component is replaced in bounded issues. The old CSS classes and style modules are deleted once nothing references them.
 
 ## Placement
 
