@@ -18,9 +18,16 @@ export default async function CheckEmailPage({ searchParams }: CheckEmailPagePro
           ? "If the address is connected to an account, a password recovery link is on its way."
           : "Open the confirmation link we sent before signing in."
       }
-      footer={<Link href="/auth/sign-in">Return to sign in</Link>}
+      footer={
+        <Link className="font-medium underline underline-offset-4" href="/auth/sign-in">
+          Return to sign in
+        </Link>
+      }
     >
-      <div className="auth-state-mark" aria-hidden="true">
+      <div
+        className="flex size-12 items-center justify-center rounded-full bg-primary text-2xl font-semibold text-primary-foreground"
+        aria-hidden="true"
+      >
         ✓
       </div>
     </AuthShell>
