@@ -1,11 +1,11 @@
 import {
   jsonValueSchema,
   moneyValueV2Schema,
-  recordTypeDefinitionV2Schema,
+  recordTypeDefinitionV3Schema,
   timestampSchema,
   type JsonValue,
-  type ModuleFieldV2,
-  type RecordTypeDefinitionV2,
+  type ModuleFieldV3,
+  type RecordTypeDefinitionV3,
 } from "@vortex/contracts";
 import { evaluateTypedConditionV2 } from "@vortex/rule";
 import {
@@ -21,7 +21,7 @@ import {
 } from "./exact-arithmetic";
 import { persistedRecordFieldValueMatches } from "./field-values";
 
-type CalculationFieldV2 = Extract<ModuleFieldV2, { type: "calculation" }>;
+type CalculationFieldV2 = Extract<ModuleFieldV3, { type: "calculation" }>;
 type CalculationExpressionV2 = CalculationFieldV2["settings"]["expression"];
 type CalculationNumberOperandV2 = Extract<
   CalculationExpressionV2,
@@ -34,7 +34,7 @@ export type RecordCalculationClockV2 = Readonly<{
 }>;
 
 export type EvaluateRecordCalculationsV2Input = Readonly<{
-  recordType: RecordTypeDefinitionV2;
+  recordType: RecordTypeDefinitionV3;
   authoritativeFieldValues: Readonly<Record<string, unknown>>;
   clock: RecordCalculationClockV2;
 }>;
@@ -177,10 +177,10 @@ const calculationDependencies = (expression: CalculationExpressionV2): string[] 
   return dependencies;
 };
 
-const resultType = (field: ModuleFieldV2): string =>
+const resultType = (field: ModuleFieldV3): string =>
   field.type === "calculation" || field.type === "total" ? field.settings.resultType : field.type;
 
-const numericValue = (field: ModuleFieldV2, value: unknown): NumericValue | undefined => {
+const numericValue = (field: ModuleFieldV3, value: unknown): NumericValue | undefined => {
   const type = resultType(field);
   if (type === "whole_number") {
     const parsed = rationalFromWholeNumber(value);
@@ -280,7 +280,7 @@ const issue = (
 export const evaluateRecordCalculationsV2 = (
   input: EvaluateRecordCalculationsV2Input,
 ): EvaluateRecordCalculationsV2Result => {
-  const parsedRecordType = recordTypeDefinitionV2Schema.safeParse(input.recordType);
+  const parsedRecordType = recordTypeDefinitionV3Schema.safeParse(input.recordType);
   const operationInstant =
     typeof input.clock?.instant === "string" ? exactInstant(input.clock.instant) : undefined;
   if (
@@ -293,7 +293,7 @@ export const evaluateRecordCalculationsV2 = (
     return { success: false, issues: [issue("invalid_input")] };
 
   const recordType = parsedRecordType.data;
-  const fields = new Map<string, ModuleFieldV2>(
+  const fields = new Map<string, ModuleFieldV3>(
     recordType.fields.map((field) => [field.fieldId, field]),
   );
   const calculations = recordType.fields.filter(
@@ -553,7 +553,7 @@ const isReadTimeCalculationField = (field: CalculationFieldV2): boolean =>
  * every calculation that depends, through any chain, on one of those.
  */
 export const readTimeCalculationFieldIdsV2 = (
-  recordType: RecordTypeDefinitionV2,
+  recordType: RecordTypeDefinitionV3,
 ): readonly string[] => {
   const calculations = recordType.fields.filter(
     (field): field is CalculationFieldV2 => field.type === "calculation",
@@ -601,7 +601,7 @@ export type EvaluateReadTimeCalculationsV2Result =
 export const evaluateReadTimeCalculationsV2 = (
   input: EvaluateRecordCalculationsV2Input,
 ): EvaluateReadTimeCalculationsV2Result => {
-  const parsed = recordTypeDefinitionV2Schema.safeParse(input.recordType);
+  const parsed = recordTypeDefinitionV3Schema.safeParse(input.recordType);
   if (!parsed.success) return { success: false, issues: [issue("invalid_input")] };
   const readTimeIds = new Set(readTimeCalculationFieldIdsV2(parsed.data));
   const evaluated = evaluateRecordCalculationsV2({

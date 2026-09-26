@@ -3,16 +3,16 @@ import {
   conditionNodeSchema,
   fieldIdSchema,
   jsonValueSchema,
-  moduleFieldV2Schema,
+  moduleFieldV3Schema,
   organizationAccountIdSchema,
   type ConditionNode,
   type JsonValue,
-  type ModuleFieldV2,
+  type ModuleFieldV3,
 } from "@vortex/contracts";
 import {
   TypedConditionEvaluationError,
   type TypedConditionEvaluationErrorReason,
-} from "./typed-condition";
+} from "./typed-condition-error";
 import {
   evaluateResolvedTypedConditionV2,
   semanticTypeForFieldV2,
@@ -36,7 +36,7 @@ export type TypedConditionParameterDeclarationV2 = Readonly<{
 
 export type TypedConditionEvaluationInputV2 = Readonly<{
   condition: ConditionNode;
-  sourceRecordFields: readonly ModuleFieldV2[];
+  sourceRecordFields: readonly ModuleFieldV3[];
   declaredFieldIds: readonly string[];
   parameterDeclarations: readonly TypedConditionParameterDeclarationV2[];
   fieldValues: Readonly<Record<string, unknown>>;
@@ -117,17 +117,17 @@ export function evaluateTypedConditionV2(input: TypedConditionEvaluationInputV2)
     refuse(containsUnsupportedOperator(safeInput.condition) ? "operator_refused" : "input_refused");
 
   const parsedFields = safeInput.sourceRecordFields.map((field) =>
-    moduleFieldV2Schema.safeParse(field),
+    moduleFieldV3Schema.safeParse(field),
   );
   if (parsedFields.some((field) => !field.success)) refuse("input_refused");
-  const fields: ModuleFieldV2[] = [];
+  const fields: ModuleFieldV3[] = [];
   for (const parsedField of parsedFields) {
     if (!parsedField.success) refuse("input_refused");
     fields.push(parsedField.data!);
   }
   const fieldIds = fields.map((field) => field.fieldId);
   if (new Set(fieldIds).size !== fieldIds.length) refuse("input_refused");
-  const fieldsById = new Map<string, ModuleFieldV2>(fields.map((field) => [field.fieldId, field]));
+  const fieldsById = new Map<string, ModuleFieldV3>(fields.map((field) => [field.fieldId, field]));
 
   const declaredFieldIds = safeInput.declaredFieldIds.map((fieldId) => {
     const parsed = fieldIdSchema.safeParse(fieldId);

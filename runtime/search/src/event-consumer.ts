@@ -7,7 +7,7 @@ import {
   recordTypeIdSchema,
   timestampSchema,
   type EventOccurrenceEnvelopeV2,
-  type RecordTypeDefinitionV2,
+  type RecordTypeDefinitionV3,
 } from "@vortex/contracts";
 import {
   buildSearchDocument,
@@ -79,7 +79,7 @@ export class SearchEventConsumerError extends Error {
  * derivation. A record type that has not published a search-relevant field is
  * still a valid configuration: every field is then simply left out.
  */
-export type SearchIndexRecordType = Pick<RecordTypeDefinitionV2, "recordTypeId" | "fields">;
+export type SearchIndexRecordType = Pick<RecordTypeDefinitionV3, "recordTypeId" | "fields">;
 
 /**
  * Server-side reads and the idempotent write the consumer needs. A loader never

@@ -30,7 +30,6 @@ export * from "./integration-contracts";
 export * from "./lineage";
 export * from "./loopback-hostname";
 export * from "./module-contracts";
-export * from "./module-contracts-v2";
 export * from "./module-contracts-v3";
 export * from "./named-actions";
 export * from "./module-field-values-v2";
