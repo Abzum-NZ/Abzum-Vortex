@@ -19,11 +19,14 @@
 --
 -- Removing registrations and handling data are the next uninstall steps and own their changes.
 
+-- The binding table is owned by the Module schema owner.
+set local role vortex_module_owner;
 alter table vortex_module.installation_bindings
   drop constraint installation_bindings_state_check;
 alter table vortex_module.installation_bindings
   add constraint installation_bindings_state_check
   check (state in ('provisioned', 'active', 'draining', 'detached'));
+reset role;
 
 -- The postgres-owned protected composer and Access reader below live in the Module and Access
 -- schemas. The Module schema owner lends postgres USAGE and CREATE for this migration only;
