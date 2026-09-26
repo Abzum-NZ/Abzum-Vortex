@@ -473,10 +473,11 @@ export const createRecordTypeLifecyclePolicyService = (
             };
 
       return requests.runChange(session, selection, async (transaction, scope) => {
-        // Every vortex_record write primitive (transfer_record_ownership,
-        // save-record, named-action storage) is granted execute only to
-        // vortex_runtime; the request-role transaction re-elevates to it
-        // immediately before the call, the same as those existing callers.
+        // Every vortex_record write entry (apply_lifecycle_record_changes for
+        // delete, restore and ownership transfer, save-record, named-action
+        // storage) is granted execute only to vortex_runtime; the request-role
+        // transaction re-elevates to it immediately before the call, the same
+        // as those existing callers.
         await transaction.query`set local role vortex_runtime`;
         const rows = await transaction.query<PolicyRow>`
           select vortex_record.save_record_type_lifecycle_policy_for_administration(

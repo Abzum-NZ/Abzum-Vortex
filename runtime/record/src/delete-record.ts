@@ -492,12 +492,15 @@ export const performProtectedRecordDelete = async (
   const finalized = parseDatabaseOutcome(
     one(
       await transaction.query<Row>`
-        select vortex_record.finalize_protected_record_delete(
+        select vortex_record.apply_lifecycle_record_changes(
           ${command.commandId}::uuid,
+          'delete'::text,
           ${command.recordTypeId}::uuid,
           ${command.recordId}::uuid,
           ${command.expectedConcurrencyNumber}::bigint,
-          ${JSON.stringify(parentMutations)}::text::jsonb
+          ${JSON.stringify(parentMutations)}::text::jsonb,
+          ${command.activityId}::uuid,
+          ${command.occurrenceId}::uuid
         ) as result
       `,
     ).result,
@@ -637,12 +640,15 @@ export const createRecordDeleteService = (dependencies: RecordDeleteServiceDepen
       const finalized = parseDatabaseOutcome(
         one(
           await transaction.query<Row>`
-            select vortex_record.finalize_protected_record_restore(
+            select vortex_record.apply_lifecycle_record_changes(
               ${command.commandId}::uuid,
+              'restore'::text,
               ${command.recordTypeId}::uuid,
               ${command.recordId}::uuid,
               ${command.expectedConcurrencyNumber}::bigint,
-              ${JSON.stringify(mutations)}::text::jsonb
+              ${JSON.stringify(mutations)}::text::jsonb,
+              ${activityId}::uuid,
+              null::uuid
             ) as result
           `,
         ).result,
