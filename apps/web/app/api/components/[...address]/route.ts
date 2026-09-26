@@ -10,20 +10,24 @@ import {
   type ComponentBundleObjectStore,
   type ServeComponentBundleResult,
 } from "@vortex/file";
+import { requestMatchesConfiguredSite } from "../../../auth/_lib/session-request-state";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
  * The bundle host for the dedicated component domain. The domain serves one
- * content-addressed bundle file at `/<contentAddress>/<relativePath>`; an
- * address with no relative path serves the bundle's entry file. The URL carries
- * no organisation, record or person identifier.
+ * content-addressed bundle file at `/api/components/<contentAddress>/<relativePath>`;
+ * an address with no relative path serves the bundle's entry file. The URL
+ * carries no organisation, record or person identifier.
  *
- * Reads pass through this server route, which mints one exact read credential
- * for the requested object; the private bucket is never public-readable. Bytes
- * are verified against the digest recorded for them, so a tampered object is
- * refused rather than delivered.
+ * The route answers only on the configured component origin
+ * (`VORTEX_COMPONENT_BUNDLE_ORIGIN`), which must be a different domain from the
+ * Vortex site, so publisher code is never served from a Vortex application
+ * origin. Reads pass through this server route, which mints one exact read
+ * credential for the requested object; the private bucket is never
+ * public-readable. Bytes are verified against the digest recorded for them, so
+ * a tampered object is refused rather than delivered.
  */
 
 const requiredEnvironmentValue = (name: string): string => {
@@ -49,6 +53,42 @@ const refusal = (
   }))
     response.headers.set(name, value);
   return response;
+};
+
+let componentOrigin: string | undefined;
+
+/**
+ * The configured component origin, refused when its host is, contains or is
+ * contained by the Vortex site host. Any configuration error fails closed.
+ */
+const configuredComponentOrigin = (): string => {
+  if (componentOrigin !== undefined) return componentOrigin;
+  const component = new URL(requiredEnvironmentValue("VORTEX_COMPONENT_BUNDLE_ORIGIN"));
+  const site = new URL(requiredEnvironmentValue("VORTEX_SITE_URL"));
+  const componentHost = component.hostname.toLowerCase();
+  const siteHost = site.hostname.toLowerCase();
+  if (
+    component.origin !== component.href.replace(/\/$/, "") ||
+    componentHost === siteHost ||
+    componentHost.endsWith(`.${siteHost}`) ||
+    siteHost.endsWith(`.${componentHost}`)
+  )
+    throw new Error("The component bundle origin must be a dedicated domain, never the Vortex site");
+  componentOrigin = component.origin;
+  return componentOrigin;
+};
+
+/** True only for a request addressed to the dedicated component origin. */
+const isComponentOriginRequest = (request: Request): boolean => {
+  try {
+    return requestMatchesConfiguredSite(
+      request.headers,
+      new URL(request.url),
+      configuredComponentOrigin(),
+    );
+  } catch {
+    return false;
+  }
 };
 
 let objectStore: ComponentBundleObjectStore | undefined;
@@ -81,15 +121,24 @@ const componentBundleObjectStore = (): ComponentBundleObjectStore => {
       },
     ],
   });
-  objectStore = createSupabaseComponentBundleObjectStore({ supabaseUrl, mintCredential: minter });
+  // The serving route only ever reads, so its store can never mint an upload.
+  objectStore = createSupabaseComponentBundleObjectStore({
+    supabaseUrl,
+    mintCredential: async (input) => {
+      if (input.operation !== "read")
+        throw new Error("The component bundle serving route mints read credentials only");
+      return minter(input);
+    },
+  });
   return objectStore;
 };
 
 /** One content-addressed bundle file, or the entry file when no path follows. */
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ address: string[] }> },
 ): Promise<Response> {
+  if (!isComponentOriginRequest(request)) return refusal("bundle_not_found");
   const { address } = await context.params;
   const contentAddress = address[0];
   if (contentAddress === undefined) return refusal("malformed_bundle");
@@ -109,7 +158,8 @@ export async function GET(
 }
 
 /** The sandboxed frame loads module scripts cross-origin, so preflight is open. */
-export function OPTIONS(): Response {
+export function OPTIONS(request: Request): Response {
+  if (!isComponentOriginRequest(request)) return refusal("bundle_not_found");
   return new Response(null, {
     status: 204,
     headers: {

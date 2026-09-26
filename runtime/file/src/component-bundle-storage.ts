@@ -268,9 +268,10 @@ export const createComponentBundleStorageCredentialMinter = (
   return async ({ operation, objectPath }) => {
     if (operation !== "upload" && operation !== "read")
       throw new Error("Component bundle credential operation is unsupported");
+    const bundleFile = /^bundles\/[0-9a-f]{96}\/(.+)$/.exec(objectPath);
     const isContentAddressedObject =
       /^manifests\/[0-9a-f]{96}\.json$/.test(objectPath) ||
-      /^bundles\/[0-9a-f]{96}\/[A-Za-z0-9._/-]+$/.test(objectPath);
+      (bundleFile?.[1] !== undefined && isSafeComponentBundlePath(bundleFile[1]));
     if (!isContentAddressedObject)
       throw new Error("Component bundle credential object path is not a content address");
 
@@ -437,7 +438,8 @@ export type PublishedComponentBundle = Readonly<{
  *    the bootstrap document loads.
  *
  * The content address describes one manifest; a different file set for the same
- * entry digest is refused rather than overwritten.
+ * entry digest, or a stored object whose bytes differ from the supplied file, is
+ * refused rather than overwritten.
  */
 export const publishComponentBundle = async (
   input: Readonly<{ release: CustomComponentReleaseV2; files: readonly ComponentBundleFile[] }>,
@@ -488,13 +490,20 @@ export const publishComponentBundle = async (
   }
 
   // The files are written first and the manifest last, so the manifest is the
-  // address's commit point: a partial write leaves no address to serve.
-  for (const [path, bytes] of byPath) {
+  // address's commit point: a partial write leaves no address to serve. Writes
+  // never overwrite, so an object left by an earlier interrupted or concurrent
+  // publication survives; each stored object is read back and must hold exactly
+  // the bytes this bundle records, otherwise the address is refused rather than
+  // committed over bytes it does not describe.
+  for (const file of files) {
     await writeObjectOrRefuse(store, {
-      objectPath: componentBundleFileObjectPath(contentAddress, path),
-      bytes,
-      contentType: componentBundleMediaType(path),
+      objectPath: file.objectPath,
+      bytes: byPath.get(file.path) as Uint8Array,
+      contentType: componentBundleMediaType(file.path),
     });
+    const stored = await readObjectOrRefuse(store, file.objectPath);
+    if (stored === undefined) return refuse("storage_unavailable");
+    if (componentBundleFileDigest(stored) !== file.sha384) return refuse("bundle_conflict");
   }
   if (existingManifest === undefined) {
     await writeObjectOrRefuse(store, {
@@ -502,6 +511,9 @@ export const publishComponentBundle = async (
       bytes: encodedManifest,
       contentType: "application/json; charset=utf-8",
     });
+    const storedManifest = await readObjectOrRefuse(store, manifestObjectPath);
+    if (storedManifest === undefined) return refuse("storage_unavailable");
+    if (!bytesEqual(storedManifest, encodedManifest)) return refuse("bundle_conflict");
   }
 
   return Object.freeze({

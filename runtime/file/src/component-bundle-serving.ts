@@ -67,6 +67,10 @@ const servedHeaders = (relativePath: string): Readonly<Record<string, string>> =
     "Access-Control-Allow-Origin": COMPONENT_BUNDLE_CORS_ORIGIN,
     "X-Content-Type-Options": "nosniff",
     "Cross-Origin-Resource-Policy": "cross-origin",
+    // A bundle file is only ever a subresource of the sandboxed bootstrap
+    // document. Opened directly, an HTML or SVG file gets an opaque origin and no
+    // capability, so publisher code never runs with the bundle host's origin.
+    "Content-Security-Policy": "sandbox; default-src 'none'",
   });
 
 const refusalHeaders = (): Readonly<Record<string, string>> =>
@@ -85,13 +89,16 @@ const refused = (reason: ComponentBundleRefusalReason): RefusedComponentBundle =
     headers: refusalHeaders(),
   });
 
+/** The route prefix of the bundle host on the dedicated component domain. */
+export const COMPONENT_BUNDLE_SERVING_PREFIX = "/api/components";
+
 /**
- * The public address of one bundle file on the dedicated component domain. The
- * address is just the entry digest plus the file's own relative path: it carries
- * no organisation, record or person identifier.
+ * The public path of one bundle file on the dedicated component domain. The
+ * path is just the entry digest plus the file's own relative path: it carries no
+ * organisation, record or person identifier.
  */
 export const componentBundleServingPath = (contentAddress: string, relativePath: string): string =>
-  `/${contentAddress}/${relativePath.split("/").map(encodeURIComponent).join("/")}`;
+  `${COMPONENT_BUNDLE_SERVING_PREFIX}/${contentAddress}/${relativePath.split("/").map(encodeURIComponent).join("/")}`;
 
 /**
  * Serves one file of one content-addressed bundle.

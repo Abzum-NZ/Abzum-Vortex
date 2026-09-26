@@ -145,6 +145,7 @@ export {
   type SupabaseComponentBundleObjectStoreConfig,
 } from "./component-bundle-storage";
 export {
+  COMPONENT_BUNDLE_SERVING_PREFIX,
   componentBundleRefusalHttpStatus,
   componentBundleServingPath,
   serveComponentBundle,

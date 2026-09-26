@@ -85,6 +85,6 @@ export const config = {
   // content-addressed and immutable, so it must not receive the session
   // proxy's private no-store response.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/components|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/components/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
