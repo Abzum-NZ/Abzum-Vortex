@@ -309,6 +309,9 @@ export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
         });
     }),
 ]);
+// Legacy authored node-and-edge workflows. Application content no longer carries them (#1086): the
+// compiler validates them as source and compiles them to nothing. They remain only until the shipped
+// background workflows become durable flows (#1088, #1092); do not extend this shape.
 const sourceWorkflowValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("literal"), value: jsonValueSchema }).strict(),
   z.object({ source: z.literal("trigger_field"), field: sourceQualifiedFieldSchema }).strict(),
@@ -756,6 +759,7 @@ export const sourceApplicationBodyV2Schema = z
         })
         .strict(),
     ).max(100),
+    /** Legacy node-and-edge workflows; validated as source, compiled to nothing (#1086). */
     workflows: z.array(
       z
         .object({
