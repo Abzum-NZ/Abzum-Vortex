@@ -28,6 +28,7 @@ import {
 import { versionRequirementSchema } from "./definitions";
 import { protectedOperationChannelSchema } from "./operation-contracts";
 import { flowNodeRunAsSchema } from "./run-as-vocabulary";
+import { tenantStructuralCapabilitySchema } from "./identity-access";
 
 /**
  * The vocabulary Application flows share with the protected-operation, execution-binding and
@@ -228,6 +229,17 @@ export const protectedOperationPermissionReferenceSchema = z
   .object({ permissionId: permissionIdSchema, key: namespacedKeySchema })
   .strict();
 
+/** Authority a protected operation must re-check in its owning service. */
+export const protectedOperationRequiredAuthoritySchema = z.discriminatedUnion("kind", [
+  protectedOperationPermissionReferenceSchema.extend({ kind: z.literal("permission") }),
+  z
+    .object({
+      kind: z.literal("tenant_capability"),
+      capability: tenantStructuralCapabilitySchema,
+    })
+    .strict(),
+]);
+
 export const safeFlowResultKindSchema = z.enum([
   "completed",
   "committed",
@@ -360,7 +372,7 @@ export const protectedOperationDescriptorSchema = z
      * business reason, so a generic engine never special-cases an operation.
      */
     sensitiveOutputs: z.array(builderKeySchema).max(20).optional(),
-    permission: protectedOperationPermissionReferenceSchema,
+    requiredAuthority: protectedOperationRequiredAuthoritySchema,
     effect: protectedOperationEffectKindSchema,
     expectedRevision: z.enum(["not_required", "required"]),
     confirmation: z.enum(["not_required", "required"]),

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*",
+    "shadcn": "4.21.0",
     "server-only": "0.0.1"
   },
   "vortex": {
