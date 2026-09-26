@@ -77,6 +77,11 @@ export type ThemeResolutionInput = Readonly<{
 
 export type ResolvedTheme = Readonly<{
   base: ExactPlatformThemeDependencyV2;
+  /**
+   * The catalogue-backed shadcn style id the theme selects; the platform default style when the
+   * theme records no selection (a theme pinned to an earlier release than the catalogue's base).
+   */
+  style: string;
   tokens: Readonly<Record<string, ThemeTokenValueV2>>;
 }>;
 

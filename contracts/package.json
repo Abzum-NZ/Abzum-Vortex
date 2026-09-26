@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./shadcn-theme-releases": "./src/shadcn-theme-releases.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json --noEmit",

@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  DEFAULT_APPLICATION_THEME_SELECTION,
   applicationThemeV2Schema,
   type DefinitionRuleFailure,
 } from "@vortex/contracts";
@@ -9,6 +10,7 @@ import { validateThemeContrast } from "./contrast";
 import { createLocatedFailure, ThemeValidationError } from "./errors";
 import { validateFocusVisibility } from "./focus";
 import { validateComponentThemeOverrides } from "./overrides";
+import { validateThemeSelectionOptions } from "./selection";
 import type {
   ApplicationThemeV2,
   ComponentThemeOverrideContext,
@@ -66,17 +68,30 @@ export function validateApplicationTheme(
 
   const tokens = parsedTheme.data.tokens;
 
-  // 2. Validate Contrast
+  // 2. Validate the catalogue selection, and the release it applies to, when the theme records one
+  const selection = parsedTheme.data.selection;
+  if (selection !== undefined) {
+    const selectionResult = validateThemeSelectionOptions(
+      selection,
+      options,
+      parsedTheme.data.base,
+    );
+    failures.push(...selectionResult.failures);
+    ruleFailures.push(...selectionResult.ruleFailures);
+    if (failures.length > 0) return { valid: false, failures, ruleFailures };
+  }
+
+  // 3. Validate Contrast
   const contrastResult = validateThemeContrast(tokens, options);
   failures.push(...contrastResult.failures);
   ruleFailures.push(...contrastResult.ruleFailures);
 
-  // 3. Validate Focus Visibility
+  // 4. Validate Focus Visibility
   const focusResult = validateFocusVisibility(tokens, options);
   failures.push(...focusResult.failures);
   ruleFailures.push(...focusResult.ruleFailures);
 
-  // 4. Validate Public Platform Assets
+  // 5. Validate Public Platform Assets
   const assetResult = validatePublicPlatformAssets(tokens, options);
   failures.push(...assetResult.failures);
   ruleFailures.push(...assetResult.ruleFailures);
@@ -181,6 +196,7 @@ export function resolveTheme(
 
   return deepFreeze({
     base: structuredClone(canonicalTheme.base),
+    style: canonicalTheme.selection?.style ?? DEFAULT_APPLICATION_THEME_SELECTION.style,
     tokens: deterministicTokens,
   });
 }

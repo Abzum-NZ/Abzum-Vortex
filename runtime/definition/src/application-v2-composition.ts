@@ -2,6 +2,7 @@ import {
   applicationCompositionCatalogueSnapshotV2Schema,
   applicationShellV2Schema,
   applicationThemeV2Schema,
+  canonicalApplicationThemeSelectionV2,
   blockPropertyValueV2Schema,
   builderKeySchema,
   guidedFormPageCompositionV2Schema,
@@ -39,8 +40,11 @@ import type {
 } from "./application-v2-resolution";
 import {
   createThemeLocation,
+  resolveThemeSelection,
   validateApplicationTheme,
   type ThemeResolutionOptions,
+  type ThemeTokenValueV2,
+  type ThemeValidationFailure,
 } from "@vortex/theme";
 
 type SourceSlot = {
@@ -173,6 +177,16 @@ const validateTheme = (
     createThemeLocation(documentKey, first.tokenKey, scope),
   );
 };
+
+/** Refuses publication with a theme selection failure, located where the Theme engine put it. */
+const rejectThemeFailure = (first: ThemeValidationFailure | undefined): never =>
+  reject(
+    first !== undefined && isDefinitionCompilerRefusalCode(first.ruleCode)
+      ? first.ruleCode
+      : "vortex.definition.application_block_settings",
+    first?.family ?? "invalid_value",
+    first?.location,
+  );
 
 /** Colour roles are declared by the platform theme release; overrides inherit them. */
 const inheritColorRole = (
@@ -570,20 +584,31 @@ export const materialiseApplicationCompositionV2 = (
   )
     reject("vortex.definition.application_dependency_manifest");
 
-  const tokens: Record<string, unknown> = { ...snapshot.platformTheme.tokens };
+  const canonicalOverrides: Record<string, ThemeTokenValueV2> = {};
   for (const [key, authored] of Object.entries(source.body.theme.token_overrides)) {
-    const existing = tokens[key] as Record<string, unknown> | undefined;
-    const compiled = canonicalThemeValue(authored as unknown as Record<string, unknown>) as Record<
-      string,
-      unknown
-    >;
-    if (existing === undefined || existing.kind !== compiled.kind)
-      reject("vortex.definition.application_block_settings", "broken_reference");
-    tokens[key] = inheritColorRole(existing, compiled);
+    canonicalOverrides[key] = canonicalThemeValue(
+      authored as unknown as Record<string, unknown>,
+    ) as ThemeTokenValueV2;
   }
+  const selectionResolution = resolveThemeSelection({
+    base: snapshot.platformTheme,
+    baseTokens: snapshot.platformTheme.tokens,
+    ...(source.body.theme.selection === undefined
+      ? {}
+      : { selection: canonicalApplicationThemeSelectionV2(source.body.theme.selection) }),
+    overrides: canonicalOverrides,
+    options: { documentKey: source.key },
+  });
+  const resolvedTheme = selectionResolution.valid
+    ? selectionResolution.resolved
+    : rejectThemeFailure(selectionResolution.failures[0]);
   const theme = applicationThemeV2Schema.parse({
     base: canonicalThemeDependency(source.body.theme.base),
-    tokens,
+    // A theme on the catalogue's base release always records its effective selection, including
+    // the platform default when the authored theme named none, so a consumer reads the exact
+    // style and dimensions. A theme on an earlier release records none and keeps its tokens.
+    ...(resolvedTheme.selection === undefined ? {} : { selection: resolvedTheme.selection }),
+    tokens: resolvedTheme.tokens,
   });
 
   // The exact pinned platform theme release is the trusted catalogue of approved,
@@ -741,6 +766,7 @@ export const materialiseApplicationCompositionV2 = (
         validateTheme(
           applicationThemeV2Schema.parse({
             base: theme.base,
+            ...(theme.selection === undefined ? {} : { selection: theme.selection }),
             tokens: { ...theme.tokens, ...effectiveOverrides },
           }),
           source.key,
