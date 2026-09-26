@@ -2,6 +2,11 @@ export { flowRunsOnlyInBrowser } from "./browser-eligibility";
 export { runBrowserFlow, type BrowserFlowRequest, type BrowserFlowResult } from "./browser-flow-runner";
 export { useFlowIntentHost, type FlowIntentHostOptions } from "./flow-intent-host";
 export {
+  createFormBlockRuntime,
+  type FormBlockRuntime,
+  type FormFieldAnswers,
+} from "./form-block-runtime";
+export {
   createFlowRuntime,
   type FlowDispatchResult,
   type FlowRuntime,
@@ -31,5 +36,6 @@ export {
   type FlowInstallationContext,
   type FlowInvokeClient,
   type FlowInvokeClientOptions,
+  type FlowResumeEvidence,
   type ServerFlowResponse,
 } from "./server-flow-client";

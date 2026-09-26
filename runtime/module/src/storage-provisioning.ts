@@ -312,7 +312,7 @@ export const createModuleInstallationStorageRepository = (
           ${command.moduleReleaseRevision}::bigint,
           ${command.expectedBindingRevision}::bigint,
           ${mode}::text,
-          ${JSON.stringify(command.contributions)}::jsonb
+          ${JSON.stringify(command.contributions)}::text::jsonb
         )
       `;
       if (rows.length !== 1 || rows[0] === undefined)

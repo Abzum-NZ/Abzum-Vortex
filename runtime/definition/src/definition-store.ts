@@ -185,9 +185,9 @@ export const createDefinitionStore = (
         from vortex_definition.create_root(
           ${source.kind},
           ${source.key},
-          ${JSON.stringify(source)},
+          ${JSON.stringify(source)}::text::jsonb,
           ${sourceFingerprint},
-          ${JSON.stringify(identityRequirements)}
+          ${JSON.stringify(identityRequirements)}::text::jsonb
         )
       `;
       if (rows.length !== 1) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
@@ -210,9 +210,9 @@ export const createDefinitionStore = (
         from vortex_definition.save_draft(
           ${command.data.rootId},
           ${command.data.expectedDraftRevision},
-          ${JSON.stringify(source)},
+          ${JSON.stringify(source)}::text::jsonb,
           ${sourceFingerprint},
-          ${JSON.stringify(identityRequirements)}
+          ${JSON.stringify(identityRequirements)}::text::jsonb
         )
       `;
       if (rows.length === 0) throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");

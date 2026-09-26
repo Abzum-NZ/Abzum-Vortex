@@ -70,10 +70,9 @@ const platformServiceOperations = byIdentity(
   (entry) => platformServiceOperationReleaseFingerprints(entry.release, entry.descriptor),
 );
 
-const theme = await readSource("platform-theme-catalogue.source.json");
 const platformThemes = byIdentity(
   "platform theme",
-  [theme],
+  Object.values(await readSource("platform-theme-catalogue.source.json")),
   (release) => `${release.catalogueThemeId}:${release.releaseVersion}`,
   platformThemeReleaseFingerprints,
 );

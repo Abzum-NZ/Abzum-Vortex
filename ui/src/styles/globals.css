@@ -19,8 +19,27 @@
 @source "../../../apps";
 @source "../../../studio";
 
-/* shadcn components use the dark: variant; it follows a .dark ancestor until the theme bridge wires it to the resolved colour scheme. */
-@custom-variant dark (&:is(.dark *));
+/*
+ * shadcn components use the dark: variant. It follows the colour scheme the theme bridge resolves,
+ * the same one its light-dark() variables follow: a .dark ancestor or a dark-mode themed container
+ * (data-vortex-theme-mode="dark"), or the person's dark preference anywhere outside a light-mode
+ * themed container (the system-mode root and system-mode containers).
+ */
+@custom-variant dark {
+  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+      @slot;
+    }
+  }
+}
+
+/* A .dark ancestor resolves the bridge's light-dark() variables to their dark values too. */
+:where(.dark) {
+  color-scheme: dark;
+}
 
 @theme inline {
   --color-background: var(--background);

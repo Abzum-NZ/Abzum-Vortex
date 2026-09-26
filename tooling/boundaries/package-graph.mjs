@@ -29,6 +29,15 @@ const allowedEnvironmentDependencies = {
   shared: new Set(["shared"]),
   test: new Set(["app", "browser", "server", "shared", "test"]),
 };
+// The one directory outside @vortex/access and @vortex/db that may run a resolved request
+// transaction: apps/web/scripts/development-setup is a development-only command (#609) that refuses
+// NODE_ENV=production and any non-local database, and mints its system context only inside itself.
+// This exemption must never cover code shipped in apps/web/app or any runtime package.
+const resolvedRequestTransactionExemption = {
+  packageName: "@vortex/web",
+  directory: path.join("scripts", "development-setup"),
+};
+
 const privateDatabaseSchemaOwners = new Map([
   ["vortex_access", "@vortex/access"],
   ["vortex_context", "@vortex/db"],
@@ -167,6 +176,12 @@ export async function validateImports(packages) {
       if (
         manifest.name !== "@vortex/access" &&
         manifest.name !== "@vortex/db" &&
+        !(
+          manifest.name === resolvedRequestTransactionExemption.packageName &&
+          path
+            .relative(directory, file)
+            .startsWith(resolvedRequestTransactionExemption.directory + path.sep)
+        ) &&
         source.includes("withResolvedRequestTransaction")
       )
         errors.push(`${file} uses the Access-only resolved request transaction capability`);
