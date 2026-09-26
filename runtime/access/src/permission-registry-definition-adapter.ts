@@ -201,6 +201,34 @@ export const prepareApplicationPermissionRegistrationFromReleaseSet = (
   const context = sessionContextSchema.safeParse(contextCandidate);
   if (!context.success || !isLiveSystemContext(context.data))
     throw new PermissionRegistryPreparationError("PERMISSION_REGISTRY_CONTEXT_REFUSED");
+  return prepareRegistrationForRelease(
+    context.data.organizationId,
+    context.data.correlationId,
+    commandCandidate,
+    releaseSetCandidate,
+  );
+};
+
+/**
+ * The same preparation for a release set read under the verified human request's own organisation
+ * scope. It grants nothing: the registration only names the release's declared permissions, and
+ * every decision still runs through Access for the signed-in person. The organisation is the
+ * request's resolved one, and the release set's own correlation is the evidence correlation, since
+ * a human request does not read under a system correlation.
+ */
+export const prepareApplicationPermissionRegistrationForHumanRequest = (
+  organizationId: string,
+  commandCandidate: PrepareApplicationPermissionRegistrationCommand,
+  releaseSetCandidate: unknown,
+): PreparedApplicationPermissionRegistration =>
+  prepareRegistrationForRelease(organizationId, undefined, commandCandidate, releaseSetCandidate);
+
+const prepareRegistrationForRelease = (
+  organizationId: string,
+  expectedCorrelationId: string | undefined,
+  commandCandidate: PrepareApplicationPermissionRegistrationCommand,
+  releaseSetCandidate: unknown,
+): PreparedApplicationPermissionRegistration => {
   const applicationRootId = applicationRootIdSchema.safeParse(commandCandidate?.applicationRootId);
   const releaseRevision = revisionSchema
     .max(Number.MAX_SAFE_INTEGER)
@@ -213,8 +241,8 @@ export const prepareApplicationPermissionRegistrationFromReleaseSet = (
     throw new PermissionRegistryPreparationError("PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID");
   const application = releaseSet.data.application;
   if (
-    application.organizationId !== context.data.organizationId ||
-    application.correlationId !== context.data.correlationId ||
+    application.organizationId !== organizationId ||
+    (expectedCorrelationId !== undefined && application.correlationId !== expectedCorrelationId) ||
     application.rootId !== applicationRootId.data ||
     application.releaseRevision !== releaseRevision.data ||
     releaseSet.data.modules.some((module) => module.correlationId !== application.correlationId)
@@ -231,7 +259,7 @@ export const prepareApplicationPermissionRegistrationFromReleaseSet = (
 
   const candidate = {
     contractVersion: "1.0.0" as const,
-    organizationId: context.data.organizationId,
+    organizationId: application.organizationId,
     applicationRootId: application.rootId,
     applicationRelease: releaseEvidence(application) as Extract<
       PermissionRegistryDefinitionRelease,

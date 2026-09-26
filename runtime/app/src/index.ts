@@ -37,8 +37,10 @@ export {
   type PermittedApplicationsRead,
 } from "./application-address";
 export {
+  createHumanInstalledRuntimeContextLoader,
   createInstalledRuntimeContextLoader,
   InstalledRuntimeContextError,
+  type HumanInstalledRuntimeContextDependencies,
   installedRuntimeContextErrorCodes,
   requireInstalledRuntimeContext,
   type InstalledRuntimeActiveInstallationReader,
