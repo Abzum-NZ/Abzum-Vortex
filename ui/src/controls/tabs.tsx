@@ -27,7 +27,8 @@ type Tab = Readonly<{ key: string; label: string; slotKey: string }>;
 
 /**
  * WAI-ARIA tabs with automatic activation, rendered by the shadcn Tabs component (Base UI): the
- * tablist owns the arrow key, Home and End keyboard behaviour and every tab is a native button.
+ * tablist owns the arrow key, Home and End keyboard behaviour, a tab activates as soon as it takes
+ * focus, and every tab is a native button.
  * Every panel stays mounted while inactive panels are hidden, so switching tabs never loses
  * entered values. The semantic tab key is the declared slot key in the 1.0.0 release and the
  * stable item identity in the 2.0.0 release; only a change of tab emits the declared
@@ -105,10 +106,10 @@ export function Tabs(props: TabsProps): ReactElement {
     context.events?.tab_changed?.({ event: "tab_changed", tabKey: key });
   };
 
-  // A declared tab key is always a string, so a value the primitive can report without one is not a
-  // tab change and never emits the declared event.
+  // Only a declared tab key is a tab change; any other value the primitive reports is ignored and
+  // never emits the declared event.
   const onValueChange = (value: unknown): void => {
-    if (typeof value !== "string") return;
+    if (typeof value !== "string" || !isTab(value)) return;
     select(value);
   };
 
@@ -122,7 +123,7 @@ export function Tabs(props: TabsProps): ReactElement {
       data-vortex-placement-id={props.placementId}
       data-vortex-active-tab={active}
     >
-      <TabsList aria-label={label}>
+      <TabsList aria-label={label} activateOnFocus>
         {tabs.map((tab) => (
           <TabsTrigger key={tab.key} value={tab.key} data-vortex-tab-key={tab.key}>
             {tab.label}

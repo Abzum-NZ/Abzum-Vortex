@@ -228,10 +228,11 @@ export function FormDraftFeedbackRegion({
       {messages.map((message, index) => (
         <Alert
           key={index}
-          role="status"
+          role="none"
+          data-vortex-draft-feedback-severity={message.severity}
           variant={message.severity === "error" ? "destructive" : "default"}
         >
-          <AlertTitle>{message.severity === "error" ? "Error" : "Note"}</AlertTitle>
+          <AlertTitle>{message.severity === "error" ? "Error" : "Warning"}</AlertTitle>
           <AlertDescription>{message.text}</AlertDescription>
         </Alert>
       ))}

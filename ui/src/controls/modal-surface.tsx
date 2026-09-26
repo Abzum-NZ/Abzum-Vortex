@@ -35,24 +35,27 @@ type ModalSurfacePayload = Readonly<{ open: boolean }>;
 
 type SurfaceSize = "small" | "medium" | "large";
 
-/** Dialog widths from the theme's scale, centered on the page. */
+/** Dialog widths from the theme's scale, centered on the page and never taller than the viewport. */
 const DIALOG_SIZES: Readonly<Record<SurfaceSize, string>> = {
   small: "sm:max-w-sm",
   medium: "sm:max-w-xl",
   large: "sm:max-w-4xl",
 };
 
-/** Drawer extents from the theme's scale, measured along the declared placement edge. */
+/**
+ * Drawer extents from the theme's scale, measured across the declared edge. The side-attached
+ * widths use the same side-scoped variants as the Sheet's own default width so they replace it.
+ */
 const DRAWER_EDGE_SIZES = {
   vertical: {
-    small: "w-full sm:max-w-xs",
-    medium: "w-full sm:max-w-md",
-    large: "w-full sm:max-w-xl",
+    small: "data-[side=left]:sm:max-w-xs data-[side=right]:sm:max-w-xs",
+    medium: "data-[side=left]:sm:max-w-md data-[side=right]:sm:max-w-md",
+    large: "data-[side=left]:sm:max-w-2xl data-[side=right]:sm:max-w-2xl",
   },
   horizontal: {
     small: "max-h-80",
-    medium: "max-h-md",
-    large: "max-h-2xl",
+    medium: "max-h-112",
+    large: "max-h-160",
   },
 } as const;
 
@@ -136,7 +139,7 @@ export function ModalSurface<Values extends ModalSurfacePayload>({
           >
             <XIcon />
           </SheetClose>
-          <div className="flex-1 overflow-y-auto px-4">{props.slots.content ?? null}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4">{props.slots.content ?? null}</div>
           {props.slots.actions === undefined || props.slots.actions === null ? null : (
             <SheetFooter>{props.slots.actions}</SheetFooter>
           )}
@@ -149,7 +152,7 @@ export function ModalSurface<Values extends ModalSurfacePayload>({
     <Dialog open={open} onOpenChange={onOpenChange} disablePointerDismissal>
       <DialogContent
         showCloseButton={false}
-        className={DIALOG_SIZES[size]}
+        className={cn("max-h-[calc(100%-2rem)] overflow-y-auto", DIALOG_SIZES[size])}
         {...sharedDataAttributes}
       >
         <DialogHeader>
