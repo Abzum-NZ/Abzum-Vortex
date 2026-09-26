@@ -178,6 +178,36 @@ export const closeOrganizationAccountResultSchema = organizationAccountLifecycle
   "close_organization_account",
 );
 
+export const updateOwnProfileCommandSchema = z
+  .object({
+    organizationAccountId: organizationAccountIdSchema,
+    expectedRevision: javascriptSafeRevisionSchema,
+    displayName: z.string().trim().min(1).max(120),
+    language: z.string().trim().min(2).max(35).optional(),
+    timeZone: z.string().trim().min(1).max(100).optional(),
+  })
+  .strict();
+
+const updateOwnProfileChangeFields = {
+  operation: z.literal("update_own_profile"),
+  organizationId: organizationIdSchema,
+  organizationAccountId: organizationAccountIdSchema,
+  correlationId: correlationIdSchema,
+  acceptedAt: timestampSchema,
+  accessVersion: javascriptSafeRevisionSchema,
+};
+
+export const updateOwnProfileResultSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("accepted"),
+      ...updateOwnProfileChangeFields,
+      account: organizationAdministrationAccountSummarySchema,
+    })
+    .strict(),
+  z.object({ outcome: z.literal("refused"), ...updateOwnProfileChangeFields }).strict(),
+]);
+
 const organizationInvitationChangeFields = {
   organizationId: organizationIdSchema,
   invitationId: invitationIdSchema,
@@ -261,6 +291,8 @@ export type ReactivateOrganizationAccountResult = z.infer<
   typeof reactivateOrganizationAccountResultSchema
 >;
 export type CloseOrganizationAccountResult = z.infer<typeof closeOrganizationAccountResultSchema>;
+export type UpdateOwnProfileCommand = z.infer<typeof updateOwnProfileCommandSchema>;
+export type UpdateOwnProfileResult = z.infer<typeof updateOwnProfileResultSchema>;
 export type CreateOrganizationInvitationForAdministrationResult = z.infer<
   typeof createOrganizationInvitationForAdministrationResultSchema
 >;
