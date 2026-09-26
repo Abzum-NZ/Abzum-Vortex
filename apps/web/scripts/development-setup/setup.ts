@@ -8,7 +8,7 @@ import {
 import { provisionTenantCommandSchema } from "@vortex/contracts";
 import { createConfiguredTenantAdministrationService } from "@vortex/identity";
 import { publishShippedDefinitions } from "./definitions";
-import { installAndGrant } from "./install";
+import { installAndGrant, replayOperatingRoleGrant, type InstallFacts } from "./install";
 import { grantStewardInstallerRole } from "./installer-access";
 import { loadSetupState } from "./state";
 
@@ -17,9 +17,10 @@ import { loadSetupState } from "./state";
  * shipped applications and grants the one nominated first owner their operating role, through the
  * protected entry points only. `pnpm setup:local` runs it; the README lists the exact steps.
  *
- * It is safe to run again: provisioning replays by its fixed duplicate key, published releases are
- * reused, installation reports "unchanged" and the operating-role grant replays its original
- * result. A different nominated account is refused by the database once the grant is established.
+ * An interrupted run resumes: provisioning replays by its fixed duplicate key and the steps already
+ * recorded in the setup state are skipped. Once every step has completed the command is disabled:
+ * a re-run only calls the initial operating-role grant again with the original receipt, which
+ * replays its stored result. A different nominated account is refused by provisioning.
  */
 
 const log = (message: string): void => {
@@ -76,6 +77,29 @@ const main = async (): Promise<void> => {
     accessVersion: provisioned.accessVersion,
   };
   const state = loadSetupState(provisioned.rootOrganizationId);
+  const installFacts = (releases: InstallFacts["releases"]): InstallFacts => ({
+    identityAuthorityId,
+    system,
+    manifest,
+    stewardIdentityId,
+    stewardOrganizationAccountId: provisioned.organizationAccountId,
+    provisioningReceiptId: provisioned.correlationId,
+    releases,
+    state,
+  });
+
+  // A completed setup is disabled: a re-run only calls the Access-owned initial operating-role
+  // grant again with the original receipt and frozen manifest, and Access replays its result.
+  if (state.setupCompleted) {
+    const rights = await replayOperatingRoleGrant(
+      installFacts(new Map(Object.entries(state.releases))),
+    );
+    log(
+      `the setup already completed; operating role ${rights.operatingRoleId} ${rights.outcome} for account ${provisioned.organizationAccountId}`,
+    );
+    return;
+  }
+
   const releases = await publishShippedDefinitions(system, manifest.applicationKeys, state, log);
 
   // 3. The steward gives themselves the application-installation permission, then installs the
@@ -91,19 +115,7 @@ const main = async (): Promise<void> => {
     },
     log,
   );
-  const rights = await installAndGrant(
-    {
-      identityAuthorityId,
-      system,
-      manifest,
-      stewardIdentityId,
-      stewardOrganizationAccountId: provisioned.organizationAccountId,
-      provisioningReceiptId: provisioned.correlationId,
-      releases,
-      state,
-    },
-    log,
-  );
+  const rights = await installAndGrant(installFacts(releases), log);
   log(
     `operating role ${rights.operatingRoleId} ${rights.outcome} for account ${provisioned.organizationAccountId}`,
   );

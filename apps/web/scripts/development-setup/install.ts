@@ -20,6 +20,7 @@ import {
   applicationRootIdSchema,
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   changeOrganizationAdministrationRoleAuthorityCommandSchema,
+  initialOperatingRoleGrantManifestSchema,
   organizationRoleChangePreparationSchema,
   organizationSelectionCandidateSchema,
   type IdentityAuthorityId,
@@ -317,6 +318,25 @@ const grantAdditionalRoles = async (
   }
 };
 
+/** The first-owner request both the first run and every replay send, from the same manifest. */
+const firstOwnerRequest = (facts: InstallFacts, operatingRoleSourceId: string) => {
+  const { manifest } = facts;
+  const operating = release(facts, manifest.operatingRole.applicationKey);
+  return firstOwnerApplicationEntryRequestSchema.parse({
+    organizationId: facts.system.organizationId,
+    applicationRootId: operating.rootId,
+    applicationReleaseRevision: operating.releaseRevision,
+    stewardOrganizationAccountId: facts.stewardOrganizationAccountId,
+    provisioningReceiptId: facts.provisioningReceiptId,
+    setupRevision: 1,
+    setupActorId: manifest.operator.systemActorId,
+    correlationId: manifest.setupCorrelationId,
+    operatingRoleId: manifest.operatingRole.roleId,
+    operatingRoleSourceId,
+    roleAssignmentId: manifest.operatingRole.roleAssignmentId,
+  });
+};
+
 /** Installs every manifest application; the operating application last, with the grant. */
 export const installAndGrant = async (
   facts: InstallFacts,
@@ -328,7 +348,6 @@ export const installAndGrant = async (
     if (key !== manifest.operatingRole.applicationKey) await installOne(facts, key, log);
 
   await prepareRelease(facts, manifest.operatingRole.applicationKey, log);
-  const operating = release(facts, manifest.operatingRole.applicationKey);
   const sourceRoleId = await roleSourceId(
     facts,
     manifest.operatingRole.applicationKey,
@@ -346,23 +365,50 @@ export const installAndGrant = async (
       }),
   });
   const session: IdentitySession = nominatedOwnerSession(facts.stewardIdentityId);
-  const result = await composition.establish(
-    session,
-    firstOwnerApplicationEntryRequestSchema.parse({
-      organizationId: facts.system.organizationId,
-      applicationRootId: operating.rootId,
-      applicationReleaseRevision: operating.releaseRevision,
-      stewardOrganizationAccountId: facts.stewardOrganizationAccountId,
-      provisioningReceiptId: facts.provisioningReceiptId,
-      setupRevision: 1,
-      setupActorId: manifest.operator.systemActorId,
-      correlationId: manifest.setupCorrelationId,
-      operatingRoleId: manifest.operatingRole.roleId,
-      operatingRoleSourceId: sourceRoleId,
-      roleAssignmentId: manifest.operatingRole.roleAssignmentId,
-    }),
-  );
+  const result = await composition.establish(session, firstOwnerRequest(facts, sourceRoleId));
   log(`installed ${manifest.operatingRole.applicationKey}: ${result.installation.outcome}`);
   await grantAdditionalRoles(facts, log);
+  facts.state.setupCompleted = true;
+  facts.state.save();
   return result.rights;
+};
+
+/**
+ * A re-run after a completed setup does nothing but call the Access-owned initial operating-role
+ * grant again with the original provisioning receipt and the same frozen manifest, so Access
+ * replays its stored result. The manifest is rebuilt exactly as the App first-owner composition
+ * built it: the evidence is deterministic for the unchanged release and registration, and Access
+ * refuses anything that differs from what it stored.
+ */
+export const replayOperatingRoleGrant = async (
+  facts: InstallFacts,
+): Promise<InitialOperatingRoleGrantResult> => {
+  const { manifest } = facts;
+  const sourceRoleId = await roleSourceId(
+    facts,
+    manifest.operatingRole.applicationKey,
+    manifest.operatingRole.roleKey,
+  );
+  const request = firstOwnerRequest(facts, sourceRoleId);
+  const operatingRoleChangeEvidence = await prepareOperatingRoleEvidence(facts, {
+    applicationKey: manifest.operatingRole.applicationKey,
+    applicationRootId: request.applicationRootId,
+    operatingRoleId: request.operatingRoleId,
+    operatingRoleSourceId: request.operatingRoleSourceId,
+  });
+  return createInitialOperatingRoleGrantService().establish(
+    initialOperatingRoleGrantManifestSchema.parse({
+      manifestVersion: "1.0.0",
+      organizationId: request.organizationId,
+      stewardOrganizationAccountId: request.stewardOrganizationAccountId,
+      applicationRootId: request.applicationRootId,
+      applicationReleaseRevision: request.applicationReleaseRevision,
+      provisioningReceiptId: request.provisioningReceiptId,
+      setupRevision: request.setupRevision,
+      setupActorId: request.setupActorId,
+      correlationId: request.correlationId,
+      roleAssignmentId: request.roleAssignmentId,
+      operatingRoleChangeEvidence,
+    }),
+  );
 };

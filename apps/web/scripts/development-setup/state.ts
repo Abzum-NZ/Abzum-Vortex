@@ -23,6 +23,8 @@ export type SetupState = {
   installerRoleGranted: boolean;
   lifecyclePolicies: Record<string, boolean>;
   rolesGranted: Record<string, boolean>;
+  /** Every step, including the initial operating-role grant, completed once for this organisation. */
+  setupCompleted: boolean;
   save(): void;
 };
 
@@ -45,6 +47,7 @@ export const loadSetupState = (organizationId: string): SetupState => {
   let installerRoleGranted = false;
   let lifecyclePolicies: Record<string, boolean> = {};
   let rolesGranted: Record<string, boolean> = {};
+  let setupCompleted = false;
   try {
     const stored = JSON.parse(readFileSync(stateFile(), "utf8")) as {
       organizationId?: unknown;
@@ -53,6 +56,7 @@ export const loadSetupState = (organizationId: string): SetupState => {
       installerRoleGranted?: boolean;
       lifecyclePolicies?: Record<string, boolean>;
       rolesGranted?: Record<string, boolean>;
+      setupCompleted?: boolean;
     };
     if (stored.organizationId === organizationId) {
       releases = stored.releases ?? {};
@@ -60,6 +64,7 @@ export const loadSetupState = (organizationId: string): SetupState => {
       installerRoleGranted = stored.installerRoleGranted === true;
       lifecyclePolicies = stored.lifecyclePolicies ?? {};
       rolesGranted = stored.rolesGranted ?? {};
+      setupCompleted = stored.setupCompleted === true;
     }
   } catch {
     // No usable state: start empty.
@@ -71,6 +76,7 @@ export const loadSetupState = (organizationId: string): SetupState => {
     installerRoleGranted,
     lifecyclePolicies,
     rolesGranted,
+    setupCompleted,
     save() {
       mkdirSync(dirname(stateFile()), { recursive: true });
       writeFileSync(
@@ -83,6 +89,7 @@ export const loadSetupState = (organizationId: string): SetupState => {
             installerRoleGranted: state.installerRoleGranted,
             lifecyclePolicies: state.lifecyclePolicies,
             rolesGranted: state.rolesGranted,
+            setupCompleted: state.setupCompleted,
           },
           null,
           2,
