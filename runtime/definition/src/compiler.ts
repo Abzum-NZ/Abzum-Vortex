@@ -4813,6 +4813,15 @@ function v2SpecialSourceTargets(
           ...sourcePath.slice(3).map((segment) => camelCase(String(segment))),
         ],
       ];
+    if (sourcePath[2] === "selection")
+      return [
+        [
+          "content",
+          "theme",
+          "selection",
+          ...sourcePath.slice(3).map((segment) => camelCase(String(segment))),
+        ],
+      ];
     if (sourcePath[2] === "token_overrides" && typeof sourcePath[3] === "string")
       return v2ThemeValueTargets(
         sourcePath,

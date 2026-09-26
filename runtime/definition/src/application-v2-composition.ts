@@ -39,8 +39,10 @@ import type {
 } from "./application-v2-resolution";
 import {
   createThemeLocation,
+  resolveThemeSelection,
   validateApplicationTheme,
   type ThemeResolutionOptions,
+  type ThemeTokenValueV2,
 } from "@vortex/theme";
 
 type SourceSlot = {
@@ -570,20 +572,36 @@ export const materialiseApplicationCompositionV2 = (
   )
     reject("vortex.definition.application_dependency_manifest");
 
-  const tokens: Record<string, unknown> = { ...snapshot.platformTheme.tokens };
+  const canonicalOverrides: Record<string, ThemeTokenValueV2> = {};
   for (const [key, authored] of Object.entries(source.body.theme.token_overrides)) {
-    const existing = tokens[key] as Record<string, unknown> | undefined;
-    const compiled = canonicalThemeValue(authored as unknown as Record<string, unknown>) as Record<
-      string,
-      unknown
-    >;
-    if (existing === undefined || existing.kind !== compiled.kind)
-      reject("vortex.definition.application_block_settings", "broken_reference");
-    tokens[key] = inheritColorRole(existing, compiled);
+    canonicalOverrides[key] = canonicalThemeValue(
+      authored as unknown as Record<string, unknown>,
+    ) as ThemeTokenValueV2;
+  }
+  const selectionResolution = resolveThemeSelection({
+    baseTokens: snapshot.platformTheme.tokens,
+    ...(source.body.theme.selection === undefined
+      ? {}
+      : { selection: source.body.theme.selection }),
+    overrides: canonicalOverrides,
+    options: { documentKey: source.key },
+  });
+  if (!selectionResolution.valid) {
+    const first = selectionResolution.failures[0];
+    reject(
+      first !== undefined && isDefinitionCompilerRefusalCode(first.ruleCode)
+        ? first.ruleCode
+        : "vortex.definition.application_block_settings",
+      first?.family ?? "invalid_value",
+      first?.location,
+    );
   }
   const theme = applicationThemeV2Schema.parse({
     base: canonicalThemeDependency(source.body.theme.base),
-    tokens,
+    // A compiled release always records the effective selection, including the platform default
+    // when the authored theme named none, so a consumer reads the exact style and dimensions.
+    selection: selectionResolution.resolved.selection,
+    tokens: selectionResolution.resolved.tokens,
   });
 
   // The exact pinned platform theme release is the trusted catalogue of approved,
@@ -741,6 +759,7 @@ export const materialiseApplicationCompositionV2 = (
         validateTheme(
           applicationThemeV2Schema.parse({
             base: theme.base,
+            ...(theme.selection === undefined ? {} : { selection: theme.selection }),
             tokens: { ...theme.tokens, ...effectiveOverrides },
           }),
           source.key,

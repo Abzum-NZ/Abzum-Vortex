@@ -1,4 +1,5 @@
 import {
+  DEFAULT_APPLICATION_THEME_SELECTION,
   DEFAULT_PLATFORM_THEME_RELEASE_V2,
   PLATFORM_BLOCK_RELEASES,
   applicationSourceDocumentV2Schema,
@@ -54,6 +55,7 @@ const theme = {
     content_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE_V2.contentFingerprint,
     catalogue_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE_V2.catalogueFingerprint,
   },
+  selection: DEFAULT_APPLICATION_THEME_SELECTION,
   token_overrides: {},
 };
 

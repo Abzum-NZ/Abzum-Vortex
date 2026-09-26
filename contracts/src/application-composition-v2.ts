@@ -1750,18 +1750,61 @@ export const sourceExactPlatformThemeDependencyV2Schema = z
   })
   .strict();
 
-/** Canonical V2 themes contain the complete resolved application token set. */
+/**
+ * One option id from the generated shadcn/create theme catalogue (contracts/src/catalogue/
+ * shadcn-create-theme-catalogue.generated.json, imported by the #1274 importer). Option ids are
+ * lowercase kebab-case, for example `default-translucent`, and are matched against the catalogue
+ * exactly.
+ */
+export const themeCatalogueOptionIdSchema = z
+  .string()
+  .min(1)
+  .max(120)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+
+/**
+ * One catalogue option id per shadcn/create dimension that #1274 publishes. A selection is
+ * strict: every dimension appears exactly once and no other key is admitted. Runtime/theme
+ * resolves the selected options into the complete token set and the style id, refusing an unknown
+ * id, a refused option or a missing dimension. Fonts and icons are separate dimensions owned by
+ * #1277 and #1278 and are absent until those releases land.
+ */
+export const applicationThemeSelectionV2Schema = z
+  .object({
+    style: themeCatalogueOptionIdSchema,
+    baseColor: themeCatalogueOptionIdSchema,
+    theme: themeCatalogueOptionIdSchema,
+    chartColor: themeCatalogueOptionIdSchema,
+    radius: themeCatalogueOptionIdSchema,
+    menuColor: themeCatalogueOptionIdSchema,
+    menuAccent: themeCatalogueOptionIdSchema,
+  })
+  .strict();
+export type ApplicationThemeSelectionV2 = z.infer<typeof applicationThemeSelectionV2Schema>;
+
+/**
+ * Canonical V2 themes contain the complete resolved application token set plus the catalogue
+ * selection they were materialised from. The selection is optional so a legacy release that only
+ * pinned a platform theme release still resolves (its tokens are the complete token set); a
+ * compiled release always records the selection its tokens came from.
+ */
 export const applicationThemeV2Schema = z
   .object({
     base: exactPlatformThemeDependencyV2Schema,
+    selection: applicationThemeSelectionV2Schema.optional(),
     tokens: z.record(builderKeySchema, themeTokenValueV2Schema),
   })
   .strict();
 
-/** Authored V2 themes may omit overrides; compilation materialises the full token set. */
+/**
+ * Authored V2 themes carry the catalogue selection and may omit overrides; compilation resolves
+ * the selection into the full token set. An absent selection means the platform default
+ * (nova, neutral base colour, neutral theme) so an older draft keeps resolving.
+ */
 export const sourceApplicationThemeV2Schema = z
   .object({
     base: sourceExactPlatformThemeDependencyV2Schema,
+    selection: applicationThemeSelectionV2Schema.optional(),
     token_overrides: z.record(builderKeySchema, sourceThemeTokenValueV2Schema),
   })
   .strict();
