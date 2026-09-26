@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { createThemeRootProps, resolveVortexStyle } from "@vortex/ui";
+import {
+  createThemeRootProps,
+  createVortexStyleRootProps,
+  resolveVortexStyleSelection,
+} from "@vortex/ui";
 import "@vortex/ui/styles/globals.css";
 import "./globals.css";
 
@@ -16,12 +20,16 @@ export const metadata: Metadata = {
  */
 const PLATFORM_THEME_STYLE = createThemeRootProps(undefined, "system").style;
 
-/** The shadcn visual style of the platform theme; themes carry no style yet, so this is the default. */
-const PLATFORM_VORTEX_STYLE = resolveVortexStyle();
+/**
+ * The platform root's style attributes. No organisation is known here, so they resolve to the
+ * platform defaults; a runtime page or preview canvas carries the attributes its own resolved
+ * theme selected, and links that style's stylesheet, inside this document.
+ */
+const PLATFORM_VORTEX_STYLE = createVortexStyleRootProps(resolveVortexStyleSelection());
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" style={PLATFORM_THEME_STYLE} data-vortex-style={PLATFORM_VORTEX_STYLE}>
+    <html lang="en" style={PLATFORM_THEME_STYLE} {...PLATFORM_VORTEX_STYLE}>
       <body>{children}</body>
     </html>
   );
