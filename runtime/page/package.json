@@ -14,6 +14,7 @@
   "dependencies": {
     "@vortex/access": "workspace:*",
     "@vortex/app": "workspace:*",
+    "@vortex/connection": "workspace:*",
     "@vortex/contracts": "workspace:*",
     "@vortex/db": "workspace:*",
     "@vortex/query": "workspace:*",
