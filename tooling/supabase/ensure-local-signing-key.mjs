@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const workspaceRoot = path.resolve(import.meta.dirname, "../..");
-const keyPath = path.join(workspaceRoot, "supabase", ".temp", "signing-keys.json");
+const localKeyPath = path.join(workspaceRoot, "supabase", ".temp", "signing-keys.json");
 const cliPath = path.join(workspaceRoot, "node_modules", "supabase", "dist", "supabase.js");
 
 const parseKey = (source) => {
@@ -44,6 +44,18 @@ const validateKeySet = (source) => {
   parseKey(JSON.stringify(keys[0]));
 };
 
+const readValidKeySet = async (candidatePath) => {
+  try {
+    await access(candidatePath, constants.R_OK);
+  } catch (error) {
+    if (error?.code === "ENOENT") return undefined;
+    throw error;
+  }
+  const source = await readFile(candidatePath, "utf8");
+  validateKeySet(source);
+  return source;
+};
+
 const generateKey = () => {
   const generated = spawnSync(
     process.execPath,
@@ -60,29 +72,84 @@ const generateKey = () => {
   return `${JSON.stringify([key], null, 2)}\n`;
 };
 
-export const ensureLocalSigningKey = async () => {
-  await mkdir(path.dirname(keyPath), { recursive: true });
+/**
+ * Resolves the one signing-key file shared by every worktree of this Git checkout. The Local
+ * Supabase stack is shared across worktrees, so every worktree must start Auth with the same key
+ * id; the canonical copy lives in the main checkout's ignored `supabase/.temp` directory. Returns
+ * `undefined` when this is the main checkout itself, or when Git is unavailable, so the caller
+ * falls back to the worktree-local file.
+ */
+const resolveSharedKeyPath = () => {
+  const result = spawnSync(
+    "git",
+    ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    {
+      cwd: workspaceRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    },
+  );
+  if (result.status !== 0 || typeof result.stdout !== "string") return undefined;
+  const commonDirectory = result.stdout.trim();
+  // Only a non-bare main checkout keeps its common directory as `<checkout>/.git`; any other
+  // layout has no main working tree to share a key from.
+  if (commonDirectory.length === 0 || path.basename(commonDirectory) !== ".git") return undefined;
+  const mainCheckout = path.dirname(path.resolve(commonDirectory));
+  const comparable = (candidate) =>
+    process.platform === "win32" ? candidate.toLowerCase() : candidate;
+  if (comparable(mainCheckout) === comparable(workspaceRoot)) return undefined;
+  return path.join(mainCheckout, "supabase", ".temp", "signing-keys.json");
+};
 
+/**
+ * Ensures the canonical file holds a valid key set. An existing valid file always wins, so a key
+ * another worktree created first is adopted instead of rotated; otherwise the candidate is written
+ * with an exclusive create so concurrent worktrees cannot both write. The key set actually stored
+ * is returned.
+ */
+const ensureSharedKeySet = async (canonicalPath, candidate) => {
+  await mkdir(path.dirname(canonicalPath), { recursive: true });
+  const existing = await readValidKeySet(canonicalPath);
+  if (existing !== undefined) return existing;
   try {
-    await access(keyPath, constants.R_OK);
-    validateKeySet(await readFile(keyPath, "utf8"));
-    return;
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
-
-  const generated = generateKey();
-  try {
-    await writeFile(keyPath, generated, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    await writeFile(canonicalPath, candidate, { encoding: "utf8", flag: "wx", mode: 0o600 });
   } catch (error) {
     if (error?.code !== "EEXIST") throw error;
   }
-  validateKeySet(await readFile(keyPath, "utf8"));
+  const stored = await readValidKeySet(canonicalPath);
+  if (stored === undefined)
+    throw new Error("The shared Local Supabase signing-key file could not be created");
+  return stored;
+};
+
+/**
+ * Prepares the Local Supabase ES256 signing key so it is generated once and reused across
+ * worktrees and database resets. The shared copy is resolved from the main checkout and copied into
+ * this worktree's `supabase/.temp` file that `supabase/config.toml` reads, so a reset in any
+ * worktree keeps the same key id. The key is never committed.
+ */
+export const ensureLocalSigningKey = async () => {
+  const sharedKeyPath = resolveSharedKeyPath();
+  const localKeySet = await readValidKeySet(localKeyPath);
+  const sharedKeySet =
+    sharedKeyPath === undefined ? undefined : await readValidKeySet(sharedKeyPath);
+
+  let keySet = sharedKeySet ?? localKeySet;
+  if (keySet === undefined) keySet = generateKey();
+
+  if (sharedKeyPath !== undefined)
+    keySet = await ensureSharedKeySet(sharedKeyPath, keySet);
+
+  if (localKeySet !== keySet) {
+    await mkdir(path.dirname(localKeyPath), { recursive: true });
+    await writeFile(localKeyPath, keySet, { encoding: "utf8", mode: 0o600 });
+  }
+  validateKeySet(await readFile(localKeyPath, "utf8"));
 };
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   await ensureLocalSigningKey();
   process.stdout.write(
-    "Local Supabase ES256 signing key is ready in the ignored .temp directory.\n",
+    "Local Supabase ES256 signing key is ready and shared across this checkout's worktrees in the ignored .temp directory.\n",
   );
 }

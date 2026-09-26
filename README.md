@@ -109,6 +109,32 @@ An interrupted run resumes: provisioning replays by its fixed key and the steps 
 
 Existing developer utilities (`pnpm verify`, `pnpm fixtures`, `pnpm db:verify`) remain in the workspace for local use. They are not fleet completion requirements, and the current development workflow does not run them or treat their output as acceptance.
 
+### Local environment variables
+
+`pnpm dev` reads server-only values from `apps/web/.env.local`: copy [apps/web/.env.example](apps/web/.env.example) and fill in local values only; never commit a real value. `pnpm db:start` prints the local API URL and publishable key. `pnpm setup:local` does not read that file: run it in a shell that exports the same `VORTEX_IDENTITY_AUTHORITY_ID`, and it refuses any environment or database that is not the local one.
+
+| Variable | Local value | Purpose |
+| --- | --- | --- |
+| `VORTEX_ENVIRONMENT` | `local` | Selects local behaviour. The local site URL must then be `http` on loopback; the development setup refuses any other value. |
+| `VORTEX_SITE_URL` | `http://127.0.0.1:3000` | The configured site URL. Identity-session cookies and auth redirects are built from it. |
+| `VORTEX_SUPABASE_URL` | `http://127.0.0.1:54321` | The local Supabase API and Auth endpoint. |
+| `VORTEX_SUPABASE_PUBLISHABLE_KEY` | `<local publishable key from supabase status>` | The public key the browser sign-in journey uses. |
+| `VORTEX_IDENTITY_AUTHORITY_ID` | `<uuid>` | Pins the local identity authority. Use the same value for `pnpm dev` and `pnpm setup:local`. |
+| `VORTEX_QUERY_CONTINUATION_KEY` | `<base64 of exactly 32 random bytes>` | Makes Query continuation tokens opaque; the generation command is in the env example. |
+| `VORTEX_RUNTIME_DATABASE_URL` | `postgresql://vortex_runtime:vortex-runtime-local-only@127.0.0.1:54322/postgres` | The restricted runtime connection to the local database. Required by `pnpm dev`; `pnpm setup:local` defaults to this address when unset. |
+| `VORTEX_RUNTIME_DATABASE_POOL_SIZE` | `<1-20>` | Optional runtime connection-pool cap; 5 applies when unset. |
+| `VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT` | not set locally | Trusted root certificate for a hosted runtime connection; not needed for the local loopback database. |
+
+The custom-component and file pages read additional variables and report a configuration error until they are set:
+
+| Variable | Purpose |
+| --- | --- |
+| `VORTEX_COMPONENT_BUNDLE_ORIGIN` | The dedicated origin the custom-component sandbox is served from. |
+| `VORTEX_FILE_STORAGE_SIGNING_KEY` | The private key the file routes sign file-storage tokens with. |
+| `VORTEX_FILE_STORAGE_SIGNING_KEY_ID` | The key id published in those signed file-storage tokens. |
+
+`VORTEX_CLUSTER_ID` and `VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID` are not needed locally: `pnpm setup:local` takes the configured operator from its manifest. `VORTEX_APPLICATION_KESTRA_URL` and the flow secret `VORTEX_WORKFLOW_CALLBACK_KEY` belong to the application Kestra instance and are not read by `pnpm dev` or `pnpm setup:local`.
+
 ## Delivery and contribution
 
 - Work from a GitHub issue with clear scope, dependencies and functional acceptance. Keep its description and roadmap status current.
