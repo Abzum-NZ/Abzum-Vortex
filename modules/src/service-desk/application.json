@@ -2550,7 +2550,7 @@
     },
     {
         "id": "event_sd_open_service_level",
-        "key": "vortex.app.events.vortex_app_service_desk_open_service_level",
+        "key": "vortex.app.events.vortex_app_service_desk_open_sla",
         "record_type": "vortex.service_desk.sla:service_level",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
