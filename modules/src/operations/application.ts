@@ -29,17 +29,30 @@ const incidentRecordType = "vortex.operations.incidents:incident";
 /** The open-incidents query the Incidents module exposes, by module key and query key. */
 const openIncidentsQuery = "vortex.operations.incidents:operations_open_incidents";
 const createAction = "vortex.operations.incidents.incident.create";
+/**
+ * Page and placement access permissions. The page access decision matches only application
+ * permissions, so a page, navigation item or placement view gate names one; the record permissions
+ * behind it (incident.read, incident.create and each named action) still decide what its data,
+ * forms and actions allow. A role holds each gate exactly when it holds the matching record
+ * permission.
+ */
+const readIncidentsPage = "application.operations.incident.read";
+const createIncidentPage = "application.operations.incident.create";
 const attachAction = "vortex.operations.incidents.incident.attach";
+const attachIncidentView = "application.operations.incident.attach";
 const incidentActionEventId = "event_operations_incident_action";
 
 /**
  * The bounded operator actions on an open incident. Each is one detail-page button, shown only to
- * the holder of its own named-action permission, whose action event starts one flow of one Call
- * protected operation task on that named action.
+ * the holder of its own view permission (held exactly by holders of the named-action permission),
+ * whose action event starts one flow of one Call protected operation task on that named action.
  */
 const incidentOperations = [
   {
     action: "vortex.operations.incidents.incident.acknowledge",
+    viewPermission: "application.operations.incident.acknowledge",
+    viewPermissionAlias: "app_permission_operations_incident_acknowledge",
+    viewNamedAction: "incident_acknowledge",
     button: "button_operations_incident_acknowledge",
     flow: "operations_acknowledge_incident",
     name: "Acknowledge incident",
@@ -50,6 +63,9 @@ const incidentOperations = [
   },
   {
     action: "vortex.operations.incidents.incident.escalate",
+    viewPermission: "application.operations.incident.escalate",
+    viewPermissionAlias: "app_permission_operations_incident_escalate",
+    viewNamedAction: "incident_escalate",
     button: "button_operations_incident_escalate",
     flow: "operations_escalate_incident",
     name: "Escalate incident",
@@ -60,6 +76,9 @@ const incidentOperations = [
   },
   {
     action: "vortex.operations.incidents.incident.resolve",
+    viewPermission: "application.operations.incident.resolve",
+    viewPermissionAlias: "app_permission_operations_incident_resolve",
+    viewNamedAction: "incident_resolve",
     button: "button_operations_incident_resolve",
     flow: "operations_resolve_incident",
     name: "Resolve incident",
@@ -216,7 +235,7 @@ const pages = [
     name: "Incidents",
     type: "list",
     record_type: incidentRecordType,
-    permission: "vortex.operations.incidents.incident.read",
+    permission: readIncidentsPage,
     query: openIncidentsQuery,
     composition: {
       shell_kind: "default",
@@ -234,7 +253,7 @@ const pages = [
     name: "Incident",
     type: "detail",
     record_type: incidentRecordType,
-    permission: "vortex.operations.incidents.incident.read",
+    permission: readIncidentsPage,
     composition: {
       shell_kind: "default",
       main: slot({
@@ -257,7 +276,7 @@ const pages = [
             ),
             submit_operations_incident_attach: submitButton("Attach signal"),
           }),
-          view_permission: attachAction,
+          view_permission: attachIncidentView,
         },
         // The bounded operator actions run on the open incident as their subject. Each button is
         // shown only to its own permission holder, and every action refuses a resolved or closed
@@ -265,7 +284,7 @@ const pages = [
         ...Object.fromEntries(
           incidentOperations.map((operation) => [
             operation.button,
-            actionButton(operation.label, operation.variant, operation.action),
+            actionButton(operation.label, operation.variant, operation.viewPermission),
           ]),
         ),
       }),
@@ -277,7 +296,7 @@ const pages = [
     name: "Create incident",
     type: "form",
     record_type: incidentRecordType,
-    permission: createAction,
+    permission: createIncidentPage,
     composition: {
       shell_kind: "default",
       main: slot({
@@ -389,6 +408,42 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
           named_action: "open",
           administrative: false,
         },
+        {
+          id: "app_permission_operations_incident_read",
+          key: readIncidentsPage,
+          label: "Open incident pages",
+          description: "Allows opening the incident list and incident pages.",
+          action_kind: "named",
+          named_action: "incident_read",
+          administrative: false,
+        },
+        {
+          id: "app_permission_operations_incident_create",
+          key: createIncidentPage,
+          label: "Open incident creation",
+          description: "Allows opening the create incident page.",
+          action_kind: "named",
+          named_action: "incident_create",
+          administrative: false,
+        },
+        {
+          id: "app_permission_operations_incident_attach",
+          key: attachIncidentView,
+          label: "See signal attachment",
+          description: "Allows seeing the attach signal form on an incident page.",
+          action_kind: "named",
+          named_action: "incident_attach",
+          administrative: false,
+        },
+        ...incidentOperations.map((operation) => ({
+          id: operation.viewPermissionAlias,
+          key: operation.viewPermission,
+          label: `See the ${operation.label} action`,
+          description: `Allows seeing the ${operation.label} button on an incident page.`,
+          action_kind: "named" as const,
+          named_action: operation.viewNamedAction,
+          administrative: false,
+        })),
       ],
       roles: [
         {
@@ -399,13 +454,19 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
           permissions: [
             "application.operations.open",
             createAction,
+            createIncidentPage,
             "vortex.operations.incidents.incident.read",
+            readIncidentsPage,
             "vortex.operations.incidents.incident.update",
             "vortex.operations.incidents.incident.soft_delete",
             "vortex.operations.incidents.incident.restore",
             "vortex.operations.incidents.incident.export",
             attachAction,
-            ...incidentOperations.map((operation) => operation.action),
+            attachIncidentView,
+            ...incidentOperations.flatMap((operation) => [
+              operation.action,
+              operation.viewPermission,
+            ]),
           ],
         },
       ],
@@ -427,14 +488,14 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
               type: "page",
               label: "Incidents",
               page: "operations_incidents",
-              permission: "vortex.operations.incidents.incident.read",
+              permission: readIncidentsPage,
             },
             {
               id: "nav_operations_new_incident",
               type: "page",
               label: "Create incident",
               page: "operations_new_incident",
-              permission: createAction,
+              permission: createIncidentPage,
             },
           ],
         },
