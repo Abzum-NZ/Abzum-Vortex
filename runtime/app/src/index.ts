@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createComponentContextResolver } from "./component-context-resolver";
 import { createDatabaseFlowStores } from "./flow-continuation-store";
 import { createFlowOrchestrator } from "./flow-orchestrator";
 import { createFormContinuationService } from "./form-continuation";
@@ -49,6 +50,29 @@ export {
   type InstalledRuntimeContextErrorCode,
   type InstalledRuntimeContextLoader,
 } from "./installed-runtime-context";
+
+export {
+  componentContextMismatchCodes,
+  componentContextSchema,
+  componentFlowInputRequestSchema,
+  componentRecordReferenceSchema,
+  componentRecordSelectionSchema,
+  createComponentContextResolver,
+  resolveComponentFlowInputs,
+  resolveComponentQueryInputs,
+  type ComponentContext,
+  type ComponentContextMismatch,
+  type ComponentContextMismatchCode,
+  type ComponentContextResolver,
+  type ComponentFlowInputRequest,
+  type ComponentFlowInputsResolution,
+  type ComponentPlacement,
+  type ComponentQueryInputsResolution,
+  type ComponentRecordReference,
+  type ComponentRecordSelection,
+  type ResolvedComponentFlowInputs,
+  type ResolvedComponentQueryInputs,
+} from "./component-context-resolver";
 
 export {
   applicationInstallationActivationRequestSchema,
@@ -144,6 +168,7 @@ export const AppService = Object.freeze({
   readOpenOperationsAlertSignals,
   createApplicationInstallationCoordinator,
   createInstalledRuntimeContextLoader,
+  createComponentContextResolver,
   createIdentityDisablementCoordinator,
   createProtectedOperationExecutor,
   createFlowOrchestrator,
