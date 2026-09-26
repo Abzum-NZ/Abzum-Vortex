@@ -63,11 +63,10 @@ export const developmentPublicationCatalogue: ImmutableDefinitionPublicationCata
 };
 
 /**
- * Every shipped module source. A module is published, and from then on installed for the
- * organisation, only because an application binds it: `modulesInDependencyOrder` walks each
- * application's own module bindings, so a module that no shipped application binds is never
- * published. The System Directory Module is bound by the administration applications, so it
- * reaches every new organisation through their ordinary activation.
+ * Every module source available to the development setup. `modulesInDependencyOrder` publishes
+ * only the modules reached through shipped application bindings and their dependencies. The
+ * System Directory source is available for the administration bindings delivered by #1356;
+ * until those bindings exist, the setup does not publish or install this module.
  */
 const moduleSources = [
   iamModule,
