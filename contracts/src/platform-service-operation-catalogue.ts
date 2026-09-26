@@ -89,6 +89,7 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   suspend_organization_account: entry(sources.suspend_organization_account),
   reactivate_organization_account: entry(sources.reactivate_organization_account),
   close_organization_account: entry(sources.close_organization_account),
+  update_own_profile: entry(sources.update_own_profile),
   create_organization_invitation: entry(sources.create_organization_invitation),
   revoke_organization_invitation: entry(sources.revoke_organization_invitation),
 });

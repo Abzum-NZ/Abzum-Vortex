@@ -11,6 +11,7 @@ import {
   NUMBER_INPUT_BLOCK_RELEASE,
   RICH_TEXT_INPUT_BLOCK_RELEASE,
   TABS_BLOCK_RELEASE,
+  TABS_BLOCK_RELEASE_2_0_0,
   TEXT_INPUT_BLOCK_RELEASE,
   VALIDATION_MESSAGE_BLOCK_RELEASE,
 } from "@vortex/contracts";
@@ -87,6 +88,7 @@ export {
   NUMBER_INPUT_BLOCK_RELEASE,
   RICH_TEXT_INPUT_BLOCK_RELEASE,
   TABS_BLOCK_RELEASE,
+  TABS_BLOCK_RELEASE_2_0_0,
   TEXT_INPUT_BLOCK_RELEASE,
   VALIDATION_MESSAGE_BLOCK_RELEASE,
 };
@@ -354,6 +356,11 @@ export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
     }),
     Object.freeze({
       metadata: TABS_BLOCK_RELEASE,
+      render: Tabs,
+      parsePayload: controlPayloadParser<TabsPayload>(parseTabsPayload),
+    }),
+    Object.freeze({
+      metadata: TABS_BLOCK_RELEASE_2_0_0,
       render: Tabs,
       parsePayload: controlPayloadParser<TabsPayload>(parseTabsPayload),
     }),
