@@ -3,7 +3,9 @@ import "server-only";
 import {
   applicationBoundReleaseSetCommandSchema,
   applicationBoundReleaseSetResultSchema,
+  applicationRootIdSchema,
   correlationIdSchema,
+  revisionSchema,
   sessionContextSchema,
   systemApplicationBoundReleaseSetCommandSchema,
   systemApplicationBoundReleaseSetResultSchema,
@@ -249,3 +251,60 @@ export const createDatabaseSystemApplicationBoundReleaseSetService = (
     createDatabaseSystemApplicationBoundReleaseSetRepository(transaction),
     createImmutableDefinitionPublicationCatalogue(catalogueDefinition),
   );
+
+const applicationReleaseAdoptionReleaseSetCommandSchema = z
+  .object({
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: revisionSchema.max(Number.MAX_SAFE_INTEGER),
+  })
+  .strict();
+
+/**
+ * The installation-management release-set read (#610): the same exact bound Application and Module
+ * release set the coordinator's system reader returns, but read by root and revision through the
+ * governed human read and gated by platform.organization.applications.manage. It is the read the
+ * deliberate release-adoption path uses instead of a server-minted system context.
+ */
+export const createDatabaseApplicationReleaseAdoptionReleaseSetService = (
+  catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
+  transaction: RequestDatabaseTransaction,
+) => {
+  const catalogue = createImmutableDefinitionPublicationCatalogue(catalogueDefinition);
+  return Object.freeze({
+    async read(commandCandidate: unknown): Promise<SystemApplicationBoundReleaseSetResult> {
+      const command = applicationReleaseAdoptionReleaseSetCommandSchema.safeParse(commandCandidate);
+      if (!command.success)
+        throw new DefinitionConsumerReadError("INVALID_DEFINITION_READ_COMMAND");
+
+      let candidate: unknown | undefined;
+      try {
+        const rows = await transaction.query<BoundReleaseSetRow>`
+          select vortex_definition.read_application_release_adoption_release_set(
+            ${command.data.applicationRootId}::uuid,
+            ${command.data.applicationReleaseRevision}::bigint
+          ) as bound_release_set
+        `;
+        if (rows.length !== 1) throw new Error("APPLICATION_BOUND_RELEASE_SET_STORAGE_INVALID");
+        candidate = rows[0]!.bound_release_set === null ? undefined : rows[0]!.bound_release_set;
+      } catch (error) {
+        throw new DefinitionConsumerReadError(
+          isDefinitionContextFailure(error)
+            ? "DEFINITION_CONTEXT_REFUSED"
+            : "DEFINITION_READ_FAILED",
+        );
+      }
+      if (candidate === undefined)
+        throw new DefinitionConsumerReadError("DEFINITION_RELEASE_NOT_FOUND");
+
+      return (await projectBoundReleaseSet(
+        candidate,
+        {
+          applicationReleaseRevision: command.data.applicationReleaseRevision,
+          applicationRootId: command.data.applicationRootId,
+          allowEmptyModules: true,
+        },
+        catalogue,
+      )) as SystemApplicationBoundReleaseSetResult;
+    },
+  });
+};

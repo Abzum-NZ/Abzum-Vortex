@@ -18,7 +18,7 @@ import {
   type SystemApplicationBoundReleaseSetResult,
 } from "@vortex/contracts";
 import {
-  createDatabaseApplicationBoundReleaseSetService,
+  createDatabaseApplicationReleaseAdoptionReleaseSetService,
   createDatabaseApplicationReleaseAdoptionTargetService,
   type ApplicationReleaseAdoptionTarget,
 } from "@vortex/definition";
@@ -57,7 +57,11 @@ const humanDefinitionAccess = (): HumanInstallationDefinitionAccess => ({
       session,
       { organizationId: target.organizationId, applicationRootId: target.applicationRootId },
       (transaction) =>
-        createDatabaseApplicationBoundReleaseSetService(definitionCatalogue, transaction).read({
+        createDatabaseApplicationReleaseAdoptionReleaseSetService(
+          definitionCatalogue,
+          transaction,
+        ).read({
+          applicationRootId: target.applicationRootId,
           applicationReleaseRevision: target.applicationReleaseRevision,
         }),
     );
