@@ -4,7 +4,7 @@ create or replace function vortex_access.resolve_record_field_bounds_internal(
 returns jsonb
 language plpgsql
 stable
-security invoker
+security definer
 set search_path = ''
 as $function$
 declare
@@ -143,7 +143,10 @@ $function$;
 
 revoke execute on function vortex_access.resolve_record_field_bounds_internal(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_module_owner, vortex_record_owner, vortex_record_adapter;
+  vortex_module_owner, vortex_record_owner;
+
+grant execute on function vortex_access.resolve_record_field_bounds_internal(jsonb)
+  to vortex_record_adapter;
 
 comment on function vortex_access.resolve_record_field_bounds_internal(jsonb) is
   'Private field-bounds resolution over one allowed exact-record access decision; looks each contribution''s field policy up from the live permission catalogue itself, never from a caller-supplied declaration.';
