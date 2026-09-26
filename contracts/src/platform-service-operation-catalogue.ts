@@ -76,6 +76,7 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   remove_group_membership: entry(sources.remove_group_membership),
   revise_role_metadata: entry(sources.revise_role_metadata),
   retire_role: entry(sources.retire_role),
+  prepare_role_change_evidence: entry(sources.prepare_role_change_evidence),
   create_custom_role: entry(sources.create_custom_role),
   create_custom_role_from_template: entry(sources.create_custom_role_from_template),
   accept_application_role_template: entry(sources.accept_application_role_template),

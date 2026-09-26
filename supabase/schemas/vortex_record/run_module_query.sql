@@ -76,7 +76,6 @@ declare
   scan_sql text;
   access_plan record;
   readable_field_ids text[] := array[]::text[];
-  access_terms text[] := array[]::text[];
   access_sql text;
   scan_record record;
   examined integer := 0;
@@ -749,26 +748,13 @@ begin
     order_by_sql := order_by_sql || ', stored.record_id asc';
   end if;
 
-  -- Access routes with an exact table form narrow the candidate rows here so a
-  -- reader limited to some records still gets full pages from a large table.
-  -- This only removes rows the exact per-row decision below would refuse; every
-  -- row the scan returns still goes through read_record, so it cannot widen a
-  -- result. An unrestricted plan adds no condition.
-  if access_plan.owner_account_id is not null then
-    access_terms := pg_catalog.array_append(
-      access_terms, 'stored.owner_organisation_account_id = $6');
-  end if;
-  if pg_catalog.cardinality(access_plan.owner_group_ids) > 0 then
-    access_terms := pg_catalog.array_append(access_terms, 'stored.owner_group_id = any ($7)');
-  end if;
-  if pg_catalog.cardinality(access_plan.shared_record_ids) > 0 then
-    access_terms := pg_catalog.array_append(access_terms, 'stored.record_id = any ($8)');
-  end if;
-  access_sql := case
-    when not access_plan.restricted then 'true'
-    when pg_catalog.cardinality(access_terms) = 0 then 'false'
-    else pg_catalog.array_to_string(access_terms, ' or ')
-  end;
+  -- The scan narrowing the plan prepared: one predicate that OR-s every
+  -- eligible alternative's exact route test with its saved condition, already
+  -- compiled over the record catalogue's own columns and bound to the
+  -- parameters the scan passes. It only removes rows the exact per-row decision
+  -- below would refuse; every row the scan returns still goes through
+  -- read_record, so it cannot widen a result.
+  access_sql := coalesce(access_plan.access_predicate, 'true');
 
   scan_sql := pg_catalog.format(
     'select stored.record_id,
@@ -811,7 +797,7 @@ begin
     using context_organization_id, context_application_root_id, after_sort_key,
       after_record_id, scan_limit + 1, access_plan.owner_account_id,
       access_plan.owner_group_ids, access_plan.shared_record_ids,
-      filter_parameters
+      filter_parameters, access_plan.access_parameters
   loop
     examined := examined + 1;
     if examined > scan_limit then
@@ -954,4 +940,4 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
   to vortex_request;
 
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb) is
-  'One bounded keyset page of rows readable through read_record for one installed Module query, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows the scan to the caller''s owner, owner-group and direct-share records where those routes have an exact table form, and still decides every returned row through read_record; works out read-time fields, such as a deadline-passed calculation, inside the query at one statement timestamp in the organisation time zone, so no query is refused for freshness.';
+  'One bounded keyset page of rows readable through read_record for one installed Module query, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows the scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; works out read-time fields, such as a deadline-passed calculation, inside the query at one statement timestamp in the organisation time zone, so no query is refused for freshness.';

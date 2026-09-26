@@ -23,10 +23,12 @@ import { persistedRecordFieldValueMatches } from "./field-values";
 
 type CalculationFieldV2 = Extract<ModuleFieldV3, { type: "calculation" }>;
 type CalculationExpressionV2 = CalculationFieldV2["settings"]["expression"];
-type CalculationNumberOperandV2 = Extract<
+/** One value of a numeric calculation: a named field, an exact literal, or a nested operation. */
+type CalculationNumberValueV2 = Extract<
   CalculationExpressionV2,
   { kind: "numeric" }
 >["operands"][number];
+type CalculationNumberLeafV2 = Extract<CalculationNumberValueV2, { source: "field" | "literal" }>;
 
 export type RecordCalculationClockV2 = Readonly<{
   instant: string;
@@ -44,6 +46,7 @@ export type RecordCalculationIssueCode =
   | "execution_ineligible"
   | "invalid_dependency_value"
   | "division_by_zero"
+  | "result_overflow"
   | "money_dimension_mismatch"
   | "non_integral_whole_number"
   | "calculation_cycle"
@@ -72,6 +75,22 @@ type NumericValue = Readonly<{
   value: ExactRational;
   currency?: string;
 }>;
+
+type NumberRefusalCode = Extract<
+  RecordCalculationIssueCode,
+  "division_by_zero" | "money_dimension_mismatch" | "result_overflow"
+>;
+/**
+ * One numeric value of a calculation: absent when a named operand has no usable value, refused
+ * when the arithmetic or the money dimensions of one operation are not allowed, and otherwise
+ * the exact rational with the currency its dimensions require. A nested operation is worked out
+ * with the same rules as the calculation that contains it, so only the outermost result is
+ * checked against the declared result type.
+ */
+type NumberValueOutcome =
+  | { kind: "value"; value: NumericValue }
+  | { kind: "absent" }
+  | { kind: "refused"; code: NumberRefusalCode };
 
 const isValueMap = (value: unknown): value is Readonly<Record<string, unknown>> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -136,6 +155,17 @@ const compareInstants = (left: ExactInstant, right: ExactInstant): -1 | 0 | 1 =>
   return leftFraction < rightFraction ? -1 : leftFraction > rightFraction ? 1 : 0;
 };
 
+const numberValueDependencies = (
+  value: CalculationNumberValueV2,
+  add: (fieldId: string) => void,
+): void => {
+  if (value.source === "numeric") {
+    value.operands.forEach((operand) => numberValueDependencies(operand, add));
+    return;
+  }
+  if (value.source === "field") add(value.fieldId);
+};
+
 const calculationDependencies = (expression: CalculationExpressionV2): string[] => {
   const dependencies: string[] = [];
   const add = (fieldId: string | undefined) => {
@@ -154,13 +184,7 @@ const calculationDependencies = (expression: CalculationExpressionV2): string[] 
       expression.fieldIds.forEach(add);
       break;
     case "numeric":
-      expression.operands.forEach((operand) => {
-        if (operand.source === "field") add(operand.fieldId);
-      });
-      break;
-    case "subtract_percentage":
-      add(expression.amountFieldId);
-      add(expression.percentageFieldId);
+      expression.operands.forEach((operand) => numberValueDependencies(operand, add));
       break;
     case "condition":
       visitCondition(expression.condition);
@@ -224,6 +248,16 @@ const numericResult = (
   if (type === "decimal_number") return amount;
   return type === "money" && currency !== undefined ? { amount, currency } : undefined;
 };
+
+/**
+ * True when an exact result is a whole number too large for the declared whole-number result
+ * type. Such a result is refused outright rather than reported as a missing or fractional value,
+ * because no exact value exists that the declared type can hold.
+ */
+const wholeNumberOverflows = (value: ExactRational): boolean =>
+  value.numerator % value.denominator === 0n &&
+  (value.numerator / value.denominator < BigInt(Number.MIN_SAFE_INTEGER) ||
+    value.numerator / value.denominator > BigInt(Number.MAX_SAFE_INTEGER));
 
 const daysInUtcMonth = (year: number, month: number): number =>
   utcDate(year, month + 1, 0).getUTCDate();
@@ -374,16 +408,59 @@ export const evaluateRecordCalculationsV2 = (
     if (field.required) issues.push(issue("required_result_missing", field.fieldId));
     else clearFieldIds.push(field.fieldId);
   };
-  const numericOperand = (operand: CalculationNumberOperandV2): NumericValue | undefined => {
-    if (operand.source === "literal") {
-      const value = rationalFromExactText(operand.value);
-      return value === undefined ? undefined : { value };
+  const numberLeaf = (leaf: CalculationNumberLeafV2): NumberValueOutcome => {
+    let parsed: NumericValue | undefined;
+    if (leaf.source === "literal") {
+      const exact = rationalFromExactText(leaf.value);
+      parsed = exact === undefined ? undefined : { value: exact };
+    } else {
+      const dependencyField = fields.get(leaf.fieldId);
+      const dependencyValue = values.get(leaf.fieldId);
+      parsed =
+        dependencyField === undefined || dependencyValue === undefined
+          ? undefined
+          : numericValue(dependencyField, dependencyValue);
     }
-    const dependencyField = fields.get(operand.fieldId);
-    const dependencyValue = values.get(operand.fieldId);
-    return dependencyField === undefined || dependencyValue === undefined
-      ? undefined
-      : numericValue(dependencyField, dependencyValue);
+    return parsed === undefined ? { kind: "absent" } : { kind: "value", value: parsed };
+  };
+  const numberValue = (value: CalculationNumberValueV2): NumberValueOutcome => {
+    if (value.source !== "numeric") return numberLeaf(value);
+    const numbers: NumericValue[] = [];
+    let refused: { kind: "refused"; code: NumberRefusalCode } | undefined;
+    for (const operand of value.operands) {
+      const outcome = numberValue(operand);
+      if (outcome.kind === "value") numbers.push(outcome.value);
+      if (outcome.kind === "refused") refused ??= outcome;
+    }
+    // An unusable operand leaves the whole formula without a value, but an operation the closed
+    // catalogue refuses is an authoring defect and is reported even beside an unusable operand.
+    if (numbers.length !== value.operands.length) return refused ?? { kind: "absent" };
+    const currency = sameCurrency(numbers);
+    const moneyCount = numbers.filter((number) => number.currency !== undefined).length;
+    const dimensionsValid =
+      value.operation === "add" || value.operation === "subtract"
+        ? moneyCount === 0 || (moneyCount === numbers.length && currency !== undefined)
+        : value.operation === "multiply"
+          ? moneyCount <= 1
+          : moneyCount === 0 || (moneyCount === 1 && numbers[0]!.currency !== undefined);
+    if (!dimensionsValid) return { kind: "refused", code: "money_dimension_mismatch" };
+    let accumulated = numbers[0]!.value;
+    for (const number of numbers.slice(1)) {
+      if (value.operation === "add") accumulated = addRationals(accumulated, number.value);
+      if (value.operation === "subtract")
+        accumulated = subtractRationals(accumulated, number.value);
+      if (value.operation === "multiply")
+        accumulated = multiplyRationals(accumulated, number.value);
+      if (value.operation === "divide") {
+        const divided = divideRationals(accumulated, number.value);
+        if (divided === undefined) return { kind: "refused", code: "division_by_zero" };
+        accumulated = divided;
+      }
+    }
+    return {
+      kind: "value",
+      value: { value: accumulated, ...(currency === undefined ? {} : { currency }) },
+    };
   };
 
   for (const field of order) {
@@ -395,65 +472,23 @@ export const evaluateRecordCalculationsV2 = (
       if (entries.every((entry) => typeof entry === "string"))
         calculated = (entries as string[]).join(expression.separator);
     } else if (expression.kind === "numeric") {
-      const operands = expression.operands.map(numericOperand);
-      if (operands.every((operand): operand is NumericValue => operand !== undefined)) {
-        const currency = sameCurrency(operands);
-        const moneyCount = operands.filter((operand) => operand.currency !== undefined).length;
-        const dimensionsValid =
-          expression.operation === "add" || expression.operation === "subtract"
-            ? moneyCount === 0 || (moneyCount === operands.length && currency !== undefined)
-            : expression.operation === "multiply"
-              ? moneyCount <= 1
-              : moneyCount === 0 || (moneyCount === 1 && operands[0]!.currency !== undefined);
-        const resultExpectsMoney = field.settings.resultType === "money";
-        if (!dimensionsValid || resultExpectsMoney !== moneyCount > 0)
+      const outcome = numberValue({
+        source: "numeric",
+        operation: expression.operation,
+        operands: expression.operands,
+      });
+      if (outcome.kind === "refused") evaluationIssue = outcome.code;
+      else if (outcome.kind === "value") {
+        const resultIsMoney = outcome.value.currency !== undefined;
+        if ((field.settings.resultType === "money") !== resultIsMoney)
           evaluationIssue = "money_dimension_mismatch";
-        else {
-          let accumulated = operands[0]!.value;
-          for (const operand of operands.slice(1)) {
-            if (expression.operation === "add")
-              accumulated = addRationals(accumulated, operand.value);
-            if (expression.operation === "subtract")
-              accumulated = subtractRationals(accumulated, operand.value);
-            if (expression.operation === "multiply")
-              accumulated = multiplyRationals(accumulated, operand.value);
-            if (expression.operation === "divide") {
-              const divided = divideRationals(accumulated, operand.value);
-              if (divided === undefined) {
-                evaluationIssue = "division_by_zero";
-                break;
-              }
-              accumulated = divided;
-            }
-          }
-          if (evaluationIssue === undefined)
-            calculated = numericResult(field, accumulated, currency ?? operands[0]!.currency);
-        }
+        else if (
+          field.settings.resultType === "whole_number" &&
+          wholeNumberOverflows(outcome.value.value)
+        )
+          evaluationIssue = "result_overflow";
+        else calculated = numericResult(field, outcome.value.value, outcome.value.currency);
       }
-    } else if (expression.kind === "subtract_percentage") {
-      const amountField = fields.get(expression.amountFieldId);
-      const percentageField = fields.get(expression.percentageFieldId);
-      const amountValue = values.get(expression.amountFieldId);
-      const percentageValue = values.get(expression.percentageFieldId);
-      const amount =
-        amountField && amountValue !== undefined
-          ? numericValue(amountField, amountValue)
-          : undefined;
-      const percentage =
-        percentageField && percentageValue !== undefined
-          ? numericValue(percentageField, percentageValue)
-          : undefined;
-      if (amount && percentage && percentage.currency === undefined) {
-        const hundred = rationalFromExactText("100")!;
-        const fraction = divideRationals(percentage.value, hundred)!;
-        calculated = numericResult(
-          field,
-          subtractRationals(amount.value, multiplyRationals(amount.value, fraction)),
-          amount.currency,
-        );
-        if ((field.settings.resultType === "money") !== (amount.currency !== undefined))
-          evaluationIssue = "money_dimension_mismatch";
-      } else if (percentage?.currency !== undefined) evaluationIssue = "money_dimension_mismatch";
     } else if (expression.kind === "condition") {
       const declaredFieldIds = dependencies.get(field.fieldId) ?? [];
       const conditionValues = Object.fromEntries(
@@ -474,7 +509,8 @@ export const evaluateRecordCalculationsV2 = (
     } else if (expression.kind === "date_offset") {
       const dateField = fields.get(expression.dateFieldId);
       const dateValue = values.get(expression.dateFieldId);
-      const amount = numericOperand(expression.amount);
+      const amountOutcome = numberLeaf(expression.amount);
+      const amount = amountOutcome.kind === "value" ? amountOutcome.value : undefined;
       const wholeAmount =
         amount && amount.currency === undefined
           ? rationalToSafeWholeNumber(amount.value)
@@ -518,7 +554,7 @@ export const evaluateRecordCalculationsV2 = (
     }
     if (calculated === undefined) {
       if (
-        (expression.kind === "numeric" || expression.kind === "subtract_percentage") &&
+        expression.kind === "numeric" &&
         field.settings.resultType === "whole_number" &&
         calculationDependencies(expression).every((fieldId) => values.has(fieldId))
       )

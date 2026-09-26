@@ -83,6 +83,8 @@ const RESERVED_RENDER_PROP_NAMES: ReadonlySet<string> = new Set([
   "projectedNavigation",
   "resolvePageHref",
   "currentPageId",
+  "themeTokens",
+  "componentBundleOrigin",
 ]);
 
 /**
@@ -185,6 +187,17 @@ export type PlatformBlockRenderProps = Readonly<{
   resolvePageHref?: (pageId: string) => string;
   /** Exact internal page identity currently shown, for the current-page state. */
   currentPageId?: string;
+  /**
+   * The resolved application theme tokens in force where this placement renders. A block that
+   * passes the application theme outward, such as the sandboxed custom-component host, reads them
+   * here rather than inventing a palette of its own.
+   */
+  themeTokens?: Readonly<Record<string, unknown>>;
+  /**
+   * The configured dedicated component origin. Only a block that frames the Vortex-owned bootstrap
+   * document reads it, so publisher code is never loaded from a Vortex application origin.
+   */
+  componentBundleOrigin?: string;
 }>;
 
 /**

@@ -15,6 +15,7 @@ import {
   jsonValueSchema,
   organizationRuntimeSettingsSchema,
   organizationSelectionCandidateSchema,
+  prepareOrganizationAdministrationRoleChangeCommandSchema,
   reactivateOrganizationAccountCommandSchema,
   removeOrganizationAdministrationMembershipCommandSchema,
   renameOrganizationAdministrationGroupCommandSchema,
@@ -112,6 +113,7 @@ export type ProtectedOperationExecutorDependencies = Readonly<{
     | "removeGroupMembership"
     | "reviseRoleMetadata"
     | "retireRole"
+    | "prepareRoleChange"
     | "createCustomRole"
     | "createCustomRoleFromTemplate"
     | "acceptApplicationRoleTemplate"
@@ -196,6 +198,19 @@ const operation =
 /** A blank optional text input, as an empty form field submits it, is the same as an absent one. */
 const optionalText = (value: ProtectedOperationValue | undefined) =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
+
+/**
+ * A text control submits a string; a declared JSON input that a person types as text is parsed here
+ * so the owning operation still receives a typed value, and a malformed one is a validation result.
+ */
+const parsedJsonInput = (value: ProtectedOperationValue): unknown => {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
 
 const mapAvailable = <Value>(
   result: HumanOrganizationRequestResult<Value>,
@@ -334,6 +349,33 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
           revision: value.role.liveRevision,
           access_version: value.accessVersion,
         }),
+      ),
+  }),
+  prepare_role_change_evidence: operation({
+    schema: prepareOrganizationAdministrationRoleChangeCommandSchema,
+    command: (inputs) => ({
+      operation: inputs.operation,
+      roleKey: inputs.role_key,
+      label: inputs.label,
+      description: inputs.description,
+      privilegeClassification: inputs.privilege_classification,
+      ...(inputs.permission_references === undefined
+        ? {}
+        : { permissionReferences: parsedJsonInput(inputs.permission_references) }),
+      ...(inputs.template_application_root_id === undefined
+        ? {}
+        : { templateApplicationRootId: inputs.template_application_root_id }),
+      ...(inputs.source_role_id === undefined ? {} : { sourceRoleId: inputs.source_role_id }),
+      acceptBroadenedAuthority: inputs.accept_broadened_authority,
+    }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.prepareRoleChange(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (evidence) => ({ evidence: evidence as unknown as JsonValue }),
       ),
   }),
   create_custom_role: operation({

@@ -5,7 +5,7 @@ import {
   applicationRootIdSchema,
   archiveDestinationReferenceSchema,
   connectionInstanceIdSchema,
-  connectionInstanceSchema,
+  connectionInstanceStatusSchema,
   connectionTypeIdSchema,
   connectionTypeSchema,
   semanticVersionSchema,
@@ -400,27 +400,22 @@ export type ConnectionInstanceStatusView = Readonly<{
 }>;
 
 /**
- * Projects one connection instance value and its authority revision into the safe status view.
+ * Projects one connection instance page read model into the safe status view.
  *
- * The instance is the shared connection instance contract value the caller's own reader produces,
- * not a table row: this module reads no table, and the contract - which also carries the secret
- * reference and the granted scopes - is re-parsed here so state, health, expiry and both scope lists
- * are its closed values and never a stored string. A value that does not satisfy the contract, and a
- * revision that is not a safe integer, both return undefined, so the caller refuses the page
+ * The instance is the shared page read model the caller's own protected reader produces, not a table
+ * row: this module reads no table, and `connectionInstanceStatusSchema` is re-parsed here so state,
+ * health, expiry, the authority revision and both scope lists are its closed values and never a
+ * stored string. That read model is deliberately separate from `connectionInstanceSchema`: it carries
+ * no secret reference, no organisation identity and no activity identity, and it accepts an instance
+ * with no authorised application and no granted scope, so a grant-less instance is shown as such. A
+ * value that does not satisfy the read model returns undefined, so the caller refuses the page
  * neutrally instead of showing a view whose revision-checking commands would be refused anyway.
  */
 export const projectConnectionInstanceStatus = (
   instance: unknown,
-  revision: unknown,
 ): ConnectionInstanceStatusView | undefined => {
-  const parsed = connectionInstanceSchema.safeParse(instance);
+  const parsed = connectionInstanceStatusSchema.safeParse(instance);
   if (!parsed.success) return undefined;
-  let authorityRevision: number;
-  try {
-    authorityRevision = assertSafeIntegerRevision(revision, "Connection administration");
-  } catch {
-    return undefined;
-  }
   const row = parsed.data;
   if (
     row.authorizedApplicationIds.length > MAXIMUM_SCOPE_ENTRIES ||
@@ -433,7 +428,7 @@ export const projectConnectionInstanceStatus = (
     connectionTypeVersion: row.connectionTypeVersion,
     state: row.state,
     healthOutcome: row.lastHealthOutcome,
-    revision: authorityRevision,
+    revision: row.revision,
     ...(row.tokenExpiresAt === undefined ? {} : { tokenExpiresAt: row.tokenExpiresAt }),
     authorizedApplicationIds: Object.freeze([...row.authorizedApplicationIds]),
     grantedScopes: Object.freeze([...row.grantedScopes]),
@@ -539,10 +534,8 @@ export type ConnectionAdministrationPageSource =
       kind: "available";
       /** The platform catalogue connection type this page administers. */
       connectionType: unknown;
-      /** The shared connection instance contract value the reader produced. */
+      /** The connection instance page read model the protected reader produced. */
       instance: unknown;
-      /** The instance's authority revision, as the reader read it. */
-      revision: unknown;
     }>
   | Readonly<{ kind: "unavailable" }>;
 
@@ -564,10 +557,10 @@ const UNAVAILABLE_PAGE: ConnectionAdministrationPageResolution = Object.freeze({
 /**
  * Composes the one administration page for a connection type and the instance it administers.
  *
- * A value that is not a valid connection type, an instance the shared contract does not accept, a
- * revision that is not a safe integer, and an instance of a different connection type than the form
- * was built from are all the same neutral refusal, so a page never offers one type's declared schema
- * over another type's instance and never shows a view whose commands would be refused.
+ * A value that is not a valid connection type, an instance the page read model does not accept, and
+ * an instance of a different connection type than the form was built from are all the same neutral
+ * refusal, so a page never offers one type's declared schema over another type's instance and never
+ * shows a view whose commands would be refused.
  *
  * The instance's pinned `connectionTypeVersion` is deliberately not required to equal the catalogue
  * type's current version: an instance registered against an older version is a supported state, and
@@ -581,7 +574,7 @@ export const projectConnectionAdministrationPage = (
   const parsed = connectionTypeSchema.safeParse(source.connectionType);
   if (!parsed.success) return REFUSED_PAGE;
   const form = buildAdministrationForm(parsed.data);
-  const status = projectConnectionInstanceStatus(source.instance, source.revision);
+  const status = projectConnectionInstanceStatus(source.instance);
   if (form === undefined || status === undefined) return REFUSED_PAGE;
   if (status.connectionTypeId !== parsed.data.connectionTypeId) return REFUSED_PAGE;
   return Object.freeze({
