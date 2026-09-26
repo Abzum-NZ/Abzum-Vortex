@@ -28,8 +28,12 @@ import {
   type ProtectedReadModelPageRequest,
   type ReadOrganizationRuntimeSettingsCommand,
   type ReadOrganizationRuntimeSettingsResult,
+  type TenantAssignmentQuery,
+  type TenantAssignmentReadResult,
   type TenantHierarchyQuery,
   type TenantHierarchyResult,
+  type TenantLauncherQuery,
+  type TenantLauncherResult,
 } from "@vortex/contracts";
 
 type OwnerResult<Value> =
@@ -99,6 +103,14 @@ export type ProtectedReadModelReaders = Readonly<{
       session: IdentitySession,
       query: TenantHierarchyQuery,
     ): Promise<TenantHierarchyResult>;
+    listTenants(
+      session: IdentitySession,
+      query: TenantLauncherQuery,
+    ): Promise<TenantLauncherResult>;
+    listTenantAdministrators(
+      session: IdentitySession,
+      query: TenantAssignmentQuery,
+    ): Promise<TenantAssignmentReadResult>;
   }>;
 }>;
 
@@ -253,6 +265,37 @@ export const createProtectedReadModelResolver = (readers: ProtectedReadModelRead
           return result.outcome === "available"
             ? { kind: "available", model, value: result.page }
             : refused;
+        }
+        case "tenants": {
+          const result = await readers.identity.listTenants(context.session, {
+            limit: page.pageSize,
+            ...(page.after === undefined ? {} : { after: page.after }),
+          } as TenantLauncherQuery);
+          return result.outcome === "available"
+            ? { kind: "available", model, value: result.page }
+            : refused;
+        }
+        case "tenant_administrators": {
+          // The assignments are the caller's own tenant's, so the tenant is the
+          // verified request context's resolved tenant and never page input.
+          const result = await readers.identity.listTenantAdministrators(context.session, {
+            tenantId: context.tenantId,
+            page: {
+              limit: page.pageSize,
+              ...(page.after === undefined ? {} : { after: page.after }),
+            },
+          } as TenantAssignmentQuery);
+          return result.outcome === "available"
+            ? { kind: "available", model, value: result.page }
+            : refused;
+        }
+        case "installed_applications": {
+          // Installed applications are read through the ordinary query path from
+          // their registered protected projection. The permitted-applications feed
+          // still serves them to pages and no owner reader replaces it yet, so this
+          // is the same neutral refusal an unknown read model gives, never a page
+          // of applications the viewer may not reach.
+          return refused;
         }
       }
     } catch {

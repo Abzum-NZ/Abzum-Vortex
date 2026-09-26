@@ -24,8 +24,9 @@ begin
   -- foreign record, so the record adapters return their identical refusal and
   -- a list page is empty rather than failing. The record identity is the
   -- organisation, whose settings are a single row, and the revision is the
-  -- settings document's own revision. Attribute names are the lowercase field
-  -- keys a projection record type declares.
+  -- settings document's own revision, which the default application shares.
+  -- Attribute names are the lowercase field keys a projection record type
+  -- declares.
   begin
     select authorized.* into strict scope_row
     from vortex_access.organization_runtime_settings_administration_read_scope() as authorized;
@@ -33,10 +34,9 @@ begin
     when insufficient_privilege then
       return;
   end;
-  select result.* into settings_row
-  from vortex_identity.read_current_organization_runtime_settings_internal(
-    scope_row.organization_id
-  ) as result;
+  select settings.* into settings_row
+  from vortex_identity.organization_runtime_settings as settings
+  where settings.organization_id = scope_row.organization_id;
   if settings_row.organization_id is null
     or settings_row.organization_id is distinct from scope_row.organization_id then
     return;
@@ -53,7 +53,8 @@ begin
       'time_zone', settings_row.time_zone,
       'currency', settings_row.currency,
       'date_format', settings_row.date_format,
-      'number_format', settings_row.number_format
+      'number_format', settings_row.number_format,
+      'default_application_root_id', settings_row.default_application_root_id
     );
 end
 $function$;
