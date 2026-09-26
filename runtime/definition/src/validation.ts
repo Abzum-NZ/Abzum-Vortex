@@ -237,7 +237,7 @@ const actionPermissionsMatch = (
   );
 };
 /**
- * A `soft_delete_subject` effect deletes the subject at the revision the command
+ * A `record.delete` task deletes the subject at the revision the command
  * names, so a deleting action has exactly one delete and may otherwise only copy
  * relationships (which write the target, never the subject) and announce Events.
  * A subject write or a creation can move that revision. The Record runtime

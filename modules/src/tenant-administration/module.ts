@@ -242,9 +242,17 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
             validation: { maximum_length: 1_000 },
           },
         ],
-        effects: [
-          { kind: "set_field", field: "reason", value: { source: "input", input: "reason" } },
-          { kind: "set_field", field: "state", value: { source: "literal", value: "submitted" } },
+        tasks: [
+          {
+            id: "set_submitted_request_fields",
+            type: "record.set_fields",
+            properties: {
+              values: {
+                reason: { source: "input", input: "reason" },
+                state: { source: "literal", value: "submitted" },
+              },
+            },
+          },
         ],
       },
     ],

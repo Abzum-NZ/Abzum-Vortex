@@ -1725,7 +1725,7 @@ const moduleSourceBodySchema = z
       else if (isProjection && !targetsOperation)
         context.addIssue({
           code: "custom",
-          path: ["actions", index, "effects"],
+          path: ["actions", index, "tasks"],
           message: "A system projection record type action targets a registered protected operation",
         });
     }

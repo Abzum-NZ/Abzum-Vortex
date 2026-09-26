@@ -1226,8 +1226,8 @@ export const isSystemRecordProtectedOperation = (
 };
 
 /**
- * A canonical Module action. An action orders effects or targets one registered protected operation,
- * never both. A protected-operation action declares no effects and no identity or revision inputs,
+ * A canonical Module action. An action orders tasks or targets one registered protected operation,
+ * never both. A protected-operation action declares no tasks and no identity or revision inputs,
  * because the subject record's identity and revision reach the operation automatically when it
  * runs. It needs both its own permission and the operation's registered permission: the operation
  * re-checks the actor's current authority in its owning service and never accepts an organisation

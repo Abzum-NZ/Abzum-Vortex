@@ -2918,7 +2918,7 @@ const actionFlowFieldValues = (
 });
 
 /** One registered task of a compiled named-action flow, pinned to the registry task version. */
-const actionEffectTask = (
+const actionFlowTask = (
   id: string,
   type: string,
   properties: Record<string, FlowValue>,
@@ -2992,7 +2992,7 @@ function actionPreconditionFormula(node: unknown, scope: ActionFlowScope): FlowF
  * Compiles one Module named action to its `transaction` flow (#1062): the action's own permanent
  * identity, typed inputs (plus the implicit subject record input) and invocation permission. The
  * precondition becomes an If task whose otherwise branch refuses, as the action refuses, and the
- * ordered effects become the registry record, event and change tasks.
+ * ordered tasks become the registry record, event and change tasks.
  *
  * Placement: the registry lets `record.set_fields` and `event.announce` run in a transaction on
  * the record being saved, which for an action is its subject. It keeps `record.create`,
@@ -3036,21 +3036,21 @@ function compileActionFlow(
   const subjectRecordTypeId = String(canonicalAction.subjectRecordTypeId);
   const scope: ActionFlowScope = { subjectFieldKeyById, subjectInput };
 
-  const effectTasks: FlowTask[] = (canonicalAction.tasks as JsonObject[]).map((task, taskIndex) => {
-    const id = task.id === undefined ? `effect_${taskIndex + 1}` : String(task.id);
+  const actionTasks: FlowTask[] = (canonicalAction.tasks as JsonObject[]).map((task, taskIndex) => {
+    const id = task.id === undefined ? `task_${taskIndex + 1}` : String(task.id);
     const properties = asObject(task.properties);
     switch (String(task.type)) {
       case "record.set_fields":
-        return actionEffectTask(id, "record.set_fields", {
+        return actionFlowTask(id, "record.set_fields", {
           values: actionFlowFieldValues(asObject(properties.values), scope),
         });
       case "record.create":
-        return actionEffectTask(id, "record.create", {
+        return actionFlowTask(id, "record.create", {
           record_type: flowTextValue(String(asObject(properties.recordType).recordTypeId)),
           values: actionFlowFieldValues(asObject(properties.values), scope),
         });
       case "record.changes":
-        return actionEffectTask(id, "record.changes", {
+        return actionFlowTask(id, "record.changes", {
           changes: {
             kind: "literal",
             literal: {
@@ -3071,12 +3071,12 @@ function compileActionFlow(
           },
         });
       case "record.delete":
-        return actionEffectTask(id, "record.delete", {
+        return actionFlowTask(id, "record.delete", {
           record_type: flowTextValue(subjectRecordTypeId),
           record: flowReferenceValue({ source: "input", name: subjectInput }),
         });
       case "event.announce":
-        return actionEffectTask(id, "event.announce", {
+        return actionFlowTask(id, "event.announce", {
           event: flowTextValue(String(properties.eventKey)),
         });
       default:
@@ -3087,15 +3087,15 @@ function compileActionFlow(
   const precondition = canonicalAction.precondition;
   const tasks: FlowTask[] =
     precondition === undefined
-      ? effectTasks
+      ? actionTasks
       : [
           {
             id: "precondition",
             type: "if",
             condition: actionPreconditionFormula(precondition, scope),
-            then: effectTasks,
+            then: actionTasks,
             else: [
-              actionEffectTask("precondition_refused", "rule.refuse", {
+              actionFlowTask("precondition_refused", "rule.refuse", {
                 reason: flowTextValue("precondition_not_met"),
                 message: flowTextValue("This action is not available for the record as it is now."),
               }),
@@ -3398,11 +3398,11 @@ function compileModule(
       }),
     };
   });
-  // Every effect-based Module named action also compiles to one `transaction` flow (#1062). A
+  // Every record-task Module named action also compiles to one `transaction` flow (#1062). A
   // protected-operation action instead targets one registered platform-service operation that
   // takes the subject row's identity and expected revision automatically. Its execution is not
   // built yet, so it compiles to no flow here, and the record runtime refuses to prepare it
-  // because its canonical action and system projection record type are not effect-based shapes.
+  // because its canonical action and system projection record type are not record-task shapes.
   const usedFlowKeys = new Set(flows.map((flow) => String(flow.key)));
   const actionFlows = (body.actions as JsonObject[]).flatMap((action, actionIndex) => {
     if (action.protected_operation !== undefined) return [];

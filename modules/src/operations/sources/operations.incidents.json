@@ -831,33 +831,32 @@
             }
           ]
         },
-        "effects": [
+        "tasks": [
           {
-            "kind": "set_field",
-            "field": "attached_signal_key",
-            "value": {
-              "source": "input",
-              "input": "deduplication_key"
+            "id": "set_attached_signal",
+            "type": "record.set_fields",
+            "properties": {
+              "values": {
+                "attached_signal_key": {
+                  "source": "input",
+                  "input": "deduplication_key"
+                },
+                "attached_signal_evidence": {
+                  "source": "input",
+                  "input": "evidence"
+                },
+                "attached_at": {
+                  "source": "current_time"
+                }
+              }
             }
           },
           {
-            "kind": "set_field",
-            "field": "attached_signal_evidence",
-            "value": {
-              "source": "input",
-              "input": "evidence"
+            "id": "announce_incident_attached",
+            "type": "event.announce",
+            "properties": {
+              "event": "vortex.operations.incidents.incident.attached"
             }
-          },
-          {
-            "kind": "set_field",
-            "field": "attached_at",
-            "value": {
-              "source": "current_time"
-            }
-          },
-          {
-            "kind": "announce_event",
-            "event": "vortex.operations.incidents.incident.attached"
           }
         ]
       },
@@ -877,18 +876,25 @@
             "closed"
           ]
         },
-        "effects": [
+        "tasks": [
           {
-            "kind": "set_field",
-            "field": "state",
-            "value": {
-              "source": "literal",
-              "value": "acknowledged"
+            "id": "set_state_acknowledged",
+            "type": "record.set_fields",
+            "properties": {
+              "values": {
+                "state": {
+                  "source": "literal",
+                  "value": "acknowledged"
+                }
+              }
             }
           },
           {
-            "kind": "announce_event",
-            "event": "vortex.operations.incidents.incident.acknowledged"
+            "id": "announce_incident_acknowledged",
+            "type": "event.announce",
+            "properties": {
+              "event": "vortex.operations.incidents.incident.acknowledged"
+            }
           }
         ]
       },
@@ -908,18 +914,25 @@
             "closed"
           ]
         },
-        "effects": [
+        "tasks": [
           {
-            "kind": "set_field",
-            "field": "severity",
-            "value": {
-              "source": "literal",
-              "value": "critical"
+            "id": "set_severity_critical",
+            "type": "record.set_fields",
+            "properties": {
+              "values": {
+                "severity": {
+                  "source": "literal",
+                  "value": "critical"
+                }
+              }
             }
           },
           {
-            "kind": "announce_event",
-            "event": "vortex.operations.incidents.incident.escalated"
+            "id": "announce_incident_escalated",
+            "type": "event.announce",
+            "properties": {
+              "event": "vortex.operations.incidents.incident.escalated"
+            }
           }
         ]
       },
@@ -939,18 +952,25 @@
             "closed"
           ]
         },
-        "effects": [
+        "tasks": [
           {
-            "kind": "set_field",
-            "field": "state",
-            "value": {
-              "source": "literal",
-              "value": "resolved"
+            "id": "set_state_resolved",
+            "type": "record.set_fields",
+            "properties": {
+              "values": {
+                "state": {
+                  "source": "literal",
+                  "value": "resolved"
+                }
+              }
             }
           },
           {
-            "kind": "announce_event",
-            "event": "vortex.operations.incidents.incident.resolved"
+            "id": "announce_incident_resolved",
+            "type": "event.announce",
+            "properties": {
+              "event": "vortex.operations.incidents.incident.resolved"
+            }
           }
         ]
       }

@@ -651,7 +651,7 @@ const compareAction = (
     "permission",
     id,
   );
-  for (const key of ["subjectRecordTypeId", "sharing", "precondition", "effects"])
+  for (const key of ["subjectRecordTypeId", "sharing", "precondition", "tasks"])
     pushChange(
       reasons,
       previous[key],

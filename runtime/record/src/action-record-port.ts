@@ -173,7 +173,7 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
   const createTargets = parseCreateTargets(value.createTargets);
   // An action that targets a registered protected operation, and every action of a system
   // projection record type, runs through that operation's owning service, never through ordered
-  // record effects.
+  // record tasks.
   if (
     !actionV2.success ||
     actionV2.data.protectedOperation !== undefined ||
@@ -429,7 +429,7 @@ type FlowComposition =
 /**
  * Runs the named action's flow once for the prepared subject and turns what it collected into the
  * composition the database applies. The flow's precondition refusal is its own outcome: the run
- * never reaches an effect, and the caller records the refusal as the action always has.
+ * never reaches a task, and the caller records the refusal as the action always has.
  */
 const composeFromFlow = (
   prepared: PreparedNamedAction,
@@ -451,7 +451,7 @@ const composeFromFlow = (
  * exact release's action flow, checked its invocation permission and supplied the flow run; this
  * port owns what needs the database: the action's preparation and permission decision, the typed
  * inputs, the relationship totals, the before-save rules, and the one apply record changes call that
- * writes every effect of the action in one transaction, receipt, Activity and Events included.
+ * writes every task of the action in one transaction, receipt, Activity and Events included.
  */
 export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortDependencies) => {
   const requests = createHumanOrganizationRequestService(dependencies);
@@ -600,7 +600,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
               values: Readonly<Record<string, JsonValue | null>>;
               finalValues: Readonly<Record<string, JsonValue | null>>;
             }>[] = [];
-            // Read unconditionally: even an action with no set_field effect and
+            // Read unconditionally: even an action with no record.set_fields task and
             // no creation can still leave a stale due row in place unless its
             // deadline transition is re-derived from the record's unchanged
             // existing values below.
@@ -677,7 +677,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 for (const fieldId of calculated.clearFieldIds) finalValues[fieldId] = null;
               if ("parentMutations" in calculated) parentMutations = calculated.parentMutations;
               // The merged closure recomputes every derived subject field. An
-              // action with no set_field effect may therefore still carry a
+              // action with no record.set_fields task may therefore still carry a
               // changed total; one whose derived values are unchanged must not
               // fabricate a subject write, a revision bump or an occurrence.
               if (Object.keys(composition.submittedValues).length === 0)
@@ -756,7 +756,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
 
             // The subject delete is the shared protected lifecycle delete, run
             // last in this same transaction against the revision the action
-            // left the subject at: the action's own effects write nothing to a
+            // left the subject at: the action's own tasks write nothing to a
             // subject it deletes. It carries the action's command identity and
             // its own Activity and `deleted` Event identities, and any refusal
             // throws so the receipt, Activity and Events roll back with it.
