@@ -6,6 +6,7 @@ import {
   projectLiveApplicationRolePermissions,
   revisionSchema,
   sessionContextSchema,
+  systemApplicationBoundReleaseSetResultSchema,
   type ApplicationPermissionCatalogueSnapshot,
   type ApplicationRole,
   type ApplicationRoleTemplatePreparationBasis,
@@ -21,6 +22,7 @@ import {
 import { canonicalJson, fingerprintCanonicalValue } from "@vortex/definition";
 import {
   PermissionRegistryPreparationError,
+  prepareApplicationPermissionRegistrationForHumanRequest,
   prepareApplicationPermissionRegistrationFromReleaseSet,
   verifyPreparedApplicationPermissionRegistration,
   type PermissionRegistryDefinitionSetReader,
@@ -204,6 +206,47 @@ export const verifyPreparedApplicationRoleTemplates = (
   const { candidateFingerprint, ...core } = candidate;
   if (candidateFingerprint !== fingerprintCanonicalValue(core)) throw evidenceError();
   return candidate;
+};
+
+/**
+ * Prepares one exact release's role templates from a release set read under the verified human
+ * request's own organisation scope. It mirrors {@link createApplicationRoleTemplateAdapter}'s
+ * registration candidate exactly, but the registration basis is the human request rather than a
+ * system context: it grants nothing, and the protected Access writer still re-verifies every
+ * fingerprint and continuity revision before any registration changes.
+ */
+export const prepareApplicationRoleTemplatesForHumanRequest = (
+  organizationId: string,
+  commandCandidate: PrepareApplicationRoleRegistrationCandidateCommand,
+  releaseSetCandidate: unknown,
+): PreparedApplicationRoleTemplates => {
+  const applicationRootId = parseApplicationRootId(commandCandidate?.applicationRootId);
+  const releaseRevision = revisionSchema
+    .max(Number.MAX_SAFE_INTEGER)
+    .safeParse(commandCandidate?.releaseRevision);
+  if (!releaseRevision.success)
+    throw new ApplicationRoleTemplatePreparationError(
+      "INVALID_APPLICATION_ROLE_TEMPLATE_PREPARATION_COMMAND",
+    );
+  const releaseSet = systemApplicationBoundReleaseSetResultSchema.safeParse(releaseSetCandidate);
+  if (!releaseSet.success) throw evidenceError();
+
+  const permissionRegistration = (() => {
+    try {
+      return prepareApplicationPermissionRegistrationForHumanRequest(
+        organizationId,
+        { applicationRootId, releaseRevision: releaseRevision.data },
+        releaseSet.data,
+      );
+    } catch (error) {
+      return mapPermissionPreparationError(error);
+    }
+  })();
+  return buildCandidate(
+    { kind: "registration_candidate" },
+    permissionRegistration,
+    releaseSet.data.application as ApplicationDefinitionRead,
+  );
 };
 
 const registrationMatchesSnapshot = (

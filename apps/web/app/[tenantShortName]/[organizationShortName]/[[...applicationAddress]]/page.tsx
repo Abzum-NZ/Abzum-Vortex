@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   ALL_UI_STYLES_CSS,
@@ -15,6 +16,7 @@ import { AuthShell } from "../../../auth/_components/auth-shell";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { loadApplicationPage } from "../../../_lib/application-page";
+import { adoptApplicationRelease } from "../../../_lib/application-release-adoption";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +99,65 @@ export default async function ApplicationAddressPage({
     redirect(
       addressPath(tenantShortName, organizationShortName, application.key, application.homePageKey),
     );
+  }
+
+  /**
+   * Deliberately adopts the offered release of the addressed application. The browser supplies the
+   * offered target and the installation revision the page loaded; the server re-resolves the
+   * signed-in person's address, re-reads the exact target release and the active installation, and
+   * refuses on any mismatch, so a stale page can never upgrade the wrong release. On success the
+   * address is revalidated so the next request resolves the new release; on any refusal the prior
+   * release keeps rendering.
+   */
+  async function adoptRelease(formData: FormData): Promise<void> {
+    "use server";
+    const currentIdentity = await resolveIdentitySession();
+    if (currentIdentity.kind === "temporarily_unavailable")
+      redirect(launcherPath(tenantShortName, organizationShortName));
+    if (
+      currentIdentity.kind === "invalid_session_state" ||
+      currentIdentity.kind === "expired_or_revoked"
+    )
+      redirect("/auth/session-ended");
+    if (currentIdentity.kind !== "active") redirect("/auth/sign-in?status=session-ended");
+
+    const applicationKey = String(formData.get("applicationKey") ?? "");
+    const pageKey = String(formData.get("pageKey") ?? "");
+    const offeredReleaseRevision = Number(formData.get("targetReleaseRevision"));
+    const expectedActiveReleaseRevision = Number(formData.get("expectedActiveReleaseRevision"));
+
+    const rechecked = await resolveApplicationAddress(
+      currentIdentity.session,
+      tenantShortName,
+      organizationShortName,
+      applicationKey,
+      pageKey,
+    );
+    if (rechecked.kind !== "application_page")
+      redirect(launcherPath(tenantShortName, organizationShortName));
+    const back = addressPath(
+      tenantShortName,
+      organizationShortName,
+      rechecked.application.key,
+      rechecked.pageKey,
+    );
+
+    let refused = false;
+    try {
+      await adoptApplicationRelease(currentIdentity.session, {
+        organizationId: rechecked.read.organizationId,
+        applicationRootId: rechecked.application.applicationRootId,
+        applicationReleaseRevision: offeredReleaseRevision,
+        expectedActiveReleaseRevision,
+      });
+    } catch {
+      refused = true;
+    }
+    // A refusal, a stale revision or a failed preparation changes nothing; the page keeps showing
+    // the prior release. Only a committed switch invalidates the cached page model.
+    if (refused) redirect(`${back}?adoption=refused`);
+    revalidatePath(back);
+    redirect(`${back}?adoption=adopted`);
   }
 
   if (identity.kind === "temporarily_unavailable")
@@ -224,5 +285,29 @@ export default async function ApplicationAddressPage({
       </AuthShell>
     );
   if (page.kind === "unavailable") return unavailableFallback;
-  return <ApplicationPageView model={page.model} />;
+  const adoption = page.model.adoption;
+  return (
+    <>
+      {adoption === undefined ? null : (
+        <form action={adoptRelease} data-vortex-release-adoption="offered">
+          <input type="hidden" name="applicationKey" value={resolved.application.key} />
+          <input type="hidden" name="pageKey" value={resolved.pageKey} />
+          <input
+            type="hidden"
+            name="targetReleaseRevision"
+            value={adoption.offeredReleaseRevision}
+          />
+          <input
+            type="hidden"
+            name="expectedActiveReleaseRevision"
+            value={adoption.installedReleaseRevision}
+          />
+          <button type="submit">
+            Adopt release {adoption.offeredReleaseVersion}
+          </button>
+        </form>
+      )}
+      <ApplicationPageView model={page.model} />
+    </>
+  );
 }

@@ -36,6 +36,7 @@ import {
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
+import { readApplicationReleaseAdoption } from "./application-release-adoption";
 import { getQueryContinuationKey } from "./query-continuation-key";
 
 /**
@@ -75,6 +76,15 @@ export type ApplicationPageModel = Readonly<{
   bindings: Readonly<Record<string, readonly PlacementFlowBinding[]>>;
   /** Permitted pages of this application, so a menu or navigate intent can be turned into an address. */
   pages: readonly Readonly<{ pageId: string; key: string }>[];
+  /**
+   * The deliberate adoption control, present only for a caller who may manage installations and
+   * only when the application root publishes a release other than the installed one.
+   */
+  adoption?: Readonly<{
+    offeredReleaseRevision: number;
+    offeredReleaseVersion: string;
+    installedReleaseRevision: number;
+  }>;
   invocation: Readonly<{
     tenantShortName: string;
     organizationShortName: string;
@@ -223,6 +233,13 @@ export const loadApplicationPage = async (
   if (loaded.kind !== "available") return loaded;
   const context = loaded.value;
   const application = context.releaseSet.application;
+
+  // The offered release is read under the viewer's own application scope. A refusal or an absent
+  // target reads as "nothing to adopt"; publishing a release alone never changes this page.
+  const adoptionTarget = await readApplicationReleaseAdoption(session, {
+    organizationId: context.organizationId,
+    applicationRootId: context.applicationRootId,
+  });
 
   const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
   if (pageDefinition === undefined) return { kind: "unavailable" };
@@ -373,6 +390,16 @@ export const loadApplicationPage = async (
       pages: application.content.pages
         .filter((candidate) => permittedKeys.has(candidate.key))
         .map((candidate) => ({ pageId: candidate.pageId, key: candidate.key })),
+      ...(adoptionTarget !== undefined &&
+      adoptionTarget.currentReleaseRevision !== context.applicationReleaseRevision
+        ? {
+            adoption: {
+              offeredReleaseRevision: adoptionTarget.currentReleaseRevision,
+              offeredReleaseVersion: adoptionTarget.currentReleaseVersion,
+              installedReleaseRevision: context.applicationReleaseRevision,
+            },
+          }
+        : {}),
       invocation: {
         tenantShortName: address.tenantShortName,
         organizationShortName: address.organizationShortName,
