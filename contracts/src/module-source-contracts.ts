@@ -1,7 +1,13 @@
 import { z } from "zod";
 import { personalDataClassSchema, publicDisplaySchema, searchPrioritySchema } from "./catalogues";
 import { builderKeySchema, namespacedKeySchema, organizationAccountIdSchema } from "./identifiers";
-import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "./common";
+import {
+  calculationMaximumNestingDepth,
+  calculationMaximumOperandCount,
+  jsonValueSchema,
+  labelSchema,
+  safeHttpsUrlSchema,
+} from "./common";
 import { versionRequirementSchema } from "./definitions";
 import {
   authoredSourceBase,
@@ -609,18 +615,64 @@ const sourcePersonLinkSettingsSchema = z
   })
   .strict();
 
+/** Closed safety limits for one nested numeric expression are declared in ./common. */
+const sourceCalculationNumberOperationSchema = z.enum(["add", "subtract", "multiply", "divide"]);
 const sourceCalculationNumberOperandSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("field"), field: builderKeySchema }).strict(),
   z.object({ source: z.literal("literal"), value: sourceExactDecimalTextV2Schema }).strict(),
 ]);
-const sourceCalculationExpressionSchema = z.discriminatedUnion("operation", [
+/**
+ * One value of a numeric calculation as authored: a named field, an exact decimal literal, or a
+ * further numeric operation over further values. A nested operation is the same closed form the
+ * calculation itself uses, so a new formula needs no new expression and no engine change.
+ */
+type SourceCalculationNumberValue =
+  | z.infer<typeof sourceCalculationNumberOperandSchema>
+  | {
+      source: "numeric";
+      numeric_operation: z.infer<typeof sourceCalculationNumberOperationSchema>;
+      operands: SourceCalculationNumberValue[];
+    };
+const inspectSourceCalculationNumberValue = (
+  value: SourceCalculationNumberValue,
+  depth = 1,
+): { depth: number; values: number } => {
+  if (value.source !== "numeric") return { depth, values: 1 };
+  const inspected = value.operands.map((operand) =>
+    inspectSourceCalculationNumberValue(operand, depth + 1),
+  );
+  return {
+    depth: Math.max(depth, ...inspected.map((operand) => operand.depth)),
+    values: 1 + inspected.reduce((total, operand) => total + operand.values, 0),
+  };
+};
+const sourceCalculationNumberValueSchema: z.ZodType<SourceCalculationNumberValue> = z.lazy(() =>
   z
-    .object({
-      operation: z.literal("subtract_percentage"),
-      amount_field: builderKeySchema,
-      percentage_field: builderKeySchema,
-    })
-    .strict(),
+    .discriminatedUnion("source", [
+      ...sourceCalculationNumberOperandSchema.options,
+      z
+        .object({
+          source: z.literal("numeric"),
+          numeric_operation: sourceCalculationNumberOperationSchema,
+          operands: z.array(sourceCalculationNumberValueSchema).min(2).max(20),
+        })
+        .strict(),
+    ])
+    .superRefine((value, context) => {
+      const inspected = inspectSourceCalculationNumberValue(value);
+      if (inspected.depth > calculationMaximumNestingDepth)
+        context.addIssue({
+          code: "custom",
+          message: `Numeric nesting cannot exceed ${calculationMaximumNestingDepth} levels`,
+        });
+      if (inspected.values > calculationMaximumOperandCount)
+        context.addIssue({
+          code: "custom",
+          message: `A numeric calculation cannot exceed ${calculationMaximumOperandCount} values`,
+        });
+    }),
+);
+const sourceCalculationExpressionSchema = z.discriminatedUnion("operation", [
   z
     .object({
       operation: z.literal("join_text"),
@@ -631,8 +683,8 @@ const sourceCalculationExpressionSchema = z.discriminatedUnion("operation", [
   z
     .object({
       operation: z.literal("numeric"),
-      numeric_operation: z.enum(["add", "subtract", "multiply", "divide"]),
-      operands: z.array(sourceCalculationNumberOperandSchema).min(2).max(20),
+      numeric_operation: sourceCalculationNumberOperationSchema,
+      operands: z.array(sourceCalculationNumberValueSchema).min(2).max(20),
     })
     .strict(),
   z.object({ operation: z.literal("condition"), condition: sourceConditionSchema }).strict(),
@@ -674,7 +726,6 @@ const sourceCalculationSettingsSchema = z
     const validResultTypes: Readonly<Record<typeof operation, readonly string[]>> = {
       join_text: ["text"],
       numeric: ["whole_number", "decimal_number", "money"],
-      subtract_percentage: ["decimal_number", "money"],
       condition: ["yes_no"],
       date_offset: ["date", "date_time"],
       deadline_passed: ["yes_no"],
@@ -684,6 +735,18 @@ const sourceCalculationSettingsSchema = z
         code: "custom",
         path: ["result_type"],
         message: "Calculation result type must match its operation",
+      });
+    if (
+      value.expression.operation === "numeric" &&
+      value.expression.operands.reduce(
+        (total, operand) => total + inspectSourceCalculationNumberValue(operand).values,
+        0,
+      ) > calculationMaximumOperandCount
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["expression", "operands"],
+        message: `A numeric calculation cannot exceed ${calculationMaximumOperandCount} values`,
       });
     if (value.evaluation === "stored" && operation === "deadline_passed")
       context.addIssue({
