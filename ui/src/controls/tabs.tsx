@@ -1,8 +1,9 @@
 "use client";
 
-import { useId, useRef, type KeyboardEvent, type ReactElement } from "react";
+import type { ReactElement } from "react";
 import { isRepeatableSlotIdentityV2, repeatableSlotKeyV2 } from "@vortex/contracts";
 import { DefinitionRenderError } from "../definition-error";
+import { Tabs as ShadcnTabs, TabsContent, TabsList, TabsTrigger } from "../components/tabs";
 import type { TabsPayload } from "./projected-data";
 import {
   readControlSettings,
@@ -25,17 +26,17 @@ const TAB_SLOTS = [
 type Tab = Readonly<{ key: string; label: string; slotKey: string }>;
 
 /**
- * WAI-ARIA tabs with automatic activation. Arrow keys, Home and End move between tabs; pointer,
- * Enter and Space use the native button. Every panel stays mounted and inactive panels are
- * hidden, so switching tabs never loses entered values. The semantic tab key is the declared
- * slot key in the 1.0.0 release and the stable item identity in the 2.0.0 release; only a change
- * of tab emits the declared `tab_changed` event.
+ * WAI-ARIA tabs with automatic activation, rendered by the shadcn Tabs component (Base UI): the
+ * tablist owns the arrow key, Home and End keyboard behaviour, a tab activates as soon as it takes
+ * focus, and every tab is a native button.
+ * Every panel stays mounted while inactive panels are hidden, so switching tabs never loses
+ * entered values. The semantic tab key is the declared slot key in the 1.0.0 release and the
+ * stable item identity in the 2.0.0 release; only a change of tab emits the declared
+ * `tab_changed` event.
  */
 export function Tabs(props: TabsProps): ReactElement {
   const context = resolveControlContext<TabsPayload>(props, ["tab_changed"]);
   const settings = readControlSettings(props, context.location);
-  const baseId = useId();
-  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   // A repeatable release declares its tabs as items keyed by a stable identity, so it has no fixed
   // slot list and may carry any number of tabs. A fixed release keeps its declared four slots.
@@ -105,72 +106,35 @@ export function Tabs(props: TabsProps): ReactElement {
     context.events?.tab_changed?.({ event: "tab_changed", tabKey: key });
   };
 
-  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number): void => {
-    const last = tabs.length - 1;
-    const next =
-      event.key === "ArrowRight"
-        ? index === last ? 0 : index + 1
-        : event.key === "ArrowLeft"
-          ? index === 0 ? last : index - 1
-          : event.key === "Home"
-            ? 0
-            : event.key === "End"
-              ? last
-              : undefined;
-    if (next === undefined) return;
-    event.preventDefault();
-    const target = tabs[next]!.key;
-    tabRefs.current[target]?.focus();
-    select(target);
+  // Only a declared tab key is a tab change; any other value the primitive reports is ignored and
+  // never emits the declared event.
+  const onValueChange = (value: unknown): void => {
+    if (typeof value !== "string" || !isTab(value)) return;
+    select(value);
   };
 
-  const tabId = (key: string): string => `${baseId}-tab-${key}`;
-  const panelId = (key: string): string => `${baseId}-panel-${key}`;
   const label = context.accessibleName ?? props.metadata.name;
 
   return (
-    <div
+    <ShadcnTabs
+      value={active}
+      onValueChange={onValueChange}
       data-vortex-control="tabs"
       data-vortex-placement-id={props.placementId}
       data-vortex-active-tab={active}
-      className="vortex-tabs"
     >
-      <div role="tablist" aria-label={label} className="vortex-tablist">
-        {tabs.map((tab, index) => (
-          <button
-            key={tab.key}
-            ref={(element) => {
-              tabRefs.current[tab.key] = element;
-            }}
-            id={tabId(tab.key)}
-            type="button"
-            role="tab"
-            aria-selected={tab.key === active}
-            aria-controls={panelId(tab.key)}
-            tabIndex={tab.key === active ? 0 : -1}
-            data-vortex-tab-key={tab.key}
-            onClick={() => select(tab.key)}
-            onKeyDown={(event) => onKeyDown(event, index)}
-            className="vortex-tab"
-          >
+      <TabsList aria-label={label} activateOnFocus>
+        {tabs.map((tab) => (
+          <TabsTrigger key={tab.key} value={tab.key} data-vortex-tab-key={tab.key}>
             {tab.label}
-          </button>
+          </TabsTrigger>
         ))}
-      </div>
+      </TabsList>
       {tabs.map((tab) => (
-        <div
-          key={tab.key}
-          id={panelId(tab.key)}
-          role="tabpanel"
-          aria-labelledby={tabId(tab.key)}
-          tabIndex={0}
-          hidden={tab.key !== active}
-          data-vortex-tab-key={tab.key}
-          className="vortex-tabpanel"
-        >
+        <TabsContent key={tab.key} value={tab.key} keepMounted data-vortex-tab-key={tab.key}>
           {props.slots[tab.slotKey] ?? null}
-        </div>
+        </TabsContent>
       ))}
-    </div>
+    </ShadcnTabs>
   );
 }
