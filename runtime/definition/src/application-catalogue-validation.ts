@@ -49,16 +49,21 @@ const effectiveLayouts = (responsive: SourcePlacement["responsive"]): SourceLayo
 };
 
 /** Exact registered releases keyed by permanent block identity and release version. */
-const registeredReleases: ReadonlyMap<string, PlatformBlockReleaseV2> = new Map(
-  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.releases.map((release) => [
-    `${release.blockId}:${release.releaseVersion}`,
-    release,
-  ]),
-);
+const registeredReleasesOf = (
+  additionalReleases: readonly PlatformBlockReleaseV2[],
+): ReadonlyMap<string, PlatformBlockReleaseV2> =>
+  new Map(
+    [...IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.releases, ...additionalReleases].map((release) => [
+      `${release.blockId}:${release.releaseVersion}`,
+      release,
+    ]),
+  );
 
 type SlotOptions = Readonly<{
   scope: readonly Segment[];
   depth: number;
+  /** True for a page's own content slots, the only place a custom component may be placed. */
+  pageLevel?: boolean;
   allowedCategories?: ReadonlySet<string>;
   responsiveOrderAllowed: boolean;
   publicSurface: boolean;
@@ -79,8 +84,16 @@ type ShellContentSlot = Readonly<{
  */
 export function validateApplicationSourceCatalogue(
   source: ApplicationSourceDocumentV2,
+  /**
+   * Custom component releases the publishing path resolved for this application: its own and the
+   * exact releases of the modules it binds. Draft save passes none, so only the platform catalogue
+   * is available then; publication passes the resolved custom component releases so a release that
+   * carries a custom component validates against its own catalogue.
+   */
+  customComponentReleases: readonly PlatformBlockReleaseV2[] = [],
 ): DefinitionRuleFailure[] {
   const catalogue = IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2;
+  const registeredReleases = registeredReleasesOf(customComponentReleases);
   const failures: DefinitionRuleFailure[] = [];
   const report = (
     ruleCode: CatalogueRuleCode,
@@ -404,6 +417,24 @@ export function validateApplicationSourceCatalogue(
         continue;
       }
       options.shellPlacements?.set(alias, { depth: options.depth, release });
+      // A custom component is placeable only by its owning application or by an application that
+      // binds the owning module (publication resolution also requires the exact owning module
+      // release); an unrelated application is refused here even when the release is present in
+      // the resolved catalogue. It is a page-level block, never placed in a shell or inside
+      // another component.
+      const customOwner = release.customComponent?.owner;
+      if (customOwner !== undefined) {
+        if (
+          customOwner.kind === "application"
+            ? customOwner.definitionKey !== source.key
+            : !source.body.module_bindings.some(
+                (binding) => binding.module === customOwner.definitionKey,
+              )
+        )
+          report("vortex.definition.application_block_references", "scope_conflict", location);
+        if (options.pageLevel !== true)
+          report("vortex.definition.application_block_references", "unsupported_choice", location);
+      }
       if (
         options.allowedCategories !== undefined &&
         !options.allowedCategories.has(release.paletteGroup)
@@ -527,6 +558,7 @@ export function validateApplicationSourceCatalogue(
         {
           scope,
           depth: declaration.depth,
+          pageLevel: true,
           allowedCategories: declaration.allowed,
           responsiveOrderAllowed: declaration.responsiveOrderAllowed,
           publicSurface,
@@ -541,7 +573,11 @@ export function validateApplicationSourceCatalogue(
     const scope = keySegment("page", page.key);
     const publicSurface = page.type === "public";
     const pageSlot = (slot: SourceSlot) =>
-      validateSlot(slot, { scope, depth: 1, responsiveOrderAllowed: true, publicSurface }, scope);
+      validateSlot(
+        slot,
+        { scope, depth: 1, pageLevel: true, responsiveOrderAllowed: true, publicSurface },
+        scope,
+      );
     if (page.type === "guided_form") {
       const composition = page.composition;
       for (const step of page.steps) {

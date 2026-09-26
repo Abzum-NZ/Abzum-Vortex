@@ -462,8 +462,10 @@
                                    "type":  "dashboard",
                                    "permission":  "application.crm.open",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "content_0":  {
                                                                                                          "block":  {
@@ -500,6 +502,7 @@
                                                                                                   "content_0"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -512,8 +515,10 @@
                                    "permission":  "vortex.crm.organisations.company.read",
                                    "query":  "crm_companies",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "content_1":  {
                                                                                                          "block":  {
@@ -591,6 +596,7 @@
                                                                                                   "content_1"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -603,8 +609,10 @@
                                    "permission":  "vortex.crm.people.contact.read",
                                    "query":  "crm_contacts",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "content_2":  {
                                                                                                          "block":  {
@@ -682,6 +690,7 @@
                                                                                                   "content_2"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -694,8 +703,10 @@
                                    "permission":  "vortex.crm.people.lead.read",
                                    "query":  "crm_leads",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "content_3":  {
                                                                                                          "block":  {
@@ -787,6 +798,7 @@
                                                                                                   "content_3"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -799,8 +811,10 @@
                                    "permission":  "vortex.crm.opportunities.opportunity.read",
                                    "query":  "crm_pipeline",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "content_4":  {
                                                                                                          "block":  {
@@ -892,6 +906,7 @@
                                                                                                   "content_4"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -904,8 +919,10 @@
                                    "permission":  "vortex.crm.activities.activity.read",
                                    "query":  "crm_activities",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "content_5":  {
                                                                                                          "block":  {
@@ -990,6 +1007,7 @@
                                                                                                   "content_5"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -1024,9 +1042,11 @@
                                                  }
                                              ],
                                    "composition":  {
-                                                       "shell_kind":  "default",
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
                                                        "step_content":  {
                                                                             "page_crm_qualify_lead_details":  {
+                                                                                                                 "slot_primary":  {
                                                                                                                   "placements":  {
                                                                                                                                      "form_6_0":  {
                                                                                                                                                       "block":  {
@@ -1142,8 +1162,10 @@
                                                                                                                                                 "form_6_0"
                                                                                                                                             ]
                                                                                                                             }
+                                                                                                                  }
                                                                                                               },
                                                                             "page_crm_qualify_company_match":  {
+                                                                                                                  "slot_primary":  {
                                                                                                                    "placements":  {
                                                                                                                                       "form_6_1":  {
                                                                                                                                                        "block":  {
@@ -1259,8 +1281,10 @@
                                                                                                                                                  "form_6_1"
                                                                                                                                              ]
                                                                                                                              }
+                                                                                                                   }
                                                                                                                },
                                                                             "page_crm_qualify_opportunity_details":  {
+                                                                                                                        "slot_primary":  {
                                                                                                                          "placements":  {
                                                                                                                                             "form_6_2":  {
                                                                                                                                                              "block":  {
@@ -1376,8 +1400,10 @@
                                                                                                                                                        "form_6_2"
                                                                                                                                                    ]
                                                                                                                                    }
+                                                                                                                         }
                                                                                                                      },
                                                                             "page_crm_qualify_summary":  {
+                                                                                                            "slot_primary":  {
                                                                                                              "placements":  {
                                                                                                                                 "form_6_3":  {
                                                                                                                                                  "block":  {
@@ -1569,6 +1595,7 @@
                                                                                                                                            "form_6_3"
                                                                                                                                        ]
                                                                                                                        }
+                                                                                                             }
                                                                                                          }
                                                                         }
                                                    }
@@ -1582,8 +1609,10 @@
                                    "permission":  "application.crm.shared_cases.read",
                                    "query":  "crm_shared_cases",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "content_7":  {
                                                                                                          "block":  {
@@ -1668,6 +1697,7 @@
                                                                                                   "content_7"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -1680,8 +1710,10 @@
                                    "permission":  "vortex.crm.organisations.company.create",
                                    "commit_action":  "vortex.crm.organisations.company.create",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "form_crm_company_create":  {
                                                                                                                        "block":  {
@@ -1797,6 +1829,7 @@
                                                                                                   "form_crm_company_create"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -1809,8 +1842,10 @@
                                    "permission":  "vortex.crm.organisations.company.update",
                                    "commit_action":  "vortex.crm.organisations.company.update",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "form_crm_company_edit":  {
                                                                                                                      "block":  {
@@ -1926,6 +1961,7 @@
                                                                                                   "form_crm_company_edit"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -1938,8 +1974,10 @@
                                    "permission":  "vortex.crm.people.contact.create",
                                    "commit_action":  "vortex.crm.people.contact.create",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "form_crm_contact_create":  {
                                                                                                                        "block":  {
@@ -2055,6 +2093,7 @@
                                                                                                   "form_crm_contact_create"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -2067,8 +2106,10 @@
                                    "permission":  "vortex.crm.people.contact.update",
                                    "commit_action":  "vortex.crm.people.contact.update",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "form_crm_contact_edit":  {
                                                                                                                      "block":  {
@@ -2184,6 +2225,7 @@
                                                                                                   "form_crm_contact_edit"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -2196,8 +2238,10 @@
                                    "permission":  "vortex.crm.people.lead.create",
                                    "commit_action":  "vortex.crm.people.lead.create",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "form_crm_lead_create":  {
                                                                                                                     "block":  {
@@ -2313,6 +2357,7 @@
                                                                                                   "form_crm_lead_create"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -2325,8 +2370,10 @@
                                    "permission":  "vortex.crm.people.lead.update",
                                    "commit_action":  "vortex.crm.people.lead.update",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "form_crm_lead_edit":  {
                                                                                                                   "block":  {
@@ -2442,6 +2489,7 @@
                                                                                                   "form_crm_lead_edit"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -2453,8 +2501,10 @@
                                    "record_type":  "vortex.crm.organisations:company",
                                    "permission":  "vortex.crm.organisations.company.read",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "form_crm_company_merge":  {
     "block":  {
@@ -2695,6 +2745,7 @@
                                                                                                   "form_crm_company_merge"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -2706,8 +2757,10 @@
                                    "record_type":  "vortex.crm.people:contact",
                                    "permission":  "vortex.crm.people.contact.read",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "detail_crm_contact":  {
                                                                                                                   "block":  {
@@ -2819,6 +2872,7 @@
                                                                                                   "detail_crm_contact"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -2830,8 +2884,10 @@
                                    "record_type":  "vortex.crm.people:lead",
                                    "permission":  "vortex.crm.people.lead.read",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
                                                                                        "detail_crm_lead":  {
                                                                                                                "block":  {
@@ -2943,6 +2999,7 @@
                                                                                                   "detail_crm_lead"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -2954,8 +3011,10 @@
                                    "record_type":  "vortex.crm.opportunities:opportunity",
                                    "permission":  "vortex.crm.opportunities.opportunity.read",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
         "action_crm_opportunity_mark_won": {
             "block": {
@@ -3102,6 +3161,7 @@
                                                                                                   "action_crm_opportunity_mark_won"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                },
@@ -3113,8 +3173,10 @@
                                    "record_type":  "vortex.crm.activities:activity",
                                    "permission":  "vortex.crm.activities.activity.read",
                                    "composition":  {
-                                                       "shell_kind":  "default",
-                                                       "main":  {
+                                                       "shell_kind":  "application",
+                                                       "shell":  "shell_crm",
+                                                       "content":  {
+                                                                   "slot_primary":  {
                                                                     "placements":  {
         "action_crm_activity_complete": {
             "block": {
@@ -3247,6 +3309,7 @@
                                                                                                   "action_crm_activity_complete"
                                                                                               ]
                                                                               }
+                                                                    }
                                                                 }
                                                    }
                                }
@@ -4268,8 +4331,187 @@
 
                                                  ],
                  "shells":  [
-
-                            ],
+                   {
+                     "id": "shell_crm",
+                     "key": "crm_shell",
+                     "name": "CRM shell",
+                     "layout": {
+                       "placements": {
+                         "shell_root": {
+                           "block": {
+                             "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                             "release_version": "1.0.0"
+                           },
+                           "settings": {
+                             "direction": {
+                               "kind": "choice",
+                               "value": "column"
+                             },
+                             "gap": {
+                               "kind": "choice",
+                               "value": "medium"
+                             }
+                           },
+                           "theme_overrides": {},
+                           "responsive": {
+                             "desktop": {
+                               "visible": true,
+                               "width": {
+                                 "kind": "fill"
+                               },
+                               "height": {
+                                 "kind": "content"
+                               }
+                             }
+                           },
+                           "slots": {
+                             "header": {
+                               "placements": {
+                                 "shell_heading": {
+                                   "block": {
+                                     "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                                     "release_version": "1.0.0"
+                                   },
+                                   "settings": {
+                                     "text": {
+                                       "kind": "text",
+                                       "value": "CRM"
+                                     },
+                                     "level": {
+                                       "kind": "choice",
+                                       "value": "one"
+                                     }
+                                   },
+                                   "theme_overrides": {},
+                                   "responsive": {
+                                     "desktop": {
+                                       "visible": true,
+                                       "width": {
+                                         "kind": "fill"
+                                       },
+                                       "height": {
+                                         "kind": "content"
+                                       }
+                                     }
+                                   },
+                                   "slots": {}
+                                 }
+                               },
+                               "order": {
+                                 "desktop": [
+                                   "shell_heading"
+                                 ]
+                               }
+                             },
+                             "content": {
+                               "placements": {
+                                 "shell_body": {
+                                   "block": {
+                                     "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                     "release_version": "1.0.0"
+                                   },
+                                   "settings": {
+                                     "direction": {
+                                       "kind": "choice",
+                                       "value": "row"
+                                     },
+                                     "gap": {
+                                       "kind": "choice",
+                                       "value": "medium"
+                                     }
+                                   },
+                                   "theme_overrides": {},
+                                   "responsive": {
+                                     "desktop": {
+                                       "visible": true,
+                                       "width": {
+                                         "kind": "fill"
+                                       },
+                                       "height": {
+                                         "kind": "content"
+                                       }
+                                     }
+                                   },
+                                   "slots": {
+                                     "menu": {
+                                       "placements": {
+                                         "shell_navigation": {
+                                           "block": {
+                                             "block_id": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
+                                             "release_version": "1.0.0"
+                                           },
+                                           "settings": {
+                                             "title": {
+                                               "kind": "text",
+                                               "value": "CRM"
+                                             }
+                                           },
+                                           "theme_overrides": {},
+                                           "responsive": {
+                                             "desktop": {
+                                               "visible": true,
+                                               "width": {
+                                                 "kind": "fill"
+                                               },
+                                               "height": {
+                                                 "kind": "content"
+                                               }
+                                             }
+                                           },
+                                           "slots": {}
+                                         }
+                                       },
+                                       "order": {
+                                         "desktop": [
+                                           "shell_navigation"
+                                         ]
+                                       }
+                                     },
+                                     "content": {
+                                       "placements": {},
+                                       "order": {
+                                         "desktop": []
+                                       }
+                                     }
+                                   }
+                                 }
+                               },
+                               "order": {
+                                 "desktop": [
+                                   "shell_body"
+                                 ]
+                               }
+                             }
+                           }
+                         }
+                       },
+                       "order": {
+                         "desktop": [
+                           "shell_root"
+                         ]
+                       }
+                     },
+                     "content_slots": [
+                       {
+                         "id": "slot_primary",
+                         "key": "primary",
+                         "label": "Primary",
+                         "required": true,
+                         "allowed_child_categories": [
+                           "content",
+                           "data",
+                           "figures",
+                           "record",
+                           "actions",
+                           "input",
+                           "layout"
+                         ],
+                         "parent_placement": "shell_body",
+                         "parent_slot": "content"
+                       }
+                     ]
+                   }
+                 ],
                  "flows":  [
                      {
                          "contractVersion": "1.0.0",

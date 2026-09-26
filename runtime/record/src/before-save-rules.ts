@@ -158,7 +158,7 @@ export const applyBeforeSaveRules = (input: {
     };
   }
 
-  const generatedFieldIds = new Set(
+  const generatedFieldIds = new Set<string>(
     recordType.fields.filter((field) => generatedFieldTypes.has(field.type)).map((f) => f.fieldId),
   );
   const changedFieldIds = [...Object.keys(result.setValues), ...result.clearFieldIds];

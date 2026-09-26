@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
-import { DisplayHeader, resolveDisplayContext, type DisplayRenderProps } from "./controls";
+import { DisplayHeader } from "./controls";
+import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import type { RichTextPayload } from "./projected-data";
 import { RichTextDocumentView } from "./rich-text";

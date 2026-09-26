@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { DisplayCellView } from "./cell";
-import { DisplayHeader, resolveDisplayContext, type DisplayRenderProps } from "./controls";
+import { DisplayHeader } from "./controls";
+import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import type { SummaryPayload } from "./projected-data";
 

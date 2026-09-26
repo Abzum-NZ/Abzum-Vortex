@@ -2,6 +2,7 @@ import "server-only";
 
 export {
   protectedQueryCommandSchema,
+  protectedQuerySortSchema,
   protectedQueryRowSchema,
   protectedQueryPageRowSchema,
   protectedQueryRowCapabilitiesSchema,
@@ -12,6 +13,7 @@ export {
   protectedQueryPageSchema,
   protectedQueryResultSchema,
   type ProtectedQueryCommand,
+  type ProtectedQuerySort,
   type ProtectedQueryRow,
   type ProtectedQueryPageRow,
   type ProtectedQueryRowCapabilities,

@@ -13,14 +13,12 @@ import {
   type FilterInputKind,
   InlineEditCell,
   PaginationControl,
-  resolveDisplayContext,
   RowActionControl,
-  rowName,
   SearchControl,
   SelectAllControl,
   SelectionControl,
-  type DisplayRenderProps,
 } from "./controls";
+import { resolveDisplayContext, rowName, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import type {
   DisplayCellValue,

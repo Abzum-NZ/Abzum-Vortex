@@ -6,7 +6,8 @@ create or replace function vortex_record.run_module_query(
   p_requested_field_ids jsonb,
   p_page_size integer,
   p_after jsonb,
-  p_requested_system_field_keys jsonb
+  p_requested_system_field_keys jsonb,
+  p_user_inputs jsonb
 )
 returns jsonb
 language plpgsql
@@ -100,6 +101,23 @@ declare
   read_time_field boolean;
   read_time_clock jsonb;
   read_time_sql text;
+  list_key text;
+  declared_list jsonb;
+  parsed_ids text[];
+  declared_lists jsonb := '{}'::jsonb;
+  declared_sortable_ids text[] := array[]::text[];
+  declared_filterable_ids text[] := array[]::text[];
+  declared_searchable_ids text[] := array[]::text[];
+  user_sort jsonb;
+  user_filter jsonb;
+  user_filter_ids text[] := array[]::text[];
+  user_search text;
+  user_search_folded text;
+  effective_sort jsonb;
+  effective_sort_is_user boolean := false;
+  search_candidate_ids text[] := array[]::text[];
+  search_field_ids text[] := array[]::text[];
+  search_matches boolean;
 begin
   -- Request shape. Nothing here is authority; it only bounds the work.
   if p_input_values is null or pg_catalog.jsonb_typeof(p_input_values) <> 'object'
@@ -138,6 +156,93 @@ begin
     end if;
     system_field_keys := pg_catalog.array_append(system_field_keys, field_item #>> '{}');
   end loop;
+
+  -- User-facing sort, filter and search: typed inputs the caller proved against
+  -- the bound list component's declared sortable, filterable and searchable
+  -- fields. Nothing here is authority; the published record-type field flags and
+  -- the guaranteed-readable projection still decide every accepted field below,
+  -- and a user input can only narrow the published query.
+  if p_user_inputs is null then
+    p_user_inputs := '{}'::jsonb;
+  end if;
+  if pg_catalog.jsonb_typeof(p_user_inputs) <> 'object' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  if exists (
+    select 1 from pg_catalog.jsonb_object_keys(p_user_inputs) as supplied(key)
+    where supplied.key not in (
+      'sort', 'filter', 'search', 'sortableFieldIds', 'filterableFieldIds', 'searchableFieldIds'
+    )
+  ) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+
+  -- The component-declared allow-lists, each an array of distinct field
+  -- identities; a malformed or repeated identity refuses the request.
+  for list_key in
+    select pg_catalog.unnest(array['sortableFieldIds', 'filterableFieldIds', 'searchableFieldIds'])
+  loop
+    declared_list := coalesce(p_user_inputs -> list_key, '[]'::jsonb);
+    if pg_catalog.jsonb_typeof(declared_list) <> 'array' then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+    end if;
+    if pg_catalog.jsonb_array_length(declared_list) > 200 then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+    end if;
+    parsed_ids := array[]::text[];
+    for field_item in
+      select item.value from pg_catalog.jsonb_array_elements(declared_list) as item(value)
+    loop
+      if pg_catalog.jsonb_typeof(field_item) <> 'string'
+        or pg_catalog.lower(field_item #>> '{}') !~ uuid_pattern
+        or pg_catalog.lower(field_item #>> '{}') = any (parsed_ids) then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+      end if;
+      parsed_ids := pg_catalog.array_append(parsed_ids, pg_catalog.lower(field_item #>> '{}'));
+    end loop;
+    declared_lists := declared_lists || pg_catalog.jsonb_build_object(list_key, pg_catalog.to_jsonb(parsed_ids));
+  end loop;
+  select coalesce(pg_catalog.array_agg(item.value), array[]::text[]) into declared_sortable_ids
+  from pg_catalog.jsonb_array_elements_text(declared_lists -> 'sortableFieldIds') as item(value);
+  select coalesce(pg_catalog.array_agg(item.value), array[]::text[]) into declared_filterable_ids
+  from pg_catalog.jsonb_array_elements_text(declared_lists -> 'filterableFieldIds') as item(value);
+  select coalesce(pg_catalog.array_agg(item.value), array[]::text[]) into declared_searchable_ids
+  from pg_catalog.jsonb_array_elements_text(declared_lists -> 'searchableFieldIds') as item(value);
+
+  -- The user's sort: the same pair shape as the published sort, bounded and each
+  -- direction valid. It replaces the published order only when it is non-empty.
+  user_sort := coalesce(p_user_inputs -> 'sort', '[]'::jsonb);
+  if pg_catalog.jsonb_typeof(user_sort) <> 'array' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  if pg_catalog.jsonb_array_length(user_sort) > 20 then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+
+  -- The user's filter: the published typed condition tree, or null.
+  user_filter := p_user_inputs -> 'filter';
+  if user_filter = 'null'::jsonb then
+    user_filter := null;
+  end if;
+  if user_filter is not null
+    and pg_catalog.jsonb_typeof(user_filter) is distinct from 'object' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+
+  -- The user's search: one bounded, non-blank text term; a blank term is absent.
+  if p_user_inputs ? 'search'
+    and pg_catalog.jsonb_typeof(p_user_inputs -> 'search') not in ('string', 'null') then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  user_search := pg_catalog.btrim(p_user_inputs ->> 'search');
+  if user_search = '' then
+    user_search := null;
+  end if;
+  if user_search is not null and pg_catalog.length(user_search) > 200 then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  user_search_folded := pg_catalog.lower(user_search);
+
   foreach system_key in array system_field_keys loop
     system_expressions := pg_catalog.array_append(system_expressions, pg_catalog.format('%L, %s', system_key,
       case system_key
@@ -219,6 +324,25 @@ begin
   from vortex_record.plan_record_read_scan_internal(record_type_id_value) as plan;
   readable_field_ids := coalesce(access_plan.readable_field_ids, array[]::text[]);
 
+  -- Search authority: the record type's own declared search priority. A component
+  -- with only a search box declares no per-field list, so an empty declared set
+  -- searches every field the record type marks searchable; a declared set narrows
+  -- it. A row matches only through a field the reader can see on that row, so a
+  -- hidden searchable value never decides a match.
+  if pg_catalog.cardinality(declared_searchable_ids) > 0 then
+    search_candidate_ids := declared_searchable_ids;
+  else
+    select coalesce(pg_catalog.array_agg(item.key), array[]::text[])
+    into search_candidate_ids
+    from pg_catalog.jsonb_object_keys(fields_by_id) as item(key);
+  end if;
+  foreach field_key in array search_candidate_ids loop
+    if (fields_by_id ? field_key)
+      and (fields_by_id -> field_key ->> 'searchPriority') in ('first', 'normal', 'last') then
+      search_field_ids := pg_catalog.array_append(search_field_ids, field_key);
+    end if;
+  end loop;
+
   -- Projection: only fields the published query selects.
   select coalesce(pg_catalog.array_agg(pg_catalog.lower(item.value #>> '{}')), array[]::text[])
   into selected_ids
@@ -227,17 +351,32 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'field_unbounded');
   end if;
 
-  -- Order: the published sort over orderable typed columns, then the record id.
-  -- A sort field the reader is not guaranteed to see is validated but never
-  -- pushed, so the scan order never depends on a value it may withhold; the
-  -- remaining readable sort fields and the record id give the keyset order.
+  -- Order: the published sort, or the user's chosen sort when one is supplied,
+  -- over orderable typed columns, then the record id. A published sort field the
+  -- reader is not guaranteed to see is validated but never pushed, so the scan
+  -- order never depends on a value it may withhold. A user sort must instead be a
+  -- field the component declares sortable, the record type declares sortable and
+  -- the reader is guaranteed to see: silently ordering by something else would be
+  -- wrong, so it is refused rather than pushed away.
+  if pg_catalog.jsonb_array_length(user_sort) > 0 then
+    effective_sort := user_sort;
+    effective_sort_is_user := true;
+  else
+    effective_sort := query_item -> 'sort';
+    effective_sort_is_user := false;
+  end if;
   for sort_item in
-    select item.value from pg_catalog.jsonb_array_elements(query_item -> 'sort') as item(value)
+    select item.value from pg_catalog.jsonb_array_elements(effective_sort) as item(value)
   loop
     field_key := pg_catalog.lower(sort_item ->> 'fieldId');
     if field_key is null or not (fields_by_id ? field_key)
       or sort_item ->> 'direction' not in ('ascending', 'descending')
       or field_key = any (declared_sort_ids) then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'sort_invalid');
+    end if;
+    if effective_sort_is_user
+      and (not (field_key = any (declared_sortable_ids))
+        or coalesce((fields_by_id -> field_key ->> 'sortable')::boolean, false) is not true) then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'sort_invalid');
     end if;
     select mapping.* into mapping_row
@@ -250,6 +389,10 @@ begin
     end if;
     declared_sort_ids := pg_catalog.array_append(declared_sort_ids, field_key);
     pushed := field_key = any (readable_field_ids);
+    if effective_sort_is_user and not pushed then
+      -- The user's order must actually be the scan order.
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'sort_invalid');
+    end if;
     -- A read-time field is worked out inside this statement, from the
     -- record's own stored values and one statement timestamp; it is never a
     -- stored column here.
@@ -302,10 +445,34 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'sort_invalid');
   end if;
 
-  -- Filter: the published condition tree over this record type's own fields.
+  -- Filter: the published condition tree over this record type's own fields, and,
+  -- when supplied, the user's typed filter ANDed with it so it can only narrow.
+  -- Every field the user's tree reads must be one the component declares
+  -- filterable; the record type's own filterable flag is checked below for both.
   filter_condition := query_item -> 'filter';
   if filter_condition is not null and filter_condition = 'null'::jsonb then
     filter_condition := null;
+  end if;
+  if user_filter is not null then
+    select coalesce(pg_catalog.array_agg(distinct referenced.value #>> '{}'), array[]::text[])
+    into user_filter_ids
+    from pg_catalog.jsonb_path_query(
+      user_filter, 'lax $.**?(@.source == "field").fieldId'
+    ) as referenced(value);
+    if exists (
+      select 1 from pg_catalog.unnest(user_filter_ids) as referenced(id)
+      where referenced.id <> pg_catalog.lower(referenced.id)
+        or referenced.id <> all (declared_filterable_ids)
+    ) then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+    end if;
+    filter_condition := case
+      when filter_condition is null then user_filter
+      else pg_catalog.jsonb_build_object(
+        'kind', 'all',
+        'conditions', pg_catalog.jsonb_build_array(filter_condition, user_filter)
+      )
+    end;
   end if;
   if filter_condition is not null then
     select coalesce(pg_catalog.array_agg(distinct referenced.value #>> '{}'), array[]::text[])
@@ -678,6 +845,39 @@ begin
           if needs_refusal_check then
             return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
           end if;
+          -- A search term matches only through a searchable field this row exposes
+          -- to the reader; a field the reader cannot see never decides a match, so
+          -- a hidden value can neither satisfy a search nor be inferred from one.
+          -- Only a text or number value, or the text members of a list value, is
+          -- searched; a structured value's JSON keys and identifiers never match.
+          if user_search is not null then
+            search_matches := false;
+            foreach field_key in array search_field_ids loop
+              if readable_values ? field_key and (
+                (pg_catalog.jsonb_typeof(readable_values -> field_key) in ('string', 'number')
+                  and pg_catalog.strpos(
+                    pg_catalog.lower(readable_values ->> field_key), user_search_folded
+                  ) > 0)
+                or (pg_catalog.jsonb_typeof(readable_values -> field_key) = 'array'
+                  and exists (
+                    select 1
+                    from pg_catalog.jsonb_array_elements(readable_values -> field_key) as member(value)
+                    where pg_catalog.jsonb_typeof(member.value) = 'string'
+                      and pg_catalog.strpos(
+                        pg_catalog.lower(member.value #>> '{}'), user_search_folded
+                      ) > 0
+                  ))
+              ) then
+                search_matches := true;
+                exit;
+              end if;
+            end loop;
+            if not search_matches then
+              last_examined_sort_key := scan_record.sort_key;
+              last_examined_record_id := scan_record.record_id;
+              continue;
+            end if;
+          end if;
           if row_count = p_page_size then
             more_rows := true;
             exit;
@@ -742,11 +942,11 @@ end
 $function$;
 
 
-revoke all on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb)
+revoke all on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_module_owner;
-grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb)
+grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb)
   to vortex_request;
 
-comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb) is
-  'One bounded keyset page of rows readable through read_record for one installed Module query, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows the scan to the caller''s owner, owner-group and direct-share records where those routes have an exact table form, and still decides every returned row through read_record; works out read-time fields, such as a deadline-passed calculation, inside the query at one statement timestamp in the organisation time zone, so no query is refused for freshness.';
+comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb) is
+  'One bounded keyset page of rows readable through read_record for one installed Module query, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows the scan to the caller''s owner, owner-group and direct-share records where those routes have an exact table form, and still decides every returned row through read_record; works out read-time fields, such as a deadline-passed calculation, inside the query at one statement timestamp in the organisation time zone, so no query is refused for freshness.';

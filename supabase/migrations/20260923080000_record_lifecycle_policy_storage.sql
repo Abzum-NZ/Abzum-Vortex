@@ -26,6 +26,13 @@ begin;
 -- table is created; it is revoked again before the transaction completes.
 grant references on vortex_definition.roots to vortex_record_owner;
 
+-- The postgres-owned Activity composer below is created in vortex_record, which
+-- needs the schema CREATE privilege that only the schema owner can lend. Revoked
+-- again before the transaction completes.
+set local role vortex_record_owner;
+grant create on schema vortex_record to postgres;
+reset role;
+
 set local role vortex_record_owner;
 
 -- One closed age/count ceiling value: an explicit finite JSON-safe positive
@@ -57,7 +64,7 @@ immutable
 security invoker
 set search_path = ''
 as $function$
-  select pg_catalog.coalesce(
+  select coalesce(
     p_value ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
     and pg_catalog.lower(p_value) <> '00000000-0000-0000-0000-000000000000',
     false
@@ -89,7 +96,7 @@ immutable
 security invoker
 set search_path = ''
 as $function$
-  select pg_catalog.coalesce(
+  select coalesce(
     pg_catalog.char_length(p_value) between 1 and 80
     and p_value ~ '^[a-z0-9]+(?:[-_][a-z0-9]+)*$'
     and p_value !~* '^https?://|postgres://|select |insert ',
@@ -104,7 +111,7 @@ immutable
 security invoker
 set search_path = ''
 as $function$
-  select pg_catalog.coalesce(
+  select coalesce(
     p_values is not null
     and pg_catalog.array_ndims(p_values) = 1
     and pg_catalog.cardinality(p_values) > 0
@@ -129,7 +136,7 @@ immutable
 security invoker
 set search_path = ''
 as $function$
-  select pg_catalog.coalesce(
+  select coalesce(
     p_values is not null
     and (
       pg_catalog.cardinality(p_values) = 0
@@ -156,7 +163,7 @@ immutable
 security invoker
 set search_path = ''
 as $function$
-  select pg_catalog.coalesce(
+  select coalesce(
     p_policy is not null
     and pg_catalog.jsonb_typeof(p_policy) = 'object'
     and p_policy ?& array[
@@ -1125,5 +1132,9 @@ comment on function vortex_record.save_record_type_lifecycle_policy_for_administ
 
 reset role;
 revoke references on vortex_definition.roots from vortex_record_owner;
+
+set local role vortex_record_owner;
+revoke create on schema vortex_record from postgres;
+reset role;
 
 commit;

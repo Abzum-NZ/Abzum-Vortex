@@ -1,5 +1,9 @@
 import "server-only";
 
+import { createDatabaseFlowStores } from "./flow-continuation-store";
+import { createFlowOrchestrator } from "./flow-orchestrator";
+import { createFormContinuationService } from "./form-continuation";
+import { createIdentityDisablementCoordinator } from "./identity-disablement";
 import { createApplicationInstallationCoordinator } from "./installation-coordinator";
 import { createInstalledRuntimeContextLoader } from "./installed-runtime-context";
 import { createOperationsAlertSink, readOpenOperationsAlertSignals } from "./operations-alert-sink";
@@ -110,6 +114,8 @@ export {
   type FlowResumeRequest,
   type FlowStartRequest,
   type FlowUnavailableNotice,
+  type NamedActionExecutionResult,
+  type NamedActionRecordPort,
 } from "./flow-orchestrator";
 
 export {
