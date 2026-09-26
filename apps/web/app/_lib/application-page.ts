@@ -169,12 +169,12 @@ const requestState = (
   const sortText = first(parameters[`sort.${placementId}`]);
   const separator = sortText?.lastIndexOf(":") ?? -1;
   const direction = sortText?.slice(separator + 1);
-  const sort =
-    sortText !== undefined &&
-    separator > 0 &&
-    (direction === "ascending" || direction === "descending")
-      ? { fieldId: sortText.slice(0, separator), direction }
-      : null;
+  const sort: { fieldId: string; direction: "ascending" | "descending" } | null =
+    sortText !== undefined && separator > 0 && direction === "ascending"
+      ? { fieldId: sortText.slice(0, separator), direction: "ascending" }
+      : sortText !== undefined && separator > 0 && direction === "descending"
+        ? { fieldId: sortText.slice(0, separator), direction: "descending" }
+        : null;
   const filterPrefix = `filter.${placementId}.`;
   const filters = Object.entries(parameters).flatMap(([name, value]) => {
     const text = first(value);
