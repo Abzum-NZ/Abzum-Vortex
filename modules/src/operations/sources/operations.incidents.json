@@ -833,18 +833,34 @@
         },
         "tasks": [
           {
-            "id": "set_attached_signal",
+            "id": "set_attached_signal_key",
             "type": "record.set_fields",
             "properties": {
               "values": {
                 "attached_signal_key": {
                   "source": "input",
                   "input": "deduplication_key"
-                },
+                }
+              }
+            }
+          },
+          {
+            "id": "set_attached_signal_evidence",
+            "type": "record.set_fields",
+            "properties": {
+              "values": {
                 "attached_signal_evidence": {
                   "source": "input",
                   "input": "evidence"
-                },
+                }
+              }
+            }
+          },
+          {
+            "id": "set_attached_at",
+            "type": "record.set_fields",
+            "properties": {
+              "values": {
                 "attached_at": {
                   "source": "current_time"
                 }

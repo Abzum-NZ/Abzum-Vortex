@@ -1003,14 +1003,22 @@
         ],
         "tasks": [
           {
-            "id": "set_resolution_fields",
+            "id": "set_status",
             "type": "record.set_fields",
             "properties": {
               "values": {
                 "status": {
                   "source": "literal",
                   "value": "resolved"
-                },
+                }
+              }
+            }
+          },
+          {
+            "id": "set_resolved_at",
+            "type": "record.set_fields",
+            "properties": {
+              "values": {
                 "resolved_at": {
                   "source": "current_time"
                 }

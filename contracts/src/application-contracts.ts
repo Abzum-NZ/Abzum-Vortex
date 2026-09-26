@@ -8,6 +8,7 @@ import {
   versionRequirementSchema,
 } from "./definitions";
 import type { ResolveRecordTypeReferences } from "./definitions";
+import { refineActionTaskIds } from "./definition-source-common";
 import {
   actionTaskSchema,
   conditionNodeSchema,
@@ -180,7 +181,7 @@ export const actionDefinitionSchema = z
     sharing: z.enum(["refused", "allowed"]),
     inputs: z.array(actionInputDefinitionSchema).max(50),
     precondition: conditionNodeSchema.optional(),
-    tasks: z.array(actionTaskSchema).min(1).max(10),
+    tasks: z.array(actionTaskSchema).min(1).max(10).superRefine(refineActionTaskIds),
   })
   .strict()
   .superRefine((value, context) => {

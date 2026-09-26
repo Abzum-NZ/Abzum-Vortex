@@ -202,10 +202,30 @@ const sourceActionTaskValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("current_actor") }).strict(),
   z.object({ source: z.literal("current_time") }).strict(),
 ]);
+/**
+ * The task ids of one named action's ordered task list. Each id becomes the id of its compiled
+ * flow task, so the ids are unique within the action and never one the compiled flow reserves for
+ * the precondition.
+ */
+export const refineActionTaskIds = (
+  tasks: readonly Readonly<{ id: string }>[],
+  context: z.RefinementCtx,
+): void => {
+  const seen = new Set<string>();
+  for (const [index, task] of tasks.entries()) {
+    if (seen.has(task.id) || task.id === "precondition" || task.id === "precondition_refused")
+      context.addIssue({
+        code: "custom",
+        path: [index, "id"],
+        message: "An action task id is unique within the action and not a reserved flow task id",
+      });
+    seen.add(task.id);
+  }
+};
 export const sourceActionTaskSchema = z.discriminatedUnion("type", [
   z
     .object({
-      id: sourceAliasSchema,
+      id: builderKeySchema,
       type: z.literal("record.set_fields"),
       properties: z
         .object({ values: z.record(builderKeySchema, sourceActionTaskValueSchema) })
@@ -214,7 +234,7 @@ export const sourceActionTaskSchema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
-      id: sourceAliasSchema,
+      id: builderKeySchema,
       type: z.literal("record.create"),
       properties: z
         .object({
@@ -226,7 +246,7 @@ export const sourceActionTaskSchema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
-      id: sourceAliasSchema,
+      id: builderKeySchema,
       type: z.literal("record.changes"),
       properties: z
         .object({
@@ -248,14 +268,14 @@ export const sourceActionTaskSchema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
-      id: sourceAliasSchema,
+      id: builderKeySchema,
       type: z.literal("record.delete"),
       properties: z.object({}).strict(),
     })
     .strict(),
   z
     .object({
-      id: sourceAliasSchema,
+      id: builderKeySchema,
       type: z.literal("event.announce"),
       properties: z.object({ event: namespacedKeySchema }).strict(),
     })

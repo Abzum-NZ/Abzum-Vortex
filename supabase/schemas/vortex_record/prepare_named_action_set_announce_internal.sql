@@ -97,6 +97,7 @@ begin
     p_action_id, p_record_type_id
   );
   if coalesce((action_context ->> 'rulesUnsupported')::boolean, false)
+    or pg_catalog.jsonb_typeof(action_context -> 'action' -> 'tasks') is distinct from 'array'
     or pg_catalog.jsonb_array_length(action_context -> 'action' -> 'tasks') not between 1 and 10
     or exists (
       select 1 from pg_catalog.jsonb_array_elements(

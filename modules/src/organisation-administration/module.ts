@@ -774,16 +774,24 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           ],
           tasks: [
             {
-              id: "set_published_notice_fields",
+              id: "set_title",
               type: "record.set_fields",
-              properties: {
-                values: {
-                  title: { source: "input", input: "title" },
-                  body: { source: "input", input: "body" },
-                  state: { source: "literal", value: "published" },
-                  published_at: { source: "current_time" },
-                },
-              },
+              properties: { values: { title: { source: "input", input: "title" } } },
+            },
+            {
+              id: "set_body",
+              type: "record.set_fields",
+              properties: { values: { body: { source: "input", input: "body" } } },
+            },
+            {
+              id: "set_state",
+              type: "record.set_fields",
+              properties: { values: { state: { source: "literal", value: "published" } } },
+            },
+            {
+              id: "set_published_at",
+              type: "record.set_fields",
+              properties: { values: { published_at: { source: "current_time" } } },
             },
           ],
         },
@@ -832,16 +840,24 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           ],
           tasks: [
             {
-              id: "set_recorded_request_fields",
+              id: "set_subject",
               type: "record.set_fields",
-              properties: {
-                values: {
-                  subject: { source: "input", input: "subject" },
-                  details: { source: "input", input: "details" },
-                  state: { source: "literal", value: "received" },
-                  received_at: { source: "current_time" },
-                },
-              },
+              properties: { values: { subject: { source: "input", input: "subject" } } },
+            },
+            {
+              id: "set_details",
+              type: "record.set_fields",
+              properties: { values: { details: { source: "input", input: "details" } } },
+            },
+            {
+              id: "set_state",
+              type: "record.set_fields",
+              properties: { values: { state: { source: "literal", value: "received" } } },
+            },
+            {
+              id: "set_received_at",
+              type: "record.set_fields",
+              properties: { values: { received_at: { source: "current_time" } } },
             },
           ],
         },
@@ -856,14 +872,14 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           inputs: [],
           tasks: [
             {
-              id: "set_completed_request_fields",
+              id: "set_state",
               type: "record.set_fields",
-              properties: {
-                values: {
-                  state: { source: "literal", value: "completed" },
-                  closed_at: { source: "current_time" },
-                },
-              },
+              properties: { values: { state: { source: "literal", value: "completed" } } },
+            },
+            {
+              id: "set_closed_at",
+              type: "record.set_fields",
+              properties: { values: { closed_at: { source: "current_time" } } },
             },
           ],
         },
@@ -878,14 +894,14 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           inputs: [],
           tasks: [
             {
-              id: "set_refused_request_fields",
+              id: "set_state",
               type: "record.set_fields",
-              properties: {
-                values: {
-                  state: { source: "literal", value: "refused" },
-                  closed_at: { source: "current_time" },
-                },
-              },
+              properties: { values: { state: { source: "literal", value: "refused" } } },
+            },
+            {
+              id: "set_closed_at",
+              type: "record.set_fields",
+              properties: { values: { closed_at: { source: "current_time" } } },
             },
           ],
         },
@@ -897,7 +913,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           permission: "vortex.organisation_administration.person.suspend",
           shareable: false,
           inputs: [],
-          effects: [],
+          tasks: [],
           protected_operation: "suspend_organization_account",
         },
         {
@@ -908,7 +924,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           permission: "vortex.organisation_administration.person.reactivate",
           shareable: false,
           inputs: [],
-          effects: [],
+          tasks: [],
           protected_operation: "reactivate_organization_account",
         },
         {
@@ -919,7 +935,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           permission: "vortex.organisation_administration.person.close",
           shareable: false,
           inputs: [],
-          effects: [],
+          tasks: [],
           protected_operation: "close_organization_account",
         },
         {
@@ -930,7 +946,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           permission: "vortex.organisation_administration.organization_invitation.revoke",
           shareable: false,
           inputs: [],
-          effects: [],
+          tasks: [],
           protected_operation: "revoke_organization_invitation",
         },
       ],

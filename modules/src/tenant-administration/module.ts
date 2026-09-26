@@ -244,14 +244,14 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
         ],
         tasks: [
           {
-            id: "set_submitted_request_fields",
+            id: "set_reason",
             type: "record.set_fields",
-            properties: {
-              values: {
-                reason: { source: "input", input: "reason" },
-                state: { source: "literal", value: "submitted" },
-              },
-            },
+            properties: { values: { reason: { source: "input", input: "reason" } } },
+          },
+          {
+            id: "set_state",
+            type: "record.set_fields",
+            properties: { values: { state: { source: "literal", value: "submitted" } } },
           },
         ],
       },

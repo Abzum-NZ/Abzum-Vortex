@@ -11,6 +11,7 @@ import {
 import { versionRequirementSchema } from "./definitions";
 import {
   authoredSourceBase,
+  refineActionTaskIds,
   sourceActionTaskSchema,
   sourceAliasSchema,
   sourceConditionSchema,
@@ -1441,7 +1442,7 @@ export const moduleSourceActionSchema = z
     shareable: z.boolean(),
     inputs: z.array(moduleSourceActionInputSchema).max(50),
     precondition: sourceConditionSchema.optional(),
-    tasks: z.array(sourceActionTaskSchema).max(10),
+    tasks: z.array(sourceActionTaskSchema).max(10).superRefine(refineActionTaskIds),
     protected_operation: moduleSourceProtectedOperationKeySchema.optional(),
   })
   .strict()

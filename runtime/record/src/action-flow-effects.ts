@@ -59,8 +59,8 @@ export type PreparedNamedAction = Readonly<{
   actorOrganizationAccountId: string;
   createTargets: readonly NamedActionCreateTarget[];
   /**
-   * The subject fields the actor may currently read under the named action. A `copy_relationships`
-   * A `record.changes` task only copies relationships whose link field is in this set.
+   * The subject fields the actor may currently read under the named action. A `record.changes`
+   * task only copies relationships whose link field is in this set.
    */
   readableFieldIds?: ReadonlySet<string>;
 }>;

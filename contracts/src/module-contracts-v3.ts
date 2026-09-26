@@ -47,6 +47,7 @@ import {
   moduleDependencySchema,
   relationshipDefinitionSchema,
 } from "./module-contracts";
+import { refineActionTaskIds } from "./definition-source-common";
 import { moduleSourceContractVersion as moduleSourceContractVersionV3 } from "./module-source-contracts";
 import { permissionDeclarationSchema } from "./permissions";
 import { protectedOperationReferenceSchema } from "./application-flow-bindings";
@@ -1244,7 +1245,7 @@ export const actionDefinitionV3Schema = z
     sharing: z.enum(["refused", "allowed"]),
     inputs: z.array(actionInputDefinitionV3Schema).max(50),
     precondition: conditionNodeSchema.optional(),
-    tasks: z.array(actionTaskSchema).max(10),
+    tasks: z.array(actionTaskSchema).max(10).superRefine(refineActionTaskIds),
     protectedOperation: protectedOperationReferenceSchema.optional(),
   })
   .strict()
