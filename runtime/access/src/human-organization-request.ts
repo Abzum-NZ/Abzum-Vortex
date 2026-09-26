@@ -94,6 +94,23 @@ const databaseCode = (error: unknown): string | undefined =>
     ? String((error as { readonly code?: unknown }).code)
     : undefined;
 
+/**
+ * A safe server-side description of a failed request: only the error class name and code of the
+ * error and its causes, never a message, value, identity or secret, so it can be logged without
+ * being shown to the browser or leaking data.
+ */
+const describeFailure = (error: unknown): string => {
+  const parts: string[] = [];
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current !== undefined && current !== null; depth += 1) {
+    const name = current instanceof Error ? current.name : typeof current;
+    const code = databaseCode(current);
+    parts.push(code === undefined ? name : `${name}(${code})`);
+    current = current instanceof Error ? current.cause : undefined;
+  }
+  return parts.join(" <- ");
+};
+
 export const createHumanOrganizationRequestService = (
   dependencies: HumanOrganizationRequestDependencies,
 ) => {
@@ -256,6 +273,8 @@ export const createHumanOrganizationRequestService = (
       return { kind: "available", value };
     } catch (error) {
       const refused = databaseCode(error) === "42501";
+      if (!refused)
+        console.error(`[access] human organisation request failed: ${describeFailure(error)}`);
       appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAtMs);
       return refused ? { kind: "unavailable" } : { kind: "temporarily_unavailable" };
     }

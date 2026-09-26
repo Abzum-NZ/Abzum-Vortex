@@ -26,6 +26,7 @@ import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { createPageFormRequestAdapter, createPrivateFormSubmitAdapter } from "@vortex/page";
 import { z } from "zod";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
+import { installedReleaseCatalogue } from "../../../_lib/definition-catalogue";
 import {
   createFlowBindingEndpoint,
   flowBindingInvocationSchema,
@@ -68,13 +69,6 @@ const privateResponse = (body: unknown, status: number): NextResponse => {
 const refusedResponse = (): NextResponse => privateResponse({ kind: "refused" }, 404);
 
 const telemetry = createAppTelemetryCollector({ downstream: createOperationsAlertSink() });
-
-/**
- * SEAM: the publication catalogue the installed release was published against. Until a shared
- * catalogue composition exists this is empty, so a release that needs platform catalogue entries
- * fails its integrity check and the endpoint refuses it, never runs it.
- */
-const definitionCatalogue = { connectionTypeReleases: [] } as const;
 
 /**
  * The session is a cookie, so a run is accepted only from this site's own pages: a browser always
@@ -180,7 +174,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const installation =
           await createActiveApplicationInstallationRepository(transaction).readCurrent();
         const releaseSet = await createDatabaseApplicationBoundReleaseSetService(
-          definitionCatalogue,
+          installedReleaseCatalogue,
           transaction,
         ).read({ applicationReleaseRevision: installation.applicationReleaseRevision });
         const application = releaseSet.application;
