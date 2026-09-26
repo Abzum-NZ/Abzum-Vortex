@@ -8,7 +8,11 @@ import {
   useState,
   type ReactElement,
 } from "react";
-import { jsonValueSchema, type CustomComponentReleaseV2 } from "@vortex/contracts";
+import {
+  flowLiteralSchema,
+  jsonValueSchema,
+  type CustomComponentReleaseV2,
+} from "@vortex/contracts";
 import { DefinitionRenderError } from "../definition-error";
 import type { PlatformBlockRenderProps } from "../registry";
 import { getAccessibleName } from "../display/display-state-container";
@@ -68,6 +72,12 @@ const UPDATE_MESSAGE_TYPE = "vortex:custom-component:update";
 const EVENT_MESSAGE_TYPE = "vortex:custom-component:event";
 const GRAPHICS_CONTEXT_LOST_MESSAGE_TYPE = "vortex:custom-component:graphics-context-lost";
 
+/** One host-rendered confirmation waiting for the person's answer. */
+type PendingConfirmation = Readonly<{
+  eventLabel: string;
+  settle: (confirmed: boolean) => void;
+}>;
+
 const EMPTY_RECORD: Readonly<Record<string, unknown>> = Object.freeze({});
 const EMPTY_BINDINGS: CustomComponentEventBindings = Object.freeze({});
 
@@ -87,7 +97,8 @@ const canonicalValue = (value: unknown): unknown => {
 
 /**
  * Validates one untrusted event payload against its declared event. An undeclared field, a missing
- * required field or a value that is not a JSON value makes the whole message invalid, so the host
+ * required field, or a value that does not match its declared value type (the shared typed-literal
+ * rule, which also refuses template delimiters in text) makes the whole message invalid, so the host
  * drops it instead of forwarding it to a flow.
  */
 export const validateCustomComponentEventPayload = (
@@ -104,9 +115,27 @@ export const validateCustomComponentEventPayload = (
       if (field.required) return undefined;
       continue;
     }
-    if (!jsonValueSchema.safeParse(supplied[field.key]).success) return undefined;
+    if (!flowLiteralSchema.safeParse({ type: field.type, value: supplied[field.key] }).success)
+      return undefined;
   }
   return Object.freeze({ ...supplied });
+};
+
+/**
+ * The values the host sends: only keys the release's data contract declares, each a JSON value.
+ * Anything else is withheld, so an over-supplied value never reaches the publisher's code even when
+ * the host is rendered outside the registration's parser.
+ */
+const contractValues = (
+  custom: CustomComponentReleaseV2 | undefined,
+  values: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> => {
+  if (custom === undefined) return EMPTY_RECORD;
+  const sent: Record<string, unknown> = {};
+  for (const field of custom.dataContract.values)
+    if (Object.hasOwn(values, field.key) && jsonValueSchema.safeParse(values[field.key]).success)
+      sent[field.key] = values[field.key];
+  return Object.freeze(sent);
 };
 
 /** A modal confirmation on the native `<dialog>`: focus moves in, Escape cancels. */
@@ -170,7 +199,8 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
 
   const custom = metadata.customComponent;
   const accessibleName = getAccessibleName(settings, metadata);
-  const mappedValues = values ?? EMPTY_RECORD;
+  const suppliedValues = values ?? EMPTY_RECORD;
+  const mappedValues = useMemo(() => contractValues(custom, suppliedValues), [custom, suppliedValues]);
   const eventBindings = bindings ?? EMPTY_BINDINGS;
   const tokens = themeTokens ?? EMPTY_RECORD;
 
@@ -206,15 +236,15 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const portRef = useRef<MessagePort | undefined>(undefined);
-  const confirmationRef = useRef<
-    Readonly<{ eventLabel: string; settle: (confirmed: boolean) => void }> | undefined
-  >(undefined);
+  // The frame element that already received its port. A later load of the same element means the
+  // frame navigated away from the bootstrap document, so it receives no second port or data.
+  const handshakeFrameRef = useRef<HTMLIFrameElement | undefined>(undefined);
+  const mountedRef = useRef(true);
+  const confirmationsRef = useRef<PendingConfirmation[]>([]);
   const runningRef = useRef(new Set<string>());
   const queuedRef = useRef(new Map<string, CustomComponentEventPayload>());
   const [generation, setGeneration] = useState(0);
-  const [confirmation, setConfirmation] = useState<
-    Readonly<{ eventLabel: string; settle: (confirmed: boolean) => void }> | undefined
-  >(undefined);
+  const [confirmation, setConfirmation] = useState<PendingConfirmation | undefined>(undefined);
 
   const closePort = useCallback(() => {
     const port = portRef.current;
@@ -225,31 +255,31 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
     }
   }, []);
 
+  // Confirmations are shown one at a time, in the order their events arrived.
   const settleConfirmation = useCallback((confirmed: boolean) => {
-    const pending = confirmationRef.current;
-    confirmationRef.current = undefined;
-    setConfirmation(undefined);
+    const [pending, ...rest] = confirmationsRef.current;
+    confirmationsRef.current = rest;
+    setConfirmation(rest[0]);
     pending?.settle(confirmed);
   }, []);
 
   const requestConfirmation = useCallback(
     (eventLabel: string) =>
       new Promise<boolean>((resolve) => {
-        const pending = Object.freeze({ eventLabel, settle: resolve });
-        confirmationRef.current = pending;
-        setConfirmation(pending);
+        const pending: PendingConfirmation = Object.freeze({ eventLabel, settle: resolve });
+        confirmationsRef.current = [...confirmationsRef.current, pending];
+        if (confirmationsRef.current.length === 1) setConfirmation(pending);
       }),
     [],
   );
 
   const runBinding = useCallback(
-    async (
-      eventKey: string,
-      payload: CustomComponentEventPayload,
-    ): Promise<void> => {
+    async (eventKey: string, payload: CustomComponentEventPayload): Promise<void> => {
+      if (!mountedRef.current) return;
       const binding = bindingsRef.current[eventKey];
       if (binding === undefined) return;
-      // One in-flight flow per binding: a repeated event replaces the queued one and is coalesced.
+      // One in-flight flow per binding: a repeated event replaces the queued one and is coalesced,
+      // so the last run uses the latest event.
       if (runningRef.current.has(eventKey)) {
         queuedRef.current.set(eventKey, payload);
         return;
@@ -259,7 +289,11 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
         if (binding.changesData) {
           const label = declarationMap.get(eventKey)?.label ?? eventKey;
           const confirmed = await requestConfirmation(label);
-          if (!confirmed) return;
+          if (!confirmed) {
+            // A declined change also discards the events that arrived while it was being asked.
+            queuedRef.current.delete(eventKey);
+            return;
+          }
         }
         await binding.run(Object.freeze({ event: eventKey, payload }));
       } catch {
@@ -267,20 +301,20 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
       } finally {
         runningRef.current.delete(eventKey);
         const queued = queuedRef.current.get(eventKey);
-        if (queued !== undefined) {
-          queuedRef.current.delete(eventKey);
-          void runBinding(eventKey, queued);
-        }
+        queuedRef.current.delete(eventKey);
+        if (queued !== undefined && mountedRef.current) void runBinding(eventKey, queued);
       }
     },
     [declarationMap, requestConfirmation],
   );
 
   const handleFrameMessage = useCallback(
-    (data: unknown): void => {
-      if (!isRecord(data)) return;
+    (port: MessagePort, data: unknown): void => {
+      // Only the current port is heard; a port from a replaced frame is already closed.
+      if (portRef.current !== port || !isRecord(data)) return;
       if (data.type === GRAPHICS_CONTEXT_LOST_MESSAGE_TYPE) {
-        // Re-render the frame by remounting the sandboxed document.
+        // Re-render by remounting the sandboxed document with a fresh port.
+        closePort();
         setGeneration((current) => current + 1);
         return;
       }
@@ -293,19 +327,24 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
       if (payload === undefined) return;
       void runBinding(eventKey, payload);
     },
-    [declarationMap, runBinding],
+    [closePort, declarationMap, runBinding],
   );
 
   const handleLoad = useCallback(() => {
     const frame = iframeRef.current;
     closePort();
     if (frame === null) return;
+    if (handshakeFrameRef.current === frame) return;
+    handshakeFrameRef.current = frame;
     const target = frame.contentWindow;
     if (target === null) return;
     const channel = new MessageChannel();
     const port = channel.port1;
     portRef.current = port;
-    port.onmessage = (event) => handleFrameMessage(event.data);
+    port.onmessage = (event) => handleFrameMessage(port, event.data);
+    // The sandboxed document has an opaque origin, which no exact target origin can name, so the
+    // only possible target is "*". The first load of this frame element is the bootstrap document
+    // itself; any later load is refused above, and every later message uses the transferred port.
     target.postMessage(
       {
         type: INIT_MESSAGE_TYPE,
@@ -328,15 +367,17 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
     });
   }, [payloadSignature]);
 
-  useEffect(
-    () => () => {
-      const pending = confirmationRef.current;
-      confirmationRef.current = undefined;
-      pending?.settle(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      const pending = confirmationsRef.current;
+      confirmationsRef.current = [];
+      queuedRef.current.clear();
+      for (const entry of pending) entry.settle(false);
       closePort();
-    },
-    [closePort],
-  );
+    };
+  }, [closePort]);
 
   const location = {
     placementId,
@@ -370,7 +411,7 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
         {custom.textAlternative}
       </p>
       <iframe
-        key={generation}
+        key={`${generation}:${bootstrapSrc}`}
         ref={iframeRef}
         title={accessibleName}
         aria-describedby={alternativeId}
