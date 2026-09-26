@@ -34,6 +34,11 @@ export const initializeLifecycleLimits = async (organizationId: string): Promise
 /**
  * Stores revision 1 of the delete policy for every record type of the prepared modules, through
  * the record lifecycle policy service's provisioned-setup entry, bound to each provisioned binding.
+ *
+ * An organisation-shared record type has one policy for the whole organisation, which the stored
+ * primitive creates only once and refuses to create again. When a later application binds a module
+ * an earlier installation already configured (Service Desk binds the CRM organisations and people
+ * modules), that stored policy already satisfies its activation gate, so it is not stored again.
  */
 export const storeInitialLifecyclePolicies = async (
   input: Readonly<{
@@ -43,6 +48,10 @@ export const storeInitialLifecyclePolicies = async (
     applicationRootId: string;
     releaseSet: SystemApplicationBoundReleaseSetResult;
     bindings: readonly Readonly<{ moduleRootId: string; bindingRevision: number }>[];
+    /** Organisation-shared storage contracts whose policy is already stored; updated as stored. */
+    sharedPolicies: Record<string, boolean>;
+    /** Persists `sharedPolicies` after each store, so an interrupted run does not repeat one. */
+    saveProgress: () => void;
   }>,
 ): Promise<number> => {
   const service = createRecordTypeLifecyclePolicyService({
@@ -56,6 +65,9 @@ export const storeInitialLifecyclePolicies = async (
     if (binding === undefined)
       throw new Error(`No provisioned binding for ${module.definitionKey}`);
     for (const recordType of module.content.recordTypes) {
+      const shared = recordType.storageScope === "organization_shared";
+      const sharedKey = recordType.storageContractId.toLowerCase();
+      if (shared && input.sharedPolicies[sharedKey] === true) continue;
       const result = await service.saveInitialForProvisionedSetup(
         nominatedOwnerSession(input.stewardIdentityId),
         {
@@ -80,6 +92,10 @@ export const storeInitialLifecyclePolicies = async (
         throw new Error(
           `The lifecycle policy for ${recordType.storageContractId} could not be stored (${result.kind})`,
         );
+      if (shared) {
+        input.sharedPolicies[sharedKey] = true;
+        input.saveProgress();
+      }
       stored += 1;
     }
   }

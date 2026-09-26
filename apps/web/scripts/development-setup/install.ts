@@ -136,6 +136,8 @@ const prepareRelease = async (
     applicationRootId: published.rootId,
     releaseSet,
     bindings: prepared.moduleBindings,
+    sharedPolicies: facts.state.sharedLifecyclePolicies,
+    saveProgress: () => facts.state.save(),
   });
   facts.state.lifecyclePolicies[applicationKey] = true;
   facts.state.save();
