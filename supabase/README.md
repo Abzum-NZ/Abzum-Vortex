@@ -80,10 +80,13 @@ The Local stack (`pnpm db:start` / `pnpm db:stop` / `pnpm db:reset`) is unrelate
 still exists for interactive local development and the local auth proof below; it is never reset or
 otherwise touched by verification.
 
-`pnpm db:start` first generates a Local-only P-256 `ES256` signing key through the pinned Supabase
-CLI. The private key stays under the ignored `supabase/.temp` directory; a clean checkout creates its
-own key and no hosted signing key is downloaded or committed. After changing signing-key settings,
-restart the Local stack with `pnpm db:stop` followed by `pnpm db:start`.
+`pnpm db:start` first prepares a Local-only P-256 `ES256` signing key through the pinned Supabase
+CLI. The key is generated once per checkout and reused: it is kept in the ignored `supabase/.temp`
+file that `config.toml` reads, and for a linked worktree the shared copy is resolved from the main
+checkout and copied in, so a reset in any worktree keeps the same key id for the shared Local stack.
+No hosted signing key is downloaded or committed, and no private key is ever committed. After
+changing signing-key settings, restart the Local stack with `pnpm db:stop` followed by
+`pnpm db:start`.
 
 With the Local stack running, `pnpm auth:local:proof` creates an isolated local address and proves
 Mailpit confirmation, password sign-in, local `getClaims()` verification against the published

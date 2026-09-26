@@ -109,6 +109,33 @@ An interrupted run resumes: provisioning replays by its fixed key and the steps 
 
 Existing developer utilities (`pnpm verify`, `pnpm fixtures`, `pnpm db:verify`) remain in the workspace for local use. They are not fleet completion requirements, and the current development workflow does not run them or treat their output as acceptance.
 
+### Local environment variables
+
+`pnpm dev` and `pnpm setup:local` read server-only values from `apps/web/.env.local`. Copy [apps/web/.env.example](apps/web/.env.example) and fill in local values only; never commit a real value. `pnpm db:start` prints the local API URL and publishable key. The development setup refuses any value that is not the local one.
+
+| Variable | Local value | Purpose |
+| --- | --- | --- |
+| `VORTEX_ENVIRONMENT` | `local` | Selects local behaviour; anything else is refused. |
+| `VORTEX_SITE_URL` | `http://127.0.0.1:3000` | The configured site URL. Identity-session cookies and auth redirects are built from it. |
+| `VORTEX_SUPABASE_URL` | `http://127.0.0.1:54321` | The local Supabase API and Auth endpoint. |
+| `VORTEX_SUPABASE_PUBLISHABLE_KEY` | `<local publishable key from supabase status>` | The public key the browser sign-in journey uses. |
+| `VORTEX_IDENTITY_AUTHORITY_ID` | `<uuid>` | Pins the local identity authority. Use the same value for `pnpm dev` and `pnpm setup:local`. |
+| `VORTEX_QUERY_CONTINUATION_KEY` | `<base64 of exactly 32 random bytes>` | Makes Query continuation tokens opaque; the generation command is in the env example. |
+| `VORTEX_RUNTIME_DATABASE_URL` | `postgresql://vortex_runtime:vortex-runtime-local-only@127.0.0.1:54322/postgres` | The restricted runtime connection to the local database. Defaults to this address when unset. |
+| `VORTEX_RUNTIME_DATABASE_POOL_SIZE` | `<1-99>` | Optional runtime connection-pool cap; a local default applies when unset. |
+| `VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT` | set only for a hosted database | Trusted root certificate for a hosted runtime connection; not needed for the local loopback database. |
+
+The components, files and workflow features read additional variables. The pages that use them report a configuration error until the variable is set:
+
+| Variable | Purpose |
+| --- | --- |
+| `VORTEX_COMPONENT_BUNDLE_ORIGIN` | The dedicated origin the custom-component sandbox is served from. |
+| `VORTEX_FILE_STORAGE_SIGNING_KEY` | The private key the file-read route signs file-storage tokens with. |
+| `VORTEX_FILE_STORAGE_SIGNING_KEY_ID` | The key id published in those signed file-storage tokens. |
+| `VORTEX_APPLICATION_KESTRA_URL` | The application Kestra instance URL used for durable flows. |
+| `VORTEX_WORKFLOW_CALLBACK_KEY` | The callback signing key the durable-flow compiler references. |
+| `VORTEX_CLUSTER_ID` | The cluster identity the configured tenant-administration tooling operates as. |
+
 ## Delivery and contribution
 
 - Work from a GitHub issue with clear scope, dependencies and functional acceptance. Keep its description and roadmap status current.
