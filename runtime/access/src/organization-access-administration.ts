@@ -1019,7 +1019,7 @@ export const createOrganizationAccessAdministrationService = (
         prepareOrganizationAdministrationRoleChangeCommandSchema.safeParse(commandCandidate);
       if (!command.success || command.data.acceptBroadenedAuthority !== "accept")
         return { kind: "unavailable" };
-      let roleId: string;
+      let roleId: OrganizationRoleChangeCandidate["roleId"];
       try {
         roleId = roleIdSchema.parse(randomUUID());
       } catch {

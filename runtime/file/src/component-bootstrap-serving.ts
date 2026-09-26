@@ -163,7 +163,11 @@ export const renderComponentBootstrapDocument = (
     body: new TextEncoder().encode(body),
     headers: Object.freeze({
       "Content-Type": "text/html; charset=utf-8",
-      "Content-Security-Policy": componentBootstrapContentSecurityPolicy(input),
+      "Content-Security-Policy": componentBootstrapContentSecurityPolicy({
+        componentOrigin: input.componentOrigin,
+        siteOrigin: input.siteOrigin,
+        allowedHosts: input.target.allowedHosts,
+      }),
       "Cache-Control": COMPONENT_BUNDLE_IMMUTABLE_CACHE_CONTROL,
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
