@@ -19,6 +19,7 @@ import {
   resolveThemeTokens,
   validateApplicationTheme,
 } from "./resolver";
+import { draftShadcnPresetImport } from "./preset-import";
 import { resolveThemeSelection, validateThemeSelectionOptions } from "./selection";
 
 export {
@@ -44,6 +45,14 @@ export {
   resolveThemeTokens,
   validateApplicationTheme,
 } from "./resolver";
+
+export { draftShadcnPresetImport } from "./preset-import";
+
+export type {
+  ShadcnPresetDimensionNotYetImportable,
+  ShadcnPresetImportDraft,
+  ShadcnPresetImportFailure,
+} from "./preset-import";
 
 export {
   resolveThemeSelection,
@@ -93,6 +102,7 @@ export type {
 export const ThemeService = Object.freeze({
   key: "theme",
   boundary: "@vortex/theme",
+  draftShadcnPresetImport,
   resolveTheme,
   resolveThemeTokens,
   validateApplicationTheme,
