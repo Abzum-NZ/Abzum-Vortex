@@ -105,7 +105,10 @@
           "vortex.organisation_administration.person.read",
           "vortex.organisation_administration.role.read",
           "vortex.organisation_administration.group.read",
-          "vortex.organisation_administration.role_assignment.read"
+          "vortex.organisation_administration.group_membership.read",
+          "vortex.organisation_administration.role_assignment.read",
+          "vortex.organisation_administration.role_activation.read",
+          "vortex.organisation_administration.delegation.read"
         ]
       }
     ],
@@ -248,6 +251,48 @@
         "id": "event_iam_open_access_request",
         "key": "vortex.app.iam.open_access_request",
         "record_type": "vortex.iam.core:access_request",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_retire_role",
+        "key": "vortex.app.iam.retire_role",
+        "record_type": "vortex.organisation_administration:role",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_retire_group",
+        "key": "vortex.app.iam.retire_group",
+        "record_type": "vortex.organisation_administration:group",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_remove_group_membership",
+        "key": "vortex.app.iam.remove_group_membership",
+        "record_type": "vortex.organisation_administration:group_membership",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_revoke_role_assignment",
+        "key": "vortex.app.iam.revoke_role_assignment",
+        "record_type": "vortex.organisation_administration:role_assignment",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_deactivate_role_activation",
+        "key": "vortex.app.iam.deactivate_role_activation",
+        "record_type": "vortex.organisation_administration:role_activation",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_revoke_delegation_authority",
+        "key": "vortex.app.iam.revoke_delegation_authority",
+        "record_type": "vortex.organisation_administration:delegation",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       }
@@ -773,7 +818,7 @@
               "iam_roles_region": {
                 "block": {
                   "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                  "release_version": "1.2.0"
+                  "release_version": "1.4.0"
                 },
                 "settings": {
                   "title": {
@@ -875,6 +920,24 @@
                         }
                       }
                     ]
+                  },
+                  "row_actions": {
+                    "kind": "list",
+                    "items": [
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "event_id": {
+                            "kind": "text",
+                            "value": "event_retire_role"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Retire role"
+                          }
+                        }
+                      }
+                    ]
                   }
                 },
                 "theme_overrides": {},
@@ -895,7 +958,7 @@
               "iam_groups_region": {
                 "block": {
                   "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                  "release_version": "1.2.0"
+                  "release_version": "1.4.0"
                 },
                 "settings": {
                   "title": {
@@ -945,6 +1008,24 @@
                         }
                       }
                     ]
+                  },
+                  "row_actions": {
+                    "kind": "list",
+                    "items": [
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "event_id": {
+                            "kind": "text",
+                            "value": "event_retire_group"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Retire group"
+                          }
+                        }
+                      }
+                    ]
                   }
                 },
                 "theme_overrides": {},
@@ -961,13 +1042,128 @@
                 },
                 "slots": {},
                 "query": "vortex.organisation_administration:groups"
+              },
+              "iam_group_memberships_region": {
+                "block": {
+                  "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                  "release_version": "1.4.0"
+                },
+                "settings": {
+                  "title": {
+                    "kind": "text",
+                    "value": "Group memberships"
+                  },
+                  "columns": {
+                    "kind": "list",
+                    "items": [
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.organisation_administration:group_membership.account_display_name"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Member"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.organisation_administration:group_membership.group_id"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Group"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.organisation_administration:group_membership.starts_at"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Starts at"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.organisation_administration:group_membership.expires_at"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Expires at"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.organisation_administration:group_membership.state"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "State"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "row_actions": {
+                    "kind": "list",
+                    "items": [
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "event_id": {
+                            "kind": "text",
+                            "value": "event_remove_group_membership"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Remove member"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "theme_overrides": {},
+                "responsive": {
+                  "desktop": {
+                    "visible": true,
+                    "width": {
+                      "kind": "fill"
+                    },
+                    "height": {
+                      "kind": "content"
+                    }
+                  }
+                },
+                "slots": {},
+                "query": "vortex.organisation_administration:group_memberships"
               }
             },
             "order": {
               "desktop": [
                 "iam_roles_groups_heading",
                 "iam_roles_region",
-                "iam_groups_region"
+                "iam_groups_region",
+                "iam_group_memberships_region"
               ]
             }
           }
@@ -1015,7 +1211,7 @@
               "iam_assignments_region": {
                 "block": {
                   "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                  "release_version": "1.2.0"
+                  "release_version": "1.4.0"
                 },
                 "settings": {
                   "title": {
@@ -1117,6 +1313,24 @@
                         }
                       }
                     ]
+                  },
+                  "row_actions": {
+                    "kind": "list",
+                    "items": [
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "event_id": {
+                            "kind": "text",
+                            "value": "event_revoke_role_assignment"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Revoke assignment"
+                          }
+                        }
+                      }
+                    ]
                   }
                 },
                 "theme_overrides": {},
@@ -1133,12 +1347,127 @@
                 },
                 "slots": {},
                 "query": "vortex.organisation_administration:role_assignments"
+              },
+              "iam_delegations_region": {
+                "block": {
+                  "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                  "release_version": "1.4.0"
+                },
+                "settings": {
+                  "title": {
+                    "kind": "text",
+                    "value": "Delegated authority"
+                  },
+                  "columns": {
+                    "kind": "list",
+                    "items": [
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.organisation_administration:delegation.holder_kind"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Holder"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.organisation_administration:delegation.scope_kind"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Scope"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.organisation_administration:delegation.starts_at"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Starts at"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.organisation_administration:delegation.expires_at"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Expires at"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.organisation_administration:delegation.state"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "State"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "row_actions": {
+                    "kind": "list",
+                    "items": [
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "event_id": {
+                            "kind": "text",
+                            "value": "event_revoke_delegation_authority"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Revoke delegation"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "theme_overrides": {},
+                "responsive": {
+                  "desktop": {
+                    "visible": true,
+                    "width": {
+                      "kind": "fill"
+                    },
+                    "height": {
+                      "kind": "content"
+                    }
+                  }
+                },
+                "slots": {},
+                "query": "vortex.organisation_administration:delegations"
               }
             },
             "order": {
               "desktop": [
                 "iam_assignments_heading",
-                "iam_assignments_region"
+                "iam_assignments_region",
+                "iam_delegations_region"
               ]
             }
           }
@@ -1394,150 +1723,6 @@
                         "input_revise_role_metadata_label",
                         "input_revise_role_metadata_description",
                         "button_revise_role_metadata"
-                      ]
-                    }
-                  }
-                }
-              },
-              "form_retire_role": {
-                "block": {
-                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Retire role"
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {
-                  "content": {
-                    "placements": {
-                      "input_retire_role_role_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "role_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Role id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_retire_role_expected_role_revision": {
-                        "block": {
-                          "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "expected_role_revision"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Expected role revision"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "integer": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "min_value": {
-                            "kind": "number",
-                            "value": 1
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "button_retire_role": {
-                        "block": {
-                          "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "label": {
-                            "kind": "text",
-                            "value": "Retire role"
-                          },
-                          "action_kind": {
-                            "kind": "choice",
-                            "value": "action"
-                          },
-                          "variant": {
-                            "kind": "choice",
-                            "value": "danger"
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      }
-                    },
-                    "order": {
-                      "desktop": [
-                        "input_retire_role_role_id",
-                        "input_retire_role_expected_role_revision",
-                        "button_retire_role"
                       ]
                     }
                   }
@@ -1852,294 +2037,6 @@
                         "input_rename_group_expected_group_revision",
                         "input_rename_group_label",
                         "button_rename_group"
-                      ]
-                    }
-                  }
-                }
-              },
-              "form_retire_group": {
-                "block": {
-                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Retire group"
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {
-                  "content": {
-                    "placements": {
-                      "input_retire_group_group_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "group_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Group id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_retire_group_expected_group_revision": {
-                        "block": {
-                          "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "expected_group_revision"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Expected group revision"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "integer": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "min_value": {
-                            "kind": "number",
-                            "value": 1
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "button_retire_group": {
-                        "block": {
-                          "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "label": {
-                            "kind": "text",
-                            "value": "Retire group"
-                          },
-                          "action_kind": {
-                            "kind": "choice",
-                            "value": "action"
-                          },
-                          "variant": {
-                            "kind": "choice",
-                            "value": "danger"
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      }
-                    },
-                    "order": {
-                      "desktop": [
-                        "input_retire_group_group_id",
-                        "input_retire_group_expected_group_revision",
-                        "button_retire_group"
-                      ]
-                    }
-                  }
-                }
-              },
-              "form_remove_group_membership": {
-                "block": {
-                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Remove group membership"
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {
-                  "content": {
-                    "placements": {
-                      "input_remove_group_membership_membership_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "membership_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Membership id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_remove_group_membership_expected_membership_revision": {
-                        "block": {
-                          "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "expected_membership_revision"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Expected membership revision"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "integer": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "min_value": {
-                            "kind": "number",
-                            "value": 1
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "button_remove_group_membership": {
-                        "block": {
-                          "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "label": {
-                            "kind": "text",
-                            "value": "Remove group membership"
-                          },
-                          "action_kind": {
-                            "kind": "choice",
-                            "value": "action"
-                          },
-                          "variant": {
-                            "kind": "choice",
-                            "value": "danger"
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      }
-                    },
-                    "order": {
-                      "desktop": [
-                        "input_remove_group_membership_membership_id",
-                        "input_remove_group_membership_expected_membership_revision",
-                        "button_remove_group_membership"
                       ]
                     }
                   }
@@ -2888,12 +2785,9 @@
               "desktop": [
                 "iam_manage_roles_groups_heading",
                 "form_revise_role_metadata",
-                "form_retire_role",
                 "form_create_group",
                 "form_add_group_membership",
                 "form_rename_group",
-                "form_retire_group",
-                "form_remove_group_membership",
                 "form_create_custom_role",
                 "form_accept_application_role_template"
               ]
@@ -2939,438 +2833,6 @@
                   }
                 },
                 "slots": {}
-              },
-              "form_revoke_role_assignment": {
-                "block": {
-                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Revoke role assignment"
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {
-                  "content": {
-                    "placements": {
-                      "input_revoke_role_assignment_role_assignment_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "role_assignment_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Role assignment id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_revoke_role_assignment_expected_assignment_revision": {
-                        "block": {
-                          "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "expected_assignment_revision"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Expected assignment revision"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "integer": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "min_value": {
-                            "kind": "number",
-                            "value": 1
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "button_revoke_role_assignment": {
-                        "block": {
-                          "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "label": {
-                            "kind": "text",
-                            "value": "Revoke role assignment"
-                          },
-                          "action_kind": {
-                            "kind": "choice",
-                            "value": "action"
-                          },
-                          "variant": {
-                            "kind": "choice",
-                            "value": "danger"
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      }
-                    },
-                    "order": {
-                      "desktop": [
-                        "input_revoke_role_assignment_role_assignment_id",
-                        "input_revoke_role_assignment_expected_assignment_revision",
-                        "button_revoke_role_assignment"
-                      ]
-                    }
-                  }
-                }
-              },
-              "form_deactivate_role_activation": {
-                "block": {
-                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Deactivate role activation"
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {
-                  "content": {
-                    "placements": {
-                      "input_deactivate_role_activation_role_activation_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "role_activation_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Role activation id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_deactivate_role_activation_expected_activation_revision": {
-                        "block": {
-                          "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "expected_activation_revision"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Expected activation revision"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "integer": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "min_value": {
-                            "kind": "number",
-                            "value": 1
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "button_deactivate_role_activation": {
-                        "block": {
-                          "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "label": {
-                            "kind": "text",
-                            "value": "Deactivate role activation"
-                          },
-                          "action_kind": {
-                            "kind": "choice",
-                            "value": "action"
-                          },
-                          "variant": {
-                            "kind": "choice",
-                            "value": "danger"
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      }
-                    },
-                    "order": {
-                      "desktop": [
-                        "input_deactivate_role_activation_role_activation_id",
-                        "input_deactivate_role_activation_expected_activation_revision",
-                        "button_deactivate_role_activation"
-                      ]
-                    }
-                  }
-                }
-              },
-              "form_revoke_delegation_authority": {
-                "block": {
-                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Revoke delegation authority"
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {
-                  "content": {
-                    "placements": {
-                      "input_revoke_delegation_authority_delegation_authority_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "delegation_authority_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Delegation authority id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_revoke_delegation_authority_expected_delegation_revision": {
-                        "block": {
-                          "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "expected_delegation_revision"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Expected delegation revision"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "integer": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "min_value": {
-                            "kind": "number",
-                            "value": 1
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "button_revoke_delegation_authority": {
-                        "block": {
-                          "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "label": {
-                            "kind": "text",
-                            "value": "Revoke delegation authority"
-                          },
-                          "action_kind": {
-                            "kind": "choice",
-                            "value": "action"
-                          },
-                          "variant": {
-                            "kind": "choice",
-                            "value": "danger"
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      }
-                    },
-                    "order": {
-                      "desktop": [
-                        "input_revoke_delegation_authority_delegation_authority_id",
-                        "input_revoke_delegation_authority_expected_delegation_revision",
-                        "button_revoke_delegation_authority"
-                      ]
-                    }
-                  }
-                }
               },
               "form_assign_role_assignment": {
                 "block": {
@@ -3786,10 +3248,7 @@
             "order": {
               "desktop": [
                 "iam_manage_assignments_heading",
-                "form_revoke_role_assignment",
-                "form_assign_role_assignment",
-                "form_deactivate_role_activation",
-                "form_revoke_delegation_authority"
+                "form_assign_role_assignment"
               ]
             }
           }
@@ -3881,11 +3340,126 @@
                   }
                 },
                 "slots": {}
+              },
+              "iam_role_activations_region": {
+                "block": {
+                  "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                  "release_version": "1.4.0"
+                },
+                "settings": {
+                  "title": {
+                    "kind": "text",
+                    "value": "Active roles"
+                  },
+                  "columns": {
+                    "kind": "list",
+                    "items": [
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.organisation_administration:role_activation.account_display_name"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Person"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.organisation_administration:role_activation.role_label"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Role"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.organisation_administration:role_activation.activated_at"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Activated at"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.organisation_administration:role_activation.expires_at"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Expires at"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.organisation_administration:role_activation.state"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "State"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "row_actions": {
+                    "kind": "list",
+                    "items": [
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "event_id": {
+                            "kind": "text",
+                            "value": "event_deactivate_role_activation"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Deactivate role"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "theme_overrides": {},
+                "responsive": {
+                  "desktop": {
+                    "visible": true,
+                    "width": {
+                      "kind": "fill"
+                    },
+                    "height": {
+                      "kind": "content"
+                    }
+                  }
+                },
+                "slots": {},
+                "query": "vortex.organisation_administration:role_activations"
               }
             },
             "order": {
               "desktop": [
-                "iam_privileged_active_heading"
+                "iam_privileged_active_heading",
+                "iam_role_activations_region"
               ]
             }
           }
@@ -4978,8 +4552,11 @@
         },
         "inputs": {
           "role_id": {
-            "type": "text",
-            "required": true
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.organisation_administration:role"
+            ]
           },
           "expected_role_revision": {
             "type": "whole_number",
@@ -5135,8 +4712,11 @@
         },
         "inputs": {
           "group_id": {
-            "type": "text",
-            "required": true
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.organisation_administration:group"
+            ]
           },
           "expected_group_revision": {
             "type": "whole_number",
@@ -5186,8 +4766,11 @@
         },
         "inputs": {
           "membership_id": {
-            "type": "text",
-            "required": true
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.organisation_administration:group_membership"
+            ]
           },
           "expected_membership_revision": {
             "type": "whole_number",
@@ -5237,8 +4820,11 @@
         },
         "inputs": {
           "role_assignment_id": {
-            "type": "text",
-            "required": true
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.organisation_administration:role_assignment"
+            ]
           },
           "expected_assignment_revision": {
             "type": "whole_number",
@@ -5288,8 +4874,11 @@
         },
         "inputs": {
           "role_activation_id": {
-            "type": "text",
-            "required": true
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.organisation_administration:role_activation"
+            ]
           },
           "expected_activation_revision": {
             "type": "whole_number",
@@ -5339,8 +4928,11 @@
         },
         "inputs": {
           "delegation_authority_id": {
-            "type": "text",
-            "required": true
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.organisation_administration:delegation"
+            ]
           },
           "expected_delegation_revision": {
             "type": "whole_number",
@@ -6109,23 +5701,6 @@
         }
       },
       {
-        "id": "binding_retire_role",
-        "control": "button_retire_role",
-        "event_id": "event_iam_administration_action",
-        "event": "action",
-        "flow": "flow_retire_role",
-        "inputs": {
-          "role_id": {
-            "kind": "caller",
-            "name": "role_id"
-          },
-          "expected_role_revision": {
-            "kind": "caller",
-            "name": "expected_role_revision"
-          }
-        }
-      },
-      {
         "id": "binding_create_group",
         "control": "button_create_group",
         "event_id": "event_iam_administration_action",
@@ -6160,91 +5735,6 @@
           "label": {
             "kind": "caller",
             "name": "label"
-          }
-        }
-      },
-      {
-        "id": "binding_retire_group",
-        "control": "button_retire_group",
-        "event_id": "event_iam_administration_action",
-        "event": "action",
-        "flow": "flow_retire_group",
-        "inputs": {
-          "group_id": {
-            "kind": "caller",
-            "name": "group_id"
-          },
-          "expected_group_revision": {
-            "kind": "caller",
-            "name": "expected_group_revision"
-          }
-        }
-      },
-      {
-        "id": "binding_remove_group_membership",
-        "control": "button_remove_group_membership",
-        "event_id": "event_iam_administration_action",
-        "event": "action",
-        "flow": "flow_remove_group_membership",
-        "inputs": {
-          "membership_id": {
-            "kind": "caller",
-            "name": "membership_id"
-          },
-          "expected_membership_revision": {
-            "kind": "caller",
-            "name": "expected_membership_revision"
-          }
-        }
-      },
-      {
-        "id": "binding_revoke_role_assignment",
-        "control": "button_revoke_role_assignment",
-        "event_id": "event_iam_administration_action",
-        "event": "action",
-        "flow": "flow_revoke_role_assignment",
-        "inputs": {
-          "role_assignment_id": {
-            "kind": "caller",
-            "name": "role_assignment_id"
-          },
-          "expected_assignment_revision": {
-            "kind": "caller",
-            "name": "expected_assignment_revision"
-          }
-        }
-      },
-      {
-        "id": "binding_deactivate_role_activation",
-        "control": "button_deactivate_role_activation",
-        "event_id": "event_iam_administration_action",
-        "event": "action",
-        "flow": "flow_deactivate_role_activation",
-        "inputs": {
-          "role_activation_id": {
-            "kind": "caller",
-            "name": "role_activation_id"
-          },
-          "expected_activation_revision": {
-            "kind": "caller",
-            "name": "expected_activation_revision"
-          }
-        }
-      },
-      {
-        "id": "binding_revoke_delegation_authority",
-        "control": "button_revoke_delegation_authority",
-        "event_id": "event_iam_administration_action",
-        "event": "action",
-        "flow": "flow_revoke_delegation_authority",
-        "inputs": {
-          "delegation_authority_id": {
-            "kind": "caller",
-            "name": "delegation_authority_id"
-          },
-          "expected_delegation_revision": {
-            "kind": "caller",
-            "name": "expected_delegation_revision"
           }
         }
       },
@@ -6444,6 +5934,108 @@
           "record_id": {
             "kind": "caller",
             "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_retire_role",
+        "control": "iam_roles_region",
+        "event_id": "event_retire_role",
+        "event": "row_action",
+        "flow": "flow_retire_role",
+        "inputs": {
+          "role_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_role_revision": {
+            "kind": "caller",
+            "name": "revision"
+          }
+        }
+      },
+      {
+        "id": "binding_retire_group",
+        "control": "iam_groups_region",
+        "event_id": "event_retire_group",
+        "event": "row_action",
+        "flow": "flow_retire_group",
+        "inputs": {
+          "group_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_group_revision": {
+            "kind": "caller",
+            "name": "revision"
+          }
+        }
+      },
+      {
+        "id": "binding_remove_group_membership",
+        "control": "iam_group_memberships_region",
+        "event_id": "event_remove_group_membership",
+        "event": "row_action",
+        "flow": "flow_remove_group_membership",
+        "inputs": {
+          "membership_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_membership_revision": {
+            "kind": "caller",
+            "name": "revision"
+          }
+        }
+      },
+      {
+        "id": "binding_revoke_role_assignment",
+        "control": "iam_assignments_region",
+        "event_id": "event_revoke_role_assignment",
+        "event": "row_action",
+        "flow": "flow_revoke_role_assignment",
+        "inputs": {
+          "role_assignment_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_assignment_revision": {
+            "kind": "caller",
+            "name": "revision"
+          }
+        }
+      },
+      {
+        "id": "binding_deactivate_role_activation",
+        "control": "iam_role_activations_region",
+        "event_id": "event_deactivate_role_activation",
+        "event": "row_action",
+        "flow": "flow_deactivate_role_activation",
+        "inputs": {
+          "role_activation_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_activation_revision": {
+            "kind": "caller",
+            "name": "revision"
+          }
+        }
+      },
+      {
+        "id": "binding_revoke_delegation_authority",
+        "control": "iam_delegations_region",
+        "event_id": "event_revoke_delegation_authority",
+        "event": "row_action",
+        "flow": "flow_revoke_delegation_authority",
+        "inputs": {
+          "delegation_authority_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_delegation_revision": {
+            "kind": "caller",
+            "name": "revision"
           }
         }
       }
