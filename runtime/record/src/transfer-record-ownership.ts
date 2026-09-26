@@ -46,14 +46,17 @@ const transfer = async (
     command.targetKind === "organization_account"
       ? command.targetOrganizationAccountId
       : command.targetGroupId;
+  const targetMutation = [
+    { kind: "transfer_ownership", targetKind: command.targetKind, targetId },
+  ];
   const rows = await transaction.query<TransferRow>`
-    select vortex_record.transfer_record_ownership(
+    select vortex_record.apply_lifecycle_record_changes(
       ${command.commandId}::uuid,
+      'transfer_ownership'::text,
       ${command.recordTypeId}::uuid,
       ${command.recordId}::uuid,
       ${command.expectedConcurrencyNumber}::bigint,
-      ${command.targetKind}::text,
-      ${targetId}::uuid,
+      ${JSON.stringify(targetMutation)}::text::jsonb,
       ${activityId}::uuid,
       ${occurrenceId}::uuid
     ) as result
