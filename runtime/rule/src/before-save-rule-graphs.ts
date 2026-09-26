@@ -3,7 +3,7 @@ import {
   ruleGraphTypedValueSchema,
   type JsonValue,
   type ModuleDefinitionConsumerReadResultV3,
-  type ModuleFieldV2,
+  type ModuleFieldV3,
   type RuleGraph,
   type RuleGraphInputDeclaration,
   type RuleGraphOperand,
@@ -143,7 +143,7 @@ const valueMatchesDeclaration = (
 
 const validateFieldMap = (
   values: Readonly<Record<string, JsonValue>>,
-  fieldsById: ReadonlyMap<string, ModuleFieldV2>,
+  fieldsById: ReadonlyMap<string, ModuleFieldV3>,
 ): Map<string, JsonValue> => {
   if (!isRecord(values)) refuse("input_refused");
   const validated = new Map<string, JsonValue>();
@@ -207,7 +207,7 @@ const resolved = (
 const resolveOperand = (
   operand: RuleGraphOperand,
   graph: RuleGraph,
-  fieldsById: ReadonlyMap<string, ModuleFieldV2>,
+  fieldsById: ReadonlyMap<string, ModuleFieldV3>,
   candidate: ReadonlyMap<string, JsonValue>,
   previous: ReadonlyMap<string, JsonValue> | undefined,
   inputs: ReadonlyMap<string, JsonValue>,
