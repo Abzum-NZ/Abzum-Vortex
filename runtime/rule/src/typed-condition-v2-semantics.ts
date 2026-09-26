@@ -10,12 +10,12 @@ import {
   recordLinkValueV2Schema,
   type ExactDecimal,
   type JsonValue,
-  type ModuleFieldV2,
+  type ModuleFieldV3,
 } from "@vortex/contracts";
 import {
   TypedConditionEvaluationError,
   type TypedConditionEvaluationErrorReason,
-} from "./typed-condition";
+} from "./typed-condition-error";
 import {
   codePointCompare,
   evaluateResolvedTypedCondition,
@@ -48,7 +48,7 @@ const refuse = (reason: TypedConditionEvaluationErrorReason): never => {
   throw new TypedConditionEvaluationError(reason);
 };
 
-export const semanticTypeForFieldV2 = (field: ModuleFieldV2): SemanticTypeV2 => {
+export const semanticTypeForFieldV2 = (field: ModuleFieldV3): SemanticTypeV2 => {
   switch (field.type) {
     case "whole_number":
       return "whole_number";
@@ -122,7 +122,7 @@ export const valueMatchesSemanticTypeV2 = (value: JsonValue, type: SemanticTypeV
   }
 };
 
-export const valueMatchesFieldV2 = (value: JsonValue, field: ModuleFieldV2): boolean => {
+export const valueMatchesFieldV2 = (value: JsonValue, field: ModuleFieldV3): boolean => {
   if (value === null) return true;
   const leafSchema = moduleFieldValueV2Schemas[field.type];
   return (

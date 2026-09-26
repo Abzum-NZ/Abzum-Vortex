@@ -296,7 +296,6 @@ const pages = [
     type: "form",
     record_type: incidentRecordType,
     permission: createAction,
-    commit_action: createAction,
     states: formStates,
     composition: {
       shell_kind: "default",

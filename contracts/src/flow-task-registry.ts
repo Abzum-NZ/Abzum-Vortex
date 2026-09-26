@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { safeFlowResultKindSchema } from "./application-flow-bindings";
-import type { workflowNodeTypeKeys } from "./catalogues";
 import { workflowValueTypeSchema } from "./catalogues";
 import { retryPolicySchema } from "./common";
 import {
@@ -784,34 +783,6 @@ const task = (type: FlowRegisteredTaskTypeKey): FlowLegacyKindMapping => ({ kind
 const structural = (
   into: Extract<FlowLegacyKindMapping, { kind: "structural" }>["into"],
 ): FlowLegacyKindMapping => ({ kind: "structural", into });
-
-/** The durable workflow nodes of `automation-contracts.ts`. */
-export const flowTaskMappingForWorkflowNode = {
-  start: structural("trigger"),
-  condition: structural("if"),
-  decision_table: structural("switch"),
-  bounded_loop: structural("for_each"),
-  delay: structural("wait_until"),
-  wait_until: structural("wait_until"),
-  start_workflow: task("flow.run_background"),
-  stop: structural("stop"),
-  create_record: task("record.create"),
-  change_record: task("record.set_fields"),
-  run_action: structural("run_flow"),
-  soft_delete_record: task("record.delete"),
-  duplicate_record: task("record.changes"),
-  add_relationship: task("record.link"),
-  copy_relationships: task("record.changes"),
-  request_form: structural("wait_for_person"),
-  query_records: task("record.query"),
-  set_values: task("data.set_values"),
-  format_value: task("data.format"),
-  generate_export: task("file.export"),
-  attach_file: task("record.set_fields"),
-  move_file: task("record.changes"),
-  call_connection: task("connection.call"),
-  acknowledge_message: task("message.acknowledge"),
-} as const satisfies Record<(typeof workflowNodeTypeKeys)[number], FlowLegacyKindMapping>;
 
 /** The effects a named action lists in `module-contracts.ts`; a named action becomes a transaction flow. */
 export const flowTaskMappingForActionEffect = {

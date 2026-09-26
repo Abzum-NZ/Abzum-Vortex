@@ -9,13 +9,13 @@ import {
 } from "./definitions";
 import type { ResolveRecordTypeReferences } from "./definitions";
 import {
-  actionDefinitionSchema,
+  actionEffectSchema,
   conditionNodeSchema,
   eventDefinitionSchema,
 } from "./module-contracts";
-import { workflowDefinitionSchema } from "./automation-contracts";
 import { interfaceDefinitionSchema } from "./integration-contracts";
 import {
+  actionIdSchema,
   builderKeySchema,
   connectionTypeIdSchema,
   containedComponentIdSchema,
@@ -27,12 +27,13 @@ import {
   pageIdSchema,
   pipelineIdSchema,
   queryIdSchema,
+  recordTypeIdSchema,
   roleIdSchema,
   semanticVersionSchema,
   workflowIdSchema,
 } from "./identifiers";
 import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "./common";
-import { applicationExperienceStateSchema } from "./catalogues";
+import { actionInputValueTypes, applicationExperienceStateSchema } from "./catalogues";
 import { permissionDeclarationSchema } from "./permissions";
 import {
   applicationShellV2Schema,
@@ -44,6 +45,176 @@ import {
 } from "./application-composition-v2";
 import { componentFlowBindingSchema } from "./application-flow-bindings";
 import { flowSchema } from "./flow-contracts";
+
+/** The typed inputs and shape of one Application-owned action. */
+const actionInputBase = {
+  key: builderKeySchema,
+  label: labelSchema,
+  required: z.boolean(),
+};
+const textActionInputSchema = z
+  .object({
+    ...actionInputBase,
+    type: z.literal(actionInputValueTypes.text),
+    validation: z
+      .object({
+        minimumLength: z.number().int().min(0).optional(),
+        maximumLength: z.number().int().positive().optional(),
+        pattern: z.string().min(1).max(500).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+const formattedTextActionInputSchema = z
+  .object({
+    ...actionInputBase,
+    type: z.literal(actionInputValueTypes.formatted_text),
+    validation: z
+      .object({
+        allowedBlocks: z
+          .array(z.enum(["paragraph", "heading", "list", "link", "attachment"]))
+          .min(1),
+        maximumLength: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+const numberActionInputSchema = z
+  .object({
+    ...actionInputBase,
+    type: z.literal(actionInputValueTypes.number),
+    validation: z
+      .object({ minimum: z.number().finite().optional(), maximum: z.number().finite().optional() })
+      .strict()
+      .optional(),
+  })
+  .strict();
+const dateActionInputSchema = z
+  .object({
+    ...actionInputBase,
+    type: z.literal(actionInputValueTypes.date),
+    validation: z
+      .object({
+        earliest: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+        latest: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+const dateTimeActionInputSchema = z
+  .object({
+    ...actionInputBase,
+    type: z.literal(actionInputValueTypes.date_time),
+    validation: z
+      .object({
+        earliest: z.string().datetime({ offset: true }).optional(),
+        latest: z.string().datetime({ offset: true }).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+export const actionInputDefinitionSchema = z
+  .discriminatedUnion("type", [
+    textActionInputSchema,
+    formattedTextActionInputSchema,
+    numberActionInputSchema,
+    z.object({ ...actionInputBase, type: z.literal(actionInputValueTypes.boolean) }).strict(),
+    dateActionInputSchema,
+    dateTimeActionInputSchema,
+    z
+      .object({
+        ...actionInputBase,
+        type: z.literal(actionInputValueTypes.record_reference),
+        recordTypes: z.array(recordTypeReferenceSchema).min(1).max(20),
+      })
+      .strict(),
+    z
+      .object({
+        ...actionInputBase,
+        type: z.literal(actionInputValueTypes.organization_account_reference),
+      })
+      .strict(),
+  ])
+  .superRefine((value, context) => {
+    if (
+      value.type === "text" &&
+      value.validation?.minimumLength !== undefined &&
+      value.validation.maximumLength !== undefined &&
+      value.validation.minimumLength > value.validation.maximumLength
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["validation", "maximumLength"],
+        message: "Maximum length cannot be below minimum length",
+      });
+    if (
+      value.type === "number" &&
+      value.validation?.minimum !== undefined &&
+      value.validation.maximum !== undefined &&
+      value.validation.minimum > value.validation.maximum
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["validation", "maximum"],
+        message: "Maximum cannot be below minimum",
+      });
+  });
+export const actionDefinitionSchema = z
+  .object({
+    actionId: actionIdSchema,
+    key: namespacedKeySchema,
+    label: labelSchema,
+    subjectRecordTypeId: recordTypeIdSchema,
+    permissionKey: namespacedKeySchema.optional(),
+    permissionKeys: z.array(namespacedKeySchema).min(2).optional(),
+    sharing: z.enum(["refused", "allowed"]),
+    inputs: z.array(actionInputDefinitionSchema).max(50),
+    precondition: conditionNodeSchema.optional(),
+    effects: z.array(actionEffectSchema).min(1).max(10),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.permissionKey === undefined) === (value.permissionKeys === undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["permissionKeys"],
+        message: "An action requires either one permission or canonical alternatives",
+      });
+    if (value.permissionKeys) {
+      if (new Set(value.permissionKeys).size !== value.permissionKeys.length)
+        context.addIssue({
+          code: "custom",
+          path: ["permissionKeys"],
+          message: "Action permission alternatives must be unique",
+        });
+      if (
+        value.permissionKeys.some(
+          (permission, index) => index > 0 && value.permissionKeys![index - 1]! >= permission,
+        )
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["permissionKeys"],
+          message: "Action permission alternatives must use canonical order",
+        });
+    }
+    if (new Set(value.inputs.map((input) => input.key)).size !== value.inputs.length)
+      context.addIssue({
+        code: "custom",
+        path: ["inputs"],
+        message: "Action input keys must be unique",
+      });
+  });
 
 export const moduleBindingSchema = z
   .object({
@@ -245,7 +416,6 @@ export const pageDefinitionV2Schema = z.discriminatedUnion("type", [
       ...pageV2Base,
       type: z.literal("form"),
       recordType: recordTypeReferenceSchema,
-      commitActionKey: namespacedKeySchema,
     })
     .strict(),
   z
@@ -253,7 +423,6 @@ export const pageDefinitionV2Schema = z.discriminatedUnion("type", [
       ...pageV2Common,
       type: z.literal("guided_form"),
       recordType: recordTypeReferenceSchema,
-      commitActionKey: namespacedKeySchema,
       steps: z.array(guidedFormStepV2Schema).min(2).max(20),
       composition: guidedFormPageCompositionV2Schema,
     })
@@ -447,7 +616,6 @@ const applicationSharedContentSchema = z
     permissions: z.array(permissionDeclarationSchema),
     actions: z.array(actionDefinitionSchema),
     events: z.array(eventDefinitionSchema),
-    workflows: z.array(workflowDefinitionSchema),
     connectionBindings: z.array(applicationConnectionBindingSchema),
     interfaces: z.array(interfaceDefinitionSchema),
     publicAddresses: z.array(publicAddressSchema),

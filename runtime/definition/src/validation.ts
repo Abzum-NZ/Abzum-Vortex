@@ -8,8 +8,7 @@ import {
   moduleDraftV3Schema,
   moduleSourceDocumentSchema,
   moduleCompilationRequestV3Schema,
-  savedSharingConditionV2Schema,
-  savedSharingConditionSchema,
+  savedSharingConditionV3Schema,
   connectionTypeSchema,
   exactDecimalTextV2Schema,
   moneyValueV2Schema,
@@ -18,7 +17,6 @@ import {
   moduleFieldValueV2Schemas,
   sourceModuleFieldValueV2Schemas,
   parseExactDecimal,
-  workflowDefinitionSchema,
   jsonValueSchema,
   walkDefinitionContract,
   definitionSourceDocumentSchema,
@@ -28,9 +26,6 @@ import {
   platformIdSchema,
   namespacedKeySchema,
   translateDefinitionSchemaError,
-  workflowNodeOutputKeysByType,
-  workflowNodeOutputsByType,
-  canonicalWorkflowValueType,
   valueTypesCompatible,
   flowTaskChildLists,
   flowTaskRegistry,
@@ -39,7 +34,7 @@ import {
   type ApplicationCompilationRequestV2,
   type ModuleCompilationRequestV3,
   type ModuleSourceDocument,
-  type ModuleFieldV2,
+  type ModuleFieldV3,
   type ApplicationSourceDocumentV2,
   type ConditionNode,
   type DefinitionSourceDocument,
@@ -47,7 +42,6 @@ import {
   type DefinitionPublicationHistoryEvidence,
   type DefinitionRuleFailure,
   type DefinitionValidationLocation,
-  type FieldDefinition,
   type FlowDefinition,
   type FlowTask,
   type PlatformBlockReleaseV2,
@@ -56,10 +50,8 @@ import {
 } from "@vortex/contracts";
 import type { z } from "zod";
 import {
-  evaluateTypedCondition,
   evaluateTypedConditionV2,
   TypedConditionEvaluationError,
-  type TypedConditionParameterDeclaration,
   type TypedConditionParameterDeclarationV2,
 } from "@vortex/rule";
 import { satisfies } from "semver";
@@ -77,6 +69,7 @@ import {
   validateApplicationSourceCatalogue,
 } from "./application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
+import { deriveFormCommitActionKeys } from "./form-commit";
 
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
@@ -2204,7 +2197,6 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
   };
 
   for (const output of moduleOutputs) {
-    const moduleV2 = "validationContractVersion" in output;
     const canonical = object(output.canonical);
     const envelope = object(canonical.envelope);
     const content = object(canonical.content);
@@ -2251,7 +2243,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         sharingConditions,
         true,
         modulePermissions,
-        moduleV2 ? new Set(sharingConditions.keys()) : new Set(),
+        new Set(sharingConditions.keys()),
       )
     )
       failures.push(
@@ -2317,14 +2309,6 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       const readTimeFieldIds = readTimeFieldIdsFor(array(record.fields));
       for (const field of array(record.fields)) {
         const settings = object(field.settings);
-        const moduleFieldValueType = (candidate: JsonObject | undefined) =>
-          moduleV2 ? fieldValueTypeV2(candidate) : fieldValueType(candidate);
-        const moduleNumericField = (candidate: JsonObject | undefined) =>
-          moduleV2
-            ? ["whole_number", "decimal_number", "money"].includes(
-                fieldValueTypeV2(candidate) ?? "",
-              )
-            : fieldValueType(candidate) === "number";
         let valid = true;
         const choiceSettings = [
           ...(["choice", "several_choices"].includes(String(field.type)) ? [settings] : []),
@@ -2354,79 +2338,54 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
           );
         if (field.type === "calculation") {
           const expression = object(settings.expression);
-          const expectedDependencies = moduleV2
-            ? calculationDependencyFieldIdsV2(expression)
-            : undefined;
+          const expectedDependencies = calculationDependencyFieldIdsV2(expression);
           valid =
             (settings.dependencyFieldIds as string[]).every((fieldId) => fields.has(fieldId)) &&
             fieldReferencesValid(settings.expression, fields) &&
-            (!moduleV2 ||
-              JSON.stringify([...new Set(settings.dependencyFieldIds as string[])]) ===
-                JSON.stringify(expectedDependencies)) &&
-            (!moduleV2 ||
-              (["decimal_number", "money"].includes(String(settings.resultType))
-                ? settings.decimalPlaces !== undefined
-                : settings.decimalPlaces === undefined));
+            JSON.stringify([...new Set(settings.dependencyFieldIds as string[])]) ===
+              JSON.stringify(expectedDependencies) &&
+            (["decimal_number", "money"].includes(String(settings.resultType))
+              ? settings.decimalPlaces !== undefined
+              : settings.decimalPlaces === undefined);
           if (settings.evaluation === "stored" && readTimeFieldIds.has(String(field.fieldId)))
             valid = false;
           if (expression.kind === "join_text")
             valid =
               valid &&
               (expression.fieldIds as string[]).every((id) =>
-                ["text", "choice"].includes(moduleFieldValueType(fieldMap.get(id)) ?? ""),
+                ["text", "choice"].includes(fieldValueTypeV2(fieldMap.get(id)) ?? ""),
               );
           if (expression.kind === "numeric")
             valid =
-              valid &&
-              (moduleV2
-                ? numericExpressionValidV2(expression, String(settings.resultType), fieldMap)
-                : array(expression.operands).every(
-                    (operand) =>
-                      operand.source === "literal" ||
-                      (operand.source === "field" &&
-                        moduleNumericField(fieldMap.get(String(operand.fieldId)))),
-                  ));
-          if (expression.kind === "subtract_percentage")
-            if (moduleV2) {
-              const amountDimension = numericDimensionV2(
-                fieldMap.get(String(expression.amountFieldId)),
-              );
-              valid =
-                valid &&
-                amountDimension !== undefined &&
-                ["whole_number", "decimal_number"].includes(
-                  fieldValueTypeV2(fieldMap.get(String(expression.percentageFieldId))) ?? "",
-                ) &&
-                (amountDimension === "money"
-                  ? settings.resultType === "money"
-                  : settings.resultType === "decimal_number");
-            } else
-              valid =
-                valid &&
-                moduleNumericField(fieldMap.get(String(expression.amountFieldId))) &&
-                fieldValueType(fieldMap.get(String(expression.percentageFieldId))) === "number";
-          if (expression.kind === "condition")
+              valid && numericExpressionValidV2(expression, String(settings.resultType), fieldMap);
+          if (expression.kind === "subtract_percentage") {
+            const amountDimension = numericDimensionV2(
+              fieldMap.get(String(expression.amountFieldId)),
+            );
             valid =
               valid &&
-              (moduleV2
-                ? conditionTypesValidV2(expression.condition, fieldMap)
-                : conditionTypesValid(expression.condition, fieldMap));
+              amountDimension !== undefined &&
+              ["whole_number", "decimal_number"].includes(
+                fieldValueTypeV2(fieldMap.get(String(expression.percentageFieldId))) ?? "",
+              ) &&
+              (amountDimension === "money"
+                ? settings.resultType === "money"
+                : settings.resultType === "decimal_number");
+          }
+          if (expression.kind === "condition")
+            valid = valid && conditionTypesValidV2(expression.condition, fieldMap);
           if (expression.kind === "date_offset") {
             const amount = object(expression.amount);
             valid =
               valid &&
               ["date", "date_time"].includes(
-                moduleFieldValueType(fieldMap.get(String(expression.dateFieldId))) ?? "",
+                fieldValueTypeV2(fieldMap.get(String(expression.dateFieldId))) ?? "",
               ) &&
-              (!moduleV2 ||
-                moduleFieldValueType(fieldMap.get(String(expression.dateFieldId))) ===
-                  settings.resultType) &&
-              ((amount.source === "literal" &&
-                (!moduleV2 || exactIntegerLiteralV2(amount.value))) ||
+              fieldValueTypeV2(fieldMap.get(String(expression.dateFieldId))) ===
+                settings.resultType &&
+              ((amount.source === "literal" && exactIntegerLiteralV2(amount.value)) ||
                 (amount.source === "field" &&
-                  (moduleV2
-                    ? fieldValueTypeV2(fieldMap.get(String(amount.fieldId))) === "whole_number"
-                    : moduleNumericField(fieldMap.get(String(amount.fieldId))))));
+                  fieldValueTypeV2(fieldMap.get(String(amount.fieldId))) === "whole_number"));
           }
           if (expression.kind === "deadline_passed") {
             const statusField =
@@ -2436,15 +2395,13 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
             valid =
               valid &&
               ["date", "date_time"].includes(
-                moduleFieldValueType(fieldMap.get(String(expression.dueFieldId))) ?? "",
+                fieldValueTypeV2(fieldMap.get(String(expression.dueFieldId))) ?? "",
               ) &&
               (expression.statusFieldId === undefined ||
-                ["text", "choice"].includes(moduleFieldValueType(statusField) ?? "")) &&
-              (!moduleV2 ||
-                expression.statusFieldId !== undefined ||
+                ["text", "choice"].includes(fieldValueTypeV2(statusField) ?? "")) &&
+              (expression.statusFieldId !== undefined ||
                 array(expression.terminalStatusValues).length === 0) &&
-              (!moduleV2 ||
-                statusField === undefined ||
+              (statusField === undefined ||
                 array(expression.terminalStatusValues).every((value) =>
                   fieldValueMatchesV2(value, statusField, "canonical"),
                 ));
@@ -2488,9 +2445,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
           const filterValid =
             settings.filter === undefined ||
             (fieldReferencesValid(settings.filter, aggregateFields) &&
-              (moduleV2
-                ? conditionTypesValidV2(settings.filter, aggregateFieldMap)
-                : conditionTypesValid(settings.filter, aggregateFieldMap)));
+              conditionTypesValidV2(settings.filter, aggregateFieldMap));
           const currencyValid =
             settings.currency === undefined ||
             (settings.operation === "sum" && aggregateResultType === "money");
@@ -2512,11 +2467,9 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
               ? settings.fieldId === undefined
               : aggregateField !== undefined) &&
             (!["sum", "average"].includes(String(settings.operation)) ||
-              (moduleV2
-                ? ["whole_number", "decimal_number", "money"].includes(
-                    fieldValueTypeV2(aggregateField) ?? "",
-                  )
-                : fieldValueType(aggregateField) === "number"));
+              ["whole_number", "decimal_number", "money"].includes(
+                fieldValueTypeV2(aggregateField) ?? "",
+              ));
           const declaredResultType = String(settings.resultType);
           const resultTypeValid =
             (settings.operation === "count" && declaredResultType === "whole_number") ||
@@ -2525,11 +2478,10 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
                 (aggregateResultType === "money" ? "money" : "decimal_number")) ||
             (["sum", "minimum", "maximum"].includes(String(settings.operation)) &&
               declaredResultType === aggregateResultType);
-          const precisionValid = moduleV2
-            ? settings.operation === "average"
+          const precisionValid =
+            settings.operation === "average"
               ? settings.decimalPlaces !== undefined
-              : settings.decimalPlaces === undefined
-            : true;
+              : settings.decimalPlaces === undefined;
           valid = valid && resultTypeValid && precisionValid;
         }
         if (!valid)
@@ -2590,7 +2542,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       const inputTypes = new Map(
         [...inputMap].map(([key, input]) => [
           key,
-          (moduleV2 ? semanticFieldTypeV2(input.type) : semanticFieldType(input.type)) ?? "",
+          semanticFieldTypeV2(input.type) ?? "",
         ]),
       );
       let valid =
@@ -2599,9 +2551,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         actionPermissionsMatch(action, modulePermissionsByKey) &&
         fieldReferencesValid(action.precondition, fields) &&
         (action.precondition === undefined ||
-          (moduleV2
-            ? conditionTypesValidV2(action.precondition, fieldMap, inputTypes)
-            : conditionTypesValid(action.precondition, fieldMap, inputTypes)));
+          conditionTypesValidV2(action.precondition, fieldMap, inputTypes));
       for (const input of array(action.inputs))
         if (
           input.type === "record_reference" &&
@@ -2614,7 +2564,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         if (
           effect.kind === "set_field" &&
           (!fields.has(String(effect.fieldId)) ||
-            !(moduleV2 ? actionValueCompatibleV2 : actionValueCompatible)(
+            !actionValueCompatibleV2(
               effect.value,
               fieldMap.get(String(effect.fieldId)),
               fieldMap,
@@ -2644,7 +2594,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
             Object.entries(object(effect.values)).some(
               ([id, value]) =>
                 !targetFields.has(id) ||
-                !(moduleV2 ? actionValueCompatibleV2 : actionValueCompatible)(
+                !actionValueCompatibleV2(
                   value,
                   targetFields.get(id),
                   fieldMap,
@@ -2809,25 +2759,16 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         record !== undefined &&
         (condition.declaredFieldIds as string[]).every((fieldId) => fields.has(fieldId)) &&
         fieldReferencesValid(condition.condition, fields) &&
-        (moduleV2
-          ? conditionTypesValidV2(condition.condition, fieldMap, parameterTypes)
-          : conditionTypesValid(condition.condition, fieldMap, parameterTypes));
+        conditionTypesValidV2(condition.condition, fieldMap, parameterTypes);
       try {
         for (const publicationTest of array(condition.publicationTests))
           if (
-            (moduleV2
-              ? evaluateSavedSharingConditionV2(
-                  condition,
-                  object(publicationTest.fieldValues),
-                  object(publicationTest.parameters),
-                  [...fieldMap.values()] as ModuleFieldV2[],
-                )
-              : evaluateSavedSharingCondition(
-                  condition,
-                  object(publicationTest.fieldValues),
-                  object(publicationTest.parameters),
-                  [...fieldMap.values()] as FieldDefinition[],
-                )) !== publicationTest.expected
+            evaluateSavedSharingCondition(
+              condition,
+              object(publicationTest.fieldValues),
+              object(publicationTest.parameters),
+              [...fieldMap.values()] as ModuleFieldV3[],
+            ) !== publicationTest.expected
           )
             valid = false;
       } catch {
@@ -2922,445 +2863,6 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
     }
   }
   return failures;
-}
-
-// Removal point (Phase 9): the workflow reachability checks in validateWorkflow are superseded by the
-// one flow validator (runtime/definition/src/flow-validation.ts, #985). Durable workflows keep their
-// node-and-edge shape until Phase 9 converts them to durable flows, so they stay until then.
-
-const outputsByNodeType: Readonly<Record<string, readonly string[]>> = workflowNodeOutputKeysByType;
-
-function validateWorkflow(output: Output, workflow: JsonObject): DefinitionRuleFailure[] {
-  const walkValues = createContractValueWalker([
-    { schema: workflowDefinitionSchema, value: workflow },
-  ]);
-  const failures: DefinitionRuleFailure[] = [];
-  const workflowFailure = (ruleCode: string, family: DefinitionRuleFailure["family"]) =>
-    failure(output, ruleCode, family, { kind: "workflow", key: String(workflow.key) });
-  const nodes = array(workflow.nodes);
-  const edges = array(workflow.edges);
-  const byId = new Map(nodes.map((node) => [String(node.nodeId), node]));
-  const starts = nodes.filter((node) => node.type === "start");
-  if (starts.length !== 1)
-    failures.push(workflowFailure("vortex.definition.workflow_single_start", "invalid_value"));
-  const edgeKeys = edges.map(
-    (edge) => `${edge.fromNodeId}\0${edge.toNodeId}\0${edge.outcome ?? ""}`,
-  );
-  if (new Set(edgeKeys).size !== edgeKeys.length)
-    failures.push(workflowFailure("vortex.definition.workflow_edges_unique", "duplicate_key"));
-  for (const edge of edges)
-    if (!byId.has(String(edge.fromNodeId)) || !byId.has(String(edge.toNodeId)))
-      failures.push(
-        workflowFailure("vortex.definition.workflow_edge_endpoints", "broken_reference"),
-      );
-  if (starts.length === 1) {
-    const reachable = new Set<string>();
-    const queue = [String(starts[0]!.nodeId)];
-    while (queue.length) {
-      const current = queue.shift()!;
-      if (reachable.has(current)) continue;
-      reachable.add(current);
-      edges
-        .filter((edge) => edge.fromNodeId === current)
-        .forEach((edge) => queue.push(String(edge.toNodeId)));
-    }
-    if (reachable.size !== nodes.length)
-      failures.push(workflowFailure("vortex.definition.workflow_reachable", "broken_reference"));
-  }
-  for (const node of nodes) {
-    const outgoing = edges.filter((edge) => edge.fromNodeId === node.nodeId);
-    if (node.type === "stop" && outgoing.length > 0)
-      failures.push(workflowFailure("vortex.definition.workflow_stop_terminal", "scope_conflict"));
-    let expected: string[] | undefined;
-    if (node.type === "condition") expected = ["matched", "not_matched"];
-    if (node.type === "decision_table")
-      expected = array(object(node.config).decisions).map((decision) => String(decision.output));
-    if (node.type === "bounded_loop") expected = ["record", "completed"];
-    if (node.type === "request_form")
-      expected = ["submitted", String(object(node.config).timeoutOutcome)];
-    if (expected) {
-      const actual = outgoing.map((edge) => String(edge.outcome));
-      if (
-        new Set(actual).size !== actual.length ||
-        actual.length !== expected.length ||
-        expected.some((outcome) => !actual.includes(outcome))
-      )
-        failures.push(
-          workflowFailure("vortex.definition.workflow_outcomes_complete", "broken_reference"),
-        );
-    }
-  }
-
-  const predecessors = new Map<string, Set<string>>(
-    nodes.map((node) => [String(node.nodeId), new Set()]),
-  );
-  edges.forEach((edge) => predecessors.get(String(edge.toNodeId))?.add(String(edge.fromNodeId)));
-  const allIds = new Set(nodes.map((node) => String(node.nodeId)));
-  const startId = starts.length === 1 ? String(starts[0]!.nodeId) : "";
-  const dominators = new Map<string, Set<string>>(
-    nodes.map((node) => [
-      String(node.nodeId),
-      String(node.nodeId) === startId ? new Set([startId]) : new Set(allIds),
-    ]),
-  );
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const node of nodes) {
-      const id = String(node.nodeId);
-      if (id === startId) continue;
-      const parents = [...(predecessors.get(id) ?? [])];
-      const intersection = parents.length
-        ? new Set(
-            [...allIds].filter((candidate) =>
-              parents.every((parent) => dominators.get(parent)?.has(candidate)),
-            ),
-          )
-        : new Set<string>();
-      intersection.add(id);
-      const current = dominators.get(id)!;
-      if (
-        current.size !== intersection.size ||
-        [...current].some((entry) => !intersection.has(entry))
-      ) {
-        dominators.set(id, intersection);
-        changed = true;
-      }
-    }
-  }
-  for (const consumer of nodes)
-    walkValues(consumer.config, (value) => {
-      if (value.source !== "node_output") return;
-      const producerId = String(value.nodeId);
-      const producer = byId.get(producerId);
-      const allowed = producer
-        ? producer.type === "request_form"
-          ? array(object(producer.config).outputs).map((entry) => String(entry.key))
-          : outputsByNodeType[String(producer.type)]
-        : undefined;
-      if (!producer || !allowed?.includes(String(value.outputKey)))
-        failures.push(
-          workflowFailure("vortex.definition.workflow_output_exists", "broken_reference"),
-        );
-      if (!dominators.get(String(consumer.nodeId))?.has(producerId))
-        failures.push(
-          workflowFailure("vortex.definition.workflow_output_dominates", "scope_conflict"),
-        );
-    });
-
-  const canTerminate = new Set(
-    nodes
-      .filter(
-        (node) =>
-          node.type === "stop" || node.type === "wait_until" || node.type === "request_form",
-      )
-      .map((node) => String(node.nodeId)),
-  );
-  changed = true;
-  while (changed) {
-    changed = false;
-    for (const edge of edges)
-      if (canTerminate.has(String(edge.toNodeId)) && !canTerminate.has(String(edge.fromNodeId))) {
-        canTerminate.add(String(edge.fromNodeId));
-        changed = true;
-      }
-  }
-  if (nodes.some((node) => !canTerminate.has(String(node.nodeId))))
-    failures.push(workflowFailure("vortex.definition.workflow_termination", "dependency_cycle"));
-
-  const visiting = new Set<string>();
-  const visited = new Set<string>();
-  const visitCycle = (nodeId: string, path: string[]) => {
-    if (visiting.has(nodeId)) {
-      const cycle = path.slice(path.indexOf(nodeId));
-      const cycleIds = new Set(cycle);
-      const boundedLoops = cycle.filter((id) => byId.get(id)?.type === "bounded_loop");
-      const loopEdges =
-        boundedLoops.length === 1
-          ? edges.filter((edge) => edge.fromNodeId === boundedLoops[0])
-          : [];
-      const bounded =
-        boundedLoops.length === 1 &&
-        loopEdges.some(
-          (edge) => edge.outcome === "record" && cycleIds.has(String(edge.toNodeId)),
-        ) &&
-        loopEdges.some(
-          (edge) => edge.outcome === "completed" && !cycleIds.has(String(edge.toNodeId)),
-        );
-      if (!bounded)
-        failures.push(
-          workflowFailure("vortex.definition.workflow_cycles_bounded", "dependency_cycle"),
-        );
-      return;
-    }
-    if (visited.has(nodeId)) return;
-    visiting.add(nodeId);
-    for (const edge of edges.filter((candidate) => candidate.fromNodeId === nodeId))
-      visitCycle(String(edge.toNodeId), [...path, nodeId]);
-    visiting.delete(nodeId);
-    visited.add(nodeId);
-  };
-  nodes.forEach((node) => visitCycle(String(node.nodeId), []));
-  return failures;
-}
-
-export function workflowValueCompatible(
-  value: JsonObject,
-  expected: string,
-  fields: ReadonlyMap<string, JsonObject>,
-  nodes: ReadonlyMap<string, JsonObject>,
-  queries: ReadonlyMap<string, JsonObject>,
-  triggerRecordId?: string,
-  expectedRecordTypeIds?: readonly string[],
-  triggerInputs: ReadonlyMap<string, JsonObject> = new Map(),
-): boolean {
-  const normalizedExpected = canonicalWorkflowValueType(expected);
-  let actual: string | undefined;
-  let actualRecordTypeIds: string[] | undefined;
-  if (value.source === "literal") {
-    const literal = value.value;
-    actual = Array.isArray(literal)
-      ? "json"
-      : literal === null || typeof literal === "object"
-        ? "json"
-        : typeof literal === "number"
-          ? "number"
-          : typeof literal === "boolean"
-            ? "boolean"
-            : typeof literal === "string" && /^\d{4}-\d{2}-\d{2}$/.test(literal)
-              ? "date"
-              : typeof literal === "string" && !Number.isNaN(Date.parse(literal))
-                ? "date_time"
-                : typeof literal === "string"
-                  ? "text"
-                  : undefined;
-  } else if (value.source === "trigger_field") {
-    const field = fields.get(String(value.fieldId));
-    actual = fieldValueType(field);
-    actualRecordTypeIds = fieldRecordTypeIds(field);
-  } else if (value.source === "trigger_input") {
-    const input = triggerInputs.get(String(value.inputKey));
-    actual = input ? canonicalWorkflowValueType(String(input.type)) : undefined;
-    actualRecordTypeIds = input?.recordTypeIds as string[] | undefined;
-  } else if (value.source === "current_record") {
-    actual = "record_reference";
-    actualRecordTypeIds = triggerRecordId ? [triggerRecordId] : undefined;
-  } else if (value.source === "current_actor") actual = "organization_account_reference";
-  else if (value.source === "current_time") actual = "date_time";
-  else if (value.source === "node_output") {
-    const producer = nodes.get(String(value.nodeId));
-    const outputKey = String(value.outputKey);
-    if (producer?.type === "request_form") {
-      const output = array(object(producer.config).outputs).find(
-        (entry) => entry.key === outputKey,
-      );
-      actual = output ? canonicalWorkflowValueType(String(output.type)) : undefined;
-      actualRecordTypeIds = output?.recordTypeIds as string[] | undefined;
-    } else if (producer) {
-      const declaration = workflowNodeOutputsByType[
-        producer.type as keyof typeof workflowNodeOutputsByType
-      ]?.find((candidate) => candidate.key === outputKey);
-      actual = declaration ? canonicalWorkflowValueType(declaration.type) : undefined;
-      const producerConfig = object(producer.config);
-      if (declaration?.target === "configured_record" && producerConfig.recordTypeId !== undefined)
-        actualRecordTypeIds = [String(producerConfig.recordTypeId)];
-      if (declaration?.target === "query") {
-        const query = queries.get(String(producerConfig.queryId));
-        if (query) actualRecordTypeIds = [String(object(query.recordType).recordTypeId)];
-      }
-      if (declaration?.target === "input_record")
-        actualRecordTypeIds = [
-          workflowValueRecordType(
-            object(producerConfig.record),
-            nodes,
-            queries,
-            triggerRecordId,
-            triggerInputs,
-          ),
-        ].filter((recordTypeId): recordTypeId is string => recordTypeId !== undefined);
-    }
-  }
-  if (normalizedExpected === "json") return actual !== undefined;
-  return (
-    valueTypesCompatible(actual, normalizedExpected, "flow") &&
-    (expectedRecordTypeIds === undefined ||
-      (actualRecordTypeIds !== undefined &&
-        actualRecordTypeIds.length > 0 &&
-        actualRecordTypeIds.every((recordTypeId) => expectedRecordTypeIds.includes(recordTypeId))))
-  );
-}
-
-function applicationWorkflowFieldValueCompatible(
-  value: JsonObject,
-  target: ApplicationFieldValuePair,
-  fields: ReadonlyMap<string, JsonObject>,
-  fieldPairs: ReadonlyMap<string, ApplicationFieldValuePair>,
-  nodes: ReadonlyMap<string, JsonObject>,
-  queries: ReadonlyMap<string, JsonObject>,
-  triggerRecordId: string | undefined,
-  expectedRecordTypeIds: readonly string[] | undefined,
-  triggerInputs: ReadonlyMap<string, JsonObject>,
-): boolean {
-  if (value.source === "literal")
-    return target.moduleV2
-      ? fieldValueMatchesV2(value.value, target.field, "canonical")
-      : valueTypesCompatible(literalValueType(value.value), fieldValueType(target.field), "value");
-  if (value.source === "trigger_field") {
-    const source = fieldPairs.get(String(value.fieldId));
-    if (!source) return false;
-    const compatible =
-      source.moduleV2 !== target.moduleV2
-        ? crossFormatFieldTypesCompatible(source, target)
-        : target.moduleV2
-          ? valueTypesCompatible(
-              applicationFieldType(source),
-              applicationFieldType(target),
-              "mapping",
-            )
-          : valueTypesCompatible(
-              applicationFieldType(source),
-              applicationFieldType(target),
-              "value",
-            );
-    if (!compatible || expectedRecordTypeIds === undefined) return compatible;
-    const actualRecordTypeIds = fieldRecordTypeIds(source.field);
-    return (
-      actualRecordTypeIds !== undefined &&
-      actualRecordTypeIds.length > 0 &&
-      actualRecordTypeIds.every((recordTypeId) => expectedRecordTypeIds.includes(recordTypeId))
-    );
-  }
-  const targetType = applicationFieldType(target);
-  if (
-    target.moduleV2 &&
-    ["decimal_number", "money", "formatted_text", "table", "attachment"].includes(
-      String(targetType),
-    )
-  )
-    return false;
-  return workflowValueCompatible(
-    value,
-    targetType === "whole_number" ? "number" : (targetType ?? ""),
-    fields,
-    nodes,
-    queries,
-    triggerRecordId,
-    expectedRecordTypeIds,
-    triggerInputs,
-  );
-}
-
-function applicationWorkflowInputCompatible(
-  value: JsonObject,
-  input: JsonObject,
-  moduleV2: boolean,
-  fields: ReadonlyMap<string, JsonObject>,
-  fieldPairs: ReadonlyMap<string, ApplicationFieldValuePair>,
-  nodes: ReadonlyMap<string, JsonObject>,
-  queries: ReadonlyMap<string, JsonObject>,
-  triggerRecordId: string | undefined,
-  expectedRecordTypeIds: readonly string[] | undefined,
-  triggerInputs: ReadonlyMap<string, JsonObject>,
-): boolean {
-  if (value.source === "trigger_field") {
-    const source = fieldPairs.get(String(value.fieldId));
-    if (!source) return false;
-    const expectedType = moduleV2
-      ? input.type === "formatted_text"
-        ? "formatted_text"
-        : semanticFieldTypeV2(input.type)
-      : canonicalWorkflowValueType(String(input.type));
-    if (!expectedType) return false;
-    const actualType = applicationFieldType(source);
-    const compatible = moduleV2
-      ? source.moduleV2
-        ? valueTypesCompatible(actualType, expectedType, "mapping")
-        : (expectedType === "whole_number" && actualType === "number") ||
-          (actualType === expectedType &&
-            ["text", "boolean", "date", "date_time", "record_reference"].includes(actualType))
-      : valueTypesCompatible(applicationInterfaceFieldType(source), expectedType, "value");
-    if (!compatible || expectedRecordTypeIds === undefined) return compatible;
-    const actualRecordTypeIds = fieldRecordTypeIds(source.field);
-    return (
-      actualRecordTypeIds !== undefined &&
-      actualRecordTypeIds.length > 0 &&
-      actualRecordTypeIds.every((recordTypeId) => expectedRecordTypeIds.includes(recordTypeId))
-    );
-  }
-  if (!moduleV2)
-    return workflowValueCompatible(
-      value,
-      String(input.type),
-      fields,
-      nodes,
-      queries,
-      triggerRecordId,
-      expectedRecordTypeIds,
-      triggerInputs,
-    );
-  const expectedType =
-    input.type === "formatted_text" ? "formatted_text" : semanticFieldTypeV2(input.type);
-  if (!expectedType) return false;
-  if (value.source === "literal") {
-    const compatible =
-      input.type === "formatted_text"
-        ? moduleFieldValueV2Schemas.formatted_text.safeParse(value.value).success
-        : valueMatchesTypeV2(value.value, expectedType);
-    if (!compatible || expectedRecordTypeIds === undefined) return compatible;
-    const actualRecordTypeId = object(value.value).recordTypeId;
-    return (
-      typeof actualRecordTypeId === "string" && expectedRecordTypeIds.includes(actualRecordTypeId)
-    );
-  }
-  if (["decimal_number", "money", "formatted_text"].includes(String(input.type))) return false;
-  return workflowValueCompatible(
-    value,
-    expectedType === "whole_number" ? "number" : expectedType,
-    fields,
-    nodes,
-    queries,
-    triggerRecordId,
-    expectedRecordTypeIds,
-    triggerInputs,
-  );
-}
-
-function workflowValueRecordType(
-  value: JsonObject,
-  nodes: ReadonlyMap<string, JsonObject>,
-  queries: ReadonlyMap<string, JsonObject>,
-  triggerRecordId?: string,
-  triggerInputs: ReadonlyMap<string, JsonObject> = new Map(),
-  visiting: ReadonlySet<string> = new Set(),
-): string | undefined {
-  if (value.source === "current_record") return triggerRecordId;
-  if (value.source === "trigger_input") {
-    const input = triggerInputs.get(String(value.inputKey));
-    const recordTypeIds = input?.recordTypeIds as string[] | undefined;
-    return recordTypeIds?.length === 1 ? recordTypeIds[0] : undefined;
-  }
-  if (value.source !== "node_output") return undefined;
-  const nodeId = String(value.nodeId);
-  if (visiting.has(nodeId)) return undefined;
-  const producer = nodes.get(nodeId);
-  if (!producer) return undefined;
-  const config = object(producer.config);
-  if (["create_record", "change_record", "duplicate_record"].includes(String(producer.type)))
-    return config.recordTypeId === undefined ? undefined : String(config.recordTypeId);
-  if (["bounded_loop", "query_records"].includes(String(producer.type))) {
-    const query = queries.get(String(config.queryId));
-    return query ? String(object(query.recordType).recordTypeId) : undefined;
-  }
-  if (producer.type === "set_values")
-    return workflowValueRecordType(
-      object(config.record),
-      nodes,
-      queries,
-      triggerRecordId,
-      triggerInputs,
-      new Set([...visiting, nodeId]),
-    );
-  return undefined;
 }
 
 function applicationRule(context: PreparedValidationContext): DefinitionRuleFailure[] {
@@ -3675,57 +3177,17 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           [`${recordTypeId}:${key.slice(key.lastIndexOf(".") + 1)}`, key] as const,
       ),
     );
-    /**
-     * The executable action keys a flow commits: a Save record task commits the standard create
-     * or update of its record type, and a Call protected operation task commits the named action it
-     * calls. An unresolvable Save commits an empty key, so it never matches a declared commit.
-     * A Run flow task commits whatever the flow it runs commits, followed once per flow.
-     */
     const flowsForCommits = new Map(
       array(content.flows).map((flow) => [String(flow.id), flow as unknown as FlowDefinition]),
     );
-    const flowCommitActionKeys = (flow: JsonObject): string[] => {
-      const keys: string[] = [];
-      const followed = new Set<string>();
-      const visitFlow = (canonical: FlowDefinition) => {
-        if (followed.has(String(canonical.id))) return;
-        followed.add(String(canonical.id));
-        visit(canonical.tasks);
-        visit(canonical.errors);
-        visit(canonical.finally);
-      };
-      const visit = (tasks: readonly FlowTask[]) => {
-        for (const task of tasks) {
-          if (task.type === "run_flow") {
-            const target = flowsForCommits.get(
-              String((task as Extract<FlowTask, { type: "run_flow" }>).flowId),
-            );
-            // A flow outside this release commits nothing a page could declare, so it never matches.
-            if (target === undefined) keys.push("");
-            else visitFlow(target);
-          }
-          const properties = (task as { properties?: Record<string, JsonObject> }).properties;
-          const literal = (name: string): string | undefined => {
-            const value = properties?.[name];
-            return value?.kind === "literal" ? String(object(value.literal).value) : undefined;
-          };
-          if (task.type === "record.save")
-            keys.push(
-              standardActionKeysByRecordAction.get(
-                `${literal("record_type")}:${properties?.record === undefined ? "create" : "update"}`,
-              ) ?? "",
-            );
-          else if (task.type === "operation.call") {
-            const called = literal("operation");
-            if (called !== undefined && executableActionKeys.has(called)) keys.push(called);
-          }
-          for (const child of flowTaskChildLists(task)) visit(child.tasks);
-        }
-      };
-      visitFlow(flow as unknown as FlowDefinition);
-      return keys;
-    };
     const executableActionKeys = new Set([...actionKeys, ...standardActionKeys]);
+    // The record type a committed executable action belongs to: a bound Module's standard record
+    // action resolves by its declared record, and a named action by its subject record.
+    const commitActionRecordType = (key: string): string | undefined =>
+      standardActionRecordTypes.get(key) ??
+      (actions.get(key)?.subjectRecordTypeId === undefined
+        ? undefined
+        : String(actions.get(key)!.subjectRecordTypeId));
     const events = new Map(
       [
         ...array(content.events),
@@ -3773,31 +3235,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     const pipelines = new Map(
       array(content.pipelines).map((pipeline) => [String(pipeline.pipelineId), pipeline]),
     );
-    const workflows = new Map(
-      array(content.workflows).map((workflow) => [String(workflow.workflowId), workflow]),
-    );
-    const workflowTriggerRecordType = (
-      candidate: JsonObject | undefined,
-      visiting: ReadonlySet<string> = new Set(),
-    ): string | undefined => {
-      if (!candidate) return undefined;
-      const candidateId = String(candidate.workflowId);
-      if (visiting.has(candidateId)) return undefined;
-      const candidateTrigger = object(candidate.trigger);
-      if (candidateTrigger.kind === "event") return String(candidateTrigger.recordTypeId);
-      if (candidateTrigger.kind === "button") {
-        const action = actions.get(String(candidateTrigger.actionKey));
-        return action !== undefined
-          ? String(action.subjectRecordTypeId)
-          : standardActionRecordTypes.get(String(candidateTrigger.actionKey));
-      }
-      if (candidateTrigger.kind === "workflow")
-        return workflowTriggerRecordType(
-          workflows.get(String(candidateTrigger.workflowId)),
-          new Set([...visiting, candidateId]),
-        );
-      return undefined;
-    };
     const connectionMap = new Map(
       connections
         .filter((connection) => {
@@ -3819,9 +3256,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           String(object(connection.canonical).connectionTypeId),
           object(connection.canonical),
         ]),
-    );
-    const connectionBindings = new Map(
-      connectionBindingEntries.map((binding) => [String(binding.bindingId), binding]),
     );
     if (
       boundRoots.size !== bindings.length ||
@@ -3988,21 +3422,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     const applicationPlacementIds = new Set(
       applicationPlacementEntries.map(([placementId]) => placementId),
     );
-    // The declared commit action of every form page that places each component. A form's
-    // submission flow may commit only that action, so the page and its flow share one commit.
-    const pageCommitActionKeysByPlacement = new Map<string, Set<string>>();
-    for (const page of pages.values()) {
-      const pagePlacementIds = [
-        ...pageContentPlacementEntriesV2(page),
-        ...pageShellPlacementEntriesV2(page),
-      ].map(([placementId]) => placementId);
-      if (page.commitActionKey !== undefined)
-        for (const placementId of pagePlacementIds) {
-          const commitKeys = pageCommitActionKeysByPlacement.get(placementId) ?? new Set<string>();
-          commitKeys.add(String(page.commitActionKey));
-          pageCommitActionKeysByPlacement.set(placementId, commitKeys);
-        }
-    }
     const identityCollections: readonly (readonly [JsonObject[], string, string])[] = [
       [array(content.pages), "pageId", "key"],
       [array(content.roles), "roleId", "key"],
@@ -4011,7 +3430,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       [array(content.permissions), "permissionId", "key"],
       [array(content.actions), "actionId", "key"],
       [array(content.events), "eventId", "key"],
-      [array(content.workflows), "workflowId", "key"],
       [array(content.connectionBindings), "bindingId", "key"],
       [array(content.interfaces), "interfaceId", "key"],
       [array(content.publicAddresses), "addressId", "path"],
@@ -4151,10 +3569,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       const pageQueryRecordId = pageQuery
         ? String(object(pageQuery.recordType).recordTypeId)
         : undefined;
-      const commitActionRecordId = page.commitActionKey
-        ? (actions.get(String(page.commitActionKey))?.subjectRecordTypeId ??
-          standardActionRecordTypes.get(String(page.commitActionKey)))
-        : undefined;
       if (!pageNavigationPermissionKnown(page.accessPermissionKey))
         failures.push(
           failure(output, "vortex.definition.application_page_permission", "broken_reference"),
@@ -4167,13 +3581,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           failure(output, "vortex.definition.application_page_query", "broken_reference"),
         );
       const pageRecord = page.recordType ? records.get(pageRecordId!) : undefined;
-      if (
-        (page.recordType && !pageRecord) ||
-        (page.commitActionKey &&
-          (!executableActionKeys.has(String(page.commitActionKey)) ||
-            !pageRecordId ||
-            String(commitActionRecordId) !== pageRecordId))
-      )
+      if (page.recordType && !pageRecord)
         failures.push(
           failure(output, "vortex.definition.application_page_references", "broken_reference"),
         );
@@ -4291,9 +3699,10 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           [...(stage.entryActionKeys as string[]), ...(stage.exitActionKeys as string[])].some(
             (key) => !executableActionKeys.has(key),
           ) ||
-          [...(stage.entryWorkflowIds as string[]), ...(stage.exitWorkflowIds as string[])].some(
-            (id) => !workflows.has(id),
-          )
+          // Application content no longer carries node-and-edge workflows (#1086), so a stage
+          // workflow cannot resolve until stage hooks start durable flows.
+          (stage.entryWorkflowIds as string[]).length > 0 ||
+          (stage.exitWorkflowIds as string[]).length > 0
         )
           failures.push(
             failure(
@@ -4664,620 +4073,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         }
       }
     }
-    for (const workflow of workflows.values()) {
-      failures.push(...validateWorkflow(output, workflow));
-      const workflowFailure = (ruleCode: string, family: DefinitionRuleFailure["family"]) =>
-        failure(output, ruleCode, family, { kind: "workflow", key: String(workflow.key) });
-      const workflowNodes = new Map(
-        array(workflow.nodes).map((node) => [String(node.nodeId), node]),
-      );
-      const trigger = object(workflow.trigger);
-      // An interface operation starts a flow entry point (which may run a background flow) and
-      // never a workflow directly, so no operation can satisfy an interface workflow trigger.
-      const interfaceTriggerOperations: JsonObject[] = [];
-      const boundIncomingMessageContracts = [...connectionBindings.values()].flatMap((binding) => {
-        const connection = connectionMap.get(String(binding.connectionTypeId));
-        if (!connection) return [];
-        const shapes = new Map(
-          array(connection.shapes).map((shape) => [String(shape.key), shape] as const),
-        );
-        return array(connection.incomingMessages).map((message) => ({
-          message,
-          shape: shapes.get(String(message.inputShapeKey)),
-        }));
-      });
-      const boundIncomingMessages = boundIncomingMessageContracts.map(({ message }) => message);
-      const incomingMessageKeys = new Set(
-        boundIncomingMessages.map((message) => String(message.key)),
-      );
-      const incomingMessageKeyCount = boundIncomingMessages.length;
-      const incomingTriggerContracts = boundIncomingMessageContracts.filter(
-        ({ message }) => message.workflowTriggerKey === trigger.messageKey,
-      );
-      const triggerEvent =
-        trigger.kind === "event" ? events.get(String(trigger.eventKey)) : undefined;
-      const triggerAction =
-        trigger.kind === "button" ? actions.get(String(trigger.actionKey)) : undefined;
-      const triggerRecordId =
-        trigger.kind === "event" || trigger.kind === "button" || trigger.kind === "workflow"
-          ? workflowTriggerRecordType(workflow)
-          : undefined;
-      const sourceWorkflow =
-        request?.source.kind === "application"
-          ? (request.source.body as ApplicationSourceDocumentV2["body"]).workflows.find(
-              (candidate) => candidate.key === String(workflow.key),
-            )
-          : undefined;
-      const sourceTrigger = sourceWorkflow?.trigger;
-      let authoredEventRecordId: string | undefined;
-      if (sourceTrigger?.kind === "event") {
-        const qualified = sourceTrigger.record_type;
-        const separator = qualified.lastIndexOf(":");
-        const definitionKey = qualified.slice(0, separator);
-        const alias = qualified.slice(separator + 1);
-        authoredEventRecordId = request?.resolution.identities.find(
-          (identity) =>
-            identity.definitionKey === definitionKey &&
-            identity.kind === "record_type" &&
-            identity.alias === alias,
-        )?.identifier;
-      }
-      if (
-        (trigger.kind === "event" &&
-          (!triggerEvent ||
-            !authoredEventRecordId ||
-            String(triggerEvent.recordTypeId) !== authoredEventRecordId ||
-            String(trigger.recordTypeId) !== authoredEventRecordId)) ||
-        (trigger.kind === "button" && !executableActionKeys.has(String(trigger.actionKey))) ||
-        (trigger.kind === "interface" && interfaceTriggerOperations.length !== 1) ||
-        (trigger.kind === "incoming_message" &&
-          (incomingTriggerContracts.length !== 1 ||
-            incomingTriggerContracts[0]?.shape === undefined ||
-            incomingMessageKeyCount !== incomingMessageKeys.size)) ||
-        (trigger.kind === "workflow" &&
-          (() => {
-            const parent = workflows.get(String(trigger.workflowId));
-            return (
-              !parent ||
-              !array(parent.nodes).some(
-                (node) =>
-                  node.type === "start_workflow" &&
-                  object(node.config).workflowId === workflow.workflowId,
-              )
-            );
-          })())
-      )
-        failures.push(
-          workflowFailure("vortex.definition.workflow_trigger_reference", "broken_reference"),
-        );
-      const triggerFieldIds = new Set(
-        triggerEvent ? (triggerEvent.carriedFieldIds as string[]) : [],
-      );
-      const triggerRecord = triggerRecordId ? records.get(triggerRecordId) : undefined;
-      const triggerModuleV2 =
-        triggerRecordId === undefined ? false : (recordValuePairs.get(triggerRecordId) ?? false);
-      const triggerRecordFields = new Map(
-        triggerRecord
-          ? array(triggerRecord.fields).map((field) => [String(field.fieldId), field])
-          : [],
-      );
-      const triggerInputs = array(trigger.inputs);
-      const triggerInputKeys = triggerInputs.map((input) => String(input.key));
-      const triggerInputsByKey = new Map(
-        triggerInputs.map((input) => {
-          if (input.source !== "record_field" || input.recordTypeIds !== undefined)
-            return [String(input.key), input] as const;
-          const recordTypeIds = fieldRecordTypeIds(triggerRecordFields.get(String(input.fieldId)));
-          return [
-            String(input.key),
-            recordTypeIds === undefined ? input : { ...input, recordTypeIds },
-          ] as const;
-        }),
-      );
-      const declaredTriggerFieldIds = new Set(
-        triggerInputs
-          .filter((input) => input.source === "record_field")
-          .map((input) => String(input.fieldId)),
-      );
-      const expectedPayloadInputs = new Map<string, { type: string; recordTypeIds?: string[] }>();
-      if (trigger.kind === "button" && triggerAction)
-        for (const input of array(triggerAction.inputs))
-          expectedPayloadInputs.set(String(input.key), {
-            type:
-              interfaceActionInputType(
-                input.type,
-                moduleActionValuePairs.get(String(trigger.actionKey))?.moduleV2 ?? false,
-              ) ?? `unsupported:${String(input.type)}`,
-            ...(input.recordTypes
-              ? {
-                  recordTypeIds: array(input.recordTypes).map((reference) =>
-                    String(reference.recordTypeId),
-                  ),
-                }
-              : {}),
-          });
-      if (trigger.kind === "incoming_message") {
-        const shape = incomingTriggerContracts[0]?.shape;
-        if (shape)
-          for (const field of array(shape.fields))
-            expectedPayloadInputs.set(String(field.key), { type: String(field.type) });
-      }
-      if (trigger.kind === "interface") {
-        const operation = interfaceTriggerOperations[0];
-        if (operation)
-          for (const [key, descriptor] of Object.entries(object(operation.inputShape)))
-            expectedPayloadInputs.set(key, { type: String(object(descriptor).type) });
-      }
-      const payloadInputs = triggerInputs.filter((input) => input.source === "payload");
-      const payloadInputContractValid =
-        payloadInputs.length === expectedPayloadInputs.size &&
-        new Set(payloadInputs.map((input) => String(input.payloadKey))).size ===
-          payloadInputs.length &&
-        payloadInputs.every((input) => {
-          const expected = expectedPayloadInputs.get(String(input.payloadKey));
-          const actualRecordTypes = new Set((input.recordTypeIds as string[] | undefined) ?? []);
-          const expectedRecordTypes = new Set(expected?.recordTypeIds ?? []);
-          return (
-            expected !== undefined &&
-            canonicalWorkflowValueType(String(input.type)) ===
-              canonicalWorkflowValueType(expected.type) &&
-            actualRecordTypes.size === expectedRecordTypes.size &&
-            [...actualRecordTypes].every((recordTypeId) => expectedRecordTypes.has(recordTypeId))
-          );
-        });
-      const triggerContractValid =
-        trigger.duplicateProtection === "required" &&
-        new Set(triggerInputKeys).size === triggerInputKeys.length &&
-        (trigger.kind === "event"
-          ? triggerInputs.every((input) => {
-              const field = triggerRecordFields.get(String(input.fieldId));
-              const pair = fieldValuePairs.get(String(input.fieldId));
-              const fieldInputType = applicationInterfaceFieldType(pair);
-              const advertisedRecordTypeIds = input.recordTypeIds as string[] | undefined;
-              const fieldRecordTypeTargets = fieldRecordTypeIds(field);
-              const referenceTargetsValid =
-                input.type === "record_reference"
-                  ? advertisedRecordTypeIds === undefined ||
-                    (fieldRecordTypeTargets !== undefined &&
-                      fieldRecordTypeTargets.every((recordTypeId) =>
-                        advertisedRecordTypeIds.includes(recordTypeId),
-                      ))
-                  : advertisedRecordTypeIds === undefined;
-              return (
-                input.source === "record_field" &&
-                field !== undefined &&
-                triggerFieldIds.has(String(input.fieldId)) &&
-                fieldInputType !== undefined &&
-                canonicalWorkflowValueType(String(input.type)) ===
-                  canonicalWorkflowValueType(fieldInputType) &&
-                referenceTargetsValid
-              );
-            })
-          : triggerInputs.every((input) => input.source === "payload") &&
-            payloadInputContractValid &&
-            trigger.condition === null) &&
-        (trigger.condition === null ||
-          (triggerRecord !== undefined &&
-            applicationConditionTypesValid(
-              trigger.condition,
-              triggerRecordFields,
-              triggerModuleV2,
-            ) &&
-            applicationFieldReferencesValid(
-              trigger.condition,
-              new Set(triggerRecordFields.keys()),
-            )));
-      if (!triggerContractValid)
-        failures.push(
-          workflowFailure("vortex.definition.workflow_trigger_values", "scope_conflict"),
-        );
-      for (const node of array(workflow.nodes)) {
-        if (node.permissionKey && !permissions.has(String(node.permissionKey)))
-          failures.push(
-            workflowFailure("vortex.definition.workflow_permission", "broken_reference"),
-          );
-        walkValues(node.config, (value) => {
-          if (value.source === "trigger_input" && !triggerInputsByKey.has(String(value.inputKey)))
-            failures.push(
-              workflowFailure("vortex.definition.workflow_trigger_values", "scope_conflict"),
-            );
-          if (value.source === "trigger_field" && trigger.kind !== "event")
-            failures.push(
-              workflowFailure("vortex.definition.workflow_trigger_values", "scope_conflict"),
-            );
-          if (
-            trigger.kind === "event" &&
-            value.source === "trigger_field" &&
-            !declaredTriggerFieldIds.has(String(value.fieldId))
-          )
-            failures.push(
-              workflowFailure("vortex.definition.workflow_trigger_values", "scope_conflict"),
-            );
-          if (value.source === "current_record" && triggerRecordId === undefined)
-            failures.push(
-              workflowFailure("vortex.definition.workflow_trigger_values", "scope_conflict"),
-            );
-        });
-        const config = object(node.config);
-        const compatibleWorkflowValue = (
-          value: unknown,
-          expected: string,
-          expectedRecordTypeIds?: readonly string[],
-        ) =>
-          workflowValueCompatible(
-            object(value),
-            expected,
-            allFields,
-            workflowNodes,
-            queries,
-            triggerRecordId,
-            expectedRecordTypeIds,
-            triggerInputsByKey,
-          );
-        let nodeValuesValid = true;
-        if (
-          node.type === "condition" &&
-          (!applicationConditionTypesValid(
-            config.condition,
-            triggerRecordFields,
-            triggerModuleV2,
-          ) ||
-            !applicationFieldReferencesValid(config.condition, new Set(triggerRecordFields.keys())))
-        )
-          nodeValuesValid = false;
-        if (
-          node.type === "decision_table" &&
-          array(config.decisions).some(
-            (decision) =>
-              !applicationConditionTypesValid(
-                decision.when,
-                triggerRecordFields,
-                triggerModuleV2,
-              ) ||
-              !applicationFieldReferencesValid(decision.when, new Set(triggerRecordFields.keys())),
-          )
-        )
-          nodeValuesValid = false;
-        if (node.type === "create_record" || node.type === "change_record") {
-          const target = records.get(String(config.recordTypeId));
-          const targetFields = new Map(
-            target ? array(target.fields).map((field) => [String(field.fieldId), field]) : [],
-          );
-          if (
-            !target ||
-            (node.type === "change_record" &&
-              !compatibleWorkflowValue(config.record, "record_reference", [
-                String(config.recordTypeId),
-              ])) ||
-            Object.entries(object(config.values)).some(([fieldId, value]) => {
-              const field = targetFields.get(fieldId);
-              const pair = fieldValuePairs.get(fieldId);
-              return (
-                !field ||
-                !pair ||
-                !applicationWorkflowFieldValueCompatible(
-                  object(value),
-                  pair,
-                  allFields,
-                  fieldValuePairs,
-                  workflowNodes,
-                  queries,
-                  triggerRecordId,
-                  fieldRecordTypeIds(field),
-                  triggerInputsByKey,
-                )
-              );
-            })
-          )
-            nodeValuesValid = false;
-        }
-        if (node.type === "set_values") {
-          const recordTypeId = workflowValueRecordType(
-            object(config.record),
-            workflowNodes,
-            queries,
-            triggerRecordId,
-            triggerInputsByKey,
-          );
-          const target = recordTypeId ? records.get(recordTypeId) : undefined;
-          const targetFields = new Map(
-            target ? array(target.fields).map((field) => [String(field.fieldId), field]) : [],
-          );
-          if (
-            !recordTypeId ||
-            !target ||
-            !compatibleWorkflowValue(config.record, "record_reference", [recordTypeId]) ||
-            Object.entries(object(config.values)).some(([fieldId, value]) => {
-              const field = targetFields.get(fieldId);
-              const pair = fieldValuePairs.get(fieldId);
-              return (
-                !field ||
-                !pair ||
-                !applicationWorkflowFieldValueCompatible(
-                  object(value),
-                  pair,
-                  allFields,
-                  fieldValuePairs,
-                  workflowNodes,
-                  queries,
-                  triggerRecordId,
-                  fieldRecordTypeIds(field),
-                  triggerInputsByKey,
-                )
-              );
-            })
-          )
-            nodeValuesValid = false;
-        }
-        if (["soft_delete_record", "duplicate_record"].includes(String(node.type)))
-          nodeValuesValid =
-            nodeValuesValid &&
-            compatibleWorkflowValue(config.record, "record_reference", [
-              String(config.recordTypeId),
-            ]);
-        if (node.type === "add_relationship") {
-          const relationship = relationshipMap.get(String(config.relationshipId));
-          const targetReferences = relationship?.toRecordType
-            ? [relationship.toRecordType]
-            : ((relationship?.toRecordTypes as unknown[] | undefined) ?? []);
-          const targetRecordIds = new Set(
-            targetReferences.map((reference) => String(object(reference).recordTypeId)),
-          );
-          const targetRecordType = workflowValueRecordType(
-            object(config.target),
-            workflowNodes,
-            queries,
-            triggerRecordId,
-            triggerInputsByKey,
-          );
-          if (
-            !relationship ||
-            !compatibleWorkflowValue(config.subject, "record_reference", [
-              String(relationship.fromRecordTypeId),
-            ]) ||
-            !targetRecordType ||
-            !targetRecordIds.has(targetRecordType) ||
-            !compatibleWorkflowValue(config.target, "record_reference", [targetRecordType])
-          )
-            nodeValuesValid = false;
-        }
-        if (node.type === "copy_relationships") {
-          const relationships = (config.relationshipIds as string[]).map((id) =>
-            relationshipMap.get(id),
-          );
-          const recordTypeIds = new Set(
-            relationships
-              .filter((entry): entry is JsonObject => entry !== undefined)
-              .map((entry) => String(entry.fromRecordTypeId)),
-          );
-          const recordTypeId = recordTypeIds.size === 1 ? [...recordTypeIds][0] : undefined;
-          if (
-            relationships.some((entry) => entry === undefined) ||
-            !recordTypeId ||
-            !compatibleWorkflowValue(config.sourceRecord, "record_reference", [recordTypeId]) ||
-            !compatibleWorkflowValue(config.targetRecord, "record_reference", [recordTypeId])
-          )
-            nodeValuesValid = false;
-        }
-        if (node.type === "run_action") {
-          const action = actions.get(String(config.actionKey));
-          const actionRecordTypeId =
-            action !== undefined
-              ? String(action.subjectRecordTypeId)
-              : standardActionRecordTypes.get(String(config.actionKey));
-          if (
-            !actionRecordTypeId ||
-            !compatibleWorkflowValue(config.subject, "record_reference", [actionRecordTypeId])
-          )
-            nodeValuesValid = false;
-        }
-        if (node.type === "format_value" && !compatibleWorkflowValue(config.input, "json"))
-          nodeValuesValid = false;
-        if (node.type === "attach_file" || node.type === "move_file") {
-          const targetField = allFields.get(String(config.fieldId));
-          const ownerRecordTypeId = fieldRecordTypes.get(String(config.fieldId));
-          if (
-            !ownerRecordTypeId ||
-            targetField?.type !== "attachment" ||
-            !compatibleWorkflowValue(config.record, "record_reference", [ownerRecordTypeId]) ||
-            !compatibleWorkflowValue(config.file, "file_reference")
-          )
-            nodeValuesValid = false;
-        }
-        if (node.type === "start_workflow") {
-          const child = workflows.get(String(config.workflowId));
-          const childTrigger = child ? object(child.trigger) : undefined;
-          if (
-            !child ||
-            childTrigger?.kind !== "workflow" ||
-            childTrigger.workflowId !== workflow.workflowId
-          )
-            nodeValuesValid = false;
-        }
-        if (
-          node.type === "acknowledge_message" &&
-          (trigger.kind !== "incoming_message" ||
-            incomingTriggerContracts.length !== 1 ||
-            String(incomingTriggerContracts[0]?.message.key) !== String(config.messageKey))
-        )
-          nodeValuesValid = false;
-        if (!nodeValuesValid)
-          failures.push(
-            workflowFailure("vortex.definition.workflow_node_values", "scope_conflict"),
-          );
-        let nodeReferencesValid = true;
-        walkValues(config, (entry) => {
-          for (const [key, candidate] of Object.entries(entry)) {
-            if (key === "recordTypeId" && !records.has(String(candidate)))
-              nodeReferencesValid = false;
-            if ((key === "fieldId" || key.endsWith("FieldId")) && !allFields.has(String(candidate)))
-              nodeReferencesValid = false;
-            if (
-              (key === "relationshipId" || key === "relationshipIds") &&
-              (Array.isArray(candidate)
-                ? candidate.some((id) => !allRelationships.has(String(id)))
-                : !allRelationships.has(String(candidate)))
-            )
-              nodeReferencesValid = false;
-            if (key === "pageId" && !pages.has(String(candidate))) nodeReferencesValid = false;
-            if (key === "queryId" && !queries.has(String(candidate))) nodeReferencesValid = false;
-            if (key === "connectionBindingId" && !connectionBindings.has(String(candidate)))
-              nodeReferencesValid = false;
-          }
-        });
-        if (
-          node.type === "wait_until" &&
-          (!triggerRecordId ||
-            fieldRecordTypes.get(String(config.dateTimeFieldId)) !== triggerRecordId ||
-            allFields.get(String(config.dateTimeFieldId))?.type !== "date_time")
-        )
-          nodeReferencesValid = false;
-        if (
-          (node.type === "attach_file" || node.type === "move_file") &&
-          allFields.get(String(config.fieldId))?.type !== "attachment"
-        )
-          nodeReferencesValid = false;
-        if (
-          node.type === "request_form" &&
-          !["form", "guided_form"].includes(String(pages.get(String(config.pageId))?.type))
-        )
-          nodeReferencesValid = false;
-        if (node.type === "request_form") {
-          const outputs = array(config.outputs);
-          const keys = outputs.map((entry) => String(entry.key));
-          if (new Set(keys).size !== keys.length) nodeReferencesValid = false;
-        }
-        if (node.type === "create_record" || node.type === "change_record") {
-          const target = records.get(String(config.recordTypeId));
-          const targetFields = new Set(
-            target ? array(target.fields).map((field) => String(field.fieldId)) : [],
-          );
-          if (Object.keys(object(config.values)).some((fieldId) => !targetFields.has(fieldId)))
-            nodeReferencesValid = false;
-        }
-        if (
-          node.type === "set_values" &&
-          Object.keys(object(config.values)).some((fieldId) => !allFields.has(fieldId))
-        )
-          nodeReferencesValid = false;
-        if (!nodeReferencesValid)
-          failures.push(
-            workflowFailure("vortex.definition.workflow_node_references", "broken_reference"),
-          );
-        if (node.type === "request_form" && !permissions.has(String(config.responderPermissionKey)))
-          failures.push(
-            workflowFailure("vortex.definition.workflow_permission", "broken_reference"),
-          );
-        if (node.type === "run_action") {
-          const action = actions.get(String(config.actionKey));
-          const actionPair = moduleActionValuePairs.get(String(config.actionKey));
-          const inputs = object(config.inputs);
-          const declared = action ? array(action.inputs) : [];
-          if (
-            !action ||
-            Object.keys(inputs).some((key) => !declared.some((input) => input.key === key)) ||
-            declared.some((input) => input.required === true && !(String(input.key) in inputs)) ||
-            declared.some((input) => {
-              if (!(String(input.key) in inputs)) return false;
-              const allowedRecordTypeIds = input.recordTypes
-                ? array(input.recordTypes).map((reference) =>
-                    String(object(reference).recordTypeId),
-                  )
-                : [];
-              return !applicationWorkflowInputCompatible(
-                object(inputs[String(input.key)]),
-                input,
-                actionPair?.moduleV2 ?? false,
-                allFields,
-                fieldValuePairs,
-                workflowNodes,
-                queries,
-                triggerRecordId,
-                allowedRecordTypeIds.length > 0 ? allowedRecordTypeIds : undefined,
-                triggerInputsByKey,
-              );
-            })
-          )
-            failures.push(
-              workflowFailure("vortex.definition.workflow_action_inputs", "broken_reference"),
-            );
-        }
-        if (node.type === "call_connection") {
-          const binding = connectionBindings.get(String(config.connectionBindingId));
-          const connection = binding
-            ? connectionMap.get(String(binding.connectionTypeId))
-            : undefined;
-          const operation = connection
-            ? array(connection.operations).find((entry) => entry.key === config.operationKey)
-            : undefined;
-          const shape =
-            connection && operation
-              ? array(connection.shapes).find((entry) => entry.key === operation.inputShapeKey)
-              : undefined;
-          const inputs = object(config.inputs);
-          const fields = shape ? array(shape.fields) : [];
-          if (
-            !binding ||
-            !operation ||
-            !shape ||
-            !(binding.requiredOperationKeys as string[]).includes(String(config.operationKey)) ||
-            Object.keys(inputs).some((key) => !fields.some((field) => field.key === key)) ||
-            fields.some((field) => field.required === true && !(String(field.key) in inputs)) ||
-            fields.some(
-              (field) =>
-                String(field.key) in inputs &&
-                !applicationWorkflowInputCompatible(
-                  object(inputs[String(field.key)]),
-                  field,
-                  false,
-                  allFields,
-                  fieldValuePairs,
-                  workflowNodes,
-                  queries,
-                  triggerRecordId,
-                  undefined,
-                  triggerInputsByKey,
-                ),
-            )
-          )
-            failures.push(
-              workflowFailure("vortex.definition.workflow_connection_inputs", "broken_reference"),
-            );
-        }
-      }
-    }
-    const childGraph = new Map<string, string[]>();
-    for (const workflow of workflows.values()) {
-      const children: string[] = [];
-      for (const node of array(workflow.nodes))
-        if (node.type === "start_workflow") children.push(String(object(node.config).workflowId));
-      childGraph.set(String(workflow.workflowId), children);
-    }
-    const childVisiting = new Set<string>();
-    const childVisited = new Set<string>();
-    const visitChild = (id: string, depth: number, maximumDepth: number) => {
-      if (childVisiting.has(id)) {
-        failures.push(
-          failure(output, "vortex.definition.workflow_child_acyclic", "dependency_cycle"),
-        );
-        return;
-      }
-      if (depth > maximumDepth)
-        failures.push(failure(output, "vortex.definition.workflow_child_depth", "scope_conflict"));
-      if (childVisited.has(id)) return;
-      childVisiting.add(id);
-      for (const child of childGraph.get(id) ?? []) {
-        if (!workflows.has(child))
-          failures.push(
-            failure(output, "vortex.definition.workflow_child_reference", "broken_reference"),
-          );
-        else visitChild(child, depth + 1, maximumDepth);
-      }
-      childVisiting.delete(id);
-      childVisited.add(id);
-    };
-    for (const workflow of workflows.values())
-      visitChild(String(workflow.workflowId), 1, Number(workflow.maximumNestingDepth));
 
     // The flow compiler judged every flow with the one flow validator (`flow-validation.ts`) before
     // it produced this content, so only what binds to them is judged here.
@@ -5303,17 +4098,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           bindingFailure("vortex.definition.application_flow_binding_target", "broken_reference"),
         );
       if (flow === undefined) continue;
-      // A form's submission may commit only the action its page declares.
-      const pageCommitKeys = pageCommitActionKeysByPlacement.get(String(binding.controlId));
-      const committed = flowCommitActionKeys(flow as unknown as JsonObject);
-      if (
-        binding.event === "form_submit" &&
-        pageCommitKeys !== undefined &&
-        committed.some((key) => pageCommitKeys.size !== 1 || !pageCommitKeys.has(key))
-      )
-        failures.push(
-          bindingFailure("vortex.definition.application_flow_binding_target", "scope_conflict"),
-        );
       const inputs = object(flowReference.inputs ?? {});
       if (Object.keys(inputs).some((name) => !Object.hasOwn(flow.inputs, name)))
         failures.push(
@@ -5326,6 +4110,39 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       )
         failures.push(
           bindingFailure("vortex.definition.application_flow_binding_inputs", "required_value"),
+        );
+    }
+
+    // A form declares no commit of its own: it commits what its bound `form_submit` flows commit.
+    // A form or guided-form page whose flows commit nothing, or a commit that resolves to no
+    // executable action, is refused rather than published as a page that cannot save; a commit of
+    // an action outside the page's record type is refused as out of the form's scope.
+    const formCommits = deriveFormCommitActionKeys(
+      {
+        pages: array(content.pages),
+        shells: array(content.shells),
+        flows: array(content.flows),
+        flowBindings: array(content.flowBindings),
+      },
+      { standardActionKeysByRecordAction, executableActionKeys },
+    );
+    for (const page of pages.values()) {
+      if (page.type !== "form" && page.type !== "guided_form") continue;
+      const recordTypeId = page.recordType
+        ? String(object(page.recordType).recordTypeId)
+        : undefined;
+      const committed = formCommits.get(String(page.pageId)) ?? [];
+      if (
+        recordTypeId === undefined ||
+        committed.length === 0 ||
+        committed.some((key) => !executableActionKeys.has(key))
+      )
+        failures.push(
+          failure(output, "vortex.definition.application_page_references", "broken_reference"),
+        );
+      else if (committed.some((key) => commitActionRecordType(key) !== recordTypeId))
+        failures.push(
+          failure(output, "vortex.definition.application_page_references", "scope_conflict"),
         );
     }
   }
@@ -6034,45 +4851,7 @@ export function evaluateSavedSharingCondition(
   input: unknown,
   fieldValues: Readonly<Record<string, unknown>>,
   parameters: Readonly<Record<string, unknown>>,
-  sourceRecordFields: readonly FieldDefinition[],
-): boolean {
-  const candidate = object(input);
-  let result: boolean;
-  try {
-    result = evaluateTypedCondition({
-      condition: candidate.condition as ConditionNode,
-      sourceRecordFields,
-      declaredFieldIds: candidate.declaredFieldIds as string[],
-      parameterDeclarations: candidate.parameters as TypedConditionParameterDeclaration[],
-      fieldValues,
-      parameterValues: parameters,
-    });
-  } catch (error) {
-    if (!(error instanceof TypedConditionEvaluationError)) throw error;
-    const mapping = {
-      input_refused: "vortex.definition.sharing_condition_input_refused",
-      field_refused: "vortex.definition.sharing_condition_field_refused",
-      parameter_refused: "vortex.definition.sharing_condition_parameter_refused",
-      operator_refused: "vortex.definition.sharing_condition_operator_refused",
-    } as const;
-    throw new DefinitionCompilationError(
-      mapping[error.reason],
-      error.reason === "operator_refused" ? "unsupported_choice" : "scope_conflict",
-    );
-  }
-  if (!savedSharingConditionSchema.safeParse(input).success)
-    throw new DefinitionCompilationError(
-      "vortex.definition.sharing_condition_input_refused",
-      "scope_conflict",
-    );
-  return result;
-}
-
-export function evaluateSavedSharingConditionV2(
-  input: unknown,
-  fieldValues: Readonly<Record<string, unknown>>,
-  parameters: Readonly<Record<string, unknown>>,
-  sourceRecordFields: readonly ModuleFieldV2[],
+  sourceRecordFields: readonly ModuleFieldV3[],
 ): boolean {
   const candidate = object(input);
   let result: boolean;
@@ -6098,7 +4877,7 @@ export function evaluateSavedSharingConditionV2(
       error.reason === "operator_refused" ? "unsupported_choice" : "scope_conflict",
     );
   }
-  if (!savedSharingConditionV2Schema.safeParse(input).success)
+  if (!savedSharingConditionV3Schema.safeParse(input).success)
     throw new DefinitionCompilationError(
       "vortex.definition.sharing_condition_input_refused",
       "scope_conflict",

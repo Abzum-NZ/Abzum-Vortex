@@ -4053,7 +4053,6 @@
         "type": "form",
         "record_type": "vortex.iam.core:access_request",
         "permission": "application.iam.request",
-        "commit_action": "vortex.iam.core.access_request.create",
         "states": [
           "normal",
           "loading",
@@ -4504,7 +4503,6 @@
         "type": "form",
         "record_type": "vortex.iam.core:access_request",
         "permission": "application.iam.request",
-        "commit_action": "vortex.iam.core.access_request.update",
         "states": [
           "normal",
           "loading",
