@@ -80,7 +80,10 @@ export default function UpdatePasswordPage() {
           Checking your recovery link…
         </p>
       ) : !validLink ? (
-        <Link className={buttonVariants({ variant: "outline", className: "w-full" })} href="/auth/recover">
+        <Link
+          className={buttonVariants({ variant: "outline", className: "w-full" })}
+          href="/auth/recover"
+        >
           Request a new link
         </Link>
       ) : null}
