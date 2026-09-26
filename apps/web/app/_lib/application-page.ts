@@ -323,14 +323,18 @@ export const loadApplicationPage = async (
 
     const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
 
-    // A Record detail on a detail page that binds no query reads its page subject: the one record
-    // the page's own address names, of the page's declared record type, through the record read
-    // path under the viewer's own authority. Nothing here comes from the browser except the id.
+    // A Record detail on a detail or public page that binds no query reads its page subject: the
+    // one record the page's own address names, of the page's declared record type, through the
+    // record read path under the viewer's own authority. A public page shows no more than its
+    // declared public fields. Nothing here comes from the browser except the id.
     if (detailContract !== undefined && queryId === undefined) {
       const subjectType =
-        pageDefinition.type === "detail" && pageDefinition.recordType.state === "resolved"
+        (pageDefinition.type === "detail" || pageDefinition.type === "public") &&
+        pageDefinition.recordType?.state === "resolved"
           ? pageDefinition.recordType
           : undefined;
+      const subjectFieldIds =
+        pageDefinition.type === "public" ? pageDefinition.publicFieldIds.map(String) : undefined;
       if (subjectType === undefined) {
         logPlacementFailure(address, placementId, "query_not_bound");
         data[placementId] = { status: "error" };
@@ -363,6 +367,7 @@ export const loadApplicationPage = async (
         {
           settings,
           ...(subjectModule === undefined ? {} : { fieldLabels: fieldLabelsOf(subjectModule) }),
+          ...(subjectFieldIds === undefined ? {} : { readableFieldIds: subjectFieldIds }),
         },
         [subject.row],
       );
