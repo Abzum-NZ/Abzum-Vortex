@@ -390,7 +390,11 @@ function sourceToCanonicalPath(
       continue;
     }
     const sourceIndex = bodyIndex + offset;
-    const mappedKey = isDataProperty(positions, sourcePath, sourceIndex)
+    // A flow value's `trigger_record.field` names a readable field key, not a permanent identity,
+    // so it never takes the field-to-identity suffix map.
+    const flowReferenceField =
+      segment === "field" && sourcePath[sourceIndex - 1] === "reference";
+    const mappedKey = isDataProperty(positions, sourcePath, sourceIndex) || flowReferenceField
       ? segment
       : segment === "id" && collection
         ? (sourceCollectionIdKeys[collection] ?? "id")
