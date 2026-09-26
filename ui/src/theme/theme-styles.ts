@@ -105,7 +105,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
 
 .vortex-form-title,
 .vortex-display-title,
-.vortex-dialog-title,
 .vortex-drawer-title,
 .vortex-group-heading {
   margin: 0;
@@ -320,8 +319,7 @@ const SHARED_COMPONENT_STYLES_CSS = `
   padding: var(--vortex-space-md) 0;
 }
 
-/* Dialog and drawer */
-.vortex-dialog,
+/* Drawer */
 .vortex-drawer {
   padding: var(--vortex-space-lg);
   border: var(--vortex-border-width) var(--vortex-border-style) var(--vortex-border-color);
@@ -331,12 +329,10 @@ const SHARED_COMPONENT_STYLES_CSS = `
   box-shadow: var(--vortex-elevation-high);
 }
 
-.vortex-dialog::backdrop,
 .vortex-drawer::backdrop {
   background-color: rgba(0, 0, 0, 0.55);
 }
 
-.vortex-dialog-header,
 .vortex-drawer-header,
 .vortex-display-header {
   display: flex;
@@ -346,7 +342,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
   margin-bottom: var(--vortex-space-md);
 }
 
-.vortex-dialog-close,
 .vortex-drawer-close {
   min-width: var(--vortex-control-min-height);
   min-height: var(--vortex-control-min-height);
@@ -360,18 +355,15 @@ const SHARED_COMPONENT_STYLES_CSS = `
   cursor: pointer;
 }
 
-.vortex-dialog-close:hover,
 .vortex-drawer-close:hover {
   color: var(--vortex-text);
   box-shadow: inset 0 0 0 0.125rem currentColor;
 }
 
-.vortex-dialog-body,
 .vortex-drawer-body {
   overflow-y: auto;
 }
 
-.vortex-dialog-actions,
 .vortex-drawer-actions {
   display: flex;
   justify-content: flex-end;
