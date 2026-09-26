@@ -276,7 +276,6 @@ const pages = [
     type: "form",
     record_type: incidentRecordType,
     permission: createAction,
-    commit_action: createAction,
     composition: {
       shell_kind: "default",
       main: slot({

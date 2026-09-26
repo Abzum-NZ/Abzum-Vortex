@@ -1018,7 +1018,6 @@
                                    "type":  "guided_form",
                                    "record_type":  "vortex.crm.people:lead",
                                    "permission":  "vortex.crm.people.lead.convert",
-                                   "commit_action":  "vortex.crm.people.lead.convert",
                                    "steps":  [
                                                  {
                                                      "id":  "page_crm_qualify_lead_details",
@@ -1708,7 +1707,6 @@
                                    "type":  "form",
                                    "record_type":  "vortex.crm.organisations:company",
                                    "permission":  "vortex.crm.organisations.company.create",
-                                   "commit_action":  "vortex.crm.organisations.company.create",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -1840,7 +1838,6 @@
                                    "type":  "form",
                                    "record_type":  "vortex.crm.organisations:company",
                                    "permission":  "vortex.crm.organisations.company.update",
-                                   "commit_action":  "vortex.crm.organisations.company.update",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -1972,7 +1969,6 @@
                                    "type":  "form",
                                    "record_type":  "vortex.crm.people:contact",
                                    "permission":  "vortex.crm.people.contact.create",
-                                   "commit_action":  "vortex.crm.people.contact.create",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -2104,7 +2100,6 @@
                                    "type":  "form",
                                    "record_type":  "vortex.crm.people:contact",
                                    "permission":  "vortex.crm.people.contact.update",
-                                   "commit_action":  "vortex.crm.people.contact.update",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -2236,7 +2231,6 @@
                                    "type":  "form",
                                    "record_type":  "vortex.crm.people:lead",
                                    "permission":  "vortex.crm.people.lead.create",
-                                   "commit_action":  "vortex.crm.people.lead.create",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -2368,7 +2362,6 @@
                                    "type":  "form",
                                    "record_type":  "vortex.crm.people:lead",
                                    "permission":  "vortex.crm.people.lead.update",
-                                   "commit_action":  "vortex.crm.people.lead.update",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",

@@ -6,6 +6,7 @@ import {
   applicationCompilationRequestV2Schema,
   applicationDraftV2Schema,
   applicationToolBundleSchema,
+  calculationMaximumNestingDepth,
   descriptionSchema,
   conditionNodeSchema,
   jsonValueSchema,
@@ -74,6 +75,7 @@ import {
   extractSourceIdentityRequirements,
   extractModuleSourceIdentityRequirementsV3,
 } from "./source-identities";
+import { deriveFormCommitActionKeys } from "./form-commit";
 import { compileRuleGraph } from "./rule-graph-compilation";
 import {
   materialiseApplicationCompositionV2,
@@ -253,7 +255,6 @@ const directSourceKeyMap: Readonly<Record<string, string>> = Object.freeze({
   view_permission: "viewPermissionKey",
   use_permission: "usePermissionKey",
   public_action: "publicActionKey",
-  commit_action: "commitActionKey",
   secret_fields: "secretFieldKeys",
 });
 
@@ -1304,7 +1305,7 @@ const applicationSourceTransformPatterns = [
   /^body\/queries\/#\/filter$/,
   /^body\/queries\/#\/sort\/#\/field$/,
   /^body\/queries\/#\/aggregates\/#\/field$/,
-  /^body\/pages\/#\/(?:id|record_type|query|permission|commit_action|public_action|public_fields\/#)$/,
+  /^body\/pages\/#\/(?:id|record_type|query|permission|public_action|public_fields\/#)$/,
   /^body\/experiences\/#\/page$/,
   /^body\/pages\/#\/layout\/(?:desktop|phone)\/component_order\/#$/,
   /^body\/pages\/#\/(?:blocks\/#|steps\/#\/blocks\/#)\/(?:id|block|query|view_permission|use_permission)$/,
@@ -2687,28 +2688,30 @@ function fieldSettings(
       if (expression.operation === "join_text") {
         dependencies = (expression.fields as string[]).map(localField);
         compiled = { kind: "join_text", fieldIds: dependencies, separator: expression.separator };
-      } else if (expression.operation === "subtract_percentage") {
-        dependencies = [
-          localField(String(expression.amount_field)),
-          localField(String(expression.percentage_field)),
-        ];
-        compiled = {
-          kind: "subtract_percentage",
-          amountFieldId: dependencies[0],
-          percentageFieldId: dependencies[1],
-        };
       } else if (expression.operation === "numeric") {
+        const dependenciesInOrder: string[] = [];
+        const numberValue = (operand: JsonObject, depth: number): unknown => {
+          if (depth > calculationMaximumNestingDepth)
+            fail("vortex.definition.invalid_object", "invalid_value");
+          if (operand.source === "numeric")
+            return {
+              source: "numeric",
+              operation: operand.numeric_operation,
+              operands: (operand.operands as JsonObject[]).map((nested) =>
+                numberValue(asObject(nested), depth + 1),
+              ),
+            };
+          if (operand.source === "field") {
+            const fieldId = localField(String(operand.field));
+            dependenciesInOrder.push(fieldId);
+            return { source: "field", fieldId };
+          }
+          return { source: "literal", value: normaliseExactV2(operand.value) };
+        };
         const operands = (expression.operands as JsonObject[]).map((operand) =>
-          operand.source === "field"
-            ? { source: "field", fieldId: localField(String(operand.field)) }
-            : {
-                source: "literal",
-                value: normaliseExactV2(operand.value),
-              },
+          numberValue(asObject(operand), 1),
         );
-        dependencies = (expression.operands as JsonObject[])
-          .filter((operand) => operand.source === "field")
-          .map((operand) => localField(String(operand.field)));
+        dependencies = dependenciesInOrder;
         compiled = {
           kind: "numeric",
           operation: expression.numeric_operation,
@@ -3686,27 +3689,6 @@ const standardRecordActions = new Set([
   "export",
 ]);
 
-/**
- * Resolves a form commit to a custom action or to a bound Module's standard record action
- * (`module.record.action`), matching the executable actions Definition validation accepts.
- */
-function resolveFormCommitAction(
-  source: JsonObject,
-  resolution: Resolution,
-  key: string,
-  allowedOwners: readonly string[],
-): string {
-  const standard = /^(.+)\.([^.]+)\.([^.]+)$/.exec(key);
-  const boundModules = (asObject(source.body).module_bindings as JsonObject[]).map((binding) =>
-    String(binding.module),
-  );
-  if (standard && standardRecordActions.has(standard[3]!) && boundModules.includes(standard[1]!)) {
-    resolution.recordType(`${standard[1]}:${standard[2]}`);
-    return key;
-  }
-  return resolution.exactOwnedReference("action", key, allowedOwners);
-}
-
 function compileApplicationPagesV2(
   source: JsonObject,
   resolution: Resolution,
@@ -3758,24 +3740,12 @@ function compileApplicationPagesV2(
         ...base,
         type: "form",
         recordType: resolution.recordType(String(page.record_type)),
-        commitActionKey: resolveFormCommitAction(
-          source,
-          resolution,
-          String(page.commit_action),
-          allowedPermissionOwners,
-        ),
       };
     if (page.type === "guided_form")
       return {
         ...base,
         type: "guided_form",
         recordType: resolution.recordType(String(page.record_type)),
-        commitActionKey: resolveFormCommitAction(
-          source,
-          resolution,
-          String(page.commit_action),
-          allowedPermissionOwners,
-        ),
         steps: (page.steps as JsonObject[]).map((step) => ({
           id: resolution.id(
             definitionKey,
@@ -4871,7 +4841,7 @@ function applicationProvenanceV2(
         sourcePath[0] === "body" &&
         sourcePath[1] === "pages" &&
         typeof sourcePath[2] === "number" &&
-        ["permission", "commit_action", "public_action"].includes(String(sourcePath.at(-1)));
+        ["permission", "public_action"].includes(String(sourcePath.at(-1)));
       const sourceParentValue = valueAtPath(source, sourcePath.slice(0, -1));
       const sourceParent =
         sourceParentValue !== null &&
@@ -5145,11 +5115,34 @@ function compileApplicationToolBundle(
     });
   };
 
+  // A form commits what its bound `form_submit` flows commit, derived exactly as Definition
+  // validation derives it, so the tool bundle and the published contract never drift.
+  const standardActionKeysByRecordAction = new Map<string, string>();
+  for (const output of boundModuleOutputs) {
+    const moduleKey = String(output.canonical.envelope.key);
+    for (const record of output.canonical.content.recordTypes)
+      for (const action of record.standardActions)
+        standardActionKeysByRecordAction.set(
+          `${String(record.recordTypeId)}:${action}`,
+          `${moduleKey}.${String(record.key)}.${action}`,
+        );
+  }
+  const formCommits = deriveFormCommitActionKeys(content, {
+    standardActionKeysByRecordAction,
+    executableActionKeys: new Set([
+      ...applicationActionKeys,
+      ...moduleActionsByKey.keys(),
+      ...standardActionKeysByRecordAction.values(),
+    ]),
+  });
+
   for (const page of content.pages) {
-    if (page.type === "form" || page.type === "guided_form")
-      addCommittedAction(page.name, String(page.commitActionKey), true);
-    else if (page.type === "public" && page.publicActionKey !== undefined)
+    if (page.type === "form" || page.type === "guided_form") {
+      for (const key of formCommits.get(String(page.pageId)) ?? [])
+        if (key !== "") addCommittedAction(page.name, key, true);
+    } else if (page.type === "public" && page.publicActionKey !== undefined) {
       addCommittedAction(page.name, String(page.publicActionKey), false);
+    }
   }
 
   // A flow's record reads name only this Application's own queries, which have their own tools

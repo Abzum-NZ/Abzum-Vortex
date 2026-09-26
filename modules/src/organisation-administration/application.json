@@ -2053,7 +2053,6 @@
         "type": "form",
         "record_type": "vortex.organisation_administration:organisation_notice",
         "permission": "vortex.organisation_administration.organisation_notice.record_notice",
-        "commit_action": "vortex.organisation_administration.organisation_notice.record_notice",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_organisation_administration",
@@ -2341,7 +2340,6 @@
         "type": "form",
         "record_type": "vortex.organisation_administration:privacy_request_case",
         "permission": "vortex.organisation_administration.privacy_request_case.record_privacy_request",
-        "commit_action": "vortex.organisation_administration.privacy_request_case.record_privacy_request",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_organisation_administration",

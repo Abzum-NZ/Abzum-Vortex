@@ -3424,7 +3424,6 @@
         "type": "form",
         "record_type": "vortex.iam.core:access_request",
         "permission": "application.iam.request",
-        "commit_action": "vortex.iam.core.access_request.create",
         "composition": {
           "shell_kind": "default",
           "main": {
@@ -3866,7 +3865,6 @@
         "type": "form",
         "record_type": "vortex.iam.core:access_request",
         "permission": "application.iam.request",
-        "commit_action": "vortex.iam.core.access_request.update",
         "composition": {
           "shell_kind": "default",
           "main": {
