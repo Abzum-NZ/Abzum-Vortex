@@ -60,6 +60,40 @@ export const THEME_VARIABLE_NAMES = [
   "--vortex-control-min-height",
   "--vortex-cell-padding-y",
   "--vortex-cell-padding-x",
+  // The shadcn CSS variables the shared components read. The bridge sets every one of them from
+  // the same resolved theme, so a re-theme restyles the shadcn components without a code change.
+  "--background",
+  "--foreground",
+  "--card",
+  "--card-foreground",
+  "--popover",
+  "--popover-foreground",
+  "--primary",
+  "--primary-foreground",
+  "--secondary",
+  "--secondary-foreground",
+  "--muted",
+  "--muted-foreground",
+  "--accent",
+  "--accent-foreground",
+  "--destructive",
+  "--border",
+  "--input",
+  "--ring",
+  "--chart-1",
+  "--chart-2",
+  "--chart-3",
+  "--chart-4",
+  "--chart-5",
+  "--radius",
+  "--sidebar",
+  "--sidebar-foreground",
+  "--sidebar-primary",
+  "--sidebar-primary-foreground",
+  "--sidebar-accent",
+  "--sidebar-accent-foreground",
+  "--sidebar-border",
+  "--sidebar-ring",
 ] as const;
 
 export type ThemeVariableName = (typeof THEME_VARIABLE_NAMES)[number];
@@ -68,8 +102,16 @@ export type ThemeCssVariables = Readonly<Record<ThemeVariableName, string>>;
 type ColorPair = Readonly<{ light: string; dark: string }>;
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+const COLOR_COMPONENT = "(?:\\d+(?:\\.\\d+)?|\\.\\d+)";
+const OKLCH_COLOR = new RegExp(
+  `^oklch\\(\\s*${COLOR_COMPONENT}%?\\s+${COLOR_COMPONENT}\\s+${COLOR_COMPONENT}(?:deg)?\\s*(?:\\/\\s*${COLOR_COMPONENT}%?)?\\s*\\)$`,
+);
 const BUILDER_KEY = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const FONT_FALLBACK = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+
+/** Only a validated six-digit hex or oklch() value reaches the stylesheet, never raw token text. */
+const isColorValue = (value: string): boolean =>
+  HEX_COLOR.test(value) || OKLCH_COLOR.test(value);
 
 /**
  * Surface keys in the exact order #594 selects the surface its text, brand and focus
@@ -163,7 +205,7 @@ const fontFamily = (familyKey: string): string | undefined =>
 function colorPair(tokens: ThemeTokens, key: string): ColorPair | undefined {
   const token = tokens[key];
   if (token?.kind !== "color_pair") return undefined;
-  return HEX_COLOR.test(token.light) && HEX_COLOR.test(token.dark)
+  return isColorValue(token.light) && isColorValue(token.dark)
     ? { light: token.light, dark: token.dark }
     : undefined;
 }
@@ -212,10 +254,17 @@ function filledPair(tokens: ThemeTokens, key: string): readonly [ColorPair, Colo
  *   `radius_sm`..`radius_lg`; border `border`; elevation `elevation_low`, `elevation_high`;
  *   focus `focus`; density `density`.
  *
+ * Every shadcn CSS variable the shared components read is set from the same resolved theme:
+ * `--background`/`--foreground` from the validated surface and text; `--card`, `--popover`,
+ * `--muted`, `--accent`, `--chart-1`..`--chart-5`, `--sidebar*`, `--input`, `--ring` and
+ * `--destructive` from the matching colour role; `--radius` from `radius_base`. `light-dark()`
+ * serves forced light, forced dark and the system preference through the container's
+ * `color-scheme`, so both `.dark` and `prefers-color-scheme` selections resolve the same map.
+ *
  * A colour is applied only where #594 validated it against what is painted beneath it;
- * otherwise the registered platform theme's value for that role is kept. Only validated hex
- * colours, finite numbers and builder-key font families are emitted, so a definition cannot
- * inject CSS.
+ * otherwise the registered platform theme's value for that role is kept. Only validated hex or
+ * oklch() colours, finite numbers and builder-key font families are emitted, so a definition
+ * cannot inject CSS.
  */
 export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables {
   const appSurface = themeSurface(tokens);
@@ -269,6 +318,14 @@ export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVar
 
   const bodyFamily = (body === undefined ? undefined : fontFamily(body.family)) ?? FONT_FALLBACK;
 
+  // Every shadcn colour comes from the resolved theme when the role is present and well formed,
+  // otherwise from the registered platform release, so the bridge holds no second palette.
+  const shadcnColour = (role: PlatformThemeTokenRoleKeyV2): string =>
+    colorValue(colorPair(tokens, role) ?? platformColor(role));
+  const platformRadiusBase = tokenOfKind(PLATFORM_TOKENS, "radius_base", "corners");
+  const radiusBaseFallback =
+    platformRadiusBase === undefined ? "0.625rem" : (rem(platformRadiusBase.rem) ?? "0.625rem");
+
   return Object.freeze({
     "--vortex-surface": colorValue(surface),
     "--vortex-text": colorValue(text),
@@ -317,6 +374,38 @@ export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVar
     "--vortex-control-min-height": density.minHeight,
     "--vortex-cell-padding-y": density.cellY,
     "--vortex-cell-padding-x": density.cellX,
+    "--background": colorValue(surface),
+    "--foreground": colorValue(text),
+    "--card": shadcnColour("card"),
+    "--card-foreground": shadcnColour("card_foreground"),
+    "--popover": shadcnColour("popover"),
+    "--popover-foreground": shadcnColour("popover_foreground"),
+    "--primary": colorValue(primary?.[0] ?? PLATFORM_DEFAULTS.primary),
+    "--primary-foreground": colorValue(primary?.[1] ?? PLATFORM_DEFAULTS.onPrimary),
+    "--secondary": colorValue(secondary?.[0] ?? PLATFORM_DEFAULTS.secondary),
+    "--secondary-foreground": colorValue(secondary?.[1] ?? PLATFORM_DEFAULTS.onSecondary),
+    "--muted": shadcnColour("muted"),
+    "--muted-foreground": onSurface("muted_text", PLATFORM_DEFAULTS.textMuted),
+    "--accent": shadcnColour("accent"),
+    "--accent-foreground": shadcnColour("accent_foreground"),
+    "--destructive": colorValue(danger?.[0] ?? PLATFORM_DEFAULTS.danger),
+    "--border": colorValue(borderColor ?? PLATFORM_DEFAULTS.border),
+    "--input": shadcnColour("input"),
+    "--ring": shadcnColour("ring"),
+    "--chart-1": shadcnColour("chart_1"),
+    "--chart-2": shadcnColour("chart_2"),
+    "--chart-3": shadcnColour("chart_3"),
+    "--chart-4": shadcnColour("chart_4"),
+    "--chart-5": shadcnColour("chart_5"),
+    "--radius": corners("radius_base", radiusBaseFallback),
+    "--sidebar": shadcnColour("sidebar"),
+    "--sidebar-foreground": shadcnColour("sidebar_foreground"),
+    "--sidebar-primary": shadcnColour("sidebar_primary"),
+    "--sidebar-primary-foreground": shadcnColour("sidebar_primary_foreground"),
+    "--sidebar-accent": shadcnColour("sidebar_accent"),
+    "--sidebar-accent-foreground": shadcnColour("sidebar_accent_foreground"),
+    "--sidebar-border": shadcnColour("sidebar_border"),
+    "--sidebar-ring": shadcnColour("sidebar_ring"),
   } satisfies Record<ThemeVariableName, string>);
 }
 

@@ -20,6 +20,11 @@ export const DEFAULT_DARK_SURFACE = "#000000";
 
 type RgbaColor = Readonly<{ r: number; g: number; b: number; a: number }>;
 
+const COLOR_COMPONENT = "(?:\\d+(?:\\.\\d+)?|\\.\\d+)";
+const OKLCH_COLOR = new RegExp(
+  `^oklch\\(\\s*(${COLOR_COMPONENT})%?\\s+(${COLOR_COMPONENT})\\s+(${COLOR_COMPONENT})(?:deg)?\\s*(?:\\/\\s*(${COLOR_COMPONENT})%?)?\\s*\\)$`,
+);
+
 function parseHex(hex: string): RgbaColor {
   const clean = hex.startsWith("#") ? hex.slice(1) : hex;
   if (!/^(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(clean))
@@ -34,6 +39,36 @@ function parseHex(hex: string): RgbaColor {
     b: parseInt(expanded.slice(4, 6), 16),
     a: expanded.length === 8 ? parseInt(expanded.slice(6, 8), 16) / 255 : 1,
   };
+}
+
+/** Converts one oklch() color to sRGB through the standard OKLab transform. */
+function parseOklch(value: string): RgbaColor {
+  const match = OKLCH_COLOR.exec(value);
+  if (match === null) throw new Error(`Invalid oklch color: "${value}"`);
+  const lightness = Number(match[1]);
+  const chroma = Number(match[2]);
+  const hueRadians = (Number(match[3]) * Math.PI) / 180;
+  const alpha = match[4] === undefined ? 1 : Number(match[4]) / 100;
+  const labA = chroma * Math.cos(hueRadians);
+  const labB = chroma * Math.sin(hueRadians);
+  const l = (lightness + 0.3963377774 * labA + 0.2158037573 * labB) ** 3;
+  const m = (lightness - 0.1055613458 * labA - 0.0638541728 * labB) ** 3;
+  const s = (lightness - 0.0894841775 * labA - 1.291485548 * labB) ** 3;
+  const toSrgb = (linear: number): number => {
+    const encoded = linear <= 0.0031308 ? 12.92 * linear : 1.055 * linear ** (1 / 2.4) - 0.055;
+    return Math.max(0, Math.min(255, encoded * 255));
+  };
+  return {
+    r: toSrgb(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+    g: toSrgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+    b: toSrgb(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s),
+    a: alpha,
+  };
+}
+
+/** Parses a six-digit hex or oklch() color value; any other form is refused. */
+function parseColor(value: string): RgbaColor {
+  return value.startsWith("oklch(") ? parseOklch(value) : parseHex(value);
 }
 
 function composite(foreground: RgbaColor, background: RgbaColor): RgbaColor {
@@ -66,23 +101,24 @@ function colorLuminance({ r, g, b }: RgbaColor): number {
 }
 
 /** Calculates luminance after composing a translucent color over an opaque background. */
-export function relativeLuminance(hex: string, background = DEFAULT_LIGHT_SURFACE): number {
-  const backdrop = requireOpaque(parseHex(background), "Luminance background");
-  return colorLuminance(composite(parseHex(hex), backdrop));
+export function relativeLuminance(color: string, background = DEFAULT_LIGHT_SURFACE): number {
+  const backdrop = requireOpaque(parseColor(background), "Luminance background");
+  return colorLuminance(composite(parseColor(color), backdrop));
 }
 
 /**
  * Calculates foreground/background contrast after alpha-compositing both layers onto
  * an opaque canvas. Argument order is significant when either color is translucent.
+ * Either color may be a six-digit hex value or an oklch() function.
  */
 export function contrastRatio(
   foreground: string,
   background: string,
   canvas = DEFAULT_LIGHT_SURFACE,
 ): number {
-  const opaqueCanvas = requireOpaque(parseHex(canvas), "Contrast canvas");
-  const effectiveBackground = composite(parseHex(background), opaqueCanvas);
-  const effectiveForeground = composite(parseHex(foreground), effectiveBackground);
+  const opaqueCanvas = requireOpaque(parseColor(canvas), "Contrast canvas");
+  const effectiveBackground = composite(parseColor(background), opaqueCanvas);
+  const effectiveForeground = composite(parseColor(foreground), effectiveBackground);
   const lumA = colorLuminance(effectiveForeground);
   const lumB = colorLuminance(effectiveBackground);
   const lighter = Math.max(lumA, lumB);

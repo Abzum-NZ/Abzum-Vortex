@@ -13,34 +13,59 @@ const deepFreeze = <Value>(value: Value): Value => {
 };
 
 /**
- * The token values of the registered platform theme live in
- * catalogue/platform-theme-catalogue.source.json, keyed by the shared token-role vocabulary
- * (`platformThemeTokenRolesV2`). Assigning them to a record over that vocabulary makes a role that
- * the vocabulary adds without a value there a compile-time error, so the registered release
- * always maps every role.
+ * The current release's token values live in catalogue/platform-theme-catalogue.source.json, keyed
+ * by the shared token-role vocabulary (`platformThemeTokenRolesV2`). Assigning them to a record
+ * over that vocabulary makes a role that the vocabulary adds without a value there a compile-time
+ * error, so the registered release always maps every role, including every shadcn role.
  */
-const tokens: Record<PlatformThemeTokenRoleKeyV2, unknown> = source.tokens;
+const currentTokens: Record<PlatformThemeTokenRoleKeyV2, unknown> =
+  source.PLATFORM_THEME_RELEASE_3_0_0.tokens;
 
 /**
- * The registered platform theme release: the one source of application theme base
- * values for authored definitions and for the renderer. It is parsed through the
- * release contract at module load and deep-frozen. Its colour pairs declare their
- * foreground/background roles so readability is judged by declared role rather than
- * by token name. Its token keys are exactly the shared token-role vocabulary
- * (`platformThemeTokenRolesV2`), so the release maps every renderer role and no
- * consumer falls back to a second token convention. Its fingerprints are the canonical-JSON
- * SHA-256 values that `pnpm catalogue:fingerprints` derives from the same token content into
+ * One registered platform theme release: a source definition plus the canonical-JSON SHA-256
+ * fingerprints that `pnpm catalogue:fingerprints` derives from the same token content into
  * catalogue/catalogue-fingerprints.generated.json, merged in by theme id and release version and
- * never written by hand.
+ * never written by hand. It is parsed through the release contract at module load and deep-frozen.
  */
-export const DEFAULT_PLATFORM_THEME_RELEASE_V2: PlatformThemeReleaseV2 = deepFreeze(
-  platformThemeReleaseV2Schema.parse({
-    catalogueThemeId: source.catalogueThemeId,
-    releaseVersion: source.releaseVersion,
-    ...generatedReleaseFingerprints(
-      "platformThemes",
-      `${source.catalogueThemeId}:${source.releaseVersion}`,
-    ),
-    tokens,
-  }),
+const release = (definition: {
+  catalogueThemeId: string;
+  releaseVersion: string;
+  tokens: unknown;
+}): PlatformThemeReleaseV2 =>
+  deepFreeze(
+    platformThemeReleaseV2Schema.parse({
+      catalogueThemeId: definition.catalogueThemeId,
+      releaseVersion: definition.releaseVersion,
+      ...generatedReleaseFingerprints(
+        "platformThemes",
+        `${definition.catalogueThemeId}:${definition.releaseVersion}`,
+      ),
+      tokens: definition.tokens,
+    }),
+  );
+
+/**
+ * The 2.0.0 release stays published unchanged, so an application pinned to it keeps its exact
+ * published theme and only the new shadcn roles fall back to the registered release at render time.
+ */
+export const PLATFORM_THEME_RELEASE_2_0_0: PlatformThemeReleaseV2 = release(
+  source.PLATFORM_THEME_RELEASE_2_0_0,
 );
+
+/**
+ * The 3.0.0 release maps every role in the shared vocabulary, including every shadcn role, to the
+ * shadcn base-nova neutral values. Its colour pairs declare their foreground/background roles so
+ * readability is judged by declared role rather than by token name.
+ */
+export const PLATFORM_THEME_RELEASE_3_0_0: PlatformThemeReleaseV2 = release({
+  catalogueThemeId: source.PLATFORM_THEME_RELEASE_3_0_0.catalogueThemeId,
+  releaseVersion: source.PLATFORM_THEME_RELEASE_3_0_0.releaseVersion,
+  tokens: currentTokens,
+});
+
+/**
+ * The registered platform theme release: the one source of application theme base values for
+ * authored definitions and for the renderer. Shipped definitions pin this release, so moving it
+ * moves every shipped theme pin together.
+ */
+export const DEFAULT_PLATFORM_THEME_RELEASE_V2: PlatformThemeReleaseV2 = PLATFORM_THEME_RELEASE_3_0_0;
