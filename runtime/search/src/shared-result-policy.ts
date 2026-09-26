@@ -4,6 +4,7 @@ import {
   applicationRootIdSchema,
   fieldIdSchema,
   organizationIdSchema,
+  recordTypeIdSchema,
   sharedRecipientCapabilitySchema,
   sharedResultGroupSchema,
   type SharedRecipientCapability,
@@ -30,11 +31,14 @@ import {
  * result group: one grant, one source cluster, one source organisation, one
  * Module revision, one record type, and the exact fields the source approved for
  * shared search together with the search words it chose. The recipient's
- * current capability is its own non-content grant mirror state plus that grant's
- * readable field projection. Only an `active` mirror whose grant identity, grant
- * fingerprint, source and recipient application all match may be searched, so a
- * pending, suspended, revoked or expired grant, a second grant, a stale mirror
- * or another recipient application contributes nothing.
+ * current capability is read for each grant through the recipient's own adapter
+ * at decision time, never taken from the request or a cache: its non-content
+ * grant mirror state plus the definition scope and readable field projection of
+ * its own federated search query under that grant. Only an `active` mirror whose
+ * grant identity, grant fingerprint, source, definition scope and recipient
+ * application all match may be searched, so a pending, suspended, revoked or
+ * expired grant, a second grant, a stale mirror or another recipient
+ * application contributes nothing.
  *
  * Search words are admitted per field and never per grant: a field must be
  * approved by the source's own searchable projection, readable under the one
@@ -64,31 +68,53 @@ export const sharedResultPolicyLimits = Object.freeze({
   maximumRequestedFieldIds: 200,
 });
 
-/** The verified recipient scope this search runs under. */
+/** The verified recipient scope and record type this search runs under. */
 export type SharedResultRecipientScope = Readonly<{
   organizationId: string;
   applicationRootId: string;
+  recordTypeId: string;
 }>;
 
 /**
- * The recipient-owned half of the decision. The requested field identities are
- * not part of it: the caller supplies them from its own already validated
- * search request, so a shared group can never widen the fields this request
- * matches, ranks, titles or highlights.
+ * The request's own Shared result groups. The recipient scope, the requested
+ * field identities and the recipient's capability are not part of it: the
+ * caller supplies scope and fields from its own already validated search
+ * request, and the capability is read at decision time, so a shared group can
+ * never widen the fields this request matches, ranks, titles or highlights.
  */
 export type SharedResultPolicyRequest = Readonly<{
-  recipient: SharedResultRecipientScope;
-  capability: SharedRecipientCapability;
   groups: readonly SharedResultGroup[];
 }>;
 
 export type SharedResultPolicyInput = SharedResultPolicyRequest &
-  Readonly<{ requestedFieldIds: readonly string[] }>;
+  Readonly<{
+    recipient: SharedResultRecipientScope;
+    requestedFieldIds: readonly string[];
+  }>;
+
+export type SharedResultCapabilityReadRequest = Readonly<{
+  organizationId: string;
+  applicationRootId: string;
+  grantId: string;
+}>;
+
+export type SharedResultPolicyDependencies = Readonly<{
+  /**
+   * The recipient's own current grant capability read, bound to this request's
+   * transaction and authority. It returns `undefined` when the recipient holds
+   * no mirror for the grant or it cannot be checked, which excludes the group.
+   * It is called for every grant on every decision, so a suspended, revoked or
+   * expired grant stops contributing on the next request.
+   */
+  readCurrentCapability: (
+    input: SharedResultCapabilityReadRequest,
+  ) => Promise<SharedRecipientCapability | undefined>;
+}>;
 
 /**
- * The source identity every decision keeps, so a rendered result can name its
- * source organisation and one result can never be attributed to a second
- * source or grant.
+ * The source identity an admitted, unavailable or refused group keeps, so a
+ * rendered result can name its source organisation and one result can never be
+ * attributed to a second source or grant. An excluded group keeps none of it.
  */
 export type SharedResultGroupIdentity = Readonly<{
   grantId: string;
@@ -112,50 +138,34 @@ export type SharedSearchableProjection = Readonly<{
   entries: readonly SearchDocumentEntry[];
 }>;
 
-export const sharedResultRecordExclusionReasonCodes = [
-  "no_permitted_field",
-  "repeated_record",
-] as const;
-export type SharedResultRecordExclusionReasonCode =
-  (typeof sharedResultRecordExclusionReasonCodes)[number];
-
 export const sharedResultGroupExclusionReasonCodes = [
   "capability_unavailable",
   "recipient_scope_mismatch",
   "grant_identity_mismatch",
   "source_scope_mismatch",
-  "repeated_source_grant",
+  "definition_scope_mismatch",
+  "repeated_grant",
 ] as const;
 export type SharedResultGroupExclusionReasonCode =
   (typeof sharedResultGroupExclusionReasonCodes)[number];
 
-export type SharedResultRecordDecision =
-  | Readonly<{ outcome: "admitted"; projection: SharedSearchableProjection }>
-  | Readonly<{
-      outcome: "excluded";
-      recordId: string;
-      reasonCode: SharedResultRecordExclusionReasonCode;
-    }>;
-
 /**
- * One group's decision. An excluded or unavailable group carries no record, so
- * one source cannot fail, dilute or delay the recipient's own results, and an
- * unavailable source stays visibly unavailable instead of becoming an empty or
- * stale local answer.
+ * One group's decision, in the order of the request's groups. An excluded group
+ * carries no source identity and no record, so an exclusion never confirms
+ * which source or grant was asked, and one source cannot fail, dilute or delay
+ * the recipient's own results. An unavailable source stays visibly unavailable
+ * instead of becoming an empty or stale local answer. An admitted group carries
+ * only its admitted projections: a record with no permitted field is absent, not
+ * reported, so neither its identity nor a count can reveal withheld text.
  */
 export type SharedResultGroupDecision =
   | Readonly<
       SharedResultGroupIdentity & {
         state: "admitted";
-        results: readonly SharedResultRecordDecision[];
+        projections: readonly SharedSearchableProjection[];
       }
     >
-  | Readonly<
-      SharedResultGroupIdentity & {
-        state: "excluded";
-        reasonCode: SharedResultGroupExclusionReasonCode;
-      }
-    >
+  | Readonly<{ state: "excluded"; reasonCode: SharedResultGroupExclusionReasonCode }>
   | Readonly<
       SharedResultGroupIdentity & {
         state: "unavailable";
@@ -188,33 +198,46 @@ const identityOf = (group: SharedResultGroup): SharedResultGroupIdentity =>
   });
 
 const groupExcluded = (
-  identity: SharedResultGroupIdentity,
   reasonCode: SharedResultGroupExclusionReasonCode,
-): SharedResultGroupDecision => Object.freeze({ ...identity, state: "excluded", reasonCode });
+): SharedResultGroupDecision => Object.freeze({ state: "excluded", reasonCode });
 
-const groupAdmitted = (
-  identity: SharedResultGroupIdentity,
-  results: readonly SharedResultRecordDecision[],
-): SharedResultGroupDecision =>
-  Object.freeze({ ...identity, state: "admitted", results: Object.freeze(results) });
-
-const groupUnavailable = (
-  identity: SharedResultGroupIdentity,
-  safeErrorCode: "source_unavailable" | "retry_later",
-): SharedResultGroupDecision => Object.freeze({ ...identity, state: "unavailable", safeErrorCode });
-
-const groupRefused = (
-  identity: SharedResultGroupIdentity,
-  safeErrorCode: SharedResultSourceRefusalCode,
-): SharedResultGroupDecision => Object.freeze({ ...identity, state: "refused", safeErrorCode });
-
-const recordAdmitted = (projection: SharedSearchableProjection): SharedResultRecordDecision =>
-  Object.freeze({ outcome: "admitted", projection });
-
-const recordExcluded = (
-  recordId: string,
-  reasonCode: SharedResultRecordExclusionReasonCode,
-): SharedResultRecordDecision => Object.freeze({ outcome: "excluded", recordId, reasonCode });
+/**
+ * Checks one group against the recipient's current capability for its grant.
+ * Returns the exclusion reason, or the verified capability when the group may
+ * contribute.
+ */
+const capabilityDecision = (
+  group: SharedResultGroup,
+  recipient: SharedResultRecipientScope,
+  current: SharedRecipientCapability | undefined,
+): SharedResultGroupExclusionReasonCode | SharedRecipientCapability => {
+  const parsed = sharedRecipientCapabilitySchema.safeParse(current);
+  if (!parsed.success || parsed.data.state !== "active") return "capability_unavailable";
+  const capability = parsed.data;
+  if (
+    !sameId(capability.recipientOrganizationId, recipient.organizationId) ||
+    !sameId(capability.recipientApplicationRootId, recipient.applicationRootId)
+  )
+    return "recipient_scope_mismatch";
+  if (
+    !sameId(capability.grantId, group.grantId) ||
+    capability.contractFingerprint !== group.contractFingerprint
+  )
+    return "grant_identity_mismatch";
+  if (
+    !sameId(capability.sourceClusterId, group.sourceClusterId) ||
+    !sameId(capability.sourceOrganizationId, group.sourceOrganizationId)
+  )
+    return "source_scope_mismatch";
+  if (
+    !sameId(capability.moduleRootId, group.moduleRootId) ||
+    !sameId(capability.recordTypeId, group.recordTypeId) ||
+    capability.publishedModuleRevision !== group.publishedModuleRevision ||
+    !sameId(group.recordTypeId, recipient.recordTypeId)
+  )
+    return "definition_scope_mismatch";
+  return capability;
+};
 
 /**
  * Decides which shared-source results the recipient may search, before ranking.
@@ -222,21 +245,25 @@ const recordExcluded = (
  * A malformed request, a malformed group or a group set that is not a bounded
  * array refuses the whole decision rather than merging a partial answer: a
  * shared group must be exact, because a merged projection is shown as source
- * content. Every other refusal is per group or per record, so one stale mirror
- * or one unreachable source never removes the recipient's own results. A group
- * is admitted only under one active grant, its records are admitted only for
- * requested, grant-readable, source-approved fields, and a record with no such
- * field is excluded so that no count, filter or rank can reveal that withheld
- * text existed.
+ * content. Every other refusal is per group, so one stale mirror or one
+ * unreachable source never removes the recipient's own results. Two groups for
+ * the same grant are both excluded, because either could be a partial answer. A
+ * group is admitted only under the one active grant it names, its records are
+ * admitted only for requested, grant-readable, source-approved fields, and a
+ * record with no such field is left out so that no count, filter or rank can
+ * reveal that withheld text existed.
  */
-export const sharedResultGroupDecisions = (
+export const sharedResultGroupDecisions = async (
   input: SharedResultPolicyInput,
-): SharedResultPolicyResult => {
+  dependencies: SharedResultPolicyDependencies,
+): Promise<SharedResultPolicyResult> => {
   const organizationId = organizationIdSchema.safeParse(input.recipient?.organizationId);
   const applicationRootId = applicationRootIdSchema.safeParse(input.recipient?.applicationRootId);
+  const recordTypeId = recordTypeIdSchema.safeParse(input.recipient?.recordTypeId);
   if (
     !organizationId.success ||
     !applicationRootId.success ||
+    !recordTypeId.success ||
     !Array.isArray(input.requestedFieldIds) ||
     input.requestedFieldIds.length < 1 ||
     input.requestedFieldIds.length > sharedResultPolicyLimits.maximumRequestedFieldIds ||
@@ -244,9 +271,10 @@ export const sharedResultGroupDecisions = (
     input.groups.length > sharedResultPolicyLimits.maximumGroups
   )
     return refusal("request_invalid");
-  const recipient = Object.freeze({
+  const recipient: SharedResultRecipientScope = Object.freeze({
     organizationId: organizationId.data,
     applicationRootId: applicationRootId.data,
+    recordTypeId: recordTypeId.data,
   });
 
   const requested = new Set<string>();
@@ -257,112 +285,90 @@ export const sharedResultGroupDecisions = (
   }
 
   const groups: SharedResultGroup[] = [];
+  const groupsPerGrant = new Map<string, number>();
   for (const item of input.groups) {
     const group = sharedResultGroupSchema.safeParse(item);
     if (!group.success) return refusal("group_invalid");
     groups.push(group.data);
+    const grantKey = lower(group.data.grantId);
+    groupsPerGrant.set(grantKey, (groupsPerGrant.get(grantKey) ?? 0) + 1);
   }
 
-  const capability = sharedRecipientCapabilitySchema.safeParse(input.capability);
-  const active = capability.success && capability.data.state === "active" ? capability.data : null;
   const decisions: SharedResultGroupDecision[] = [];
-  const seenSourceGrants = new Set<string>();
-
   for (const group of groups) {
-    const identity = identityOf(group);
-    if (active === null) {
-      decisions.push(groupExcluded(identity, "capability_unavailable"));
+    // One search asks each grant once. A repeated grant is never resolved by
+    // order, so neither copy can double a count or a rank.
+    if ((groupsPerGrant.get(lower(group.grantId)) ?? 0) > 1) {
+      decisions.push(groupExcluded("repeated_grant"));
       continue;
     }
-    if (
-      !sameId(active.recipientOrganizationId, recipient.organizationId) ||
-      !sameId(active.recipientApplicationRootId, recipient.applicationRootId)
-    ) {
-      decisions.push(groupExcluded(identity, "recipient_scope_mismatch"));
+    const current = await dependencies.readCurrentCapability({
+      organizationId: recipient.organizationId,
+      applicationRootId: recipient.applicationRootId,
+      grantId: group.grantId,
+    });
+    const capability = capabilityDecision(group, recipient, current);
+    if (typeof capability === "string") {
+      decisions.push(groupExcluded(capability));
       continue;
     }
-    if (
-      !sameId(active.grantId, group.grantId) ||
-      active.contractFingerprint !== group.contractFingerprint
-    ) {
-      decisions.push(groupExcluded(identity, "grant_identity_mismatch"));
-      continue;
-    }
-    if (
-      !sameId(active.sourceClusterId, group.sourceClusterId) ||
-      !sameId(active.sourceOrganizationId, group.sourceOrganizationId)
-    ) {
-      decisions.push(groupExcluded(identity, "source_scope_mismatch"));
-      continue;
-    }
-    // One search may ask a bounded set of grants, but it never asks one source
-    // under one grant twice, so a second group cannot double a count or a rank.
-    const sourceGrant = [group.sourceClusterId, group.sourceOrganizationId, group.grantId]
-      .map(lower)
-      .join(":");
-    if (seenSourceGrants.has(sourceGrant)) {
-      decisions.push(groupExcluded(identity, "repeated_source_grant"));
-      continue;
-    }
-    seenSourceGrants.add(sourceGrant);
 
+    const identity = identityOf(group);
     if (group.state === "unavailable" || group.state === "retryable") {
-      decisions.push(groupUnavailable(identity, group.safeErrorCode));
+      decisions.push(
+        Object.freeze({ ...identity, state: "unavailable", safeErrorCode: group.safeErrorCode }),
+      );
       continue;
     }
     if (group.state === "refused") {
-      decisions.push(groupRefused(identity, group.safeErrorCode));
+      decisions.push(
+        Object.freeze({ ...identity, state: "refused", safeErrorCode: group.safeErrorCode }),
+      );
       continue;
     }
 
-    const readable = new Set(active.readableFieldIds.map(lower));
+    const readable = new Set(capability.readableFieldIds.map(lower));
     const priorityByField = new Map(
       group.fieldProjection.map((field) => [lower(field.fieldId), field.searchPriority]),
     );
-    const results: SharedResultRecordDecision[] = [];
-    const seenRecords = new Set<string>();
+    const projections: SharedSearchableProjection[] = [];
     for (const record of group.records) {
-      if (seenRecords.has(lower(record.recordId))) {
-        results.push(recordExcluded(record.recordId, "repeated_record"));
-        continue;
-      }
-      seenRecords.add(lower(record.recordId));
-
       const entries: SearchDocumentEntry[] = [];
-      let remaining = searchDocumentLimits.documentTextLength;
+      let remaining: number = searchDocumentLimits.documentTextLength;
       for (const entry of record.entries) {
         const fieldId = lower(entry.fieldId);
         if (!requested.has(fieldId) || !readable.has(fieldId)) continue;
         const priority = priorityByField.get(fieldId);
-        if (priority === undefined) continue;
-        // The recipient derives the ranking weight itself; a source-supplied
-        // weight is never trusted, and a source may not raise its own priority.
-        const weight = searchPriorityWeights[priority];
-        if (weight === undefined || remaining <= 0) continue;
+        if (priority === undefined || entry.text.length > remaining) continue;
         remaining -= entry.text.length;
-        entries.push(Object.freeze({ fieldId: entry.fieldId, priority, weight, text: entry.text }));
+        // The ranking weight is derived here from the published priority; no
+        // source-supplied number ever reaches ranking.
+        entries.push(
+          Object.freeze({
+            fieldId: entry.fieldId,
+            priority,
+            weight: searchPriorityWeights[priority],
+            text: entry.text,
+          }),
+        );
       }
       // A record with no permitted field must not appear at all, or a count or
       // filter would reveal that only withheld source text could have matched.
-      if (entries.length === 0) {
-        results.push(recordExcluded(record.recordId, "no_permitted_field"));
-        continue;
-      }
-      results.push(
-        recordAdmitted(
-          Object.freeze({
-            sourceClusterId: record.sourceClusterId,
-            sourceOrganizationId: record.sourceOrganizationId,
-            recordTypeId: record.recordTypeId,
-            recordId: record.recordId,
-            concurrencyNumber: record.concurrencyNumber,
-            entries: Object.freeze(entries),
-          }),
-        ),
+      if (entries.length === 0) continue;
+      projections.push(
+        Object.freeze({
+          sourceClusterId: record.sourceClusterId,
+          sourceOrganizationId: record.sourceOrganizationId,
+          recordTypeId: record.recordTypeId,
+          recordId: record.recordId,
+          concurrencyNumber: record.concurrencyNumber,
+          entries: Object.freeze(entries),
+        }),
       );
     }
-
-    decisions.push(groupAdmitted(identity, results));
+    decisions.push(
+      Object.freeze({ ...identity, state: "admitted", projections: Object.freeze(projections) }),
+    );
   }
 
   return Object.freeze({ outcome: "completed", groups: Object.freeze(decisions) });

@@ -20,6 +20,7 @@ import {
 import {
   sharedResultGroupDecisions,
   type SharedResultGroupDecision,
+  type SharedResultPolicyDependencies,
   type SharedResultPolicyRequest,
   type SharedResultPolicyResult,
 } from "./shared-result-policy";
@@ -51,7 +52,8 @@ import {
  *
  * A shared source is not in the index at all, so its results arrive as the
  * request's own Shared result groups and are decided by #646 in the same
- * pre-ranking step. Those decisions are returned beside the local candidates:
+ * pre-ranking step, against the recipient's grant capability read at that
+ * moment. Those decisions are returned beside the local candidates:
  * they are request-only projections carrying their own source identities, they
  * are never documents, and the caller ranks and pages over both sets for the
  * current response only. A group set that is not exact refuses the request;
@@ -127,10 +129,11 @@ export type PermittedSearchInput = Readonly<{
   candidates: readonly SearchDocument[];
   /**
    * The request's shared-source groups, when the response includes a Shared
-   * result group. The requested field identities are taken from this module's
-   * own parsed request, never from the caller, so a shared group cannot widen
-   * the fields this search matches. Omitted when the response has no shared
-   * content; running the source search itself is #739.
+   * result group. The recipient scope, record type and requested field
+   * identities are taken from this module's own parsed request, never from the
+   * caller, so a shared group cannot widen the fields this search matches.
+   * Omitted when the response has no shared content; running the source search
+   * itself is #739.
    */
   shared?: SharedResultPolicyRequest;
 }>;
@@ -144,6 +147,12 @@ export type PermittedSearchDependencies = Readonly<{
   readCurrentRecord: (
     input: PermittedSearchCurrentReadRequest,
   ) => Promise<PermittedSearchCurrentRead | undefined>;
+  /**
+   * The caller's own current grant capability read for Shared result groups,
+   * bound to the same transaction and authority. Without it every shared group
+   * is excluded, never admitted.
+   */
+  readCurrentSharedCapability?: SharedResultPolicyDependencies["readCurrentCapability"];
 }>;
 
 /** One authority-filtered candidate, still before ranking, counting and paging. */
@@ -343,6 +352,10 @@ const noSharedGroups: SharedResultPolicyResult = Object.freeze({
   groups: Object.freeze([]),
 });
 
+/** Without the caller's capability read, no shared group can be admitted. */
+const noSharedCapability: SharedResultPolicyDependencies["readCurrentCapability"] = async () =>
+  undefined;
+
 /**
  * Filters one bounded candidate set to the records the current reader may see
  * and the exact searchable fields it may see on them.
@@ -378,20 +391,26 @@ export const permittedSearchCandidates = async (
     return refusal("candidate_set_invalid");
 
   // Shared-source content is decided by #646 in the same pre-ranking step, from
-  // the source's own approved projection and the recipient's current grant
-  // capability, so a shared result can never reach ranking, counting or paging
+  // the source's own approved projection and the recipient's grant capability
+  // read now, so a shared result can never reach ranking, counting or paging
   // before the same boundary that filters the recipient's own index.
   const shared =
     input.shared === undefined
       ? noSharedGroups
-      : sharedResultGroupDecisions({
-          ...input.shared,
-          recipient: Object.freeze({
-            organizationId: access.data.organizationId,
-            applicationRootId: request.applicationRootId,
-          }),
-          requestedFieldIds: request.requestedFieldIds,
-        });
+      : await sharedResultGroupDecisions(
+          {
+            groups: input.shared.groups,
+            recipient: Object.freeze({
+              organizationId: access.data.organizationId,
+              applicationRootId: request.applicationRootId,
+              recordTypeId: request.recordTypeId,
+            }),
+            requestedFieldIds: request.requestedFieldIds,
+          },
+          {
+            readCurrentCapability: dependencies.readCurrentSharedCapability ?? noSharedCapability,
+          },
+        );
   if (shared.outcome === "refused") return refusal("shared_result_invalid");
   const sharedGroups = shared.groups;
 

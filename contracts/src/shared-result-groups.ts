@@ -18,7 +18,8 @@ import { federatedRefusalCodeSchema } from "./integration-contracts";
  * Request-only Shared result groups (#646).
  *
  * Application search may add one Shared result group for each active sharing
- * grant the recipient knows from its non-content grant mirrors. The source
+ * grant the recipient knows from its non-content grant mirrors, and never more
+ * than one group for the same grant. The source
  * executes that search itself and returns its own approved projection of the
  * records it chose; the recipient merges those projections into the current
  * response only. A group is therefore the complete unit of shared searchability:
@@ -213,14 +214,15 @@ export const sharedResultGroupSchema = z
   });
 
 /**
- * The recipient's current capability for one shared search: the current state
+ * The recipient's current capability for one grant, read by the recipient's own
+ * adapter at decision time rather than carried by the request: the current state
  * of its own non-content grant mirror, the one complete grant identity that
- * mirror holds, and the readable field projection the source returned with this
- * response. Only an `active` mirror whose grant identity and fingerprint match
- * the group may be searched, so a pending, suspended, revoked or expired grant,
- * a second grant, or another recipient application cannot contribute scope or
- * fields to the same result. The mirror carries no field list, so the readable
- * projection is source-owned evidence bound to the grant by its fingerprint.
+ * mirror holds, and the definition scope and readable field projection of the
+ * recipient's own federated search query under that grant. Only an `active`
+ * mirror whose grant identity, fingerprint, source and definition scope all
+ * match the group may be searched, so a pending, suspended, revoked or expired
+ * grant, a second grant, another record type or Module revision, or another
+ * recipient application cannot contribute scope or fields to the same result.
  */
 export const sharedRecipientCapabilitySchema = z
   .object({
@@ -230,6 +232,9 @@ export const sharedRecipientCapabilitySchema = z
     contractFingerprint: fingerprintSchema,
     sourceClusterId: clusterIdSchema,
     sourceOrganizationId: organizationIdSchema,
+    moduleRootId: moduleRootIdSchema,
+    recordTypeId: recordTypeIdSchema,
+    publishedModuleRevision: revisionSchema,
     // A grant's readable fields name one record type's fields, bounded at 500 by the grant.
     readableFieldIds: z.array(fieldIdSchema).min(1).max(500),
     /** Exactly the states a recipient grant mirror can hold. */
