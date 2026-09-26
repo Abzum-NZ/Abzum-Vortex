@@ -405,6 +405,16 @@ const activeRelease = (
   return { releaseRevision, bindings: active };
 };
 
+/**
+ * A draining installation is being uninstalled: it is never prepared, activated, upgraded or
+ * withdrawn until the uninstall completes, so no step returns it to service or removes the access
+ * that work still running relies on.
+ */
+const requireNotDraining = (state: InstallationBindings): void => {
+  if (state.moduleBindings.some((binding) => binding.state === "draining"))
+    throw fail("APPLICATION_INSTALLATION_STALE");
+};
+
 const expectedBindings = (
   bindings: readonly Pick<ModuleInstallationBindingEvidence, "moduleRootId" | "bindingRevision">[],
 ): ExpectedModuleBinding[] =>
@@ -492,7 +502,15 @@ const drainInstallation = async (
     parsed === null ||
     !parsed.success ||
     !sameId(parsed.data.applicationRootId, applicationRootId) ||
-    parsed.data.applicationReleaseRevision !== applicationReleaseRevision
+    parsed.data.applicationReleaseRevision !== applicationReleaseRevision ||
+    parsed.data.moduleBindings.length !== expectedModuleBindings.length ||
+    parsed.data.moduleBindings.some(
+      (binding) =>
+        binding.state !== "draining" ||
+        !sameId(binding.organizationId, parsed.data.organizationId) ||
+        !sameId(binding.applicationRootId, applicationRootId) ||
+        binding.applicationReleaseRevision !== applicationReleaseRevision,
+    )
   )
     throw fail("APPLICATION_INSTALLATION_FAILED");
   return parsed.data;
@@ -857,6 +875,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             request.organizationId,
             request.applicationRootId,
           );
+          requireNotDraining(state);
           if (activeRelease(state) !== null) throw fail("APPLICATION_INSTALLATION_STALE");
           return alignAccess(
             transaction,
@@ -881,6 +900,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             request.organizationId,
             request.applicationRootId,
           );
+          requireNotDraining(state);
           if (activeRelease(state) !== null) throw fail("APPLICATION_INSTALLATION_STALE");
           // A still-provisioned binding outside this pin set would block its activation, and the
           // fixed operations cannot detach an inactive binding.
@@ -951,6 +971,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             request.organizationId,
             request.applicationRootId,
           );
+          requireNotDraining(state);
           const mode = requireExpectedActive(request, activeRelease(state));
           await alignAccess(
             transaction,
@@ -988,6 +1009,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
               request.organizationId,
               request.applicationRootId,
             );
+            requireNotDraining(state);
             const active = activeRelease(state);
             if (requireExpectedActive(request, active) === "already_active")
               return {
@@ -1058,7 +1080,8 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     /**
      * Withdraws exactly the named release. Bindings are detached, never deleted, so stored
      * records remain; a prepared release that never became active keeps its inactive storage. The
-     * Access coordinator preserves final-steward, supplier and continuity safeguards.
+     * Access coordinator preserves final-steward, supplier and continuity safeguards. A draining
+     * installation is refused: its uninstall owns what happens to it next.
      */
     async withdraw(
       session: IdentitySession,
@@ -1087,6 +1110,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             request.organizationId,
             request.applicationRootId,
           );
+          requireNotDraining(state);
           const active = activeRelease(state);
           if (
             active !== null
@@ -1215,6 +1239,8 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             request.applicationReleaseRevision,
             expectedBindings(drainable),
           );
+          if (!sameId(drained.organizationId, state.organizationId))
+            throw fail("APPLICATION_INSTALLATION_FAILED");
 
           return {
             outcome: drained.changed ? "draining" : "unchanged",
