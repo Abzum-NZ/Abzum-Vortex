@@ -338,11 +338,13 @@ begin
               or (semantic_type = 'text_collection' and database_value_type = 'json')
               or (semantic_type = 'opaque_json' and database_value_type = 'json')
               or (semantic_type = 'money' and database_value_type = 'json')
-              or (semantic_type = 'decimal_number' and database_value_type in ('decimal', 'text'))
-              or (semantic_type = 'number' and database_value_type in ('integer', 'decimal'))
-              or (semantic_type = 'date' and database_value_type in ('date', 'text'))
-              or (semantic_type = 'date_time'
-                and database_value_type in ('timestamp_with_time_zone', 'text'))
+              or (semantic_type = 'decimal_number' and database_value_type = 'decimal')
+              -- A version-1 decimal field is a number to the condition engine
+              -- but is projected as decimal text, which that engine refuses;
+              -- only a whole number is stored as the number it compares.
+              or (semantic_type = 'number' and database_value_type = 'integer')
+              or (semantic_type = 'date' and database_value_type = 'date')
+              or (semantic_type = 'date_time' and database_value_type = 'timestamp_with_time_zone')
             ) then
               supported := false;
               exit;

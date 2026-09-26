@@ -61,9 +61,10 @@ declare
   member_group_ids uuid[];
   wants_owner boolean := false;
   wants_share boolean := false;
-  -- Every route of every eligible alternative has an exact table form. When any
-  -- route does not, the whole plan is unrestricted so the exact per-row
-  -- decision alone narrows the scan.
+  -- Every route of every eligible alternative has an exact stored predicate, so
+  -- a condition-free scan examines only rows the exact decision admits. When
+  -- any route does not, that route's term is left true in the scan plan and no
+  -- field is taken as readable for every scanned row.
   pushable boolean := true;
   shared_overflow boolean := false;
   shared uuid[] := array[]::uuid[];
@@ -566,11 +567,13 @@ begin
               or (semantic_type = 'text_collection' and database_value_type = 'json')
               or (semantic_type = 'opaque_json' and database_value_type = 'json')
               or (semantic_type = 'money' and database_value_type = 'json')
-              or (semantic_type = 'decimal_number' and database_value_type in ('decimal', 'text'))
-              or (semantic_type = 'number' and database_value_type in ('integer', 'decimal'))
-              or (semantic_type = 'date' and database_value_type in ('date', 'text'))
-              or (semantic_type = 'date_time'
-                and database_value_type in ('timestamp_with_time_zone', 'text'))
+              or (semantic_type = 'decimal_number' and database_value_type = 'decimal')
+              -- A version-1 decimal field is a number to the condition engine
+              -- but is projected as decimal text, which that engine refuses;
+              -- only a whole number is stored as the number it compares.
+              or (semantic_type = 'number' and database_value_type = 'integer')
+              or (semantic_type = 'date' and database_value_type = 'date')
+              or (semantic_type = 'date_time' and database_value_type = 'timestamp_with_time_zone')
             ) then
               supported := false;
               exit;

@@ -30,9 +30,10 @@ declare
   member_group_ids uuid[];
   wants_owner boolean := false;
   wants_share boolean := false;
-  -- Every route of every eligible alternative has an exact table form. When any
-  -- route does not, the whole plan is unrestricted so the exact per-row
-  -- decision alone narrows the scan.
+  -- Every route of every eligible alternative has an exact stored predicate, so
+  -- a condition-free scan examines only rows the exact decision admits. When
+  -- any route does not, that route's term is left true in the scan plan and no
+  -- field is taken as readable for every scanned row.
   pushable boolean := true;
   shared_overflow boolean := false;
   shared uuid[] := array[]::uuid[];
