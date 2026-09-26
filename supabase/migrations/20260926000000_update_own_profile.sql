@@ -4,9 +4,10 @@
 --
 -- Identity owns the private account-profile writer; Access owns the protected request entry. The
 -- actor, organisation and account come only from the validated human request context, never from
--- the command. Access takes the organisation Access-version lock before it authorises, the account
--- revision is exact, and Access version is never changed because a profile edit is not an
--- authorisation change. Both refusal and completion append one content-free Activity through
+-- the command. Access takes the organisation Access-version lock (active organisation and tenant,
+-- unchanged Access version) before it authorises; the permission-free own-account path is refused
+-- in a delegated or support context. The account revision is exact, and Access version is never
+-- changed because a profile edit is not an authorisation change. Both refusal and completion append one content-free Activity through
 -- vortex_context.channel().
 
 create or replace function vortex_identity.update_organization_account_profile_internal(
@@ -128,6 +129,7 @@ declare
   context_account_id uuid;
   context_access_version bigint;
   context_correlation_id uuid;
+  locked_access_version bigint;
   decision record;
   changed record;
   activity_result text;
@@ -145,21 +147,33 @@ begin
 
   context_value := vortex_access.validated_human_request_context();
   context_organization_id := (context_value ->> 'organizationId')::uuid;
-  perform 1
-  from vortex_access.organization_access_versions as access_version
-  where access_version.organization_id = context_organization_id
-  for update;
-  if not found then
-    raise exception using errcode = '42501',
-      message = 'Organization account profile update is unavailable';
-  end if;
-
-  context_value := vortex_access.validated_human_request_context();
   context_account_id := (context_value ->> 'organizationAccountId')::uuid;
   context_access_version := (context_value ->> 'accessVersion')::bigint;
   context_correlation_id := (context_value ->> 'correlationId')::uuid;
 
-  if p_organization_account_id is distinct from context_account_id then
+  select version.current_version into locked_access_version
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  join vortex_identity.tenants as tenant
+    on tenant.tenant_id = organization.tenant_id
+  where version.organization_id = context_organization_id
+    and organization.state = 'active'
+    and tenant.state = 'active'
+  for update of version;
+  if not found or locked_access_version is distinct from context_access_version then
+    raise exception using errcode = '42501',
+      message = 'Organization account profile update is unavailable';
+  end if;
+
+  if p_organization_account_id = context_account_id then
+    -- The own-account path needs no permission, so it is only for the person themself: a
+    -- delegated or support context acting for them is refused like any unavailable change.
+    if context_value ? 'delegatedContext' or context_value ? 'supportContext' then
+      raise exception using errcode = '42501',
+        message = 'Organization account profile update is unavailable';
+    end if;
+  else
     select evaluated.* into strict decision
     from vortex_access.evaluate_organization_permission_eligibility(
       pg_catalog.jsonb_build_object(

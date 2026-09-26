@@ -183,8 +183,10 @@ export const updateOwnProfileCommandSchema = z
     organizationAccountId: organizationAccountIdSchema,
     expectedRevision: javascriptSafeRevisionSchema,
     displayName: z.string().trim().min(1).max(120),
-    language: z.string().trim().min(2).max(35).optional(),
-    timeZone: z.string().trim().min(1).max(100).optional(),
+    // The same canonical BCP-47 tag and supported IANA zone rules as the organisation settings,
+    // within the account columns' length bounds.
+    language: organizationRuntimeSettingsSchema.shape.language.max(35).optional(),
+    timeZone: organizationRuntimeSettingsSchema.shape.timeZone.max(100).optional(),
   })
   .strict();
 
