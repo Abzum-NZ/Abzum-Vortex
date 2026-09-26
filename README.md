@@ -118,7 +118,7 @@ Existing developer utilities (`pnpm verify`, `pnpm fixtures`, `pnpm db:verify`) 
 | Variable | Local value | Purpose |
 | --- | --- | --- |
 | `VORTEX_ENVIRONMENT` | `local` | Selects local behaviour. The local site URL must then be `http` on loopback; the development setup refuses any other value. |
-| `VORTEX_SITE_URL` | `http://127.0.0.1:3000` | The configured site URL. Identity-session cookies and auth redirects are built from it. |
+| `VORTEX_SITE_URL` | `http://localhost:3000` | The configured site URL. Identity-session cookies and auth redirects are built from it. Open the application at exactly this address: Next.js builds its redirects from the request URL as `localhost`, so browsing `127.0.0.1` makes the proxy's site check fail. |
 | `VORTEX_SUPABASE_URL` | `http://127.0.0.1:54321` | The local Supabase API and Auth endpoint. |
 | `VORTEX_SUPABASE_PUBLISHABLE_KEY` | `<local publishable key from supabase status>` | The public key the browser sign-in journey uses. |
 | `VORTEX_IDENTITY_AUTHORITY_ID` | `<uuid>` | Pins the local identity authority. Use the same value for `pnpm dev` and `pnpm setup:local`. |
@@ -126,6 +126,8 @@ Existing developer utilities (`pnpm verify`, `pnpm fixtures`, `pnpm db:verify`) 
 | `VORTEX_RUNTIME_DATABASE_URL` | `postgresql://vortex_runtime:vortex-runtime-local-only@127.0.0.1:54322/postgres` | The restricted runtime connection to the local database. Required by `pnpm dev`; `pnpm setup:local` defaults to this address when unset. |
 | `VORTEX_RUNTIME_DATABASE_POOL_SIZE` | `<1-20>` | Optional runtime connection-pool cap; 5 applies when unset. |
 | `VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT` | not set locally | Trusted root certificate for a hosted runtime connection; not needed for the local loopback database. |
+
+In a local environment the installed-application pages read releases against the platform catalogue plus the development placeholder connection types CRM and Service Desk bind (`apps/web/app/_lib/definition-catalogue.ts`). During `pnpm setup:local` the database driver no longer prints server notices such as `relation ... already exists, skipping` (an idempotent index the setup creates twice); a real database error still stops the setup with a non-zero exit. A failing installed-application page logs a safe `[access] human organisation request failed` line with error class names and codes to the `pnpm dev` console.
 
 The custom-component and file pages read additional variables and report a configuration error until they are set:
 

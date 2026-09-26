@@ -36,6 +36,7 @@ import {
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
+import { installedReleaseCatalogue } from "./definition-catalogue";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";
 import { getQueryContinuationKey } from "./query-continuation-key";
 
@@ -46,9 +47,6 @@ import { getQueryContinuationKey } from "./query-continuation-key";
  * address and the page's own query string. Nothing here decides permission: the stored page and
  * navigation services, the Query engine and the flow endpoint each keep their own Access decision.
  */
-
-/** The publication catalogue the installed release was published against (see the flow endpoint). */
-const definitionCatalogue = { connectionTypeReleases: [] } as const;
 
 const telemetry = createAppTelemetryCollector({ downstream: createOperationsAlertSink() });
 
@@ -225,7 +223,7 @@ export const loadApplicationPage = async (
     return createHumanInstalledRuntimeContextLoader({
       activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
       releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-        definitionCatalogue,
+        installedReleaseCatalogue,
         transaction,
       ),
       scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
