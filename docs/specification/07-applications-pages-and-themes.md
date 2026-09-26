@@ -302,6 +302,8 @@ It covers:
 - Light and dark appearances where supported.
 - Default density and phone behaviour.
 
+Every interface primitive is a [shadcn/ui](https://ui.shadcn.com) component built on Base UI and styled with Tailwind CSS, kept as source in the shared `ui` package. The theme engine supplies every design value through the shadcn CSS variables, so a theme change restyles every component without code changes ([architecture decision 12](../build-plan/architecture-decisions-2026-09-25.md)).
+
 An organisation may choose a platform theme or edit the theme settings exposed by its application draft. The resulting values publish with the application. Themes cannot hide focus, lower required contrast, insert scripts, fetch remote code, or override field and permission meaning.
 
 ## Accessibility and responsive behaviour
