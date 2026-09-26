@@ -1,0 +1,2386 @@
+{
+  "source_contract_version": "3.0.0",
+  "root_alias": "mod_system_directory",
+  "key": "vortex.system_directory",
+  "kind": "module",
+  "body": {
+    "name": "System Directory",
+    "description": "The shared read surface over the platform's own people, groups, roles and organisation records, so any application that binds this module can show the same directory through the ordinary query path.",
+    "dependencies": [],
+    "record_types": [
+      {
+        "id": "rt_system_directory_person",
+        "key": "person",
+        "name": "Person",
+        "plural_name": "People",
+        "title_field": "display_name",
+        "storage_contract_id": "srt_system_directory_person",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "read"
+        ],
+        "custom_actions": [],
+        "system_projection": {
+          "protected_view": "organization_accounts",
+          "organization_field": "organization_id",
+          "revision_field": "revision",
+          "filterable_fields": [
+            "state"
+          ],
+          "sortable_fields": [
+            "display_name",
+            "state"
+          ]
+        },
+        "fields": [
+          {
+            "id": "fld_person_organization_id",
+            "key": "organization_id",
+            "label": "Organisation",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_person_revision",
+            "key": "revision",
+            "label": "Revision",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {}
+          },
+          {
+            "id": "fld_person_display_name",
+            "key": "display_name",
+            "label": "Display name",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 120
+            }
+          },
+          {
+            "id": "fld_person_state",
+            "key": "state",
+            "label": "State",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "active",
+                  "label": "Active"
+                },
+                {
+                  "value": "suspended",
+                  "label": "Suspended"
+                },
+                {
+                  "value": "closed",
+                  "label": "Closed"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_person_language",
+            "key": "language",
+            "label": "Language",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 35
+            }
+          },
+          {
+            "id": "fld_person_time_zone",
+            "key": "time_zone",
+            "label": "Time zone",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 100
+            }
+          }
+        ],
+        "relationships": []
+      },
+      {
+        "id": "rt_system_directory_organization_invitation",
+        "key": "organization_invitation",
+        "name": "Organisation invitation",
+        "plural_name": "Organisation invitations",
+        "title_field": "invited_email",
+        "storage_contract_id": "srt_system_directory_invitation",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "read"
+        ],
+        "custom_actions": [],
+        "system_projection": {
+          "protected_view": "organization_invitations",
+          "organization_field": "organization_id",
+          "revision_field": "revision",
+          "filterable_fields": [
+            "state"
+          ],
+          "sortable_fields": [
+            "invited_email",
+            "state",
+            "expires_at"
+          ]
+        },
+        "fields": [
+          {
+            "id": "fld_invitation_organization_id",
+            "key": "organization_id",
+            "label": "Organisation",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_invitation_revision",
+            "key": "revision",
+            "label": "Revision",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {}
+          },
+          {
+            "id": "fld_invitation_email",
+            "key": "invited_email",
+            "label": "Invited email",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 320
+            }
+          },
+          {
+            "id": "fld_invitation_state",
+            "key": "state",
+            "label": "State",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "pending",
+                  "label": "Pending"
+                },
+                {
+                  "value": "accepted",
+                  "label": "Accepted"
+                },
+                {
+                  "value": "revoked",
+                  "label": "Revoked"
+                },
+                {
+                  "value": "expired",
+                  "label": "Expired"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_invitation_invited_at",
+            "key": "invited_at",
+            "label": "Invited at",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "date_time",
+            "settings": {
+              "display_time_zone": "organisation"
+            }
+          },
+          {
+            "id": "fld_invitation_expires_at",
+            "key": "expires_at",
+            "label": "Expires at",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "date_time",
+            "settings": {
+              "display_time_zone": "organisation"
+            }
+          }
+        ],
+        "relationships": []
+      },
+      {
+        "id": "rt_system_directory_organization_settings",
+        "key": "organization_settings",
+        "name": "Organisation settings",
+        "plural_name": "Organisation settings",
+        "title_field": "organization_id",
+        "storage_contract_id": "srt_system_directory_settings",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "read"
+        ],
+        "custom_actions": [],
+        "system_projection": {
+          "protected_view": "organization_runtime_settings",
+          "organization_field": "organization_id",
+          "revision_field": "revision",
+          "filterable_fields": [],
+          "sortable_fields": [
+            "language"
+          ]
+        },
+        "fields": [
+          {
+            "id": "fld_settings_organization_id",
+            "key": "organization_id",
+            "label": "Organisation",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_settings_revision",
+            "key": "revision",
+            "label": "Revision",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {}
+          },
+          {
+            "id": "fld_settings_language",
+            "key": "language",
+            "label": "Language",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 35
+            }
+          },
+          {
+            "id": "fld_settings_time_zone",
+            "key": "time_zone",
+            "label": "Time zone",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 100
+            }
+          },
+          {
+            "id": "fld_settings_currency",
+            "key": "currency",
+            "label": "Currency",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 3
+            }
+          },
+          {
+            "id": "fld_settings_date_format",
+            "key": "date_format",
+            "label": "Date format",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "short",
+                  "label": "Short"
+                },
+                {
+                  "value": "medium",
+                  "label": "Medium"
+                },
+                {
+                  "value": "long",
+                  "label": "Long"
+                },
+                {
+                  "value": "full",
+                  "label": "Full"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_settings_number_format",
+            "key": "number_format",
+            "label": "Number format",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "auto",
+                  "label": "Automatic"
+                },
+                {
+                  "value": "always",
+                  "label": "Always show decimals"
+                },
+                {
+                  "value": "min2",
+                  "label": "At least two decimals"
+                },
+                {
+                  "value": "never",
+                  "label": "Never show decimals"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_settings_default_application_root_id",
+            "key": "default_application_root_id",
+            "label": "Default application",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          }
+        ],
+        "relationships": []
+      },
+      {
+        "id": "rt_system_directory_group",
+        "key": "group",
+        "name": "Group",
+        "plural_name": "Groups",
+        "title_field": "label",
+        "storage_contract_id": "srt_system_directory_group",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "read"
+        ],
+        "custom_actions": [],
+        "system_projection": {
+          "protected_view": "groups",
+          "organization_field": "organization_id",
+          "revision_field": "revision",
+          "filterable_fields": [
+            "state"
+          ],
+          "sortable_fields": [
+            "key",
+            "label",
+            "state"
+          ]
+        },
+        "fields": [
+          {
+            "id": "fld_group_organization_id",
+            "key": "organization_id",
+            "label": "Organisation",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_group_revision",
+            "key": "revision",
+            "label": "Revision",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {}
+          },
+          {
+            "id": "fld_group_key",
+            "key": "key",
+            "label": "Key",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 40
+            }
+          },
+          {
+            "id": "fld_group_label",
+            "key": "label",
+            "label": "Label",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 60
+            }
+          },
+          {
+            "id": "fld_group_state",
+            "key": "state",
+            "label": "State",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "active",
+                  "label": "Active"
+                },
+                {
+                  "value": "retired",
+                  "label": "Retired"
+                }
+              ]
+            }
+          }
+        ],
+        "relationships": []
+      },
+      {
+        "id": "rt_system_directory_group_membership",
+        "key": "group_membership",
+        "name": "Group membership",
+        "plural_name": "Group memberships",
+        "title_field": "account_display_name",
+        "storage_contract_id": "srt_system_directory_group_membership",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "read"
+        ],
+        "custom_actions": [],
+        "system_projection": {
+          "protected_view": "people",
+          "organization_field": "organization_id",
+          "revision_field": "revision",
+          "filterable_fields": [
+            "group_id",
+            "organization_account_id",
+            "state",
+            "temporal_state"
+          ],
+          "sortable_fields": [
+            "account_display_name",
+            "starts_at",
+            "expires_at",
+            "state"
+          ]
+        },
+        "fields": [
+          {
+            "id": "fld_group_membership_organization_id",
+            "key": "organization_id",
+            "label": "Organisation",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_group_membership_revision",
+            "key": "revision",
+            "label": "Revision",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {}
+          },
+          {
+            "id": "fld_group_membership_group_id",
+            "key": "group_id",
+            "label": "Group",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_group_membership_account_id",
+            "key": "organization_account_id",
+            "label": "Organisation account",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_group_membership_display_name",
+            "key": "account_display_name",
+            "label": "Account display name",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 120
+            }
+          },
+          {
+            "id": "fld_group_membership_starts_at",
+            "key": "starts_at",
+            "label": "Starts at",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "date_time",
+            "settings": {
+              "display_time_zone": "organisation"
+            }
+          },
+          {
+            "id": "fld_group_membership_expires_at",
+            "key": "expires_at",
+            "label": "Expires at",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "date_time",
+            "settings": {
+              "display_time_zone": "organisation"
+            }
+          },
+          {
+            "id": "fld_group_membership_state",
+            "key": "state",
+            "label": "State",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "live",
+                  "label": "Live"
+                },
+                {
+                  "value": "revoked",
+                  "label": "Revoked"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_group_membership_temporal_state",
+            "key": "temporal_state",
+            "label": "Temporal state",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "active",
+                  "label": "Active"
+                },
+                {
+                  "value": "scheduled",
+                  "label": "Scheduled"
+                },
+                {
+                  "value": "expired",
+                  "label": "Expired"
+                },
+                {
+                  "value": "revoked",
+                  "label": "Revoked"
+                }
+              ]
+            }
+          }
+        ],
+        "relationships": []
+      },
+      {
+        "id": "rt_system_directory_role",
+        "key": "role",
+        "name": "Role",
+        "plural_name": "Roles",
+        "title_field": "label",
+        "storage_contract_id": "srt_system_directory_role",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "read"
+        ],
+        "custom_actions": [],
+        "system_projection": {
+          "protected_view": "roles",
+          "organization_field": "organization_id",
+          "revision_field": "revision",
+          "filterable_fields": [
+            "lifecycle",
+            "role_kind",
+            "privilege_classification",
+            "assignment_policy"
+          ],
+          "sortable_fields": [
+            "key",
+            "label",
+            "lifecycle",
+            "accepted_permission_count"
+          ]
+        },
+        "fields": [
+          {
+            "id": "fld_role_organization_id",
+            "key": "organization_id",
+            "label": "Organisation",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_role_revision",
+            "key": "revision",
+            "label": "Revision",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {}
+          },
+          {
+            "id": "fld_role_key",
+            "key": "key",
+            "label": "Key",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 40
+            }
+          },
+          {
+            "id": "fld_role_label",
+            "key": "label",
+            "label": "Label",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 60
+            }
+          },
+          {
+            "id": "fld_role_lifecycle",
+            "key": "lifecycle",
+            "label": "Lifecycle",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "active",
+                  "label": "Active"
+                },
+                {
+                  "value": "acceptance_required",
+                  "label": "Acceptance required"
+                },
+                {
+                  "value": "unavailable",
+                  "label": "Unavailable"
+                },
+                {
+                  "value": "retired",
+                  "label": "Retired"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_role_kind",
+            "key": "role_kind",
+            "label": "Role kind",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "application",
+                  "label": "Application"
+                },
+                {
+                  "value": "custom",
+                  "label": "Custom"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_role_privilege_classification",
+            "key": "privilege_classification",
+            "label": "Privilege classification",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "standard",
+                  "label": "Standard"
+                },
+                {
+                  "value": "privileged",
+                  "label": "Privileged"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_role_assignment_policy",
+            "key": "assignment_policy",
+            "label": "Assignment policy",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "standing",
+                  "label": "Standing"
+                },
+                {
+                  "value": "activation_required",
+                  "label": "Activation required"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_role_accepted_permission_count",
+            "key": "accepted_permission_count",
+            "label": "Accepted permission count",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {}
+          }
+        ],
+        "relationships": []
+      },
+      {
+        "id": "rt_system_directory_role_assignment",
+        "key": "role_assignment",
+        "name": "Role assignment",
+        "plural_name": "Role assignments",
+        "title_field": "role_label",
+        "storage_contract_id": "srt_system_directory_role_assignment",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "read"
+        ],
+        "custom_actions": [],
+        "system_projection": {
+          "protected_view": "effective_assignments",
+          "organization_field": "organization_id",
+          "revision_field": "revision",
+          "filterable_fields": [
+            "role_id",
+            "assignee_kind",
+            "organization_account_id",
+            "group_id",
+            "assignment_kind",
+            "state",
+            "temporal_state"
+          ],
+          "sortable_fields": [
+            "role_key",
+            "role_label",
+            "starts_at",
+            "expires_at",
+            "state"
+          ]
+        },
+        "fields": [
+          {
+            "id": "fld_role_assignment_organization_id",
+            "key": "organization_id",
+            "label": "Organisation",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_role_assignment_revision",
+            "key": "revision",
+            "label": "Revision",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {}
+          },
+          {
+            "id": "fld_role_assignment_role_id",
+            "key": "role_id",
+            "label": "Role",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_role_assignment_role_key",
+            "key": "role_key",
+            "label": "Role key",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 40
+            }
+          },
+          {
+            "id": "fld_role_assignment_role_label",
+            "key": "role_label",
+            "label": "Role label",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 60
+            }
+          },
+          {
+            "id": "fld_role_assignment_assignee_kind",
+            "key": "assignee_kind",
+            "label": "Assignee kind",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "organization_account",
+                  "label": "Organisation account"
+                },
+                {
+                  "value": "group",
+                  "label": "Group"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_role_assignment_organization_account_id",
+            "key": "organization_account_id",
+            "label": "Organisation account",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_role_assignment_group_id",
+            "key": "group_id",
+            "label": "Group",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_role_assignment_assignment_kind",
+            "key": "assignment_kind",
+            "label": "Assignment kind",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "standing",
+                  "label": "Standing"
+                },
+                {
+                  "value": "eligible",
+                  "label": "Eligible"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_role_assignment_starts_at",
+            "key": "starts_at",
+            "label": "Starts at",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "date_time",
+            "settings": {
+              "display_time_zone": "organisation"
+            }
+          },
+          {
+            "id": "fld_role_assignment_expires_at",
+            "key": "expires_at",
+            "label": "Expires at",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "date_time",
+            "settings": {
+              "display_time_zone": "organisation"
+            }
+          },
+          {
+            "id": "fld_role_assignment_state",
+            "key": "state",
+            "label": "State",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "live",
+                  "label": "Live"
+                },
+                {
+                  "value": "revoked",
+                  "label": "Revoked"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_role_assignment_temporal_state",
+            "key": "temporal_state",
+            "label": "Temporal state",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "active",
+                  "label": "Active"
+                },
+                {
+                  "value": "scheduled",
+                  "label": "Scheduled"
+                },
+                {
+                  "value": "expired",
+                  "label": "Expired"
+                },
+                {
+                  "value": "revoked",
+                  "label": "Revoked"
+                }
+              ]
+            }
+          }
+        ],
+        "relationships": []
+      },
+      {
+        "id": "rt_system_directory_role_activation",
+        "key": "role_activation",
+        "name": "Role activation",
+        "plural_name": "Role activations",
+        "title_field": "account_display_name",
+        "storage_contract_id": "srt_system_directory_role_activation",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "read"
+        ],
+        "custom_actions": [],
+        "system_projection": {
+          "protected_view": "role_activations",
+          "organization_field": "organization_id",
+          "revision_field": "revision",
+          "filterable_fields": [
+            "organization_account_id",
+            "role_id",
+            "eligibility_source_kind",
+            "state",
+            "temporal_state"
+          ],
+          "sortable_fields": [
+            "account_display_name",
+            "role_key",
+            "role_label",
+            "activated_at",
+            "expires_at",
+            "state"
+          ]
+        },
+        "fields": [
+          {
+            "id": "fld_role_activation_organization_id",
+            "key": "organization_id",
+            "label": "Organisation",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_role_activation_revision",
+            "key": "revision",
+            "label": "Revision",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {}
+          },
+          {
+            "id": "fld_role_activation_organization_account_id",
+            "key": "organization_account_id",
+            "label": "Organisation account",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_role_activation_account_display_name",
+            "key": "account_display_name",
+            "label": "Account display name",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 120
+            }
+          },
+          {
+            "id": "fld_role_activation_role_id",
+            "key": "role_id",
+            "label": "Role",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_role_activation_role_key",
+            "key": "role_key",
+            "label": "Role key",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 40
+            }
+          },
+          {
+            "id": "fld_role_activation_role_label",
+            "key": "role_label",
+            "label": "Role label",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 60
+            }
+          },
+          {
+            "id": "fld_role_activation_eligibility_source_kind",
+            "key": "eligibility_source_kind",
+            "label": "Eligibility source",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "direct",
+                  "label": "Direct"
+                },
+                {
+                  "value": "group",
+                  "label": "Group"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_role_activation_activated_at",
+            "key": "activated_at",
+            "label": "Activated at",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "date_time",
+            "settings": {
+              "display_time_zone": "organisation"
+            }
+          },
+          {
+            "id": "fld_role_activation_expires_at",
+            "key": "expires_at",
+            "label": "Expires at",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "date_time",
+            "settings": {
+              "display_time_zone": "organisation"
+            }
+          },
+          {
+            "id": "fld_role_activation_state",
+            "key": "state",
+            "label": "State",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "live",
+                  "label": "Live"
+                },
+                {
+                  "value": "revoked",
+                  "label": "Revoked"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_role_activation_temporal_state",
+            "key": "temporal_state",
+            "label": "Temporal state",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "active",
+                  "label": "Active"
+                },
+                {
+                  "value": "expired",
+                  "label": "Expired"
+                },
+                {
+                  "value": "revoked",
+                  "label": "Revoked"
+                }
+              ]
+            }
+          }
+        ],
+        "relationships": []
+      },
+      {
+        "id": "rt_system_directory_delegation",
+        "key": "delegation",
+        "name": "Delegation",
+        "plural_name": "Delegations",
+        "title_field": "scope_kind",
+        "storage_contract_id": "srt_system_directory_delegation",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "read"
+        ],
+        "custom_actions": [],
+        "system_projection": {
+          "protected_view": "delegations",
+          "organization_field": "organization_id",
+          "revision_field": "revision",
+          "filterable_fields": [
+            "holder_kind",
+            "organization_account_id",
+            "group_id",
+            "scope_kind",
+            "state",
+            "temporal_state"
+          ],
+          "sortable_fields": [
+            "scope_kind",
+            "starts_at",
+            "expires_at",
+            "state"
+          ]
+        },
+        "fields": [
+          {
+            "id": "fld_delegation_organization_id",
+            "key": "organization_id",
+            "label": "Organisation",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_delegation_revision",
+            "key": "revision",
+            "label": "Revision",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {}
+          },
+          {
+            "id": "fld_delegation_holder_kind",
+            "key": "holder_kind",
+            "label": "Holder kind",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "organization_account",
+                  "label": "Organisation account"
+                },
+                {
+                  "value": "group",
+                  "label": "Group"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_delegation_organization_account_id",
+            "key": "organization_account_id",
+            "label": "Organisation account",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_delegation_group_id",
+            "key": "group_id",
+            "label": "Group",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_delegation_scope_kind",
+            "key": "scope_kind",
+            "label": "Scope kind",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "organization_catalogue",
+                  "label": "Organisation catalogue"
+                },
+                {
+                  "value": "bounded",
+                  "label": "Bounded"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_delegation_starts_at",
+            "key": "starts_at",
+            "label": "Starts at",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "date_time",
+            "settings": {
+              "display_time_zone": "organisation"
+            }
+          },
+          {
+            "id": "fld_delegation_expires_at",
+            "key": "expires_at",
+            "label": "Expires at",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "date_time",
+            "settings": {
+              "display_time_zone": "organisation"
+            }
+          },
+          {
+            "id": "fld_delegation_state",
+            "key": "state",
+            "label": "State",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "live",
+                  "label": "Live"
+                },
+                {
+                  "value": "revoked",
+                  "label": "Revoked"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_delegation_temporal_state",
+            "key": "temporal_state",
+            "label": "Temporal state",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "active",
+                  "label": "Active"
+                },
+                {
+                  "value": "scheduled",
+                  "label": "Scheduled"
+                },
+                {
+                  "value": "expired",
+                  "label": "Expired"
+                },
+                {
+                  "value": "revoked",
+                  "label": "Revoked"
+                }
+              ]
+            }
+          }
+        ],
+        "relationships": []
+      },
+      {
+        "id": "rt_system_directory_organization",
+        "key": "organization",
+        "name": "Organisation",
+        "plural_name": "Organisations",
+        "title_field": "display_name",
+        "storage_contract_id": "srt_system_directory_organization",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "read"
+        ],
+        "custom_actions": [],
+        "system_projection": {
+          "protected_view": "tenant_structure",
+          "organization_field": "organization_id",
+          "revision_field": "revision",
+          "filterable_fields": [
+            "state"
+          ],
+          "sortable_fields": [
+            "short_name",
+            "display_name",
+            "state",
+            "state_changed_at",
+            "created_at"
+          ]
+        },
+        "fields": [
+          {
+            "id": "fld_organization_organization_id",
+            "key": "organization_id",
+            "label": "Organisation",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_organization_revision",
+            "key": "revision",
+            "label": "Revision",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {}
+          },
+          {
+            "id": "fld_organization_tenant_id",
+            "key": "tenant_id",
+            "label": "Tenant",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_organization_parent_id",
+            "key": "parent_organization_id",
+            "label": "Parent organisation",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_organization_short_name",
+            "key": "short_name",
+            "label": "Short name",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 63
+            }
+          },
+          {
+            "id": "fld_organization_display_name",
+            "key": "display_name",
+            "label": "Display name",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 120
+            }
+          },
+          {
+            "id": "fld_organization_state",
+            "key": "state",
+            "label": "State",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "active",
+                  "label": "Active"
+                },
+                {
+                  "value": "suspended",
+                  "label": "Suspended"
+                },
+                {
+                  "value": "archived",
+                  "label": "Archived"
+                },
+                {
+                  "value": "removal_pending",
+                  "label": "Removal pending"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_organization_state_changed_at",
+            "key": "state_changed_at",
+            "label": "State changed at",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "date_time",
+            "settings": {
+              "display_time_zone": "organisation"
+            }
+          },
+          {
+            "id": "fld_organization_created_at",
+            "key": "created_at",
+            "label": "Created at",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "date_time",
+            "settings": {
+              "display_time_zone": "organisation"
+            }
+          }
+        ],
+        "relationships": []
+      },
+      {
+        "id": "rt_system_directory_tenant_administrator",
+        "key": "tenant_administrator",
+        "name": "Tenant administrator",
+        "plural_name": "Tenant administrators",
+        "title_field": "identity_id",
+        "storage_contract_id": "srt_system_directory_tenant_administrator",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "read"
+        ],
+        "custom_actions": [],
+        "system_projection": {
+          "protected_view": "tenant_administrators",
+          "organization_field": "organization_id",
+          "revision_field": "revision",
+          "filterable_fields": [
+            "state"
+          ],
+          "sortable_fields": [
+            "starts_at",
+            "expires_at",
+            "state"
+          ]
+        },
+        "fields": [
+          {
+            "id": "fld_tenant_administrator_organization_id",
+            "key": "organization_id",
+            "label": "Organisation",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_tenant_administrator_revision",
+            "key": "revision",
+            "label": "Revision",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {}
+          },
+          {
+            "id": "fld_tenant_administrator_tenant_id",
+            "key": "tenant_id",
+            "label": "Tenant",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_tenant_administrator_identity_id",
+            "key": "identity_id",
+            "label": "Identity",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "search_priority": "first",
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 36
+            }
+          },
+          {
+            "id": "fld_tenant_administrator_capability_keys",
+            "key": "capability_keys",
+            "label": "Capabilities",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "several_choices",
+            "settings": {
+              "options": [
+                {
+                  "value": "platform.tenant.administrators.manage",
+                  "label": "Manage tenant administrators"
+                },
+                {
+                  "value": "platform.tenant.administrators.read",
+                  "label": "Read tenant administrators"
+                },
+                {
+                  "value": "platform.tenant.hierarchy.read",
+                  "label": "Read tenant hierarchy"
+                },
+                {
+                  "value": "platform.tenant.organizations.create",
+                  "label": "Create organisations"
+                },
+                {
+                  "value": "platform.tenant.organizations.lifecycle",
+                  "label": "Change organisation lifecycle"
+                },
+                {
+                  "value": "platform.tenant.organizations.rename",
+                  "label": "Rename organisations"
+                },
+                {
+                  "value": "platform.tenant.organizations.reparent",
+                  "label": "Move organisations"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_tenant_administrator_starts_at",
+            "key": "starts_at",
+            "label": "Starts at",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "date_time",
+            "settings": {
+              "display_time_zone": "organisation"
+            }
+          },
+          {
+            "id": "fld_tenant_administrator_expires_at",
+            "key": "expires_at",
+            "label": "Expires at",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "date_time",
+            "settings": {
+              "display_time_zone": "organisation"
+            }
+          },
+          {
+            "id": "fld_tenant_administrator_state",
+            "key": "state",
+            "label": "State",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "scheduled",
+                  "label": "Scheduled"
+                },
+                {
+                  "value": "active",
+                  "label": "Active"
+                },
+                {
+                  "value": "expired",
+                  "label": "Expired"
+                },
+                {
+                  "value": "revoked",
+                  "label": "Revoked"
+                }
+              ]
+            }
+          }
+        ],
+        "relationships": []
+      }
+    ],
+    "permissions": [],
+    "actions": [],
+    "events": [],
+    "flows": [],
+    "extension_points": [],
+    "sharing_conditions": [],
+    "queries": [
+      {
+        "id": "qry_people",
+        "key": "people",
+        "record_type": "person",
+        "inputs": [],
+        "select": [
+          "display_name",
+          "state",
+          "language",
+          "time_zone"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "display_name",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_organization_invitations",
+        "key": "organization_invitations",
+        "record_type": "organization_invitation",
+        "inputs": [],
+        "select": [
+          "invited_email",
+          "state",
+          "invited_at",
+          "expires_at"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "invited_email",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_organization_settings",
+        "key": "organization_settings",
+        "record_type": "organization_settings",
+        "inputs": [],
+        "select": [
+          "language",
+          "time_zone",
+          "currency",
+          "date_format",
+          "number_format",
+          "default_application_root_id"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "language",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_roles",
+        "key": "roles",
+        "record_type": "role",
+        "inputs": [],
+        "select": [
+          "key",
+          "label",
+          "lifecycle",
+          "role_kind",
+          "privilege_classification",
+          "assignment_policy",
+          "accepted_permission_count"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "label",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_groups",
+        "key": "groups",
+        "record_type": "group",
+        "inputs": [],
+        "select": [
+          "key",
+          "label",
+          "state"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "label",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_role_assignments",
+        "key": "role_assignments",
+        "record_type": "role_assignment",
+        "inputs": [],
+        "select": [
+          "role_label",
+          "assignee_kind",
+          "assignment_kind",
+          "starts_at",
+          "expires_at",
+          "state",
+          "temporal_state"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "role_label",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_group_memberships",
+        "key": "group_memberships",
+        "record_type": "group_membership",
+        "inputs": [],
+        "select": [
+          "group_id",
+          "account_display_name",
+          "starts_at",
+          "expires_at",
+          "state",
+          "temporal_state"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "account_display_name",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_role_activations",
+        "key": "role_activations",
+        "record_type": "role_activation",
+        "inputs": [],
+        "select": [
+          "account_display_name",
+          "role_key",
+          "role_label",
+          "activated_at",
+          "expires_at",
+          "state",
+          "temporal_state"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "account_display_name",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_delegations",
+        "key": "delegations",
+        "record_type": "delegation",
+        "inputs": [],
+        "select": [
+          "holder_kind",
+          "group_id",
+          "scope_kind",
+          "starts_at",
+          "expires_at",
+          "state",
+          "temporal_state"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "scope_kind",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_organizations",
+        "key": "organizations",
+        "record_type": "organization",
+        "inputs": [],
+        "select": [
+          "display_name",
+          "short_name",
+          "state",
+          "state_changed_at",
+          "created_at"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "display_name",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_tenant_administrators",
+        "key": "tenant_administrators",
+        "record_type": "tenant_administrator",
+        "inputs": [],
+        "select": [
+          "identity_id",
+          "starts_at",
+          "expires_at",
+          "state"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "starts_at",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      }
+    ]
+  }
+}
