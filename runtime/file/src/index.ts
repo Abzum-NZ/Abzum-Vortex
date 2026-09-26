@@ -153,3 +153,14 @@ export {
   type ServeComponentBundleResult,
   type ServedComponentBundle,
 } from "./component-bundle-serving";
+export {
+  COMPONENT_BOOTSTRAP_QUERY_PARAMETERS,
+  COMPONENT_BOOTSTRAP_SERVING_PATH,
+  COMPONENT_BOOTSTRAP_SERVING_SUBPATH,
+  componentBootstrapContentSecurityPolicy,
+  componentBootstrapServingUrl,
+  parseComponentBootstrapTarget,
+  renderComponentBootstrapDocument,
+  type ComponentBootstrapDocument,
+  type ComponentBootstrapTarget,
+} from "./component-bootstrap-serving";
