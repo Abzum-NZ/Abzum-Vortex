@@ -99,7 +99,7 @@
                                          "id":  "app_permission_5",
                                          "key":  "application.crm.company.read",
                                          "label":  "Open company pages",
-                                         "description":  "Allows open company pages.",
+                                         "description":  "Allows opening company pages.",
                                          "action_kind":  "named",
                                          "named_action":  "company_read",
                                          "administrative":  false
@@ -108,7 +108,7 @@
                                          "id":  "app_permission_6",
                                          "key":  "application.crm.contact.read",
                                          "label":  "Open contact pages",
-                                         "description":  "Allows open contact pages.",
+                                         "description":  "Allows opening contact pages.",
                                          "action_kind":  "named",
                                          "named_action":  "contact_read",
                                          "administrative":  false
@@ -117,7 +117,7 @@
                                          "id":  "app_permission_7",
                                          "key":  "application.crm.lead.read",
                                          "label":  "Open lead pages",
-                                         "description":  "Allows open lead pages.",
+                                         "description":  "Allows opening lead pages.",
                                          "action_kind":  "named",
                                          "named_action":  "lead_read",
                                          "administrative":  false
@@ -126,7 +126,7 @@
                                          "id":  "app_permission_8",
                                          "key":  "application.crm.opportunity.read",
                                          "label":  "Open opportunity pages",
-                                         "description":  "Allows open opportunity pages.",
+                                         "description":  "Allows opening opportunity pages.",
                                          "action_kind":  "named",
                                          "named_action":  "opportunity_read",
                                          "administrative":  false
@@ -135,7 +135,7 @@
                                          "id":  "app_permission_9",
                                          "key":  "application.crm.activity.read",
                                          "label":  "Open activity pages",
-                                         "description":  "Allows open activity pages.",
+                                         "description":  "Allows opening activity pages.",
                                          "action_kind":  "named",
                                          "named_action":  "activity_read",
                                          "administrative":  false
@@ -144,7 +144,7 @@
                                          "id":  "app_permission_10",
                                          "key":  "application.crm.lead.convert",
                                          "label":  "Open lead conversion",
-                                         "description":  "Allows open lead conversion.",
+                                         "description":  "Allows opening lead conversion.",
                                          "action_kind":  "named",
                                          "named_action":  "lead_convert",
                                          "administrative":  false
@@ -153,7 +153,7 @@
                                          "id":  "app_permission_11",
                                          "key":  "application.crm.company.create",
                                          "label":  "Open company creation",
-                                         "description":  "Allows open company creation.",
+                                         "description":  "Allows opening company creation.",
                                          "action_kind":  "named",
                                          "named_action":  "company_create",
                                          "administrative":  false
@@ -162,7 +162,7 @@
                                          "id":  "app_permission_12",
                                          "key":  "application.crm.company.update",
                                          "label":  "Open company editing",
-                                         "description":  "Allows open company editing.",
+                                         "description":  "Allows opening company editing.",
                                          "action_kind":  "named",
                                          "named_action":  "company_update",
                                          "administrative":  false
@@ -171,7 +171,7 @@
                                          "id":  "app_permission_13",
                                          "key":  "application.crm.contact.create",
                                          "label":  "Open contact creation",
-                                         "description":  "Allows open contact creation.",
+                                         "description":  "Allows opening contact creation.",
                                          "action_kind":  "named",
                                          "named_action":  "contact_create",
                                          "administrative":  false
@@ -180,7 +180,7 @@
                                          "id":  "app_permission_14",
                                          "key":  "application.crm.contact.update",
                                          "label":  "Open contact editing",
-                                         "description":  "Allows open contact editing.",
+                                         "description":  "Allows opening contact editing.",
                                          "action_kind":  "named",
                                          "named_action":  "contact_update",
                                          "administrative":  false
@@ -189,7 +189,7 @@
                                          "id":  "app_permission_15",
                                          "key":  "application.crm.lead.create",
                                          "label":  "Open lead creation",
-                                         "description":  "Allows open lead creation.",
+                                         "description":  "Allows opening lead creation.",
                                          "action_kind":  "named",
                                          "named_action":  "lead_create",
                                          "administrative":  false
@@ -198,9 +198,36 @@
                                          "id":  "app_permission_16",
                                          "key":  "application.crm.lead.update",
                                          "label":  "Open lead editing",
-                                         "description":  "Allows open lead editing.",
+                                         "description":  "Allows opening lead editing.",
                                          "action_kind":  "named",
                                          "named_action":  "lead_update",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_17",
+                                         "key":  "application.crm.company.merge",
+                                         "label":  "See the merge companies form",
+                                         "description":  "Allows seeing the merge companies form on a company page.",
+                                         "action_kind":  "named",
+                                         "named_action":  "company_merge",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_18",
+                                         "key":  "application.crm.opportunity.mark_won",
+                                         "label":  "See the mark won action",
+                                         "description":  "Allows seeing the mark won button on an opportunity page.",
+                                         "action_kind":  "named",
+                                         "named_action":  "opportunity_mark_won",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_19",
+                                         "key":  "application.crm.activity.complete",
+                                         "label":  "See the complete activity action",
+                                         "description":  "Allows seeing the complete button on an activity page.",
+                                         "action_kind":  "named",
+                                         "named_action":  "activity_complete",
                                          "administrative":  false
                                      }
                                  ],
@@ -243,6 +270,7 @@
                                                        "vortex.crm.opportunities.opportunity.restore",
                                                        "vortex.crm.opportunities.opportunity.export",
                                                        "vortex.crm.opportunities.opportunity.mark_won",
+                                                       "application.crm.opportunity.mark_won",
                                                        "vortex.crm.activities.activity.create",
                                                        "vortex.crm.activities.activity.read",
                                                        "application.crm.activity.read",
@@ -251,6 +279,7 @@
                                                        "vortex.crm.activities.activity.restore",
                                                        "vortex.crm.activities.activity.export",
                                                        "vortex.crm.activities.activity.complete",
+                                                       "application.crm.activity.complete",
                                                        "vortex.crm.tags.record_tag.manage",
                                                        "application.crm.shared_cases.read",
                                                        "application.crm.shared_cases.collaborate"
@@ -276,6 +305,7 @@
                                                        "vortex.crm.organisations.company.restore",
                                                        "vortex.crm.organisations.company.export",
                                                        "vortex.crm.organisations.company.merge",
+                                                       "application.crm.company.merge",
                                                        "vortex.crm.people.contact.create",
                                                        "application.crm.contact.create",
                                                        "vortex.crm.people.contact.read",
@@ -311,6 +341,7 @@
                                                        "vortex.crm.opportunities.opportunity_contact.restore",
                                                        "vortex.crm.opportunities.opportunity_contact.export",
                                                        "vortex.crm.opportunities.opportunity.mark_won",
+                                                       "application.crm.opportunity.mark_won",
                                                        "vortex.crm.activities.activity.create",
                                                        "vortex.crm.activities.activity.read",
                                                        "application.crm.activity.read",
@@ -319,6 +350,7 @@
                                                        "vortex.crm.activities.activity.restore",
                                                        "vortex.crm.activities.activity.export",
                                                        "vortex.crm.activities.activity.complete",
+                                                       "application.crm.activity.complete",
                                                        "vortex.crm.tags.tag.create",
                                                        "vortex.crm.tags.tag.read",
                                                        "vortex.crm.tags.tag.update",
@@ -2426,7 +2458,7 @@
         "block_id":  "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
         "release_version":  "1.0.0"
     },
-    "view_permission":  "vortex.crm.organisations.company.merge",
+    "view_permission":  "application.crm.company.merge",
     "settings":  {
         "title":  {
             "kind":  "text",
@@ -2936,7 +2968,7 @@
                 "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                 "release_version": "1.0.0"
             },
-            "view_permission": "vortex.crm.opportunities.opportunity.mark_won",
+            "view_permission": "application.crm.opportunity.mark_won",
             "settings": {
                 "label": {
                     "kind": "text",
@@ -3098,7 +3130,7 @@
                 "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                 "release_version": "1.0.0"
             },
-            "view_permission": "vortex.crm.activities.activity.complete",
+            "view_permission": "application.crm.activity.complete",
             "settings": {
                 "label": {
                     "kind": "text",

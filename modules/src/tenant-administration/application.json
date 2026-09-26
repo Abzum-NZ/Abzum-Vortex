@@ -39,8 +39,8 @@
       {
         "id": "app_permission_3",
         "key": "application.tenant_administration.organization_lifecycle_request.read",
-        "label": "Open organization lifecycle request pages",
-        "description": "Allows open organization lifecycle request pages.",
+        "label": "Open organisation lifecycle request pages",
+        "description": "Allows opening organisation lifecycle request pages.",
         "action_kind": "named",
         "named_action": "organization_lifecycle_request_read",
         "administrative": false
@@ -48,8 +48,8 @@
       {
         "id": "app_permission_4",
         "key": "application.tenant_administration.organization_lifecycle_request.submit",
-        "label": "Open organization lifecycle request submit pages",
-        "description": "Allows open organization lifecycle request submit pages.",
+        "label": "Open organisation lifecycle request submission",
+        "description": "Allows opening the submit organisation lifecycle request page.",
         "action_kind": "named",
         "named_action": "organization_lifecycle_request_submit",
         "administrative": false

@@ -82,7 +82,7 @@
                                          "id":  "app_permission_4",
                                          "key":  "application.service_desk.case.read",
                                          "label":  "Open case pages",
-                                         "description":  "Allows open case pages.",
+                                         "description":  "Allows opening case pages.",
                                          "action_kind":  "named",
                                          "named_action":  "case_read",
                                          "administrative":  false
@@ -91,7 +91,7 @@
                                          "id":  "app_permission_5",
                                          "key":  "application.service_desk.case.create",
                                          "label":  "Open case creation",
-                                         "description":  "Allows open case creation.",
+                                         "description":  "Allows opening case creation.",
                                          "action_kind":  "named",
                                          "named_action":  "case_create",
                                          "administrative":  false
@@ -100,7 +100,7 @@
                                          "id":  "app_permission_6",
                                          "key":  "application.service_desk.article.read",
                                          "label":  "Open article pages",
-                                         "description":  "Allows open article pages.",
+                                         "description":  "Allows opening article pages.",
                                          "action_kind":  "named",
                                          "named_action":  "article_read",
                                          "administrative":  false
@@ -109,7 +109,7 @@
                                          "id":  "app_permission_7",
                                          "key":  "application.service_desk.service_level.read",
                                          "label":  "Open service level pages",
-                                         "description":  "Allows open service level pages.",
+                                         "description":  "Allows opening service level pages.",
                                          "action_kind":  "named",
                                          "named_action":  "service_level_read",
                                          "administrative":  false
@@ -118,7 +118,7 @@
                                          "id":  "app_permission_8",
                                          "key":  "application.service_desk.case.update",
                                          "label":  "Open case editing",
-                                         "description":  "Allows open case editing.",
+                                         "description":  "Allows opening case editing.",
                                          "action_kind":  "named",
                                          "named_action":  "case_update",
                                          "administrative":  false
@@ -127,7 +127,7 @@
                                          "id":  "app_permission_9",
                                          "key":  "application.service_desk.company.read",
                                          "label":  "Open company pages",
-                                         "description":  "Allows open company pages.",
+                                         "description":  "Allows opening company pages.",
                                          "action_kind":  "named",
                                          "named_action":  "company_read",
                                          "administrative":  false
@@ -136,9 +136,45 @@
                                          "id":  "app_permission_10",
                                          "key":  "application.service_desk.contact.read",
                                          "label":  "Open contact pages",
-                                         "description":  "Allows open contact pages.",
+                                         "description":  "Allows opening contact pages.",
                                          "action_kind":  "named",
                                          "named_action":  "contact_read",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_11",
+                                         "key":  "application.service_desk.case.add_public_comment",
+                                         "label":  "See the public comment form",
+                                         "description":  "Allows seeing the public comment form on a case page.",
+                                         "action_kind":  "named",
+                                         "named_action":  "case_add_public_comment",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_12",
+                                         "key":  "application.service_desk.case.resolve",
+                                         "label":  "See the resolve case form",
+                                         "description":  "Allows seeing the resolve form on a case page.",
+                                         "action_kind":  "named",
+                                         "named_action":  "case_resolve",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_13",
+                                         "key":  "application.service_desk.article.publish",
+                                         "label":  "See the publish article action",
+                                         "description":  "Allows seeing the publish button on an article page.",
+                                         "action_kind":  "named",
+                                         "named_action":  "article_publish",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_14",
+                                         "key":  "application.service_desk.service_level.manage",
+                                         "label":  "See the pause service level action",
+                                         "description":  "Allows seeing the pause button on a service level page.",
+                                         "action_kind":  "named",
+                                         "named_action":  "service_level_manage",
                                          "administrative":  false
                                      }
                                  ],
@@ -165,7 +201,9 @@
                                                        "vortex.service_desk.cases.case.export",
                                                        "vortex.service_desk.cases.case.assign",
                                                        "vortex.service_desk.cases.case.resolve",
+                                                       "application.service_desk.case.resolve",
                                                        "vortex.service_desk.cases.case.add_public_comment",
+                                                       "application.service_desk.case.add_public_comment",
                                                        "vortex.service_desk.cases.case_comment.create",
                                                        "vortex.service_desk.cases.case_comment.read",
                                                        "vortex.service_desk.cases.case_comment.update",
@@ -208,7 +246,9 @@
                                                        "vortex.service_desk.cases.case_comment.export",
                                                        "vortex.service_desk.cases.case.assign",
                                                        "vortex.service_desk.cases.case.resolve",
+                                                       "application.service_desk.case.resolve",
                                                        "vortex.service_desk.cases.case.add_public_comment",
+                                                       "application.service_desk.case.add_public_comment",
                                                        "vortex.service_desk.sla.business_calendar.create",
                                                        "vortex.service_desk.sla.business_calendar.read",
                                                        "vortex.service_desk.sla.business_calendar.update",
@@ -223,6 +263,7 @@
                                                        "vortex.service_desk.sla.service_level.restore",
                                                        "vortex.service_desk.sla.service_level.export",
                                                        "vortex.service_desk.sla.service_level.manage",
+                                                       "application.service_desk.service_level.manage",
                                                        "vortex.service_desk.knowledge.article.create",
                                                        "vortex.service_desk.knowledge.article.read",
                                                        "application.service_desk.article.read",
@@ -235,7 +276,8 @@
                                                        "vortex.service_desk.knowledge.article_case.soft_delete",
                                                        "vortex.service_desk.knowledge.article_case.restore",
                                                        "vortex.service_desk.knowledge.article_case.export",
-                                                       "vortex.service_desk.knowledge.article.publish"
+                                                       "vortex.service_desk.knowledge.article.publish",
+                                                       "application.service_desk.article.publish"
                                                    ]
                                },
                                {
@@ -254,6 +296,7 @@
                                                        "vortex.service_desk.knowledge.article.restore",
                                                        "vortex.service_desk.knowledge.article.export",
                                                        "vortex.service_desk.knowledge.article.publish",
+                                                       "application.service_desk.article.publish",
                                                        "vortex.service_desk.knowledge.article_case.create",
                                                        "vortex.service_desk.knowledge.article_case.read",
                                                        "vortex.service_desk.knowledge.article_case.soft_delete",
@@ -527,7 +570,7 @@
                 "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                 "release_version": "1.0.0"
             },
-            "view_permission": "vortex.service_desk.cases.case.add_public_comment",
+            "view_permission": "application.service_desk.case.add_public_comment",
             "settings": {
                 "title": {
                     "kind": "text",
@@ -634,7 +677,7 @@
                 "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                 "release_version": "1.0.0"
             },
-            "view_permission": "vortex.service_desk.cases.case.resolve",
+            "view_permission": "application.service_desk.case.resolve",
             "settings": {
                 "title": {
                     "kind": "text",
@@ -1122,7 +1165,7 @@
                 "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                 "release_version": "1.0.0"
             },
-            "view_permission": "vortex.service_desk.knowledge.article.publish",
+            "view_permission": "application.service_desk.article.publish",
             "settings": {
                 "label": {
                     "kind": "text",
@@ -1584,7 +1627,7 @@
                 "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                 "release_version": "1.0.0"
             },
-            "view_permission": "vortex.service_desk.sla.service_level.manage",
+            "view_permission": "application.service_desk.service_level.manage",
             "settings": {
                 "label": {
                     "kind": "text",

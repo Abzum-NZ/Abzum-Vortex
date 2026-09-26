@@ -40,7 +40,7 @@
         "id": "app_permission_3",
         "key": "application.organisation_administration.organisation_notice.read",
         "label": "Open organisation notice pages",
-        "description": "Allows open organisation notice pages.",
+        "description": "Allows opening organisation notice pages.",
         "action_kind": "named",
         "named_action": "organisation_notice_read",
         "administrative": false
@@ -48,8 +48,8 @@
       {
         "id": "app_permission_4",
         "key": "application.organisation_administration.organisation_notice.record_notice",
-        "label": "Open organisation notice record notice pages",
-        "description": "Allows open organisation notice record notice pages.",
+        "label": "Open notice recording",
+        "description": "Allows opening the record organisation notice page.",
         "action_kind": "named",
         "named_action": "organisation_notice_record_notice",
         "administrative": false
@@ -58,7 +58,7 @@
         "id": "app_permission_5",
         "key": "application.organisation_administration.privacy_request_case.read",
         "label": "Open privacy request case pages",
-        "description": "Allows open privacy request case pages.",
+        "description": "Allows opening privacy request case pages.",
         "action_kind": "named",
         "named_action": "privacy_request_case_read",
         "administrative": false
@@ -66,8 +66,8 @@
       {
         "id": "app_permission_6",
         "key": "application.organisation_administration.privacy_request_case.record_privacy_request",
-        "label": "Open privacy request case record privacy request pages",
-        "description": "Allows open privacy request case record privacy request pages.",
+        "label": "Open privacy request recording",
+        "description": "Allows opening the record privacy request page.",
         "action_kind": "named",
         "named_action": "record_privacy_request",
         "administrative": false
