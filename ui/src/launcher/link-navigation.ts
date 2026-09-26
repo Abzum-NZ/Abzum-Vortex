@@ -1,7 +1,8 @@
 "use client";
 
-import { safeHttpsUrlSchema } from "@vortex/contracts";
+import { safeHttpsUrlSchema, type JsonValue } from "@vortex/contracts";
 import { DefinitionRenderError } from "../definition-error";
+import type { FlowIntent } from "../flow-runtime/intents";
 
 /**
  * The two open behaviours a link may declare (spec 07). `replace` uses a client-side transition for
@@ -21,7 +22,12 @@ export const LINK_OPEN_BEHAVIORS: readonly LinkOpenBehavior[] = Object.freeze([
  * access, never trusted from the browser.
  */
 export type LinkTarget =
-  | Readonly<{ kind: "page"; pageId: string }>
+  | Readonly<{
+      kind: "page";
+      pageId: string;
+      /** Parameters of the Navigate task that opened it; the shell decides how a page uses them. */
+      parameters?: Readonly<Record<string, JsonValue>>;
+    }>
   | Readonly<{ kind: "application"; applicationRootId: string }>
   | Readonly<{ kind: "external"; address: string }>;
 
@@ -101,6 +107,45 @@ export function externalLinkActivation(address: unknown): ExternalLinkActivation
   });
 }
 
+/** The Navigate task's intent, from the flow runtime or built for a link activation. */
+export type NavigateTaskIntent = FlowIntent & Readonly<{ kind: "navigate" }>;
+
+/** The Navigate task intent that opens one page; a link activation runs exactly this intent. */
+export const navigateIntentForPage = (
+  pageId: string,
+  taskId = "link_activation",
+): NavigateTaskIntent => ({ kind: "navigate", taskId, properties: { page: pageId } });
+
+/** The page target a Navigate task intent names; undefined when it names no valid page. */
+export const linkTargetForNavigateIntent = (intent: FlowIntent): LinkTarget | undefined => {
+  const { page, parameters } = intent.properties;
+  if (intent.kind !== "navigate" || typeof page !== "string" || page.length === 0) return undefined;
+  const bag =
+    typeof parameters === "object" && parameters !== null && !Array.isArray(parameters)
+      ? parameters
+      : undefined;
+  return { kind: "page", pageId: page, ...(bag === undefined ? {} : { parameters: bag }) };
+};
+
+/**
+ * The browser implementation of the Navigate task (`interface.navigate`), shared by a flow's
+ * Navigate task and by link activation. The page is re-checked on the server first and refused when
+ * it is no longer available; navigation then follows unsaved-work protection. Returns true only when
+ * navigation was started.
+ */
+export async function performNavigateTask(
+  intent: FlowIntent,
+  environment: LinkNavigationEnvironment,
+): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  const target = linkTargetForNavigateIntent(intent);
+  if (target === undefined) return false;
+  if (!(await environment.recheckInternalTarget(target))) return false;
+  if (!mayDiscardUnsavedWork(environment.unsavedWork)) return false;
+  environment.navigateInternal(target);
+  return true;
+}
+
 /**
  * Activates one declared link target under its declared open behaviour. An external address is
  * validated, then opened by full document navigation after unsaved-work protection (`replace`) or
@@ -127,6 +172,12 @@ export async function activateLinkTarget(
     window.location.assign(address.data);
     return true;
   }
+  // A same-context page link is the Navigate task, so links and flows share one navigation path.
+  if (target.kind === "page" && behavior === "replace")
+    return performNavigateTask(
+      navigateIntentForPage(target.pageId),
+      environment,
+    );
   if (!(await environment.recheckInternalTarget(target))) return false;
   if (behavior === "new_page") {
     const address = sameOriginAddress(environment.resolveInternalAddress(target));
