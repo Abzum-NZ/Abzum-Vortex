@@ -118,10 +118,9 @@ export const developmentSetupManifest: DevelopmentSetupManifest =
       timeZone: "Pacific/Auckland",
       currency: "NZD",
     },
-    // In installation order. CRM and Service Desk are shipped but not installed here: their
-    // applications pin exact 2.0.0 releases of their modules, and a fresh organisation publishes
-    // every module as 1.0.0, so their release sets cannot resolve yet. The Operations application
-    // does not publish from a fresh organisation yet either.
+    // In installation order: the administration applications the first owner needs. CRM, Service
+    // Desk and Operations are shipped but this setup does not install them; adding one here is a
+    // separate, verified change.
     applicationKeys: [
       "vortex.app.iam",
       "vortex.app.organisation_administration",
