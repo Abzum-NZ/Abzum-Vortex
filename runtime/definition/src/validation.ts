@@ -8,8 +8,7 @@ import {
   moduleDraftV3Schema,
   moduleSourceDocumentSchema,
   moduleCompilationRequestV3Schema,
-  savedSharingConditionV2Schema,
-  savedSharingConditionSchema,
+  savedSharingConditionV3Schema,
   connectionTypeSchema,
   exactDecimalTextV2Schema,
   moneyValueV2Schema,
@@ -39,7 +38,7 @@ import {
   type ApplicationCompilationRequestV2,
   type ModuleCompilationRequestV3,
   type ModuleSourceDocument,
-  type ModuleFieldV2,
+  type ModuleFieldV3,
   type ApplicationSourceDocumentV2,
   type ConditionNode,
   type DefinitionSourceDocument,
@@ -47,7 +46,6 @@ import {
   type DefinitionPublicationHistoryEvidence,
   type DefinitionRuleFailure,
   type DefinitionValidationLocation,
-  type FieldDefinition,
   type FlowDefinition,
   type FlowTask,
   type PlatformBlockReleaseV2,
@@ -56,10 +54,8 @@ import {
 } from "@vortex/contracts";
 import type { z } from "zod";
 import {
-  evaluateTypedCondition,
   evaluateTypedConditionV2,
   TypedConditionEvaluationError,
-  type TypedConditionParameterDeclaration,
   type TypedConditionParameterDeclarationV2,
 } from "@vortex/rule";
 import { satisfies } from "semver";
@@ -2204,7 +2200,6 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
   };
 
   for (const output of moduleOutputs) {
-    const moduleV2 = "validationContractVersion" in output;
     const canonical = object(output.canonical);
     const envelope = object(canonical.envelope);
     const content = object(canonical.content);
@@ -2251,7 +2246,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         sharingConditions,
         true,
         modulePermissions,
-        moduleV2 ? new Set(sharingConditions.keys()) : new Set(),
+        new Set(sharingConditions.keys()),
       )
     )
       failures.push(
@@ -2317,14 +2312,6 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       const readTimeFieldIds = readTimeFieldIdsFor(array(record.fields));
       for (const field of array(record.fields)) {
         const settings = object(field.settings);
-        const moduleFieldValueType = (candidate: JsonObject | undefined) =>
-          moduleV2 ? fieldValueTypeV2(candidate) : fieldValueType(candidate);
-        const moduleNumericField = (candidate: JsonObject | undefined) =>
-          moduleV2
-            ? ["whole_number", "decimal_number", "money"].includes(
-                fieldValueTypeV2(candidate) ?? "",
-              )
-            : fieldValueType(candidate) === "number";
         let valid = true;
         const choiceSettings = [
           ...(["choice", "several_choices"].includes(String(field.type)) ? [settings] : []),
@@ -2354,79 +2341,54 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
           );
         if (field.type === "calculation") {
           const expression = object(settings.expression);
-          const expectedDependencies = moduleV2
-            ? calculationDependencyFieldIdsV2(expression)
-            : undefined;
+          const expectedDependencies = calculationDependencyFieldIdsV2(expression);
           valid =
             (settings.dependencyFieldIds as string[]).every((fieldId) => fields.has(fieldId)) &&
             fieldReferencesValid(settings.expression, fields) &&
-            (!moduleV2 ||
-              JSON.stringify([...new Set(settings.dependencyFieldIds as string[])]) ===
-                JSON.stringify(expectedDependencies)) &&
-            (!moduleV2 ||
-              (["decimal_number", "money"].includes(String(settings.resultType))
-                ? settings.decimalPlaces !== undefined
-                : settings.decimalPlaces === undefined));
+            JSON.stringify([...new Set(settings.dependencyFieldIds as string[])]) ===
+              JSON.stringify(expectedDependencies) &&
+            (["decimal_number", "money"].includes(String(settings.resultType))
+              ? settings.decimalPlaces !== undefined
+              : settings.decimalPlaces === undefined);
           if (settings.evaluation === "stored" && readTimeFieldIds.has(String(field.fieldId)))
             valid = false;
           if (expression.kind === "join_text")
             valid =
               valid &&
               (expression.fieldIds as string[]).every((id) =>
-                ["text", "choice"].includes(moduleFieldValueType(fieldMap.get(id)) ?? ""),
+                ["text", "choice"].includes(fieldValueTypeV2(fieldMap.get(id)) ?? ""),
               );
           if (expression.kind === "numeric")
             valid =
-              valid &&
-              (moduleV2
-                ? numericExpressionValidV2(expression, String(settings.resultType), fieldMap)
-                : array(expression.operands).every(
-                    (operand) =>
-                      operand.source === "literal" ||
-                      (operand.source === "field" &&
-                        moduleNumericField(fieldMap.get(String(operand.fieldId)))),
-                  ));
-          if (expression.kind === "subtract_percentage")
-            if (moduleV2) {
-              const amountDimension = numericDimensionV2(
-                fieldMap.get(String(expression.amountFieldId)),
-              );
-              valid =
-                valid &&
-                amountDimension !== undefined &&
-                ["whole_number", "decimal_number"].includes(
-                  fieldValueTypeV2(fieldMap.get(String(expression.percentageFieldId))) ?? "",
-                ) &&
-                (amountDimension === "money"
-                  ? settings.resultType === "money"
-                  : settings.resultType === "decimal_number");
-            } else
-              valid =
-                valid &&
-                moduleNumericField(fieldMap.get(String(expression.amountFieldId))) &&
-                fieldValueType(fieldMap.get(String(expression.percentageFieldId))) === "number";
-          if (expression.kind === "condition")
+              valid && numericExpressionValidV2(expression, String(settings.resultType), fieldMap);
+          if (expression.kind === "subtract_percentage") {
+            const amountDimension = numericDimensionV2(
+              fieldMap.get(String(expression.amountFieldId)),
+            );
             valid =
               valid &&
-              (moduleV2
-                ? conditionTypesValidV2(expression.condition, fieldMap)
-                : conditionTypesValid(expression.condition, fieldMap));
+              amountDimension !== undefined &&
+              ["whole_number", "decimal_number"].includes(
+                fieldValueTypeV2(fieldMap.get(String(expression.percentageFieldId))) ?? "",
+              ) &&
+              (amountDimension === "money"
+                ? settings.resultType === "money"
+                : settings.resultType === "decimal_number");
+          }
+          if (expression.kind === "condition")
+            valid = valid && conditionTypesValidV2(expression.condition, fieldMap);
           if (expression.kind === "date_offset") {
             const amount = object(expression.amount);
             valid =
               valid &&
               ["date", "date_time"].includes(
-                moduleFieldValueType(fieldMap.get(String(expression.dateFieldId))) ?? "",
+                fieldValueTypeV2(fieldMap.get(String(expression.dateFieldId))) ?? "",
               ) &&
-              (!moduleV2 ||
-                moduleFieldValueType(fieldMap.get(String(expression.dateFieldId))) ===
-                  settings.resultType) &&
-              ((amount.source === "literal" &&
-                (!moduleV2 || exactIntegerLiteralV2(amount.value))) ||
+              fieldValueTypeV2(fieldMap.get(String(expression.dateFieldId))) ===
+                settings.resultType &&
+              ((amount.source === "literal" && exactIntegerLiteralV2(amount.value)) ||
                 (amount.source === "field" &&
-                  (moduleV2
-                    ? fieldValueTypeV2(fieldMap.get(String(amount.fieldId))) === "whole_number"
-                    : moduleNumericField(fieldMap.get(String(amount.fieldId))))));
+                  fieldValueTypeV2(fieldMap.get(String(amount.fieldId))) === "whole_number"));
           }
           if (expression.kind === "deadline_passed") {
             const statusField =
@@ -2436,15 +2398,13 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
             valid =
               valid &&
               ["date", "date_time"].includes(
-                moduleFieldValueType(fieldMap.get(String(expression.dueFieldId))) ?? "",
+                fieldValueTypeV2(fieldMap.get(String(expression.dueFieldId))) ?? "",
               ) &&
               (expression.statusFieldId === undefined ||
-                ["text", "choice"].includes(moduleFieldValueType(statusField) ?? "")) &&
-              (!moduleV2 ||
-                expression.statusFieldId !== undefined ||
+                ["text", "choice"].includes(fieldValueTypeV2(statusField) ?? "")) &&
+              (expression.statusFieldId !== undefined ||
                 array(expression.terminalStatusValues).length === 0) &&
-              (!moduleV2 ||
-                statusField === undefined ||
+              (statusField === undefined ||
                 array(expression.terminalStatusValues).every((value) =>
                   fieldValueMatchesV2(value, statusField, "canonical"),
                 ));
@@ -2488,9 +2448,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
           const filterValid =
             settings.filter === undefined ||
             (fieldReferencesValid(settings.filter, aggregateFields) &&
-              (moduleV2
-                ? conditionTypesValidV2(settings.filter, aggregateFieldMap)
-                : conditionTypesValid(settings.filter, aggregateFieldMap)));
+              conditionTypesValidV2(settings.filter, aggregateFieldMap));
           const currencyValid =
             settings.currency === undefined ||
             (settings.operation === "sum" && aggregateResultType === "money");
@@ -2512,11 +2470,9 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
               ? settings.fieldId === undefined
               : aggregateField !== undefined) &&
             (!["sum", "average"].includes(String(settings.operation)) ||
-              (moduleV2
-                ? ["whole_number", "decimal_number", "money"].includes(
-                    fieldValueTypeV2(aggregateField) ?? "",
-                  )
-                : fieldValueType(aggregateField) === "number"));
+              ["whole_number", "decimal_number", "money"].includes(
+                fieldValueTypeV2(aggregateField) ?? "",
+              ));
           const declaredResultType = String(settings.resultType);
           const resultTypeValid =
             (settings.operation === "count" && declaredResultType === "whole_number") ||
@@ -2525,11 +2481,10 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
                 (aggregateResultType === "money" ? "money" : "decimal_number")) ||
             (["sum", "minimum", "maximum"].includes(String(settings.operation)) &&
               declaredResultType === aggregateResultType);
-          const precisionValid = moduleV2
-            ? settings.operation === "average"
+          const precisionValid =
+            settings.operation === "average"
               ? settings.decimalPlaces !== undefined
-              : settings.decimalPlaces === undefined
-            : true;
+              : settings.decimalPlaces === undefined;
           valid = valid && resultTypeValid && precisionValid;
         }
         if (!valid)
@@ -2590,7 +2545,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       const inputTypes = new Map(
         [...inputMap].map(([key, input]) => [
           key,
-          (moduleV2 ? semanticFieldTypeV2(input.type) : semanticFieldType(input.type)) ?? "",
+          semanticFieldTypeV2(input.type) ?? "",
         ]),
       );
       let valid =
@@ -2599,9 +2554,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         actionPermissionsMatch(action, modulePermissionsByKey) &&
         fieldReferencesValid(action.precondition, fields) &&
         (action.precondition === undefined ||
-          (moduleV2
-            ? conditionTypesValidV2(action.precondition, fieldMap, inputTypes)
-            : conditionTypesValid(action.precondition, fieldMap, inputTypes)));
+          conditionTypesValidV2(action.precondition, fieldMap, inputTypes));
       for (const input of array(action.inputs))
         if (
           input.type === "record_reference" &&
@@ -2614,7 +2567,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         if (
           effect.kind === "set_field" &&
           (!fields.has(String(effect.fieldId)) ||
-            !(moduleV2 ? actionValueCompatibleV2 : actionValueCompatible)(
+            !actionValueCompatibleV2(
               effect.value,
               fieldMap.get(String(effect.fieldId)),
               fieldMap,
@@ -2644,7 +2597,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
             Object.entries(object(effect.values)).some(
               ([id, value]) =>
                 !targetFields.has(id) ||
-                !(moduleV2 ? actionValueCompatibleV2 : actionValueCompatible)(
+                !actionValueCompatibleV2(
                   value,
                   targetFields.get(id),
                   fieldMap,
@@ -2809,25 +2762,16 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         record !== undefined &&
         (condition.declaredFieldIds as string[]).every((fieldId) => fields.has(fieldId)) &&
         fieldReferencesValid(condition.condition, fields) &&
-        (moduleV2
-          ? conditionTypesValidV2(condition.condition, fieldMap, parameterTypes)
-          : conditionTypesValid(condition.condition, fieldMap, parameterTypes));
+        conditionTypesValidV2(condition.condition, fieldMap, parameterTypes);
       try {
         for (const publicationTest of array(condition.publicationTests))
           if (
-            (moduleV2
-              ? evaluateSavedSharingConditionV2(
-                  condition,
-                  object(publicationTest.fieldValues),
-                  object(publicationTest.parameters),
-                  [...fieldMap.values()] as ModuleFieldV2[],
-                )
-              : evaluateSavedSharingCondition(
-                  condition,
-                  object(publicationTest.fieldValues),
-                  object(publicationTest.parameters),
-                  [...fieldMap.values()] as FieldDefinition[],
-                )) !== publicationTest.expected
+            evaluateSavedSharingCondition(
+              condition,
+              object(publicationTest.fieldValues),
+              object(publicationTest.parameters),
+              [...fieldMap.values()] as ModuleFieldV3[],
+            ) !== publicationTest.expected
           )
             valid = false;
       } catch {
@@ -6034,45 +5978,7 @@ export function evaluateSavedSharingCondition(
   input: unknown,
   fieldValues: Readonly<Record<string, unknown>>,
   parameters: Readonly<Record<string, unknown>>,
-  sourceRecordFields: readonly FieldDefinition[],
-): boolean {
-  const candidate = object(input);
-  let result: boolean;
-  try {
-    result = evaluateTypedCondition({
-      condition: candidate.condition as ConditionNode,
-      sourceRecordFields,
-      declaredFieldIds: candidate.declaredFieldIds as string[],
-      parameterDeclarations: candidate.parameters as TypedConditionParameterDeclaration[],
-      fieldValues,
-      parameterValues: parameters,
-    });
-  } catch (error) {
-    if (!(error instanceof TypedConditionEvaluationError)) throw error;
-    const mapping = {
-      input_refused: "vortex.definition.sharing_condition_input_refused",
-      field_refused: "vortex.definition.sharing_condition_field_refused",
-      parameter_refused: "vortex.definition.sharing_condition_parameter_refused",
-      operator_refused: "vortex.definition.sharing_condition_operator_refused",
-    } as const;
-    throw new DefinitionCompilationError(
-      mapping[error.reason],
-      error.reason === "operator_refused" ? "unsupported_choice" : "scope_conflict",
-    );
-  }
-  if (!savedSharingConditionSchema.safeParse(input).success)
-    throw new DefinitionCompilationError(
-      "vortex.definition.sharing_condition_input_refused",
-      "scope_conflict",
-    );
-  return result;
-}
-
-export function evaluateSavedSharingConditionV2(
-  input: unknown,
-  fieldValues: Readonly<Record<string, unknown>>,
-  parameters: Readonly<Record<string, unknown>>,
-  sourceRecordFields: readonly ModuleFieldV2[],
+  sourceRecordFields: readonly ModuleFieldV3[],
 ): boolean {
   const candidate = object(input);
   let result: boolean;
@@ -6098,7 +6004,7 @@ export function evaluateSavedSharingConditionV2(
       error.reason === "operator_refused" ? "unsupported_choice" : "scope_conflict",
     );
   }
-  if (!savedSharingConditionV2Schema.safeParse(input).success)
+  if (!savedSharingConditionV3Schema.safeParse(input).success)
     throw new DefinitionCompilationError(
       "vortex.definition.sharing_condition_input_refused",
       "scope_conflict",

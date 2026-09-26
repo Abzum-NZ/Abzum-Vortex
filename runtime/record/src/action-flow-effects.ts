@@ -1,5 +1,5 @@
 import {
-  type actionDefinitionV2Schema,
+  type actionDefinitionV3Schema,
   compileTextInputPattern,
   currencyCodeV2Schema,
   dateValueV2Schema,
@@ -11,7 +11,7 @@ import {
   organizationAccountIdSchema,
   parseExactDecimal,
   recordLinkValueV2Schema,
-  type recordTypeDefinitionV2Schema,
+  type recordTypeDefinitionV3Schema,
   recordRichTextDocumentV2Schema,
   timestampSchema,
   type JsonValue,
@@ -33,8 +33,8 @@ import {
  * here is a verified statement of intent, never an authority the database trusts.
  */
 
-type NamedActionDefinition = ReturnType<typeof actionDefinitionV2Schema.parse>;
-type RecordTypeDefinition = ReturnType<typeof recordTypeDefinitionV2Schema.parse>;
+type NamedActionDefinition = ReturnType<typeof actionDefinitionV3Schema.parse>;
+type RecordTypeDefinition = ReturnType<typeof recordTypeDefinitionV3Schema.parse>;
 
 /**
  * One `create_record` target resolved by the database from the published resolved record-type
