@@ -91,9 +91,13 @@ const resolveSharedKeyPath = () => {
   );
   if (result.status !== 0 || typeof result.stdout !== "string") return undefined;
   const commonDirectory = result.stdout.trim();
-  if (commonDirectory.length === 0) return undefined;
+  // Only a non-bare main checkout keeps its common directory as `<checkout>/.git`; any other
+  // layout has no main working tree to share a key from.
+  if (commonDirectory.length === 0 || path.basename(commonDirectory) !== ".git") return undefined;
   const mainCheckout = path.dirname(path.resolve(commonDirectory));
-  if (path.resolve(mainCheckout) === workspaceRoot) return undefined;
+  const comparable = (candidate) =>
+    process.platform === "win32" ? candidate.toLowerCase() : candidate;
+  if (comparable(mainCheckout) === comparable(workspaceRoot)) return undefined;
   return path.join(mainCheckout, "supabase", ".temp", "signing-keys.json");
 };
 
