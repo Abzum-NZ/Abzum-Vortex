@@ -341,7 +341,7 @@ export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVar
   const shadcnFill = (
     role: ShadcnFilledRole,
   ): readonly [fill: string, foreground: string] => {
-    const [fill, foreground] = filledPair(tokens, role) ?? [
+    const [fill, foreground]: readonly [ColorPair, ColorPair] = filledPair(tokens, role) ?? [
       platformColor(role),
       platformColor(`${role}_foreground` as const),
     ];
