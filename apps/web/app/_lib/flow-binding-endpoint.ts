@@ -4,7 +4,6 @@ import { createHash } from "node:crypto";
 import {
   containedComponentIdSchema,
   flowIdSchema,
-  formContinuationDraftEvidenceSchema,
   formContinuationReceiptSchema,
   formContinuationTargetSchema,
   identitySessionSchema,
@@ -96,13 +95,13 @@ const continuationInvocationSchema = z
     /**
      * #588: the exact paused target and the run receipt the surface last saw. Both are evidence: the
      * server compares them with the trusted installation and the stored run, so a caller can neither
-     * skip unanswered inputs nor name a different node. They are optional so an older surface that
-     * holds only the continuation still resumes under the server's own checks.
+     * skip unanswered inputs nor name a different node. The target is absent only for a pause the
+     * server issued none for (a form node that names no form); that resume stays under the
+     * orchestrator's own release and receipt checks. No private draft evidence is accepted: until a
+     * draft authority can verify one on the server, a request that names a draft is refused.
      */
     target: formContinuationTargetSchema.optional(),
     receipt: formContinuationReceiptSchema.optional(),
-    /** The private draft revision (#587) the answer was made from, forwarded to the #544 interface. */
-    draft: formContinuationDraftEvidenceSchema.optional(),
   })
   .strict();
 
@@ -144,7 +143,7 @@ export type FlowBindingEndpointDependencies = Readonly<{
     runId: string | undefined,
   ) => Pick<FlowOrchestrator, "start" | "resume">;
   /**
-   * THE SEAM for #588's form-submit adapter (blocked by #544 and #588): turns what a form
+   * THE SEAM for #588's form-submit adapter (`createPrivateFormSubmitAdapter`): turns what a form
    * submission supplies into the caller inputs of a `form_submit` binding. Until it is supplied a
    * `form_submit` binding is refused, so there is never a second, ad hoc submit path.
    */
@@ -155,8 +154,7 @@ export type FlowBindingEndpointDependencies = Readonly<{
   /**
    * THE SEAM for #588's continuation adapter: forwards an exact paused target and its run receipt to
    * the web-independent form continuation interface (#544), which compares them with trusted state.
-   * Supplied when the request carries the full target; without it the orchestrator still validates
-   * the release, paused node and receipt before resuming.
+   * Until it is supplied a continuation that carries a target is refused.
    */
   continueForm?: (
     session: IdentitySession,
@@ -192,8 +190,6 @@ export type FlowBindingEndpointResult =
       /** The exact paused target and receipt the surface returns with the continuation (evidence). */
       target?: FormContinuationTarget;
       receipt?: FormContinuationReceipt;
-      nodeId: string;
-      committedEffects: number;
       unavailable: readonly FlowUnavailableNotice[];
     }>
   /** Unknown, not installed, foreign, expired or not permitted: one neutral result. */
@@ -350,8 +346,6 @@ const toResult = (
         expiresAt: response.expiresAt,
         ...(target === undefined ? {} : { target }),
         ...(receipt.success ? { receipt: receipt.data } : {}),
-        nodeId: response.nodeId,
-        committedEffects: response.committedEffects,
         unavailable: response.unavailable,
       };
     }
@@ -373,7 +367,7 @@ const continuationResult = (
         descriptor: outcome.presentation,
         outputs: outcome.presentation.outputs === "available" ? outcome.outputs : {},
         intents: outcome.intents as SafeIntents,
-        unavailable: [],
+        unavailable: outcome.unavailable,
         ...(outcome.failure === undefined ? {} : { failure: outcome.failure }),
       };
     case "form_requested":
@@ -386,9 +380,7 @@ const continuationResult = (
         expiresAt: outcome.expiresAt,
         target: outcome.target,
         receipt: outcome.receipt,
-        nodeId: outcome.target.nodeId,
-        committedEffects: outcome.receipt.committedEffects,
-        unavailable: [],
+        unavailable: outcome.unavailable,
       };
     default:
       return outcome.reason === "stale_installation"
@@ -441,17 +433,12 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           if (!installation.bindings.some((entry) => sameId(entry.flow.flowId, request.flowId)))
             return refused;
           const target = request.target;
-          // #588: an exact paused target goes to the #544 interface, the one place that compares the
-          // installation, flow, node and receipt with trusted state. A request that holds only the
-          // continuation still resumes under the orchestrator's own release, node and receipt checks.
-          if (
-            target !== undefined &&
-            dependencies.continueForm !== undefined &&
-            sameId(target.flowId, request.flowId) &&
-            target.releaseKey === installation.releaseKey &&
-            target.installation.applicationRootId === installation.applicationRootId &&
-            target.installation.installationReleaseRevision === installation.installationRevision
-          ) {
+          // #588: an exact paused target always goes to the #544 interface, the one place that
+          // compares the installation, release, flow, node, form and receipt with trusted state; a
+          // stale target comes back as a reload and a forged one as the neutral refusal.
+          if (target !== undefined) {
+            if (dependencies.continueForm === undefined || !sameId(target.flowId, request.flowId))
+              return refused;
             const answer =
               request.answer.kind === "confirmed"
                 ? ({ kind: "confirm", confirmed: request.answer.confirmed } as const)
@@ -466,16 +453,12 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
               continuation: request.continuation,
               answer,
               ...(request.receipt === undefined ? {} : { receipt: request.receipt }),
-              ...(request.draft === undefined ? {} : { draft: request.draft }),
             });
             return continuationResult(outcome, installation.installationRevision);
           }
           const expectation: FlowRunExpectation = {
             releaseKey: installation.releaseKey,
             ...(request.receipt === undefined ? {} : { receipt: request.receipt }),
-            ...(target === undefined
-              ? {}
-              : { pausedAt: { nodeId: target.nodeId, awaiting: target.awaiting } }),
           };
           const response = await dependencies
             .orchestratorFor(release, undefined)

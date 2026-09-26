@@ -12,11 +12,14 @@ import {
   createOperationsAlertSink,
   createProtectedOperationExecutor,
 } from "@vortex/app";
-import type {
-  FormContinuationOutcome,
-  FormContinuationRequest,
-  IdentitySession,
-  OrganizationSelectionCandidate,
+import {
+  flowTaskChildLists,
+  type FlowDefinition,
+  type FlowTask,
+  type FormContinuationOutcome,
+  type FormContinuationRequest,
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
@@ -85,6 +88,39 @@ const fromOwnSite = (request: NextRequest): boolean => {
     origin === new URL(getIdentityJourneyConfiguration().siteUrl).origin &&
     contentType === "application/json"
   );
+};
+
+/**
+ * Whether an installed flow declares the paused node a continuation target names (#544): a task
+ * with that id anywhere in the flow and, for a form, a Show form task whose fixed form is the named
+ * one (a confirmation names no form). The stored run still pins the exact node; this refuses a
+ * target the installed flow could never pause at before the continuation is spent.
+ */
+const declaresPausedNode = (
+  flow: unknown,
+  node: Readonly<{ nodeId: string; formId?: string }>,
+): boolean => {
+  const definition = flow as Partial<Pick<FlowDefinition, "tasks" | "errors" | "finally">>;
+  const find = (tasks: readonly FlowTask[] | undefined): FlowTask | undefined => {
+    for (const task of tasks ?? []) {
+      if (task.id === node.nodeId) return task;
+      for (const child of flowTaskChildLists(task)) {
+        const found = find(child.tasks);
+        if (found !== undefined) return found;
+      }
+    }
+    return undefined;
+  };
+  const task = find(definition.tasks) ?? find(definition.errors) ?? find(definition.finally);
+  if (task === undefined) return false;
+  if (node.formId === undefined) return task.type === "interface.confirm";
+  if (task.type !== "interface.show_form") return false;
+  const form = (task as { properties?: Record<string, unknown> }).properties?.form as
+    | Readonly<{ kind?: unknown; literal?: Readonly<{ value?: unknown }> }>
+    | undefined;
+  // A form chosen by a reference or formula is only known at run time; the stored run pins it.
+  if (form?.kind !== "literal") return form !== undefined;
+  return String(form.literal?.value).toLowerCase() === node.formId.toLowerCase();
 };
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -198,12 +234,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             ledger: stores.ledger,
             resolveRelease: async () => release,
           }),
-          resolveInstallation: async ({ installation, flowId }) => {
-            if (installation.applicationRootId !== installed.applicationRootId)
-              return { kind: "stale" };
+          resolveInstallation: async ({ installation, flowId, node }) => {
+            // Another application is foreign, not stale: it gets the neutral refusal.
+            if (
+              installation.applicationRootId.toLowerCase() !==
+              installed.applicationRootId.toLowerCase()
+            )
+              return { kind: "unavailable" };
             if (installation.installationReleaseRevision !== installed.installationRevision)
               return { kind: "stale" };
-            if (!installed.flows.has(flowId)) return { kind: "unavailable" };
+            const flow = installed.flows.get(flowId);
+            if (flow === undefined) return { kind: "unavailable" };
+            if (node !== undefined && !declaresPausedNode(flow, node)) return { kind: "unavailable" };
             return { kind: "current", releaseKey: installed.releaseKey };
           },
         }),

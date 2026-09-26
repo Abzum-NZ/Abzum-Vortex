@@ -345,15 +345,20 @@ export function ApplicationPageView({
   /**
    * Reports a server-driven flow's safe outcome for a form gesture. The runtime already carried out
    * every pause through a continuation; only the final outcome is shown, and the page re-reads the
-   * persisted data whatever the flow reported.
+   * persisted data whatever the flow reported. A gesture the form block ignored because the same
+   * binding is already running leaves the page as that run set it.
    */
   const applyDispatch = useCallback(
     async (dispatch: Promise<FlowDispatchResult | undefined>) => {
       setBusy(true);
       setNotice(undefined);
+      let settles = true;
       try {
         const result = await dispatch;
-        if (result === undefined) return;
+        if (result === undefined) {
+          settles = false;
+          return;
+        }
         if (result.ranIn === "browser") {
           setNotice(unavailableNotice);
           return;
@@ -372,11 +377,16 @@ export function ApplicationPageView({
           setNotice(outcomeNotices.refused ?? unavailableNotice);
           return;
         }
+        if (server.kind === "abandoned") {
+          // The run may have committed a step before the answer was lost: never report nothing.
+          setNotice(outcomeNotices.uncertain ?? unavailableNotice);
+          return router.refresh();
+        }
         setNotice(unavailableNotice);
       } catch {
         setNotice(unavailableNotice);
       } finally {
-        setBusy(false);
+        if (settles) setBusy(false);
       }
     },
     [router],
@@ -439,7 +449,7 @@ export function ApplicationPageView({
         events.form_submit = (event: ControlSemanticEvent) => {
           if (event.event !== "form_submit" || busy) return;
           void applyDispatch(
-            formBlock.submit(asFormBinding(placementId, submitBinding), { values: event.values }),
+            formBlock.submit(asFormBinding(placementId, submitBinding), event.values),
           );
         };
       const readyBinding = bindings.find((binding) => binding.event === "form_ready");

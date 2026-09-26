@@ -81,13 +81,11 @@ export async function driveServerFlow(
             else await performPresentationIntent(intent, host);
 
           const continuation = response.continuation;
-          // The exact evidence the server issued with this pause; sent back unchanged on resume.
+          // The exact evidence the server issued with this pause, sent back unchanged on resume; the
+          // page never builds a target or receipt of its own.
           const evidence: FlowResumeEvidence = {
             ...(response.target === undefined ? {} : { target: response.target }),
-            receipt: {
-              runId: response.runId,
-              committedEffects: response.committedEffects ?? 0,
-            },
+            ...(response.receipt === undefined ? {} : { receipt: response.receipt }),
           };
           if (response.awaiting === "form") {
             const form = readFormIntent(waiting);

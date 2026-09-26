@@ -11,13 +11,17 @@ import type {
 
 /**
  * #588: the Page request adapter that turns one form gesture into the exact server interface it
- * needs. Submit, Enter and Save are one `form_submit` binding whose values the surface supplies
- * from the person's current private draft (#587). `createPrivateFormSubmitAdapter` normalises that
- * submission into the caller inputs the binding declares, so the form endpoint runs the bound flow
- * exactly once, a surface can neither add an input the binding does not declare nor choose the
- * next node, and an unbounded answers bag or a malformed draft identity is refused instead of run
- * half-filled. A value the surface supplies is an input; nothing here reads authority or the
- * organisation from it.
+ * needs. Submit, Enter and Save are one `form_submit` binding whose answers the surface supplies.
+ * `createPrivateFormSubmitAdapter` normalises that submission into the caller inputs the binding
+ * declares, so the form endpoint runs the bound flow exactly once, a surface can neither add an
+ * input the binding does not declare nor choose the next node, and an unbounded answers bag is
+ * refused instead of run half-filled. A value the surface supplies is an input; nothing here reads
+ * authority or the organisation from it.
+ *
+ * Private drafts (#587) fail closed. A draft's answers may only be read through the draft authority
+ * for the verified person, and no concrete draft authority is composed on the web server yet, so a
+ * submission that names a draft is refused rather than run with answers nobody verified against
+ * that draft revision.
  *
  * Continue, Cancel and resume carry the exact installation, release, form, flow, pending node and
  * completed-operation receipts the server issued. `createPageFormRequestAdapter` forwards them
@@ -28,52 +32,35 @@ import type {
  */
 
 const maximumFormValues = 500;
-const maximumDraftIdLength = 200;
 
 const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
   typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
 
-/**
- * The answers of the person's current private form draft. The draft identity is the exact #587
- * revision the answers were read from; it is present whenever the surface keeps a draft and is
- * absent only for a submission the surface made without one.
- */
+/** The answers a surface submits for a `form_submit` binding. */
 export type PrivateFormSubmission = Readonly<{
   values: Readonly<Record<string, unknown>>;
-  draft?: Readonly<{ draftId: string; revision: number }>;
 }>;
 
 /**
  * Reads the submission envelope a surface sends for a `form_submit` binding. It fails closed: an
- * unbounded or non-record answers bag has nothing to submit, and a draft identity that is present
- * but malformed (empty, fractional or non-positive revision) is refused rather than trusted.
+ * unbounded or non-record answers bag has nothing to submit, an unknown envelope key is refused,
+ * and a draft identity is refused until a draft authority can verify it (see above).
  */
 export const readPrivateFormSubmission = (
   candidate: unknown,
 ): PrivateFormSubmission | undefined => {
   if (!isRecord(candidate)) return undefined;
+  if (Object.keys(candidate).some((key) => key !== "values")) return undefined;
   const values = candidate.values;
   if (!isRecord(values) || Object.keys(values).length > maximumFormValues) return undefined;
-  const draft = candidate.draft;
-  if (draft === undefined) return { values };
-  if (
-    !isRecord(draft) ||
-    typeof draft.draftId !== "string" ||
-    draft.draftId.length === 0 ||
-    draft.draftId.length > maximumDraftIdLength ||
-    typeof draft.revision !== "number" ||
-    !Number.isSafeInteger(draft.revision) ||
-    draft.revision < 1
-  )
-    return undefined;
-  return { values, draft: { draftId: draft.draftId, revision: draft.revision } };
+  return { values };
 };
 
 /**
  * The endpoint's form-submit seam. It returns the caller inputs the binding declares, filled from
- * the answers of the person's current draft, or `undefined` so the endpoint refuses the submit. A
- * binding that declares the whole answer receives the submission's own values record; every other
- * declared caller input is named exactly.
+ * the submitted answers, or `undefined` so the endpoint refuses the submit. A binding that
+ * declares the whole answer receives the submission's own values record; every other declared
+ * caller input is named exactly.
  */
 export type PrivateFormSubmitAdapter = (
   binding: ComponentFlowBinding,

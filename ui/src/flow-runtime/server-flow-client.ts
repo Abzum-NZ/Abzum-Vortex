@@ -27,9 +27,7 @@ export type FlowResumeEvidence = Readonly<{
   /** The exact paused target (#544): installation, release, flow, node, awaiting form and receipt. */
   target?: unknown;
   /** The run receipt: which run and how many protected effects it has committed. */
-  receipt?: Readonly<{ runId: string; committedEffects: number }>;
-  /** The private draft revision (#587) the answer was made from, when the surface holds one. */
-  draft?: unknown;
+  receipt?: unknown;
 }>;
 
 export type ServerFlowResponse =
@@ -51,8 +49,6 @@ export type ServerFlowResponse =
       expiresAt: string;
       target?: unknown;
       receipt?: unknown;
-      nodeId?: string;
-      committedEffects?: number;
     }>
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "unavailable" }>;
@@ -118,10 +114,6 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         expiresAt: candidate.expiresAt,
         ...(isRecord(candidate.target) ? { target: candidate.target } : {}),
         ...(isRecord(candidate.receipt) ? { receipt: candidate.receipt } : {}),
-        ...(typeof candidate.nodeId === "string" ? { nodeId: candidate.nodeId } : {}),
-        ...(typeof candidate.committedEffects === "number"
-          ? { committedEffects: candidate.committedEffects }
-          : {}),
       };
     }
     case "result": {
@@ -218,7 +210,6 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
         answer,
         ...(evidence?.target === undefined ? {} : { target: evidence.target }),
         ...(evidence?.receipt === undefined ? {} : { receipt: evidence.receipt }),
-        ...(evidence?.draft === undefined ? {} : { draft: evidence.draft }),
       }),
   });
 }
