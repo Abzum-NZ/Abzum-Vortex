@@ -742,8 +742,15 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
           )
             valid = false;
           walkValues(task, (entry) => {
-            if (entry.source === "input" && !inputs.has(String(entry.input))) valid = false;
-            if (entry.source === "subject_field" && !fields.has(String(entry.field))) valid = false;
+            const reference = actionValueReferenceEntry(entry);
+            if (
+              reference?.source === "input" &&
+              !inputs.has(String(reference.name)) &&
+              String(reference.name) !== "record"
+            )
+              valid = false;
+            if (reference?.source === "trigger_record" && !fields.has(String(reference.field)))
+              valid = false;
           });
         }
       }
@@ -1745,21 +1752,58 @@ function conditionTypesValid(
   return leftType === rightType || (leftType === "date_time" && rightType === "date");
 }
 
+/**
+ * The reference sources a named-action task value may read. An action value is a flow value
+ * (`{ kind: "literal", literal }` or `{ kind: "reference", reference }`); an input reference names
+ * a declared action input, a trigger-record reference names a subject field by its key, and the
+ * reserved `record` input is the whole subject record the compiler supplies to the action flow.
+ */
+const actionValueReferenceSources: ReadonlySet<string> = new Set([
+  "input",
+  "trigger_record",
+  "execution_actor",
+  "execution_now",
+]);
+
+const actionValueReference = (value: unknown): JsonObject | undefined => {
+  const entry = object(value);
+  return entry.kind === "reference" ? object(entry.reference) : undefined;
+};
+
+const actionValueLiteral = (value: unknown): unknown => {
+  const entry = object(value);
+  return entry.kind === "literal" ? object(entry.literal).value : undefined;
+};
+
+/** A task value map key names a field; source maps key by alias and canonical maps by field id. */
+const actionFieldByKey = (
+  fields: ReadonlyMap<string, JsonObject>,
+  key: string,
+): JsonObject | undefined => {
+  const direct = fields.get(key);
+  if (direct !== undefined) return direct;
+  for (const field of fields.values()) if (String(field.key) === key) return field;
+  return undefined;
+};
+
 function actionValueType(
   value: unknown,
   fields: ReadonlyMap<string, JsonObject>,
   inputs: ReadonlyMap<string, JsonObject>,
 ): string | undefined {
   const entry = object(value);
-  if (entry.source === "literal") return literalValueType(entry.value);
-  if (entry.source === "input") {
-    const type = inputs.get(String(entry.inputKey))?.type;
-    return semanticFieldType(type);
+  if (entry.kind === "literal") return literalValueType(actionValueLiteral(value));
+  const reference = actionValueReference(value);
+  if (reference === undefined) return undefined;
+  if (reference.source === "input") {
+    const input = inputs.get(String(reference.name));
+    if (input !== undefined) return semanticFieldType(input.type);
+    return String(reference.name) === "record" ? "record_reference" : undefined;
   }
-  if (entry.source === "subject_field") return fieldValueType(fields.get(String(entry.fieldId)));
-  if (entry.source === "subject_record") return "record_reference";
-  if (entry.source === "current_actor") return "organization_account_reference";
-  if (entry.source === "current_time") return "date_time";
+  if (reference.source === "trigger_record")
+    return fieldValueType(actionFieldByKey(fields, String(reference.field)));
+  if (reference.source === "execution_actor") return "organization_account_reference";
+  if (reference.source === "execution_now") return "date_time";
   return undefined;
 }
 
@@ -1769,18 +1813,19 @@ function actionValueRecordTypeIds(
   inputs: ReadonlyMap<string, JsonObject>,
   subjectRecordTypeId: string,
 ): string[] | undefined {
-  const entry = object(value);
-  if (entry.source === "input") {
-    const input = inputs.get(String(entry.inputKey ?? entry.input));
-    if (input?.type !== "record_reference") return undefined;
+  const reference = actionValueReference(value);
+  if (reference === undefined) return undefined;
+  if (reference.source === "input") {
+    const input = inputs.get(String(reference.name));
+    if (input === undefined) return String(reference.name) === "record" ? [subjectRecordTypeId] : undefined;
+    if (input.type !== "record_reference") return undefined;
     const references = array(input.recordTypes ?? input.record_types);
-    return references.map((reference) =>
-      typeof reference === "string" ? reference : String(reference.recordTypeId),
+    return references.map((entry) =>
+      typeof entry === "string" ? entry : String(entry.recordTypeId),
     );
   }
-  if (entry.source === "subject_field")
-    return fieldRecordTypeIds(fields.get(String(entry.fieldId ?? entry.field)));
-  if (entry.source === "subject_record") return [subjectRecordTypeId];
+  if (reference.source === "trigger_record")
+    return fieldRecordTypeIds(actionFieldByKey(fields, String(reference.field)));
   return undefined;
 }
 
@@ -1788,22 +1833,22 @@ function actionValueTypeV2(
   value: unknown,
   fields: ReadonlyMap<string, JsonObject>,
   inputs: ReadonlyMap<string, JsonObject>,
-  dialect: ModuleV2ValueDialect,
 ): string | undefined {
-  const entry = object(value);
-  if (entry.source === "input") {
-    const inputType = inputs.get(String(entry[dialect === "source" ? "input" : "inputKey"]))?.type;
-    return inputType === "formatted_text" ? "formatted_text" : semanticFieldTypeV2(inputType);
+  const reference = actionValueReference(value);
+  if (reference === undefined) return undefined;
+  if (reference.source === "input") {
+    const input = inputs.get(String(reference.name));
+    if (input === undefined) return String(reference.name) === "record" ? "record_reference" : undefined;
+    return input.type === "formatted_text" ? "formatted_text" : semanticFieldTypeV2(input.type);
   }
-  if (entry.source === "subject_field") {
-    const field = fields.get(String(entry[dialect === "source" ? "field" : "fieldId"]));
+  if (reference.source === "trigger_record") {
+    const field = actionFieldByKey(fields, String(reference.field));
     return ["formatted_text", "table", "attachment"].includes(String(field?.type))
       ? String(field!.type)
       : fieldValueTypeV2(field);
   }
-  if (entry.source === "subject_record") return "record_reference";
-  if (entry.source === "current_actor") return "organization_account_reference";
-  if (entry.source === "current_time") return "date_time";
+  if (reference.source === "execution_actor") return "organization_account_reference";
+  if (reference.source === "execution_now") return "date_time";
   return undefined;
 }
 
@@ -1820,12 +1865,12 @@ function actionValueCompatibleV2(
     ? String(targetField!.type)
     : fieldValueTypeV2(targetField);
   const compatible =
-    entry.source === "literal"
-      ? fieldValueMatchesV2(entry.value, targetField, dialect)
-      : valueTypesCompatible(actionValueTypeV2(value, fields, inputs, dialect), expectedType, "exact");
+    entry.kind === "literal"
+      ? fieldValueMatchesV2(actionValueLiteral(value), targetField, dialect)
+      : valueTypesCompatible(actionValueTypeV2(value, fields, inputs), expectedType, "exact");
   const expectedRecordTypeIds = fieldRecordTypeIds(targetField);
   if (!compatible || expectedRecordTypeIds === undefined) return compatible;
-  if (entry.source === "literal") return compatible;
+  if (entry.kind === "literal") return compatible;
   const actualRecordTypeIds = actionValueRecordTypeIds(value, fields, inputs, subjectRecordTypeId);
   return (
     actualRecordTypeIds !== undefined &&
@@ -1848,6 +1893,7 @@ function actionValueCompatible(
   );
   const expectedRecordTypeIds = fieldRecordTypeIds(targetField);
   if (!compatible || expectedRecordTypeIds === undefined) return compatible;
+  if (object(value).kind === "literal") return compatible;
   const actualRecordTypeIds = actionValueRecordTypeIds(value, fields, inputs, subjectRecordTypeId);
   return (
     actualRecordTypeIds !== undefined &&
@@ -1884,6 +1930,11 @@ const crossFormatFieldTypesCompatible = (
   );
 };
 
+const actionValueReferenceEntry = (entry: JsonObject): JsonObject | undefined =>
+  actionValueReferenceSources.has(String(entry.source))
+    ? entry
+    : actionValueReference(entry);
+
 function applicationActionValueCompatible(
   value: unknown,
   target: ApplicationFieldValuePair | undefined,
@@ -1894,12 +1945,17 @@ function applicationActionValueCompatible(
 ): boolean {
   if (!target) return false;
   const entry = object(value);
-  if (entry.source === "literal")
+  if (entry.kind === "literal")
     return target.moduleV2
-      ? fieldValueMatchesV2(entry.value, target.field, "canonical")
-      : valueTypesCompatible(literalValueType(entry.value), fieldValueType(target.field), "value");
-  if (entry.source === "subject_field" && subjectModuleV2 !== target.moduleV2) {
-    const sourceField = subjectFields.get(String(entry.fieldId));
+      ? fieldValueMatchesV2(actionValueLiteral(value), target.field, "canonical")
+      : valueTypesCompatible(
+          literalValueType(actionValueLiteral(value)),
+          fieldValueType(target.field),
+          "value",
+        );
+  const reference = actionValueReference(value);
+  if (reference?.source === "trigger_record" && subjectModuleV2 !== target.moduleV2) {
+    const sourceField = actionFieldByKey(subjectFields, String(reference.field));
     if (
       !sourceField ||
       !crossFormatFieldTypesCompatible({ field: sourceField, moduleV2: subjectModuleV2 }, target)
@@ -1908,16 +1964,16 @@ function applicationActionValueCompatible(
   }
   if (
     target.moduleV2 &&
-    entry.source === "input" &&
-    (inputs.get(String(entry.inputKey))?.type === "formatted_text" ||
-      (inputs.get(String(entry.inputKey))?.type === "number" &&
+    reference?.source === "input" &&
+    (inputs.get(String(reference.name))?.type === "formatted_text" ||
+      (inputs.get(String(reference.name))?.type === "number" &&
         ["decimal_number", "money"].includes(applicationFieldType(target) ?? "")))
   )
     return false;
   if (
     target.moduleV2 &&
     !valueTypesCompatible(
-      actionValueTypeV2(value, subjectFields, inputs, "canonical"),
+      actionValueTypeV2(value, subjectFields, inputs),
       applicationFieldType(target),
       "mapping",
     )
@@ -2652,8 +2708,18 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
             valid = false;
         }
         walkValues(task, (entry) => {
-          if (entry.source === "input" && !inputKeys.has(String(entry.inputKey))) valid = false;
-          if (entry.source === "subject_field" && !fields.has(String(entry.fieldId))) valid = false;
+          const reference = actionValueReferenceEntry(entry);
+          if (
+            reference?.source === "input" &&
+            !inputKeys.has(String(reference.name)) &&
+            String(reference.name) !== "record"
+          )
+            valid = false;
+          if (
+            reference?.source === "trigger_record" &&
+            actionFieldByKey(fieldMap, String(reference.field)) === undefined
+          )
+            valid = false;
         });
       }
       if (!valid)
@@ -3139,10 +3205,20 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         return false;
 
       let safe = true;
+      const subjectFieldIdsByKey = new Map(
+        subjectRecord
+          ? array(subjectRecord.fields).map(
+              (field) => [String(field.key), String(field.fieldId)] as const,
+            )
+          : [],
+      );
       const inspectSubjectReferences = (value: unknown) => {
         walkValues(value, (entry) => {
-          if (entry.source === "subject_field" && !subjectFieldIds.has(String(entry.fieldId)))
-            safe = false;
+          const reference = actionValueReferenceEntry(entry);
+          if (reference?.source === "trigger_record") {
+            const fieldId = subjectFieldIdsByKey.get(String(reference.field));
+            if (fieldId === undefined || !subjectFieldIds.has(fieldId)) safe = false;
+          }
           if (entry.source === "field" && !subjectFieldIds.has(String(entry.fieldId))) safe = false;
         });
       };
@@ -3447,8 +3523,18 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
             valid = false;
         }
         walkValues(task, (entry) => {
-          if (entry.source === "input" && !inputs.has(String(entry.inputKey))) valid = false;
-          if (entry.source === "subject_field" && !fields.has(String(entry.fieldId))) valid = false;
+          const reference = actionValueReferenceEntry(entry);
+          if (
+            reference?.source === "input" &&
+            !inputs.has(String(reference.name)) &&
+            String(reference.name) !== "record"
+          )
+            valid = false;
+          if (
+            reference?.source === "trigger_record" &&
+            actionFieldByKey(fieldMap, String(reference.field)) === undefined
+          )
+            valid = false;
         });
       }
       if (!valid)

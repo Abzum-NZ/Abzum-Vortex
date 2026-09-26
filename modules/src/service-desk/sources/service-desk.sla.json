@@ -637,10 +637,7 @@
             "type": "record.set_fields",
             "properties": {
               "values": {
-                "active": {
-                  "source": "literal",
-                  "value": false
-                }
+                "active": { "kind": "literal", "literal": { "type": "json", "value": false } }
               }
             }
           },

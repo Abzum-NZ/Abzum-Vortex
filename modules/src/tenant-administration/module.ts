@@ -246,12 +246,12 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
           {
             id: "set_reason",
             type: "record.set_fields",
-            properties: { values: { reason: { source: "input", input: "reason" } } },
+            properties: { values: { reason: "{{ inputs.reason }}" } },
           },
           {
             id: "set_state",
             type: "record.set_fields",
-            properties: { values: { state: { source: "literal", value: "submitted" } } },
+            properties: { values: { state: { kind: "literal", literal: { type: "json", value: "submitted" } } } },
           },
         ],
       },
