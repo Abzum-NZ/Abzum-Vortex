@@ -6055,7 +6055,10 @@ function compileParsedApplicationV2Request(
     // Publication refuses with the first of the located catalogue results draft save reports,
     // before materialisation can refuse the same document without its location.
     const catalogueFailure = settleDefinitionRuleFailures(
-      validateApplicationSourceCatalogue(source),
+      validateApplicationSourceCatalogue(
+        source,
+        request.catalogueSnapshot.platformBlocks.releases,
+      ),
     )[0];
     if (catalogueFailure !== undefined)
       throw new DefinitionCompilationError(
