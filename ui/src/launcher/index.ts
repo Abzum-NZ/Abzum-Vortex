@@ -29,3 +29,17 @@ export {
   VIEW_FILTER_BLOCK_RELEASE,
   createLauncherComponentRegistry,
 } from "./registrations";
+
+// Link Navigation and the Navigate task (#1013)
+export {
+  activateLinkTarget,
+  externalLinkActivation,
+  linkTargetForNavigateIntent,
+  navigateIntentForPage,
+  performNavigateTask,
+  type LinkNavigationEnvironment,
+  type LinkOpenBehavior,
+  type LinkTarget,
+  type NavigateTaskIntent,
+  type UnsavedWorkGuard,
+} from "./link-navigation";

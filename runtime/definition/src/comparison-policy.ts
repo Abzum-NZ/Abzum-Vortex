@@ -1,7 +1,5 @@
 import type {
   ApplicationContentV2,
-  ModuleContent,
-  ModuleContentV2,
   ModuleContentV3,
   VersionImpact,
   VersionImpactReason,
@@ -995,8 +993,8 @@ const compareFlow = (
 };
 
 export const compareModuleContents = (
-  previousContent: ModuleContent | ModuleContentV2 | ModuleContentV3,
-  candidateContent: ModuleContent | ModuleContentV2 | ModuleContentV3,
+  previousContent: ModuleContentV3,
+  candidateContent: ModuleContentV3,
 ): VersionImpactReason[] => {
   const reasons: VersionImpactReason[] = [];
   const previous = asRecord(previousContent);
@@ -1986,7 +1984,7 @@ const normaliseRecordType = (recordType: RecordValue): RecordValue => ({
   customActionIds: sorted(recordType.customActionIds as unknown[]),
 });
 
-export const normaliseModuleContent = <T extends ModuleContent | ModuleContentV2 | ModuleContentV3>(
+export const normaliseModuleContent = <T extends ModuleContentV3>(
   content: T,
 ): T => {
   const value = asRecord(content);

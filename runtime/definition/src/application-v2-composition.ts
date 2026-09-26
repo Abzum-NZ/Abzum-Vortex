@@ -4,7 +4,10 @@ import {
   applicationThemeV2Schema,
   blockPropertyValueV2Schema,
   guidedFormPageCompositionV2Schema,
+  isRepeatableSlotIdentityV2,
   pageCompositionV2Schema,
+  repeatableSlotItemIdentitiesV2,
+  repeatableSlotKeyV2,
   validateComponentSettingValue,
   validateComponentSettings,
   type ApplicationCompositionCatalogueSnapshotV2,
@@ -512,11 +515,48 @@ export const materialiseApplicationCompositionV2 = (
         readModelPlacementIds.add(canonicalId);
       }
 
-      const declaredSlots = new Map(release.slots.map((slot) => [slot.key, slot]));
-      if (Object.keys(authoredPlacement.slots).some((key) => !declaredSlots.has(key)))
+      // A repeatable declaration's own key names only its family, never a slot.
+      const declaredSlots = new Set(
+        release.slots.filter((slot) => slot.repeats === undefined).map((slot) => slot.key),
+      );
+      const repeatableSlots = new Map<string, (typeof release.slots)[number]>();
+      for (const declaration of release.slots) {
+        if (declaration.repeats === undefined) continue;
+        const identities = repeatableSlotItemIdentitiesV2(
+          declaration,
+          authoredPlacement.settings,
+        );
+        if (new Set(identities).size !== identities.length)
+          reject("vortex.definition.application_block_settings", "duplicate_key");
+        for (const identity of identities) {
+          if (!isRepeatableSlotIdentityV2(declaration.key, identity))
+            reject("vortex.definition.application_block_settings", "invalid_value");
+          repeatableSlots.set(repeatableSlotKeyV2(declaration.key, identity), declaration);
+        }
+      }
+      if (
+        Object.keys(authoredPlacement.slots).some(
+          (key) => !declaredSlots.has(key) && !repeatableSlots.has(key),
+        )
+      )
         reject("vortex.definition.application_block_references", "unknown_property");
       const slots: Record<string, unknown> = {};
+      const compileChildSlot = (
+        declaration: (typeof release.slots)[number],
+        slotKey: string,
+      ): ReturnType<typeof compileSlot> =>
+        compileSlot(authoredPlacement.slots[slotKey]!, {
+          depth: options.depth + 1,
+          allowedCategories: new Set(declaration.allowedChildCategories),
+          responsiveOrderAllowed: release.capabilities.responsiveOrder,
+          publicSurface: options.publicSurface,
+          ...(options.reserved === undefined ? {} : { reserved: options.reserved }),
+          ...(options.captureShellPlacements === undefined
+            ? {}
+            : { captureShellPlacements: options.captureShellPlacements }),
+        });
       for (const declaration of release.slots) {
+        if (declaration.repeats !== undefined) continue;
         const child = authoredPlacement.slots[declaration.key];
         const reserved = options.reserved?.has(`${alias}:${declaration.key}`) === true;
         if (child === undefined) {
@@ -526,18 +566,11 @@ export const materialiseApplicationCompositionV2 = (
         }
         if (declaration.required && Object.keys(child.placements).length === 0 && !reserved)
           reject("vortex.definition.application_block_references", "required_value");
-        const childOptions: Parameters<typeof compileSlot>[1] = {
-          depth: options.depth + 1,
-          allowedCategories: new Set(declaration.allowedChildCategories),
-          responsiveOrderAllowed: release.capabilities.responsiveOrder,
-          publicSurface: options.publicSurface,
-          ...(options.reserved === undefined ? {} : { reserved: options.reserved }),
-          ...(options.captureShellPlacements === undefined
-            ? {}
-            : { captureShellPlacements: options.captureShellPlacements }),
-        };
-        slots[declaration.key] = compileSlot(child, childOptions);
+        slots[declaration.key] = compileChildSlot(declaration, declaration.key);
       }
+      for (const [slotKey, declaration] of repeatableSlots)
+        if (authoredPlacement.slots[slotKey] !== undefined)
+          slots[slotKey] = compileChildSlot(declaration, slotKey);
       const responsive = materialiseResponsive(authoredPlacement.responsive, release);
       const themeOverrides: Record<string, unknown> = {};
       const effectiveOverrides: Record<string, unknown> = {};
