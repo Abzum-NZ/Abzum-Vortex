@@ -105,6 +105,8 @@ What the setup does, in order, through the protected entry points only (no table
 
 The configured manifest is `apps/web/scripts/development-setup/manifest.ts`. Management status or a first sign-in never implies application permission: the account can use only what these roles and later IAM assignments give it. The command is not a general grant tool: further access is granted in the IAM application.
 
+CRM and Service Desk bind the email, calendar and webhook connection types, which have no platform release yet (#1316). Until then the setup publishes development placeholders of them (`apps/web/scripts/development-setup/placeholder-connection-types.ts`) only into its own local catalogue: they have no provider, their only allowed host is a reserved `.invalid` name that never resolves, and no connection is configured, so the installed CRM and Service Desk show their connections as not configured and cannot send anything.
+
 An interrupted run resumes: provisioning replays by its fixed key and the steps recorded in `supabase/.temp/development-setup-state.json` are skipped. Once every step has completed, the command is disabled: running it again only calls the initial operating-role grant with the original receipt and the same manifest, which replays the stored result. A different nominated account is refused. `pnpm db:reset` starts over.
 
 Existing developer utilities (`pnpm verify`, `pnpm fixtures`, `pnpm db:verify`) remain in the workspace for local use. They are not fleet completion requirements, and the current development workflow does not run them or treat their output as acceptance.
