@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createComponentContextResolver } from "./component-context-resolver";
+import { createComponentEventDispatcher } from "./component-event-dispatch";
 import { createDatabaseFlowStores } from "./flow-continuation-store";
 import { createFlowOrchestrator } from "./flow-orchestrator";
 import { createFormContinuationService } from "./form-continuation";
@@ -73,6 +74,26 @@ export {
   type ResolvedComponentFlowInputs,
   type ResolvedComponentQueryInputs,
 } from "./component-context-resolver";
+
+export {
+  componentDatasetViewEvents,
+  componentEventDispatchRefusalCodes,
+  componentEventDispatchRequestSchema,
+  componentLocalDisplayFilterConditionSchema,
+  componentLocalDisplayFilterSchema,
+  createComponentEventDispatcher,
+  type ComponentEventDataRefusal,
+  type ComponentEventDataResult,
+  type ComponentEventDataRow,
+  type ComponentEventDispatchDependencies,
+  type ComponentEventDispatchRefusalCode,
+  type ComponentEventDispatchRequest,
+  type ComponentEventDispatchResult,
+  type ComponentEventDispatcher,
+  type ComponentEventView,
+  type ComponentLocalDisplayFilter,
+  type ComponentLocalDisplayFilterCondition,
+} from "./component-event-dispatch";
 
 export {
   applicationInstallationActivationRequestSchema,
@@ -169,6 +190,7 @@ export const AppService = Object.freeze({
   createApplicationInstallationCoordinator,
   createInstalledRuntimeContextLoader,
   createComponentContextResolver,
+  createComponentEventDispatcher,
   createIdentityDisablementCoordinator,
   createProtectedOperationExecutor,
   createFlowOrchestrator,
