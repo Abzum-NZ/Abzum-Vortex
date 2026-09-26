@@ -532,6 +532,12 @@ export function validateFlow(
         return resolveReference(value.reference, where, [...path, "reference"]);
       case "formula":
         return formulaType(value.formula, where, [...path, "formula"]);
+      // A map is a JSON object of values. Every entry is checked as a value of its own, so a
+      // reference inside it resolves or is refused exactly as one outside it would be.
+      case "map":
+        for (const [key, entry] of Object.entries(value.entries))
+          checkValue(entry, undefined, where, [...path, "entries", key]);
+        return "json";
     }
   };
 
@@ -543,7 +549,20 @@ export function validateFlow(
     path: Path,
   ) => {
     const actual = valueType(value, where, path);
-    if (accepted === undefined || actual === undefined) return;
+    if (accepted === undefined) return;
+    // A map is a set of named values, never one scalar, so it fills only a use that accepts JSON;
+    // its static `json` type would otherwise pass every typed use and fail only at run time.
+    if (value.kind === "map") {
+      if (!accepted.includes("json"))
+        add(
+          path,
+          "vortex.definition.source_type_compatibility",
+          "invalid_value",
+          `Expected ${describe(accepted)}, found a map of values`,
+        );
+      return;
+    }
+    if (actual === undefined) return;
     const literal = value.kind === "literal";
     if (literal ? accepted.some((expected) => valueTypesCompatible(actual, expected, "value")) : fits(actual, accepted))
       return;
@@ -672,6 +691,8 @@ export function validateFlow(
       case "switch": {
         const node = task as Extract<FlowTask, { type: "switch" }>;
         const type = valueType(node.value, where, [...path, "value"]);
+        if (node.value.kind === "map")
+          add([...path, "value"], "vortex.definition.source_type_compatibility", "invalid_value", "A switch compares one value, never a map of values");
         node.cases.forEach((entry, index) => {
           if (
             type !== undefined &&
@@ -690,7 +711,9 @@ export function validateFlow(
       case "for_each": {
         const node = task as Extract<FlowTask, { type: "for_each" }>;
         const type = valueType(node.items, where, [...path, "items"]);
-        if (type !== undefined && type !== "json" && !listTypes.has(type))
+        if (node.items.kind === "map")
+          add([...path, "items"], "vortex.definition.source_type_compatibility", "invalid_value", "For each needs a list, found a map of values");
+        else if (type !== undefined && type !== "json" && !listTypes.has(type))
           add([...path, "items"], "vortex.definition.source_type_compatibility", "invalid_value", `For each needs a list, found ${type}`);
         return;
       }

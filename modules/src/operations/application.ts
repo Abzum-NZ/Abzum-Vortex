@@ -8,7 +8,7 @@ import {
   PLATFORM_BLOCK_RELEASES,
   RECORD_DETAIL_BLOCK_RELEASE,
   RICH_TEXT_INPUT_BLOCK_RELEASE,
-  TABLE_BLOCK_RELEASE,
+  TABLE_BLOCK_RELEASE_1_3_0,
   TEXT_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
   defaultOperationFlowSource,
@@ -41,6 +41,19 @@ const createIncidentPage = "application.operations.incident.create";
 const attachAction = "vortex.operations.incidents.incident.attach";
 const attachIncidentView = "application.operations.incident.attach";
 const incidentActionEventId = "event_operations_incident_action";
+const incidentRowClickEventId = "event_operations_open_incident";
+
+/**
+ * The identities of the Incidents row click: the event the table's row_click setting names, the
+ * browser-only flow it runs, and that flow's own label and description.
+ */
+const openIncidentRowClick = {
+  eventId: incidentRowClickEventId,
+  flow: "operations_open_incident",
+  label: "Open incident",
+  description:
+    "Opens the clicked incident's own detail page with the record identity the clicked row carries.",
+};
 
 /**
  * The bounded operator actions on an open incident. Each is one detail-page button, shown only to
@@ -189,6 +202,21 @@ const createForm = "form_operations_new_incident";
 const attachForm = "form_operations_incident_attach";
 
 /**
+ * The columns the Incidents table shows: exactly the fields its own open-incidents query selects,
+ * each labelled for a reader and formatted from the field's own declared type.
+ */
+const incidentColumns: ReadonlyArray<readonly [string, string]> = [
+  ["incident_number", "Incident number"],
+  ["code", "Code"],
+  ["severity", "Severity"],
+  ["affected_service", "Affected service"],
+  ["owning_role", "Owning role"],
+  ["runbook_reference", "Runbook"],
+  ["state", "State"],
+  ["attached_at", "Attached"],
+];
+
+/**
  * One reachable dashboard page per spec 19 runbook, keyed by its exact `runbookReference` tail. The
  * page text carries the reference, its owning role, concrete operator steps and the bounded action
  * set, so an operator reading an incident's `runbook_reference` can follow it without opening
@@ -241,7 +269,26 @@ const pages = [
       shell_kind: "default",
       main: slot({
         operations_incidents_table: {
-          ...placement(TABLE_BLOCK_RELEASE, { title: { kind: "text", value: "Open incidents" } }),
+          ...placement(TABLE_BLOCK_RELEASE_1_3_0, {
+            title: { kind: "text", value: "Open incidents" },
+            columns: {
+              kind: "list",
+              items: incidentColumns.map(([field, label]) => ({
+                kind: "group" as const,
+                properties: {
+                  field: {
+                    kind: "field_reference" as const,
+                    field: `${incidentRecordType}.${field}`,
+                  },
+                  label: { kind: "text" as const, value: label },
+                },
+              })),
+            },
+            row_click: {
+              kind: "group",
+              properties: { event_id: { kind: "text", value: incidentRowClickEventId } },
+            },
+          }),
           query: openIncidentsQuery,
         },
       }),
@@ -540,6 +587,13 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
           carries: [],
           personal_or_sensitive_values_allowed: false,
         },
+        {
+          id: incidentRowClickEventId,
+          key: "vortex.app.events.vortex_app_operations_open_incident",
+          record_type: incidentRecordType,
+          carries: [],
+          personal_or_sensitive_values_allowed: false,
+        },
       ],
       public_addresses: [],
       platform_block_dependencies: platformBlockDependencies,
@@ -551,6 +605,42 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
       // named action. The flows run as the signed-in operator, so the action's own permission,
       // field policy and precondition decide the result.
       flows: [
+        {
+          // Clicking an incident row opens its own detail page with the record identity the row
+          // carries, so the page subject is read through the normal record read path.
+          contractVersion: "1.0.0",
+          id: openIncidentRowClick.flow,
+          key: openIncidentRowClick.flow,
+          description: openIncidentRowClick.description,
+          labels: { name: openIncidentRowClick.label },
+          execution: "interactive",
+          runAs: { kind: "initiator" },
+          inputs: {
+            record_id: {
+              type: "record_reference",
+              required: true,
+              recordTypeIds: [incidentRecordType],
+            },
+          },
+          tasks: [
+            {
+              id: "open_detail",
+              type: "interface.navigate",
+              version: "1.0.0",
+              properties: {
+                page: {
+                  kind: "literal",
+                  literal: { type: "text", value: "operations_incident_detail" },
+                },
+                parameters: {
+                  kind: "map",
+                  entries: { record_id: "{{ inputs.record_id }}" },
+                },
+              },
+            },
+          ],
+          outputs: {},
+        },
         {
           ...defaultSaveFlowSource({
             id: "operations_create_incident",
@@ -606,6 +696,16 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
             deduplication_key: { kind: "caller", name: "deduplication_key" },
             evidence: { kind: "caller", name: "evidence" },
           },
+        },
+        // Clicking an incident row starts the one flow that opens that incident's detail page,
+        // with the record identity the row carries as its only input.
+        {
+          id: "row_binding_operations_open_incident",
+          control: "operations_incidents_table",
+          event_id: openIncidentRowClick.eventId,
+          event: "row_clicked" as const,
+          flow: openIncidentRowClick.flow,
+          inputs: { record_id: { kind: "caller" as const, name: "record_id" } },
         },
         // Each operator button starts its own one-task flow with no inputs: the incident is the
         // detail page's subject, and the named action's own permission, field policy and
