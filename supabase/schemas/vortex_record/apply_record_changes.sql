@@ -573,20 +573,24 @@ begin
       action_id_value, p_record_type_id
     );
     if coalesce((action_context ->> 'rulesUnsupported')::boolean, false)
+      or pg_catalog.jsonb_typeof(action_context -> 'action' -> 'tasks') is distinct from 'array'
       or exists (
         select 1 from pg_catalog.jsonb_array_elements(
-          action_context -> 'action' -> 'effects'
-        ) effect(value)
-        where effect.value ->> 'kind' not in ('set_field', 'create_record', 'copy_relationships', 'soft_delete_subject', 'announce_event')
+          action_context -> 'action' -> 'tasks'
+        ) task(value)
+        where task.value ->> 'type' not in ('record.set_fields', 'record.create', 'record.changes', 'record.delete', 'event.announce')
       ) then
       return pg_catalog.jsonb_build_object('outcome', 'unsupported');
     end if;
     select coalesce(pg_catalog.jsonb_agg(field_id order by field_id collate "C"), '[]'::jsonb)
     into action_set_field_ids
     from (
-      select distinct pg_catalog.lower(effect.value ->> 'fieldId') as field_id
-      from pg_catalog.jsonb_array_elements(action_context -> 'action' -> 'effects') effect(value)
-      where effect.value ->> 'kind' = 'set_field'
+      select distinct pg_catalog.lower(key.field_key) as field_id
+      from pg_catalog.jsonb_array_elements(action_context -> 'action' -> 'tasks') task(value)
+      cross join lateral pg_catalog.jsonb_object_keys(
+        task.value -> 'properties' -> 'values'
+      ) key(field_key)
+      where task.value ->> 'type' = 'record.set_fields'
     ) fields;
     if action_set_field_ids is distinct from coalesce((
         select pg_catalog.jsonb_agg(key order by key collate "C")
@@ -600,7 +604,7 @@ begin
 
     -- A create-only action whose created record moves one of the subject's own
     -- totals still has to write the subject, so the subject is written whenever
-    -- a set_field exists or the final-value map is non-empty.
+    -- a record.set_fields task exists or the final-value map is non-empty.
     subject_write := pg_catalog.jsonb_array_length(action_set_field_ids) > 0
       or action_final_values <> '{}'::jsonb;
   end if;
@@ -1273,7 +1277,7 @@ begin
         message = 'Named action creation plan is unavailable';
     end if;
 
-    -- Every insert, in authored effect order, before any edge. Each allocates
+    -- Every insert, in authored task order, before any edge. Each allocates
     -- its reference numbers (L4); keeping the whole set ahead of the edge pass
     -- is what matches ordinary create's counter-before-edge order.
     for creation in

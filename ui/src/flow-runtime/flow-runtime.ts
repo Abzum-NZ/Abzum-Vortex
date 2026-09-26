@@ -25,11 +25,14 @@ export type FlowRuntimeOptions = Readonly<{
 export type FlowRuntime = Readonly<{
   /**
    * Runs the flow bound to one component event. A browser-only flow runs in the page; every other
-   * flow is started on the server and driven through its continuations.
+   * flow is started on the server and driven through its continuations. `clickId` is the one
+   * identity of the user gesture: supplying the same identity for a repeated request makes the
+   * server reach the same run, so a resubmission never commits a second time.
    */
   dispatch: (
     binding: ComponentFlowBinding,
     callerInputs?: Readonly<Record<string, unknown>>,
+    clickId?: string,
   ) => Promise<FlowDispatchResult>;
 }>;
 
@@ -61,10 +64,12 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
   const clock = options.clock ?? (() => new Date().toISOString());
   const newId = options.newId ?? (() => crypto.randomUUID());
   return Object.freeze({
-    async dispatch(binding, callerInputs = {}): Promise<FlowDispatchResult> {
+    async dispatch(binding, callerInputs = {}, clickId): Promise<FlowDispatchResult> {
       const flowId = binding.flow.flowId;
       const library = options.library;
-      if (library !== undefined && flowRunsOnlyInBrowser(flowId, library)) {
+      // A form submit carries the surface's own submission envelope; the server's form-submit
+      // adapter projects it and the endpoint validates it, so it is never pre-filtered here.
+      if (binding.event !== "form_submit" && library !== undefined && flowRunsOnlyInBrowser(flowId, library)) {
         const inputs = bindingInputs(binding, callerInputs);
         if (inputs === undefined)
           return {
@@ -77,7 +82,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
         return {
           ranIn: "browser",
           result: await runBrowserFlow(
-            { flowId, inputs, runId: newId(), now: clock() },
+            { flowId, inputs, runId: clickId ?? newId(), now: clock() },
             library,
             options.host,
           ),
@@ -87,7 +92,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       const first = await options.client.startBinding(
         { bindingId: binding.bindingId, flowId },
         callerInputs,
-        newId(),
+        clickId ?? newId(),
       );
       return {
         ranIn: "server",

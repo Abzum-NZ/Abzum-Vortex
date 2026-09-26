@@ -9,7 +9,8 @@ import { builderKeySchema, namespacedKeySchema, semanticVersionSchema } from "./
 import { jsonValueSchema, labelSchema } from "./common";
 import { versionRequirementSchema } from "./definitions";
 import {
-  sourceActionEffectSchema,
+  refineActionTaskIds,
+  sourceActionTaskSchema,
   sourceAliasSchema,
   sourceConditionSchema,
   sourceQualifiedFieldSchema,
@@ -901,7 +902,7 @@ export const sourceApplicationBodyV2Schema = z
           sharing: z.enum(["refused", "allowed"]),
           inputs: z.array(actionInputSchema).max(50),
           precondition: sourceConditionSchema.optional(),
-          effects: z.array(sourceActionEffectSchema).min(1).max(10),
+          tasks: z.array(sourceActionTaskSchema).min(1).max(10).superRefine(refineActionTaskIds),
         })
         .strict()
         .superRefine((value, context) => {

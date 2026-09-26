@@ -20,6 +20,17 @@ export const DEFAULT_DARK_SURFACE = "#000000";
 
 type RgbaColor = Readonly<{ r: number; g: number; b: number; a: number }>;
 
+const COLOR_COMPONENT = "(?:\\d+(?:\\.\\d+)?|\\.\\d+)";
+const OKLCH_COLOR = new RegExp(
+  `^oklch\\(\\s*(${COLOR_COMPONENT})(%?)\\s+(${COLOR_COMPONENT})\\s+(${COLOR_COMPONENT})(?:deg)?\\s*(?:\\/\\s*(${COLOR_COMPONENT})(%?))?\\s*\\)$`,
+);
+
+/** The CSS Color 4 just-noticeable difference in OKLab used by its sRGB gamut mapping. */
+const GAMUT_MAPPING_JND = 0.02;
+const GAMUT_MAPPING_EPSILON = 0.0001;
+
+type Triple = readonly [number, number, number];
+
 function parseHex(hex: string): RgbaColor {
   const clean = hex.startsWith("#") ? hex.slice(1) : hex;
   if (!/^(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(clean))
@@ -34,6 +45,119 @@ function parseHex(hex: string): RgbaColor {
     b: parseInt(expanded.slice(4, 6), 16),
     a: expanded.length === 8 ? parseInt(expanded.slice(6, 8), 16) / 255 : 1,
   };
+}
+
+const clamp = (value: number, minimum: number, maximum: number): number =>
+  Math.min(maximum, Math.max(minimum, value));
+
+/** OKLab to linear-light sRGB (Ottosson's published matrices). */
+function oklabToLinearSrgb(lightness: number, labA: number, labB: number): Triple {
+  const l = (lightness + 0.3963377774 * labA + 0.2158037573 * labB) ** 3;
+  const m = (lightness - 0.1055613458 * labA - 0.0638541728 * labB) ** 3;
+  const s = (lightness - 0.0894841775 * labA - 1.291485548 * labB) ** 3;
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ];
+}
+
+/** Linear-light sRGB to OKLab, the inverse of `oklabToLinearSrgb`. */
+function linearSrgbToOklab([r, g, b]: Triple): Triple {
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+}
+
+const encodeSrgb = (linear: number): number =>
+  linear <= 0.0031308 ? 12.92 * linear : 1.055 * linear ** (1 / 2.4) - 0.055;
+const decodeSrgb = (encoded: number): number =>
+  encoded <= 0.04045 ? encoded / 12.92 : ((encoded + 0.055) / 1.055) ** 2.4;
+
+/** Clips each gamma-encoded channel into sRGB and returns the result in linear light. */
+const clipLinearSrgb = (linear: Triple): Triple =>
+  linear.map((channel) => decodeSrgb(clamp(encodeSrgb(channel), 0, 1))) as unknown as Triple;
+
+const inSrgbGamut = (linear: Triple): boolean =>
+  linear.every((channel) => {
+    const encoded = encodeSrgb(channel);
+    return encoded >= -GAMUT_MAPPING_EPSILON && encoded <= 1 + GAMUT_MAPPING_EPSILON;
+  });
+
+const deltaEOk = (left: Triple, right: Triple): number => {
+  const [l1, a1, b1] = linearSrgbToOklab(left);
+  const [l2, a2, b2] = linearSrgbToOklab(right);
+  return Math.hypot(l1 - l2, a1 - a2, b1 - b2);
+};
+
+/**
+ * Maps one OKLCH colour into sRGB with the CSS Color 4 gamut-mapping algorithm: lightness at or
+ * beyond the ends is white or black, and an out-of-gamut colour keeps its lightness and hue while
+ * its chroma is reduced until clipping it moves it less than one just-noticeable difference. The
+ * contrast checks therefore judge the colour a browser paints, not an unrepresentable one.
+ */
+function oklchToLinearSrgb(lightness: number, chroma: number, hueDegrees: number): Triple {
+  if (lightness >= 1) return [1, 1, 1];
+  if (lightness <= 0) return [0, 0, 0];
+  const hue = (hueDegrees * Math.PI) / 180;
+  const atChroma = (value: number): Triple =>
+    oklabToLinearSrgb(lightness, value * Math.cos(hue), value * Math.sin(hue));
+  const original = atChroma(chroma);
+  if (inSrgbGamut(original)) return clipLinearSrgb(original);
+  if (deltaEOk(original, clipLinearSrgb(original)) < GAMUT_MAPPING_JND)
+    return clipLinearSrgb(original);
+  let minimum = 0;
+  let maximum = chroma;
+  let minimumInGamut = true;
+  while (maximum - minimum > GAMUT_MAPPING_EPSILON) {
+    const candidateChroma = (minimum + maximum) / 2;
+    const candidate = atChroma(candidateChroma);
+    if (minimumInGamut && inSrgbGamut(candidate)) {
+      minimum = candidateChroma;
+      continue;
+    }
+    const clipped = clipLinearSrgb(candidate);
+    const error = deltaEOk(candidate, clipped);
+    if (error < GAMUT_MAPPING_JND) {
+      if (GAMUT_MAPPING_JND - error < GAMUT_MAPPING_EPSILON) return clipped;
+      minimumInGamut = false;
+      minimum = candidateChroma;
+    } else {
+      maximum = candidateChroma;
+    }
+  }
+  return clipLinearSrgb(atChroma(minimum));
+}
+
+/**
+ * Converts one oklch() colour to 8-bit-scale sRGB. Lightness is a number or a percentage of 1,
+ * alpha a number or a percentage of 1, both clamped to their CSS range as a browser does.
+ */
+function parseOklch(value: string): RgbaColor {
+  const match = OKLCH_COLOR.exec(value);
+  if (match === null) throw new Error(`Invalid oklch color: "${value}"`);
+  const [, lightnessText, lightnessPercent, chromaText, hueText, alphaText, alphaPercent] = match;
+  const lightness = clamp(Number(lightnessText) / (lightnessPercent === "%" ? 100 : 1), 0, 1);
+  const alpha =
+    alphaText === undefined ? 1 : clamp(Number(alphaText) / (alphaPercent === "%" ? 100 : 1), 0, 1);
+  const [r, g, b] = oklchToLinearSrgb(lightness, Number(chromaText), Number(hueText) % 360);
+  const toChannel = (linear: number): number => clamp(encodeSrgb(linear), 0, 1) * 255;
+  return { r: toChannel(r), g: toChannel(g), b: toChannel(b), a: alpha };
+}
+
+/** Parses a six-digit hex or oklch() color value; any other form is refused. */
+function parseColor(value: string): RgbaColor {
+  return value.startsWith("oklch(") ? parseOklch(value) : parseHex(value);
+}
+
+/** Whether a six-digit hex or oklch() colour paints fully opaque. */
+function isOpaqueColor(value: string): boolean {
+  return parseColor(value).a === 1;
 }
 
 function composite(foreground: RgbaColor, background: RgbaColor): RgbaColor {
@@ -66,23 +190,24 @@ function colorLuminance({ r, g, b }: RgbaColor): number {
 }
 
 /** Calculates luminance after composing a translucent color over an opaque background. */
-export function relativeLuminance(hex: string, background = DEFAULT_LIGHT_SURFACE): number {
-  const backdrop = requireOpaque(parseHex(background), "Luminance background");
-  return colorLuminance(composite(parseHex(hex), backdrop));
+export function relativeLuminance(color: string, background = DEFAULT_LIGHT_SURFACE): number {
+  const backdrop = requireOpaque(parseColor(background), "Luminance background");
+  return colorLuminance(composite(parseColor(color), backdrop));
 }
 
 /**
  * Calculates foreground/background contrast after alpha-compositing both layers onto
  * an opaque canvas. Argument order is significant when either color is translucent.
+ * Either color may be a six-digit hex value or an oklch() function.
  */
 export function contrastRatio(
   foreground: string,
   background: string,
   canvas = DEFAULT_LIGHT_SURFACE,
 ): number {
-  const opaqueCanvas = requireOpaque(parseHex(canvas), "Contrast canvas");
-  const effectiveBackground = composite(parseHex(background), opaqueCanvas);
-  const effectiveForeground = composite(parseHex(foreground), effectiveBackground);
+  const opaqueCanvas = requireOpaque(parseColor(canvas), "Contrast canvas");
+  const effectiveBackground = composite(parseColor(background), opaqueCanvas);
+  const effectiveForeground = composite(parseColor(foreground), effectiveBackground);
   const lumA = colorLuminance(effectiveForeground);
   const lumB = colorLuminance(effectiveBackground);
   const lighter = Math.max(lumA, lumB);
@@ -185,6 +310,17 @@ export function validateThemeContrast(
       family: "invalid_value",
       message: "A theme must declare a colour with the background role",
     });
+  }
+  // An oklch() value can carry alpha, but the surface is the opaque canvas every other colour is
+  // judged on and painted over, so a translucent surface is refused rather than judged.
+  if (surface.key !== undefined && !(isOpaqueColor(surface.light) && isOpaqueColor(surface.dark))) {
+    addFailure({
+      code: "TRANSLUCENT_BACKGROUND",
+      family: "invalid_value",
+      message: `Background colour token "${surface.key}" must be opaque in both light and dark mode`,
+      tokenKey: surface.key,
+    });
+    return { failures, ruleFailures };
   }
   const lightSurface = surface.light;
   const darkSurface = surface.dark;

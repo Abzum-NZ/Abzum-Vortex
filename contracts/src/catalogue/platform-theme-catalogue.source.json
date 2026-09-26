@@ -1,151 +1,429 @@
 {
-  "catalogueThemeId": "3f0a2b14-9c6d-4e58-8a71-6d2e5f4b1c09",
-  "releaseVersion": "2.0.0",
-  "tokens": {
-    "background": {
-      "kind": "color_pair",
-      "light": "#FFFFFF",
-      "dark": "#0F172A",
-      "role": "background"
-    },
-    "surface": {
-      "kind": "color_pair",
-      "light": "#F8FAFC",
-      "dark": "#1E293B",
-      "role": "background"
-    },
-    "text": {
-      "kind": "color_pair",
-      "light": "#0F172A",
-      "dark": "#F8FAFC",
-      "role": "foreground"
-    },
-    "muted_text": {
-      "kind": "color_pair",
-      "light": "#475569",
-      "dark": "#CBD5E1",
-      "role": "foreground"
-    },
-    "border_color": {
-      "kind": "color_pair",
-      "light": "#CBD5E1",
-      "dark": "#334155"
-    },
-    "border": {
-      "kind": "border",
-      "widthRem": 0.0625,
-      "style": "solid",
-      "colorToken": "border_color"
-    },
-    "primary": {
-      "kind": "color_pair",
-      "light": "#1D4ED8",
-      "dark": "#93C5FD"
-    },
-    "primary_foreground": {
-      "kind": "color_pair",
-      "light": "#FFFFFF",
-      "dark": "#0B1220",
-      "role": "foreground"
-    },
-    "secondary": {
-      "kind": "color_pair",
-      "light": "#E2E8F0",
-      "dark": "#334155"
-    },
-    "secondary_foreground": {
-      "kind": "color_pair",
-      "light": "#0F172A",
-      "dark": "#F8FAFC",
-      "role": "foreground"
-    },
-    "danger": {
-      "kind": "color_pair",
-      "light": "#B91C1C",
-      "dark": "#F87171"
-    },
-    "danger_foreground": {
-      "kind": "color_pair",
-      "light": "#FFFFFF",
-      "dark": "#000000",
-      "role": "foreground"
-    },
-    "danger_text": {
-      "kind": "color_pair",
-      "light": "#B91C1C",
-      "dark": "#F87171",
-      "role": "foreground"
-    },
-    "warning_text": {
-      "kind": "color_pair",
-      "light": "#92400E",
-      "dark": "#FBBF24",
-      "role": "foreground"
-    },
-    "info_text": {
-      "kind": "color_pair",
-      "light": "#1D4ED8",
-      "dark": "#60A5FA",
-      "role": "foreground"
-    },
-    "focus": {
-      "kind": "focus",
-      "colorToken": "primary",
-      "widthRem": 0.125
-    },
-    "body": {
-      "kind": "typography",
-      "family": "body",
-      "sizeRem": 1,
-      "lineHeight": 1.5,
-      "weight": 400
-    },
-    "heading": {
-      "kind": "typography",
-      "family": "heading",
-      "sizeRem": 1.5,
-      "lineHeight": 1.25,
-      "weight": 600
-    },
-    "space_xs": {
-      "kind": "spacing",
-      "rem": 0.25
-    },
-    "space_sm": {
-      "kind": "spacing",
-      "rem": 0.5
-    },
-    "space_md": {
-      "kind": "spacing",
-      "rem": 1
-    },
-    "space_lg": {
-      "kind": "spacing",
-      "rem": 1.5
-    },
-    "radius_sm": {
-      "kind": "corners",
-      "rem": 0.125
-    },
-    "radius_md": {
-      "kind": "corners",
-      "rem": 0.25
-    },
-    "radius_lg": {
-      "kind": "corners",
-      "rem": 0.5
-    },
-    "elevation_low": {
-      "kind": "elevation",
-      "level": 1
-    },
-    "elevation_high": {
-      "kind": "elevation",
-      "level": 3
-    },
-    "density": {
-      "kind": "density",
-      "value": "comfortable"
+  "PLATFORM_THEME_RELEASE_2_0_0": {
+    "catalogueThemeId": "3f0a2b14-9c6d-4e58-8a71-6d2e5f4b1c09",
+    "releaseVersion": "2.0.0",
+    "tokens": {
+      "background": {
+        "kind": "color_pair",
+        "light": "#FFFFFF",
+        "dark": "#0F172A",
+        "role": "background"
+      },
+      "surface": {
+        "kind": "color_pair",
+        "light": "#F8FAFC",
+        "dark": "#1E293B",
+        "role": "background"
+      },
+      "text": {
+        "kind": "color_pair",
+        "light": "#0F172A",
+        "dark": "#F8FAFC",
+        "role": "foreground"
+      },
+      "muted_text": {
+        "kind": "color_pair",
+        "light": "#475569",
+        "dark": "#CBD5E1",
+        "role": "foreground"
+      },
+      "border_color": {
+        "kind": "color_pair",
+        "light": "#CBD5E1",
+        "dark": "#334155"
+      },
+      "border": {
+        "kind": "border",
+        "widthRem": 0.0625,
+        "style": "solid",
+        "colorToken": "border_color"
+      },
+      "primary": {
+        "kind": "color_pair",
+        "light": "#1D4ED8",
+        "dark": "#93C5FD"
+      },
+      "primary_foreground": {
+        "kind": "color_pair",
+        "light": "#FFFFFF",
+        "dark": "#0B1220",
+        "role": "foreground"
+      },
+      "secondary": {
+        "kind": "color_pair",
+        "light": "#E2E8F0",
+        "dark": "#334155"
+      },
+      "secondary_foreground": {
+        "kind": "color_pair",
+        "light": "#0F172A",
+        "dark": "#F8FAFC",
+        "role": "foreground"
+      },
+      "danger": {
+        "kind": "color_pair",
+        "light": "#B91C1C",
+        "dark": "#F87171"
+      },
+      "danger_foreground": {
+        "kind": "color_pair",
+        "light": "#FFFFFF",
+        "dark": "#000000",
+        "role": "foreground"
+      },
+      "danger_text": {
+        "kind": "color_pair",
+        "light": "#B91C1C",
+        "dark": "#F87171",
+        "role": "foreground"
+      },
+      "warning_text": {
+        "kind": "color_pair",
+        "light": "#92400E",
+        "dark": "#FBBF24",
+        "role": "foreground"
+      },
+      "info_text": {
+        "kind": "color_pair",
+        "light": "#1D4ED8",
+        "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "focus": {
+        "kind": "focus",
+        "colorToken": "primary",
+        "widthRem": 0.125
+      },
+      "body": {
+        "kind": "typography",
+        "family": "body",
+        "sizeRem": 1,
+        "lineHeight": 1.5,
+        "weight": 400
+      },
+      "heading": {
+        "kind": "typography",
+        "family": "heading",
+        "sizeRem": 1.5,
+        "lineHeight": 1.25,
+        "weight": 600
+      },
+      "space_xs": {
+        "kind": "spacing",
+        "rem": 0.25
+      },
+      "space_sm": {
+        "kind": "spacing",
+        "rem": 0.5
+      },
+      "space_md": {
+        "kind": "spacing",
+        "rem": 1
+      },
+      "space_lg": {
+        "kind": "spacing",
+        "rem": 1.5
+      },
+      "radius_sm": {
+        "kind": "corners",
+        "rem": 0.125
+      },
+      "radius_md": {
+        "kind": "corners",
+        "rem": 0.25
+      },
+      "radius_lg": {
+        "kind": "corners",
+        "rem": 0.5
+      },
+      "elevation_low": {
+        "kind": "elevation",
+        "level": 1
+      },
+      "elevation_high": {
+        "kind": "elevation",
+        "level": 3
+      },
+      "density": {
+        "kind": "density",
+        "value": "comfortable"
+      }
+    }
+  },
+  "PLATFORM_THEME_RELEASE_3_0_0": {
+    "catalogueThemeId": "3f0a2b14-9c6d-4e58-8a71-6d2e5f4b1c09",
+    "releaseVersion": "3.0.0",
+    "tokens": {
+      "background": {
+        "kind": "color_pair",
+        "light": "oklch(1 0 0)",
+        "dark": "oklch(0.145 0 0)",
+        "role": "background"
+      },
+      "surface": {
+        "kind": "color_pair",
+        "light": "oklch(0.985 0 0)",
+        "dark": "oklch(0.205 0 0)",
+        "role": "background"
+      },
+      "text": {
+        "kind": "color_pair",
+        "light": "oklch(0.145 0 0)",
+        "dark": "oklch(0.985 0 0)",
+        "role": "foreground"
+      },
+      "muted_text": {
+        "kind": "color_pair",
+        "light": "oklch(0.556 0 0)",
+        "dark": "oklch(0.708 0 0)",
+        "role": "foreground"
+      },
+      "border_color": {
+        "kind": "color_pair",
+        "light": "oklch(0.922 0 0)",
+        "dark": "oklch(1 0 0 / 10%)"
+      },
+      "border": {
+        "kind": "border",
+        "widthRem": 0.0625,
+        "style": "solid",
+        "colorToken": "border_color"
+      },
+      "primary": {
+        "kind": "color_pair",
+        "light": "oklch(0.205 0 0)",
+        "dark": "oklch(0.922 0 0)"
+      },
+      "primary_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.985 0 0)",
+        "dark": "oklch(0.205 0 0)",
+        "role": "foreground"
+      },
+      "secondary": {
+        "kind": "color_pair",
+        "light": "oklch(0.97 0 0)",
+        "dark": "oklch(0.269 0 0)"
+      },
+      "secondary_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.205 0 0)",
+        "dark": "oklch(0.985 0 0)",
+        "role": "foreground"
+      },
+      "danger": {
+        "kind": "color_pair",
+        "light": "oklch(0.577 0.245 27.325)",
+        "dark": "oklch(0.704 0.191 22.216)"
+      },
+      "danger_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.985 0 0)",
+        "dark": "oklch(0.205 0 0)",
+        "role": "foreground"
+      },
+      "danger_text": {
+        "kind": "color_pair",
+        "light": "oklch(0.577 0.245 27.325)",
+        "dark": "oklch(0.704 0.191 22.216)",
+        "role": "foreground"
+      },
+      "warning_text": {
+        "kind": "color_pair",
+        "light": "#92400E",
+        "dark": "#FBBF24",
+        "role": "foreground"
+      },
+      "info_text": {
+        "kind": "color_pair",
+        "light": "#1D4ED8",
+        "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "card": {
+        "kind": "color_pair",
+        "light": "oklch(1 0 0)",
+        "dark": "oklch(0.205 0 0)",
+        "role": "background"
+      },
+      "card_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.145 0 0)",
+        "dark": "oklch(0.985 0 0)",
+        "role": "foreground"
+      },
+      "popover": {
+        "kind": "color_pair",
+        "light": "oklch(1 0 0)",
+        "dark": "oklch(0.205 0 0)",
+        "role": "background"
+      },
+      "popover_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.145 0 0)",
+        "dark": "oklch(0.985 0 0)",
+        "role": "foreground"
+      },
+      "muted": {
+        "kind": "color_pair",
+        "light": "oklch(0.97 0 0)",
+        "dark": "oklch(0.269 0 0)",
+        "role": "background"
+      },
+      "accent": {
+        "kind": "color_pair",
+        "light": "oklch(0.97 0 0)",
+        "dark": "oklch(0.269 0 0)",
+        "role": "background"
+      },
+      "accent_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.205 0 0)",
+        "dark": "oklch(0.985 0 0)",
+        "role": "foreground"
+      },
+      "input": {
+        "kind": "color_pair",
+        "light": "oklch(0.922 0 0)",
+        "dark": "oklch(1 0 0 / 15%)"
+      },
+      "ring": {
+        "kind": "color_pair",
+        "light": "oklch(0.708 0 0)",
+        "dark": "oklch(0.556 0 0)"
+      },
+      "chart_1": {
+        "kind": "color_pair",
+        "light": "oklch(0.809 0.105 251.813)",
+        "dark": "oklch(0.809 0.105 251.813)"
+      },
+      "chart_2": {
+        "kind": "color_pair",
+        "light": "oklch(0.623 0.214 259.815)",
+        "dark": "oklch(0.623 0.214 259.815)"
+      },
+      "chart_3": {
+        "kind": "color_pair",
+        "light": "oklch(0.546 0.245 262.881)",
+        "dark": "oklch(0.546 0.245 262.881)"
+      },
+      "chart_4": {
+        "kind": "color_pair",
+        "light": "oklch(0.488 0.243 264.376)",
+        "dark": "oklch(0.488 0.243 264.376)"
+      },
+      "chart_5": {
+        "kind": "color_pair",
+        "light": "oklch(0.424 0.199 265.638)",
+        "dark": "oklch(0.424 0.199 265.638)"
+      },
+      "sidebar": {
+        "kind": "color_pair",
+        "light": "oklch(0.985 0 0)",
+        "dark": "oklch(0.205 0 0)",
+        "role": "background"
+      },
+      "sidebar_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.145 0 0)",
+        "dark": "oklch(0.985 0 0)",
+        "role": "foreground"
+      },
+      "sidebar_primary": {
+        "kind": "color_pair",
+        "light": "oklch(0.205 0 0)",
+        "dark": "oklch(0.488 0.243 264.376)"
+      },
+      "sidebar_primary_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.985 0 0)",
+        "dark": "oklch(0.985 0 0)",
+        "role": "foreground"
+      },
+      "sidebar_accent": {
+        "kind": "color_pair",
+        "light": "oklch(0.97 0 0)",
+        "dark": "oklch(0.269 0 0)"
+      },
+      "sidebar_accent_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.205 0 0)",
+        "dark": "oklch(0.985 0 0)",
+        "role": "foreground"
+      },
+      "sidebar_border": {
+        "kind": "color_pair",
+        "light": "oklch(0.922 0 0)",
+        "dark": "oklch(1 0 0 / 10%)"
+      },
+      "sidebar_ring": {
+        "kind": "color_pair",
+        "light": "oklch(0.708 0 0)",
+        "dark": "oklch(0.556 0 0)"
+      },
+      "focus": {
+        "kind": "focus",
+        "colorToken": "primary",
+        "widthRem": 0.125
+      },
+      "body": {
+        "kind": "typography",
+        "family": "body",
+        "sizeRem": 1,
+        "lineHeight": 1.5,
+        "weight": 400
+      },
+      "heading": {
+        "kind": "typography",
+        "family": "heading",
+        "sizeRem": 1.5,
+        "lineHeight": 1.25,
+        "weight": 600
+      },
+      "space_xs": {
+        "kind": "spacing",
+        "rem": 0.25
+      },
+      "space_sm": {
+        "kind": "spacing",
+        "rem": 0.5
+      },
+      "space_md": {
+        "kind": "spacing",
+        "rem": 1
+      },
+      "space_lg": {
+        "kind": "spacing",
+        "rem": 1.5
+      },
+      "radius_sm": {
+        "kind": "corners",
+        "rem": 0.125
+      },
+      "radius_md": {
+        "kind": "corners",
+        "rem": 0.25
+      },
+      "radius_lg": {
+        "kind": "corners",
+        "rem": 0.5
+      },
+      "radius_base": {
+        "kind": "corners",
+        "rem": 0.625
+      },
+      "elevation_low": {
+        "kind": "elevation",
+        "level": 1
+      },
+      "elevation_high": {
+        "kind": "elevation",
+        "level": 3
+      },
+      "density": {
+        "kind": "density",
+        "value": "comfortable"
+      }
     }
   }
 }

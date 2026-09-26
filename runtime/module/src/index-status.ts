@@ -423,7 +423,7 @@ export const createApplicationIndexStatusRepository = (
             ${installation.data.organizationId}::uuid,
             ${installation.data.applicationRootId}::uuid,
             ${installation.data.applicationReleaseRevision}::bigint,
-            ${JSON.stringify(expectedModuleBindings)}::jsonb
+            ${JSON.stringify(expectedModuleBindings)}::text::jsonb
           ) as index_status
         `;
         if (statusRows.length !== 1 || statusRows[0] === undefined)
