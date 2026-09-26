@@ -211,16 +211,18 @@ export const startVerificationDatabase = async ({
     worktree,
   });
 
-  // The plain Postgres image has no Storage or Auth tables, and the Vortex
-  // migrations read them (`storage.buckets`, `storage.objects`, `auth.jwt()`,
-  // `auth.sessions`), so prepare those schemas from the pinned Supabase service
-  // images before applying any migration. A preparation failure carries the
-  // same handle as a failed migration, so the caller can identify the cluster.
+  // The plain Postgres image has no Storage, Auth or Realtime tables, and the
+  // Vortex migrations read them (`storage.buckets`, `storage.objects`,
+  // `auth.jwt()`, `auth.sessions`, `realtime.messages`), so prepare those
+  // schemas from the pinned Supabase service images before applying any
+  // migration. A preparation failure carries the same handle as a failed
+  // migration, so the caller can identify the cluster.
   try {
     prepareVerificationDatabase({
       containerName,
       jwtSecret,
       postgresImage: verificationDatabaseImage,
+      spawn,
       stdout,
       stderr,
     });
