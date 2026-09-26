@@ -17,6 +17,7 @@ import {
   identitySessionCookieDeletions,
   type SessionCookie,
   type SessionCookieMutation,
+  type SessionCookieProfile,
 } from "./session-cookie";
 import { createIdentitySessionClient, type IdentitySessionClient } from "./supabase-session-client";
 import { identitySessionProxyHeader } from "./session-request-state";
@@ -33,6 +34,17 @@ const applyMutations = async (mutations: readonly SessionCookieMutation[]): Prom
 const requestCookies = async (): Promise<readonly SessionCookie[]> => {
   const store = await cookies();
   return store.getAll().map(({ name, value }) => ({ name, value }));
+};
+
+const staleCookieDeletions = (
+  previous: readonly SessionCookie[],
+  written: readonly SessionCookieMutation[],
+  profile: SessionCookieProfile,
+): readonly SessionCookieMutation[] => {
+  const kept = new Set(written.map(({ name }) => name));
+  return identitySessionCookieDeletions(profile).filter(
+    ({ name }) => !kept.has(name) && previous.some((cookie) => cookie.name === name),
+  );
 };
 
 const sessionService = () => {
@@ -74,33 +86,37 @@ export const bootstrapIdentitySession = async (
   let outcome: IdentitySessionResolution = unavailable();
   let committed = false;
   try {
-    const boundary = createIdentitySessionClient(await requestCookies());
-    if (boundary.stage.initialState.kind === "invalid") {
-      outcome = invalid();
+    // A fresh sign-in supersedes whatever session cookies the browser still holds. Starting from
+    // them would make the provider client try to refresh a stale pair (for example after a
+    // database reset) and discard or race the new session, so it starts empty and the old
+    // cookies are replaced or deleted when the new pair is committed.
+    const previous = await requestCookies();
+    const boundary = createIdentitySessionClient([]);
+    const setResult = await boundary.client.auth.setSession({
+      access_token: signedIn.accessToken,
+      refresh_token: signedIn.refreshToken,
+    });
+    if (setResult.error || !setResult.data.session) {
+      outcome = providerFailure(setResult.error);
     } else {
-      const setResult = await boundary.client.auth.setSession({
-        access_token: signedIn.accessToken,
-        refresh_token: signedIn.refreshToken,
-      });
-      if (setResult.error || !setResult.data.session) {
-        outcome = providerFailure(setResult.error);
+      const currentToken = setResult.data.session.access_token;
+      const live = await boundary.client.auth.getUser(currentToken);
+      if (live.error || !live.data.user) {
+        outcome = providerFailure(live.error);
       } else {
-        const currentToken = setResult.data.session.access_token;
-        const live = await boundary.client.auth.getUser(currentToken);
-        if (live.error || !live.data.user) {
-          outcome = providerFailure(live.error);
-        } else {
-          outcome = await sessionService().bootstrap(
-            currentToken,
-            correlationIdSchema.parse(randomUUID()),
-          );
-          const staged = boundary.stage.snapshot();
-          if (staged.refused) {
-            outcome = invalid();
-          } else if (outcome.kind === "active") {
-            await applyMutations(staged.mutations);
-            committed = true;
-          }
+        outcome = await sessionService().bootstrap(
+          currentToken,
+          correlationIdSchema.parse(randomUUID()),
+        );
+        const staged = boundary.stage.snapshot();
+        if (staged.refused) {
+          outcome = invalid();
+        } else if (outcome.kind === "active") {
+          await applyMutations([
+            ...staged.mutations,
+            ...staleCookieDeletions(previous, staged.mutations, boundary.profile),
+          ]);
+          committed = true;
         }
       }
     }
