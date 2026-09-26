@@ -124,6 +124,32 @@ const delegationAllFields = [
   "state",
   "temporal_state",
 ];
+// The organisation settings system record type is the read-only projection of the
+// one protected settings document the organisation already has, so it declares
+// only the safe projected fields and no ordinary write path. Its two changes go
+// through the registered protected operations that re-check the document's exact
+// current revision, so each carries the settings row's identity and revision
+// automatically. Extending the settings themselves is a later task. The
+// installed-application system record type is the read-only projection of the
+// applications installed in the organisation, and the permitted-applications feed
+// still serves installed applications to pages until a follow-up replaces it.
+const settingsAllFields = [
+  "organization_id",
+  "revision",
+  "language",
+  "time_zone",
+  "currency",
+  "date_format",
+  "number_format",
+  "default_application_root_id",
+];
+const installedApplicationAllFields = [
+  "organization_id",
+  "revision",
+  "key",
+  "release_revision",
+  "is_default",
+];
 
 /**
  * Ordinary, application-contained records for the Organisation Administration
@@ -135,7 +161,9 @@ const delegationAllFields = [
  * through the ordinary query path and never copied into application records.
  * Each change still goes through its registered protected operation, and the raw
  * invitation secret and its stored fingerprint are never projected. Role grants
- * stay in the IAM application; this module declares no grant control.
+ * stay in the IAM application; this module declares no grant control. The one
+ * organisation settings document and the organisation's installed applications
+ * are the same kind of protected fact and are declared the same way, beside them.
  */
 export const organisationAdministrationModule: ModuleSourceDocument =
   moduleSourceDocumentSchema.parse({
@@ -1750,6 +1778,234 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           ],
           relationships: [],
         },
+        {
+          id: "rt_organization_settings",
+          key: "organization_settings",
+          name: "Organisation settings",
+          plural_name: "Organisation settings",
+          title_field: "organization_id",
+          storage_contract_id: "srt_org_admin_settings",
+          storage_scope: "organisation_shared",
+          ownership_mode: "none",
+          standard_actions: ["read"],
+          custom_actions: ["act_update_organization_settings", "act_set_default_application"],
+          system_projection: {
+            protected_view: "organization_runtime_settings",
+            organization_field: "organization_id",
+            revision_field: "revision",
+            filterable_fields: [],
+            sortable_fields: [],
+          },
+          fields: [
+            {
+              id: "fld_settings_organization_id",
+              key: "organization_id",
+              label: "Organisation",
+              required: true,
+              unique: false,
+              filterable: false,
+              sortable: false,
+              personal_data: "none",
+              public_display: "refused",
+              type: "text",
+              settings: { max_length: 36 },
+            },
+            {
+              id: "fld_settings_revision",
+              key: "revision",
+              label: "Revision",
+              required: true,
+              unique: false,
+              filterable: false,
+              sortable: false,
+              personal_data: "none",
+              public_display: "refused",
+              type: "whole_number",
+              settings: {},
+            },
+            {
+              id: "fld_settings_language",
+              key: "language",
+              label: "Language",
+              required: false,
+              unique: false,
+              filterable: false,
+              sortable: false,
+              personal_data: "none",
+              public_display: "refused",
+              type: "text",
+              settings: { max_length: 35 },
+            },
+            {
+              id: "fld_settings_time_zone",
+              key: "time_zone",
+              label: "Time zone",
+              required: false,
+              unique: false,
+              filterable: false,
+              sortable: false,
+              personal_data: "none",
+              public_display: "refused",
+              type: "text",
+              settings: { max_length: 100 },
+            },
+            {
+              id: "fld_settings_currency",
+              key: "currency",
+              label: "Currency",
+              required: false,
+              unique: false,
+              filterable: false,
+              sortable: false,
+              personal_data: "none",
+              public_display: "refused",
+              type: "text",
+              settings: { max_length: 3 },
+            },
+            {
+              id: "fld_settings_date_format",
+              key: "date_format",
+              label: "Date format",
+              required: false,
+              unique: false,
+              filterable: false,
+              sortable: false,
+              personal_data: "none",
+              public_display: "refused",
+              type: "choice",
+              settings: {
+                options: [
+                  { value: "short", label: "Short" },
+                  { value: "medium", label: "Medium" },
+                  { value: "long", label: "Long" },
+                  { value: "full", label: "Full" },
+                ],
+              },
+            },
+            {
+              id: "fld_settings_number_format",
+              key: "number_format",
+              label: "Number format",
+              required: false,
+              unique: false,
+              filterable: false,
+              sortable: false,
+              personal_data: "none",
+              public_display: "refused",
+              type: "choice",
+              settings: {
+                options: [
+                  { value: "auto", label: "Automatic" },
+                  { value: "always", label: "Always show decimals" },
+                  { value: "min2", label: "At least two decimals" },
+                  { value: "never", label: "Never show decimals" },
+                ],
+              },
+            },
+            {
+              id: "fld_settings_default_application_root_id",
+              key: "default_application_root_id",
+              label: "Default application",
+              required: false,
+              unique: false,
+              filterable: false,
+              sortable: false,
+              personal_data: "none",
+              public_display: "refused",
+              type: "text",
+              settings: { max_length: 36 },
+            },
+          ],
+          relationships: [],
+        },
+        {
+          id: "rt_installed_application",
+          key: "installed_application",
+          name: "Installed application",
+          plural_name: "Installed applications",
+          title_field: "key",
+          storage_contract_id: "srt_org_admin_installed_application",
+          storage_scope: "organisation_shared",
+          ownership_mode: "none",
+          standard_actions: ["read"],
+          custom_actions: [],
+          system_projection: {
+            protected_view: "installed_applications",
+            organization_field: "organization_id",
+            revision_field: "revision",
+            filterable_fields: ["is_default"],
+            sortable_fields: ["key", "release_revision"],
+          },
+          fields: [
+            {
+              id: "fld_installed_application_organization_id",
+              key: "organization_id",
+              label: "Organisation",
+              required: true,
+              unique: false,
+              filterable: false,
+              sortable: false,
+              personal_data: "none",
+              public_display: "refused",
+              type: "text",
+              settings: { max_length: 36 },
+            },
+            {
+              id: "fld_installed_application_revision",
+              key: "revision",
+              label: "Revision",
+              required: true,
+              unique: false,
+              filterable: false,
+              sortable: false,
+              personal_data: "none",
+              public_display: "refused",
+              type: "whole_number",
+              settings: {},
+            },
+            {
+              id: "fld_installed_application_key",
+              key: "key",
+              label: "Key",
+              required: false,
+              unique: false,
+              filterable: false,
+              sortable: true,
+              search_priority: "first",
+              personal_data: "none",
+              public_display: "refused",
+              type: "text",
+              settings: { max_length: 120 },
+            },
+            {
+              id: "fld_installed_application_release_revision",
+              key: "release_revision",
+              label: "Installed release",
+              required: false,
+              unique: false,
+              filterable: false,
+              sortable: true,
+              personal_data: "none",
+              public_display: "refused",
+              type: "whole_number",
+              settings: {},
+            },
+            {
+              id: "fld_installed_application_is_default",
+              key: "is_default",
+              label: "Default application",
+              required: false,
+              unique: false,
+              filterable: true,
+              sortable: false,
+              personal_data: "none",
+              public_display: "refused",
+              type: "yes_no",
+              settings: {},
+            },
+          ],
+          relationships: [],
+        },
       ],
       permissions: [
         {
@@ -2193,6 +2449,71 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           record_scope: { routes: [{ kind: "all_records" }] },
           field_policy: { readable_fields: ["state"], changeable_fields: [] },
         },
+        {
+          id: "perm_settings_read",
+          key: "vortex.organisation_administration.organization_settings.read",
+          label: "Read organisation settings",
+          description:
+            "Allows reading the protected organisation settings projection as a system record.",
+          record_type: "organization_settings",
+          action_kind: "read",
+          administrative: false,
+          record_scope: { routes: [{ kind: "all_records" }] },
+          field_policy: { readable_fields: settingsAllFields, changeable_fields: [] },
+        },
+        {
+          id: "perm_settings_update",
+          key: "vortex.organisation_administration.organization_settings.update",
+          label: "Update organisation settings",
+          description:
+            "Allows updating the organisation settings document through its protected operation.",
+          record_type: "organization_settings",
+          action_kind: "named",
+          named_action: "update",
+          administrative: false,
+          record_scope: { routes: [{ kind: "all_records" }] },
+          field_policy: {
+            readable_fields: [
+              "language",
+              "time_zone",
+              "currency",
+              "date_format",
+              "number_format",
+            ],
+            changeable_fields: [],
+          },
+        },
+        {
+          id: "perm_settings_set_default_application",
+          key: "vortex.organisation_administration.organization_settings.set_default_application",
+          label: "Set default application",
+          description:
+            "Allows setting or clearing the organisation's default application through its protected operation.",
+          record_type: "organization_settings",
+          action_kind: "named",
+          named_action: "set_default_application",
+          administrative: false,
+          record_scope: { routes: [{ kind: "all_records" }] },
+          field_policy: {
+            readable_fields: ["default_application_root_id"],
+            changeable_fields: [],
+          },
+        },
+        {
+          id: "perm_installed_application_read",
+          key: "vortex.organisation_administration.installed_application.read",
+          label: "Read installed applications",
+          description:
+            "Allows reading the protected installed-application projection as a system record.",
+          record_type: "installed_application",
+          action_kind: "read",
+          administrative: false,
+          record_scope: { routes: [{ kind: "all_records" }] },
+          field_policy: {
+            readable_fields: installedApplicationAllFields,
+            changeable_fields: [],
+          },
+        },
       ],
       actions: [
         {
@@ -2473,6 +2794,76 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           inputs: [],
           tasks: [],
           protected_operation: "revoke_delegation_authority",
+        },
+        {
+          id: "act_update_organization_settings",
+          key: "vortex.organisation_administration.organization_settings.update",
+          label: "Update organisation settings",
+          record_type: "organization_settings",
+          permission: "vortex.organisation_administration.organization_settings.update",
+          shareable: false,
+          // The settings document's identity and revision reach the operation
+          // automatically, so only the new values are the actor's input.
+          inputs: [
+            {
+              key: "language",
+              label: "Language",
+              required: true,
+              type: "text",
+              validation: { maximum_length: 35 },
+            },
+            {
+              key: "time_zone",
+              label: "Time zone",
+              required: true,
+              type: "text",
+              validation: { maximum_length: 100 },
+            },
+            {
+              key: "currency",
+              label: "Currency",
+              required: true,
+              type: "text",
+              validation: { minimum_length: 3, maximum_length: 3 },
+            },
+            {
+              key: "date_format",
+              label: "Date format",
+              required: true,
+              type: "text",
+              validation: { minimum_length: 1, maximum_length: 20 },
+            },
+            {
+              key: "number_format",
+              label: "Number format",
+              required: true,
+              type: "text",
+              validation: { minimum_length: 1, maximum_length: 20 },
+            },
+          ],
+          tasks: [],
+          protected_operation: "update_runtime_settings",
+        },
+        {
+          id: "act_set_default_application",
+          key: "vortex.organisation_administration.organization_settings.set_default_application",
+          label: "Set default application",
+          record_type: "organization_settings",
+          permission: "vortex.organisation_administration.organization_settings.set_default_application",
+          shareable: false,
+          // The settings document's identity and revision reach the operation
+          // automatically; an absent application clears the default.
+          inputs: [
+            {
+              key: "default_application_root_id",
+              label: "Default application",
+              required: false,
+              type: "text",
+              validation: { maximum_length: 36 },
+            },
+          ],
+          tasks: [],
+          protected_operation: "set_default_application",
         },
       ],
       events: [],

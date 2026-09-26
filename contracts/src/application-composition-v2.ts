@@ -1986,6 +1986,9 @@ export const protectedReadModelKeys = [
   "tenant_structure",
   "organization_invitations",
   "organization_runtime_settings",
+  "tenants",
+  "tenant_administrators",
+  "installed_applications",
 ] as const;
 export const protectedReadModelKeySchema = z.enum(protectedReadModelKeys);
 export type ProtectedReadModelKey = z.infer<typeof protectedReadModelKeySchema>;
@@ -2056,6 +2059,29 @@ export const protectedReadModelDeclarations = Object.freeze({
     ownerReader: "access.readOrganizationRuntimeSettings",
     filters: Object.freeze([] as const),
     resultContract: "ReadOrganizationRuntimeSettingsResult",
+  }),
+  tenants: Object.freeze({
+    label: "Tenants",
+    ownerReader: "identity.listTenants",
+    filters: Object.freeze([] as const),
+    resultContract: "TenantLauncherResult",
+  }),
+  tenant_administrators: Object.freeze({
+    label: "Tenant administrators",
+    ownerReader: "identity.listTenantAdministrators",
+    filters: Object.freeze([] as const),
+    resultContract: "TenantAssignmentReadResult",
+  }),
+  // Installed applications already project a registered protected view, so the
+  // ordinary query path reads them. The permitted-applications feed still serves
+  // them to pages and no owner reader replaces it yet, so a page binding to this
+  // read model refuses neutrally until that feed is replaced; `unavailable` is
+  // that fact, not a reader that does not exist.
+  installed_applications: Object.freeze({
+    label: "Installed applications",
+    ownerReader: "unavailable",
+    filters: Object.freeze([] as const),
+    resultContract: "ProtectedReadModelResolution",
   }),
 } satisfies Record<
   ProtectedReadModelKey,

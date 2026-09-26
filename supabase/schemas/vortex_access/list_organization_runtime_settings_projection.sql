@@ -16,6 +16,7 @@ as $function$
 declare
   scope_row record;
   settings_row record;
+  settings_default_application_root_id uuid;
 begin
   -- The projection keeps today's row visibility inside itself: the same fixed
   -- runtime-settings read decision the bespoke reader applies decides whether
@@ -24,8 +25,9 @@ begin
   -- foreign record, so the record adapters return their identical refusal and
   -- a list page is empty rather than failing. The record identity is the
   -- organisation, whose settings are a single row, and the revision is the
-  -- settings document's own revision. Attribute names are the lowercase field
-  -- keys a projection record type declares.
+  -- settings document's own revision, which the default application shares.
+  -- Attribute names are the lowercase field keys a projection record type
+  -- declares.
   begin
     select authorized.* into strict scope_row
     from vortex_access.organization_runtime_settings_administration_read_scope() as authorized;
@@ -44,6 +46,9 @@ begin
   if p_record_id is not null and p_record_id <> settings_row.organization_id then
     return;
   end if;
+  select settings.default_application_root_id into settings_default_application_root_id
+  from vortex_identity.organization_runtime_settings as settings
+  where settings.organization_id = settings_row.organization_id;
   return query select
     settings_row.organization_id,
     settings_row.organization_id,
@@ -53,7 +58,8 @@ begin
       'time_zone', settings_row.time_zone,
       'currency', settings_row.currency,
       'date_format', settings_row.date_format,
-      'number_format', settings_row.number_format
+      'number_format', settings_row.number_format,
+      'default_application_root_id', settings_default_application_root_id
     );
 end
 $function$;
