@@ -417,7 +417,6 @@ export const pageDefinitionV2Schema = z.discriminatedUnion("type", [
       ...pageV2Base,
       type: z.literal("form"),
       recordType: recordTypeReferenceSchema,
-      commitActionKey: namespacedKeySchema,
     })
     .strict(),
   z
@@ -425,7 +424,6 @@ export const pageDefinitionV2Schema = z.discriminatedUnion("type", [
       ...pageV2Common,
       type: z.literal("guided_form"),
       recordType: recordTypeReferenceSchema,
-      commitActionKey: namespacedKeySchema,
       steps: z.array(guidedFormStepV2Schema).min(2).max(20),
       composition: guidedFormPageCompositionV2Schema,
     })

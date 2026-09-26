@@ -27,6 +27,7 @@ import {
   isPlatformPermissionKey,
   PLATFORM_SERVICE_OPERATIONS,
   flowContractVersion,
+  flowTaskChildLists,
   flowTaskMappingForActionEffect,
   normalizeExactDecimal,
   readModuleSourceRecordOwnershipMode,
@@ -270,7 +271,6 @@ const directSourceKeyMap: Readonly<Record<string, string>> = Object.freeze({
   view_permission: "viewPermissionKey",
   use_permission: "usePermissionKey",
   public_action: "publicActionKey",
-  commit_action: "commitActionKey",
   secret_fields: "secretFieldKeys",
 });
 
@@ -1508,7 +1508,7 @@ const applicationSourceTransformPatterns = [
   /^body\/queries\/#\/filter$/,
   /^body\/queries\/#\/sort\/#\/field$/,
   /^body\/queries\/#\/aggregates\/#\/field$/,
-  /^body\/pages\/#\/(?:id|record_type|query|permission|commit_action|public_action|public_fields\/#)$/,
+  /^body\/pages\/#\/(?:id|record_type|query|permission|public_action|public_fields\/#)$/,
   /^body\/experiences\/#\/page$/,
   /^body\/pages\/#\/layout\/(?:desktop|phone)\/component_order\/#$/,
   /^body\/pages\/#\/(?:blocks\/#|steps\/#\/blocks\/#)\/(?:id|block|query|view_permission|use_permission)$/,
@@ -4387,27 +4387,6 @@ const standardRecordActions = new Set([
   "export",
 ]);
 
-/**
- * Resolves a form commit to a custom action or to a bound Module's standard record action
- * (`module.record.action`), matching the executable actions Definition validation accepts.
- */
-function resolveFormCommitAction(
-  source: JsonObject,
-  resolution: Resolution,
-  key: string,
-  allowedOwners: readonly string[],
-): string {
-  const standard = /^(.+)\.([^.]+)\.([^.]+)$/.exec(key);
-  const boundModules = (asObject(source.body).module_bindings as JsonObject[]).map((binding) =>
-    String(binding.module),
-  );
-  if (standard && standardRecordActions.has(standard[3]!) && boundModules.includes(standard[1]!)) {
-    resolution.recordType(`${standard[1]}:${standard[2]}`);
-    return key;
-  }
-  return resolution.exactOwnedReference("action", key, allowedOwners);
-}
-
 function compileApplicationPagesV2(
   source: JsonObject,
   resolution: Resolution,
@@ -4459,24 +4438,12 @@ function compileApplicationPagesV2(
         ...base,
         type: "form",
         recordType: resolution.recordType(String(page.record_type)),
-        commitActionKey: resolveFormCommitAction(
-          source,
-          resolution,
-          String(page.commit_action),
-          allowedPermissionOwners,
-        ),
       };
     if (page.type === "guided_form")
       return {
         ...base,
         type: "guided_form",
         recordType: resolution.recordType(String(page.record_type)),
-        commitActionKey: resolveFormCommitAction(
-          source,
-          resolution,
-          String(page.commit_action),
-          allowedPermissionOwners,
-        ),
         steps: (page.steps as JsonObject[]).map((step) => ({
           id: resolution.id(
             definitionKey,
@@ -5588,7 +5555,7 @@ function applicationProvenanceV2(
         sourcePath[0] === "body" &&
         sourcePath[1] === "pages" &&
         typeof sourcePath[2] === "number" &&
-        ["permission", "commit_action", "public_action"].includes(String(sourcePath.at(-1)));
+        ["permission", "public_action"].includes(String(sourcePath.at(-1)));
       const sourceParentValue = valueAtPath(source, sourcePath.slice(0, -1));
       const sourceParent =
         sourceParentValue !== null &&
@@ -5862,11 +5829,117 @@ function compileApplicationToolBundle(
     });
   };
 
+  // A form no longer declares its own commit: it commits what its bound `form_submit` flow
+  // commits. The derived action is read from the flow's tasks exactly as Definition validation
+  // derives it, so the tool bundle and the published contract never drift.
+  const standardActionKeysByRecordAction = new Map<string, string>();
+  for (const output of boundModuleOutputs) {
+    const moduleKey = String(output.canonical.envelope.key);
+    for (const record of output.canonical.content.recordTypes)
+      for (const action of record.standardActions)
+        standardActionKeysByRecordAction.set(
+          `${String(record.recordTypeId)}:${action}`,
+          `${moduleKey}.${String(record.key)}.${action}`,
+        );
+  }
+  const executableFlowCommitKeys = new Set<string>([
+    ...applicationActionKeys,
+    ...moduleActionsByKey.keys(),
+    ...standardActionKeysByRecordAction.values(),
+  ]);
+  const flowsById = new Map<string, FlowDefinition>(
+    content.flows.map((flow) => [String(flow.id), flow as unknown as FlowDefinition] as const),
+  );
+  const flowCommitActionKeys = (flow: FlowDefinition): string[] => {
+    const keys: string[] = [];
+    const followed = new Set<string>();
+    const visit = (tasks: readonly FlowTask[]): void => {
+      for (const task of tasks) {
+        if (task.type === "run_flow") {
+          const target = flowsById.get(
+            String((task as Extract<FlowTask, { type: "run_flow" }>).flowId),
+          );
+          if (target === undefined) keys.push("");
+          else visitFlow(target);
+        }
+        const properties = (task as { properties?: Record<string, JsonObject> }).properties;
+        const literal = (name: string): string | undefined => {
+          const value = properties?.[name];
+          return value?.kind === "literal" ? String(asObject(value.literal).value) : undefined;
+        };
+        if (task.type === "record.save")
+          keys.push(
+            standardActionKeysByRecordAction.get(
+              `${literal("record_type")}:${properties?.record === undefined ? "create" : "update"}`,
+            ) ?? "",
+          );
+        else if (task.type === "operation.call") {
+          const called = literal("operation");
+          if (called !== undefined && executableFlowCommitKeys.has(called)) keys.push(called);
+        }
+        for (const child of flowTaskChildLists(task)) visit(child.tasks);
+      }
+    };
+    const visitFlow = (candidate: FlowDefinition): void => {
+      if (followed.has(String(candidate.id))) return;
+      followed.add(String(candidate.id));
+      visit(candidate.tasks);
+      visit(candidate.errors);
+      visit(candidate.finally);
+    };
+    visitFlow(flow);
+    return keys;
+  };
+  const pageControlIds = (page: { composition: unknown }): string[] => {
+    const composition = asObject(page.composition);
+    const ids: string[] = [];
+    const collect = (slotValue: unknown): void => {
+      for (const [placementId, placementValue] of Object.entries(
+        asObject(asObject(slotValue).placements),
+      )) {
+        ids.push(placementId);
+        for (const childSlot of Object.values(asObject(asObject(placementValue).slots)))
+          collect(childSlot);
+      }
+    };
+    if ("main" in composition) collect(composition.main);
+    else if ("content" in composition)
+      for (const slot of Object.values(asObject(composition.content))) collect(slot);
+    else if (composition.shellKind === "default")
+      for (const slot of Object.values(asObject(composition.stepContent))) collect(slot);
+    else
+      for (const step of Object.values(asObject(composition.stepContent)))
+        for (const slot of Object.values(asObject(step))) collect(slot);
+    if (composition.shellKind === "application") {
+      const shell = content.shells.find(
+        (candidate) => String(candidate.shellId) === String(composition.shellId),
+      );
+      if (shell !== undefined) collect(shell.layout);
+    }
+    return ids;
+  };
+  const formCommitFlowsByControl = new Map<string, FlowDefinition[]>();
+  for (const binding of content.flowBindings) {
+    if (binding.event !== "form_submit") continue;
+    const flow = flowsById.get(String(binding.flow.flowId));
+    if (flow === undefined) continue;
+    const controlId = String(binding.controlId);
+    formCommitFlowsByControl.set(controlId, [
+      ...(formCommitFlowsByControl.get(controlId) ?? []),
+      flow,
+    ]);
+  }
+
   for (const page of content.pages) {
-    if (page.type === "form" || page.type === "guided_form")
-      addCommittedAction(page.name, String(page.commitActionKey), true);
-    else if (page.type === "public" && page.publicActionKey !== undefined)
+    if (page.type === "form" || page.type === "guided_form") {
+      const committed = new Set<string>();
+      for (const controlId of pageControlIds(page))
+        for (const flow of formCommitFlowsByControl.get(controlId) ?? [])
+          for (const key of flowCommitActionKeys(flow)) if (key !== "") committed.add(key);
+      for (const key of committed) addCommittedAction(page.name, key, true);
+    } else if (page.type === "public" && page.publicActionKey !== undefined) {
       addCommittedAction(page.name, String(page.publicActionKey), false);
+    }
   }
 
   // A flow's record reads name only this Application's own queries, which have their own tools
