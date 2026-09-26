@@ -621,10 +621,7 @@
             "type": "record.set_fields",
             "properties": {
               "values": {
-                "status": {
-                  "source": "literal",
-                  "value": "published"
-                }
+                "status": { "kind": "literal", "literal": { "type": "json", "value": "published" } }
               }
             }
           },

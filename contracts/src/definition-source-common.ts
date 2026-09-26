@@ -5,6 +5,7 @@ import {
   conditionMaximumOperandCount,
   jsonValueSchema,
 } from "./common";
+import { flowValueSchema } from "./flow-contracts";
 
 /** Portable aliases exist only in authored definitions. #15 resolves them to platform identifiers. */
 export const sourceAliasSchema = z
@@ -194,14 +195,6 @@ export const sourceQualifiedConditionSchema: z.ZodType<SourceQualifiedCondition>
         message: `Condition operands cannot exceed ${conditionMaximumOperandCount}`,
       });
   });
-const sourceActionTaskValueSchema = z.discriminatedUnion("source", [
-  z.object({ source: z.literal("literal"), value: jsonValueSchema }).strict(),
-  z.object({ source: z.literal("input"), input: builderKeySchema }).strict(),
-  z.object({ source: z.literal("subject_field"), field: builderKeySchema }).strict(),
-  z.object({ source: z.literal("subject_record") }).strict(),
-  z.object({ source: z.literal("current_actor") }).strict(),
-  z.object({ source: z.literal("current_time") }).strict(),
-]);
 /**
  * The task ids of one named action's ordered task list. Each id becomes the id of its compiled
  * flow task, so the ids are unique within the action and never one the compiled flow reserves for
@@ -222,13 +215,20 @@ export const refineActionTaskIds = (
     seen.add(task.id);
   }
 };
+/**
+ * One registry record task of an authored Module or Application action. The task type and property
+ * names are the flow task registry's, and each property value uses the same flow value grammar as
+ * an authored flow (`flowValueSchema`). The `values` property is the flow `field_values` map: its
+ * keys are field aliases of the task's record type and each entry is a flow value, so `input`,
+ * subject-field and actor/time reads are the same closed references a flow authors.
+ */
 export const sourceActionTaskSchema = z.discriminatedUnion("type", [
   z
     .object({
       id: builderKeySchema,
       type: z.literal("record.set_fields"),
       properties: z
-        .object({ values: z.record(builderKeySchema, sourceActionTaskValueSchema) })
+        .object({ values: z.record(builderKeySchema, flowValueSchema) })
         .strict(),
     })
     .strict(),
@@ -239,7 +239,7 @@ export const sourceActionTaskSchema = z.discriminatedUnion("type", [
       properties: z
         .object({
           record_type: sourceQualifiedRecordTypeSchema,
-          values: z.record(builderKeySchema, sourceActionTaskValueSchema),
+          values: z.record(builderKeySchema, flowValueSchema),
         })
         .strict(),
     })

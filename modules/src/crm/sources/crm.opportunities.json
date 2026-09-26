@@ -858,8 +858,11 @@
             "properties": {
               "values": {
                 "stage": {
-                  "source": "literal",
-                  "value": "won"
+                  "kind": "literal",
+                  "literal": {
+                    "type": "json",
+                    "value": "won"
+                  }
                 }
               }
             }

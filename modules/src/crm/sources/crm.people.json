@@ -896,22 +896,10 @@
             "properties": {
               "record_type": "vortex.crm.people:contact",
               "values": {
-                "first_name": {
-                  "source": "input",
-                  "input": "first_name"
-                },
-                "last_name": {
-                  "source": "input",
-                  "input": "last_name"
-                },
-                "email": {
-                  "source": "subject_field",
-                  "field": "email"
-                },
-                "company": {
-                  "source": "input",
-                  "input": "company"
-                }
+                "first_name": "{{ inputs.first_name }}",
+                "last_name": "{{ inputs.last_name }}",
+                "email": "{{ trigger.record.email }}",
+                "company": "{{ inputs.company }}"
               }
             }
           },
@@ -920,10 +908,7 @@
             "type": "record.set_fields",
             "properties": {
               "values": {
-                "status": {
-                  "source": "literal",
-                  "value": "converted"
-                }
+                "status": { "kind": "literal", "literal": { "type": "json", "value": "converted" } }
               }
             }
           },

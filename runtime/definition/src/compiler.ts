@@ -412,14 +412,6 @@ function sourceToCanonicalPath(
     sourcePath.at(-1) === "field"
   )
     mapped[mapped.length - 1] = "fieldId";
-  if (
-    (source.kind === "module" || source.kind === "application") &&
-    sourcePath[0] === "body" &&
-    sourcePath[1] === "actions" &&
-    sourcePath.includes("tasks") &&
-    sourcePath.at(-1) === "input"
-  )
-    mapped[mapped.length - 1] = "inputKey";
   return resolveDynamicMapPath(source, canonical, sourcePath, mapped);
 }
 
@@ -1321,7 +1313,6 @@ const moduleSourceTransformPatterns = [
   /^body\/actions\/#\/protected_operation$/,
   /^body\/actions\/#\/tasks\/#\/properties\/(?:record_type|event)$/,
   /^body\/actions\/#\/tasks\/#\/properties\/changes\/#\/(?:relationships\/#|target_input)$/,
-  /^body\/actions\/#\/tasks\/#\/properties\/values\/[^/]+\/(?:source|input|field|value)(?:\/.*)?$/,
   /^body\/queries\/#\/(?:id|record_type|select\/#|group_by\/#)$/,
   /^body\/queries\/#\/inputs\/#\/(?:type|record_types\/#)$/,
   /^body\/queries\/#\/inputs\/#\/validation\/(?:minimum|maximum)$/,
@@ -1369,7 +1360,6 @@ const applicationSourceTransformPatterns = [
   /^body\/actions\/#\/inputs\/#\/(?:type|record_types\/#)$/,
   /^body\/actions\/#\/tasks\/#\/properties\/(?:record_type|event)$/,
   /^body\/actions\/#\/tasks\/#\/properties\/changes\/#\/(?:relationships\/#|target_input)$/,
-  /^body\/actions\/#\/tasks\/#\/properties\/values\/[^/]+\/(?:source|input|field|value)(?:\/.*)?$/,
   /^body\/rules\/#\/effect\/(?:field|message|component|workflow|reason_code)$/,
   /^body\/rules\/#\/effect\/value(?:\/.*)?$/,
   /^body\/pipelines\/#\/stages\/#\/(?:entry_actions|exit_actions)\/#$/,
@@ -2200,24 +2190,6 @@ function qualifiedField(resolution: Resolution, reference: string): string {
   return resolution.field(reference.slice(0, separator), reference.slice(separator + 1));
 }
 
-function actionValue(
-  value: unknown,
-  field: (alias: string) => string,
-  targetField?: JsonObject,
-  valueContext?: ModuleValueContext,
-): unknown {
-  const input = asObject(value);
-  if (input.source === "input") return { source: "input", inputKey: input.input };
-  if (input.source === "subject_field")
-    return { source: "subject_field", fieldId: field(String(input.field)) };
-  if (input.source === "literal" && valueContext)
-    return {
-      ...input,
-      value: normaliseModuleFieldValueV2(targetField, input.value, valueContext),
-    };
-  return input;
-}
-
 function actionInput(input: JsonObject, resolution: Resolution, moduleV2 = false): unknown {
   const validation = input.validation ? asObject(input.validation) : undefined;
   const compiledValidation = validation
@@ -2938,51 +2910,13 @@ const subjectFieldReference = (fieldId: unknown, scope: ActionFlowScope): FlowRe
 };
 
 /**
- * Lowers one compiled action value source to the flow value it means. Every dynamic source becomes
- * a typed flow reference: an action input, a subject field, the subject record input, or the
- * trusted run context's actor and time. Only a literal stays a value.
+ * The `field_values` property of a compiled action's record task: the canonical action task already
+ * carries its value map in the flow value grammar, keyed by permanent field identity, so it travels
+ * as the one literal JSON a `field_values` property is: a map whose every entry is a flow value.
  */
-function actionFlowValue(value: unknown, scope: ActionFlowScope): FlowValue {
-  const source = asObject(value);
-  switch (source.source) {
-    case "literal":
-      return { kind: "literal", literal: { type: "json", value: source.value as JsonValue } };
-    case "input":
-      return flowReferenceValue({ source: "input", name: String(source.inputKey) });
-    case "subject_field":
-      return flowReferenceValue(subjectFieldReference(source.fieldId, scope));
-    case "subject_record":
-      return flowReferenceValue({ source: "input", name: scope.subjectInput });
-    case "current_actor":
-      return flowReferenceValue({ source: "execution_actor" });
-    case "current_time":
-      return flowReferenceValue({ source: "execution_now" });
-    default:
-      return fail("vortex.definition.invalid_compilation_output", "invalid_value");
-  }
-}
-
-/**
- * The `field_values` property of a compiled action's record task: field id to flow value. A flow
- * value is a single value, so the per-field map travels as JSON whose every entry is itself a
- * flow value (a typed literal or typed reference), never an action value source. Typing the map
- * itself needs a field-values-of-flow-values property, which #1063 adds with the one apply record
- * changes call.
- */
-const actionFlowFieldValues = (
-  values: Readonly<Record<string, unknown>>,
-  scope: ActionFlowScope,
-): FlowValue => ({
+const actionFlowFieldValues = (values: Readonly<Record<string, unknown>>): FlowValue => ({
   kind: "literal",
-  literal: {
-    type: "json",
-    value: Object.fromEntries(
-      Object.entries(values).map(([fieldId, value]) => [
-        fieldId,
-        actionFlowValue(value, scope) as unknown as JsonValue,
-      ]),
-    ),
-  },
+  literal: { type: "json", value: values as JsonValue },
 });
 
 /** One registered task of a compiled named-action flow, pinned to the registry task version. */
@@ -3110,12 +3044,12 @@ function compileActionFlow(
     switch (String(task.type)) {
       case "record.set_fields":
         return actionFlowTask(id, "record.set_fields", {
-          values: actionFlowFieldValues(asObject(properties.values), scope),
+          values: actionFlowFieldValues(asObject(properties.values)),
         });
       case "record.create":
         return actionFlowTask(id, "record.create", {
           record_type: flowTextValue(String(asObject(properties.recordType).recordTypeId)),
-          values: actionFlowFieldValues(asObject(properties.values), scope),
+          values: actionFlowFieldValues(asObject(properties.values)),
         });
       case "record.changes":
         return actionFlowTask(id, "record.changes", {
@@ -3409,13 +3343,10 @@ function compileModule(
               type: "record.set_fields",
               properties: {
                 values: objectFromUniqueEntries(
-                  Object.entries(asObject(properties.values)).map(([key, value]) => {
-                    const fieldId = localField(key);
-                    return [
-                      fieldId,
-                      actionValue(value, localField, fieldsById.get(fieldId), valueContext),
-                    ];
-                  }),
+                  Object.entries(asObject(properties.values)).map(([key, value]) => [
+                    localField(key),
+                    value,
+                  ]),
                 ),
               },
             };
@@ -3427,13 +3358,10 @@ function compileModule(
               properties: {
                 recordType: resolution.recordType(target),
                 values: objectFromUniqueEntries(
-                  Object.entries(asObject(properties.values)).map(([key, value]) => {
-                    const fieldId = resolution.field(target, key);
-                    return [
-                      fieldId,
-                      actionValue(value, localField, fieldsById.get(fieldId), valueContext),
-                    ];
-                  }),
+                  Object.entries(asObject(properties.values)).map(([key, value]) => [
+                    resolution.field(target, key),
+                    value,
+                  ]),
                 ),
               },
             };
@@ -4110,41 +4038,25 @@ function compileApplication(
                   type: "record.set_fields",
                   properties: {
                     values: objectFromUniqueEntries(
-                      Object.entries(asObject(properties.values)).map(([key, value]) => {
-                        const fieldId = localField(key);
-                        const pair = valueIndex.fieldById(fieldId);
-                        return [
-                          fieldId,
-                          actionValue(
-                            value,
-                            localField,
-                            pair?.field,
-                            pair?.moduleV2 ? subjectContext : undefined,
-                          ),
-                        ];
-                      }),
+                      Object.entries(asObject(properties.values)).map(([key, value]) => [
+                        localField(key),
+                        value,
+                      ]),
                     ),
                   },
                 };
               case "record.create": {
                 const target = String(properties.record_type);
-                const targetContext = valueIndex.record(target)?.moduleV2
-                  ? valueIndex.context(target)
-                  : undefined;
                 return {
                   id,
                   type: "record.create",
                   properties: {
                     recordType: resolution.recordType(target),
                     values: objectFromUniqueEntries(
-                      Object.entries(asObject(properties.values)).map(([key, value]) => {
-                        const fieldId = resolution.field(target, key);
-                        const pair = valueIndex.fieldById(fieldId);
-                        return [
-                          fieldId,
-                          actionValue(value, localField, pair?.field, targetContext),
-                        ];
-                      }),
+                      Object.entries(asObject(properties.values)).map(([key, value]) => [
+                        resolution.field(target, key),
+                        value,
+                      ]),
                     ),
                   },
                 };

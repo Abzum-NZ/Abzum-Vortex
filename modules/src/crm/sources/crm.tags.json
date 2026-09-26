@@ -562,20 +562,10 @@
             "properties": {
               "record_type": "vortex.crm.tags:record_tag",
               "values": {
-                "tag": {
-                  "source": "input",
-                  "input": "tag"
-                },
-                "record": {
-                  "source": "input",
-                  "input": "record"
-                },
-                "assigned_at": {
-                  "source": "current_time"
-                },
-                "assigned_by": {
-                  "source": "current_actor"
-                }
+                "tag": "{{ inputs.tag }}",
+                "record": "{{ inputs.record }}",
+                "assigned_at": "{{ execution.now }}",
+                "assigned_by": "{{ execution.actor }}"
               }
             }
           },

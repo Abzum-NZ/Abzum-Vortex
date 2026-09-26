@@ -438,10 +438,7 @@
             "type": "record.set_fields",
             "properties": {
               "values": {
-                "completed": {
-                  "source": "literal",
-                  "value": true
-                }
+                "completed": { "kind": "literal", "literal": { "type": "json", "value": true } }
               }
             }
           },
