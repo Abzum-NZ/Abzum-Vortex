@@ -3,18 +3,51 @@
 import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
+  createFlowInvokeClient,
+  createFlowRuntime,
+  createFormBlockRuntime,
   createFullPlatformComponentRegistry,
   PageLayoutRenderer,
+  useFlowIntentHost,
+  type ControlSemanticEvent,
   type DisplaySemanticEvent,
+  type FlowDispatchResult,
+  type FlowFormAnswer,
+  type FlowFormIntent,
+  type FormBlockRuntime,
+  type LinkNavigationEnvironment,
   type ProjectedPageCapability,
 } from "@vortex/ui";
 import type { ApplicationPageModel, PlacementFlowBinding } from "../../../../_lib/application-page";
 
+/**
+ * The full component flow binding the browser runtime expects. A {@link PlacementFlowBinding} carries
+ * only the identities the page needs; a form submit reaches the server by binding id and flow id, so
+ * its input map is not required here.
+ */
+type ComponentFlowBinding = Parameters<FormBlockRuntime["submit"]>[0];
+
+const asFormBinding = (
+  placementId: string,
+  binding: PlacementFlowBinding,
+): ComponentFlowBinding =>
+  ({
+    bindingId: binding.bindingId,
+    // The placement id and the binding's control id are the same stable identity.
+    controlId: placementId,
+    eventId: binding.eventId,
+    event: binding.event,
+    flow: { flowId: binding.flowId, inputs: {} },
+  }) as ComponentFlowBinding;
+
 /** One registry shared by every rendered application page. */
 const platformComponentRegistry = createFullPlatformComponentRegistry();
 
-type DisplayEventName = DisplaySemanticEvent["event"];
-type EventHandlers = Partial<Record<DisplayEventName, (event: DisplaySemanticEvent) => void>>;
+/**
+ * A placement's event callbacks. Display events and control events (the form's ready, reset and
+ * submit) are both delivered through the one runtime-inputs map, so the key is the event name.
+ */
+type EventHandlers = Record<string, (event: never) => void>;
 type Notice = Readonly<{ tone: "info" | "problem"; text: string }>;
 
 /**
@@ -127,6 +160,99 @@ export function ApplicationPageView({
     [basePath, pageKeyOf],
   );
 
+  /**
+   * The one browser flow client and host (#1013): a form submit starts the bound flow on the server
+   * and the runtime carries out every pause (another form or a confirmation) through a continuation,
+   * which is returned exactly as the server issued it.
+   */
+  const flowClient = useMemo(
+    () =>
+      createFlowInvokeClient({
+        address: {
+          tenantShortName: application.tenantShortName,
+          organizationShortName: application.organizationShortName,
+          applicationKey: application.applicationKey,
+        },
+        installation: {
+          installationRevision: application.installationRevision,
+          releaseKey: application.releaseKey,
+        },
+      }),
+    [application],
+  );
+  const navigationEnvironment = useMemo<LinkNavigationEnvironment>(
+    () => ({
+      recheckInternalTarget: async (target) => target.kind !== "external",
+      navigateInternal: (target) => {
+        if (target.kind !== "page") return;
+        const parameters = new URLSearchParams();
+        for (const [name, value] of Object.entries(target.parameters ?? {}))
+          if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+            parameters.set(name, String(value));
+        const query = parameters.toString();
+        router.push(`${resolvePageHref(target.pageId)}${query === "" ? "" : `?${query}`}`);
+      },
+      resolveInternalAddress: (target) =>
+        target.kind === "page" ? resolvePageHref(target.pageId) : basePath,
+    }),
+    [basePath, resolvePageHref, router],
+  );
+  const renderForm = useCallback(
+    (
+      form: FlowFormIntent,
+      controls: Readonly<{
+        submit: (values: FlowFormAnswer["values"]) => void;
+        cancel: () => void;
+      }>,
+    ) => (
+      <form
+        className="vortex-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const entered = new FormData(event.currentTarget);
+          const values: Record<string, string> = {};
+          for (const [name, value] of entered.entries()) values[name] = String(value);
+          controls.submit(values);
+        }}
+      >
+        {Object.entries(form.inputs).map(([name, value]) => (
+          <label key={name} className="vortex-field">
+            <span>{name}</span>
+            <input
+              name={name}
+              defaultValue={
+                typeof value === "string" || typeof value === "number" ? String(value) : ""
+              }
+            />
+          </label>
+        ))}
+        <div className="vortex-dialog-actions">
+          <button
+            type="button"
+            className="vortex-button vortex-button-secondary"
+            onClick={controls.cancel}
+          >
+            Cancel
+          </button>
+          <button type="submit" className="vortex-button vortex-button-primary">
+            Continue
+          </button>
+        </div>
+      </form>
+    ),
+    [],
+  );
+  const { host, element: intentHostElement } = useFlowIntentHost({
+    renderForm,
+    navigation: navigationEnvironment,
+  });
+  // One form-block runtime per host: a gesture dispatches its bound flow once and every pause is
+  // carried out by the same host before the next answer is sent.
+  const formBlock = useMemo(
+    () => createFormBlockRuntime(createFlowRuntime({ client: flowClient, host })),
+    [flowClient, host],
+  );
+
   /** A page's own view state (sort, filter, search) lives in its address, so it can be shared and reloaded. */
   const setQuery = useCallback(
     (change: (parameters: URLSearchParams) => void) => {
@@ -216,19 +342,63 @@ export function ApplicationPageView({
     [application, carryOutIntents, router],
   );
 
+  /**
+   * Reports a server-driven flow's safe outcome for a form gesture. The runtime already carried out
+   * every pause through a continuation; only the final outcome is shown, and the page re-reads the
+   * persisted data whatever the flow reported.
+   */
+  const applyDispatch = useCallback(
+    async (dispatch: Promise<FlowDispatchResult | undefined>) => {
+      setBusy(true);
+      setNotice(undefined);
+      try {
+        const result = await dispatch;
+        if (result === undefined) return;
+        if (result.ranIn === "browser") {
+          setNotice(unavailableNotice);
+          return;
+        }
+        const server = result.result;
+        if (server.kind === "reload") {
+          setSelection({});
+          return router.refresh();
+        }
+        if (server.kind === "finished") {
+          setSelection({});
+          setNotice(outcomeNotices[server.descriptor.outcome] ?? unavailableNotice);
+          return router.refresh();
+        }
+        if (server.kind === "refused") {
+          setNotice(outcomeNotices.refused ?? unavailableNotice);
+          return;
+        }
+        setNotice(unavailableNotice);
+      } catch {
+        setNotice(unavailableNotice);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [router],
+  );
+
   const runtimeInputs = useMemo(() => {
     const inputs: Record<string, unknown> = {};
-    for (const [placementId, data] of Object.entries(model.data)) {
+    // A placement may hold bindings (a form submits) without holding projected data, so both key
+    // sets are wired: every placement with data or with a flow binding receives its callbacks.
+    const placementIds = new Set([...Object.keys(model.data), ...Object.keys(model.bindings)]);
+    for (const placementId of placementIds) {
+      const data = model.data[placementId];
       const bindings = model.bindings[placementId] ?? [];
       const events: EventHandlers = {};
       for (const kind of ["row_clicked", "row_action", "bulk_action", "inline_edit"] as const)
         if (bindings.some((binding) => binding.event === kind))
-          events[kind] = (event) => {
+          events[kind] = (event: DisplaySemanticEvent) => {
             const binding = bindingFor(bindings, event);
             if (binding !== undefined && !busy) void runBinding(binding, suppliedValues(event));
           };
       events.refresh = () => router.refresh();
-      events.selection_changed = (event) => {
+      events.selection_changed = (event: DisplaySemanticEvent) => {
         if (event.event !== "selection_changed") return;
         setSelection((current) => {
           const held = new Set(current[placementId] ?? []);
@@ -237,13 +407,13 @@ export function ApplicationPageView({
           return { ...current, [placementId]: [...held] };
         });
       };
-      events.sort_changed = (event) => {
+      events.sort_changed = (event: DisplaySemanticEvent) => {
         if (event.event !== "sort_changed") return;
         setQuery((parameters) =>
           parameters.set(`sort.${placementId}`, `${event.columnKey}:${event.direction}`),
         );
       };
-      events.filter_changed = (event) => {
+      events.filter_changed = (event: DisplaySemanticEvent) => {
         if (event.event !== "filter_changed") return;
         setQuery((parameters) => {
           const name = `filter.${placementId}.${event.field}`;
@@ -251,13 +421,39 @@ export function ApplicationPageView({
           else parameters.set(name, event.value);
         });
       };
-      events.search_changed = (event) => {
+      events.search_changed = (event: DisplaySemanticEvent) => {
         if (event.event !== "search_changed") return;
         setQuery((parameters) => {
           if (event.query.trim() === "") parameters.delete(`search.${placementId}`);
           else parameters.set(`search.${placementId}`, event.query);
         });
       };
+      // A form container emits its one submission for a gesture; it runs the bound flow once
+      // through the runtime, which resumes every pause with the server-issued continuation.
+      const submitBinding = bindings.find((binding) => binding.event === "form_submit");
+      if (submitBinding !== undefined)
+        events.form_submit = (event: ControlSemanticEvent) => {
+          if (event.event !== "form_submit" || busy) return;
+          void applyDispatch(
+            formBlock.submit(asFormBinding(placementId, submitBinding), { values: event.values }),
+          );
+        };
+      const readyBinding = bindings.find((binding) => binding.event === "form_ready");
+      if (readyBinding !== undefined)
+        events.form_ready = (event: ControlSemanticEvent) => {
+          if (event.event !== "form_ready" || busy) return;
+          void applyDispatch(formBlock.ready(asFormBinding(placementId, readyBinding)));
+        };
+      const resetBinding = bindings.find((binding) => binding.event === "form_reset");
+      if (resetBinding !== undefined)
+        events.form_reset = (event: ControlSemanticEvent) => {
+          if (event.event !== "form_reset" || busy) return;
+          void applyDispatch(formBlock.reset(asFormBinding(placementId, resetBinding)));
+        };
+      if (data === undefined) {
+        inputs[placementId] = { events };
+        continue;
+      }
       const held = selection[placementId];
       const ready = data as { status?: string; values?: Record<string, unknown> };
       inputs[placementId] = {
@@ -269,7 +465,7 @@ export function ApplicationPageView({
       };
     }
     return inputs;
-  }, [busy, model.bindings, model.data, router, runBinding, selection, setQuery]);
+  }, [applyDispatch, busy, formBlock, model.bindings, model.data, router, runBinding, selection, setQuery]);
 
   return (
     <>
@@ -289,6 +485,7 @@ export function ApplicationPageView({
         currentPageId={model.pageId}
         runtimeInputs={runtimeInputs}
       />
+      {intentHostElement}
     </>
   );
 }

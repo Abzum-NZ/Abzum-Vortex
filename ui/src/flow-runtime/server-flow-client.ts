@@ -18,6 +18,20 @@ export type FlowAnswer =
   | Readonly<{ kind: "form_answered"; submitted: boolean; values: JsonValue }>
   | Readonly<{ kind: "confirmed"; confirmed: boolean }>;
 
+/**
+ * The exact evidence the server issued with a paused run, returned with the continuation so the
+ * server can compare it with trusted state. The page never invents it: it stores what the previous
+ * response carried and sends it back unchanged.
+ */
+export type FlowResumeEvidence = Readonly<{
+  /** The exact paused target (#544): installation, release, flow, node, awaiting form and receipt. */
+  target?: unknown;
+  /** The run receipt: which run and how many protected effects it has committed. */
+  receipt?: Readonly<{ runId: string; committedEffects: number }>;
+  /** The private draft revision (#587) the answer was made from, when the surface holds one. */
+  draft?: unknown;
+}>;
+
 export type ServerFlowResponse =
   | Readonly<{ kind: "reload"; installationRevision: number }>
   | Readonly<{
@@ -35,6 +49,10 @@ export type ServerFlowResponse =
       intents: readonly FlowIntent[];
       continuation: string;
       expiresAt: string;
+      target?: unknown;
+      receipt?: unknown;
+      nodeId?: string;
+      committedEffects?: number;
     }>
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "unavailable" }>;
@@ -45,7 +63,12 @@ export type FlowInvokeClient = Readonly<{
     callerInputs: Readonly<Record<string, unknown>>,
     clickId: string,
   ) => Promise<ServerFlowResponse>;
-  resume: (flowId: string, continuation: string, answer: FlowAnswer) => Promise<ServerFlowResponse>;
+  resume: (
+    flowId: string,
+    continuation: string,
+    answer: FlowAnswer,
+    evidence?: FlowResumeEvidence,
+  ) => Promise<ServerFlowResponse>;
 }>;
 
 export type FlowInvokeClientOptions = Readonly<{
@@ -93,6 +116,12 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         intents,
         continuation: candidate.continuation,
         expiresAt: candidate.expiresAt,
+        ...(isRecord(candidate.target) ? { target: candidate.target } : {}),
+        ...(isRecord(candidate.receipt) ? { receipt: candidate.receipt } : {}),
+        ...(typeof candidate.nodeId === "string" ? { nodeId: candidate.nodeId } : {}),
+        ...(typeof candidate.committedEffects === "number"
+          ? { committedEffects: candidate.committedEffects }
+          : {}),
       };
     }
     case "result": {
@@ -180,7 +209,16 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
         clickId,
         callerInputs,
       }),
-    resume: (flowId, continuation, answer) =>
-      send({ kind: "continuation", ...context, flowId, continuation, answer }),
+    resume: (flowId, continuation, answer, evidence) =>
+      send({
+        kind: "continuation",
+        ...context,
+        flowId,
+        continuation,
+        answer,
+        ...(evidence?.target === undefined ? {} : { target: evidence.target }),
+        ...(evidence?.receipt === undefined ? {} : { receipt: evidence.receipt }),
+        ...(evidence?.draft === undefined ? {} : { draft: evidence.draft }),
+      }),
   });
 }

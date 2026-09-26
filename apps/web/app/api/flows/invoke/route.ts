@@ -8,11 +8,19 @@ import {
   createAppTelemetryCollector,
   createDatabaseFlowStores,
   createFlowOrchestrator,
+  createFormContinuationService,
   createOperationsAlertSink,
   createProtectedOperationExecutor,
 } from "@vortex/app";
+import type {
+  FormContinuationOutcome,
+  FormContinuationRequest,
+  IdentitySession,
+  OrganizationSelectionCandidate,
+} from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
+import { createPageFormRequestAdapter, createPrivateFormSubmitAdapter } from "@vortex/page";
 import { z } from "zod";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import {
@@ -127,41 +135,87 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
     const stores = createDatabaseFlowStores();
 
+    /** The trusted active installation for the initiator's own selection; never from the request. */
+    const readInstalled = async (
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+    ): Promise<InstalledFlowBindings | undefined> => {
+      const read = await requests.run(session, selection, async (transaction) => {
+        const installation =
+          await createActiveApplicationInstallationRepository(transaction).readCurrent();
+        const releaseSet = await createDatabaseApplicationBoundReleaseSetService(
+          definitionCatalogue,
+          transaction,
+        ).read({ applicationReleaseRevision: installation.applicationReleaseRevision });
+        const application = releaseSet.application;
+        const flows = new Map<string, unknown>();
+        for (const flow of [
+          ...application.content.flows,
+          ...releaseSet.modules.flatMap((module) => module.content.flows),
+        ]) {
+          // One flow per identity: a Module flow never shadows an Application flow, and an
+          // ambiguous release is refused rather than run.
+          if (flows.has(String(flow.id))) throw new Error("FLOW_IDENTITY_AMBIGUOUS");
+          flows.set(String(flow.id), flow);
+        }
+        const installed: InstalledFlowBindings = {
+          organizationId: installation.organizationId,
+          applicationRootId: address.application.applicationRootId,
+          installationRevision: installation.applicationReleaseRevision,
+          releaseKey: [
+            application.releaseVersion,
+            application.contentFingerprint,
+            application.resolutionFingerprint,
+          ].join(":"),
+          bindings: application.content.flowBindings,
+          flows,
+        };
+        return installed;
+      });
+      return read.kind === "available" ? read.value : undefined;
+    };
+
+    /**
+     * #588: the #544 continuation interface over a fresh orchestrator bound to the trusted release.
+     * It re-reads the active installation and checks the caller's target against it before the
+     * orchestrator consumes the single-use continuation, so Page never duplicates that validation.
+     */
+    const continueForm = async (
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      request: FormContinuationRequest,
+    ): Promise<FormContinuationOutcome> => {
+      const installed = await readInstalled(session, selection);
+      if (installed === undefined) return { kind: "refused", reason: "unavailable" } as const;
+      const release = { releaseKey: installed.releaseKey, flows: installed.flows };
+      // The Page request adapter forwards the exact evidence unchanged; the #544 interface is the
+      // only place that compares it with trusted state and consumes the single-use continuation.
+      const pageFormRequests = createPageFormRequestAdapter({
+        continuation: createFormContinuationService({
+          orchestrator: createFlowOrchestrator({
+            executor,
+            continuations: stores.continuations,
+            ledger: stores.ledger,
+            resolveRelease: async () => release,
+          }),
+          resolveInstallation: async ({ installation, flowId }) => {
+            if (installation.applicationRootId !== installed.applicationRootId)
+              return { kind: "stale" };
+            if (installation.installationReleaseRevision !== installed.installationRevision)
+              return { kind: "stale" };
+            if (!installed.flows.has(flowId)) return { kind: "unavailable" };
+            return { kind: "current", releaseKey: installed.releaseKey };
+          },
+        }),
+      });
+      return pageFormRequests.resume(session, selection, request);
+    };
+
+    const adaptFormSubmit = createPrivateFormSubmitAdapter();
     const endpoint = createFlowBindingEndpoint({
-      async readInstallation(session, selection) {
-        const read = await requests.run(session, selection, async (transaction) => {
-          const installation =
-            await createActiveApplicationInstallationRepository(transaction).readCurrent();
-          const releaseSet = await createDatabaseApplicationBoundReleaseSetService(
-            definitionCatalogue,
-            transaction,
-          ).read({ applicationReleaseRevision: installation.applicationReleaseRevision });
-          const application = releaseSet.application;
-          const flows = new Map<string, unknown>();
-          for (const flow of [
-            ...application.content.flows,
-            ...releaseSet.modules.flatMap((module) => module.content.flows),
-          ]) {
-            // One flow per identity: a Module flow never shadows an Application flow, and an
-            // ambiguous release is refused rather than run.
-            if (flows.has(String(flow.id))) throw new Error("FLOW_IDENTITY_AMBIGUOUS");
-            flows.set(String(flow.id), flow);
-          }
-          const installed: InstalledFlowBindings = {
-            organizationId: installation.organizationId,
-            installationRevision: installation.applicationReleaseRevision,
-            releaseKey: [
-              application.releaseVersion,
-              application.contentFingerprint,
-              application.resolutionFingerprint,
-            ].join(":"),
-            bindings: application.content.flowBindings,
-            flows,
-          };
-          return installed;
-        });
-        return read.kind === "available" ? read.value : undefined;
-      },
+      readInstallation: readInstalled,
+      adaptFormSubmit: async (binding, callerInputs) => adaptFormSubmit(binding, callerInputs),
+      continueForm,
       orchestratorFor: (release, runId) =>
         createFlowOrchestrator({
           executor,
