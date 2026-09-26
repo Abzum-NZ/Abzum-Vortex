@@ -69,6 +69,7 @@ import {
   validateApplicationSourceCatalogue,
 } from "./application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
+import { deriveFormCommitActionKeys } from "./form-commit";
 
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
@@ -3176,56 +3177,9 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           [`${recordTypeId}:${key.slice(key.lastIndexOf(".") + 1)}`, key] as const,
       ),
     );
-    /**
-     * The executable action keys a flow commits: a Save record task commits the standard create
-     * or update of its record type, and a Call protected operation task commits the named action it
-     * calls. An unresolvable Save commits an empty key, so it never matches a declared commit.
-     * A Run flow task commits whatever the flow it runs commits, followed once per flow.
-     */
     const flowsForCommits = new Map(
       array(content.flows).map((flow) => [String(flow.id), flow as unknown as FlowDefinition]),
     );
-    const flowCommitActionKeys = (flow: JsonObject): string[] => {
-      const keys: string[] = [];
-      const followed = new Set<string>();
-      const visitFlow = (canonical: FlowDefinition) => {
-        if (followed.has(String(canonical.id))) return;
-        followed.add(String(canonical.id));
-        visit(canonical.tasks);
-        visit(canonical.errors);
-        visit(canonical.finally);
-      };
-      const visit = (tasks: readonly FlowTask[]) => {
-        for (const task of tasks) {
-          if (task.type === "run_flow") {
-            const target = flowsForCommits.get(
-              String((task as Extract<FlowTask, { type: "run_flow" }>).flowId),
-            );
-            // A flow outside this release commits nothing a page could declare, so it never matches.
-            if (target === undefined) keys.push("");
-            else visitFlow(target);
-          }
-          const properties = (task as { properties?: Record<string, JsonObject> }).properties;
-          const literal = (name: string): string | undefined => {
-            const value = properties?.[name];
-            return value?.kind === "literal" ? String(object(value.literal).value) : undefined;
-          };
-          if (task.type === "record.save")
-            keys.push(
-              standardActionKeysByRecordAction.get(
-                `${literal("record_type")}:${properties?.record === undefined ? "create" : "update"}`,
-              ) ?? "",
-            );
-          else if (task.type === "operation.call") {
-            const called = literal("operation");
-            if (called !== undefined && executableActionKeys.has(called)) keys.push(called);
-          }
-          for (const child of flowTaskChildLists(task)) visit(child.tasks);
-        }
-      };
-      visitFlow(flow as unknown as FlowDefinition);
-      return keys;
-    };
     const executableActionKeys = new Set([...actionKeys, ...standardActionKeys]);
     // The record type a committed executable action belongs to: a bound Module's standard record
     // action resolves by its declared record, and a named action by its subject record.
@@ -4159,38 +4113,36 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         );
     }
 
-    // A form no longer declares its own commit: it commits what its bound `form_submit` flows
-    // commit. Each form or guided-form page must bind at least one such flow whose committed
-    // executable action belongs to the page's record type; a form with no bound commit flow is
-    // refused here rather than publishing a page that cannot save.
-    const formCommitKeysByControl = new Map<string, Set<string>>();
-    for (const binding of array(content.flowBindings)) {
-      if (String(binding.event) !== "form_submit") continue;
-      const flow = flowsById.get(String(object(binding.flow).flowId));
-      if (flow === undefined) continue;
-      const controlId = String(binding.controlId);
-      const keys = formCommitKeysByControl.get(controlId) ?? new Set<string>();
-      for (const key of flowCommitActionKeys(flow as unknown as JsonObject))
-        if (key !== "") keys.add(key);
-      formCommitKeysByControl.set(controlId, keys);
-    }
+    // A form declares no commit of its own: it commits what its bound `form_submit` flows commit.
+    // A form or guided-form page whose flows commit nothing, or a commit that resolves to no
+    // executable action, is refused rather than published as a page that cannot save; a commit of
+    // an action outside the page's record type is refused as out of the form's scope.
+    const formCommits = deriveFormCommitActionKeys(
+      {
+        pages: array(content.pages),
+        shells: array(content.shells),
+        flows: array(content.flows),
+        flowBindings: array(content.flowBindings),
+      },
+      { standardActionKeysByRecordAction, executableActionKeys },
+    );
     for (const page of pages.values()) {
       if (page.type !== "form" && page.type !== "guided_form") continue;
       const recordTypeId = page.recordType
         ? String(object(page.recordType).recordTypeId)
         : undefined;
-      const committed = [
-        ...pageContentPlacementEntriesV2(page),
-        ...pageShellPlacementEntriesV2(page),
-      ].flatMap(([placementId]) => [...(formCommitKeysByControl.get(placementId) ?? [])]);
+      const committed = formCommits.get(String(page.pageId)) ?? [];
       if (
         recordTypeId === undefined ||
-        !committed.some(
-          (key) => executableActionKeys.has(key) && commitActionRecordType(key) === recordTypeId,
-        )
+        committed.length === 0 ||
+        committed.some((key) => !executableActionKeys.has(key))
       )
         failures.push(
           failure(output, "vortex.definition.application_page_references", "broken_reference"),
+        );
+      else if (committed.some((key) => commitActionRecordType(key) !== recordTypeId))
+        failures.push(
+          failure(output, "vortex.definition.application_page_references", "scope_conflict"),
         );
     }
   }

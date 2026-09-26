@@ -27,7 +27,6 @@ import {
   isPlatformPermissionKey,
   PLATFORM_SERVICE_OPERATIONS,
   flowContractVersion,
-  flowTaskChildLists,
   flowTaskMappingForActionEffect,
   normalizeExactDecimal,
   readModuleSourceRecordOwnershipMode,
@@ -75,6 +74,7 @@ import {
   extractSourceIdentityRequirements,
   extractModuleSourceIdentityRequirementsV3,
 } from "./source-identities";
+import { deriveFormCommitActionKeys } from "./form-commit";
 import { compileRuleGraph } from "./rule-graph-compilation";
 import {
   materialiseApplicationCompositionV2,
@@ -5112,9 +5112,8 @@ function compileApplicationToolBundle(
     });
   };
 
-  // A form no longer declares its own commit: it commits what its bound `form_submit` flow
-  // commits. The derived action is read from the flow's tasks exactly as Definition validation
-  // derives it, so the tool bundle and the published contract never drift.
+  // A form commits what its bound `form_submit` flows commit, derived exactly as Definition
+  // validation derives it, so the tool bundle and the published contract never drift.
   const standardActionKeysByRecordAction = new Map<string, string>();
   for (const output of boundModuleOutputs) {
     const moduleKey = String(output.canonical.envelope.key);
@@ -5125,101 +5124,19 @@ function compileApplicationToolBundle(
           `${moduleKey}.${String(record.key)}.${action}`,
         );
   }
-  const executableFlowCommitKeys = new Set<string>([
-    ...applicationActionKeys,
-    ...moduleActionsByKey.keys(),
-    ...standardActionKeysByRecordAction.values(),
-  ]);
-  const flowsById = new Map<string, FlowDefinition>(
-    content.flows.map((flow) => [String(flow.id), flow as unknown as FlowDefinition] as const),
-  );
-  const flowCommitActionKeys = (flow: FlowDefinition): string[] => {
-    const keys: string[] = [];
-    const followed = new Set<string>();
-    const visit = (tasks: readonly FlowTask[]): void => {
-      for (const task of tasks) {
-        if (task.type === "run_flow") {
-          const target = flowsById.get(
-            String((task as Extract<FlowTask, { type: "run_flow" }>).flowId),
-          );
-          if (target === undefined) keys.push("");
-          else visitFlow(target);
-        }
-        const properties = (task as { properties?: Record<string, JsonObject> }).properties;
-        const literal = (name: string): string | undefined => {
-          const value = properties?.[name];
-          return value?.kind === "literal" ? String(asObject(value.literal).value) : undefined;
-        };
-        if (task.type === "record.save")
-          keys.push(
-            standardActionKeysByRecordAction.get(
-              `${literal("record_type")}:${properties?.record === undefined ? "create" : "update"}`,
-            ) ?? "",
-          );
-        else if (task.type === "operation.call") {
-          const called = literal("operation");
-          if (called !== undefined && executableFlowCommitKeys.has(called)) keys.push(called);
-        }
-        for (const child of flowTaskChildLists(task)) visit(child.tasks);
-      }
-    };
-    const visitFlow = (candidate: FlowDefinition): void => {
-      if (followed.has(String(candidate.id))) return;
-      followed.add(String(candidate.id));
-      visit(candidate.tasks);
-      visit(candidate.errors);
-      visit(candidate.finally);
-    };
-    visitFlow(flow);
-    return keys;
-  };
-  const pageControlIds = (page: { composition: unknown }): string[] => {
-    const composition = asObject(page.composition);
-    const ids: string[] = [];
-    const collect = (slotValue: unknown): void => {
-      for (const [placementId, placementValue] of Object.entries(
-        asObject(asObject(slotValue).placements),
-      )) {
-        ids.push(placementId);
-        for (const childSlot of Object.values(asObject(asObject(placementValue).slots)))
-          collect(childSlot);
-      }
-    };
-    if ("main" in composition) collect(composition.main);
-    else if ("content" in composition)
-      for (const slot of Object.values(asObject(composition.content))) collect(slot);
-    else if (composition.shellKind === "default")
-      for (const slot of Object.values(asObject(composition.stepContent))) collect(slot);
-    else
-      for (const step of Object.values(asObject(composition.stepContent)))
-        for (const slot of Object.values(asObject(step))) collect(slot);
-    if (composition.shellKind === "application") {
-      const shell = content.shells.find(
-        (candidate) => String(candidate.shellId) === String(composition.shellId),
-      );
-      if (shell !== undefined) collect(shell.layout);
-    }
-    return ids;
-  };
-  const formCommitFlowsByControl = new Map<string, FlowDefinition[]>();
-  for (const binding of content.flowBindings) {
-    if (binding.event !== "form_submit") continue;
-    const flow = flowsById.get(String(binding.flow.flowId));
-    if (flow === undefined) continue;
-    const controlId = String(binding.controlId);
-    formCommitFlowsByControl.set(controlId, [
-      ...(formCommitFlowsByControl.get(controlId) ?? []),
-      flow,
-    ]);
-  }
+  const formCommits = deriveFormCommitActionKeys(content, {
+    standardActionKeysByRecordAction,
+    executableActionKeys: new Set([
+      ...applicationActionKeys,
+      ...moduleActionsByKey.keys(),
+      ...standardActionKeysByRecordAction.values(),
+    ]),
+  });
 
   for (const page of content.pages) {
     if (page.type === "form" || page.type === "guided_form") {
-      const committed = new Set<string>();
-      for (const controlId of pageControlIds(page))
-        for (const flow of formCommitFlowsByControl.get(controlId) ?? [])
-          for (const key of flowCommitActionKeys(flow)) if (key !== "") committed.add(key);
-      for (const key of committed) addCommittedAction(page.name, key, true);
+      for (const key of formCommits.get(String(page.pageId)) ?? [])
+        if (key !== "") addCommittedAction(page.name, key, true);
     } else if (page.type === "public" && page.publicActionKey !== undefined) {
       addCommittedAction(page.name, String(page.publicActionKey), false);
     }
