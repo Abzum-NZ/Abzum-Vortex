@@ -322,6 +322,41 @@ export {
   createFullPlatformComponentRegistry,
 } from "./combined-registry";
 
+// Generic Connection Administration Page Contracts (#693)
+export {
+  CONNECTION_ADMINISTRATION_CONTROL_KINDS,
+  CONNECTION_ADMINISTRATION_HEALTH_VALUES,
+  CONNECTION_ADMINISTRATION_INPUT_KEYS,
+  CONNECTION_ADMINISTRATION_RECOVERY_MESSAGES,
+  CONNECTION_ADMINISTRATION_RECOVERY_STATES,
+  CONNECTION_ADMINISTRATION_REFUSAL_CODES,
+  CONNECTION_ADMINISTRATION_STATE_VALUES,
+  CONNECTION_ADMINISTRATION_STEP_KEYS,
+  CONNECTION_ADMINISTRATION_VALUE_TYPES,
+  connectionAdministrationControlFields,
+  connectionAdministrationRecoveryMessage,
+  connectionAdministrationRecoveryValidation,
+  connectionAdministrationStatusFields,
+  parseConnectionAdministrationPage,
+  parseConnectionAdministrationRecovery,
+  type ConnectionAdministrationControlField,
+  type ConnectionAdministrationControlKind,
+  type ConnectionAdministrationFormFieldProjection,
+  type ConnectionAdministrationFormProjection,
+  type ConnectionAdministrationHealth,
+  type ConnectionAdministrationInputKey,
+  type ConnectionAdministrationPagePayload,
+  type ConnectionAdministrationPageProjection,
+  type ConnectionAdministrationRecoveryProjection,
+  type ConnectionAdministrationRecoveryState,
+  type ConnectionAdministrationRefusalCode,
+  type ConnectionAdministrationState,
+  type ConnectionAdministrationStatusProjection,
+  type ConnectionAdministrationStepKey,
+  type ConnectionAdministrationTypeProjection,
+  type ConnectionAdministrationValueType,
+} from "./connection-administration";
+
 // Exact-draft Application Preview (#597)
 export {
   ApplicationPreview,
