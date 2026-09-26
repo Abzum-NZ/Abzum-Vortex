@@ -37,25 +37,42 @@ export function createFormBlockRuntime(
   newGestureId: () => string = () => crypto.randomUUID(),
 ): FormBlockRuntime {
   const inFlight = new Set<string>();
+  // A submission's one gesture identity, keyed by the binding and the exact answers it carries.
+  // Re-submitting the same answers (a double click that outlived the first run, or a network
+  // retry) reaches the same run, so the effect ledger replays its recorded outcome instead of
+  // committing a second time. A changed answer set is a new gesture.
+  const gestureIds = new Map<string, string>();
 
   const dispatchOnce = async (
     binding: ComponentFlowBinding,
     callerInputs: Readonly<Record<string, unknown>>,
+    gestureKey?: string,
   ): Promise<FlowDispatchResult | undefined> => {
-    if (inFlight.has(binding.bindingId)) return undefined;
-    inFlight.add(binding.bindingId);
+    const guard = gestureKey ?? binding.bindingId;
+    if (inFlight.has(guard)) return undefined;
+    let gestureId = gestureKey === undefined ? undefined : gestureIds.get(gestureKey);
+    if (gestureId === undefined) {
+      gestureId = newGestureId();
+      if (gestureKey !== undefined) gestureIds.set(gestureKey, gestureId);
+    }
+    inFlight.add(guard);
     try {
-      return await runtime.dispatch(binding, callerInputs, newGestureId());
+      return await runtime.dispatch(binding, callerInputs, gestureId);
     } finally {
-      inFlight.delete(binding.bindingId);
+      inFlight.delete(guard);
     }
   };
 
   return Object.freeze({
-    submit: (binding, values, draft) =>
-      binding.event === "form_submit"
-        ? dispatchOnce(binding, { values, ...(draft === undefined ? {} : { draft }) })
-        : Promise.resolve(undefined),
+    submit: (binding, values, draft) => {
+      if (binding.event !== "form_submit") return Promise.resolve(undefined);
+      const callerInputs = { values, ...(draft === undefined ? {} : { draft }) };
+      return dispatchOnce(
+        binding,
+        callerInputs,
+        `${binding.bindingId}|${JSON.stringify(callerInputs)}`,
+      );
+    },
     ready: (binding) =>
       binding.event === "form_ready"
         ? dispatchOnce(binding, {})
