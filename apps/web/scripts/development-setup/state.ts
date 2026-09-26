@@ -20,6 +20,9 @@ export type SetupState = {
   organizationId: string;
   drafts: Record<string, CreatedDraft>;
   releases: Record<string, PublishedRelease>;
+  installerRoleGranted: boolean;
+  lifecyclePolicies: Record<string, boolean>;
+  rolesGranted: Record<string, boolean>;
   save(): void;
 };
 
@@ -39,15 +42,24 @@ const stateFile = (): string =>
 export const loadSetupState = (organizationId: string): SetupState => {
   let releases: Record<string, PublishedRelease> = {};
   let drafts: Record<string, CreatedDraft> = {};
+  let installerRoleGranted = false;
+  let lifecyclePolicies: Record<string, boolean> = {};
+  let rolesGranted: Record<string, boolean> = {};
   try {
     const stored = JSON.parse(readFileSync(stateFile(), "utf8")) as {
       organizationId?: unknown;
       releases?: Record<string, PublishedRelease>;
       drafts?: Record<string, CreatedDraft>;
+      installerRoleGranted?: boolean;
+      lifecyclePolicies?: Record<string, boolean>;
+      rolesGranted?: Record<string, boolean>;
     };
     if (stored.organizationId === organizationId) {
       releases = stored.releases ?? {};
       drafts = stored.drafts ?? {};
+      installerRoleGranted = stored.installerRoleGranted === true;
+      lifecyclePolicies = stored.lifecyclePolicies ?? {};
+      rolesGranted = stored.rolesGranted ?? {};
     }
   } catch {
     // No usable state: start empty.
@@ -56,12 +68,22 @@ export const loadSetupState = (organizationId: string): SetupState => {
     organizationId,
     drafts,
     releases,
+    installerRoleGranted,
+    lifecyclePolicies,
+    rolesGranted,
     save() {
       mkdirSync(dirname(stateFile()), { recursive: true });
       writeFileSync(
         stateFile(),
         `${JSON.stringify(
-          { organizationId: state.organizationId, drafts: state.drafts, releases: state.releases },
+          {
+            organizationId: state.organizationId,
+            drafts: state.drafts,
+            releases: state.releases,
+            installerRoleGranted: state.installerRoleGranted,
+            lifecyclePolicies: state.lifecyclePolicies,
+            rolesGranted: state.rolesGranted,
+          },
           null,
           2,
         )}\n`,

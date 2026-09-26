@@ -66,6 +66,34 @@ export const developmentSetupManifestSchema = z
         roleAssignmentId: roleAssignmentIdSchema,
       })
       .strict(),
+    /**
+     * Further application roles the steward accepts and assigns to themselves through the ordinary
+     * Access administration operations (the initial operating-role grant takes only one role, and
+     * only one whose permissions all belong to its own application).
+     */
+    additionalRoles: z
+      .array(
+        z
+          .object({
+            applicationKey: z.enum(shippedApplicationKeys),
+            roleKey: z.string(),
+            roleId: roleIdSchema,
+            roleAssignmentId: roleAssignmentIdSchema,
+          })
+          .strict(),
+      )
+      .max(10),
+    /**
+     * The custom role the steward creates and assigns to themselves so they can install
+     * applications (a provisioned steward holds no application-installation permission).
+     */
+    installerRole: z
+      .object({
+        roleKey: z.string(),
+        roleId: roleIdSchema,
+        roleAssignmentId: roleAssignmentIdSchema,
+      })
+      .strict(),
     /** The correlation the grant records; reused so an exact retry replays the original result. */
     setupCorrelationId: correlationIdSchema,
   })
@@ -92,18 +120,43 @@ export const developmentSetupManifest: DevelopmentSetupManifest =
     },
     // In installation order. CRM and Service Desk are shipped but not installed here: their
     // applications pin exact 2.0.0 releases of their modules, and a fresh organisation publishes
-    // every module as 1.0.0, so their release sets cannot resolve yet.
+    // every module as 1.0.0, so their release sets cannot resolve yet. The Operations application
+    // does not publish from a fresh organisation yet either.
     applicationKeys: [
       "vortex.app.iam",
       "vortex.app.organisation_administration",
       "vortex.app.tenant_administration",
-      "vortex.app.operations",
     ],
     operatingRole: {
       applicationKey: "vortex.app.iam",
-      roleKey: "iam_administrator",
+      roleKey: "iam_reviewer",
       roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d05",
       roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d06",
+    },
+    additionalRoles: [
+      {
+        applicationKey: "vortex.app.iam",
+        roleKey: "iam_administrator",
+        roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d0a",
+        roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d0b",
+      },
+      {
+        applicationKey: "vortex.app.organisation_administration",
+        roleKey: "organisation_administrator",
+        roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d0c",
+        roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d0d",
+      },
+      {
+        applicationKey: "vortex.app.tenant_administration",
+        roleKey: "tenant_administrator",
+        roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d0e",
+        roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d0f",
+      },
+    ],
+    installerRole: {
+      roleKey: "application_installer",
+      roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d08",
+      roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d09",
     },
     setupCorrelationId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d07",
   });

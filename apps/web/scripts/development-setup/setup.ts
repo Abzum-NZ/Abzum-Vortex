@@ -9,6 +9,7 @@ import { provisionTenantCommandSchema } from "@vortex/contracts";
 import { createConfiguredTenantAdministrationService } from "@vortex/identity";
 import { publishShippedDefinitions } from "./definitions";
 import { installAndGrant } from "./install";
+import { grantStewardInstallerRole } from "./installer-access";
 import { loadSetupState } from "./state";
 
 /**
@@ -77,7 +78,19 @@ const main = async (): Promise<void> => {
   const state = loadSetupState(provisioned.rootOrganizationId);
   const releases = await publishShippedDefinitions(system, manifest.applicationKeys, state, log);
 
-  // 3. Install the applications and grant the operating role.
+  // 3. The steward gives themselves the application-installation permission, then installs the
+  //    applications and receives the operating role.
+  await grantStewardInstallerRole(
+    {
+      identityAuthorityId,
+      organizationId: system.organizationId,
+      stewardIdentityId,
+      stewardOrganizationAccountId: provisioned.organizationAccountId,
+      manifest,
+      state,
+    },
+    log,
+  );
   const rights = await installAndGrant(
     {
       identityAuthorityId,
@@ -87,6 +100,7 @@ const main = async (): Promise<void> => {
       stewardOrganizationAccountId: provisioned.organizationAccountId,
       provisioningReceiptId: provisioned.correlationId,
       releases,
+      state,
     },
     log,
   );
