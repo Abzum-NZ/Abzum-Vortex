@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "next dev -H 127.0.0.1",
     "build": "next build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "setup:local": "node --conditions=react-server --import tsx scripts/development-setup/setup.ts"
   },
   "dependencies": {
     "@supabase/ssr": "catalog:",
