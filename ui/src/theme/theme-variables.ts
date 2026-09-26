@@ -134,6 +134,17 @@ function platformColor(role: PlatformThemeTokenRoleKeyV2): ColorPair {
   return pair;
 }
 
+/** The shadcn surfaces the vocabulary pairs with a `<role>_foreground` role. */
+type ShadcnFilledRole = "card" | "popover" | "accent" | "sidebar" | "sidebar_primary" | "sidebar_accent";
+
+/** The registered release's base radius, which shadcn derives every corner size from. */
+const PLATFORM_RADIUS_BASE: string = (() => {
+  const token = PLATFORM_TOKENS.radius_base;
+  if (token?.kind !== "corners" || !Number.isFinite(token.rem) || token.rem < 0)
+    throw new Error('Platform theme release is missing corners role "radius_base"');
+  return `${token.rem}rem`;
+})();
+
 /** #594 default contrast surface, taken from the registered release's background role. */
 const DEFAULT_SURFACE: ColorPair = platformColor("background");
 const DEFAULT_TEXT: ColorPair = platformColor("text");
@@ -257,9 +268,12 @@ function filledPair(tokens: ThemeTokens, key: string): readonly [ColorPair, Colo
  * Every shadcn CSS variable the shared components read is set from the same resolved theme:
  * `--background`/`--foreground` from the validated surface and text; `--card`, `--popover`,
  * `--muted`, `--accent`, `--chart-1`..`--chart-5`, `--sidebar*`, `--input`, `--ring` and
- * `--destructive` from the matching colour role; `--radius` from `radius_base`. `light-dark()`
- * serves forced light, forced dark and the system preference through the container's
- * `color-scheme`, so both `.dark` and `prefers-color-scheme` selections resolve the same map.
+ * `--destructive` from the matching colour role; `--radius` from `radius_base`. A fill and its
+ * `<role>_foreground` (card, popover, accent, sidebar, sidebar_primary, sidebar_accent) change
+ * together. `light-dark()` serves forced light, forced dark and the system preference through the
+ * container's `color-scheme` (a `.dark` ancestor sets it dark), and the shadcn `dark:` variant in
+ * ui/src/styles/globals.css follows the same resolved mode, so `.dark` and `prefers-color-scheme`
+ * selections resolve the same map.
  *
  * A colour is applied only where #594 validated it against what is painted beneath it;
  * otherwise the registered platform theme's value for that role is kept. Only validated hex or
@@ -322,9 +336,23 @@ export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVar
   // otherwise from the registered platform release, so the bridge holds no second palette.
   const shadcnColour = (role: PlatformThemeTokenRoleKeyV2): string =>
     colorValue(colorPair(tokens, role) ?? platformColor(role));
-  const platformRadiusBase = tokenOfKind(PLATFORM_TOKENS, "radius_base", "corners");
-  const radiusBaseFallback =
-    platformRadiusBase === undefined ? "0.625rem" : (rem(platformRadiusBase.rem) ?? "0.625rem");
+  // A fill and its #594-validated foreground change together, so a foreground is never painted on
+  // a fill it was not judged against.
+  const shadcnFill = (
+    role: ShadcnFilledRole,
+  ): readonly [fill: string, foreground: string] => {
+    const [fill, foreground] = filledPair(tokens, role) ?? [
+      platformColor(role),
+      platformColor(`${role}_foreground` as const),
+    ];
+    return [colorValue(fill), colorValue(foreground)];
+  };
+  const [card, cardForeground] = shadcnFill("card");
+  const [popover, popoverForeground] = shadcnFill("popover");
+  const [accent, accentForeground] = shadcnFill("accent");
+  const [sidebar, sidebarForeground] = shadcnFill("sidebar");
+  const [sidebarPrimary, sidebarPrimaryForeground] = shadcnFill("sidebar_primary");
+  const [sidebarAccent, sidebarAccentForeground] = shadcnFill("sidebar_accent");
 
   return Object.freeze({
     "--vortex-surface": colorValue(surface),
@@ -376,18 +404,18 @@ export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVar
     "--vortex-cell-padding-x": density.cellX,
     "--background": colorValue(surface),
     "--foreground": colorValue(text),
-    "--card": shadcnColour("card"),
-    "--card-foreground": shadcnColour("card_foreground"),
-    "--popover": shadcnColour("popover"),
-    "--popover-foreground": shadcnColour("popover_foreground"),
+    "--card": card,
+    "--card-foreground": cardForeground,
+    "--popover": popover,
+    "--popover-foreground": popoverForeground,
     "--primary": colorValue(primary?.[0] ?? PLATFORM_DEFAULTS.primary),
     "--primary-foreground": colorValue(primary?.[1] ?? PLATFORM_DEFAULTS.onPrimary),
     "--secondary": colorValue(secondary?.[0] ?? PLATFORM_DEFAULTS.secondary),
     "--secondary-foreground": colorValue(secondary?.[1] ?? PLATFORM_DEFAULTS.onSecondary),
     "--muted": shadcnColour("muted"),
     "--muted-foreground": onSurface("muted_text", PLATFORM_DEFAULTS.textMuted),
-    "--accent": shadcnColour("accent"),
-    "--accent-foreground": shadcnColour("accent_foreground"),
+    "--accent": accent,
+    "--accent-foreground": accentForeground,
     "--destructive": colorValue(danger?.[0] ?? PLATFORM_DEFAULTS.danger),
     "--border": colorValue(borderColor ?? PLATFORM_DEFAULTS.border),
     "--input": shadcnColour("input"),
@@ -397,13 +425,13 @@ export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVar
     "--chart-3": shadcnColour("chart_3"),
     "--chart-4": shadcnColour("chart_4"),
     "--chart-5": shadcnColour("chart_5"),
-    "--radius": corners("radius_base", radiusBaseFallback),
-    "--sidebar": shadcnColour("sidebar"),
-    "--sidebar-foreground": shadcnColour("sidebar_foreground"),
-    "--sidebar-primary": shadcnColour("sidebar_primary"),
-    "--sidebar-primary-foreground": shadcnColour("sidebar_primary_foreground"),
-    "--sidebar-accent": shadcnColour("sidebar_accent"),
-    "--sidebar-accent-foreground": shadcnColour("sidebar_accent_foreground"),
+    "--radius": corners("radius_base", PLATFORM_RADIUS_BASE),
+    "--sidebar": sidebar,
+    "--sidebar-foreground": sidebarForeground,
+    "--sidebar-primary": sidebarPrimary,
+    "--sidebar-primary-foreground": sidebarPrimaryForeground,
+    "--sidebar-accent": sidebarAccent,
+    "--sidebar-accent-foreground": sidebarAccentForeground,
     "--sidebar-border": shadcnColour("sidebar_border"),
     "--sidebar-ring": shadcnColour("sidebar_ring"),
   } satisfies Record<ThemeVariableName, string>);
