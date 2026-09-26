@@ -398,6 +398,54 @@ export const changeOrganizationAdministrationRoleAuthorityCommandSchema = z
   })
   .strict();
 
+/**
+ * The bounded configuration an administrator supplies to prepare one create-custom-role or
+ * accept-application-role-template change. It names permissions or a published template but never a
+ * fingerprint: the server derives the exact current evidence for the caller's organisation. The
+ * explicit acceptance is a visible, required choice, so a broadening template is accepted on
+ * purpose rather than by submitting a form.
+ */
+export const organizationAdministrationRoleChangePreparationOperationSchema = z.enum([
+  "create_custom",
+  "accept_new_application_role",
+]);
+
+export const prepareOrganizationAdministrationRoleChangeCommandSchema = z
+  .object({
+    operation: organizationAdministrationRoleChangePreparationOperationSchema,
+    roleKey: builderKeySchema,
+    label: labelSchema,
+    description: descriptionSchema,
+    privilegeClassification: rolePrivilegeClassificationSchema,
+    permissionReferences: z.array(organizationAccessExactPermissionSchema).min(1).max(500).optional(),
+    templateApplicationRootId: applicationRootIdSchema.optional(),
+    sourceRoleId: roleIdSchema.optional(),
+    acceptBroadenedAuthority: z.enum(["accept", "decline"]),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const creatingCustom = value.operation === "create_custom";
+    const acceptingTemplate = value.operation === "accept_new_application_role";
+    if (creatingCustom !== (value.permissionReferences !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["permissionReferences"],
+        message: "Only a custom role names its own permission references",
+      });
+    if ((value.templateApplicationRootId !== undefined) !== acceptingTemplate)
+      context.addIssue({
+        code: "custom",
+        path: ["templateApplicationRootId"],
+        message: "Accepting a template names its exact application",
+      });
+    if ((value.sourceRoleId !== undefined) !== acceptingTemplate)
+      context.addIssue({
+        code: "custom",
+        path: ["sourceRoleId"],
+        message: "Accepting a template names its exact source role",
+      });
+  });
+
 export const changeOrganizationAdministrationRoleResultSchema = z
   .object({
     role: organizationAdministrationRoleSummarySchema,
@@ -928,6 +976,12 @@ export type ChangeOrganizationAdministrationRoleAuthorityCommand = z.infer<
 >;
 export type ChangeOrganizationAdministrationRoleResult = z.infer<
   typeof changeOrganizationAdministrationRoleResultSchema
+>;
+export type OrganizationAdministrationRoleChangePreparationOperation = z.infer<
+  typeof organizationAdministrationRoleChangePreparationOperationSchema
+>;
+export type PrepareOrganizationAdministrationRoleChangeCommand = z.infer<
+  typeof prepareOrganizationAdministrationRoleChangeCommandSchema
 >;
 export type OrganizationAdministrationApplicationRoleTemplateReference = z.infer<
   typeof organizationAdministrationApplicationRoleTemplateReferenceSchema
