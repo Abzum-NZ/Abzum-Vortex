@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { Card, CardContent } from "../components/card";
+import { Card, CardContent, CardHeader } from "../components/card";
 import { DisplayCellView } from "./cell";
 import { DisplayHeader } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
@@ -39,7 +39,11 @@ export function PlainTextDisplay(props: DisplayRenderProps<TextPayload>): ReactE
     >
       {values === undefined ? null : (
         <Card data-vortex-display="text" data-vortex-placement-id={props.placementId}>
-          <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
+          {title === undefined && events?.refresh === undefined ? null : (
+            <CardHeader className="*:mb-0">
+              <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
+            </CardHeader>
+          )}
           <CardContent>
             <DisplayCellView value={values.value} />
           </CardContent>

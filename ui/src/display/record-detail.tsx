@@ -58,13 +58,13 @@ export function RecordDetailDisplay(
           aria-label={accessibleName}
         >
           {hasHeader ? (
-            <CardHeader>
+            <CardHeader className="*:mb-0">
               <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
             </CardHeader>
           ) : null}
           {hasHeader ? <Separator /> : null}
-          <CardContent>
-            <dl className="grid gap-4 sm:grid-cols-2">
+          <CardContent className="flex flex-col items-start gap-4">
+            <dl className="grid w-full gap-4 sm:grid-cols-2">
               {fields.map((field) => (
                 <div
                   key={field.key}

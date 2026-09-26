@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { Card, CardContent } from "../components/card";
+import { Card } from "../components/card";
 import { DisplayCellView } from "./cell";
 import { DisplayHeader } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
@@ -37,13 +37,16 @@ export function SummaryValuesDisplay(props: DisplayRenderProps<SummaryPayload>):
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
           <dl className="m-0 grid gap-3 sm:grid-cols-3">
             {values.values.map((item) => (
-              <Card key={item.key} size="sm" data-vortex-summary-key={item.key}>
-                <CardContent>
-                  <dt className="text-sm text-muted-foreground">{item.label}</dt>
-                  <dd className="mt-1 text-base font-medium">
-                    <DisplayCellView value={item.value} />
-                  </dd>
-                </CardContent>
+              <Card
+                key={item.key}
+                size="sm"
+                data-vortex-summary-key={item.key}
+                className="gap-1 px-(--card-spacing)"
+              >
+                <dt className="text-sm text-muted-foreground">{item.label}</dt>
+                <dd className="font-heading text-base font-medium">
+                  <DisplayCellView value={item.value} />
+                </dd>
               </Card>
             ))}
           </dl>

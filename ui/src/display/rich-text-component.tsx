@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { Card, CardContent } from "../components/card";
+import { Card, CardContent, CardHeader } from "../components/card";
 import { DisplayHeader } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
@@ -40,7 +40,11 @@ export function RichTextDisplay(props: DisplayRenderProps<RichTextPayload>): Rea
     >
       {values === undefined ? null : (
         <Card data-vortex-display="rich_text" data-vortex-placement-id={props.placementId}>
-          <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
+          {title === undefined && events?.refresh === undefined ? null : (
+            <CardHeader className="*:mb-0">
+              <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
+            </CardHeader>
+          )}
           <CardContent>
             <RichTextDocumentView document={values.document} />
           </CardContent>

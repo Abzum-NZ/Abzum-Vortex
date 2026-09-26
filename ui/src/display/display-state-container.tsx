@@ -2,7 +2,7 @@ import type { ReactElement, ReactNode } from "react";
 import type { BlockPropertyValueV2Contract, PlatformBlockReleaseV2 } from "@vortex/contracts";
 import { Alert, AlertDescription } from "../components/alert";
 import { Badge } from "../components/badge";
-import { Card } from "../components/card";
+import { Card, CardContent } from "../components/card";
 import { Empty, EmptyHeader, EmptyDescription } from "../components/empty";
 import { Skeleton } from "../components/skeleton";
 import type { DisplayDataState, DisplayRefusalReason } from "./projected-data";
@@ -76,12 +76,12 @@ export function DisplayStateContainer<Values>({
         data-vortex-display-state="loading"
         aria-label={`Loading ${accessibleName}`}
       >
-        <div className="flex flex-col gap-2">
+        <CardContent className="flex flex-col gap-2">
           <Skeleton className="h-4 w-2/5" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-4/5" />
-        </div>
-        <span className="text-sm text-muted-foreground">Loading…</span>
+          <span className="text-sm text-muted-foreground">Loading…</span>
+        </CardContent>
       </Card>
     );
   }
@@ -107,7 +107,7 @@ export function DisplayStateContainer<Values>({
         role="status"
         data-vortex-display-state="refused"
         data-vortex-refusal-reason={projectedData.reason}
-        className="border border-l-4 border-l-destructive"
+        className="border border-solid border-l-4 border-l-destructive"
         aria-label={`${accessibleName}: unavailable`}
       >
         <EmptyHeader>
