@@ -1585,7 +1585,18 @@ export const themeTokenKindV2Schema = z.enum([
   "density",
 ]);
 
-const colorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+const colorComponentPattern = "(?:\\d+(?:\\.\\d+)?|\\.\\d+)";
+const hexColorPattern = /^#[0-9a-fA-F]{6}$/;
+const oklchColorPattern = new RegExp(
+  `^oklch\\(\\s*${colorComponentPattern}%?\\s+${colorComponentPattern}\\s+${colorComponentPattern}(?:deg)?\\s*(?:\\/\\s*${colorComponentPattern}%?)?\\s*\\)$`,
+);
+
+/** A theme colour is a six-digit hex value or an oklch() function, the two app-lightness forms. */
+const colorSchema = z
+  .string()
+  .refine((value) => hexColorPattern.test(value) || oklchColorPattern.test(value), {
+    message: "Use a six-digit hex or an oklch() colour value",
+  });
 
 /**
  * Declares how a platform theme colour is used, so readability checks follow the
@@ -1750,6 +1761,30 @@ export const platformThemeTokenRolesV2 = [
   { key: "danger_text", kind: "color_pair", colorRole: "foreground" },
   { key: "warning_text", kind: "color_pair", colorRole: "foreground" },
   { key: "info_text", kind: "color_pair", colorRole: "foreground" },
+  // The shadcn CSS variables the shared components read. Each card, popover, accent and sidebar
+  // surface carries its own foreground role, so the readability checks judge each painted pair.
+  { key: "card", kind: "color_pair", colorRole: "background" },
+  { key: "card_foreground", kind: "color_pair", colorRole: "foreground" },
+  { key: "popover", kind: "color_pair", colorRole: "background" },
+  { key: "popover_foreground", kind: "color_pair", colorRole: "foreground" },
+  { key: "muted", kind: "color_pair", colorRole: "background" },
+  { key: "accent", kind: "color_pair", colorRole: "background" },
+  { key: "accent_foreground", kind: "color_pair", colorRole: "foreground" },
+  { key: "input", kind: "color_pair" },
+  { key: "ring", kind: "color_pair" },
+  { key: "chart_1", kind: "color_pair" },
+  { key: "chart_2", kind: "color_pair" },
+  { key: "chart_3", kind: "color_pair" },
+  { key: "chart_4", kind: "color_pair" },
+  { key: "chart_5", kind: "color_pair" },
+  { key: "sidebar", kind: "color_pair", colorRole: "background" },
+  { key: "sidebar_foreground", kind: "color_pair", colorRole: "foreground" },
+  { key: "sidebar_primary", kind: "color_pair" },
+  { key: "sidebar_primary_foreground", kind: "color_pair", colorRole: "foreground" },
+  { key: "sidebar_accent", kind: "color_pair" },
+  { key: "sidebar_accent_foreground", kind: "color_pair", colorRole: "foreground" },
+  { key: "sidebar_border", kind: "color_pair" },
+  { key: "sidebar_ring", kind: "color_pair" },
   { key: "focus", kind: "focus" },
   { key: "body", kind: "typography" },
   { key: "heading", kind: "typography" },
@@ -1760,6 +1795,7 @@ export const platformThemeTokenRolesV2 = [
   { key: "radius_sm", kind: "corners" },
   { key: "radius_md", kind: "corners" },
   { key: "radius_lg", kind: "corners" },
+  { key: "radius_base", kind: "corners" },
   { key: "elevation_low", kind: "elevation" },
   { key: "elevation_high", kind: "elevation" },
   { key: "density", kind: "density" },
