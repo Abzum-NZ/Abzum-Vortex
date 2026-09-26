@@ -26,6 +26,16 @@ export {
 } from "./document-store";
 
 export {
+  derivedFieldInputIds,
+  searchFieldDisclosure,
+  searchIndexDisclosableFieldIds,
+  searchIndexFieldDiscloses,
+  type PublishedSearchField,
+  type SearchFieldDisclosure,
+  type SearchIndexShareMetadata,
+} from "./sensitivity-policy";
+
+export {
   permittedSearchCandidates,
   permittedSearchLimits,
   permittedSearchRefusalReasonCodes,

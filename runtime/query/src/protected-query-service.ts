@@ -27,7 +27,13 @@ import {
   type QueryContinuation,
   type QueryContinuationKey,
 } from "./continuation-token";
-import { decideQueryCache, type QueryCacheDecision, type QueryCacheInput } from "./cache-policy";
+import {
+  decideQueryCache,
+  queryCacheMaxEvaluatedFields,
+  type QueryCacheDecision,
+  type QueryCacheInput,
+  type QueryCachePublishedField,
+} from "./cache-policy";
 import {
   protectedQueryCommandSchema,
   protectedQueryRefusalReasonCodes,
@@ -80,6 +86,15 @@ export type ProtectedQueryCacheContext = Readonly<{
   readTimeFieldsPresent: boolean;
   /** True when any requested or filtered field is personal data or its classification is unknown. */
   sensitiveFieldsPresent: boolean;
+  /**
+   * The published fields of the queried record type, when the caller can prove
+   * them. Supplying them lets the cache policy re-derive sensitivity and
+   * read-time eligibility from each derived field's recursive input closure,
+   * so a calculation or total cannot hide an input; a field whose
+   * classification is unknown then bypasses. When absent, the eligibility facts
+   * above stand unchanged.
+   */
+  publishedFields?: readonly QueryCachePublishedField[];
   sharedSourceOwnership: QueryCacheInput["eligibility"]["sharedSourceOwnership"];
   policyTtlSeconds: QueryCacheInput["lifetime"]["policyTtlSeconds"];
   /** When the current grant or account state stops being valid; absent when unproven. */
@@ -476,6 +491,12 @@ const planCache = async (
     for (const sort of command.sort) recheckedFieldIds.add(sort.fieldId.toLowerCase());
     if (command.filter !== undefined) conditionFieldIds(command.filter, recheckedFieldIds);
     if (recheckedFieldIds.size > 200) return undefined;
+    // A cached body also holds the requested projection, so those fields join
+    // the exact published-field evidence: a derived requested field whose
+    // recursive input is sensitive cannot be cached behind its own label.
+    const evaluatedFieldIds = new Set(recheckedFieldIds);
+    for (const fieldId of command.requestedFieldIds) evaluatedFieldIds.add(fieldId.toLowerCase());
+    if (evaluatedFieldIds.size > queryCacheMaxEvaluatedFields) return undefined;
     const decision = decideQueryCache({
       request: command,
       scope: {
@@ -500,6 +521,17 @@ const planCache = async (
         sensitiveFieldsPresent: context.sensitiveFieldsPresent,
         sharedSourceOwnership: context.sharedSourceOwnership,
       },
+      // Exact evidence when the caller can prove the published fields; the
+      // evaluator can only make the decision stricter. With no published fields
+      // the caller's own eligibility facts stand.
+      ...(context.publishedFields === undefined
+        ? {}
+        : {
+            fieldEvidence: {
+              publishedFields: [...context.publishedFields],
+              evaluatedFieldIds: [...evaluatedFieldIds],
+            },
+          }),
       lifetime: {
         now: cache.now().toISOString(),
         policyTtlSeconds: context.policyTtlSeconds,

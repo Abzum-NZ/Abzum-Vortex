@@ -11,6 +11,7 @@ import {
   type RecordTypeDefinitionV2,
   type SearchPriority,
 } from "@vortex/contracts";
+import { searchIndexFieldDiscloses } from "./sensitivity-policy";
 
 /**
  * Organisation-owned search documents (#643).
@@ -122,7 +123,7 @@ export const searchableFieldConfigurationFor = (
     fields: Object.freeze(
       recordType.fields.flatMap((field): SearchableFieldConfigurationEntry[] => {
         const priority = field.searchPriority;
-        if (priority === undefined || !isIndexableField({ ...field, priority }, policy)) return [];
+        if (priority === undefined || !isIndexableField({ ...field, priority }, policy) || !searchIndexFieldDiscloses(recordType.fields, field.fieldId, policy)) return [];
         const optionLabels = optionLabelsFor(field);
         return [
           Object.freeze({
