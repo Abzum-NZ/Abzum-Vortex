@@ -2,9 +2,9 @@
  * shadcn base-nova style, scoped to [data-vortex-style="nova"] on the root element.
  *
  * The component source in ui/src/components carries the style's class names. This file holds the
- * style's base layer and the neutral shadcn variable defaults it needs to render. The theme
- * bridge sets the same variables from the resolved Vortex theme on the root element, which wins
- * over these defaults.
+ * style's base layer and the neutral shadcn variable defaults it needs to render. The Vortex theme
+ * bridge still sets only its own --vortex-* variables, so these defaults are what the components
+ * paint until the resolved theme is mapped onto the shadcn variables.
  */
 [data-vortex-style="nova"] {
   color-scheme: light dark;
@@ -43,8 +43,34 @@
 }
 
 @layer base {
-  [data-vortex-style="nova"] * {
+  /*
+   * Tailwind's preflight is not loaded (see globals.css), so the reset the style's class names rely
+   * on is applied to shadcn component elements (and their content) only. Existing screens carry no
+   * data-slot and keep their look: no border, outline, spacing or font change reaches them.
+   */
+  [data-vortex-style="nova"] :where([data-slot], [data-slot] *) {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid;
     @apply border-border outline-ring/50;
+  }
+
+  [data-vortex-style="nova"] :where(button, input, select, textarea):where([data-slot], [data-slot] *) {
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    background-color: transparent;
+    border-radius: 0;
+  }
+
+  [data-vortex-style="nova"] :where(fieldset[data-slot]) {
+    min-width: 0;
+  }
+
+  [data-vortex-style="nova"] :where(svg):where([data-slot], [data-slot] *) {
+    display: block;
+    vertical-align: middle;
   }
 
   [data-vortex-style="nova"] body {
