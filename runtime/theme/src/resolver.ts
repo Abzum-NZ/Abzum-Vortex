@@ -68,10 +68,14 @@ export function validateApplicationTheme(
 
   const tokens = parsedTheme.data.tokens;
 
-  // 2. Validate the catalogue selection when the theme records one
+  // 2. Validate the catalogue selection, and the release it applies to, when the theme records one
   const selection = parsedTheme.data.selection;
   if (selection !== undefined) {
-    const selectionResult = validateThemeSelectionOptions(selection, options);
+    const selectionResult = validateThemeSelectionOptions(
+      selection,
+      options,
+      parsedTheme.data.base,
+    );
     failures.push(...selectionResult.failures);
     ruleFailures.push(...selectionResult.ruleFailures);
     if (failures.length > 0) return { valid: false, failures, ruleFailures };

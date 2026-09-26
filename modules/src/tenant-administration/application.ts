@@ -1,6 +1,6 @@
 import {
-  DEFAULT_APPLICATION_THEME_SELECTION,
   DEFAULT_PLATFORM_THEME_RELEASE_V2,
+  DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   PLATFORM_BLOCK_RELEASES,
   applicationSourceDocumentV2Schema,
   type ApplicationSourceDocumentV2,
@@ -55,7 +55,7 @@ const theme = {
     content_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE_V2.contentFingerprint,
     catalogue_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE_V2.catalogueFingerprint,
   },
-  selection: DEFAULT_APPLICATION_THEME_SELECTION,
+  selection: DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   token_overrides: {},
 };
 

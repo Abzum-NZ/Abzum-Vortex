@@ -4,15 +4,18 @@ import {
   DEFAULT_APPLICATION_THEME_SELECTION,
   applicationThemeSelectionV2Schema,
   findShadcnThemeCatalogueOption,
+  isShadcnThemeCatalogueBaseRelease,
+  shadcnThemeCatalogueDimensionKeys,
   themeTokenValueV2Schema,
   type ApplicationThemeSelectionV2,
   type DefinitionRuleFailure,
 } from "@vortex/contracts";
 import { findShadcnThemeRelease } from "@vortex/contracts/shadcn-theme-releases";
 import { validateThemeContrast } from "./contrast";
-import { createLocatedFailure } from "./errors";
+import { createLocatedFailure, createThemeLocation } from "./errors";
 import { validateFocusVisibility } from "./focus";
 import type {
+  ExactPlatformThemeDependencyV2,
   ThemeResolutionOptions,
   ThemeTokenValueV2,
   ThemeValidationFailure,
@@ -20,26 +23,31 @@ import type {
 
 /**
  * The dimensions whose catalogue options set theme tokens, in the order they are applied. Each
- * option release is the base release with that option's token keys applied, so a later dimension
- * overrides an earlier one: the base colour lays the complete neutral palette, the theme colour
- * sets the brand and chart pairs, the chart colour sets the five chart pairs, and the radius sets
- * the base corner.
+ * option release is the catalogue's base release with that option's token keys applied, and only
+ * those keys are copied, so a later dimension overrides an earlier one where their keys overlap:
+ * the base colour lays the complete neutral palette (including chart pairs), the theme colour then
+ * sets the brand and chart pairs, the chart colour then sets the five chart pairs, and the radius
+ * sets the base corner. Authored token overrides are applied last, then contrast and focus are
+ * checked on the result.
  */
 const TOKEN_DIMENSION_ORDER = ["baseColor", "theme", "chartColor", "radius"] as const;
 
-/** Menu colour, menu accent and style are variant descriptors, not tokens. */
 export type ResolvedThemeSelection = Readonly<{
-  selection: ApplicationThemeSelectionV2;
+  /**
+   * The effective selection: the authored one, or the platform default when none was authored.
+   * Absent only for a theme pinned to an earlier release than the catalogue's base release.
+   */
+  selection?: ApplicationThemeSelectionV2 | undefined;
   /** The selected, catalogue-backed shadcn style id, for the style CSS loader. */
   style: string;
-  menuColor: string;
-  menuAccent: string;
   /** The complete resolved application token set: base release plus every selected option. */
   tokens: Readonly<Record<string, ThemeTokenValueV2>>;
 }>;
 
 export type ThemeSelectionResolutionInput = Readonly<{
-  /** The pinned base release's tokens the selection is applied to. */
+  /** The pinned platform theme release the selection is applied to. */
+  base: Pick<ExactPlatformThemeDependencyV2, "catalogueThemeId" | "releaseVersion">;
+  /** The pinned base release's tokens. */
   baseTokens: Readonly<Record<string, ThemeTokenValueV2>>;
   /** The authored catalogue selection; absent means the platform default selection. */
   selection?: ApplicationThemeSelectionV2 | undefined;
@@ -56,18 +64,117 @@ export type ThemeSelectionResolution =
       ruleFailures: readonly DefinitionRuleFailure[];
     }>;
 
+type FailureSink = (params: {
+  code: string;
+  family: "invalid_value" | "broken_reference";
+  message: string;
+  dimension?: string;
+}) => void;
+
+/** Locates selection failures at the theme's selection, and at the dimension when one is named. */
+const selectionFailureSink = (
+  failures: ThemeValidationFailure[],
+  ruleFailures: DefinitionRuleFailure[],
+  documentKey: string | undefined,
+): FailureSink => {
+  return ({ dimension, ...params }) => {
+    const located = createLocatedFailure({
+      ...params,
+      ...(dimension === undefined ? {} : { tokenKey: dimension }),
+      ...(documentKey === undefined
+        ? {}
+        : {
+            location: createThemeLocation(documentKey, dimension, [
+              { kind: "setting", key: "selection" },
+            ]),
+          }),
+    });
+    failures.push(located.failure);
+    ruleFailures.push(located.ruleFailure);
+  };
+};
+
+const checkSelectionOptions = (
+  selection: ApplicationThemeSelectionV2,
+  base: ThemeSelectionResolutionInput["base"] | undefined,
+  addFailure: FailureSink,
+): void => {
+  if (base !== undefined && !isShadcnThemeCatalogueBaseRelease(base))
+    addFailure({
+      code: "THEME_SELECTION_BASE_MISMATCH",
+      family: "broken_reference",
+      message: `Theme selection requires the catalogue's base platform theme release; the theme pins release ${base.releaseVersion}`,
+    });
+  for (const dimension of shadcnThemeCatalogueDimensionKeys) {
+    const optionId = selection[dimension];
+    const option = findShadcnThemeCatalogueOption(dimension, optionId);
+    if (option === undefined) {
+      addFailure({
+        code: "UNKNOWN_THEME_OPTION",
+        family: "invalid_value",
+        message: `Theme selection names unknown ${dimension} option "${optionId}"`,
+        dimension,
+      });
+      continue;
+    }
+    if (option.release?.refused === true) {
+      addFailure({
+        code: "REFUSED_THEME_OPTION",
+        family: "invalid_value",
+        message: `Theme selection names ${dimension} option "${optionId}", which fails the platform contrast gate`,
+        dimension,
+      });
+      continue;
+    }
+    if (dimension === "style" && option.asset === undefined)
+      addFailure({
+        code: "UNKNOWN_THEME_OPTION",
+        family: "broken_reference",
+        message: `Theme selection style option "${optionId}" ships no stylesheet`,
+        dimension,
+      });
+  }
+};
+
 /**
- * Validates a selection names an offered, non-refused option of every dimension. It reads no token
- * values, so publication can refuse an invalid selection before it resolves any tokens.
+ * Validates that a recorded selection names an offered, non-refused option of every dimension
+ * and, when the pinned base release is given, that it is the catalogue's base release. It reads no
+ * token values, so a stored theme's selection can be checked without resolving it again.
  */
 export function validateThemeSelectionOptions(
   selection: ApplicationThemeSelectionV2,
   options?: ThemeResolutionOptions | undefined,
+  base?: ThemeSelectionResolutionInput["base"] | undefined,
 ): { failures: ThemeValidationFailure[]; ruleFailures: DefinitionRuleFailure[] } {
   const failures: ThemeValidationFailure[] = [];
   const ruleFailures: DefinitionRuleFailure[] = [];
-  const documentKey = options?.documentKey;
-  const addFailure = (params: {
+  checkSelectionOptions(
+    selection,
+    base,
+    selectionFailureSink(failures, ruleFailures, options?.documentKey),
+  );
+  return { failures, ruleFailures };
+}
+
+/**
+ * Resolves a catalogue selection into the complete token set and the style id. It refuses a
+ * selection over any release other than the catalogue's base release, an unknown option id, a
+ * refused option, a missing or extra dimension, and a token override whose key, kind or colour
+ * role the selected theme does not allow. The resolved tokens then pass the same contrast and
+ * focus checks publication runs, so an override cannot hide focus or lower required contrast.
+ *
+ * On the catalogue's base release an absent selection resolves as the platform default. On an
+ * earlier release an absent selection keeps that release's exact tokens (plus the overrides), as
+ * the platform theme catalogue promises for applications that still pin it.
+ */
+export function resolveThemeSelection(
+  input: ThemeSelectionResolutionInput,
+): ThemeSelectionResolution {
+  const failures: ThemeValidationFailure[] = [];
+  const ruleFailures: DefinitionRuleFailure[] = [];
+  const documentKey = input.options?.documentKey;
+  const addSelectionFailure = selectionFailureSink(failures, ruleFailures, documentKey);
+  const addTokenFailure = (params: {
     code: string;
     family: "invalid_value" | "broken_reference";
     message: string;
@@ -77,158 +184,55 @@ export function validateThemeSelectionOptions(
     failures.push(located.failure);
     ruleFailures.push(located.ruleFailure);
   };
-  for (const dimension of [
-    "style",
-    "baseColor",
-    "theme",
-    "chartColor",
-    "radius",
-    "menuColor",
-    "menuAccent",
-  ] as const) {
-    const option = findShadcnThemeCatalogueOption(dimension, selection[dimension]);
-    if (option === undefined) {
-      addFailure({
-        code: "UNKNOWN_THEME_OPTION",
-        family: "invalid_value",
-        message: `Theme selection names unknown ${dimension} option "${selection[dimension]}"`,
-        tokenKey: dimension,
-      });
-      continue;
-    }
-    if (option.release?.refused === true)
-      addFailure({
-        code: "REFUSED_THEME_OPTION",
-        family: "invalid_value",
-        message: `Theme selection names ${dimension} option "${selection[dimension]}", which fails the platform contrast gate`,
-        tokenKey: dimension,
-      });
-  }
-  return { failures, ruleFailures };
-}
-
-/**
- * Resolves a catalogue selection into the complete token set and the style id, refusing an unknown
- * option id, a refused option, a missing dimension and a token override whose kind or role the
- * selected theme does not allow. The resolved tokens then pass the same contrast and focus checks
- * publication runs, so an override that hides focus or lowers required contrast is refused here.
- */
-export function resolveThemeSelection(
-  input: ThemeSelectionResolutionInput,
-): ThemeSelectionResolution {
-  const failures: ThemeValidationFailure[] = [];
-  const ruleFailures: DefinitionRuleFailure[] = [];
-  const documentKey = input.options?.documentKey;
-
-  const addFailure = (params: {
-    code: string;
-    family: "invalid_value" | "broken_reference" | "unsafe_content";
-    message: string;
-    tokenKey?: string;
-  }): void => {
-    const located = createLocatedFailure({ ...params, documentKey });
-    failures.push(located.failure);
-    ruleFailures.push(located.ruleFailure);
-  };
-
-  const selectionInput = input.selection ?? DEFAULT_APPLICATION_THEME_SELECTION;
-  const parsedSelection = applicationThemeSelectionV2Schema.safeParse(selectionInput);
-  if (!parsedSelection.success) {
-    addFailure({
-      code: "INVALID_THEME_SELECTION",
-      family: "invalid_value",
-      message: `Application theme selection is invalid: ${parsedSelection.error.message}`,
-    });
-    return { valid: false, failures, ruleFailures };
-  }
-  const selection = parsedSelection.data;
 
   const tokens: Record<string, ThemeTokenValueV2> = { ...input.baseTokens };
+  let selection: ApplicationThemeSelectionV2 | undefined;
 
-  for (const dimension of TOKEN_DIMENSION_ORDER) {
-    const optionId = selection[dimension];
-    const option = findShadcnThemeCatalogueOption(dimension, optionId);
-    if (option === undefined) {
-      addFailure({
-        code: "UNKNOWN_THEME_OPTION",
+  if (input.selection !== undefined || isShadcnThemeCatalogueBaseRelease(input.base)) {
+    const parsedSelection = applicationThemeSelectionV2Schema.safeParse(
+      input.selection ?? DEFAULT_APPLICATION_THEME_SELECTION,
+    );
+    if (!parsedSelection.success) {
+      addSelectionFailure({
+        code: "INVALID_THEME_SELECTION",
         family: "invalid_value",
-        message: `Theme selection names unknown ${dimension} option "${optionId}"`,
-        tokenKey: dimension,
+        message: `Application theme selection is invalid: ${parsedSelection.error.message}`,
       });
-      continue;
+      return { valid: false, failures, ruleFailures };
     }
-    if (option.release === undefined || option.release.refused === true) {
-      addFailure({
-        code: "REFUSED_THEME_OPTION",
-        family: "invalid_value",
-        message: `Theme selection names ${dimension} option "${optionId}", which fails the platform contrast gate`,
-        tokenKey: dimension,
-      });
-      continue;
-    }
-    if (option.releaseKey === undefined) {
-      addFailure({
-        code: "UNKNOWN_THEME_OPTION_RELEASE",
-        family: "broken_reference",
-        message: `Theme selection ${dimension} option "${optionId}" declares no release key`,
-        tokenKey: dimension,
-      });
-      continue;
-    }
-    const release = findShadcnThemeRelease(option.releaseKey);
-    if (release === undefined) {
-      addFailure({
-        code: "UNKNOWN_THEME_OPTION_RELEASE",
-        family: "broken_reference",
-        message: `Theme selection ${dimension} option "${optionId}" has no catalogue release`,
-        tokenKey: dimension,
-      });
-      continue;
-    }
-    for (const tokenKey of option.tokenKeys ?? []) {
-      const raw = release.tokens[tokenKey];
-      const parsed = raw === undefined ? undefined : themeTokenValueV2Schema.safeParse(raw);
-      if (parsed === undefined || !parsed.success) {
-        addFailure({
-          code: "INVALID_THEME_OPTION_TOKEN",
-          family: "invalid_value",
-          message: `Theme selection ${dimension} option "${optionId}" does not map token "${tokenKey}"`,
-          tokenKey,
+    selection = parsedSelection.data;
+    checkSelectionOptions(selection, input.base, addSelectionFailure);
+    if (failures.length > 0) return { valid: false, failures, ruleFailures };
+
+    for (const dimension of TOKEN_DIMENSION_ORDER) {
+      const optionId = selection[dimension];
+      const option = findShadcnThemeCatalogueOption(dimension, optionId);
+      const release =
+        option?.releaseKey === undefined ? undefined : findShadcnThemeRelease(option.releaseKey);
+      if (option === undefined || release === undefined) {
+        addSelectionFailure({
+          code: "UNKNOWN_THEME_OPTION_RELEASE",
+          family: "broken_reference",
+          message: `Theme selection ${dimension} option "${optionId}" has no catalogue release`,
+          dimension,
         });
         continue;
       }
-      tokens[tokenKey] = parsed.data;
+      for (const tokenKey of option.tokenKeys ?? []) {
+        const raw = release.tokens[tokenKey];
+        const parsed = raw === undefined ? undefined : themeTokenValueV2Schema.safeParse(raw);
+        if (parsed === undefined || !parsed.success) {
+          addSelectionFailure({
+            code: "INVALID_THEME_OPTION_TOKEN",
+            family: "broken_reference",
+            message: `Theme selection ${dimension} option "${optionId}" does not map token "${tokenKey}"`,
+            dimension,
+          });
+          continue;
+        }
+        tokens[tokenKey] = parsed.data;
+      }
     }
-  }
-
-  // Style, menu colour and menu accent are catalogue variants. The style id must name a shipped
-  // style with its scoped CSS asset; the menu variants must name an offered descriptor.
-  const styleOption = findShadcnThemeCatalogueOption("style", selection.style);
-  if (styleOption === undefined || styleOption.asset === undefined) {
-    addFailure({
-      code: "UNKNOWN_THEME_OPTION",
-      family: "invalid_value",
-      message: `Theme selection names unknown style option "${selection.style}"`,
-      tokenKey: "style",
-    });
-  }
-  const menuColorOption = findShadcnThemeCatalogueOption("menuColor", selection.menuColor);
-  if (menuColorOption === undefined) {
-    addFailure({
-      code: "UNKNOWN_THEME_OPTION",
-      family: "invalid_value",
-      message: `Theme selection names unknown menuColor option "${selection.menuColor}"`,
-      tokenKey: "menuColor",
-    });
-  }
-  const menuAccentOption = findShadcnThemeCatalogueOption("menuAccent", selection.menuAccent);
-  if (menuAccentOption === undefined) {
-    addFailure({
-      code: "UNKNOWN_THEME_OPTION",
-      family: "invalid_value",
-      message: `Theme selection names unknown menuAccent option "${selection.menuAccent}"`,
-      tokenKey: "menuAccent",
-    });
   }
 
   for (const key of Object.keys(input.overrides ?? {}).sort()) {
@@ -236,7 +240,7 @@ export function resolveThemeSelection(
     if (override === undefined) continue;
     const inherited = tokens[key];
     if (inherited === undefined) {
-      addFailure({
+      addTokenFailure({
         code: "UNKNOWN_TOKEN_OVERRIDE",
         family: "broken_reference",
         message: `Theme token override references unknown token "${key}"`,
@@ -245,7 +249,7 @@ export function resolveThemeSelection(
       continue;
     }
     if (inherited.kind !== override.kind) {
-      addFailure({
+      addTokenFailure({
         code: "TOKEN_KIND_MISMATCH",
         family: "broken_reference",
         message: `Theme token override for "${key}" has kind "${override.kind}" but the selected theme token has kind "${inherited.kind}"`,
@@ -255,7 +259,7 @@ export function resolveThemeSelection(
     }
     if (override.kind === "color_pair" && inherited.kind === "color_pair") {
       if (override.role !== undefined && override.role !== inherited.role) {
-        addFailure({
+        addTokenFailure({
           code: "COLOR_ROLE_OVERRIDE",
           family: "invalid_value",
           message: `Theme token override for "${key}" cannot change the colour role declared by the catalogue`,
@@ -284,10 +288,8 @@ export function resolveThemeSelection(
   return {
     valid: true,
     resolved: Object.freeze({
-      selection: Object.freeze({ ...selection }),
-      style: selection.style,
-      menuColor: selection.menuColor,
-      menuAccent: selection.menuAccent,
+      ...(selection === undefined ? {} : { selection: Object.freeze({ ...selection }) }),
+      style: (selection ?? DEFAULT_APPLICATION_THEME_SELECTION).style,
       tokens: Object.freeze(tokens),
     }),
   };

@@ -1,6 +1,8 @@
 import {
   type ApplicationThemeSelectionV2,
   applicationThemeSelectionV2Schema,
+  type SourceApplicationThemeSelectionV2,
+  sourceApplicationThemeSelectionV2Schema,
 } from "./application-composition-v2";
 import index from "./catalogue/shadcn-create-theme-catalogue.generated.json";
 
@@ -111,7 +113,24 @@ export const DEFAULT_APPLICATION_THEME_SELECTION: ApplicationThemeSelectionV2 =
     menuAccent: "subtle",
   });
 
-/** A fresh mutable copy of the platform default selection, for a caller that will edit it. */
-export const defaultApplicationThemeSelection = (): ApplicationThemeSelectionV2 => ({
-  ...DEFAULT_APPLICATION_THEME_SELECTION,
-});
+/** The platform default selection in its authored form, which shipped application sources pin. */
+export const DEFAULT_SOURCE_APPLICATION_THEME_SELECTION: SourceApplicationThemeSelectionV2 =
+  sourceApplicationThemeSelectionV2Schema.parse({
+    style: DEFAULT_APPLICATION_THEME_SELECTION.style,
+    base_color: DEFAULT_APPLICATION_THEME_SELECTION.baseColor,
+    theme: DEFAULT_APPLICATION_THEME_SELECTION.theme,
+    chart_color: DEFAULT_APPLICATION_THEME_SELECTION.chartColor,
+    radius: DEFAULT_APPLICATION_THEME_SELECTION.radius,
+    menu_color: DEFAULT_APPLICATION_THEME_SELECTION.menuColor,
+    menu_accent: DEFAULT_APPLICATION_THEME_SELECTION.menuAccent,
+  });
+
+/**
+ * Whether a pinned platform theme release is the catalogue's base release. Every catalogue option
+ * release is that release with the option's tokens applied, so a selection resolves only over it.
+ */
+export const isShadcnThemeCatalogueBaseRelease = (
+  release: Readonly<{ catalogueThemeId: string; releaseVersion: string }>,
+): boolean =>
+  release.catalogueThemeId === shadcnThemeCatalogue.baseRelease.catalogueThemeId &&
+  release.releaseVersion === shadcnThemeCatalogue.baseRelease.releaseVersion;
