@@ -96,6 +96,37 @@ export {
 } from "./component-event-dispatch";
 
 export {
+  acceptComponentResult,
+  beginComponentInvocation,
+  componentDisplayOutcomeKinds,
+  componentDisplayRefusalReasons,
+  componentDisplayUnavailableReasons,
+  componentInvocationCauseSchema,
+  componentInvocationIdSchema,
+  componentSelectionSchema,
+  openComponentResultState,
+  projectComponentResult,
+  refreshComponentAfterSave,
+  type ComponentConfirmedWrite,
+  type ComponentDatasetReread,
+  type ComponentDisplayOutcome,
+  type ComponentDisplayOutcomeKind,
+  type ComponentDisplayRecovery,
+  type ComponentDisplayRefusalReason,
+  type ComponentDisplayUnavailableReason,
+  type ComponentFlowDisplay,
+  type ComponentInvocation,
+  type ComponentInvocationCause,
+  type ComponentInvocationId,
+  type ComponentInvocationStart,
+  type ComponentInvocationStartInput,
+  type ComponentResultReduction,
+  type ComponentResultReductionReason,
+  type ComponentResultState,
+  type ComponentSelection,
+} from "./component-result-state";
+
+export {
   applicationInstallationActivationRequestSchema,
   ApplicationInstallationCoordinatorError,
   applicationInstallationCoordinatorErrorCodes,
