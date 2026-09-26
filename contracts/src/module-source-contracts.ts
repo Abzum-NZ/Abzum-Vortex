@@ -27,6 +27,8 @@ import {
 } from "./module-field-values-v2";
 import { moduleSourceRecordOwnershipModeSchema } from "./record-ownership-compatibility";
 import { sourceFlowCollectionSchema } from "./flow-source-contracts";
+import { protectedReadModelKeySchema } from "./application-composition-v2";
+import { PLATFORM_SERVICE_OPERATIONS } from "./platform-service-operation-catalogue";
 
 /** The one current Module source/validation contract pair. */
 export const moduleSourceContractVersion = "3.0.0" as const;
@@ -1180,6 +1182,65 @@ export const moduleSourceActionInputSchema = z
 // Record types, actions and sharing conditions.
 // ---------------------------------------------------------------------------
 
+const systemRecordProtectedOperationKeys = Object.entries(PLATFORM_SERVICE_OPERATIONS)
+  .filter(([, operation]) => operation.descriptor.expectedRevision === "required")
+  .map(([key]) => key) as [string, ...string[]];
+
+/**
+ * A registered protected operation a system projection record type action may target: exactly the
+ * platform-service catalogue operations that change one existing row at an expected revision, so
+ * the subject row's identity and revision always have somewhere to go. The operation stays the only
+ * write path over its protected fact, so an action names it by its registered key and never by an
+ * identity. The operation requires its own registered permission and re-checks the actor's current
+ * authority when it runs, in addition to the action's own permission.
+ */
+export const moduleSourceProtectedOperationKeySchema = z.enum(systemRecordProtectedOperationKeys);
+
+/**
+ * The system projection storage kind: the record type's typed fields project one registered
+ * protected view (or the function behind it) rather than generated record storage. The projection
+ * includes the organisation, so the declaration names the field that holds it; filterable and
+ * sortable fields are the closed subset the query engine may use; and the revision field is the
+ * concurrency number every protected operation re-checks.
+ */
+export const moduleSourceSystemProjectionSchema = z
+  .object({
+    protected_view: protectedReadModelKeySchema,
+    organization_field: builderKeySchema,
+    revision_field: builderKeySchema,
+    filterable_fields: z.array(builderKeySchema).max(500),
+    sortable_fields: z.array(builderKeySchema).max(500),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.filterable_fields).size !== value.filterable_fields.length)
+      context.addIssue({
+        code: "custom",
+        path: ["filterable_fields"],
+        message: "Filterable fields must be unique",
+      });
+    if (new Set(value.sortable_fields).size !== value.sortable_fields.length)
+      context.addIssue({
+        code: "custom",
+        path: ["sortable_fields"],
+        message: "Sortable fields must be unique",
+      });
+  });
+
+/**
+ * Field types whose values come from generated record storage (counters, relationship edges,
+ * relationship totals, stored files or child rows) rather than a column of a protected view, so a
+ * system projection record type cannot declare them.
+ */
+const systemProjectionRefusedFieldTypes: ReadonlySet<string> = new Set([
+  "reference_number",
+  "table",
+  "link",
+  "link_to_one_of_several",
+  "total",
+  "attachment",
+]);
+
 export const moduleSourceRecordTypeSchema = z
   .object({
     id: sourceAliasSchema,
@@ -1189,6 +1250,7 @@ export const moduleSourceRecordTypeSchema = z
     title_field: builderKeySchema,
     storage_contract_id: sourceAliasSchema,
     storage_scope: z.enum(["organisation_shared", "application_contained"]),
+    system_projection: moduleSourceSystemProjectionSchema.optional(),
     ownership_mode: moduleSourceRecordOwnershipModeSchema,
     ownership_relationship: builderKeySchema.optional(),
     standard_actions: z
@@ -1236,6 +1298,73 @@ export const moduleSourceRecordTypeSchema = z
         path: ["ownership_relationship"],
         message: "The ownership relationship must resolve to a link field on this record type",
       });
+    const projection = value.system_projection;
+    if (projection === undefined) return;
+    // A system record type is a read-only projection of protected storage that includes the
+    // organisation: its write path is the named protected operation, never a standard record
+    // command. A standard create, update, delete or restore is refused at publication by the
+    // compiler with its own registered code (vortex.definition.system_record_write_refused), so
+    // the source shape deliberately admits the declaration for that refusal to report.
+    if (value.storage_scope !== "organisation_shared")
+      context.addIssue({
+        code: "custom",
+        path: ["storage_scope"],
+        message: "A system projection record type is scoped to exactly one organisation",
+      });
+    const fields = new Map(value.fields.map((field) => [field.key, field]));
+    const organization = fields.get(projection.organization_field);
+    if (organization === undefined || organization.type !== "text" || !organization.required)
+      context.addIssue({
+        code: "custom",
+        path: ["system_projection", "organization_field"],
+        message: "The organisation field must be a required text field of the record type",
+      });
+    const revision = fields.get(projection.revision_field);
+    if (revision === undefined || revision.type !== "whole_number" || !revision.required)
+      context.addIssue({
+        code: "custom",
+        path: ["system_projection", "revision_field"],
+        message: "The revision field must be a required whole-number field of the record type",
+      });
+    for (const [index, field] of value.fields.entries())
+      if (systemProjectionRefusedFieldTypes.has(field.type))
+        context.addIssue({
+          code: "custom",
+          path: ["fields", index, "type"],
+          message: "A system projection field is a read-only value of its protected view",
+        });
+    const filterable = new Set(projection.filterable_fields);
+    const sortable = new Set(projection.sortable_fields);
+    for (const [index, key] of projection.filterable_fields.entries())
+      if (!fields.get(key)?.filterable)
+        context.addIssue({
+          code: "custom",
+          path: ["system_projection", "filterable_fields", index],
+          message: "A declared filterable field must be a filterable field of the record type",
+        });
+    for (const [index, key] of projection.sortable_fields.entries())
+      if (!fields.get(key)?.sortable)
+        context.addIssue({
+          code: "custom",
+          path: ["system_projection", "sortable_fields", index],
+          message: "A declared sortable field must be a sortable field of the record type",
+        });
+    // The declared lists are the closed set the query engine may use, so a field flagged
+    // filterable or sortable outside them would be an undeclared query capability.
+    for (const [index, field] of value.fields.entries()) {
+      if (field.filterable && !filterable.has(field.key))
+        context.addIssue({
+          code: "custom",
+          path: ["fields", index, "filterable"],
+          message: "Every filterable system projection field must be declared filterable",
+        });
+      if (field.sortable && !sortable.has(field.key))
+        context.addIssue({
+          code: "custom",
+          path: ["fields", index, "sortable"],
+          message: "Every sortable system projection field must be declared sortable",
+        });
+    }
   });
 
 export const moduleSourceActionSchema = z
@@ -1249,10 +1378,19 @@ export const moduleSourceActionSchema = z
     shareable: z.boolean(),
     inputs: z.array(moduleSourceActionInputSchema).max(50),
     precondition: sourceConditionSchema.optional(),
-    effects: z.array(sourceActionEffectSchema).min(1).max(10),
+    effects: z.array(sourceActionEffectSchema).max(10),
+    protected_operation: moduleSourceProtectedOperationKeySchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
+    const hasEffects = value.effects.length > 0;
+    const hasOperation = value.protected_operation !== undefined;
+    if (hasEffects === hasOperation)
+      context.addIssue({
+        code: "custom",
+        path: ["protected_operation"],
+        message: "An action targets either ordered effects or one registered protected operation",
+      });
     if ((value.permission === undefined) === (value.permission_alternatives === undefined))
       context.addIssue({
         code: "custom",
@@ -1507,6 +1645,27 @@ const moduleSourceBodySchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    // A system projection record type has no ordinary write path, so every action on it targets a
+    // registered protected operation, and no other record type may target a protected operation.
+    const recordTypes = new Map(value.record_types.map((recordType) => [recordType.key, recordType]));
+    for (const [index, action] of value.actions.entries()) {
+      const recordType = recordTypes.get(action.record_type);
+      if (recordType === undefined) continue;
+      const isProjection = recordType.system_projection !== undefined;
+      const targetsOperation = action.protected_operation !== undefined;
+      if (targetsOperation && !isProjection)
+        context.addIssue({
+          code: "custom",
+          path: ["actions", index, "protected_operation"],
+          message: "Only a system projection record type action targets a protected operation",
+        });
+      else if (isProjection && !targetsOperation)
+        context.addIssue({
+          code: "custom",
+          path: ["actions", index, "effects"],
+          message: "A system projection record type action targets a registered protected operation",
+        });
+    }
     // Contributions resolve their target by a local dependency key, so a Module that
     // declares contributions needs unambiguous keys. Modules without contributions keep
     // their existing acceptance unchanged.

@@ -1,12 +1,8 @@
 import type { ReactElement } from "react";
 import { readRecordDetailContract } from "@vortex/contracts";
 import { DisplayCellView } from "./cell";
-import {
-  DisplayHeader,
-  resolveDisplayContext,
-  RowActionControl,
-  type DisplayRenderProps,
-} from "./controls";
+import { DisplayHeader, RowActionControl } from "./controls";
+import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import type { DisplayField, RecordDetailPayload } from "./projected-data";
 

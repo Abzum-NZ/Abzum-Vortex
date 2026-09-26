@@ -8,6 +8,7 @@ import {
   type ModuleRootId,
   type OrganizationSelectionCandidate,
   type QueryId,
+  type RecordsDisplayFormat,
 } from "@vortex/contracts";
 import type { HumanOrganizationRequestResult } from "@vortex/access";
 import {
@@ -50,6 +51,21 @@ export type RecordsTableQueryRequest = Readonly<{
   continuationToken?: string;
   /** Headings from the installed definition for declared columns that set no label (field identity to label). */
   fieldLabels?: Readonly<Record<string, string>>;
+  /**
+   * The viewer's chosen sort, from a `sort_changed` data event. It must be a declared sortable
+   * field; `null` or absent uses the bound query's declared sort.
+   */
+  sort?: Readonly<{ fieldId: string; direction: "ascending" | "descending" }> | null;
+  /**
+   * The viewer's active per-field filters, from `filter_changed` data events. An empty value
+   * clears that field; every named field must be a declared filterable field.
+   */
+  filters?: readonly Readonly<{ fieldId: string; value: string }>[];
+  /**
+   * The viewer's search text, from a `search_changed` data event. It is sent only when the
+   * placement enables search; the engine matches it over the record type's searchable fields.
+   */
+  search?: string | null;
 }>;
 
 /**
@@ -74,11 +90,119 @@ export type RecordsTableQueryResolution =
 const refused = Object.freeze({ kind: "refused" as const });
 const unavailable = Object.freeze({ kind: "unavailable" as const });
 
+const lowerUnique = (values: readonly string[]): string[] => [
+  ...new Set(values.map((value) => value.toLowerCase())),
+];
+
+/**
+ * A number filter value as the engine compares it: a safe integer as a JSON number, which matches
+ * whole-number and decimal fields alike, and any other plain decimal as canonical decimal text (no
+ * exponent, no leading or trailing zeros), which is how the engine carries a decimal field's value.
+ * Anything else is undefined, so the command is refused rather than filtered loosely.
+ */
+const numberFilterValue = (raw: string): number | string | undefined => {
+  const match = /^(-?)([0-9]+)(?:\.([0-9]+))?$/.exec(raw.trim());
+  if (match === null) return undefined;
+  const sign = match[1] ?? "";
+  const whole = (match[2] ?? "").replace(/^0+(?=[0-9])/, "");
+  const fraction = (match[3] ?? "").replace(/0+$/, "");
+  if (fraction !== "") return `${sign}${whole}.${fraction}`;
+  const value = Number(whole);
+  if (!Number.isSafeInteger(value)) return undefined;
+  return sign === "-" && value !== 0 ? -value : value;
+};
+
+const ISO_CALENDAR_DAY = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/;
+
+/** The UTC start of a calendar day and of the next one, or undefined for an invalid date. */
+const utcDayBounds = (raw: string): readonly [string, string] | undefined => {
+  const match = ISO_CALENDAR_DAY.exec(raw);
+  if (match === null) return undefined;
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const start = new Date(Date.UTC(year, month, day));
+  if (start.getUTCFullYear() !== year || start.getUTCMonth() !== month || start.getUTCDate() !== day)
+    return undefined;
+  const end = new Date(Date.UTC(year, month, day + 1));
+  return [start.toISOString(), end.toISOString()];
+};
+
+/**
+ * One `filter_changed` value as a typed condition over its field, chosen by the column's declared
+ * format, which is also what picks the filter control. A text-like field matches a substring; a
+ * number, date or yes/no field must equal the value the control reports; a date-and-time field
+ * matches the whole reported calendar day, taken in UTC. An unparsable value yields undefined so the
+ * command is refused rather than filtered loosely. The condition is plain JSON: the Query command
+ * schema parses it into a typed condition, so a malformed one refuses the command.
+ */
+const filterConditionFor = (
+  format: RecordsDisplayFormat,
+  fieldId: string,
+  raw: string,
+): JsonValue | undefined => {
+  const left = { source: "field" as const, fieldId: fieldId.toLowerCase() };
+  switch (format) {
+    case "number":
+    case "currency":
+    case "percent": {
+      const value = numberFilterValue(raw);
+      return value === undefined
+        ? undefined
+        : { kind: "comparison", operator: "equals", left, right: { source: "value", value } };
+    }
+    case "boolean":
+      return raw === "true" || raw === "false"
+        ? {
+            kind: "comparison",
+            operator: "equals",
+            left,
+            right: { source: "value", value: raw === "true" },
+          }
+        : undefined;
+    case "date":
+      return utcDayBounds(raw) === undefined
+        ? undefined
+        : { kind: "comparison", operator: "equals", left, right: { source: "value", value: raw } };
+    case "date_time": {
+      const bounds = utcDayBounds(raw);
+      return bounds === undefined
+        ? undefined
+        : {
+            kind: "all",
+            conditions: [
+              {
+                kind: "comparison",
+                operator: "greater_than_or_equal",
+                left,
+                right: { source: "value", value: bounds[0] },
+              },
+              {
+                kind: "comparison",
+                operator: "less_than",
+                left,
+                right: { source: "value", value: bounds[1] },
+              },
+            ],
+          };
+    }
+    default:
+      return {
+        kind: "comparison",
+        operator: "contains",
+        left,
+        right: { source: "value", value: raw },
+      };
+  }
+};
+
 /**
  * Builds the Query engine command a declared Records table needs: exactly its declared columns,
- * its declared page size and its declared query inputs. Returns undefined when the placement
- * declares no data contract, a page-supplied input is missing or the command is not one the
- * Query engine accepts (for example a column that is not a field identity).
+ * its declared page size, its declared query inputs, and the viewer's current sort, filters and
+ * search from the table's data events. Every user choice must stay inside the component's declared
+ * sortable and filterable fields, so an unconfigured field can neither sort nor filter. Returns
+ * undefined when the placement declares no data contract, a page-supplied input is missing, a user
+ * choice names an undeclared or unreadable field, or the command is not one the Query engine accepts.
  */
 export const buildRecordsTableQueryCommand = (
   request: RecordsTableQueryRequest,
@@ -97,12 +221,50 @@ export const buildRecordsTableQueryCommand = (
     if (value === undefined) return undefined;
     inputValues[parameter.input] = value;
   }
+
+  const sortableFieldIds = lowerUnique(contract.sortableFields);
+  const filterableFieldIds = lowerUnique(contract.filterableFields);
+  const sort: { fieldId: string; direction: "ascending" | "descending" }[] = [];
+  if (request.sort !== undefined && request.sort !== null) {
+    if (!sortableFieldIds.includes(request.sort.fieldId.toLowerCase())) return undefined;
+    sort.push({ fieldId: request.sort.fieldId, direction: request.sort.direction });
+  }
+  const conditions: JsonValue[] = [];
+  for (const filter of request.filters ?? []) {
+    if (filter.value === "") continue;
+    const fieldId = filter.fieldId.toLowerCase();
+    if (!filterableFieldIds.includes(fieldId)) return undefined;
+    const column = contract.columns.find((candidate) => candidate.field.toLowerCase() === fieldId);
+    if (column === undefined) return undefined;
+    const condition = filterConditionFor(column.format, filter.fieldId, filter.value);
+    if (condition === undefined) return undefined;
+    conditions.push(condition);
+  }
+  const filter: JsonValue | undefined =
+    conditions.length === 0
+      ? undefined
+      : conditions.length === 1
+        ? conditions[0]
+        : { kind: "all", conditions };
+  const search =
+    contract.search && request.search !== undefined && request.search !== null && request.search.trim() !== ""
+      ? request.search.trim()
+      : undefined;
+
   const command = protectedQueryCommandSchema.safeParse({
     moduleRootId: request.moduleRootId,
     queryId: request.queryId,
     inputValues,
     requestedFieldIds: fieldIds,
     requestedSystemFieldKeys: [],
+    sort,
+    ...(filter === undefined ? {} : { filter }),
+    ...(search === undefined ? {} : { search }),
+    sortableFieldIds,
+    filterableFieldIds,
+    // The table contract declares only a search box, not a searchable field list, so an empty
+    // declared set tells the engine to search every field the record type marks searchable.
+    searchableFieldIds: [],
     pageSize: contract.pageSize,
     ...(request.continuationToken === undefined
       ? {}

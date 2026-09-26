@@ -35,7 +35,8 @@
     "@vortex/rule": "workspace:*",
     "@vortex/search": "workspace:*",
     "@vortex/theme": "workspace:*",
-    "@vortex/workflow": "workspace:*"
+    "@vortex/workflow": "workspace:*",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@types/react": "19.3.0",

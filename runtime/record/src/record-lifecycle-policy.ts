@@ -14,7 +14,10 @@ import {
   revisionSchema,
   storageContractIdSchema,
   workflowIdSchema,
+  type ApplicationRootId,
   type IdentitySession,
+  type OrganizationId,
+  type StorageContractId,
   type OrganizationLifecycleLimits,
   type OrganizationSelectionCandidate,
   type RecordTypeLifecyclePolicy,
@@ -69,9 +72,9 @@ export type RecordTypeLifecyclePolicyActionInput =
  * of this command: it is server-assigned and immutable across revisions.
  */
 export interface SaveRecordTypeLifecyclePolicyCommand {
-  readonly organizationId: string;
-  readonly storageContractId: string;
-  readonly applicationRootId: string | null;
+  readonly organizationId: OrganizationId;
+  readonly storageContractId: StorageContractId;
+  readonly applicationRootId: ApplicationRootId | null;
   /** Must match the organisation's current lifecycle-limits revision. */
   readonly expectedSettingsRevision: number;
   /** `null` when creating the first policy for this exact target. */
@@ -93,14 +96,14 @@ export interface SaveRecordTypeLifecyclePolicyCommand {
  * policy that #566 already governs.
  */
 export interface SaveInitialRecordTypeLifecyclePolicyForProvisionedSetupCommand {
-  readonly organizationId: string;
+  readonly organizationId: OrganizationId;
   /** The Application being installed; always present, never null. */
-  readonly bindingApplicationRootId: string;
+  readonly bindingApplicationRootId: ApplicationRootId;
   /** Must match the provisioned Module binding revision for this target. */
   readonly expectedBindingRevision: number;
-  readonly storageContractId: string;
+  readonly storageContractId: StorageContractId;
   /** `null` only for an organisation-shared record type. */
-  readonly applicationRootId: string | null;
+  readonly applicationRootId: ApplicationRootId | null;
   /** Must match the organisation's current lifecycle-limits revision. */
   readonly expectedSettingsRevision: number;
   readonly policy: RecordTypeLifecyclePolicyActionInput;

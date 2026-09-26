@@ -25,6 +25,7 @@ import {
   recordTypeIdSchema,
   fieldIdSchema,
   isPlatformPermissionKey,
+  PLATFORM_SERVICE_OPERATIONS,
   flowContractVersion,
   flowTaskMappingForActionEffect,
   normalizeExactDecimal,
@@ -36,6 +37,7 @@ import {
   type ApplicationToolOperationReference,
   type ApplicationToolBundle,
   type NavigationItem,
+  type PlatformServiceOperationKey,
   type ModuleCompilationOutputV3,
   type ModuleCompilationRequestV3,
   type ModuleSourceDocument,
@@ -102,6 +104,8 @@ const ID_FIELDS = new Set([
   "storage_contract_id",
   "title_field",
   "ownership_relationship",
+  "organization_field",
+  "revision_field",
   "from_field",
   "record_type",
   "source_record_type",
@@ -232,6 +236,12 @@ const directSourceKeyMap: Readonly<Record<string, string>> = Object.freeze({
   storage_contract_id: "storageContractId",
   title_field: "titleFieldId",
   ownership_relationship: "ownershipRelationshipId",
+  organization_field: "organizationFieldId",
+  revision_field: "revisionFieldId",
+  filterable_fields: "filterableFieldIds",
+  sortable_fields: "sortableFieldIds",
+  protected_view: "protectedView",
+  protected_operation: "protectedOperation",
   from_field: "fromFieldId",
   field: "fieldId",
   declared_fields: "declaredFieldIds",
@@ -931,6 +941,17 @@ function explicitSourceTargets(
     ];
     return leafPaths(valueAtPath(canonical, targetPath), targetPath);
   }
+  if (
+    (source.kind === "module" || source.kind === "application") &&
+    sourcePath[0] === "body" &&
+    sourcePath[1] === "actions" &&
+    typeof sourcePath[2] === "number" &&
+    sourcePath[3] === "protected_operation" &&
+    sourcePath.length === 4
+  ) {
+    const targetPath: Path = ["content", "actions", sourcePath[2], "protectedOperation"];
+    return leafPaths(valueAtPath(canonical, targetPath), targetPath);
+  }
   if (source.kind === "connection_type" && sourcePath[0] === "body") {
     const connectionKeys: Readonly<Record<string, string>> = {
       path: "pathTemplate",
@@ -1435,6 +1456,8 @@ const moduleSourceTransformPatterns = [
   /^body\/contributions\/#\/(?:id|dependency|extension_point|record_type|field|contributed_action)$/,
   /^body\/record_types\/#\/(?:name|plural_name|custom_actions\/#|ownership_mode|storage_scope)$/,
   /^body\/record_types\/#\/(?:storage_contract_id|title_field|ownership_relationship)$/,
+  /^body\/record_types\/#\/system_projection\/(?:organization_field|revision_field)$/,
+  /^body\/record_types\/#\/system_projection\/(?:filterable_fields|sortable_fields)\/#$/,
   /^body\/record_types\/#\/fields\/#\/default(?:\/.*)?$/,
   /^body\/record_types\/#\/fields\/#\/settings\/(?:minimum|maximum)$/,
   /^body\/record_types\/#\/fields\/#\/settings\/decimal_places$/,
@@ -1452,6 +1475,7 @@ const moduleSourceTransformPatterns = [
   /^body\/actions\/#\/(?:record_type|permission|shareable)$/,
   /^body\/actions\/#\/inputs\/#\/(?:type|record_types\/#)$/,
   /^body\/actions\/#\/inputs\/#\/validation\/(?:minimum|maximum)$/,
+  /^body\/actions\/#\/protected_operation$/,
   /^body\/actions\/#\/effects\/#\/(?:field|record_type|relationships\/#|target_input|event)$/,
   /^body\/actions\/#\/effects\/#\/value\/(?:source|input|field|value)(?:\/.*)?$/,
   /^body\/actions\/#\/effects\/#\/values\/[^/]+\/(?:source|input|field|value)(?:\/.*)?$/,
@@ -1632,7 +1656,7 @@ function sourceResolvesIdentity(sourcePath: Path, positions: SourceContractPosit
   return (
     path === "root_alias" ||
     (typeof last === "string" && ID_FIELDS.has(last)) ||
-    /\/(?:custom_actions|carries|declared_fields|public_fields|select|group_by|component_order|relationships|record_types|allowed_child_blocks)\/#$/.test(
+    /\/(?:custom_actions|carries|declared_fields|filterable_fields|sortable_fields|public_fields|select|group_by|component_order|relationships|record_types|allowed_child_blocks)\/#$/.test(
       path,
     ) ||
     /\/(?:record_type|source_record_type|to_record_type|target|field|page|query|block|home_page|module|connection_type|workflow|node|relationship|amount_field|percentage_field|date_field|due_field|status_field|required_permission|dependency|extension_point|contributed_action)$/.test(
@@ -3349,6 +3373,21 @@ function compileActionFlow(
   };
 }
 
+/**
+ * Resolves a source action's registered protected-operation key to the exact operation reference
+ * the canonical action carries. Registration is the platform-service catalogue; an action never
+ * names an operation identity itself.
+ */
+function platformServiceProtectedOperationReference(key: unknown): JsonObject {
+  const operation = PLATFORM_SERVICE_OPERATIONS[String(key) as PlatformServiceOperationKey];
+  if (operation === undefined)
+    fail("vortex.definition.workflow_node_references", "broken_reference");
+  return {
+    owner: { kind: "platform_service", serviceId: operation.release.serviceId },
+    operationId: operation.release.operationId,
+  };
+}
+
 function compileModule(
   source: JsonObject,
   resolution: Resolution,
@@ -3393,6 +3432,26 @@ function compileModule(
   const recordTypes = (body.record_types as JsonObject[]).map((recordType) => {
     const recordKey = String(recordType.key);
     const qualified = `${definitionKey}:${recordKey}`;
+    const projection = recordType.system_projection as JsonObject | undefined;
+    // A system projection record type has no ordinary write path: its changes go only through the
+    // registered protected operation its actions target, so a standard write action refuses here at
+    // publication with its own registered code. The source contract deliberately admits the
+    // declaration so this stable refusal, not a generic shape failure, is what the author sees.
+    if (
+      projection !== undefined &&
+      (recordType.standard_actions as string[]).some(
+        (action) =>
+          action === "create" ||
+          action === "update" ||
+          action === "soft_delete" ||
+          action === "restore",
+      )
+    )
+      fail(
+        "vortex.definition.system_record_write_refused",
+        "invalid_value",
+        resolution.location("record_type", recordKey),
+      );
     const valueContext = valueContextFor(qualified);
     const recordTypeId = resolution.id(definitionKey, "record_type", recordKey, "content");
     const compiledFields = (recordType.fields as JsonObject[]).map((field) => ({
@@ -3450,6 +3509,24 @@ function compileModule(
         recordType.storage_scope === "organisation_shared"
           ? "organization_shared"
           : recordType.storage_scope,
+      ...(projection === undefined
+        ? {}
+        : {
+            systemProjection: {
+              protectedView: projection.protected_view,
+              organizationFieldId: resolution.field(
+                qualified,
+                String(projection.organization_field),
+              ),
+              revisionFieldId: resolution.field(qualified, String(projection.revision_field)),
+              filterableFieldIds: (projection.filterable_fields as string[]).map((alias) =>
+                resolution.field(qualified, alias),
+              ),
+              sortableFieldIds: (projection.sortable_fields as string[]).map((alias) =>
+                resolution.field(qualified, alias),
+              ),
+            },
+          }),
       ownershipMode: readModuleSourceRecordOwnershipMode(recordType.ownership_mode),
       ...(recordType.ownership_relationship
         ? {
@@ -3484,6 +3561,13 @@ function compileModule(
         ? { permissionKeys: action.permission_alternatives }
         : { permissionKey: action.permission }),
       sharing: action.shareable ? "allowed" : "refused",
+      ...(action.protected_operation
+        ? {
+            protectedOperation: platformServiceProtectedOperationReference(
+              action.protected_operation,
+            ),
+          }
+        : {}),
       inputs: (action.inputs as JsonObject[]).map((input) => actionInput(input, resolution, true)),
       ...(action.precondition
         ? { precondition: condition(action.precondition, localField, valueContext) }
@@ -3528,10 +3612,14 @@ function compileModule(
       }),
     };
   });
-  // Every Module named action also compiles to one `transaction` flow (#1062); the action's own
-  // execution path is unchanged until #1063 runs the flow.
+  // Every effect-based Module named action also compiles to one `transaction` flow (#1062). A
+  // protected-operation action instead targets one registered platform-service operation that
+  // takes the subject row's identity and expected revision automatically. Its execution is not
+  // built yet, so it compiles to no flow here, and the record runtime refuses to prepare it
+  // because its canonical action and system projection record type are not effect-based shapes.
   const usedFlowKeys = new Set(flows.map((flow) => String(flow.key)));
-  const actionFlows = (body.actions as JsonObject[]).map((action, actionIndex) => {
+  const actionFlows = (body.actions as JsonObject[]).flatMap((action, actionIndex) => {
+    if (action.protected_operation !== undefined) return [];
     const recordKey = String(action.record_type);
     const subjectRecord = (body.record_types as JsonObject[]).find(
       (candidate) => String(candidate.key) === recordKey,
@@ -3550,21 +3638,23 @@ function compileModule(
     for (let suffix = 1; usedFlowKeys.has(flowKey); suffix += 1) flowKey = `${baseKey}_${suffix}`;
     usedFlowKeys.add(flowKey);
     const canonicalAction = actions[actionIndex]! as unknown as JsonObject;
-    return compileActionFlow(
-      action,
-      canonicalAction,
-      flowKey,
-      definitionKey,
-      subjectFieldKeyById,
-      // An action with permission alternatives has no single invocation permission; a flow holds
-      // exactly one, so its binding keeps checking the alternatives (#1063).
-      canonicalAction.permissionKey === undefined
-        ? undefined
-        : (resolution.permission(
-            String(canonicalAction.permissionKey),
-            permissionOwners,
-          ) as FlowDefinition["invocationPermissionId"]),
-    );
+    return [
+      compileActionFlow(
+        action,
+        canonicalAction,
+        flowKey,
+        definitionKey,
+        subjectFieldKeyById,
+        // An action with permission alternatives has no single invocation permission; a flow holds
+        // exactly one, so its binding keeps checking the alternatives (#1063).
+        canonicalAction.permissionKey === undefined
+          ? undefined
+          : (resolution.permission(
+              String(canonicalAction.permissionKey),
+              permissionOwners,
+            ) as FlowDefinition["invocationPermissionId"]),
+      ),
+    ];
   });
   const events = (body.events as JsonObject[]).map((event) => {
     const record = qualifiedForRecord(String(event.record_type));
@@ -5965,7 +6055,10 @@ function compileParsedApplicationV2Request(
     // Publication refuses with the first of the located catalogue results draft save reports,
     // before materialisation can refuse the same document without its location.
     const catalogueFailure = settleDefinitionRuleFailures(
-      validateApplicationSourceCatalogue(source),
+      validateApplicationSourceCatalogue(
+        source,
+        request.catalogueSnapshot.platformBlocks.releases,
+      ),
     )[0];
     if (catalogueFailure !== undefined)
       throw new DefinitionCompilationError(

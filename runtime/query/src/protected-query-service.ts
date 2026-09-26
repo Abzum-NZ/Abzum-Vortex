@@ -189,6 +189,54 @@ const pageReadSchema = z.discriminatedUnion("outcome", [
 
 const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
+/**
+ * The user-facing sort, filter and search a request carries, plus the component-declared
+ * sortable, filterable and searchable field sets. It is passed as one value so the engine can
+ * validate every choice against the installed record type's own field flags and the
+ * guaranteed-readable projection.
+ */
+const userQueryInputs = (command: ProtectedQueryCommand): Readonly<Record<string, unknown>> => ({
+  sort: command.sort,
+  filter: command.filter ?? null,
+  search: command.search ?? null,
+  sortableFieldIds: command.sortableFieldIds,
+  filterableFieldIds: command.filterableFieldIds,
+  searchableFieldIds: command.searchableFieldIds,
+});
+
+/** Every field identifier a typed condition tree reads, lower-cased; a malformed node contributes none. */
+const conditionFieldIds = (condition: unknown, into: Set<string>): void => {
+  if (Array.isArray(condition)) {
+    for (const item of condition) conditionFieldIds(item, into);
+    return;
+  }
+  if (condition === null || typeof condition !== "object") return;
+  const record = condition as Record<string, unknown>;
+  if (record.source === "field" && typeof record.fieldId === "string")
+    into.add(record.fieldId.toLowerCase());
+  for (const item of Object.values(record)) conditionFieldIds(item, into);
+};
+
+/**
+ * Whether the caller's user sort and filter stay inside the component-declared allow-lists it
+ * also supplied. The engine still intersects each accepted field with the installed record type's
+ * own flags, so this only fails a choice the component itself did not declare. Returns the neutral
+ * refusal for the offending input, or undefined when every choice is declared.
+ */
+const userInputRefusal = (
+  command: ProtectedQueryCommand,
+): ProtectedQueryRefusalReasonCode | undefined => {
+  const sortable = new Set(command.sortableFieldIds.map((fieldId) => fieldId.toLowerCase()));
+  if (command.sort.some((sort) => !sortable.has(sort.fieldId.toLowerCase()))) return "sort_invalid";
+  if (command.filter !== undefined) {
+    const filterable = new Set(command.filterableFieldIds.map((fieldId) => fieldId.toLowerCase()));
+    const referenced = new Set<string>();
+    conditionFieldIds(command.filter, referenced);
+    if ([...referenced].some((fieldId) => !filterable.has(fieldId))) return "filter_invalid";
+  }
+  return undefined;
+};
+
 const readInputs = async (transaction: RequestDatabaseTransaction, command: ProtectedQueryCommand) => {
   const rows = await transaction.query<ResultRow>`
     select vortex_record.read_module_query_inputs(
@@ -215,7 +263,8 @@ const readPage = async (
       ${JSON.stringify(command.requestedFieldIds)}::text::jsonb,
       ${command.pageSize}::integer,
       ${after === undefined ? null : JSON.stringify({ sortKey: after.sortKey, recordId: after.recordId })}::text::jsonb,
-      ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb
+      ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb,
+      ${JSON.stringify(userQueryInputs(command))}::text::jsonb
     ) as result
   `;
   return pageReadSchema.parse(one(rows));
@@ -230,6 +279,10 @@ const runCommand = async (
 ): Promise<ProtectedQueryResult> => {
   const applicationRootId = scope.applicationRootId;
   if (applicationRootId === undefined) return refusal("request_invalid");
+
+  // A user sort or filter outside the component-declared sets is refused before any read.
+  const userRefusal = userInputRefusal(command);
+  if (userRefusal !== undefined) return refusal(userRefusal);
 
   // A continuation is accepted only for the same actor, installation, query,
   // release and inputs it was issued for.
@@ -265,7 +318,12 @@ const runCommand = async (
     if (error instanceof QueryInputRefusalError) return refusal("input_invalid");
     throw error;
   }
-  const inputFingerprint = fingerprintQueryInputs(inputValues);
+  // The fingerprint binds the query inputs and the user's sort, filter and search alike, so a
+  // continuation issued under one view can never be replayed under another.
+  const inputFingerprint = fingerprintQueryInputs({
+    inputValues,
+    user: userQueryInputs(command),
+  });
   if (after !== undefined && after.inputFingerprint !== inputFingerprint) return refusal("cursor_stale");
 
   const load = async (): Promise<ProtectedQueryResult> => {
@@ -373,6 +431,9 @@ const planCache = async (
   declared: ResolvedInputs,
   cache: QueryCache,
 ): Promise<CachePlan | undefined> => {
+  // A search match is decided per row over the values readable when the page was read, which the
+  // hit recheck does not re-evaluate, so a searched page always bypasses the cache.
+  if (command.search !== undefined) return undefined;
   const context = await isolated(transaction, async () => {
     const resolved = await cache.resolveContext(transaction, scope, command, {
       moduleReleaseRevision: declared.moduleReleaseRevision,
@@ -407,6 +468,14 @@ const planCache = async (
       !context.recordDependencies.some((dependency) => sameId(dependency.recordTypeId, recordTypeId.data))
     )
       return undefined;
+    // A hit is reusable only while every field that drove it stays readable, so the reader's own
+    // sort and filter fields join the fields the caller already named.
+    const recheckedFieldIds = new Set(
+      referencedFieldIds.data.map((fieldId) => fieldId.toLowerCase()),
+    );
+    for (const sort of command.sort) recheckedFieldIds.add(sort.fieldId.toLowerCase());
+    if (command.filter !== undefined) conditionFieldIds(command.filter, recheckedFieldIds);
+    if (recheckedFieldIds.size > 200) return undefined;
     const decision = decideQueryCache({
       request: command,
       scope: {
@@ -444,7 +513,7 @@ const planCache = async (
     return {
       decision,
       recordTypeId: recordTypeId.data,
-      referencedFieldIds: referencedFieldIds.data.map((fieldId) => fieldId.toLowerCase()),
+      referencedFieldIds: [...recheckedFieldIds],
     };
   } catch {
     // Anything unresolved bypasses to the ordinary authorised query.

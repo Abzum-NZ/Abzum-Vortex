@@ -393,7 +393,7 @@ export interface EventDeliveryRecoveryRepository {
 export const createEventDeliveryRecoveryRepository = (
   transaction: RuntimeDatabaseTransaction,
 ): EventDeliveryRecoveryRepository =>
-  Object.freeze({
+  Object.freeze<EventDeliveryRecoveryRepository>({
     async reportFailure(inputCandidate) {
       const input = validateFailureReportInput(inputCandidate);
       try {
