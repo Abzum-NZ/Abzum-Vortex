@@ -59,10 +59,12 @@ export default async function ApplicationAddressPage({
   searchParams,
 }: ApplicationAddressPageProps) {
   const identity = await resolveIdentitySession();
-  if (identity.kind === "invalid_session_state" || identity.kind === "expired_or_revoked")
+  // Every settled non-active result ends the session through the route that clears its cookies. A
+  // bare sign-in redirect would leave a verified token for an inactive or missing identity in place,
+  // and the sign-in page would send it straight back here. Only a temporarily unavailable read keeps
+  // the session and is answered below.
+  if (identity.kind !== "active" && identity.kind !== "temporarily_unavailable")
     redirect("/auth/session-ended");
-  if (identity.kind === "missing" || identity.kind === "cluster_identity_inactive")
-    redirect("/auth/sign-in?status=session-ended");
 
   const { tenantShortName, organizationShortName, applicationAddress } = await params;
   const addressSegments = applicationAddress ?? [];
@@ -79,12 +81,7 @@ export default async function ApplicationAddressPage({
     const chooser = launcherPath(tenantShortName, organizationShortName);
     const currentIdentity = await resolveIdentitySession();
     if (currentIdentity.kind === "temporarily_unavailable") redirect(chooser);
-    if (
-      currentIdentity.kind === "invalid_session_state" ||
-      currentIdentity.kind === "expired_or_revoked"
-    )
-      redirect("/auth/session-ended");
-    if (currentIdentity.kind !== "active") redirect("/auth/sign-in?status=session-ended");
+    if (currentIdentity.kind !== "active") redirect("/auth/session-ended");
 
     const rechecked = await resolveApplicationAddress(
       currentIdentity.session,
@@ -114,12 +111,7 @@ export default async function ApplicationAddressPage({
     const currentIdentity = await resolveIdentitySession();
     if (currentIdentity.kind === "temporarily_unavailable")
       redirect(launcherPath(tenantShortName, organizationShortName));
-    if (
-      currentIdentity.kind === "invalid_session_state" ||
-      currentIdentity.kind === "expired_or_revoked"
-    )
-      redirect("/auth/session-ended");
-    if (currentIdentity.kind !== "active") redirect("/auth/sign-in?status=session-ended");
+    if (currentIdentity.kind !== "active") redirect("/auth/session-ended");
 
     const applicationKey = String(formData.get("applicationKey") ?? "");
     const pageKey = String(formData.get("pageKey") ?? "");
