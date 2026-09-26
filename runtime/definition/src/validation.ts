@@ -1820,8 +1820,8 @@ function actionValueRecordTypeIds(
     if (input === undefined) return String(reference.name) === "record" ? [subjectRecordTypeId] : undefined;
     if (input.type !== "record_reference") return undefined;
     const references = array(input.recordTypes ?? input.record_types);
-    return references.map((reference) =>
-      typeof reference === "string" ? reference : String(reference.recordTypeId),
+    return references.map((entry) =>
+      typeof entry === "string" ? entry : String(entry.recordTypeId),
     );
   }
   if (reference.source === "trigger_record")
