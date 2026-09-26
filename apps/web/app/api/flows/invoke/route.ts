@@ -22,8 +22,10 @@ import {
   type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
+import { createTenantGovernanceService } from "@vortex/identity";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { createPageFormRequestAdapter, createPrivateFormSubmitAdapter } from "@vortex/page";
+import type { RuntimeDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { installedReleaseCatalogue } from "../../../_lib/definition-catalogue";
@@ -162,6 +164,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         identityAuthorityId: authorityId,
         telemetry,
       }),
+      tenantGovernance: {
+        run: (session, selection, operation) =>
+          requests.runChange(session, selection, (transaction, scope) =>
+            operation({
+              tenantId: scope.tenantId,
+              operations: createTenantGovernanceService({
+                runtimeTransaction: <Result>(
+                  run: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+                ) => run(transaction),
+              }),
+            }),
+          ),
+      },
     });
     const stores = createDatabaseFlowStores();
 
