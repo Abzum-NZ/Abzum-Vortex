@@ -216,6 +216,9 @@ export const createRuntimePostgresClient = (configuration: RuntimeDatabaseConfig
           }
         : false,
     connection: { application_name: "vortex-runtime" },
+    // Server notices (for example an idempotent "already exists, skipping") are not failures; the
+    // driver would otherwise print each as an error-shaped object. Real errors still reject.
+    onnotice: () => undefined,
   });
 
 const loadClient = (): Sql =>
