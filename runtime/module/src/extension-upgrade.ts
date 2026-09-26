@@ -84,6 +84,20 @@ export type ModuleUpgradeReleaseContent = Readonly<{
     recordTypeId: string;
     accepts: readonly string[];
   }>[];
+  /**
+   * The release's own declared contributions. Absent means none, exactly as the
+   * #717 resolver reads it, so an upgraded contributor that no longer declares
+   * an installed contribution withdraws it rather than keeping it attached.
+   */
+  contributions?: readonly Readonly<{
+    contributionId: string;
+    kind: string;
+    targetModule: Readonly<{ moduleRootId: string }>;
+    targetExtensionPointId: string;
+    recordTypeId?: string;
+    fieldId?: string;
+    actionId?: string;
+  }>[];
 }>;
 
 /**
@@ -112,23 +126,19 @@ type InstalledExtensionBindingBase = Readonly<{
 
 /**
  * One installed contribution exactly as the #717 resolver emitted it. The
- * shape is structural, so the definition tier's resolved contribution and the
- * storage tier's resolved binding are both accepted without either tier
- * changing; `targetModuleKey`, definition keys and point keys are optional
- * because only the identities below decide adoption.
+ * shape is structural and mirrors that resolver's single-kind shape, so the
+ * definition tier's `ResolvedAdditiveContribution` and the storage tier's
+ * `ResolvedContributionBinding` are both assignable without either tier
+ * changing. Their extra keys are ignored because only the identities below
+ * decide adoption; the kind-specific identities are checked at run time.
  */
-export type InstalledExtensionBinding =
-  | (InstalledExtensionBindingBase &
-      Readonly<{
-        kind: "field";
-        recordTypeId: string;
-        fieldId: string;
-      }>)
-  | (InstalledExtensionBindingBase &
-      Readonly<{
-        kind: "action";
-        actionId: string;
-      }>);
+export type InstalledExtensionBinding = InstalledExtensionBindingBase &
+  Readonly<{
+    kind: "field" | "action";
+    recordTypeId?: string;
+    fieldId?: string;
+    actionId?: string;
+  }>;
 
 /** The complete adoption input: both exact release sets and the live bindings. */
 export type ModuleExtensionUpgradeInput = Readonly<{
@@ -177,12 +187,15 @@ export type ModuleExtensionUpgradeRefusalEntry = Readonly<{
   selectedVersion: string | null;
 }>;
 
-/** One Module root's exact release movement, from the installed release or from nothing. */
+/**
+ * One Module root's exact release movement: from the installed release or from
+ * nothing, to the adopted release or to nothing when the adoption uninstalls it.
+ */
 export type ModuleExtensionUpgradeReleaseTransition = Readonly<{
   moduleRootId: string;
   definitionKey: string;
   fromReleaseVersion: string | null;
-  toReleaseVersion: string;
+  toReleaseVersion: string | null;
 }>;
 
 /**
@@ -230,9 +243,11 @@ const compareStrings = (left: string, right: string): number =>
 const isFilled = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
-const invalidInput = (): never => {
+// A function declaration, not an arrow constant, so a bare `invalidInput();`
+// statement narrows the evidence checked before it.
+function invalidInput(): never {
   throw new ModuleExtensionUpgradeError("MODULE_EXTENSION_UPGRADE_INPUT_INVALID");
-};
+}
 
 /** Deterministic JSON with sorted object keys, matching the platform's canonical form. */
 const canonicalJson = (value: unknown): string => {
@@ -351,7 +366,10 @@ const tildeUpperBound = (lower: StableVersion, declaredSegments: number): Stable
     : (Object.freeze([lower[0] + 1, 0, 0]) as StableVersion);
 
 const comparatorAccepts = (candidate: StableVersion, comparator: RangeComparator): boolean => {
-  if (comparator.segments.length === 0) return true;
+  // A bare wildcard accepts every stable version, except that `>*` and `<*`
+  // accept none, exactly as `semver` reads them.
+  if (comparator.segments.length === 0)
+    return comparator.operator !== ">" && comparator.operator !== "<";
   const lower = lowerBoundOf(comparator.segments);
   const upper = comparator.open ? upperBoundOf(comparator.segments) : undefined;
   const atLeast = compareStableVersions(candidate, lower) >= 0;
@@ -385,18 +403,22 @@ const comparatorAccepts = (candidate: StableVersion, comparator: RangeComparator
 
 /**
  * A range is satisfied when any `||`-separated comparator set holds, and a set
- * holds when every one of its comparators holds. A set the closed grammar
- * cannot parse refuses the adoption instead of admitting a version it did not
- * prove.
+ * holds when every one of its comparators holds; an empty set is `*`, as in
+ * `semver`. Whitespace between an operator and its version is joined first,
+ * as `semver` does, so a hyphen range still leaves a bare `-` token. A set the
+ * closed grammar cannot parse refuses the adoption instead of admitting a
+ * version it did not prove.
  */
 const rangeAccepts = (expression: string, candidate: string): RequirementVerdict => {
   const version = stableVersion(candidate);
   if (version === undefined) return "unassessable";
-  const alternatives = expression.split("||");
+  const alternatives = expression
+    .replace(/(>=|<=|>|<|=|\^|~)\s+(?=[0-9xX*])/g, "$1")
+    .split("||");
   let assessable = true;
   for (const alternative of alternatives) {
     const tokens = alternative.trim().split(/\s+/).filter((token) => token.length > 0);
-    if (tokens.length === 0) continue;
+    if (tokens.length === 0) return "satisfied";
     const comparators: RangeComparator[] = [];
     for (const token of tokens) {
       const comparator = parseComparator(token);
@@ -432,14 +454,17 @@ const readDependency = (candidate: unknown): ModuleUpgradeDependency | undefined
     !isFilled(dependency.dependencyKey) ||
     !isFilled(dependency.moduleRootId) ||
     !isFilled(dependency.moduleKey) ||
-    stableVersion(dependency.resolvedVersion) === undefined
+    !isFilled(dependency.resolvedVersion)
   )
     return undefined;
   const version = dependency.version;
   if (typeof version !== "object" || version === null) return undefined;
   const requirement = version as Record<string, unknown>;
+  // The contract lets an exact requirement and a recorded resolution name any
+  // semantic version, prerelease included. Both are decided by exact equality
+  // against a stable adopted release, so a prerelease one is simply unmet.
   if (requirement.selection === "exact") {
-    if (stableVersion(requirement.version) === undefined) return undefined;
+    if (!isFilled(requirement.version)) return undefined;
     return Object.freeze({
       dependencyKey: dependency.dependencyKey,
       moduleRootId: dependency.moduleRootId,
@@ -462,12 +487,45 @@ const readDependency = (candidate: unknown): ModuleUpgradeDependency | undefined
   }) as ModuleUpgradeDependency;
 };
 
+/**
+ * Checks the exact content parts the planner reads, so malformed content fails
+ * as unusable evidence instead of surfacing as an unrelated runtime error.
+ */
+const isListOf = (
+  candidate: unknown,
+  accepts: (entry: Record<string, unknown>) => boolean,
+): boolean =>
+  Array.isArray(candidate) &&
+  candidate.every(
+    (entry) =>
+      typeof entry === "object" && entry !== null && accepts(entry as Record<string, unknown>),
+  );
+
+const isRecordTypeView = (recordType: Record<string, unknown>): boolean =>
+  isFilled(recordType.recordTypeId) &&
+  isListOf(recordType.fields, (field) => isFilled(field.fieldId));
+
+const isExtensionPointView = (point: Record<string, unknown>): boolean =>
+  isFilled(point.extensionPointId) &&
+  isFilled(point.recordTypeId) &&
+  Array.isArray(point.accepts) &&
+  point.accepts.every(isFilled);
+
+const isContributionView = (contribution: Record<string, unknown>): boolean =>
+  isFilled(contribution.contributionId) &&
+  isFilled(contribution.kind) &&
+  isFilled(contribution.targetExtensionPointId) &&
+  typeof contribution.targetModule === "object" &&
+  contribution.targetModule !== null &&
+  isFilled((contribution.targetModule as Record<string, unknown>).moduleRootId);
+
 const readRelease = (candidate: unknown): ModuleUpgradeRelease => {
   if (typeof candidate !== "object" || candidate === null) invalidInput();
   const release = candidate as Record<string, unknown>;
   if (
     !isFilled(release.moduleRootId) ||
     !isFilled(release.definitionKey) ||
+    !isFilled(release.releaseVersion) ||
     stableVersion(release.releaseVersion) === undefined
   )
     invalidInput();
@@ -476,9 +534,10 @@ const readRelease = (candidate: unknown): ModuleUpgradeRelease => {
   const view = content as Record<string, unknown>;
   if (
     !Array.isArray(view.dependencies) ||
-    !Array.isArray(view.recordTypes) ||
-    !Array.isArray(view.actions) ||
-    !Array.isArray(view.extensionPoints)
+    !isListOf(view.recordTypes, isRecordTypeView) ||
+    !isListOf(view.actions, (action) => isFilled(action.actionId)) ||
+    !isListOf(view.extensionPoints, isExtensionPointView) ||
+    (view.contributions !== undefined && !isListOf(view.contributions, isContributionView))
   )
     invalidInput();
   const dependencyKeys = new Set<string>();
@@ -499,11 +558,23 @@ const readRelease = (candidate: unknown): ModuleUpgradeRelease => {
       recordTypes: view.recordTypes as ModuleUpgradeReleaseContent["recordTypes"],
       actions: view.actions as ModuleUpgradeReleaseContent["actions"],
       extensionPoints: view.extensionPoints as ModuleUpgradeReleaseContent["extensionPoints"],
+      contributions: (view.contributions ?? []) as NonNullable<
+        ModuleUpgradeReleaseContent["contributions"]
+      >,
     }),
   });
 };
 
-const readBinding = (candidate: unknown): InstalledExtensionBinding => {
+/** Identities are UUIDs, compared case-insensitively as the storage tier does. */
+const sameIdentity = (left: unknown, right: unknown): boolean =>
+  isFilled(left) && isFilled(right) && left.toLowerCase() === right.toLowerCase();
+
+/**
+ * Normalises one installed binding into its kind-specific shape. A contribution
+ * is identified by its contributed field or action, as both the contract and
+ * the storage tier require, so a binding that disagrees is unusable evidence.
+ */
+const readBinding = (candidate: unknown): PreservedExtensionBinding => {
   if (typeof candidate !== "object" || candidate === null) invalidInput();
   const binding = candidate as Record<string, unknown>;
   if (
@@ -517,7 +588,12 @@ const readBinding = (candidate: unknown): InstalledExtensionBinding => {
   )
     invalidInput();
   if (binding.kind === "field") {
-    if (!isFilled(binding.recordTypeId) || !isFilled(binding.fieldId)) invalidInput();
+    if (
+      !isFilled(binding.recordTypeId) ||
+      !isFilled(binding.fieldId) ||
+      !sameIdentity(binding.fieldId, binding.contributionId)
+    )
+      invalidInput();
     return Object.freeze({
       kind: "field" as const,
       contributionId: binding.contributionId,
@@ -532,7 +608,8 @@ const readBinding = (candidate: unknown): InstalledExtensionBinding => {
     });
   }
   if (binding.kind === "action") {
-    if (!isFilled(binding.actionId)) invalidInput();
+    if (!isFilled(binding.actionId) || !sameIdentity(binding.actionId, binding.contributionId))
+      invalidInput();
     return Object.freeze({
       kind: "action" as const,
       contributionId: binding.contributionId,
@@ -590,7 +667,9 @@ const contributionIdentityIsAction = (
  * both sets is carried at its exact release. The plan is compatible only when
  * every declared dependency of every adopted release names an adopted release
  * whose exact version satisfies that declaration, and every installed
- * contribution still resolves inside the adopted set.
+ * contribution still resolves inside the adopted set. A contribution whose
+ * contributor is uninstalled, or upgraded to a release that no longer declares
+ * it at the same extension point, retires instead of being preserved.
  *
  * A contributor that pins an exact target version therefore has to be
  * republished with a widened requirement before that target can be adopted,
@@ -613,7 +692,7 @@ export const planModuleExtensionUpgrade = (
   const currentByRootId = readReleaseSet(input.currentReleases);
   const adoptedByRootId = readReleaseSet(input.adoptedReleases);
 
-  const bindings: InstalledExtensionBinding[] = [];
+  const bindings: PreservedExtensionBinding[] = [];
   const contributionIds = new Set<string>();
   for (const candidate of input.installedBindings) {
     const binding = readBinding(candidate);
@@ -708,10 +787,9 @@ export const planModuleExtensionUpgrade = (
     const installedContributor = currentByRootId.get(binding.contributorModuleRootId);
     const installedTarget = currentByRootId.get(binding.targetModuleRootId);
     if (installedContributor === undefined || installedTarget === undefined) invalidInput();
-    if (
-      binding.contributorReleaseVersion !== installedContributor.releaseVersion ||
-      binding.targetModuleReleaseVersion !== installedTarget.releaseVersion
-    ) {
+    // The mismatch names the recorded release that disagrees with the installed
+    // set, contributor first, so the builder sees which evidence is stale.
+    const refuseEvidence = (recordedVersion: string, installedVersion: string): void => {
       refuse({
         code: "installed_binding_evidence_mismatch",
         declaringModuleRootId: binding.contributorModuleRootId,
@@ -719,9 +797,16 @@ export const planModuleExtensionUpgrade = (
         targetModuleRootId: binding.targetModuleRootId,
         targetExtensionPointId: binding.targetExtensionPointId,
         contributionId: binding.contributionId,
-        requiredVersion: binding.targetModuleReleaseVersion,
-        selectedVersion: installedTarget.releaseVersion,
+        requiredVersion: recordedVersion,
+        selectedVersion: installedVersion,
       });
+    };
+    if (binding.contributorReleaseVersion !== installedContributor.releaseVersion) {
+      refuseEvidence(binding.contributorReleaseVersion, installedContributor.releaseVersion);
+      continue;
+    }
+    if (binding.targetModuleReleaseVersion !== installedTarget.releaseVersion) {
+      refuseEvidence(binding.targetModuleReleaseVersion, installedTarget.releaseVersion);
       continue;
     }
 
@@ -730,6 +815,27 @@ export const planModuleExtensionUpgrade = (
     // values, so its binding leaves the installation and #718 detaches it.
     if (nextContributor === undefined) {
       retiredBindingIds.push(binding.contributionId);
+      continue;
+    }
+
+    // The binding exists only because the contributor declares it. A carried
+    // contributor that does not declare it contradicts the installed evidence;
+    // an upgraded contributor that no longer declares it at the same point has
+    // withdrawn it, which retires it exactly like an uninstall. Any new
+    // declaration is the #717 resolver's to bind, never this plan's.
+    const declared = nextContributor.content.contributions?.find((contribution) =>
+      sameIdentity(contribution.contributionId, binding.contributionId),
+    );
+    const stillDeclared =
+      declared !== undefined &&
+      declared.kind === binding.kind &&
+      sameIdentity(declared.targetModule.moduleRootId, binding.targetModuleRootId) &&
+      sameIdentity(declared.targetExtensionPointId, binding.targetExtensionPointId) &&
+      (binding.kind !== "field" || sameIdentity(declared.recordTypeId, binding.recordTypeId));
+    if (!stillDeclared) {
+      if (nextContributor.releaseVersion === installedContributor.releaseVersion)
+        refuseEvidence(binding.contributorReleaseVersion, installedContributor.releaseVersion);
+      else retiredBindingIds.push(binding.contributionId);
       continue;
     }
 
@@ -856,21 +962,33 @@ export const planModuleExtensionUpgrade = (
     );
   }
 
-  const transitions = sortedBy(
-    adoptedReleases
-      .filter(
-        (release) =>
-          currentByRootId.get(release.moduleRootId)?.releaseVersion !== release.releaseVersion,
-      )
-      .map((release) => {
-        const installed = currentByRootId.get(release.moduleRootId);
-        return Object.freeze({
-          moduleRootId: release.moduleRootId,
-          definitionKey: release.definitionKey,
-          fromReleaseVersion: installed?.releaseVersion ?? null,
-          toReleaseVersion: release.releaseVersion,
-        });
+  // Every movement, uninstalls included, so the fingerprint distinguishes two
+  // adoptions that differ only in what they remove.
+  const arriving: ModuleExtensionUpgradeReleaseTransition[] = adoptedReleases
+    .filter(
+      (release) =>
+        currentByRootId.get(release.moduleRootId)?.releaseVersion !== release.releaseVersion,
+    )
+    .map((release) =>
+      Object.freeze({
+        moduleRootId: release.moduleRootId,
+        definitionKey: release.definitionKey,
+        fromReleaseVersion: currentByRootId.get(release.moduleRootId)?.releaseVersion ?? null,
+        toReleaseVersion: release.releaseVersion,
       }),
+    );
+  const leaving: ModuleExtensionUpgradeReleaseTransition[] = [...currentByRootId.values()]
+    .filter((release) => !adoptedByRootId.has(release.moduleRootId))
+    .map((release) =>
+      Object.freeze({
+        moduleRootId: release.moduleRootId,
+        definitionKey: release.definitionKey,
+        fromReleaseVersion: release.releaseVersion,
+        toReleaseVersion: null,
+      }),
+    );
+  const transitions = sortedBy(
+    [...arriving, ...leaving],
     (transition) => transition.moduleRootId,
   );
 
