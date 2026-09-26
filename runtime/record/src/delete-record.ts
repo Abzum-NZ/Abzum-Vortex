@@ -446,7 +446,7 @@ const restoredRootMutation = (
  * already owns: database preflight, runtime total recalculation and terminal
  * writer. Every non-final outcome throws `RecordLifecycleRollback` so the whole
  * transaction is discarded, because the preflight has already deleted rows
- * behind a pending receipt. The named-action `soft_delete_subject` effect runs
+ * behind a pending receipt. The named-action `record.delete` task runs
  * this same function, so there is no second delete path.
  */
 export const performProtectedRecordDelete = async (

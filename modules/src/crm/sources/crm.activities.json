@@ -12,7 +12,7 @@
         "module": "vortex.crm.organisations",
         "version": {
           "selection": "exact",
-          "version": "2.0.0"
+          "version": "1.0.0"
         }
       },
       {
@@ -20,7 +20,7 @@
         "module": "vortex.crm.people",
         "version": {
           "selection": "exact",
-          "version": "2.0.0"
+          "version": "1.0.0"
         }
       },
       {
@@ -28,7 +28,7 @@
         "module": "vortex.crm.opportunities",
         "version": {
           "selection": "exact",
-          "version": "2.0.0"
+          "version": "1.0.0"
         }
       }
     ],
@@ -432,18 +432,25 @@
         "permission": "vortex.crm.activities.activity.complete",
         "shareable": false,
         "inputs": [],
-        "effects": [
+        "tasks": [
           {
-            "kind": "set_field",
-            "field": "completed",
-            "value": {
-              "source": "literal",
-              "value": true
+            "id": "set_completed",
+            "type": "record.set_fields",
+            "properties": {
+              "values": {
+                "completed": {
+                  "source": "literal",
+                  "value": true
+                }
+              }
             }
           },
           {
-            "kind": "announce_event",
-            "event": "vortex.crm.activities.activity.completed"
+            "id": "announce_activity_completed",
+            "type": "event.announce",
+            "properties": {
+              "event": "vortex.crm.activities.activity.completed"
+            }
           }
         ]
       }

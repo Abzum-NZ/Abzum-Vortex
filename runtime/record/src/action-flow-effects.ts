@@ -29,7 +29,7 @@ import {
  * turning the record tasks the flow collected into the one mutation list `apply_record_changes`
  * applies. The flow itself is run by the flow interpreter; nothing here decides a precondition.
  *
- * The database re-derives every effect from the installed action and its inputs, so what is composed
+ * The database re-derives every task from the installed action and its inputs, so what is composed
  * here is a verified statement of intent, never an authority the database trusts.
  */
 
@@ -59,13 +59,13 @@ export type PreparedNamedAction = Readonly<{
   actorOrganizationAccountId: string;
   createTargets: readonly NamedActionCreateTarget[];
   /**
-   * The subject fields the actor may currently read under the named action. A `copy_relationships`
-   * effect only copies relationships whose link field is in this set.
+   * The subject fields the actor may currently read under the named action. A `record.changes`
+   * task only copies relationships whose link field is in this set.
    */
   readableFieldIds?: ReadonlySet<string>;
 }>;
 
-/** One composed creation, in authored effect order. */
+/** One composed creation, in authored task order. */
 export type NamedActionCreation = Readonly<{
   ordinal: number;
   recordTypeId: string;
@@ -73,7 +73,7 @@ export type NamedActionCreation = Readonly<{
 }>;
 
 /**
- * One `copy_relationships` effect, resolved. The database re-derives the same plan from the
+ * One `copy_relationships` change, resolved. The database re-derives the same plan from the
  * installed action and the supplied inputs, so this is a verified statement of intent that the
  * preview and the final preparation must agree on.
  */
@@ -90,7 +90,7 @@ export type NamedActionComposition = Readonly<{
   relationshipCopies: readonly NamedActionRelationshipCopy[];
   /**
    * Whether the action soft-deletes its subject. The delete itself is never composed here: it runs
-   * through the shared protected lifecycle delete after the action's own effects.
+   * through the shared protected lifecycle delete after the action's own tasks.
    */
   softDeletesSubject: boolean;
   announcedEventKeys: readonly string[];
@@ -287,8 +287,6 @@ const isFlowValue = (candidate: unknown): candidate is FlowValueJson => {
   return candidate.kind === "reference" && isPlainObject(candidate.reference);
 };
 
-type ActionEffect = NamedActionDefinition["effects"][number];
-
 /**
  * What a compiled value reads, resolved against whichever record type owns the field being written:
  * a literal, an action input, a subject field, the subject record itself, the actor or the one
@@ -343,37 +341,29 @@ const textProperty = (call: FlowProtectedTaskCall, property: string): string | u
   return typeof carried === "string" ? carried : undefined;
 };
 
-/** The effect a collected task stands for is the one named by its compiled task id. */
-const effectOrdinal = (taskId: string, effectCount: number): number | undefined => {
-  const match = /^effect_(\d+)$/.exec(taskId);
-  if (match === null) return undefined;
-  const ordinal = Number(match[1]) - 1;
-  return Number.isSafeInteger(ordinal) && ordinal >= 0 && ordinal < effectCount ? ordinal : undefined;
-};
-
 const sameKeys = (left: readonly string[], right: readonly string[]): boolean =>
   left.length === right.length &&
   [...left].map((key) => key.toLowerCase()).sort().join("|") ===
     [...right].map((key) => key.toLowerCase()).sort().join("|");
 
 /**
- * Resolves one `copy_relationships` effect against the subject. The target is read through the
+ * Resolves one authored relationship copy against the subject. The target is read through the
  * action's `record_reference` input, which must name another record of the subject's own record
  * type: the copied relationships are the subject's, so only a same-type record can hold them. Every
  * selected id must be a `many_to_one` relationship the subject declares (a `one_to_one` link cannot
  * be held by a second record), whose link field the actor can currently read and that no earlier
- * `set_field` effect changes: the database copies the subject's edge as it stands before the
+ * `record.set_fields` task changes: the database copies the subject's edge as it stands before the
  * command writes the subject. Nothing is copied that the action did not name.
  */
 const relationshipCopy = (
   prepared: PreparedNamedAction,
   normalizedInputs: Readonly<Record<string, JsonValue>>,
   ordinal: number,
-  effect: Extract<ActionEffect, { kind: "copy_relationships" }>,
+  authored: Readonly<{ targetInputKey: string; relationshipIds: readonly string[] }>,
   earlierSetFieldIds: ReadonlySet<string>,
 ): NamedActionRelationshipCopy | undefined => {
-  if (!hasOwn(normalizedInputs, effect.targetInputKey)) return undefined;
-  const target = recordLinkValueV2Schema.safeParse(normalizedInputs[effect.targetInputKey]);
+  if (!hasOwn(normalizedInputs, authored.targetInputKey)) return undefined;
+  const target = recordLinkValueV2Schema.safeParse(normalizedInputs[authored.targetInputKey]);
   if (
     !target.success ||
     target.data.recordTypeId.toLowerCase() !== prepared.recordType.recordTypeId.toLowerCase() ||
@@ -390,7 +380,7 @@ const relationshipCopy = (
     [...(prepared.readableFieldIds ?? [])].map((fieldId) => fieldId.toLowerCase()),
   );
   const selected = new Set<string>();
-  for (const relationshipId of effect.relationshipIds) {
+  for (const relationshipId of authored.relationshipIds) {
     const key = relationshipId.toLowerCase();
     // A repeated id names the same relationship; the database copies it once.
     if (selected.has(key)) continue;
@@ -416,9 +406,9 @@ const relationshipCopy = (
 
 /**
  * Turns the record tasks an action's flow collected into the composition `apply_record_changes`
- * applies. Every collected task must be the compiled task of exactly one installed effect, of the
- * kind that effect has, and every installed effect must be covered once; anything else means the
- * flow is not the installed action's, and the action is refused as invalid.
+ * applies. Every collected task must be the compiled task of exactly one installed task, of the
+ * type that task has, and every installed task must be covered once; anything else means the flow
+ * is not the installed action's, and the action is refused as invalid.
  */
 export const composeFlowEffects = (
   prepared: PreparedNamedAction,
@@ -426,14 +416,14 @@ export const composeFlowEffects = (
   collected: Extract<ActionFlowOutcome, { kind: "collected" }>,
   issuedAt: string,
 ): NamedActionComposition | undefined => {
-  const effects = prepared.action.effects;
-  const byOrdinal = new Map<number, FlowProtectedTaskCall>();
+  const tasks = prepared.action.tasks;
+  const byId = new Map<string, FlowProtectedTaskCall>();
   for (const call of collected.calls) {
-    const ordinal = effectOrdinal(call.taskId, effects.length);
-    if (ordinal === undefined || byOrdinal.has(ordinal)) return undefined;
-    byOrdinal.set(ordinal, call);
+    // A flow that calls the same task twice is not the installed action's flow.
+    if (byId.has(call.taskId)) return undefined;
+    byId.set(call.taskId, call);
   }
-  if (byOrdinal.size !== effects.length) return undefined;
+  if (byId.size !== tasks.length) return undefined;
 
   const fields = new Map(prepared.recordType.fields.map((field) => [field.fieldId, field]));
   const targets = new Map(prepared.createTargets.map((target) => [target.ordinal, target]));
@@ -444,25 +434,25 @@ export const composeFlowEffects = (
   let softDeletesSubject = false;
   const announcedEventKeys: string[] = [];
 
-  for (const [ordinal, effect] of effects.entries()) {
-    const call = byOrdinal.get(ordinal)!;
-    if (effect.kind === "announce_event") {
-      if (call.taskType !== "event.announce" || textProperty(call, "event") !== effect.eventKey)
-        return undefined;
-      announcedEventKeys.push(effect.eventKey);
+  for (const [ordinal, task] of tasks.entries()) {
+    const call = byId.get(task.id);
+    if (call === undefined || call.taskType !== task.type) return undefined;
+    if (task.type === "event.announce") {
+      if (textProperty(call, "event") !== task.properties.eventKey) return undefined;
+      announcedEventKeys.push(task.properties.eventKey);
       continue;
     }
-    if (effect.kind === "create_record") {
+    if (task.type === "record.create") {
       const target = targets.get(ordinal);
       const authored = valueMap(call, "values");
       if (
-        call.taskType !== "record.create" ||
         target === undefined ||
         authored === undefined ||
-        effect.recordType.state !== "resolved" ||
-        effect.recordType.recordTypeId.toLowerCase() !== target.recordTypeId.toLowerCase() ||
+        task.properties.recordType.state !== "resolved" ||
+        task.properties.recordType.recordTypeId.toLowerCase() !==
+          target.recordTypeId.toLowerCase() ||
         textProperty(call, "record_type")?.toLowerCase() !== target.recordTypeId.toLowerCase() ||
-        !sameKeys(Object.keys(authored), Object.keys(effect.values))
+        !sameKeys(Object.keys(authored), Object.keys(task.properties.values))
       )
         return undefined;
       const targetFields = new Map<string, (typeof target.recordType.fields)[number]>(
@@ -486,32 +476,39 @@ export const composeFlowEffects = (
       creations.push({ ordinal, recordTypeId: target.recordTypeId, values });
       continue;
     }
-    if (effect.kind === "copy_relationships") {
+    if (task.type === "record.changes") {
       const changes = call.properties.changes?.value;
-      if (
-        call.taskType !== "record.changes" ||
-        !Array.isArray(changes) ||
-        changes.length !== 1 ||
-        !isPlainObject(changes[0]) ||
-        changes[0].kind !== "copy_relationships" ||
-        !Array.isArray(changes[0].relationshipIds) ||
-        !sameKeys(
-          changes[0].relationshipIds.filter((item): item is string => typeof item === "string"),
-          effect.relationshipIds,
+      const authoredChanges = task.properties.changes;
+      if (!Array.isArray(changes) || changes.length !== authoredChanges.length) return undefined;
+      for (const [index, authoredChange] of authoredChanges.entries()) {
+        const change = changes[index];
+        if (
+          !isPlainObject(change) ||
+          change.kind !== "copy_relationships" ||
+          !Array.isArray(change.relationshipIds) ||
+          !sameKeys(
+            change.relationshipIds.filter((item): item is string => typeof item === "string"),
+            authoredChange.relationshipIds,
+          )
         )
-      )
-        return undefined;
-      const copy = relationshipCopy(prepared, normalizedInputs, ordinal, effect, setFieldIds);
-      if (copy === undefined) return undefined;
-      relationshipCopies.push(copy);
+          return undefined;
+        const copy = relationshipCopy(
+          prepared,
+          normalizedInputs,
+          ordinal,
+          authoredChange,
+          setFieldIds,
+        );
+        if (copy === undefined) return undefined;
+        relationshipCopies.push(copy);
+      }
       continue;
     }
-    if (effect.kind === "soft_delete_subject") {
+    if (task.type === "record.delete") {
       const record = call.properties.record?.value;
       // One delete per action; a second could only name the same subject.
       if (
         softDeletesSubject ||
-        call.taskType !== "record.delete" ||
         textProperty(call, "record_type")?.toLowerCase() !==
           prepared.recordType.recordTypeId.toLowerCase() ||
         (typeof record === "string" ? record : undefined) !== prepared.recordId
@@ -520,27 +517,26 @@ export const composeFlowEffects = (
       softDeletesSubject = true;
       continue;
     }
-    if (effect.kind !== "set_field") return undefined;
+    if (task.type !== "record.set_fields") return undefined;
     const authored = valueMap(call, "values");
-    setFieldIds.add(effect.fieldId.toLowerCase());
-    const field = fields.get(effect.fieldId);
-    if (
-      call.taskType !== "record.set_fields" ||
-      authored === undefined ||
-      field === undefined ||
-      !sameKeys(Object.keys(authored), [effect.fieldId])
-    )
+    const authoredValues = task.properties.values;
+    if (authored === undefined || !sameKeys(Object.keys(authored), Object.keys(authoredValues)))
       return undefined;
-    const value = writtenValue(
-      prepared,
-      normalizedInputs,
-      collected.subjectInput,
-      issuedAt,
-      field,
-      Object.values(authored)[0],
-    );
-    if (value === undefined) return undefined;
-    submittedValues[effect.fieldId] = value;
+    for (const [fieldId, source] of Object.entries(authoredValues)) {
+      setFieldIds.add(fieldId.toLowerCase());
+      const field = fields.get(fieldId);
+      if (field === undefined) return undefined;
+      const value = writtenValue(
+        prepared,
+        normalizedInputs,
+        collected.subjectInput,
+        issuedAt,
+        field,
+        authored[fieldId],
+      );
+      if (value === undefined) return undefined;
+      submittedValues[fieldId] = value;
+    }
   }
   if (creations.length !== prepared.createTargets.length) return undefined;
   // The delete runs against the subject revision the command names, so a deleting action may only

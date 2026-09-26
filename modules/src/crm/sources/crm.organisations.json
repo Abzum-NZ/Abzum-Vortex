@@ -523,20 +523,33 @@
             ]
           }
         ],
-        "effects": [
+        "tasks": [
           {
-            "kind": "copy_relationships",
-            "relationships": [
-              "parent_company"
-            ],
-            "target_input": "duplicate_company"
+            "id": "copy_parent_company",
+            "type": "record.changes",
+            "properties": {
+              "changes": [
+                {
+                  "kind": "copy_relationships",
+                  "relationships": [
+                    "parent_company"
+                  ],
+                  "target_input": "duplicate_company"
+                }
+              ]
+            }
           },
           {
-            "kind": "soft_delete_subject"
+            "id": "delete_subject",
+            "type": "record.delete",
+            "properties": {}
           },
           {
-            "kind": "announce_event",
-            "event": "vortex.crm.organisations.company.merged"
+            "id": "announce_company_merged",
+            "type": "event.announce",
+            "properties": {
+              "event": "vortex.crm.organisations.company.merged"
+            }
           }
         ]
       }

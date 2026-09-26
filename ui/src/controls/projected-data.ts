@@ -111,6 +111,19 @@ export type ChoiceInputPayload = Readonly<{
   error?: string;
 }>;
 
+/**
+ * The ready values an automatic field input accepts: exactly the payload of the control its
+ * referenced module field selected, so a projected value is validated as that control's own shape.
+ */
+export type FieldInputPayload =
+  | TextInputPayload
+  | LinkInputPayload
+  | RichTextInputPayload
+  | NumberInputPayload
+  | BooleanInputPayload
+  | DateInputPayload
+  | ChoiceInputPayload;
+
 /** The ready values a validation message block accepts. */
 export type ValidationPayload = Readonly<{ kind: "validation"; errors: readonly string[] }>;
 
@@ -136,6 +149,7 @@ export type NumberInputData = ControlDataState<NumberInputPayload>;
 export type BooleanInputData = ControlDataState<BooleanInputPayload>;
 export type DateInputData = ControlDataState<DateInputPayload>;
 export type ChoiceInputData = ControlDataState<ChoiceInputPayload>;
+export type FieldInputData = ControlDataState<FieldInputPayload>;
 export type ValidationData = ControlDataState<ValidationPayload>;
 export type ButtonData = ControlDataState<ButtonPayload>;
 export type TabsData = ControlDataState<TabsPayload>;
@@ -470,6 +484,39 @@ export const parseChoiceInputPayload = (
     ...(options === undefined ? {} : { options }),
     ...optionalError(record, location),
   });
+};
+
+/**
+ * The ready values an automatic field input accepts. It carries exactly the payload of the control
+ * its referenced module field selected, so this one parser validates every control kind the input
+ * may become and the renderer never invents a shape.
+ */
+export const parseFieldInputPayload = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): FieldInputPayload => {
+  const record = requireRecord(value, "Projected control values must be an object", location);
+  switch (record.kind) {
+    case "text_input":
+      return parseTextInputPayload(value, location);
+    case "link_input":
+      return parseLinkInputPayload(value, location);
+    case "rich_text_input":
+      return parseRichTextInputPayload(value, location);
+    case "number_input":
+      return parseNumberInputPayload(value, location);
+    case "boolean_input":
+      return parseBooleanInputPayload(value, location);
+    case "date_input":
+      return parseDateInputPayload(value, location);
+    case "choice_input":
+      return parseChoiceInputPayload(value, location);
+    default:
+      return fail(
+        `An automatic field input cannot carry '${String(record.kind)}' projected values`,
+        location,
+      );
+  }
 };
 
 /** The ready values a validation message block accepts. */

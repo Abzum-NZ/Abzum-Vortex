@@ -6,7 +6,11 @@ import {
   type FlowIntent,
   type FlowIntentHost,
 } from "./intents";
-import type { FlowInvokeClient, ServerFlowResponse } from "./server-flow-client";
+import type {
+  FlowInvokeClient,
+  FlowResumeEvidence,
+  ServerFlowResponse,
+} from "./server-flow-client";
 
 export type ServerDrivenResult =
   /** The server ended the run; `descriptor` is its safe result and outputs are as it released them. */
@@ -77,22 +81,38 @@ export async function driveServerFlow(
             else await performPresentationIntent(intent, host);
 
           const continuation = response.continuation;
+          // The exact evidence the server issued with this pause, sent back unchanged on resume; the
+          // page never builds a target or receipt of its own.
+          const evidence: FlowResumeEvidence = {
+            ...(response.target === undefined ? {} : { target: response.target }),
+            ...(response.receipt === undefined ? {} : { receipt: response.receipt }),
+          };
           if (response.awaiting === "form") {
             const form = readFormIntent(waiting);
             if (form === undefined) return { kind: "refused" };
             const answer = await host.showForm(form);
-            response = await client.resume(flowId, continuation, {
-              kind: "form_answered",
-              submitted: answer.submitted,
-              values: answer.submitted ? answer.values : null,
-            });
+            response = await client.resume(
+              flowId,
+              continuation,
+              {
+                kind: "form_answered",
+                submitted: answer.submitted,
+                values: answer.submitted ? answer.values : null,
+              },
+              evidence,
+            );
           } else {
             const confirmation = readConfirmIntent(waiting);
             if (confirmation === undefined) return { kind: "refused" };
-            response = await client.resume(flowId, continuation, {
-              kind: "confirmed",
-              confirmed: await host.confirm(confirmation),
-            });
+            response = await client.resume(
+              flowId,
+              continuation,
+              {
+                kind: "confirmed",
+                confirmed: await host.confirm(confirmation),
+              },
+              evidence,
+            );
           }
           break;
         }

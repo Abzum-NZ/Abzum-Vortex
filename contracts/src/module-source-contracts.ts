@@ -11,7 +11,8 @@ import {
 import { versionRequirementSchema } from "./definitions";
 import {
   authoredSourceBase,
-  sourceActionEffectSchema,
+  refineActionTaskIds,
+  sourceActionTaskSchema,
   sourceAliasSchema,
   sourceConditionSchema,
   sourceQualifiedRecordTypeSchema,
@@ -1441,18 +1442,18 @@ export const moduleSourceActionSchema = z
     shareable: z.boolean(),
     inputs: z.array(moduleSourceActionInputSchema).max(50),
     precondition: sourceConditionSchema.optional(),
-    effects: z.array(sourceActionEffectSchema).max(10),
+    tasks: z.array(sourceActionTaskSchema).max(10).superRefine(refineActionTaskIds),
     protected_operation: moduleSourceProtectedOperationKeySchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
-    const hasEffects = value.effects.length > 0;
+    const hasTasks = value.tasks.length > 0;
     const hasOperation = value.protected_operation !== undefined;
-    if (hasEffects === hasOperation)
+    if (hasTasks === hasOperation)
       context.addIssue({
         code: "custom",
         path: ["protected_operation"],
-        message: "An action targets either ordered effects or one registered protected operation",
+        message: "An action targets either ordered tasks or one registered protected operation",
       });
     if ((value.permission === undefined) === (value.permission_alternatives === undefined))
       context.addIssue({
@@ -1725,7 +1726,7 @@ const moduleSourceBodySchema = z
       else if (isProjection && !targetsOperation)
         context.addIssue({
           code: "custom",
-          path: ["actions", index, "effects"],
+          path: ["actions", index, "tasks"],
           message: "A system projection record type action targets a registered protected operation",
         });
     }

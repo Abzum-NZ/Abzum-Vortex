@@ -12,7 +12,7 @@
         "module": "vortex.crm.organisations",
         "version": {
           "selection": "exact",
-          "version": "2.0.0"
+          "version": "1.0.0"
         }
       },
       {
@@ -20,7 +20,7 @@
         "module": "vortex.crm.people",
         "version": {
           "selection": "exact",
-          "version": "2.0.0"
+          "version": "1.0.0"
         }
       },
       {
@@ -28,7 +28,7 @@
         "module": "vortex.service_desk.sla",
         "version": {
           "selection": "exact",
-          "version": "2.0.0"
+          "version": "1.0.0"
         }
       }
     ],
@@ -964,18 +964,25 @@
             "type": "organisation_account_reference"
           }
         ],
-        "effects": [
+        "tasks": [
           {
-            "kind": "set_field",
-            "field": "owner",
-            "value": {
-              "source": "input",
-              "input": "owner"
+            "id": "set_owner",
+            "type": "record.set_fields",
+            "properties": {
+              "values": {
+                "owner": {
+                  "source": "input",
+                  "input": "owner"
+                }
+              }
             }
           },
           {
-            "kind": "announce_event",
-            "event": "vortex.service_desk.cases.case.assigned"
+            "id": "announce_case_assigned",
+            "type": "event.announce",
+            "properties": {
+              "event": "vortex.service_desk.cases.case.assigned"
+            }
           }
         ]
       },
@@ -994,48 +1001,62 @@
             "type": "formatted_text"
           }
         ],
-        "effects": [
+        "tasks": [
           {
-            "kind": "set_field",
-            "field": "status",
-            "value": {
-              "source": "literal",
-              "value": "resolved"
-            }
-          },
-          {
-            "kind": "set_field",
-            "field": "resolved_at",
-            "value": {
-              "source": "current_time"
-            }
-          },
-          {
-            "kind": "create_record",
-            "record_type": "vortex.service_desk.cases:case_comment",
-            "values": {
-              "case": {
-                "source": "subject_record"
-              },
-              "body": {
-                "source": "input",
-                "input": "resolution"
-              },
-              "customer_visible": {
-                "source": "literal",
-                "value": false
-              },
-              "created_by": {
-                "source": "current_actor"
-              },
-              "created_at": {
-                "source": "current_time"
+            "id": "set_status",
+            "type": "record.set_fields",
+            "properties": {
+              "values": {
+                "status": {
+                  "source": "literal",
+                  "value": "resolved"
+                }
               }
             }
           },
           {
-            "kind": "announce_event",
-            "event": "vortex.service_desk.cases.case.resolved"
+            "id": "set_resolved_at",
+            "type": "record.set_fields",
+            "properties": {
+              "values": {
+                "resolved_at": {
+                  "source": "current_time"
+                }
+              }
+            }
+          },
+          {
+            "id": "create_resolution_comment",
+            "type": "record.create",
+            "properties": {
+              "record_type": "vortex.service_desk.cases:case_comment",
+              "values": {
+                "case": {
+                  "source": "subject_record"
+                },
+                "body": {
+                  "source": "input",
+                  "input": "resolution"
+                },
+                "customer_visible": {
+                  "source": "literal",
+                  "value": false
+                },
+                "created_by": {
+                  "source": "current_actor"
+                },
+                "created_at": {
+                  "source": "current_time"
+                }
+              }
+            }
+          },
+          {
+            "id": "announce_case_resolved",
+            "type": "event.announce",
+            "properties": {
+              "event": "vortex.service_desk.cases.case.resolved"
+            }
           }
         ]
       },
@@ -1054,33 +1075,39 @@
             "type": "formatted_text"
           }
         ],
-        "effects": [
+        "tasks": [
           {
-            "kind": "create_record",
-            "record_type": "vortex.service_desk.cases:case_comment",
-            "values": {
-              "case": {
-                "source": "subject_record"
-              },
-              "body": {
-                "source": "input",
-                "input": "body"
-              },
-              "customer_visible": {
-                "source": "literal",
-                "value": true
-              },
-              "created_by": {
-                "source": "current_actor"
-              },
-              "created_at": {
-                "source": "current_time"
+            "id": "create_public_comment",
+            "type": "record.create",
+            "properties": {
+              "record_type": "vortex.service_desk.cases:case_comment",
+              "values": {
+                "case": {
+                  "source": "subject_record"
+                },
+                "body": {
+                  "source": "input",
+                  "input": "body"
+                },
+                "customer_visible": {
+                  "source": "literal",
+                  "value": true
+                },
+                "created_by": {
+                  "source": "current_actor"
+                },
+                "created_at": {
+                  "source": "current_time"
+                }
               }
             }
           },
           {
-            "kind": "announce_event",
-            "event": "vortex.service_desk.cases.case.public_comment_added"
+            "id": "announce_public_comment_added",
+            "type": "event.announce",
+            "properties": {
+              "event": "vortex.service_desk.cases.case.public_comment_added"
+            }
           }
         ]
       }
