@@ -1,6 +1,7 @@
 import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
   applicationDraftV2Schema,
+  calculationMaximumNestingDepth,
   protectedReadModelKeys,
   isPlatformPermissionKey,
   applicationSourceDocumentV2Schema,
@@ -1373,15 +1374,26 @@ const calculationDependencyFieldIdsV2 = (expression: JsonObject): string[] => {
     if (!Array.isArray(value) && object(value).source === "field") add(object(value).fieldId);
     for (const child of Array.isArray(value) ? value : Object.values(value)) visitCondition(child);
   };
+  const visitNumberValue = (value: unknown, depth: number): boolean => {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+    if (depth > calculationMaximumNestingDepth) return false;
+    const entry = object(value);
+    if (entry.source === "numeric") {
+      const operands = array(entry.operands);
+      if (operands.length < 2) return false;
+      return operands.every((operand) => visitNumberValue(operand, depth + 1));
+    }
+    if (entry.source === "field") add(entry.fieldId);
+    return true;
+  };
   if (expression.kind === "join_text")
     for (const fieldId of expression.fieldIds as string[]) add(fieldId);
   if (expression.kind === "numeric")
     for (const operand of array(expression.operands))
-      if (operand.source === "field") add(operand.fieldId);
-  if (expression.kind === "subtract_percentage") {
-    add(expression.amountFieldId);
-    add(expression.percentageFieldId);
-  }
+      if (!visitNumberValue(operand, 1)) {
+        dependencies.length = 0;
+        break;
+      }
   if (expression.kind === "condition") visitCondition(expression.condition);
   if (expression.kind === "date_offset") {
     add(expression.dateFieldId);
@@ -1395,25 +1407,20 @@ const calculationDependencyFieldIdsV2 = (expression: JsonObject): string[] => {
   return dependencies;
 };
 
-const numericExpressionValidV2 = (
-  expression: JsonObject,
-  resultType: string,
-  fields: ReadonlyMap<string, JsonObject>,
-): boolean => {
-  const operands = array(expression.operands);
-  const dimensions = operands.map((operand) =>
-    operand.source === "literal"
-      ? exactDecimalTextV2Schema.safeParse(operand.value).success
-        ? ("dimensionless" as const)
-        : undefined
-      : numericDimensionV2(fields.get(String(operand.fieldId))),
-  );
-  if (dimensions.some((dimension) => dimension === undefined)) return false;
+/**
+ * The money dimension one operation yields from its operands' dimensions, or undefined when a
+ * dimension is unknown or the operation's dimensions are not allowed. Money divided by money is
+ * refused: only a dimensionless divisor keeps the dividend's currency.
+ */
+const numericOperationDimensionV2 = (
+  operation: string,
+  dimensions: readonly (NumericDimensionV2 | undefined)[],
+): NumericDimensionV2 | undefined => {
+  if (dimensions.some((dimension) => dimension === undefined)) return undefined;
   const moneyPositions = dimensions.flatMap((dimension, index) =>
     dimension === "money" ? [index] : [],
   );
-  const operation = String(expression.operation);
-  const dimensionValid =
+  const valid =
     operation === "add" || operation === "subtract"
       ? moneyPositions.length === 0 || moneyPositions.length === dimensions.length
       : operation === "multiply"
@@ -1421,9 +1428,44 @@ const numericExpressionValidV2 = (
         : operation === "divide"
           ? moneyPositions.length === 0 || (moneyPositions.length === 1 && moneyPositions[0] === 0)
           : false;
-  if (!dimensionValid) return false;
-  const resultIsMoney = moneyPositions.length > 0;
-  return resultIsMoney
+  if (!valid) return undefined;
+  return moneyPositions.length > 0 ? "money" : "dimensionless";
+};
+
+/** The money dimension of one numeric value, worked out through any nesting of operations. */
+const numericValueDimensionV2 = (
+  value: unknown,
+  fields: ReadonlyMap<string, JsonObject>,
+  depth = 1,
+): NumericDimensionV2 | undefined => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (depth > calculationMaximumNestingDepth) return undefined;
+  const entry = object(value);
+  if (entry.source === "literal")
+    return exactDecimalTextV2Schema.safeParse(entry.value).success
+      ? ("dimensionless" as const)
+      : undefined;
+  if (entry.source === "field") return numericDimensionV2(fields.get(String(entry.fieldId)));
+  if (entry.source !== "numeric") return undefined;
+  const operands = array(entry.operands);
+  if (operands.length < 2) return undefined;
+  return numericOperationDimensionV2(
+    String(entry.operation),
+    operands.map((operand) => numericValueDimensionV2(operand, fields, depth + 1)),
+  );
+};
+
+const numericExpressionValidV2 = (
+  expression: JsonObject,
+  resultType: string,
+  fields: ReadonlyMap<string, JsonObject>,
+): boolean => {
+  const dimension = numericOperationDimensionV2(
+    String(expression.operation),
+    array(expression.operands).map((operand) => numericValueDimensionV2(operand, fields)),
+  );
+  if (dimension === undefined) return false;
+  return dimension === "money"
     ? resultType === "money"
     : resultType === "whole_number" || resultType === "decimal_number";
 };
@@ -2358,20 +2400,6 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
           if (expression.kind === "numeric")
             valid =
               valid && numericExpressionValidV2(expression, String(settings.resultType), fieldMap);
-          if (expression.kind === "subtract_percentage") {
-            const amountDimension = numericDimensionV2(
-              fieldMap.get(String(expression.amountFieldId)),
-            );
-            valid =
-              valid &&
-              amountDimension !== undefined &&
-              ["whole_number", "decimal_number"].includes(
-                fieldValueTypeV2(fieldMap.get(String(expression.percentageFieldId))) ?? "",
-              ) &&
-              (amountDimension === "money"
-                ? settings.resultType === "money"
-                : settings.resultType === "decimal_number");
-          }
           if (expression.kind === "condition")
             valid = valid && conditionTypesValidV2(expression.condition, fieldMap);
           if (expression.kind === "date_offset") {

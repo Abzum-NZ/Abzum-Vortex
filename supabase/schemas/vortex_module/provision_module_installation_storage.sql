@@ -140,7 +140,7 @@ begin
   binding_exists := found;
 
   if binding_exists then
-    if stored_binding.state = 'active'
+    if stored_binding.state in ('active', 'draining')
       or (
         p_expected_binding_revision is null
         and (

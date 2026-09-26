@@ -381,6 +381,8 @@ export type PlacementRendererProps = Readonly<{
   runtimeInputs?: RuntimeInputsByPlacement | undefined;
   /** Theme tokens in force where this placement renders. */
   themeScope?: PlacementThemeScope | undefined;
+  /** Configured dedicated component origin, threaded to the sandboxed custom-component host. */
+  componentBundleOrigin?: string | undefined;
 }>;
 
 /**
@@ -424,6 +426,7 @@ function PlacementView({
   resolvePageHref,
   currentPageId,
   themeScope = EMPTY_THEME_SCOPE,
+  componentBundleOrigin,
   responsive = false,
 }: PlacementRendererProps & LiveLayoutMode): ReactElement {
   const currentLocation: DefinitionRenderErrorLocation = {
@@ -513,6 +516,7 @@ function PlacementView({
             resolvePageHref={resolvePageHref}
             currentPageId={currentPageId}
             themeScope={placementTheme.scope}
+            componentBundleOrigin={componentBundleOrigin}
             responsive={responsive}
           />
         );
@@ -567,10 +571,12 @@ function PlacementView({
           breakpoint={breakpoint}
           metadata={metadata}
           themeOverrides={placement.themeOverrides}
+          themeTokens={placementTheme.scope.inherited}
           {...availability}
           {...(projectedNavigation === undefined ? {} : { projectedNavigation })}
           {...(resolvePageHref === undefined ? {} : { resolvePageHref })}
           {...(currentPageId === undefined ? {} : { currentPageId })}
+          {...(componentBundleOrigin === undefined ? {} : { componentBundleOrigin })}
         />
       ) : null}
     </div>
@@ -604,6 +610,8 @@ export type PlacementSlotRendererProps = Readonly<{
   runtimeInputs?: RuntimeInputsByPlacement | undefined;
   /** Theme tokens in force where this slot renders. */
   themeScope?: PlacementThemeScope | undefined;
+  /** Configured dedicated component origin, threaded to the sandboxed custom-component host. */
+  componentBundleOrigin?: string | undefined;
 }>;
 
 /**
@@ -641,6 +649,7 @@ function PlacementSlotView({
   resolvePageHref,
   currentPageId,
   themeScope,
+  componentBundleOrigin,
   responsive = false,
 }: PlacementSlotRendererProps & LiveLayoutMode): ReactElement {
   const currentLocation: DefinitionRenderErrorLocation = {
@@ -710,6 +719,7 @@ function PlacementSlotView({
         resolvePageHref={resolvePageHref}
         currentPageId={currentPageId}
         themeScope={themeScope}
+        {...(componentBundleOrigin === undefined ? {} : { componentBundleOrigin })}
         responsive={responsive}
       />
     );
@@ -787,6 +797,11 @@ export type PageLayoutRendererProps = Readonly<{
   locale?: string | undefined;
   /** Organisation or viewer IANA time zone for timestamp presentation. */
   timeZone?: string | undefined;
+  /**
+   * The configured dedicated component origin. A page that places a custom component passes it so
+   * the sandboxed host can frame the Vortex-owned bootstrap document on that origin.
+   */
+  componentBundleOrigin?: string | undefined;
 }>;
 
 /**
@@ -810,6 +825,7 @@ export function PageLayoutRenderer({
   themeMode,
   locale,
   timeZone,
+  componentBundleOrigin,
 }: PageLayoutRendererProps): ReactElement {
   // Stable across server render and hydration; scopes this root's responsive rules.
   const liveLayoutScope = useId();
@@ -857,6 +873,7 @@ export function PageLayoutRenderer({
     resolvePageHref,
     currentPageId,
     themeScope: { application: applicationTokens, inherited: applicationTokens },
+    ...(componentBundleOrigin === undefined ? {} : { componentBundleOrigin }),
   };
 
   // The theme root serves runtime pages and preview canvases alike; React hoists and
