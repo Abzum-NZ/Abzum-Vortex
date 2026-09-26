@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*",
+    "@vortex/rule": "workspace:*",
     "react": "19.3.0"
   },
   "devDependencies": {

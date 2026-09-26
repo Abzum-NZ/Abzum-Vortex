@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type ReactElement } from "react";
+import { useEffect, useId, useRef, useState, type ReactElement } from "react";
 import { DefinitionRenderError } from "../definition-error";
 import type { ButtonPayload } from "./projected-data";
 import {
@@ -34,6 +34,18 @@ export function Button(props: ButtonProps): ReactElement {
   );
   const form = useFormScope();
   const noteId = useId();
+  // An action handler may return the promise of the flow it started; the button stays busy until it
+  // settles, so one gesture cannot start the same flow twice.
+  const [running, setRunning] = useState(false);
+  // Guards the gap before the busy state renders, so a second click in the same frame is ignored.
+  const runningNow = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   if (mode !== "action" && form === undefined)
     throw new DefinitionRenderError(
       "INVALID_COMPOSITION",
@@ -42,7 +54,7 @@ export function Button(props: ButtonProps): ReactElement {
     );
 
   const label = context.accessibleName ?? props.metadata.name;
-  const pending = context.pending || (mode === "submit" && form?.pending === true);
+  const pending = context.pending || running || (mode === "submit" && form?.pending === true);
   const disabled =
     context.inactive ||
     pending ||
@@ -62,8 +74,21 @@ export function Button(props: ButtonProps): ReactElement {
         aria-busy={pending}
         {...(note === undefined ? {} : { "aria-describedby": noteId })}
         onClick={() => {
-          if (mode === "action" && !disabled)
-            context.events?.action?.({ event: "action", intent: "activate" });
+          if (mode !== "action" || disabled || runningNow.current) return;
+          const outcome: unknown = context.events?.action?.({ event: "action", intent: "activate" });
+          if (
+            typeof outcome === "object" &&
+            outcome !== null &&
+            typeof (outcome as PromiseLike<unknown>).then === "function"
+          ) {
+            runningNow.current = true;
+            setRunning(true);
+            const settle = (): void => {
+              runningNow.current = false;
+              if (mounted.current) setRunning(false);
+            };
+            (outcome as PromiseLike<unknown>).then(settle, settle);
+          }
         }}
         className={`vortex-button vortex-button-${variant}`}
       >
