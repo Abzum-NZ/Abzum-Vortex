@@ -2112,13 +2112,25 @@
                         },
                         "notice_body_input": {
                           "block": {
-                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                             "release_version": "1.0.0"
                           },
                           "settings": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organisation_notice.body"
+                            "name": {
+                              "kind": "text",
+                              "value": "body"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Notice text"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "multiline": {
+                              "kind": "boolean",
+                              "value": true
                             }
                           },
                           "theme_overrides": {},
