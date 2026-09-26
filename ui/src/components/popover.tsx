@@ -3,6 +3,15 @@
 import * as React from "react";
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import { cn } from "../lib/utils";
+import { useVortexStylePortalRoot } from "../theme/vortex-style-root";
+
+function PopoverPortal({ container, ...props }: PopoverPrimitive.Portal.Props) {
+  const styleRoot = useVortexStylePortalRoot();
+  if (styleRoot !== null && styleRoot.element === null && container === undefined) return null;
+  return (
+    <PopoverPrimitive.Portal container={container ?? styleRoot?.element ?? undefined} {...props} />
+  );
+}
 
 function Popover({ ...props }: PopoverPrimitive.Root.Props) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />;
@@ -22,7 +31,7 @@ function PopoverContent({
 }: PopoverPrimitive.Popup.Props &
   Pick<PopoverPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset">) {
   return (
-    <PopoverPrimitive.Portal>
+    <PopoverPortal>
       <PopoverPrimitive.Positioner
         align={align}
         alignOffset={alignOffset}
@@ -39,7 +48,7 @@ function PopoverContent({
           {...props}
         />
       </PopoverPrimitive.Positioner>
-    </PopoverPrimitive.Portal>
+    </PopoverPortal>
   );
 }
 

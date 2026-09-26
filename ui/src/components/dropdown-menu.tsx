@@ -4,13 +4,22 @@ import * as React from "react";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { CheckIcon, ChevronRightIcon } from "lucide-react";
 import { cn } from "../lib/utils";
+import { useVortexStylePortalRoot } from "../theme/vortex-style-root";
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
   return <MenuPrimitive.Root data-slot="dropdown-menu" {...props} />;
 }
 
-function DropdownMenuPortal({ ...props }: MenuPrimitive.Portal.Props) {
-  return <MenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />;
+function DropdownMenuPortal({ container, ...props }: MenuPrimitive.Portal.Props) {
+  const styleRoot = useVortexStylePortalRoot();
+  if (styleRoot !== null && styleRoot.element === null && container === undefined) return null;
+  return (
+    <MenuPrimitive.Portal
+      data-slot="dropdown-menu-portal"
+      container={container ?? styleRoot?.element ?? undefined}
+      {...props}
+    />
+  );
 }
 
 function DropdownMenuTrigger({ ...props }: MenuPrimitive.Trigger.Props) {
@@ -27,7 +36,7 @@ function DropdownMenuContent({
 }: MenuPrimitive.Popup.Props &
   Pick<MenuPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset">) {
   return (
-    <MenuPrimitive.Portal>
+    <DropdownMenuPortal>
       <MenuPrimitive.Positioner
         className="isolate z-50 outline-none"
         align={align}
@@ -44,7 +53,7 @@ function DropdownMenuContent({
           {...props}
         />
       </MenuPrimitive.Positioner>
-    </MenuPrimitive.Portal>
+    </DropdownMenuPortal>
   );
 }
 

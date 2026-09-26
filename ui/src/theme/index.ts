@@ -31,3 +31,4 @@ export {
 } from "./vortex-style";
 
 export { VortexStyleStylesheet } from "./vortex-style-stylesheet";
+export { VortexStyleRoot } from "./vortex-style-root";

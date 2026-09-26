@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { cn } from "../lib/utils";
+import { useVortexStylePortalRoot } from "../theme/vortex-style-root";
 
 import { Button } from "./button";
 import { XIcon } from "lucide-react";
@@ -15,8 +16,16 @@ function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
   return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />;
 }
 
-function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />;
+function DialogPortal({ container, ...props }: DialogPrimitive.Portal.Props) {
+  const styleRoot = useVortexStylePortalRoot();
+  if (styleRoot !== null && styleRoot.element === null && container === undefined) return null;
+  return (
+    <DialogPrimitive.Portal
+      data-slot="dialog-portal"
+      container={container ?? styleRoot?.element ?? undefined}
+      {...props}
+    />
+  );
 }
 
 function DialogClose({ ...props }: DialogPrimitive.Close.Props) {

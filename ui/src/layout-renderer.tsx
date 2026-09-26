@@ -16,6 +16,7 @@ import {
   createVortexStyleRootProps,
   resolvePlacementTheme,
   resolveVortexStyleSelection,
+  VortexStyleRoot,
   VortexStyleStylesheet,
   type ApplicationThemeV2,
   type PlacementThemeScope,
@@ -890,7 +891,7 @@ export function PageLayoutRenderer({
   // client-side navigation to another application renders the new link beside the hoisted one, so
   // the stylesheet component drops the superseded sheet once the new one is in place.
   return (
-    <div
+    <VortexStyleRoot
       {...createThemeRootProps(applicationTheme, themeMode)}
       {...vortexStyleProps}
       {...(breakpoint === undefined ? { [LIVE_LAYOUT_SCOPE_ATTRIBUTE]: liveLayoutScope } : {})}
@@ -928,7 +929,7 @@ export function PageLayoutRenderer({
           />
         )}
       </DateFormatProvider>
-    </div>
+    </VortexStyleRoot>
   );
 }
 
