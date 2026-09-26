@@ -3,6 +3,7 @@ import {
   applicationShellV2Schema,
   blockPropertyValueV2Schema,
   immutablePlatformBlockCatalogueV2Schema,
+  isRepeatableSlotIdentityV2,
   placementSlotV2Schema,
   repeatableSlotItemIdentitiesV2,
   repeatableSlotKeyV2,
@@ -199,7 +200,10 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
         ),
       );
       for (const [key, child] of Object.entries(placement.slots)) {
-        if (!release.slots.some((slot) => slot.key === key) && !repeatableKeys.has(key))
+        if (
+          !release.slots.some((slot) => slot.repeats === undefined && slot.key === key) &&
+          !repeatableKeys.has(key)
+        )
           throw new VortexPuckAdapterError(
             `Undeclared Puck slot ${key} for ${release.rendererKey}`,
           );
@@ -283,35 +287,30 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
         `${at}[${index}].props.settings`,
       );
 
-      const repeatableKeys = new Set(
-        release.slots.flatMap((slot) =>
-          slot.repeats === undefined
-            ? []
-            : repeatableSlotItemIdentitiesV2(
-                slot,
-                settings as Readonly<Record<string, BlockPropertyValueV2Contract>>,
-              ).map((identity) => repeatableSlotKeyV2(slot.key, identity)),
-        ),
-      );
-      const allowed = new Set([
-        "id",
-        "settings",
-        "vortex",
-        ...release.slots.map((slot) => slot.key),
-        ...repeatableKeys,
-      ]);
+      // Each declared slot's keys: a fixed slot's own key, or one key per repeatable item, whose
+      // identities must be admissible and distinct so no two items share a slot.
+      const slotKeysByDeclaration = release.slots.map((declaration) => {
+        if (declaration.repeats === undefined) return [declaration.key];
+        const identities = repeatableSlotItemIdentitiesV2(
+          declaration,
+          settings as Readonly<Record<string, BlockPropertyValueV2Contract>>,
+        );
+        if (
+          new Set(identities).size !== identities.length ||
+          identities.some((identity) => !isRepeatableSlotIdentityV2(declaration.key, identity))
+        )
+          throw new VortexPuckAdapterError(
+            `Repeatable item keys must be distinct builder keys at ${at}[${index}].props.settings`,
+          );
+        return identities.map((identity) => repeatableSlotKeyV2(declaration.key, identity));
+      });
+      const allowed = new Set(["id", "settings", "vortex", ...slotKeysByDeclaration.flat()]);
       if (Object.keys(props).some((key) => !allowed.has(key)))
         throw new VortexPuckAdapterError(`Private or transient Puck data at ${at}[${index}].props`);
 
       const slots: Record<string, VortexSlot> = {};
-      for (const declaration of release.slots) {
-        const slotKeys =
-          declaration.repeats === undefined
-            ? [declaration.key]
-            : repeatableSlotItemIdentitiesV2(
-                declaration,
-                settings as Readonly<Record<string, BlockPropertyValueV2Contract>>,
-              ).map((identity) => repeatableSlotKeyV2(declaration.key, identity));
+      for (const [declarationIndex, declaration] of release.slots.entries()) {
+        const slotKeys = slotKeysByDeclaration[declarationIndex]!;
         for (const slotKey of slotKeys) {
           const slotInput = props[slotKey];
           if (slotInput === undefined) {

@@ -3,8 +3,8 @@ import {
   applicationShellV2Schema,
   applicationThemeV2Schema,
   blockPropertyValueV2Schema,
-  builderKeySchema,
   guidedFormPageCompositionV2Schema,
+  isRepeatableSlotIdentityV2,
   pageCompositionV2Schema,
   repeatableSlotItemIdentitiesV2,
   repeatableSlotKeyV2,
@@ -515,7 +515,10 @@ export const materialiseApplicationCompositionV2 = (
         readModelPlacementIds.add(canonicalId);
       }
 
-      const declaredSlots = new Map(release.slots.map((slot) => [slot.key, slot]));
+      // A repeatable declaration's own key names only its family, never a slot.
+      const declaredSlots = new Set(
+        release.slots.filter((slot) => slot.repeats === undefined).map((slot) => slot.key),
+      );
       const repeatableSlots = new Map<string, (typeof release.slots)[number]>();
       for (const declaration of release.slots) {
         if (declaration.repeats === undefined) continue;
@@ -526,10 +529,9 @@ export const materialiseApplicationCompositionV2 = (
         if (new Set(identities).size !== identities.length)
           reject("vortex.definition.application_block_settings", "duplicate_key");
         for (const identity of identities) {
-          const slotKey = repeatableSlotKeyV2(declaration.key, identity);
-          if (!builderKeySchema.safeParse(slotKey).success)
+          if (!isRepeatableSlotIdentityV2(declaration.key, identity))
             reject("vortex.definition.application_block_settings", "invalid_value");
-          repeatableSlots.set(slotKey, declaration);
+          repeatableSlots.set(repeatableSlotKeyV2(declaration.key, identity), declaration);
         }
       }
       if (
@@ -554,17 +556,7 @@ export const materialiseApplicationCompositionV2 = (
             : { captureShellPlacements: options.captureShellPlacements }),
         });
       for (const declaration of release.slots) {
-        if (declaration.repeats !== undefined) {
-          for (const identity of repeatableSlotItemIdentitiesV2(
-            declaration,
-            authoredPlacement.settings,
-          )) {
-            const slotKey = repeatableSlotKeyV2(declaration.key, identity);
-            if (authoredPlacement.slots[slotKey] !== undefined)
-              slots[slotKey] = compileChildSlot(declaration, slotKey);
-          }
-          continue;
-        }
+        if (declaration.repeats !== undefined) continue;
         const child = authoredPlacement.slots[declaration.key];
         const reserved = options.reserved?.has(`${alias}:${declaration.key}`) === true;
         if (child === undefined) {
@@ -576,6 +568,9 @@ export const materialiseApplicationCompositionV2 = (
           reject("vortex.definition.application_block_references", "required_value");
         slots[declaration.key] = compileChildSlot(declaration, declaration.key);
       }
+      for (const [slotKey, declaration] of repeatableSlots)
+        if (authoredPlacement.slots[slotKey] !== undefined)
+          slots[slotKey] = compileChildSlot(declaration, slotKey);
       const responsive = materialiseResponsive(authoredPlacement.responsive, release);
       const themeOverrides: Record<string, unknown> = {};
       const effectiveOverrides: Record<string, unknown> = {};

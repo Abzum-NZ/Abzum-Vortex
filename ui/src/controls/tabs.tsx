@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, type KeyboardEvent, type ReactElement } from "react";
-import { builderKeySchema, repeatableSlotKeyV2 } from "@vortex/contracts";
+import { isRepeatableSlotIdentityV2, repeatableSlotKeyV2 } from "@vortex/contracts";
 import { DefinitionRenderError } from "../definition-error";
 import type { TabsPayload } from "./projected-data";
 import {
@@ -43,29 +43,23 @@ export function Tabs(props: TabsProps): ReactElement {
   const repeats = repeatableSlot?.repeats;
   let tabs: readonly Tab[];
   if (repeatableSlot !== undefined && repeats !== undefined) {
-    const items = settings.groups(repeats.items);
-    tabs = items.flatMap((item): Tab[] => {
+    const seen = new Set<string>();
+    tabs = settings.groups(repeats.items).map((item): Tab => {
       const identityValue = item[repeats.identity];
-      const identity = identityValue?.kind === "text" ? identityValue.value.trim() : "";
-      if (identity.length === 0) return [];
-      if (!builderKeySchema.safeParse(identity).success)
+      const identity = identityValue?.kind === "text" ? identityValue.value : "";
+      if (!isRepeatableSlotIdentityV2(repeatableSlot.key, identity) || seen.has(identity))
         throw new DefinitionRenderError(
           "INVALID_COMPOSITION",
-          `Tab identity '${identity}' must be a lowercase builder key`,
+          "Every tab needs its own stable key of lowercase words separated by underscores",
           context.location,
         );
+      seen.add(identity);
       const labelValue = item.label;
       const label =
         labelValue?.kind === "text" && labelValue.value.trim().length > 0
-          ? labelValue.value.trim()
+          ? labelValue.value
           : identity;
-      return [
-        {
-          key: identity,
-          label,
-          slotKey: repeatableSlotKeyV2(repeatableSlot.key, identity),
-        },
-      ];
+      return { key: identity, label, slotKey: repeatableSlotKeyV2(repeatableSlot.key, identity) };
     });
     if (tabs.length === 0)
       throw new DefinitionRenderError(

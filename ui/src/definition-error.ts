@@ -222,7 +222,10 @@ export function validatePlacementSlots(
   location: DefinitionRenderErrorLocation = {},
   options: Readonly<{ allowEmptyRequiredSlots?: boolean }> = {},
 ): void {
-  const declaredSlots = new Map(metadata.slots.map((slot) => [slot.key, slot]));
+  // A repeatable declaration's own key names only its family, never a slot.
+  const declaredSlots = new Map(
+    metadata.slots.filter((slot) => slot.repeats === undefined).map((slot) => [slot.key, slot]),
+  );
 
   // A repeatable slot owns one key per declared item identity, so resolve every item's own key to
   // its declaration before judging the placement's slots.

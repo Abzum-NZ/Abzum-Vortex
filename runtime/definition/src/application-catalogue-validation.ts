@@ -3,6 +3,7 @@ import {
   builderKeySchema,
   readRecordDetailContract,
   readRecordsTableContract,
+  isRepeatableSlotIdentityV2,
   repeatableSlotItemIdentitiesV2,
   repeatableSlotKeyV2,
   validateComponentSettings,
@@ -450,8 +451,11 @@ export function validateApplicationSourceCatalogue(
       validateAccessibleName(placement.settings, release, location);
       validateResponsive(placement, release, location);
 
-      const declaredSlots = new Map(
-        release.slots.map((declaration) => [declaration.key, declaration]),
+      // A repeatable declaration's own key names only its family, never a slot.
+      const declaredSlots = new Set(
+        release.slots
+          .filter((declaration) => declaration.repeats === undefined)
+          .map((declaration) => declaration.key),
       );
       const repeatableSlots = new Map<string, (typeof release.slots)[number]>();
       for (const declaration of release.slots) {
@@ -464,14 +468,13 @@ export function validateApplicationSourceCatalogue(
             [...location, ...keySegment("setting", declaration.repeats.items)],
           );
         for (const identity of identities) {
-          const slotKey = repeatableSlotKeyV2(declaration.key, identity);
-          if (!builderKeySchema.safeParse(slotKey).success)
+          if (!isRepeatableSlotIdentityV2(declaration.key, identity))
             report(
               "vortex.definition.application_block_settings",
               "invalid_value",
               [...location, ...keySegment("setting", declaration.repeats.items)],
             );
-          else repeatableSlots.set(slotKey, declaration);
+          else repeatableSlots.set(repeatableSlotKeyV2(declaration.key, identity), declaration);
         }
       }
       if (
@@ -503,11 +506,7 @@ export function validateApplicationSourceCatalogue(
         );
       };
       for (const declaration of release.slots) {
-        if (declaration.repeats !== undefined) {
-          for (const identity of repeatableSlotItemIdentitiesV2(declaration, placement.settings))
-            validateChild(declaration, repeatableSlotKeyV2(declaration.key, identity));
-          continue;
-        }
+        if (declaration.repeats !== undefined) continue;
         const child = placement.slots[declaration.key];
         const reserved = options.reserved?.has(`${alias}:${declaration.key}`) === true;
         if (
@@ -518,6 +517,7 @@ export function validateApplicationSourceCatalogue(
           report("vortex.definition.application_block_references", "required_value", location);
         validateChild(declaration, declaration.key);
       }
+      for (const [slotKey, declaration] of repeatableSlots) validateChild(declaration, slotKey);
     }
   };
 
