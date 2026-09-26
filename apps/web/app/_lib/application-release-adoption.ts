@@ -14,7 +14,9 @@ import {
   type HumanInstallationDefinitionAccess,
 } from "@vortex/app";
 import {
+  type ApplicationRootId,
   type IdentitySession,
+  type OrganizationId,
   type SystemApplicationBoundReleaseSetResult,
 } from "@vortex/contracts";
 import {
@@ -108,7 +110,7 @@ const coordinator = () =>
  */
 export const readApplicationReleaseAdoption = async (
   session: IdentitySession,
-  scope: Readonly<{ organizationId: string; applicationRootId: string }>,
+  scope: Readonly<{ organizationId: OrganizationId; applicationRootId: ApplicationRootId }>,
 ): Promise<ApplicationReleaseAdoptionTarget | undefined> => {
   try {
     const result = await requests().run(
