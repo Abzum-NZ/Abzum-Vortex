@@ -1898,8 +1898,11 @@ export const protectedReadModelKeys = [
   "people",
   "organization_accounts",
   "roles",
+  "permissions",
   "groups",
   "effective_assignments",
+  "role_activations",
+  "delegations",
   "tenant_structure",
   "organization_invitations",
   "organization_runtime_settings",
@@ -1926,6 +1929,12 @@ export const protectedReadModelDeclarations = Object.freeze({
     filters: Object.freeze([] as const),
     resultContract: "ListOrganizationAdministrationRolesResult",
   }),
+  permissions: Object.freeze({
+    label: "Permissions",
+    ownerReader: "access.listPermissions",
+    filters: Object.freeze([] as const),
+    resultContract: "ListOrganizationAdministrationPermissionsResult",
+  }),
   groups: Object.freeze({
     label: "Groups",
     ownerReader: "access.listGroups",
@@ -1937,6 +1946,18 @@ export const protectedReadModelDeclarations = Object.freeze({
     ownerReader: "access.listRoleAssignments",
     filters: Object.freeze([] as const),
     resultContract: "ListOrganizationAdministrationRoleAssignmentsResult",
+  }),
+  role_activations: Object.freeze({
+    label: "Role activations",
+    ownerReader: "access.listRoleActivations",
+    filters: Object.freeze([] as const),
+    resultContract: "ListOrganizationAdministrationRoleActivationsResult",
+  }),
+  delegations: Object.freeze({
+    label: "Delegations",
+    ownerReader: "access.listDelegationAuthorities",
+    filters: Object.freeze([] as const),
+    resultContract: "ListOrganizationAdministrationDelegationAuthoritiesResult",
   }),
   tenant_structure: Object.freeze({
     label: "Tenant structure",
