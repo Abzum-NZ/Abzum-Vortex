@@ -247,7 +247,6 @@ export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
       type: z.literal("form"),
       record_type: sourceQualifiedRecordTypeSchema,
       permission: namespacedKeySchema,
-      commit_action: namespacedKeySchema,
     })
     .strict(),
   z
@@ -256,7 +255,6 @@ export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
       type: z.literal("guided_form"),
       record_type: sourceQualifiedRecordTypeSchema,
       permission: namespacedKeySchema,
-      commit_action: namespacedKeySchema,
       steps: z.array(sourceGuidedFormStepV2Schema).min(2).max(20),
       composition: sourceGuidedFormPageCompositionV2Schema,
     })
