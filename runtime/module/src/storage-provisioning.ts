@@ -346,10 +346,10 @@ export const createModuleInstallationStorageRepository = (
         throw mapFailure(error);
       }
     },
-    attachContributions(commandCandidate) {
+    attachContributions(commandCandidate: ModuleContributionStorageCommand) {
       return mutateContributions(commandCandidate, "attach");
     },
-    detachContributions(commandCandidate) {
+    detachContributions(commandCandidate: ModuleContributionStorageCommand) {
       return mutateContributions(commandCandidate, "detach");
     },
   });
