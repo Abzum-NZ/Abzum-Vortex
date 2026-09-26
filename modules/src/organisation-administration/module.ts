@@ -1794,7 +1794,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
             organization_field: "organization_id",
             revision_field: "revision",
             filterable_fields: [],
-            sortable_fields: [],
+            sortable_fields: ["language"],
           },
           fields: [
             {
@@ -1830,7 +1830,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
               required: false,
               unique: false,
               filterable: false,
-              sortable: false,
+              sortable: true,
               personal_data: "none",
               public_display: "refused",
               type: "text",
@@ -2913,6 +2913,151 @@ export const organisationAdministrationModule: ModuleSourceDocument =
             {
               "field": "received_at",
               "direction": "descending"
+            }
+          ],
+          "page_size": 50,
+          "relationship_hops": 0
+        },
+        {
+          "id": "qry_people",
+          "key": "people",
+          "record_type": "person",
+          "inputs": [],
+          "select": [
+            "display_name",
+            "state",
+            "language",
+            "time_zone"
+          ],
+          "filter": null,
+          "group_by": [],
+          "aggregates": [],
+          "sort": [
+            {
+              "field": "display_name",
+              "direction": "ascending"
+            }
+          ],
+          "page_size": 50,
+          "relationship_hops": 0
+        },
+        {
+          "id": "qry_organization_invitations",
+          "key": "organization_invitations",
+          "record_type": "organization_invitation",
+          "inputs": [],
+          "select": [
+            "invited_email",
+            "state",
+            "invited_at",
+            "expires_at"
+          ],
+          "filter": null,
+          "group_by": [],
+          "aggregates": [],
+          "sort": [
+            {
+              "field": "invited_email",
+              "direction": "ascending"
+            }
+          ],
+          "page_size": 50,
+          "relationship_hops": 0
+        },
+        {
+          "id": "qry_organization_settings",
+          "key": "organization_settings",
+          "record_type": "organization_settings",
+          "inputs": [],
+          "select": [
+            "language",
+            "time_zone",
+            "currency",
+            "date_format",
+            "number_format",
+            "default_application_root_id"
+          ],
+          "filter": null,
+          "group_by": [],
+          "aggregates": [],
+          "sort": [
+            {
+              "field": "language",
+              "direction": "ascending"
+            }
+          ],
+          "page_size": 50,
+          "relationship_hops": 0
+        },
+        {
+          "id": "qry_roles",
+          "key": "roles",
+          "record_type": "role",
+          "inputs": [],
+          "select": [
+            "key",
+            "label",
+            "lifecycle",
+            "role_kind",
+            "privilege_classification",
+            "assignment_policy",
+            "accepted_permission_count"
+          ],
+          "filter": null,
+          "group_by": [],
+          "aggregates": [],
+          "sort": [
+            {
+              "field": "label",
+              "direction": "ascending"
+            }
+          ],
+          "page_size": 50,
+          "relationship_hops": 0
+        },
+        {
+          "id": "qry_groups",
+          "key": "groups",
+          "record_type": "group",
+          "inputs": [],
+          "select": [
+            "key",
+            "label",
+            "state"
+          ],
+          "filter": null,
+          "group_by": [],
+          "aggregates": [],
+          "sort": [
+            {
+              "field": "label",
+              "direction": "ascending"
+            }
+          ],
+          "page_size": 50,
+          "relationship_hops": 0
+        },
+        {
+          "id": "qry_role_assignments",
+          "key": "role_assignments",
+          "record_type": "role_assignment",
+          "inputs": [],
+          "select": [
+            "role_label",
+            "assignee_kind",
+            "assignment_kind",
+            "starts_at",
+            "expires_at",
+            "state",
+            "temporal_state"
+          ],
+          "filter": null,
+          "group_by": [],
+          "aggregates": [],
+          "sort": [
+            {
+              "field": "role_label",
+              "direction": "ascending"
             }
           ],
           "page_size": 50,

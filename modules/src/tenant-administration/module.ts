@@ -788,6 +788,53 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
         ],
         "page_size": 50,
         "relationship_hops": 0
+      },
+      {
+        "id": "qry_organizations",
+        "key": "organizations",
+        "record_type": "organization",
+        "inputs": [],
+        "select": [
+          "display_name",
+          "short_name",
+          "state",
+          "state_changed_at",
+          "created_at"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "display_name",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_tenant_administrators",
+        "key": "tenant_administrators",
+        "record_type": "tenant_administrator",
+        "inputs": [],
+        "select": [
+          "identity_id",
+          "starts_at",
+          "expires_at",
+          "state"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "starts_at",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
       }
     ],
   },
