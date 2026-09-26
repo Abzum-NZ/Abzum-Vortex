@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactElement } from "react";
+import { Alert, AlertDescription, AlertTitle } from "../components/alert";
 import { equalFormValue, useFormScope } from "./form-context";
 import type { TypedFieldValue } from "./projected-data";
 
@@ -167,19 +168,33 @@ export function FieldDraftFeedback({
   const notes: ReactElement[] = [];
   if (feedback?.required === true)
     notes.push(
-      <span key="required" className="vortex-draft-feedback-required">
+      <span
+        key="required"
+        data-vortex-draft-feedback-required
+        className="text-sm text-muted-foreground"
+      >
         Required
       </span>,
     );
   if (feedback?.disabled === true)
     notes.push(
-      <span key="disabled" className="vortex-draft-feedback-disabled">
+      <span
+        key="disabled"
+        data-vortex-draft-feedback-disabled
+        className="text-sm text-muted-foreground"
+      >
         Not editable
       </span>,
     );
   feedback?.messages.forEach((message, index) => {
     notes.push(
-      <span key={`message-${index}`} className={`vortex-draft-feedback-${message.severity}`}>
+      <span
+        key={`message-${index}`}
+        data-vortex-draft-feedback-severity={message.severity}
+        className={
+          message.severity === "error" ? "text-sm text-destructive" : "text-sm text-foreground"
+        }
+      >
         {message.text}
       </span>,
     );
@@ -189,7 +204,7 @@ export function FieldDraftFeedback({
       id={id}
       role="status"
       data-vortex-draft-feedback="field"
-      className="vortex-draft-feedback"
+      className="flex flex-col gap-0.5"
     >
       {notes}
     </span>
@@ -213,12 +228,13 @@ export function FormDraftFeedbackRegion({
       id={id}
       role="status"
       data-vortex-draft-feedback="form"
-      className="vortex-draft-feedback-summary"
+      className="flex flex-col gap-2"
     >
       {messages.map((message, index) => (
-        <p key={index} className={`vortex-draft-feedback-${message.severity}`}>
-          {message.text}
-        </p>
+        <Alert key={index} variant={message.severity === "error" ? "destructive" : "default"}>
+          <AlertTitle>{message.severity === "error" ? "Error" : "Note"}</AlertTitle>
+          <AlertDescription>{message.text}</AlertDescription>
+        </Alert>
       ))}
     </div>
   );

@@ -7,21 +7,12 @@ import type { DialogPayload } from "./projected-data";
 
 export type DialogProps = ControlRenderProps<DialogPayload>;
 
-const DIALOG_WIDTHS = { small: "24rem", medium: "36rem", large: "52rem" } as const;
-
 /**
  * Modal dialog with a required content slot and an optional actions slot. It opens from its
- * authored initial state or projected open state; its semantic identity is its placement.
+ * authored initial state or projected open state; its semantic identity is its placement. It is
+ * rendered by the shadcn Dialog component (Base UI), which traps focus inside the surface and
+ * returns focus when it closes.
  */
 export function Dialog(props: DialogProps): ReactElement {
-  return (
-    <ModalSurface<DialogPayload>
-      props={props}
-      kind="dialog"
-      surfaceStyle={(size) => ({
-        width: `min(${DIALOG_WIDTHS[size]}, calc(100% - 2rem))`,
-        maxHeight: "calc(100% - 2rem)",
-      })}
-    />
-  );
+  return <ModalSurface<DialogPayload> props={props} kind="dialog" />;
 }

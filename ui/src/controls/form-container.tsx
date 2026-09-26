@@ -168,19 +168,23 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       {...(title === undefined ? {} : { "aria-labelledby": titleId })}
       data-vortex-control="form-container"
       data-vortex-placement-id={props.placementId}
-      className="vortex-form"
+      className="flex flex-col gap-4"
     >
       {title === undefined ? null : (
-        <h2 id={titleId} className="vortex-form-title">
+        <h2 id={titleId} className="font-heading text-base font-medium">
           {title}
         </h2>
       )}
-      {note === undefined ? null : <p className="vortex-field-note">{note}</p>}
+      {note === undefined ? null : (
+        <p data-vortex-field-note className="text-sm text-destructive">
+          {note}
+        </p>
+      )}
       <FormScopeContext.Provider value={scope}>
         <fieldset
           key={generation}
           disabled={fieldsDisabled}
-          className="vortex-form-fields"
+          className="flex min-w-0 flex-col gap-4 border-0 p-0"
         >
           {props.slots.content ?? null}
         </fieldset>
