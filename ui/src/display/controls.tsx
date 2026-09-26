@@ -193,16 +193,20 @@ export function SelectAllControl({
 
 /**
  * One row command of a list or record detail, bound to the declared `row_action` event; the bound
- * flow decides its meaning. The Records table offers its own row commands as one Dropdown Menu.
+ * flow decides its meaning. The record's current revision travels with the command, so a flow that
+ * changes one existing row is bound at the revision the person saw. The Records table offers its own
+ * row commands as one Dropdown Menu.
  */
 export function RowActionControl({
   recordId,
+  revision,
   name,
   eventId,
   label,
   events,
 }: Readonly<{
   recordId: string;
+  revision?: number;
   name: string;
   eventId?: string;
   label?: string;
@@ -211,6 +215,7 @@ export function RowActionControl({
   const onRowAction = events?.row_action;
   if (onRowAction === undefined) return null;
   const text = label ?? "Open";
+  const identity = { recordId, ...(revision === undefined ? {} : { revision }) };
   return (
     <Button
       variant="outline"
@@ -220,8 +225,8 @@ export function RowActionControl({
         clickEvent.stopPropagation();
         onRowAction(
           eventId === undefined
-            ? { event: "row_action", recordId }
-            : { event: "row_action", eventId, recordId },
+            ? { event: "row_action", ...identity }
+            : { event: "row_action", eventId, ...identity },
         );
       }}
     >
@@ -235,15 +240,18 @@ export function RowActionControl({
  * Each declared action carries the stable identity of its own binding, so several named commands on
  * one table reach different flows. `actions` is undefined only for a release that declares no named
  * action: that release keeps the one legacy control, identified by the placement itself, as the
- * menu's single command. Declared actions the row does not show leave no command at all.
+ * menu's single command. Declared actions the row does not show leave no command at all. Every
+ * command carries the row's current revision, so the bound flow acts on the record as it was read.
  */
 export function RowActionsMenu({
   recordId,
+  revision,
   name,
   actions,
   events,
 }: Readonly<{
   recordId: string;
+  revision?: number;
   name: string;
   actions: readonly RecordsTableActionContract[] | undefined;
   events: DisplayEventHandlers | undefined;
@@ -262,6 +270,7 @@ export function RowActionsMenu({
           label: action.label,
           eventId: action.eventId,
         }));
+  const identity = { recordId, ...(revision === undefined ? {} : { revision }) };
   // A row that shows no command keeps an empty actions cell, as before.
   if (commands.length === 0) return null;
   return (
@@ -288,8 +297,8 @@ export function RowActionsMenu({
             onClick={() =>
               onRowAction(
                 command.eventId === undefined
-                  ? { event: "row_action", recordId }
-                  : { event: "row_action", eventId: command.eventId, recordId },
+                  ? { event: "row_action", ...identity }
+                  : { event: "row_action", eventId: command.eventId, ...identity },
               )
             }
           >

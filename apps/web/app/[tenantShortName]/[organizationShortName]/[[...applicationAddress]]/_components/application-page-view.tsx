@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, type ReactElement } from "react";
+import { useCallback, useId, useMemo, useState, type ReactElement } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   createFlowInvokeClient,
@@ -18,6 +18,11 @@ import {
   type LinkNavigationEnvironment,
   type ProjectedPageCapability,
 } from "@vortex/ui";
+import { Button } from "@vortex/ui/components/button";
+import { DialogFooter } from "@vortex/ui/components/dialog";
+import { Field, FieldGroup } from "@vortex/ui/components/field";
+import { Input } from "@vortex/ui/components/input";
+import { Label } from "@vortex/ui/components/label";
 import type { ApplicationPageModel, PlacementFlowBinding } from "../../../../_lib/application-page";
 
 /**
@@ -93,12 +98,20 @@ const cellToJson = (value: unknown): unknown => {
  * What a component event supplies to its bound flow, by the caller input names the flow declares.
  * The vocabulary is closed and event-shaped: `record_id`, `record_ids`, `revision`, `field` and
  * `value`. A binding receives only the names it declares, and the endpoint refuses anything else.
+ *
+ * A row action carries the row's server-projected current revision exactly as an inline-edit commit
+ * does, so a command that changes one existing row is bound at the revision the person actually saw.
+ * The value comes from the projected row, never from anything the person types.
  */
 const suppliedValues = (event: DisplaySemanticEvent): Record<string, unknown> => {
   switch (event.event) {
     case "row_clicked":
-    case "row_action":
       return { record_id: event.recordId };
+    case "row_action":
+      return {
+        record_id: event.recordId,
+        ...(event.revision === undefined ? {} : { revision: event.revision }),
+      };
     case "bulk_action":
       return { record_ids: [...event.recordIds] };
     case "inline_edit":
@@ -197,6 +210,9 @@ export function ApplicationPageView({
     }),
     [basePath, resolvePageHref, router],
   );
+  const formFieldId = useId();
+  // The body of a Show form surface. The flow intent host presents it inside its shadcn Dialog, so
+  // the body is built from the same shadcn field, input and button parts and ends in the dialog's footer.
   const renderForm = useCallback(
     (
       form: FlowFormIntent,
@@ -206,7 +222,7 @@ export function ApplicationPageView({
       }>,
     ) => (
       <form
-        className="vortex-form"
+        className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
           const entered = new FormData(event.currentTarget);
@@ -215,32 +231,29 @@ export function ApplicationPageView({
           controls.submit(values);
         }}
       >
-        {Object.entries(form.inputs).map(([name, value]) => (
-          <label key={name} className="vortex-field">
-            <span>{name}</span>
-            <input
-              name={name}
-              defaultValue={
-                typeof value === "string" || typeof value === "number" ? String(value) : ""
-              }
-            />
-          </label>
-        ))}
-        <div className="vortex-dialog-actions">
-          <button
-            type="button"
-            className="vortex-button vortex-button-secondary"
-            onClick={controls.cancel}
-          >
+        <FieldGroup>
+          {Object.entries(form.inputs).map(([name, value], index) => (
+            <Field key={name}>
+              <Label htmlFor={`${formFieldId}-${index}`}>{name}</Label>
+              <Input
+                id={`${formFieldId}-${index}`}
+                name={name}
+                defaultValue={
+                  typeof value === "string" || typeof value === "number" ? String(value) : ""
+                }
+              />
+            </Field>
+          ))}
+        </FieldGroup>
+        <DialogFooter>
+          <Button type="button" variant="secondary" onClick={controls.cancel}>
             Cancel
-          </button>
-          <button type="submit" className="vortex-button vortex-button-primary">
-            Continue
-          </button>
-        </div>
+          </Button>
+          <Button type="submit">Continue</Button>
+        </DialogFooter>
       </form>
     ),
-    [],
+    [formFieldId],
   );
   const { host, element: intentHostElement } = useFlowIntentHost({
     renderForm,

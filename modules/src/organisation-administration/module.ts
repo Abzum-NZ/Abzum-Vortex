@@ -3062,6 +3062,83 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           ],
           "page_size": 50,
           "relationship_hops": 0
+        },
+        {
+          "id": "qry_group_memberships",
+          "key": "group_memberships",
+          "record_type": "group_membership",
+          "inputs": [],
+          "select": [
+            "group_id",
+            "account_display_name",
+            "starts_at",
+            "expires_at",
+            "state",
+            "temporal_state"
+          ],
+          "filter": null,
+          "group_by": [],
+          "aggregates": [],
+          "sort": [
+            {
+              "field": "account_display_name",
+              "direction": "ascending"
+            }
+          ],
+          "page_size": 50,
+          "relationship_hops": 0
+        },
+        {
+          "id": "qry_role_activations",
+          "key": "role_activations",
+          "record_type": "role_activation",
+          "inputs": [],
+          "select": [
+            "account_display_name",
+            "role_key",
+            "role_label",
+            "activated_at",
+            "expires_at",
+            "state",
+            "temporal_state"
+          ],
+          "filter": null,
+          "group_by": [],
+          "aggregates": [],
+          "sort": [
+            {
+              "field": "account_display_name",
+              "direction": "ascending"
+            }
+          ],
+          "page_size": 50,
+          "relationship_hops": 0
+        },
+        {
+          "id": "qry_delegations",
+          "key": "delegations",
+          "record_type": "delegation",
+          "inputs": [],
+          "select": [
+            "holder_kind",
+            "group_id",
+            "scope_kind",
+            "starts_at",
+            "expires_at",
+            "state",
+            "temporal_state"
+          ],
+          "filter": null,
+          "group_by": [],
+          "aggregates": [],
+          "sort": [
+            {
+              "field": "scope_kind",
+              "direction": "ascending"
+            }
+          ],
+          "page_size": 50,
+          "relationship_hops": 0
         }
       ],
     },
