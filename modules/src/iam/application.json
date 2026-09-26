@@ -2061,6 +2061,540 @@
                     }
                   }
                 }
+              },
+              "form_create_custom_role": {
+                "block": {
+                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                  "release_version": "1.0.0"
+                },
+                "settings": {
+                  "title": {
+                    "kind": "text",
+                    "value": "Create custom role"
+                  }
+                },
+                "theme_overrides": {},
+                "responsive": {
+                  "desktop": {
+                    "visible": true,
+                    "width": {
+                      "kind": "fill"
+                    },
+                    "height": {
+                      "kind": "content"
+                    }
+                  }
+                },
+                "slots": {
+                  "content": {
+                    "placements": {
+                      "input_create_custom_role_role_key": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "role_key"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Role key"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_create_custom_role_label": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "label"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Label"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_create_custom_role_description": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "description"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Description"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          },
+                          "multiline": {
+                            "kind": "boolean",
+                            "value": true
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_create_custom_role_privilege_classification": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "privilege_classification"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Privilege classification"
+                          },
+                          "help_text": {
+                            "kind": "text",
+                            "value": "standard or privileged"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_create_custom_role_permission_references": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "permission_references"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Permission references"
+                          },
+                          "help_text": {
+                            "kind": "text",
+                            "value": "JSON array of exact permission references. Each entry names ownerKind, ownerId and permissionId, plus applicationRootId when the owner is an application or module."
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          },
+                          "multiline": {
+                            "kind": "boolean",
+                            "value": true
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "button_create_custom_role": {
+                        "block": {
+                          "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "label": {
+                            "kind": "text",
+                            "value": "Create custom role"
+                          },
+                          "action_kind": {
+                            "kind": "choice",
+                            "value": "action"
+                          },
+                          "variant": {
+                            "kind": "choice",
+                            "value": "primary"
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      }
+                    },
+                    "order": {
+                      "desktop": [
+                        "input_create_custom_role_role_key",
+                        "input_create_custom_role_label",
+                        "input_create_custom_role_description",
+                        "input_create_custom_role_privilege_classification",
+                        "input_create_custom_role_permission_references",
+                        "button_create_custom_role"
+                      ]
+                    }
+                  }
+                }
+              },
+              "form_accept_application_role_template": {
+                "block": {
+                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                  "release_version": "1.0.0"
+                },
+                "settings": {
+                  "title": {
+                    "kind": "text",
+                    "value": "Accept role template"
+                  }
+                },
+                "theme_overrides": {},
+                "responsive": {
+                  "desktop": {
+                    "visible": true,
+                    "width": {
+                      "kind": "fill"
+                    },
+                    "height": {
+                      "kind": "content"
+                    }
+                  }
+                },
+                "slots": {
+                  "content": {
+                    "placements": {
+                      "input_accept_application_role_template_application_root_id": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "template_application_root_id"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Application root id"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_accept_application_role_template_source_role_id": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "source_role_id"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Source role id"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_accept_application_role_template_role_key": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "role_key"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Role key"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_accept_application_role_template_label": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "label"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Label"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_accept_application_role_template_description": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "description"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Description"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          },
+                          "multiline": {
+                            "kind": "boolean",
+                            "value": true
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_accept_application_role_template_privilege_classification": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "privilege_classification"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Privilege classification"
+                          },
+                          "help_text": {
+                            "kind": "text",
+                            "value": "standard or privileged"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "button_accept_application_role_template": {
+                        "block": {
+                          "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "label": {
+                            "kind": "text",
+                            "value": "Accept role template"
+                          },
+                          "action_kind": {
+                            "kind": "choice",
+                            "value": "action"
+                          },
+                          "variant": {
+                            "kind": "choice",
+                            "value": "primary"
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      }
+                    },
+                    "order": {
+                      "desktop": [
+                        "input_accept_application_role_template_application_root_id",
+                        "input_accept_application_role_template_source_role_id",
+                        "input_accept_application_role_template_role_key",
+                        "input_accept_application_role_template_label",
+                        "input_accept_application_role_template_description",
+                        "input_accept_application_role_template_privilege_classification",
+                        "button_accept_application_role_template"
+                      ]
+                    }
+                  }
+                }
               }
             },
             "order": {
@@ -2072,7 +2606,9 @@
                 "form_add_group_membership",
                 "form_rename_group",
                 "form_retire_group",
-                "form_remove_group_membership"
+                "form_remove_group_membership",
+                "form_create_custom_role",
+                "form_accept_application_role_template"
               ]
             }
           }
@@ -5104,6 +5640,366 @@
         },
         "errors": [],
         "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_create_custom_role",
+        "key": "create_custom_role",
+        "labels": {
+          "name": "Create custom role"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "operation": {
+            "type": "choice",
+            "required": true
+          },
+          "role_key": {
+            "type": "text",
+            "required": true
+          },
+          "label": {
+            "type": "text",
+            "required": true
+          },
+          "description": {
+            "type": "text",
+            "required": true
+          },
+          "privilege_classification": {
+            "type": "choice",
+            "required": true
+          },
+          "permission_references": {
+            "type": "json",
+            "required": true
+          },
+          "accept_broadened_authority": {
+            "type": "choice",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "confirm",
+            "type": "interface.confirm",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Create custom role"
+                }
+              },
+              "message": {
+                "kind": "formula",
+                "formula": {
+                  "op": "join",
+                  "parts": [
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": "Create the custom role "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "role_key"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": " ("
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "label"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": ", "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "privilege_classification"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": "). Everyone later assigned to it gains exactly the permissions you listed, which broadens their authority. Confirm only if you accept that authority."
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "declined",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "confirm",
+                  "key": "confirmed"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_declined",
+                "type": "stop",
+                "outcome": "declined"
+              }
+            ]
+          },
+          {
+            "id": "prepare",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.prepare_role_change_evidence"
+                }
+              }
+            }
+          },
+          {
+            "id": "commit",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.create_custom_role"
+                }
+              },
+              "inputs": {
+                "kind": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "prepare",
+                  "key": "result"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {}
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_accept_application_role_template",
+        "key": "accept_application_role_template",
+        "labels": {
+          "name": "Accept role template"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "operation": {
+            "type": "choice",
+            "required": true
+          },
+          "template_application_root_id": {
+            "type": "text",
+            "required": true
+          },
+          "source_role_id": {
+            "type": "text",
+            "required": true
+          },
+          "role_key": {
+            "type": "text",
+            "required": true
+          },
+          "label": {
+            "type": "text",
+            "required": true
+          },
+          "description": {
+            "type": "text",
+            "required": true
+          },
+          "privilege_classification": {
+            "type": "choice",
+            "required": true
+          },
+          "accept_broadened_authority": {
+            "type": "choice",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "confirm",
+            "type": "interface.confirm",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Accept role template"
+                }
+              },
+              "message": {
+                "kind": "formula",
+                "formula": {
+                  "op": "join",
+                  "parts": [
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": "Accept the application role template "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "source_role_id"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": " of application "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "template_application_root_id"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": " as the new role "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "role_key"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": " ("
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "label"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": ", "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "privilege_classification"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": "). The new role receives the template's complete current permissions, which broadens the authority of everyone later assigned to it. Confirm only if you accept that authority."
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "declined",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "confirm",
+                  "key": "confirmed"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_declined",
+                "type": "stop",
+                "outcome": "declined"
+              }
+            ]
+          },
+          {
+            "id": "prepare",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.prepare_role_change_evidence"
+                }
+              }
+            }
+          },
+          {
+            "id": "commit",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.accept_application_role_template"
+                }
+              },
+              "inputs": {
+                "kind": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "prepare",
+                  "key": "result"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {}
       }
     ],
     "flow_bindings": [
@@ -5394,6 +6290,96 @@
           "values": {
             "kind": "caller",
             "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_create_custom_role",
+        "control": "button_create_custom_role",
+        "event_id": "event_iam_administration_action",
+        "event": "action",
+        "flow": "flow_create_custom_role",
+        "inputs": {
+          "operation": {
+            "kind": "literal",
+            "literal": {
+              "type": "choice",
+              "value": "create_custom"
+            }
+          },
+          "role_key": {
+            "kind": "caller",
+            "name": "role_key"
+          },
+          "label": {
+            "kind": "caller",
+            "name": "label"
+          },
+          "description": {
+            "kind": "caller",
+            "name": "description"
+          },
+          "privilege_classification": {
+            "kind": "caller",
+            "name": "privilege_classification"
+          },
+          "permission_references": {
+            "kind": "caller",
+            "name": "permission_references"
+          },
+          "accept_broadened_authority": {
+            "kind": "literal",
+            "literal": {
+              "type": "choice",
+              "value": "accept"
+            }
+          }
+        }
+      },
+      {
+        "id": "binding_accept_application_role_template",
+        "control": "button_accept_application_role_template",
+        "event_id": "event_iam_administration_action",
+        "event": "action",
+        "flow": "flow_accept_application_role_template",
+        "inputs": {
+          "operation": {
+            "kind": "literal",
+            "literal": {
+              "type": "choice",
+              "value": "accept_new_application_role"
+            }
+          },
+          "template_application_root_id": {
+            "kind": "caller",
+            "name": "template_application_root_id"
+          },
+          "source_role_id": {
+            "kind": "caller",
+            "name": "source_role_id"
+          },
+          "role_key": {
+            "kind": "caller",
+            "name": "role_key"
+          },
+          "label": {
+            "kind": "caller",
+            "name": "label"
+          },
+          "description": {
+            "kind": "caller",
+            "name": "description"
+          },
+          "privilege_classification": {
+            "kind": "caller",
+            "name": "privilege_classification"
+          },
+          "accept_broadened_authority": {
+            "kind": "literal",
+            "literal": {
+              "type": "choice",
+              "value": "accept"
+            }
           }
         }
       }

@@ -1377,5 +1377,82 @@
         "failed"
       ]
     }
+  },
+  "prepare_role_change_evidence": {
+    "key": "prepare_role_change_evidence",
+    "name": "Prepare role change evidence",
+    "release": {
+      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
+      "operationId": "fef76b5f-d5e8-4a96-abca-b232f924db84",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
+        },
+        "operationId": "fef76b5f-d5e8-4a96-abca-b232f924db84"
+      },
+      "inputs": {
+        "operation": {
+          "type": "choice",
+          "required": true
+        },
+        "role_key": {
+          "type": "text",
+          "required": true
+        },
+        "label": {
+          "type": "text",
+          "required": true
+        },
+        "description": {
+          "type": "text",
+          "required": true
+        },
+        "privilege_classification": {
+          "type": "choice",
+          "required": true
+        },
+        "permission_references": {
+          "type": "json",
+          "required": false
+        },
+        "template_application_root_id": {
+          "type": "text",
+          "required": false
+        },
+        "source_role_id": {
+          "type": "text",
+          "required": false
+        },
+        "accept_broadened_authority": {
+          "type": "choice",
+          "required": true
+        }
+      },
+      "outputs": {
+        "evidence": {
+          "type": "json",
+          "required": true
+        }
+      },
+      "permission": {
+        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
+        "key": "platform.organization.roles.manage"
+      },
+      "effect": "read",
+      "expectedRevision": "not_required",
+      "confirmation": "not_required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "completed",
+        "refused",
+        "validation",
+        "failed"
+      ]
+    }
   }
 }

@@ -375,8 +375,12 @@ export {
 export {
   ALL_UI_STYLES_CSS,
   createThemeRootProps,
+  DEFAULT_VORTEX_STYLE,
+  resolveVortexStyle,
+  VORTEX_STYLES,
   type ThemeMode,
   type ThemeRootProps,
+  type VortexStyle,
 } from "./theme";
 
 // Browser Flow Runtime (#1013)
