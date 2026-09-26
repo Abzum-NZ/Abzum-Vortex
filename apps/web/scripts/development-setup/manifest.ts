@@ -36,9 +36,7 @@ export const developmentSetupManifestSchema = z
   .object({
     manifestVersion: z.literal("1.0.0"),
     /** The trusted configured operator that provisions the tenant (the #605 receipt actor). */
-    operator: z
-      .object({ clusterId: clusterIdSchema, systemActorId: actorIdSchema })
-      .strict(),
+    operator: z.object({ clusterId: clusterIdSchema, systemActorId: actorIdSchema }).strict(),
     /** The system actor that authors and publishes the shipped definitions. */
     definitionActorId: actorIdSchema,
     provisioning: z

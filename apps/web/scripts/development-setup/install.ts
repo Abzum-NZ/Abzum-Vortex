@@ -7,12 +7,16 @@ import {
   type PermissionRegistryDefinitionSetReader,
 } from "@vortex/access";
 import {
+  applicationInstallationActivationRequestSchema,
   ApplicationInstallationCoordinatorError,
+  applicationInstallationPreparationRequestSchema,
   createApplicationInstallationCoordinator,
   createFirstOwnerApplicationEntryComposition,
+  firstOwnerApplicationEntryRequestSchema,
   type ApplicationInstallationCoordinatorDependencies,
 } from "@vortex/app";
 import {
+  applicationRootIdSchema,
   organizationRoleChangePreparationSchema,
   type IdentityAuthorityId,
   type IdentitySession,
@@ -50,9 +54,7 @@ export type InstallFacts = Readonly<{
   releases: ReadonlyMap<string, PublishedRelease>;
 }>;
 
-const definitionReader = (
-  facts: InstallFacts,
-): PermissionRegistryDefinitionSetReader => ({
+const definitionReader = (facts: InstallFacts): PermissionRegistryDefinitionSetReader => ({
   read: (context, command) =>
     inSystemTransaction(context, (transaction) =>
       createDatabaseSystemApplicationBoundReleaseSetService(
@@ -96,18 +98,23 @@ const installOne = async (
     applicationReleaseRevision: published.releaseRevision,
   };
   const session = nominatedOwnerSession(facts.stewardIdentityId);
-  await coordinator.prepare(session, target as never).catch((error: unknown) => {
-    if (
-      error instanceof ApplicationInstallationCoordinatorError &&
-      error.code === "APPLICATION_INSTALLATION_STALE"
-    )
-      return undefined;
-    throw error;
-  });
-  const activation = await coordinator.activate(session, {
-    ...target,
-    expectedActiveReleaseRevision: null,
-  } as never);
+  await coordinator
+    .prepare(session, applicationInstallationPreparationRequestSchema.parse(target))
+    .catch((error: unknown) => {
+      if (
+        error instanceof ApplicationInstallationCoordinatorError &&
+        error.code === "APPLICATION_INSTALLATION_STALE"
+      )
+        return undefined;
+      throw error;
+    });
+  const activation = await coordinator.activate(
+    session,
+    applicationInstallationActivationRequestSchema.parse({
+      ...target,
+      expectedActiveReleaseRevision: null,
+    }),
+  );
   log(`installed ${applicationKey}: ${activation.outcome}`);
 };
 
@@ -131,7 +138,9 @@ const prepareOperatingRoleEvidence = async (
       createApplicationRoleTemplateAdapter({
         definitionReader: definitionReader(facts),
         permissionRegistryFacts: createPermissionRegistryPrivateRepository(transaction),
-      }).prepareCurrentActive(context, { applicationRootId: input.applicationRootId } as never),
+      }).prepareCurrentActive(context, {
+        applicationRootId: applicationRootIdSchema.parse(input.applicationRootId),
+      }),
   );
   if (templates.preparationBasis.kind !== "current_active_registration")
     throw new Error("The operating role must derive from the active registration");
@@ -169,7 +178,7 @@ const prepareOperatingRoleEvidence = async (
         })),
       },
     }),
-  ) as PreparedOrganizationRoleChange;
+  );
 };
 
 /** The source role id of the manifest's operating role, read from the exact release definition. */
@@ -180,12 +189,13 @@ const operatingRoleSourceId = async (facts: InstallFacts, applicationRootId: str
     definitionReader: definitionReader(facts),
     permissionRegistryFacts: {
       lookup: () => Promise.reject(new Error("Not used for a registration candidate")),
-      readApplicationSnapshot: () => Promise.reject(new Error("Not used for a registration candidate")),
+      readApplicationSnapshot: () =>
+        Promise.reject(new Error("Not used for a registration candidate")),
     },
   }).prepareRegistrationCandidate(context, {
-    applicationRootId,
+    applicationRootId: applicationRootIdSchema.parse(applicationRootId),
     releaseRevision: published.releaseRevision,
-  } as never);
+  });
   const template = candidate.templates.find(
     (entry) => entry.template.key === facts.manifest.operatingRole.roleKey,
   );
@@ -218,19 +228,22 @@ export const installAndGrant = async (
       }),
   });
   const session: IdentitySession = nominatedOwnerSession(facts.stewardIdentityId);
-  const result = await composition.establish(session, {
-    organizationId: facts.system.organizationId,
-    applicationRootId: operating.rootId,
-    applicationReleaseRevision: operating.releaseRevision,
-    stewardOrganizationAccountId: facts.stewardOrganizationAccountId,
-    provisioningReceiptId: facts.provisioningReceiptId,
-    setupRevision: 1,
-    setupActorId: manifest.operator.systemActorId,
-    correlationId: manifest.setupCorrelationId,
-    operatingRoleId: manifest.operatingRole.roleId,
-    operatingRoleSourceId: sourceRoleId,
-    roleAssignmentId: manifest.operatingRole.roleAssignmentId,
-  } as never);
+  const result = await composition.establish(
+    session,
+    firstOwnerApplicationEntryRequestSchema.parse({
+      organizationId: facts.system.organizationId,
+      applicationRootId: operating.rootId,
+      applicationReleaseRevision: operating.releaseRevision,
+      stewardOrganizationAccountId: facts.stewardOrganizationAccountId,
+      provisioningReceiptId: facts.provisioningReceiptId,
+      setupRevision: 1,
+      setupActorId: manifest.operator.systemActorId,
+      correlationId: manifest.setupCorrelationId,
+      operatingRoleId: manifest.operatingRole.roleId,
+      operatingRoleSourceId: sourceRoleId,
+      roleAssignmentId: manifest.operatingRole.roleAssignmentId,
+    }),
+  );
   log(`installed ${manifest.operatingRole.applicationKey}: ${result.installation.outcome}`);
   return result.rights;
 };

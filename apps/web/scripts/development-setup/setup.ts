@@ -5,6 +5,7 @@ import {
   requireLocalDevelopmentEnvironment,
   resolveFirstOwnerIdentity,
 } from "./guards";
+import { provisionTenantCommandSchema } from "@vortex/contracts";
 import { createConfiguredTenantAdministrationService } from "@vortex/identity";
 import { publishShippedDefinitions } from "./definitions";
 import { installAndGrant } from "./install";
@@ -38,26 +39,28 @@ const main = async (): Promise<void> => {
       VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID: manifest.operator.systemActorId,
     },
   });
-  const provisioned = await tenantAdministration.provisionTenant({
-    operation: "provision_tenant",
-    duplicateKey: manifest.provisioning.duplicateKey,
-    tenant: manifest.provisioning.tenant,
-    rootOrganization: manifest.provisioning.rootOrganization,
-    tenantSteward: { identityId: stewardIdentityId },
-    organizationSteward: {
-      identityId: stewardIdentityId,
-      accountDisplayName: manifest.provisioning.accountDisplayName,
-      accountLanguage: manifest.provisioning.language,
-      accountTimeZone: manifest.provisioning.timeZone,
-    },
-    runtimeSettings: {
-      language: manifest.provisioning.language,
-      timeZone: manifest.provisioning.timeZone,
-      currency: manifest.provisioning.currency,
-      dateFormat: "medium",
-      numberFormat: "auto",
-    },
-  } as never);
+  const provisioned = await tenantAdministration.provisionTenant(
+    provisionTenantCommandSchema.parse({
+      operation: "provision_tenant",
+      duplicateKey: manifest.provisioning.duplicateKey,
+      tenant: manifest.provisioning.tenant,
+      rootOrganization: manifest.provisioning.rootOrganization,
+      tenantSteward: { identityId: stewardIdentityId },
+      organizationSteward: {
+        identityId: stewardIdentityId,
+        accountDisplayName: manifest.provisioning.accountDisplayName,
+        accountLanguage: manifest.provisioning.language,
+        accountTimeZone: manifest.provisioning.timeZone,
+      },
+      runtimeSettings: {
+        language: manifest.provisioning.language,
+        timeZone: manifest.provisioning.timeZone,
+        currency: manifest.provisioning.currency,
+        dateFormat: "medium",
+        numberFormat: "auto",
+      },
+    }),
+  );
   if (provisioned.outcome === "refused")
     throw new DevelopmentSetupRefusal(
       `Provisioning was refused (${provisioned.code}). If the organisation already exists for a different account, reset the local database (pnpm db:reset).`,

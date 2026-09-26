@@ -24,6 +24,7 @@
     "@vortex/access": "workspace:*",
     "@vortex/app": "workspace:*",
     "@vortex/connection": "workspace:*",
+    "@vortex/db": "workspace:*",
     "@vortex/definition": "workspace:*",
     "@vortex/event": "workspace:*",
     "@vortex/file": "workspace:*",

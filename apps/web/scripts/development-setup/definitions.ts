@@ -97,8 +97,8 @@ const modulesInDependencyOrder = (applicationKeys: readonly string[]): StoredDef
       visit(dependency.module);
   };
   for (const key of applicationKeys)
-    for (const binding of (shippedApplicationSource(key).body as ApplicationBody)
-      .module_bindings ?? [])
+    for (const binding of (shippedApplicationSource(key).body as ApplicationBody).module_bindings ??
+      [])
       visit(binding.module);
   const ordered: StoredDefinitionSource[] = [];
   const placed = new Set<string>();

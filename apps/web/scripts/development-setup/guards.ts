@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { join } from "node:path";
 import {
   identityAuthorityIdSchema,
   identityIdSchema,
@@ -27,8 +28,7 @@ export class DevelopmentSetupRefusal extends Error {
 }
 
 export type FirstOwnerNomination =
-  | Readonly<{ kind: "identity"; identityId: string }>
-  | Readonly<{ kind: "email"; email: string }>;
+  Readonly<{ kind: "identity"; identityId: string }> | Readonly<{ kind: "email"; email: string }>;
 
 export type DevelopmentSetupArguments = Readonly<{ firstOwner: FirstOwnerNomination }>;
 
@@ -121,14 +121,19 @@ export const requireLocalDevelopmentEnvironment = (
 type LocalSupabaseStatus = Readonly<{ API_URL: string; SECRET_KEY: string }>;
 
 const readLocalSupabaseStatus = (): LocalSupabaseStatus => {
-  const pnpmEntry = process.env.npm_execpath;
-  if (pnpmEntry === undefined)
-    throw new DevelopmentSetupRefusal("Run the setup through `pnpm setup:local`.");
-  const result = spawnSync(
-    process.execPath,
-    [pnpmEntry, "exec", "supabase", "status", "--output", "json"],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], cwd: findRepositoryRoot() },
+  const root = findRepositoryRoot();
+  const binary = join(
+    root,
+    "node_modules",
+    ".bin",
+    process.platform === "win32" ? "supabase.cmd" : "supabase",
   );
+  const result = spawnSync(`"${binary}" status --output json`, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    cwd: root,
+    shell: true,
+  });
   try {
     const status = JSON.parse(result.stdout) as Record<string, unknown>;
     if (typeof status.API_URL === "string" && typeof status.SECRET_KEY === "string")
@@ -156,7 +161,8 @@ export const resolveFirstOwnerIdentity = async (
   });
   for (let page = 1; page <= 50; page += 1) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
-    if (error !== null) throw new DevelopmentSetupRefusal("The local Auth user list is unavailable.");
+    if (error !== null)
+      throw new DevelopmentSetupRefusal("The local Auth user list is unavailable.");
     const match = data.users.find((user) => user.email?.toLowerCase() === nomination.email);
     if (match !== undefined) return identityIdSchema.parse(match.id);
     if (data.users.length < 200) break;
