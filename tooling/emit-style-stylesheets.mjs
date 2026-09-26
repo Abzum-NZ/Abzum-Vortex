@@ -126,8 +126,9 @@ const header = (style, option) => `/*
  * The shadcn/create ${style} style, scoped to [data-vortex-style="${style}"] on the root element, so the
  * runtime loader can link this one stylesheet for the resolved style and no other.
  *
- * The \`--tw-*\` custom properties it reads are registered by the shared stylesheet this application
- * already loads, so they need no copy here.
+ * It carries its own registrations of the \`--tw-*\` custom properties its rules read, because the
+ * shared stylesheet registers only those its own utilities use; a registration the shared
+ * stylesheet also makes is identical, so the repeat is harmless.
  */
 `;
 
