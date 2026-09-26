@@ -301,6 +301,7 @@ It covers:
 - Logo and approved image assets.
 - Light and dark appearances where supported.
 - Default density and phone behaviour.
+- The shadcn/create dimensions: visual style, base colour, theme colour, chart colours, heading and body fonts, icon library, radius, menu and menu accent. Every option offered at the pinned shadcn version is available, and a shadcn preset code can be imported into these selections.
 
 Every interface primitive is a [shadcn/ui](https://ui.shadcn.com) component built on Base UI and styled with Tailwind CSS, kept as source in the shared `ui` package. The theme engine supplies every design value through the shadcn CSS variables, so a theme change restyles every component without code changes ([architecture decision 12](../build-plan/architecture-decisions-2026-09-25.md)).
 
