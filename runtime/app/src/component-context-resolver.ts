@@ -1,14 +1,16 @@
 import "server-only";
 
 import {
+  builderKeySchema,
   containedComponentIdSchema,
   eventIdSchema,
+  parseExactDecimal,
   readRecordsTableContract,
   recordIdSchema,
+  recordRichTextDocumentV2Schema,
   recordsTableActionCapabilities,
   recordTypeIdSchema,
   revisionSchema,
-  valueTypesCompatible,
   type ComponentFlowBinding,
   type ComponentSemanticEventKind,
   type ComponentSettingValue,
@@ -37,6 +39,8 @@ import {
  * flow. Event dispatch, result freshness and presentation remain outside this module.
  */
 
+const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
+
 /** The one closed context vocabulary a component can carry into a bound flow. */
 export const componentRecordReferenceSchema = z
   .object({
@@ -55,16 +59,26 @@ export const componentRecordSelectionSchema = z
     recordTypeId: recordTypeIdSchema,
     members: z.array(componentRecordReferenceSchema).max(500),
   })
-  .strict();
+  .strict()
+  .refine(
+    (selection) =>
+      selection.members.every((member) => sameId(member.recordTypeId, selection.recordTypeId)) &&
+      new Set(selection.members.map((member) => member.recordId.toLowerCase())).size ===
+        selection.members.length,
+    { message: "A selection holds distinct records of its one record type" },
+  );
 export type ComponentRecordSelection = z.infer<typeof componentRecordSelectionSchema>;
 
 /**
- * The trusted component context. `page_subject` is the page's own record; `related_record` is an
- * explicitly declared related record reached from the page, so a related panel resolves to its own
- * record and never silently falls back to the page subject; `current_row` and `current_selection`
- * are the interaction contexts a repeatable data block supplies.
+ * The trusted component context. `no_record` is a page or surface without a record subject, such as
+ * a list page or dashboard, so no record input can be filled; `page_subject` is the page's own
+ * record; `related_record` is an explicitly declared related record reached from the page, so a
+ * related panel resolves to its own record and never silently falls back to the page subject;
+ * `current_row` and `current_selection` are the interaction contexts a repeatable data block
+ * supplies.
  */
 export const componentContextSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("no_record") }).strict(),
   z.object({ kind: z.literal("page_subject"), record: componentRecordReferenceSchema }).strict(),
   z
     .object({
@@ -103,6 +117,7 @@ export const componentContextMismatchCodes = [
   "missing_required_input",
   "supplied_input_not_declared",
   "unknown_query",
+  "ambiguous_query",
   "unknown_query_input",
   "incompatible_query_input_type",
   "missing_query_input",
@@ -123,7 +138,12 @@ export const componentFlowInputRequestSchema = z
     eventId: eventIdSchema,
     context: componentContextSchema,
     /** The values the untrusted surface supplies, by the caller input name they fill. */
-    suppliedValues: z.record(z.string(), z.unknown()).default({}),
+    suppliedValues: z
+      .record(builderKeySchema, z.unknown())
+      .refine((values) => Object.keys(values).length <= 100, {
+        message: "A surface supplies at most one value per bound input",
+      })
+      .default({}),
   })
   .strict();
 export type ComponentFlowInputRequest = z.input<typeof componentFlowInputRequestSchema>;
@@ -163,8 +183,6 @@ const mismatch = (
 ): ComponentContextMismatch =>
   field === undefined ? { kind: "mismatch", code } : { kind: "mismatch", code, field };
 
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
-
 /** Value types that name or grant authority. A surface may never supply these itself. */
 const untrustedIdentityTypes: ReadonlySet<string> = new Set([
   "record_reference",
@@ -191,21 +209,29 @@ const selectionContextEvents: ReadonlySet<ComponentSemanticEventKind> = new Set(
 /**
  * Whether the supplied context kind is the one the bound event declares. A row event carries the
  * current row; a bulk or selection event carries the current selection; every other data or action
- * event carries the page subject or one of its declared related records.
+ * event carries the page subject, one of its declared related records, or no record at all.
  */
 const contextMatchesEvent = (event: ComponentSemanticEventKind, context: ComponentContext): boolean => {
   if (rowContextEvents.has(event)) return context.kind === "current_row";
   if (selectionContextEvents.has(event)) return context.kind === "current_selection";
-  return context.kind === "page_subject" || context.kind === "related_record";
+  return (
+    context.kind === "page_subject" ||
+    context.kind === "related_record" ||
+    context.kind === "no_record"
+  );
 };
 
-const contextRecordTypeId = (context: ComponentContext): string =>
-  context.kind === "current_selection" ? context.selection.recordTypeId : context.record.recordTypeId;
+const contextRecordTypeId = (context: ComponentContext): string | undefined =>
+  context.kind === "no_record"
+    ? undefined
+    : context.kind === "current_selection"
+      ? context.selection.recordTypeId
+      : context.record.recordTypeId;
 
 const singleContextRecord = (
   context: ComponentContext,
 ): ComponentRecordReference | undefined =>
-  context.kind === "current_selection" ? undefined : context.record;
+  context.kind === "no_record" || context.kind === "current_selection" ? undefined : context.record;
 
 const recordTypeAllowed = (
   declaration: FlowInputDeclaration,
@@ -214,39 +240,40 @@ const recordTypeAllowed = (
   declaration.recordTypeIds === undefined ||
   declaration.recordTypeIds.some((allowed) => sameId(allowed, recordTypeId));
 
-/** The catalogue type of a JSON value a surface supplied, when it can be known. */
-const jsonValueType = (value: unknown): string | undefined => {
-  if (value === null) return "json";
-  if (typeof value === "string") return "text";
-  if (typeof value === "boolean") return "yes_no";
-  if (typeof value === "number")
-    return Number.isSafeInteger(value) ? "whole_number" : "decimal_number";
-  if (Array.isArray(value))
-    return value.every((entry) => typeof entry === "string") ? "several_choices" : "json";
-  if (typeof value === "object") return "json";
-  return undefined;
-};
+const isoDate = z.iso.date();
+const isoDateTime = z.iso.datetime({ offset: true });
+const nonEmptyText = (value: unknown): boolean => typeof value === "string" && value.length > 0;
 
-/** Whether a surface-supplied value is one the declared flow input type can hold. */
+/**
+ * Whether a surface-supplied value has the shape the declared flow input type carries. This is the
+ * same per-type rule the flow interpreter applies when a run starts, so a value accepted here is
+ * one the run accepts. Identity types never reach this check: they come only from the context.
+ */
 const suppliedValueFits = (value: unknown, declaredType: string): boolean => {
   switch (declaredType) {
+    case "yes_no":
+      return typeof value === "boolean";
+    case "whole_number":
+      return typeof value === "number" && Number.isSafeInteger(value);
+    case "decimal_number":
+    case "money":
+      return parseExactDecimal(value) !== undefined;
+    case "date":
+      return isoDate.safeParse(value).success;
+    case "date_time":
+      return isoDateTime.safeParse(value).success;
+    case "text":
+    case "formatted_text":
+      return typeof value === "string";
     case "choice":
-      return typeof value === "string" && value.length > 0;
+    case "file_reference":
+      return nonEmptyText(value);
     case "several_choices":
-      return (
-        Array.isArray(value) &&
-        value.every((entry) => typeof entry === "string" && entry.length > 0)
-      );
+      return Array.isArray(value) && value.every(nonEmptyText);
     case "json":
-      return true;
-    default: {
-      const actual = jsonValueType(value);
-      return (
-        actual !== undefined &&
-        (valueTypesCompatible(actual, declaredType, "value") ||
-          (actual === "json" && declaredType === "several_choices"))
-      );
-    }
+      return value !== undefined;
+    default:
+      return false;
   }
 };
 
@@ -259,6 +286,15 @@ const withinSupplied = (value: unknown): boolean => {
   }
 };
 
+/** Flow input names that receive the trusted revision, record type or capabilities of the context. */
+const contextFieldInputs: ReadonlySet<string> = new Set(["revision", "record_type_id", "capabilities"]);
+
+/** Whether the trusted context, never the surface, fills this flow input. */
+const contextFilledInput = (flowInputName: string, declaration: FlowInputDeclaration): boolean =>
+  declaration.type === "record_reference" ||
+  declaration.type === "record_reference_list" ||
+  contextFieldInputs.has(flowInputName);
+
 type CallerInputResolution =
   | Readonly<{ kind: "value"; value: unknown }>
   | Readonly<{ kind: "omitted" }>
@@ -266,8 +302,9 @@ type CallerInputResolution =
 
 /**
  * Resolves one declared caller input. Record references and the named context fields (revision,
- * record type and capabilities) come only from the trusted context; every other input may take the
- * surface's value, type-checked against the flow's own declaration.
+ * record type and capabilities) come only from the trusted context, and a surface value offered for
+ * one of them is refused rather than ignored; every other input may take the surface's value,
+ * type-checked against the flow's own declaration.
  */
 const resolveCallerInput = (
   flowInputName: string,
@@ -277,6 +314,9 @@ const resolveCallerInput = (
   suppliedValues: Readonly<Record<string, unknown>>,
 ): CallerInputResolution => {
   const single = singleContextRecord(context);
+
+  if (contextFilledInput(flowInputName, declaration) && Object.hasOwn(suppliedValues, callerName))
+    return { kind: "mismatch", code: "untrusted_identity_input" };
 
   if (declaration.type === "record_reference") {
     if (single === undefined) return { kind: "mismatch", code: "unexpected_event_context" };
@@ -299,8 +339,10 @@ const resolveCallerInput = (
     return { kind: "value", value: single.revision };
   }
   if (flowInputName === "record_type_id") {
+    const recordTypeId = contextRecordTypeId(context);
+    if (recordTypeId === undefined) return { kind: "mismatch", code: "unexpected_event_context" };
     if (declaration.type !== "text") return { kind: "mismatch", code: "incompatible_input_type" };
-    return { kind: "value", value: contextRecordTypeId(context) };
+    return { kind: "value", value: recordTypeId };
   }
   if (flowInputName === "capabilities") {
     if (single === undefined) return { kind: "mismatch", code: "unexpected_event_context" };
@@ -375,13 +417,14 @@ export function resolveComponentFlowInputs(
 
   const inputs: Record<string, unknown> = {};
   for (const [name, value] of Object.entries(binding.flow.inputs)) {
+    // Every bound input, literal or caller, must be one the flow declares, or the run refuses it.
+    const declaration = Object.hasOwn(flow.inputs, name) ? flow.inputs[name] : undefined;
+    if (declaration === undefined) return mismatch("unknown_input", name);
     if (value.kind === "literal") {
       inputs[name] = value.literal.value;
       continue;
     }
     if (value.kind !== "caller") return mismatch("unresolved_authored_value", name);
-    const declaration = flow.inputs[name];
-    if (declaration === undefined) return mismatch("unknown_input", name);
     if (!withinSupplied(suppliedValues[value.name]))
       return mismatch("incompatible_input_type", name);
     const resolved = resolveCallerInput(name, value.name, declaration, context, suppliedValues);
@@ -398,6 +441,7 @@ export function resolveComponentFlowInputs(
 }
 
 type ModuleQueryMatch = Readonly<{ moduleRootId: string; query: ModuleQueryDefinitionV3 }>;
+type QueryInputDeclaration = ModuleQueryDefinitionV3["inputs"][number];
 
 const findModuleQueries = (
   installed: InstalledRuntimeContext,
@@ -411,8 +455,12 @@ const findModuleQueries = (
   return matches;
 };
 
-/** Reads a parameter value typed to the query input it fills; a value the type cannot hold is dropped. */
-const coerceQueryValue = (raw: unknown, declaredType: string): unknown => {
+/**
+ * Reads a placement's fixed text as the query input type it fills. A fixed value is always authored
+ * text, so a number or yes/no input reads its canonical text form; anything else is kept as given
+ * and judged by {@link queryValueFits}.
+ */
+const coerceQueryValue = (raw: unknown, declaredType: QueryInputDeclaration["type"]): unknown => {
   if (typeof raw !== "string") return raw;
   if (declaredType === "number") {
     const value = Number(raw);
@@ -422,8 +470,45 @@ const coerceQueryValue = (raw: unknown, declaredType: string): unknown => {
   return raw;
 };
 
-const queryValueFits = (value: unknown, declaredType: string): boolean =>
-  suppliedValueFits(value, declaredType);
+const isPlainRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+/**
+ * Whether a placement or page value has the shape the published query input type carries, in the
+ * Query engine's own typed-input vocabulary (exact decimal text, a money amount and currency, an
+ * ISO date or date-time). The engine still checks declared ranges, lengths and patterns when it
+ * runs. Identity types never pass here, because only the trusted context supplies them.
+ */
+const queryValueFits = (value: unknown, declaration: QueryInputDeclaration): boolean => {
+  switch (declaration.type) {
+    case "text":
+      return typeof value === "string";
+    case "formatted_text":
+      return recordRichTextDocumentV2Schema.safeParse(value).success;
+    case "number":
+      return typeof value === "number" && Number.isFinite(value);
+    case "decimal_number":
+      return typeof value === "string" && parseExactDecimal(value) !== undefined;
+    case "money":
+      return (
+        isPlainRecord(value) &&
+        Object.keys(value).length === 2 &&
+        typeof value.amount === "string" &&
+        parseExactDecimal(value.amount) !== undefined &&
+        typeof value.currency === "string" &&
+        /^[A-Z]{3}$/.test(value.currency)
+      );
+    case "boolean":
+      return typeof value === "boolean";
+    case "date":
+      return isoDate.safeParse(value).success;
+    case "date_time":
+      return isoDateTime.safeParse(value).success;
+    case "record_reference":
+    case "organization_account_reference":
+      return false;
+  }
+};
 
 /**
  * Builds the exact published query input a data placement reads from. Each declared query input is
@@ -449,12 +534,12 @@ export function resolveComponentQueryInputs(
 
   const matches = findModuleQueries(installed, placement.queryId);
   if (matches.length === 0) return mismatch("unknown_query");
-  if (matches.length > 1) return mismatch("ambiguous_query_context_input");
+  if (matches.length > 1) return mismatch("ambiguous_query");
   const match = matches[0];
   if (match === undefined) return mismatch("unknown_query");
   const { moduleRootId, query } = match;
 
-  const declared = new Map<string, ModuleQueryDefinitionV3["inputs"][number]>();
+  const declared = new Map<string, QueryInputDeclaration>();
   for (const input of query.inputs) declared.set(input.key, input);
 
   const inputValues: Record<string, unknown> = {};
@@ -467,7 +552,7 @@ export function resolveComponentQueryInputs(
     const raw =
       parameter.source === "fixed"
         ? parameter.fixedValue
-        : parameter.pageParameter === undefined
+        : parameter.pageParameter === undefined || !Object.hasOwn(pageParameters, parameter.pageParameter)
           ? undefined
           : pageParameters[parameter.pageParameter];
     if (raw === undefined) {
@@ -475,13 +560,14 @@ export function resolveComponentQueryInputs(
       continue;
     }
     const value = coerceQueryValue(raw, declaration.type);
-    if (value === undefined || !queryValueFits(value, declaration.type))
+    if (value === undefined || !queryValueFits(value, declaration))
       return mismatch("incompatible_query_input_type", parameter.input);
     inputValues[parameter.input] = value;
   }
 
   // A record-reference input the placement's parameters leave open is filled only from the trusted
   // context, and only when the query declares exactly one such input, so the resolver never guesses.
+  // The value is the exact record reference the Query engine accepts: record type plus record.
   const openRecordInputs = query.inputs.filter(
     (input) => input.type === "record_reference" && !Object.hasOwn(inputValues, input.key),
   );
@@ -491,24 +577,17 @@ export function resolveComponentQueryInputs(
   if (single !== undefined) {
     for (const input of openRecordInputs) {
       if (input.type !== "record_reference") continue;
-      const accepts = input.recordTypes.some((allowed) => {
-        if (allowed.state !== "resolved") return false;
-        return (
-          sameId(allowed.moduleRootId, moduleRootId) &&
-          sameId(String(allowed.recordTypeId), single.recordTypeId)
-        );
-      });
+      const accepts = input.recordTypes.some(
+        (allowed) =>
+          allowed.state === "resolved" && sameId(String(allowed.recordTypeId), single.recordTypeId),
+      );
       if (!accepts) return mismatch("incompatible_query_input_type", input.key);
-      inputValues[input.key] = single.recordId;
+      inputValues[input.key] = { recordTypeId: single.recordTypeId, recordId: single.recordId };
     }
   }
 
   for (const input of query.inputs)
-    if (
-      input.required &&
-      !Object.hasOwn(inputValues, input.key) &&
-      input.type !== "record_reference"
-    )
+    if (input.required && !Object.hasOwn(inputValues, input.key))
       return mismatch("missing_query_input", input.key);
 
   return { kind: "resolved", moduleRootId, queryId: String(query.queryId), inputValues };
