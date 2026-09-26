@@ -81,7 +81,7 @@ async function openOrganization(event: DisplaySemanticEvent): Promise<void> {
   if (identity.kind === "temporarily_unavailable") redirect("/signed-in");
   if (identity.kind === "invalid_session_state" || identity.kind === "expired_or_revoked")
     redirect("/auth/session-ended");
-  if (identity.kind !== "active") redirect("/auth/sign-in?status=session-ended");
+  if (identity.kind !== "active") redirect("/auth/session-ended");
 
   const current = await loadOrganizationLauncher(identity.session);
   if (current.kind !== "available") redirect("/signed-in");
@@ -106,7 +106,7 @@ export default async function SignedInPage() {
     );
   if (result.kind === "invalid_session_state" || result.kind === "expired_or_revoked")
     redirect("/auth/session-ended");
-  if (result.kind !== "active") redirect("/auth/sign-in?status=session-ended");
+  if (result.kind !== "active") redirect("/auth/session-ended");
 
   const launcher = await retryOnceWhenTemporarilyUnavailable("organisations", () =>
     loadOrganizationLauncher(result.session),

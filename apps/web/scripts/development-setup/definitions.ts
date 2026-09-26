@@ -23,6 +23,7 @@ import {
   organisationAdministrationModule,
   serviceDeskApplication,
   serviceDeskModuleSources,
+  systemDirectoryModule,
   tenantAdministrationApplication,
   tenantAdministrationModule,
 } from "@vortex/modules";
@@ -61,10 +62,17 @@ export const developmentPublicationCatalogue: ImmutableDefinitionPublicationCata
   },
 };
 
+/**
+ * Every module source available to the development setup. `modulesInDependencyOrder` publishes
+ * only the modules reached through shipped application bindings and their dependencies. The
+ * System Directory source is available for the administration bindings delivered by #1356;
+ * until those bindings exist, the setup does not publish or install this module.
+ */
 const moduleSources = [
   iamModule,
   tenantAdministrationModule,
   organisationAdministrationModule,
+  systemDirectoryModule,
   ...crmModuleSources,
   ...serviceDeskModuleSources,
   ...operationsModuleSources,
