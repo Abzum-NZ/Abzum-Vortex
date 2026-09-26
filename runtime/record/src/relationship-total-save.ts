@@ -1,8 +1,8 @@
 import {
-  recordTypeDefinitionV2Schema,
+  recordTypeDefinitionV3Schema,
   type JsonValue,
-  type ModuleFieldV2,
-  type RecordTypeDefinitionV2,
+  type ModuleFieldV3,
+  type RecordTypeDefinitionV3,
   type SaveRecordCommandV2,
 } from "@vortex/contracts";
 import { evaluateRecordCalculationsV2 } from "./calculations";
@@ -17,12 +17,12 @@ import { evaluateRecordTotalsV2 } from "./totals";
 export type LockedRelationshipTotalRecord = Readonly<{
   recordKey: string;
   recordId?: string;
-  recordType: RecordTypeDefinitionV2;
+  recordType: RecordTypeDefinitionV3;
   concurrencyNumber?: number;
   existingValues: Readonly<Record<string, unknown>>;
   relationshipSources: readonly Readonly<{
     relationshipId: string;
-    sourceRecordType: RecordTypeDefinitionV2;
+    sourceRecordType: RecordTypeDefinitionV3;
     records: readonly Readonly<{
       recordKey?: string;
       fieldValues: Readonly<Record<string, unknown>>;
@@ -94,7 +94,7 @@ const dependencyFieldIds = (candidate: unknown): readonly string[] => {
   return [...found];
 };
 
-const totalDependencies = (field: Extract<ModuleFieldV2, { type: "total" }>) => [
+const totalDependencies = (field: Extract<ModuleFieldV3, { type: "total" }>) => [
   ...(field.settings.fieldId === undefined ? [] : [field.settings.fieldId]),
   ...dependencyFieldIds(field.settings.filter),
 ];
@@ -102,17 +102,17 @@ const totalDependencies = (field: Extract<ModuleFieldV2, { type: "total" }>) => 
 const nodeKey = (recordKey: string, fieldId: string) => `${recordKey}:${fieldId}`;
 
 type DerivedField =
-  Extract<ModuleFieldV2, { type: "calculation" }> | Extract<ModuleFieldV2, { type: "total" }>;
+  Extract<ModuleFieldV3, { type: "calculation" }> | Extract<ModuleFieldV3, { type: "total" }>;
 
-const derivedFields = (recordType: RecordTypeDefinitionV2) =>
+const derivedFields = (recordType: RecordTypeDefinitionV3) =>
   recordType.fields.filter(
     (field): field is DerivedField => field.type === "calculation" || field.type === "total",
   );
 
 const calculationRecordType = (
-  recordType: RecordTypeDefinitionV2,
+  recordType: RecordTypeDefinitionV3,
   targetFieldId: string,
-): RecordTypeDefinitionV2 => {
+): RecordTypeDefinitionV3 => {
   const included = new Set<string>([targetFieldId]);
   let changed = true;
   while (changed) {
@@ -130,7 +130,7 @@ const calculationRecordType = (
       }
     }
   }
-  return recordTypeDefinitionV2Schema.parse({
+  return recordTypeDefinitionV3Schema.parse({
     ...recordType,
     fields: recordType.fields.filter(
       (field) => field.type !== "calculation" || included.has(field.fieldId),
@@ -139,10 +139,10 @@ const calculationRecordType = (
 };
 
 const totalRecordType = (
-  recordType: RecordTypeDefinitionV2,
+  recordType: RecordTypeDefinitionV3,
   targetFieldId: string,
-): RecordTypeDefinitionV2 =>
-  recordTypeDefinitionV2Schema.parse({
+): RecordTypeDefinitionV3 =>
+  recordTypeDefinitionV3Schema.parse({
     ...recordType,
     fields: recordType.fields.filter(
       (field) => field.type !== "total" || field.fieldId === targetFieldId,

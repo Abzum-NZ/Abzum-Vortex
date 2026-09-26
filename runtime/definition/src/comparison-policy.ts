@@ -1,7 +1,5 @@
 import type {
   ApplicationContentV2,
-  ModuleContent,
-  ModuleContentV2,
   ModuleContentV3,
   VersionImpact,
   VersionImpactReason,
@@ -995,8 +993,8 @@ const compareFlow = (
 };
 
 export const compareModuleContents = (
-  previousContent: ModuleContent | ModuleContentV2 | ModuleContentV3,
-  candidateContent: ModuleContent | ModuleContentV2 | ModuleContentV3,
+  previousContent: ModuleContentV3,
+  candidateContent: ModuleContentV3,
 ): VersionImpactReason[] => {
   const reasons: VersionImpactReason[] = [];
   const previous = asRecord(previousContent);
@@ -1381,15 +1379,6 @@ const compareApplicationSharedContent = (
   );
   compareKeyed(
     reasons,
-    previous.workflows as RecordValue[],
-    candidate.workflows as RecordValue[],
-    "workflowId",
-    "workflow",
-    (left, right) => compareWorkflow(reasons, left, right),
-    () => "major",
-  );
-  compareKeyed(
-    reasons,
     previous.connectionBindings as RecordValue[],
     candidate.connectionBindings as RecordValue[],
     "bindingId",
@@ -1695,53 +1684,6 @@ const comparePipeline = (
     reasons.push(makeReason("patch", "presentation_changed", "pipeline", "order", id));
 };
 
-const compareWorkflow = (
-  reasons: VersionImpactReason[],
-  previous: RecordValue,
-  candidate: RecordValue,
-): void => {
-  const id = candidate.workflowId;
-  pushChange(
-    reasons,
-    previous.name,
-    candidate.name,
-    "patch",
-    "presentation_changed",
-    "workflow",
-    "name",
-    id,
-  );
-  pushChange(
-    reasons,
-    previous.key,
-    candidate.key,
-    "major",
-    "component_key_changed",
-    "workflow",
-    "key",
-    id,
-  );
-  for (const key of ["trigger", "runAs", "edges", "maximumNestingDepth"])
-    pushChange(
-      reasons,
-      previous[key],
-      candidate[key],
-      "major",
-      "existing_behavior_changed",
-      "workflow",
-      "behavior",
-      id,
-    );
-  compareKeyed(
-    reasons,
-    previous.nodes as RecordValue[],
-    candidate.nodes as RecordValue[],
-    "nodeId",
-    "workflow_node",
-    (left, right) => compareSimpleComponent(reasons, "workflow_node", right.nodeId, left, right),
-  );
-};
-
 const compareInterface = (
   reasons: VersionImpactReason[],
   previous: RecordValue,
@@ -1995,7 +1937,7 @@ const normaliseRecordType = (recordType: RecordValue): RecordValue => ({
   customActionIds: sorted(recordType.customActionIds as unknown[]),
 });
 
-export const normaliseModuleContent = <T extends ModuleContent | ModuleContentV2 | ModuleContentV3>(
+export const normaliseModuleContent = <T extends ModuleContentV3>(
   content: T,
 ): T => {
   const value = asRecord(content);
@@ -2083,14 +2025,6 @@ const normaliseApplicationSharedContent = (content: ApplicationContentV2): Recor
       })),
       "eventId",
     ),
-    workflows: sorted(
-      (value.workflows as RecordValue[]).map((workflow) => ({
-        ...workflow,
-        nodes: sorted(workflow.nodes as unknown[], "nodeId"),
-        edges: sorted(workflow.edges as unknown[]),
-      })),
-      "workflowId",
-    ),
     connectionBindings: sorted(
       (value.connectionBindings as RecordValue[]).map((binding) => ({
         ...binding,
@@ -2135,16 +2069,6 @@ const assertUniqueValues = (values: unknown[]): void => {
   const identities = values.map(canonicalJson);
   if (new Set(identities).size !== identities.length)
     refuseVersionImpact("ambiguous_component_identity");
-};
-
-const assertUniqueWorkflowEdges = (edges: RecordValue[]): void => {
-  assertUniqueValues(
-    edges.map((edge) => ({
-      fromNodeId: edge.fromNodeId,
-      toNodeId: edge.toNodeId,
-      ...(edge.outcome === undefined ? {} : { outcome: edge.outcome }),
-    })),
-  );
 };
 
 const currencyConfiguration = (settings: RecordValue): RecordValue => ({
@@ -2237,7 +2161,6 @@ const assertUnambiguousApplicationSharedContent = (content: unknown): void => {
     ["pipelines", "pipelineId"],
     ["actions", "actionId"],
     ["events", "eventId"],
-    ["workflows", "workflowId"],
     ["connectionBindings", "bindingId"],
     ["interfaces", "interfaceId"],
     ["publicAddresses", "addressId"],
@@ -2250,10 +2173,6 @@ const assertUnambiguousApplicationSharedContent = (content: unknown): void => {
     assertUniqueValues(role.permissionKeys as unknown[]);
   for (const pipeline of value.pipelines as RecordValue[])
     assertUnique(pipeline.stages as RecordValue[], "key");
-  for (const workflow of value.workflows as RecordValue[]) {
-    assertUnique(workflow.nodes as RecordValue[], "nodeId");
-    assertUniqueWorkflowEdges(workflow.edges as RecordValue[]);
-  }
   const flowBindings = value.flowBindings as RecordValue[];
   const flowBindingKeys = flowBindings.map(
     (binding) => `${binding.controlId}:${binding.eventId}`,
@@ -2848,7 +2767,6 @@ export const normaliseApplicationContentV2 = (
     permissions: common.permissions,
     actions: common.actions,
     events: common.events,
-    workflows: common.workflows,
     connectionBindings: common.connectionBindings,
     interfaces: common.interfaces,
     publicAddresses: common.publicAddresses,

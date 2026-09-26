@@ -3,20 +3,20 @@ import {
   currencyCodeV2Schema,
   exactDecimalTextV2Schema,
   exactDecimalWithinBoundsV2,
-  moduleFieldV2Schema,
+  moduleFieldV3Schema,
   moduleFieldValueV2Schemas,
   moneyValueV2Schema,
   normalizeExactDecimal,
   parseExactDecimal,
-  recordTypeDefinitionV2Schema,
+  recordTypeDefinitionV3Schema,
   sourceExactDecimalTextV2Schema,
   sourceModuleFieldValueV2Schemas,
   sourceMoneyValueV2Schema,
   type FileId,
   type JsonValue,
-  type ModuleFieldV2,
+  type ModuleFieldV3,
   type PermissionId,
-  type RecordTypeDefinitionV2,
+  type RecordTypeDefinitionV3,
 } from "@vortex/contracts";
 
 type ValueMap = Readonly<Record<string, unknown>>;
@@ -75,7 +75,7 @@ export type RecordFieldValuePendingCheck =
 
 export type PrepareRecordFieldValuesV2Input = Readonly<{
   operation: "create" | "update";
-  recordType: RecordTypeDefinitionV2;
+  recordType: RecordTypeDefinitionV3;
   submittedValues: ValueMap;
   existingValues?: ValueMap;
   organizationCurrency?: string;
@@ -116,7 +116,7 @@ export type PrepareInitialRecordFieldCandidateV2Result =
   | Readonly<{ success: false; issues: readonly RecordFieldValuePreparationIssue[] }>;
 
 export type FinalizeRecordFieldCandidateV2Input = Readonly<{
-  recordType: RecordTypeDefinitionV2;
+  recordType: RecordTypeDefinitionV3;
   initialCandidate: InitialRecordFieldCandidateV2;
   candidateValues: ValueMap;
   requirements?: readonly RecordFieldValueRequirementV2[];
@@ -139,11 +139,11 @@ type ValueOrigin = RecordFieldValueOriginV2 | "candidate";
 type FieldPolicyMode = "structural" | "final";
 
 export type PersistedRecordFieldValueInput = Readonly<{
-  field: ModuleFieldV2;
+  field: ModuleFieldV3;
   value: unknown;
 }>;
 
-const generatedFieldTypes = new Set<ModuleFieldV2["type"]>([
+const generatedFieldTypes = new Set<ModuleFieldV3["type"]>([
   "reference_number",
   "calculation",
   "total",
@@ -196,8 +196,8 @@ const validateExactBounds = (
   );
 };
 
-const syntheticFieldAcceptsDefault = (field: ModuleFieldV2, value: unknown): boolean =>
-  moduleFieldV2Schema.safeParse({ ...field, default: value }).success;
+const syntheticFieldAcceptsDefault = (field: ModuleFieldV3, value: unknown): boolean =>
+  moduleFieldV3Schema.safeParse({ ...field, default: value }).success;
 
 const collectRichTextFileChecks = (
   value: Extract<JsonValue, { blocks?: unknown }>,
@@ -234,7 +234,7 @@ const collectChoicePermission = (
 };
 
 const normalizeMoney = (
-  field: Extract<ModuleFieldV2, { type: "money" }>,
+  field: Extract<ModuleFieldV3, { type: "money" }>,
   value: unknown,
   origin: ValueOrigin,
   path: ValuePath,
@@ -271,7 +271,7 @@ const normalizeMoney = (
   return { amount, currency: parsed.data.currency };
 };
 
-type TableField = Extract<ModuleFieldV2, { type: "table" }>;
+type TableField = Extract<ModuleFieldV3, { type: "table" }>;
 type TableColumn = TableField["settings"]["columns"][number];
 
 const tableCellAccepts = (parent: TableField, column: TableColumn, value: unknown): boolean => {
@@ -281,7 +281,7 @@ const tableCellAccepts = (parent: TableField, column: TableColumn, value: unknow
     settings: column.settings,
     default: value,
   };
-  return moduleFieldV2Schema.safeParse(candidate).success;
+  return moduleFieldV3Schema.safeParse(candidate).success;
 };
 
 const normalizeTableMoney = (
@@ -426,7 +426,7 @@ const normalizeTable = (
 };
 
 const normalizeGeneratedExisting = (
-  field: Extract<ModuleFieldV2, { type: "reference_number" | "calculation" | "total" }>,
+  field: Extract<ModuleFieldV3, { type: "reference_number" | "calculation" | "total" }>,
   value: unknown,
 ): JsonValue | undefined => {
   const resultType =
@@ -444,7 +444,7 @@ const normalizeGeneratedExisting = (
 };
 
 const normalizeValue = (
-  field: ModuleFieldV2,
+  field: ModuleFieldV3,
   value: unknown,
   origin: ValueOrigin,
   context: PreparationContext,
@@ -455,7 +455,7 @@ const normalizeValue = (
   if (generatedFieldTypes.has(field.type)) {
     if (origin !== "existing") return issue(context, "generated_field_input", path, field.fieldId);
     const parsed = normalizeGeneratedExisting(
-      field as Extract<ModuleFieldV2, { type: "reference_number" | "calculation" | "total" }>,
+      field as Extract<ModuleFieldV3, { type: "reference_number" | "calculation" | "total" }>,
       value,
     );
     return parsed ?? issue(context, "invalid_existing_value", path, field.fieldId);
@@ -602,7 +602,7 @@ const normalizeValue = (
 export const persistedRecordFieldValueMatches = (
   input: PersistedRecordFieldValueInput,
 ): boolean => {
-  const field = moduleFieldV2Schema.safeParse(input.field);
+  const field = moduleFieldV3Schema.safeParse(input.field);
   if (!field.success) return false;
   const context: PreparationContext = { issues: [], pendingChecks: [] };
   return normalizeValue(field.data, input.value, "existing", context, "final", true) !== undefined;
@@ -623,7 +623,7 @@ const preparationContext = (organizationCurrency: string | undefined): Preparati
 export const prepareInitialRecordFieldCandidateV2 = (
   input: PrepareRecordFieldValuesV2Input,
 ): PrepareInitialRecordFieldCandidateV2Result => {
-  const trustedRecordType = recordTypeDefinitionV2Schema.parse(input.recordType);
+  const trustedRecordType = recordTypeDefinitionV3Schema.parse(input.recordType);
   const context = preparationContext(input.organizationCurrency);
   if (!isValueMap(input.submittedValues)) issue(context, "invalid_input", ["submittedValues"]);
   if (input.operation === "update" && !isValueMap(input.existingValues))
@@ -637,7 +637,7 @@ export const prepareInitialRecordFieldCandidateV2 = (
 
   const submittedValues = input.submittedValues;
   const existingValues = input.existingValues ?? {};
-  const fieldsById = new Map<string, ModuleFieldV2>(
+  const fieldsById = new Map<string, ModuleFieldV3>(
     trustedRecordType.fields.map((field) => [field.fieldId, field]),
   );
   const candidateValues: Record<string, JsonValue> = {};
@@ -729,7 +729,7 @@ const finalizeRecordFieldCandidateV2Internal = (
   input: FinalizeRecordFieldCandidateV2Input,
   requiredGeneratedFieldIds: ReadonlySet<string>,
 ): PrepareRecordFieldValuesV2Result => {
-  const trustedRecordType = recordTypeDefinitionV2Schema.parse(input.recordType);
+  const trustedRecordType = recordTypeDefinitionV3Schema.parse(input.recordType);
   const context = preparationContext(input.organizationCurrency);
   if (!isValueMap(input.candidateValues)) issue(context, "invalid_input", ["candidateValues"]);
   if (input.initialCandidate.recordTypeId !== trustedRecordType.recordTypeId)
@@ -741,7 +741,7 @@ const finalizeRecordFieldCandidateV2Internal = (
     issue(context, "invalid_input", ["organizationCurrency"]);
   if (context.issues.length > 0) return { success: false, issues: context.issues };
 
-  const fieldsById = new Map<string, ModuleFieldV2>(
+  const fieldsById = new Map<string, ModuleFieldV3>(
     trustedRecordType.fields.map((field) => [field.fieldId, field]),
   );
   for (const fieldId of requiredGeneratedFieldIds) {
@@ -772,7 +772,7 @@ const finalizeRecordFieldCandidateV2Internal = (
 
     if (generatedFieldTypes.has(field.type)) {
       const normalized = normalizeGeneratedExisting(
-        field as Extract<ModuleFieldV2, { type: "reference_number" | "calculation" | "total" }>,
+        field as Extract<ModuleFieldV3, { type: "reference_number" | "calculation" | "total" }>,
         value,
       );
       if (normalized === undefined)

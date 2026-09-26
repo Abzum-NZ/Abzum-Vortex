@@ -1,14 +1,14 @@
 import {
   jsonValueSchema,
-  recordTypeDefinitionV2Schema,
+  recordTypeDefinitionV3Schema,
   timestampSchema,
-  type ModuleFieldV2,
-  type RecordTypeDefinitionV2,
+  type ModuleFieldV3,
+  type RecordTypeDefinitionV3,
 } from "@vortex/contracts";
 import type { RelationshipTotalParentMutation } from "./relationship-total-save";
 
 export type DeriveEarliestPendingDeadlineTransitionV2Input = Readonly<{
-  recordType: RecordTypeDefinitionV2;
+  recordType: RecordTypeDefinitionV3;
   finalAuthoritativeFieldValues: Readonly<Record<string, unknown>>;
   organizationTimeZone: string;
 }>;
@@ -24,7 +24,7 @@ type ExactInstant = Readonly<{ epochSecond: bigint; fraction: string }>;
 const isValueMap = (value: unknown): value is Readonly<Record<string, unknown>> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
-const fieldResultType = (field: ModuleFieldV2): string =>
+const fieldResultType = (field: ModuleFieldV3): string =>
   field.type === "calculation" || field.type === "total" ? field.settings.resultType : field.type;
 
 /**
@@ -34,7 +34,7 @@ const fieldResultType = (field: ModuleFieldV2): string =>
  * Both a calculation and a total must compare against the organisation-local
  * date rather than the UTC date, so they are treated identically here.
  */
-export const isDateDeadlineDueFieldV2 = (field: ModuleFieldV2): boolean =>
+export const isDateDeadlineDueFieldV2 = (field: ModuleFieldV3): boolean =>
   fieldResultType(field) === "date";
 
 const utcDate = (year: number, month: number, day: number): Date => {
@@ -151,7 +151,7 @@ const compareInstants = (left: ExactInstant, right: ExactInstant): -1 | 0 | 1 =>
 export const deriveEarliestPendingDeadlineTransitionV2 = (
   input: DeriveEarliestPendingDeadlineTransitionV2Input,
 ): PendingDeadlineTransitionV2 | undefined => {
-  const recordType = recordTypeDefinitionV2Schema.safeParse(input.recordType);
+  const recordType = recordTypeDefinitionV3Schema.safeParse(input.recordType);
   if (
     !recordType.success ||
     !isValueMap(input.finalAuthoritativeFieldValues) ||
@@ -211,7 +211,7 @@ export const deriveEarliestPendingDeadlineTransitionV2 = (
 export type DeadlineDueParentRecordLookup = Readonly<{
   recordKey: string;
   recordId?: string;
-  recordType: RecordTypeDefinitionV2;
+  recordType: RecordTypeDefinitionV3;
   existingValues: Readonly<Record<string, unknown>>;
 }>;
 
