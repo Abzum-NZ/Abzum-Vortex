@@ -391,43 +391,47 @@ export function ApplicationPageView({
       const data = model.data[placementId];
       const bindings = model.bindings[placementId] ?? [];
       const events: EventHandlers = {};
-      for (const kind of ["row_clicked", "row_action", "bulk_action", "inline_edit"] as const)
-        if (bindings.some((binding) => binding.event === kind))
-          events[kind] = (event: DisplaySemanticEvent) => {
-            const binding = bindingFor(bindings, event);
-            if (binding !== undefined && !busy) void runBinding(binding, suppliedValues(event));
-          };
-      events.refresh = () => router.refresh();
-      events.selection_changed = (event: DisplaySemanticEvent) => {
-        if (event.event !== "selection_changed") return;
-        setSelection((current) => {
-          const held = new Set(current[placementId] ?? []);
-          if (event.selected) held.add(event.recordId);
-          else held.delete(event.recordId);
-          return { ...current, [placementId]: [...held] };
-        });
-      };
-      events.sort_changed = (event: DisplaySemanticEvent) => {
-        if (event.event !== "sort_changed") return;
-        setQuery((parameters) =>
-          parameters.set(`sort.${placementId}`, `${event.columnKey}:${event.direction}`),
-        );
-      };
-      events.filter_changed = (event: DisplaySemanticEvent) => {
-        if (event.event !== "filter_changed") return;
-        setQuery((parameters) => {
-          const name = `filter.${placementId}.${event.field}`;
-          if (event.value === "") parameters.delete(name);
-          else parameters.set(name, event.value);
-        });
-      };
-      events.search_changed = (event: DisplaySemanticEvent) => {
-        if (event.event !== "search_changed") return;
-        setQuery((parameters) => {
-          if (event.query.trim() === "") parameters.delete(`search.${placementId}`);
-          else parameters.set(`search.${placementId}`, event.query);
-        });
-      };
+      // Display callbacks belong only to a placement with projected data; a control placement's
+      // own parser refuses an event name it does not declare, so they are never added to a form.
+      if (data !== undefined) {
+        for (const kind of ["row_clicked", "row_action", "bulk_action", "inline_edit"] as const)
+          if (bindings.some((binding) => binding.event === kind))
+            events[kind] = (event: DisplaySemanticEvent) => {
+              const binding = bindingFor(bindings, event);
+              if (binding !== undefined && !busy) void runBinding(binding, suppliedValues(event));
+            };
+        events.refresh = () => router.refresh();
+        events.selection_changed = (event: DisplaySemanticEvent) => {
+          if (event.event !== "selection_changed") return;
+          setSelection((current) => {
+            const held = new Set(current[placementId] ?? []);
+            if (event.selected) held.add(event.recordId);
+            else held.delete(event.recordId);
+            return { ...current, [placementId]: [...held] };
+          });
+        };
+        events.sort_changed = (event: DisplaySemanticEvent) => {
+          if (event.event !== "sort_changed") return;
+          setQuery((parameters) =>
+            parameters.set(`sort.${placementId}`, `${event.columnKey}:${event.direction}`),
+          );
+        };
+        events.filter_changed = (event: DisplaySemanticEvent) => {
+          if (event.event !== "filter_changed") return;
+          setQuery((parameters) => {
+            const name = `filter.${placementId}.${event.field}`;
+            if (event.value === "") parameters.delete(name);
+            else parameters.set(name, event.value);
+          });
+        };
+        events.search_changed = (event: DisplaySemanticEvent) => {
+          if (event.event !== "search_changed") return;
+          setQuery((parameters) => {
+            if (event.query.trim() === "") parameters.delete(`search.${placementId}`);
+            else parameters.set(`search.${placementId}`, event.query);
+          });
+        };
+      }
       // A form container emits its one submission for a gesture; it runs the bound flow once
       // through the runtime, which resumes every pause with the server-issued continuation.
       const submitBinding = bindings.find((binding) => binding.event === "form_submit");
@@ -451,7 +455,7 @@ export function ApplicationPageView({
           void applyDispatch(formBlock.reset(asFormBinding(placementId, resetBinding)));
         };
       if (data === undefined) {
-        inputs[placementId] = { events };
+        if (Object.keys(events).length > 0) inputs[placementId] = { events };
         continue;
       }
       const held = selection[placementId];
