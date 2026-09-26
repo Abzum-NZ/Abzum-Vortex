@@ -176,6 +176,7 @@ const logPlacementFailure = (
   address: Readonly<{ application: PermittedApplication; pageKey: string }>,
   placementId: string,
   reason:
+    | "read_model_not_served"
     | "query_not_bound"
     | "query_unavailable"
     | "query_refused"
@@ -306,6 +307,13 @@ export const loadApplicationPage = async (
     const settings = placement.settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
     const tableContract = readRecordsTableContract(settings);
     const detailContract = tableContract === undefined ? readRecordDetailContract(settings) : undefined;
+    // A placement still bound to a legacy read model has no reader on this page: system record
+    // types are read through the query path. It must never fall through to an empty display.
+    if (placement.readModel !== undefined) {
+      logPlacementFailure(address, placementId, "read_model_not_served");
+      data[placementId] = { status: "error" };
+      continue;
+    }
     if (tableContract === undefined && detailContract === undefined) continue;
 
     const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;

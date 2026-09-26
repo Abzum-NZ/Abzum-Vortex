@@ -61,7 +61,10 @@
           "vortex.organisation_administration.privacy_request_case.export",
           "vortex.organisation_administration.privacy_request_case.record_privacy_request",
           "vortex.organisation_administration.privacy_request_case.complete",
-          "vortex.organisation_administration.privacy_request_case.refuse"
+          "vortex.organisation_administration.privacy_request_case.refuse",
+          "vortex.organisation_administration.person.read",
+          "vortex.organisation_administration.organization_invitation.read",
+          "vortex.organisation_administration.organization_settings.read"
         ]
       }
     ],
@@ -446,12 +449,69 @@
                 "accounts_region": {
                   "block": {
                     "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.0.0"
+                    "release_version": "1.2.0"
                   },
                   "settings": {
                     "title": {
                       "kind": "text",
                       "value": "Organisation accounts"
+                    },
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:person.display_name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Display name"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:person.state"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "State"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:person.language"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Language"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:person.time_zone"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Time zone"
+                            }
+                          }
+                        }
+                      ]
                     }
                   },
                   "theme_overrides": {},
@@ -467,7 +527,7 @@
                     }
                   },
                   "slots": {},
-                  "read_model": "organization_accounts"
+                  "query": "vortex.organisation_administration:people"
                 },
                 "form_suspend_account": {
                   "block": {
@@ -959,12 +1019,69 @@
                 "invitations_region": {
                   "block": {
                     "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.0.0"
+                    "release_version": "1.2.0"
                   },
                   "settings": {
                     "title": {
                       "kind": "text",
                       "value": "Invitations"
+                    },
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organization_invitation.invited_email"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Invited email"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organization_invitation.state"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "State"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organization_invitation.invited_at"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Invited at"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organization_invitation.expires_at"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Expires at"
+                            }
+                          }
+                        }
+                      ]
                     }
                   },
                   "theme_overrides": {},
@@ -980,7 +1097,7 @@
                     }
                   },
                   "slots": {},
-                  "read_model": "organization_invitations"
+                  "query": "vortex.organisation_administration:organization_invitations"
                 },
                 "form_create_invitation": {
                   "block": {
@@ -1319,12 +1436,95 @@
                 "settings_region": {
                   "block": {
                     "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.0.0"
+                    "release_version": "1.2.0"
                   },
                   "settings": {
                     "title": {
                       "kind": "text",
                       "value": "Current runtime settings"
+                    },
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organization_settings.language"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Language"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organization_settings.time_zone"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Time zone"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organization_settings.currency"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Currency"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organization_settings.date_format"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Date format"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organization_settings.number_format"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Number format"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organization_settings.default_application_root_id"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Default application"
+                            }
+                          }
+                        }
+                      ]
                     }
                   },
                   "theme_overrides": {},
@@ -1340,7 +1540,7 @@
                     }
                   },
                   "slots": {},
-                  "read_model": "organization_runtime_settings"
+                  "query": "vortex.organisation_administration:organization_settings"
                 },
                 "form_update_runtime_settings": {
                   "block": {

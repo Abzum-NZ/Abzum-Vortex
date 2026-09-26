@@ -51,7 +51,9 @@
           "vortex.tenant_administration.organization_lifecycle_request.soft_delete",
           "vortex.tenant_administration.organization_lifecycle_request.restore",
           "vortex.tenant_administration.organization_lifecycle_request.export",
-          "vortex.tenant_administration.organization_lifecycle_request.submit"
+          "vortex.tenant_administration.organization_lifecycle_request.submit",
+          "vortex.tenant_administration.organization.read",
+          "vortex.tenant_administration.tenant_administrator.read"
         ]
       }
     ],
@@ -323,7 +325,7 @@
                     },
                     "text": {
                       "kind": "text",
-                      "value": "Review tenant structure and organisation lifecycle requests. Protected tenant structure and the organisation's role assignment ledger are read live on their own pages; nothing is copied into application records. A tenant administrator listing is not yet available."
+                      "value": "Review tenant structure and organisation lifecycle requests. Protected tenant structure and tenant administrators are read live on their own pages; nothing is copied into application records."
                     }
                   },
                   "theme_overrides": {},
@@ -365,12 +367,82 @@
                 "structure_region": {
                   "block": {
                     "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.0.0"
+                    "release_version": "1.2.0"
                   },
                   "settings": {
                     "title": {
                       "kind": "text",
                       "value": "Tenant structure"
+                    },
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.tenant_administration:organization.display_name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Display name"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.tenant_administration:organization.short_name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Short name"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.tenant_administration:organization.state"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "State"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.tenant_administration:organization.state_changed_at"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "State changed"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.tenant_administration:organization.created_at"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Created"
+                            }
+                          }
+                        }
+                      ]
                     }
                   },
                   "theme_overrides": {},
@@ -386,7 +458,7 @@
                     }
                   },
                   "slots": {},
-                  "read_model": "tenant_structure"
+                  "query": "vortex.tenant_administration:organizations"
                 }
               },
               "order": {
@@ -422,7 +494,7 @@
                     },
                     "text": {
                       "kind": "text",
-                      "value": "A tenant administrator listing is not yet available: no protected read model provides one. The role assignment ledger below is not that list; it is the organisation's role assignment ledger, including revoked and expired entries, read live from protected Access. Granting and revoking tenant-administrator access runs through IAM, never from this application."
+                      "value": "Tenant administrators are read live from protected Identity data under your current authority; nothing is copied into application records. Granting and revoking tenant-administrator access runs through IAM, never from this application."
                     }
                   },
                   "theme_overrides": {},
@@ -442,12 +514,69 @@
                 "administrators_region": {
                   "block": {
                     "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.0.0"
+                    "release_version": "1.2.0"
                   },
                   "settings": {
                     "title": {
                       "kind": "text",
-                      "value": "Role assignment ledger"
+                      "value": "Tenant administrators"
+                    },
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.tenant_administration:tenant_administrator.identity_id"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Identity"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.tenant_administration:tenant_administrator.starts_at"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Starts"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.tenant_administration:tenant_administrator.expires_at"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Expires"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.tenant_administration:tenant_administrator.state"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "State"
+                            }
+                          }
+                        }
+                      ]
                     }
                   },
                   "theme_overrides": {},
@@ -463,7 +592,7 @@
                     }
                   },
                   "slots": {},
-                  "read_model": "effective_assignments"
+                  "query": "vortex.tenant_administration:tenant_administrators"
                 }
               },
               "order": {
