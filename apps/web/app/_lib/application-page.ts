@@ -187,8 +187,6 @@ const logPlacementFailure = (
   reason:
     | "read_model_not_served"
     | "query_not_bound"
-    | "query_unavailable"
-    | "query_refused"
     | "subject_not_addressed"
     | "subject_unavailable"
     | "subject_refused"
@@ -295,7 +293,6 @@ export const loadApplicationPage = async (
   if (navigation.kind !== "available") return navigation;
 
   const queries = createProtectedQueryService({ ...dependencies, continuationKey });
-  const tables = createRecordsTableQueryResolver(queries);
   const subjects = createPageSubjectReader(dependencies);
 
   const data: Record<string, PageDataState> = {};
@@ -399,6 +396,16 @@ export const loadApplicationPage = async (
     const fieldLabels = fieldLabelsOf(bound.module);
 
     if (tableContract !== undefined) {
+      let queryRefusalReasonCode: string | undefined;
+      const tables = createRecordsTableQueryResolver({
+        run: async (querySession, querySelection, command) => {
+          const result = await queries.run(querySession, querySelection, command);
+          if (result.kind === "available" && result.value.outcome === "refused") {
+            queryRefusalReasonCode = result.value.reasonCode;
+          }
+          return result;
+        },
+      });
       const pageParameters: Record<string, JsonValue> = {};
       for (const parameter of tableContract.parameters) {
         const raw = parameter.pageParameter === undefined ? undefined : first(parameters[parameter.pageParameter]);
@@ -419,13 +426,14 @@ export const loadApplicationPage = async (
         search: state.search,
       });
       if (resolved.kind === "unavailable") {
-        logPlacementFailure(address, placementId, "query_unavailable");
+        console.error("[page] data placement unavailable: class=protected_query code=query_unavailable");
         data[placementId] = { status: "error" };
       } else if (resolved.kind === "refused") {
-        logPlacementFailure(address, placementId, "query_refused");
+        console.error(
+          `[page] data placement refused: class=${queryRefusalReasonCode === undefined ? "records_table" : "protected_query"} code=${queryRefusalReasonCode ?? "query_refused"}`,
+        );
         data[placementId] = { status: "refused", reason: "not_permitted" };
-      }
-      else if (resolved.display.status === "empty") data[placementId] = { status: "empty" };
+      } else if (resolved.display.status === "empty") data[placementId] = { status: "empty" };
       else
         data[placementId] = {
           status: "ready",
