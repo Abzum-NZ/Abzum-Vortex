@@ -299,7 +299,188 @@
     ],
     "public_addresses": [],
     "platform_block_dependencies": [],
-    "shells": [],
+    "shells": [
+      {
+        "id": "shell_iam",
+        "key": "iam_shell",
+        "name": "IAM shell",
+        "layout": {
+          "placements": {
+            "shell_root": {
+              "block": {
+                "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                "release_version": "1.0.0"
+              },
+              "settings": {
+                "direction": {
+                  "kind": "choice",
+                  "value": "column"
+                },
+                "gap": {
+                  "kind": "choice",
+                  "value": "medium"
+                }
+              },
+              "theme_overrides": {},
+              "responsive": {
+                "desktop": {
+                  "visible": true,
+                  "width": {
+                    "kind": "fill"
+                  },
+                  "height": {
+                    "kind": "content"
+                  }
+                }
+              },
+              "slots": {
+                "header": {
+                  "placements": {
+                    "shell_heading": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.0.0"
+                      },
+                      "settings": {
+                        "text": {
+                          "kind": "text",
+                          "value": "IAM"
+                        },
+                        "level": {
+                          "kind": "choice",
+                          "value": "one"
+                        }
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      },
+                      "slots": {}
+                    }
+                  },
+                  "order": {
+                    "desktop": [
+                      "shell_heading"
+                    ]
+                  }
+                },
+                "content": {
+                  "placements": {
+                    "shell_body": {
+                      "block": {
+                        "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                        "release_version": "1.0.0"
+                      },
+                      "settings": {
+                        "direction": {
+                          "kind": "choice",
+                          "value": "row"
+                        },
+                        "gap": {
+                          "kind": "choice",
+                          "value": "medium"
+                        }
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      },
+                      "slots": {
+                        "menu": {
+                          "placements": {
+                            "shell_navigation": {
+                              "block": {
+                                "block_id": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
+                                "release_version": "1.0.0"
+                              },
+                              "settings": {
+                                "title": {
+                                  "kind": "text",
+                                  "value": "IAM"
+                                }
+                              },
+                              "theme_overrides": {},
+                              "responsive": {
+                                "desktop": {
+                                  "visible": true,
+                                  "width": {
+                                    "kind": "fill"
+                                  },
+                                  "height": {
+                                    "kind": "content"
+                                  }
+                                }
+                              },
+                              "slots": {}
+                            }
+                          },
+                          "order": {
+                            "desktop": [
+                              "shell_navigation"
+                            ]
+                          }
+                        },
+                        "content": {
+                          "placements": {},
+                          "order": {
+                            "desktop": []
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "order": {
+                    "desktop": [
+                      "shell_body"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "order": {
+            "desktop": [
+              "shell_root"
+            ]
+          }
+        },
+        "content_slots": [
+          {
+            "id": "slot_primary",
+            "key": "primary",
+            "label": "Primary",
+            "required": true,
+            "allowed_child_categories": [
+              "content",
+              "data",
+              "figures",
+              "record",
+              "actions",
+              "input",
+              "layout"
+            ],
+            "parent_placement": "shell_body",
+            "parent_slot": "content"
+          }
+        ]
+      }
+    ],
     "pages": [
       {
         "id": "page_iam_profile",
@@ -308,8 +489,9 @@
         "type": "dashboard",
         "permission": "application.iam.open",
         "composition": {
-          "shell_kind": "default",
-          "main": {
+          "shell_kind": "application",
+          "shell": "shell_iam",
+          "content": { "slot_primary": {
             "placements": {
               "iam_profile_heading": {
                 "block": {
@@ -593,7 +775,7 @@
                 "iam_profile_form"
               ]
             }
-          }
+          } }
         }
       },
       {
@@ -603,8 +785,9 @@
         "type": "dashboard",
         "permission": "platform.organization.permissions.read",
         "composition": {
-          "shell_kind": "default",
-          "main": {
+          "shell_kind": "application",
+          "shell": "shell_iam",
+          "content": { "slot_primary": {
             "placements": {
               "iam_overview_heading": {
                 "block": {
@@ -641,7 +824,7 @@
                 "iam_overview_heading"
               ]
             }
-          }
+          } }
         }
       },
       {
@@ -651,8 +834,9 @@
         "type": "dashboard",
         "permission": "vortex.organisation_administration.person.read",
         "composition": {
-          "shell_kind": "default",
-          "main": {
+          "shell_kind": "application",
+          "shell": "shell_iam",
+          "content": { "slot_primary": {
             "placements": {
               "iam_people_heading": {
                 "block": {
@@ -773,7 +957,7 @@
                 "iam_people_region"
               ]
             }
-          }
+          } }
         }
       },
       {
@@ -783,8 +967,9 @@
         "type": "dashboard",
         "permission": "platform.organization.roles.read",
         "composition": {
-          "shell_kind": "default",
-          "main": {
+          "shell_kind": "application",
+          "shell": "shell_iam",
+          "content": { "slot_primary": {
             "placements": {
               "iam_roles_groups_heading": {
                 "block": {
@@ -1166,7 +1351,7 @@
                 "iam_group_memberships_region"
               ]
             }
-          }
+          } }
         }
       },
       {
@@ -1176,8 +1361,9 @@
         "type": "dashboard",
         "permission": "platform.organization.assignments.read",
         "composition": {
-          "shell_kind": "default",
-          "main": {
+          "shell_kind": "application",
+          "shell": "shell_iam",
+          "content": { "slot_primary": {
             "placements": {
               "iam_assignments_heading": {
                 "block": {
@@ -1470,7 +1656,7 @@
                 "iam_delegations_region"
               ]
             }
-          }
+          } }
         }
       },
       {
@@ -1480,8 +1666,9 @@
         "type": "dashboard",
         "permission": "platform.organization.roles.manage",
         "composition": {
-          "shell_kind": "default",
-          "main": {
+          "shell_kind": "application",
+          "shell": "shell_iam",
+          "content": { "slot_primary": {
             "placements": {
               "iam_manage_roles_groups_heading": {
                 "block": {
@@ -2792,7 +2979,7 @@
                 "form_accept_application_role_template"
               ]
             }
-          }
+          } }
         }
       },
       {
@@ -2802,8 +2989,9 @@
         "type": "dashboard",
         "permission": "platform.organization.assignments.manage",
         "composition": {
-          "shell_kind": "default",
-          "main": {
+          "shell_kind": "application",
+          "shell": "shell_iam",
+          "content": { "slot_primary": {
             "placements": {
               "iam_manage_assignments_heading": {
                 "block": {
@@ -3251,7 +3439,7 @@
                 "form_assign_role_assignment"
               ]
             }
-          }
+          } }
         }
       },
       {
@@ -3261,8 +3449,9 @@
         "type": "dashboard",
         "permission": "platform.organization.roles.read",
         "composition": {
-          "shell_kind": "default",
-          "main": {
+          "shell_kind": "application",
+          "shell": "shell_iam",
+          "content": { "slot_primary": {
             "placements": {
               "iam_privileged_eligible_heading": {
                 "block": {
@@ -3299,7 +3488,7 @@
                 "iam_privileged_eligible_heading"
               ]
             }
-          }
+          } }
         }
       },
       {
@@ -3309,8 +3498,9 @@
         "type": "dashboard",
         "permission": "platform.organization.roles.read",
         "composition": {
-          "shell_kind": "default",
-          "main": {
+          "shell_kind": "application",
+          "shell": "shell_iam",
+          "content": { "slot_primary": {
             "placements": {
               "iam_privileged_active_heading": {
                 "block": {
@@ -3462,7 +3652,7 @@
                 "iam_role_activations_region"
               ]
             }
-          }
+          } }
         }
       },
       {
@@ -3474,8 +3664,9 @@
         "permission": "application.iam.open",
         "query": "vortex.iam.core:iam_access_requests",
         "composition": {
-          "shell_kind": "default",
-          "main": {
+          "shell_kind": "application",
+          "shell": "shell_iam",
+          "content": { "slot_primary": {
             "placements": {
               "iam_access_requests_list": {
                 "block": {
@@ -3593,7 +3784,7 @@
                 "iam_access_requests_list"
               ]
             }
-          }
+          } }
         }
       },
       {
@@ -3604,8 +3795,9 @@
         "record_type": "vortex.iam.core:access_request",
         "permission": "application.iam.open",
         "composition": {
-          "shell_kind": "default",
-          "main": {
+          "shell_kind": "application",
+          "shell": "shell_iam",
+          "content": { "slot_primary": {
             "placements": {
               "iam_access_request_detail_body": {
                 "block": {
@@ -3812,7 +4004,7 @@
                 "iam_access_request_detail_body"
               ]
             }
-          }
+          } }
         }
       },
       {
@@ -3823,8 +4015,9 @@
         "record_type": "vortex.iam.core:access_request",
         "permission": "application.iam.request",
         "composition": {
-          "shell_kind": "default",
-          "main": {
+          "shell_kind": "application",
+          "shell": "shell_iam",
+          "content": { "slot_primary": {
             "placements": {
               "iam_access_request_new_form": {
                 "block": {
@@ -4112,7 +4305,7 @@
                 "iam_access_request_new_form"
               ]
             }
-          }
+          } }
         }
       },
       {
@@ -4123,8 +4316,9 @@
         "record_type": "vortex.iam.core:access_request",
         "permission": "application.iam.request",
         "composition": {
-          "shell_kind": "default",
-          "main": {
+          "shell_kind": "application",
+          "shell": "shell_iam",
+          "content": { "slot_primary": {
             "placements": {
               "iam_access_request_edit_form": {
                 "block": {
@@ -4412,7 +4606,7 @@
                 "iam_access_request_edit_form"
               ]
             }
-          }
+          } }
         }
       }
     ],

@@ -59,14 +59,13 @@ const entry = (definition: {
  * version and never written by hand; the publication catalogue recomputes both when it is created,
  * so a changed descriptor without regenerated fingerprints refuses instead of publishing.
  *
- * Every operation the Access services already provide is registered, including the grant-side
- * assign-role and add-membership operations and the create-custom-role and accept-application-role
- * template operations. Registration never grants authority: each operation re-checks the current
- * actor's authority and refuses any grant that exceeds the actor's own delegated scope inside its
- * owning service transaction, so a flow can never expand access. The role-creation and
- * template-acceptance operations carry already-prepared role-change evidence, which the owning
- * service re-verifies before the database re-applies the affected-assignment review, the explicit
- * acceptance evidence and the permanent-steward safeguard.
+ * Access and Identity operations are registered here, including the grant-side assign-role and
+ * add-membership operations and the create-custom-role and accept-application-role template
+ * operations. Registration never grants authority: each operation re-checks the current actor's
+ * authority in its owning service transaction. A flow cannot expand access through registration.
+ * The role-creation and template-acceptance operations carry already-prepared role-change
+ * evidence. The owning service re-verifies it before the database re-applies the
+ * affected-assignment review, explicit acceptance evidence and permanent-steward safeguard.
  */
 export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   create_group: entry(sources.create_group),
@@ -87,6 +86,9 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   revoke_delegation_authority: entry(sources.revoke_delegation_authority),
   update_runtime_settings: entry(sources.update_runtime_settings),
   set_default_application: entry(sources.set_default_application),
+  rename_tenant_organization: entry(sources.rename_tenant_organization),
+  suspend_tenant_organization: entry(sources.suspend_tenant_organization),
+  reactivate_tenant_organization: entry(sources.reactivate_tenant_organization),
   suspend_organization_account: entry(sources.suspend_organization_account),
   reactivate_organization_account: entry(sources.reactivate_organization_account),
   close_organization_account: entry(sources.close_organization_account),
