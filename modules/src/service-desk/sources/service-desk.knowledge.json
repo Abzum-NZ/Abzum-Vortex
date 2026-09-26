@@ -615,18 +615,25 @@
         "permission": "vortex.service_desk.knowledge.article.publish",
         "shareable": false,
         "inputs": [],
-        "effects": [
+        "tasks": [
           {
-            "kind": "set_field",
-            "field": "status",
-            "value": {
-              "source": "literal",
-              "value": "published"
+            "id": "set_status_published",
+            "type": "record.set_fields",
+            "properties": {
+              "values": {
+                "status": {
+                  "source": "literal",
+                  "value": "published"
+                }
+              }
             }
           },
           {
-            "kind": "announce_event",
-            "event": "vortex.service_desk.knowledge.article.published"
+            "id": "announce_article_published",
+            "type": "event.announce",
+            "properties": {
+              "event": "vortex.service_desk.knowledge.article.published"
+            }
           }
         ]
       }

@@ -889,40 +889,50 @@
             ]
           }
         ],
-        "effects": [
+        "tasks": [
           {
-            "kind": "create_record",
-            "record_type": "vortex.crm.people:contact",
-            "values": {
-              "first_name": {
-                "source": "input",
-                "input": "first_name"
-              },
-              "last_name": {
-                "source": "input",
-                "input": "last_name"
-              },
-              "email": {
-                "source": "subject_field",
-                "field": "email"
-              },
-              "company": {
-                "source": "input",
-                "input": "company"
+            "id": "create_contact",
+            "type": "record.create",
+            "properties": {
+              "record_type": "vortex.crm.people:contact",
+              "values": {
+                "first_name": {
+                  "source": "input",
+                  "input": "first_name"
+                },
+                "last_name": {
+                  "source": "input",
+                  "input": "last_name"
+                },
+                "email": {
+                  "source": "subject_field",
+                  "field": "email"
+                },
+                "company": {
+                  "source": "input",
+                  "input": "company"
+                }
               }
             }
           },
           {
-            "kind": "set_field",
-            "field": "status",
-            "value": {
-              "source": "literal",
-              "value": "converted"
+            "id": "set_status_converted",
+            "type": "record.set_fields",
+            "properties": {
+              "values": {
+                "status": {
+                  "source": "literal",
+                  "value": "converted"
+                }
+              }
             }
           },
           {
-            "kind": "announce_event",
-            "event": "vortex.crm.people.lead.converted"
+            "id": "announce_lead_converted",
+            "type": "event.announce",
+            "properties": {
+              "event": "vortex.crm.people.lead.converted"
+            }
           }
         ]
       }

@@ -631,18 +631,25 @@
         "permission": "vortex.service_desk.sla.service_level.manage",
         "shareable": false,
         "inputs": [],
-        "effects": [
+        "tasks": [
           {
-            "kind": "set_field",
-            "field": "active",
-            "value": {
-              "source": "literal",
-              "value": false
+            "id": "set_active",
+            "type": "record.set_fields",
+            "properties": {
+              "values": {
+                "active": {
+                  "source": "literal",
+                  "value": false
+                }
+              }
             }
           },
           {
-            "kind": "announce_event",
-            "event": "vortex.service_desk.sla.service_level.changed"
+            "id": "announce_service_level_changed",
+            "type": "event.announce",
+            "properties": {
+              "event": "vortex.service_desk.sla.service_level.changed"
+            }
           }
         ]
       }

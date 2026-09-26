@@ -135,7 +135,13 @@ export const conditionNodeSchema: z.ZodType<ConditionNode> = conditionNodeTreeSc
   },
 );
 
-const actionValueSchema = z.discriminatedUnion("source", [
+/**
+ * The value grammar a named-action task property reads. A value is a literal, one of the action's
+ * declared inputs, one of the subject record's fields, the whole subject record, the current actor
+ * or the one checked execution time. It is the authored grammar resolved to permanent identities;
+ * moving it to the flow value grammar is a follow-up.
+ */
+const actionTaskValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("literal"), value: jsonValueSchema }).strict(),
   z.object({ source: z.literal("input"), inputKey: builderKeySchema }).strict(),
   z.object({ source: z.literal("subject_field"), fieldId: fieldIdSchema }).strict(),
@@ -143,26 +149,69 @@ const actionValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("current_actor") }).strict(),
   z.object({ source: z.literal("current_time") }).strict(),
 ]);
-export const actionEffectSchema = z.discriminatedUnion("kind", [
-  z
-    .object({ kind: z.literal("set_field"), fieldId: fieldIdSchema, value: actionValueSchema })
-    .strict(),
+
+/**
+ * One registry record task of a canonical Module or Application action, in authored order. A named
+ * action's ordered task list is the one home of its behaviour; each task compiles into the same
+ * registry record task of the action's `transaction` flow. The task type names and property names
+ * are the flow task registry's, while each property value keeps the action value grammar above.
+ */
+export const actionTaskSchema = z.discriminatedUnion("type", [
   z
     .object({
-      kind: z.literal("create_record"),
-      recordType: recordTypeReferenceSchema,
-      values: z.record(fieldIdSchema, actionValueSchema),
+      id: builderKeySchema,
+      type: z.literal("record.set_fields"),
+      properties: z.object({ values: z.record(fieldIdSchema, actionTaskValueSchema) }).strict(),
     })
     .strict(),
   z
     .object({
-      kind: z.literal("copy_relationships"),
-      relationshipIds: z.array(containedComponentIdSchema).min(1),
-      targetInputKey: builderKeySchema,
+      id: builderKeySchema,
+      type: z.literal("record.create"),
+      properties: z
+        .object({
+          recordType: recordTypeReferenceSchema,
+          values: z.record(fieldIdSchema, actionTaskValueSchema),
+        })
+        .strict(),
     })
     .strict(),
-  z.object({ kind: z.literal("soft_delete_subject") }).strict(),
-  z.object({ kind: z.literal("announce_event"), eventKey: namespacedKeySchema }).strict(),
+  z
+    .object({
+      id: builderKeySchema,
+      type: z.literal("record.changes"),
+      properties: z
+        .object({
+          changes: z
+            .array(
+              z
+                .object({
+                  kind: z.literal("copy_relationships"),
+                  relationshipIds: z.array(containedComponentIdSchema).min(1),
+                  targetInputKey: builderKeySchema,
+                })
+                .strict(),
+            )
+            .min(1)
+            .max(10),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      id: builderKeySchema,
+      type: z.literal("record.delete"),
+      properties: z.object({}).strict(),
+    })
+    .strict(),
+  z
+    .object({
+      id: builderKeySchema,
+      type: z.literal("event.announce"),
+      properties: z.object({ eventKey: namespacedKeySchema }).strict(),
+    })
+    .strict(),
 ]);
 
 export const eventDefinitionSchema = z

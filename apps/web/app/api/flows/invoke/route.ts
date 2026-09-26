@@ -8,11 +8,22 @@ import {
   createAppTelemetryCollector,
   createDatabaseFlowStores,
   createFlowOrchestrator,
+  createFormContinuationService,
   createOperationsAlertSink,
   createProtectedOperationExecutor,
 } from "@vortex/app";
+import {
+  flowTaskChildLists,
+  type FlowDefinition,
+  type FlowTask,
+  type FormContinuationOutcome,
+  type FormContinuationRequest,
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
+} from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
+import { createPageFormRequestAdapter, createPrivateFormSubmitAdapter } from "@vortex/page";
 import { z } from "zod";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import {
@@ -79,6 +90,39 @@ const fromOwnSite = (request: NextRequest): boolean => {
   );
 };
 
+/**
+ * Whether an installed flow declares the paused node a continuation target names (#544): a task
+ * with that id anywhere in the flow and, for a form, a Show form task whose fixed form is the named
+ * one (a confirmation names no form). The stored run still pins the exact node; this refuses a
+ * target the installed flow could never pause at before the continuation is spent.
+ */
+const declaresPausedNode = (
+  flow: unknown,
+  node: Readonly<{ nodeId: string; formId?: string }>,
+): boolean => {
+  const definition = flow as Partial<Pick<FlowDefinition, "tasks" | "errors" | "finally">>;
+  const find = (tasks: readonly FlowTask[] | undefined): FlowTask | undefined => {
+    for (const task of tasks ?? []) {
+      if (task.id === node.nodeId) return task;
+      for (const child of flowTaskChildLists(task)) {
+        const found = find(child.tasks);
+        if (found !== undefined) return found;
+      }
+    }
+    return undefined;
+  };
+  const task = find(definition.tasks) ?? find(definition.errors) ?? find(definition.finally);
+  if (task === undefined) return false;
+  if (node.formId === undefined) return task.type === "interface.confirm";
+  if (task.type !== "interface.show_form") return false;
+  const form = (task as { properties?: Record<string, unknown> }).properties?.form as
+    | Readonly<{ kind?: unknown; literal?: Readonly<{ value?: unknown }> }>
+    | undefined;
+  // A form chosen by a reference or formula is only known at run time; the stored run pins it.
+  if (form?.kind !== "literal") return form !== undefined;
+  return String(form.literal?.value).toLowerCase() === node.formId.toLowerCase();
+};
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     if (!fromOwnSite(request)) return privateResponse({ kind: "refused" }, 403);
@@ -127,41 +171,93 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
     const stores = createDatabaseFlowStores();
 
+    /** The trusted active installation for the initiator's own selection; never from the request. */
+    const readInstalled = async (
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+    ): Promise<InstalledFlowBindings | undefined> => {
+      const read = await requests.run(session, selection, async (transaction) => {
+        const installation =
+          await createActiveApplicationInstallationRepository(transaction).readCurrent();
+        const releaseSet = await createDatabaseApplicationBoundReleaseSetService(
+          definitionCatalogue,
+          transaction,
+        ).read({ applicationReleaseRevision: installation.applicationReleaseRevision });
+        const application = releaseSet.application;
+        const flows = new Map<string, unknown>();
+        for (const flow of [
+          ...application.content.flows,
+          ...releaseSet.modules.flatMap((module) => module.content.flows),
+        ]) {
+          // One flow per identity: a Module flow never shadows an Application flow, and an
+          // ambiguous release is refused rather than run.
+          if (flows.has(String(flow.id))) throw new Error("FLOW_IDENTITY_AMBIGUOUS");
+          flows.set(String(flow.id), flow);
+        }
+        const installed: InstalledFlowBindings = {
+          organizationId: installation.organizationId,
+          applicationRootId: address.application.applicationRootId,
+          installationRevision: installation.applicationReleaseRevision,
+          releaseKey: [
+            application.releaseVersion,
+            application.contentFingerprint,
+            application.resolutionFingerprint,
+          ].join(":"),
+          bindings: application.content.flowBindings,
+          flows,
+        };
+        return installed;
+      });
+      return read.kind === "available" ? read.value : undefined;
+    };
+
+    /**
+     * #588: the #544 continuation interface over a fresh orchestrator bound to the trusted release.
+     * It re-reads the active installation and checks the caller's target against it before the
+     * orchestrator consumes the single-use continuation, so Page never duplicates that validation.
+     */
+    const continueForm = async (
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      request: FormContinuationRequest,
+    ): Promise<FormContinuationOutcome> => {
+      const installed = await readInstalled(session, selection);
+      if (installed === undefined) return { kind: "refused", reason: "unavailable" } as const;
+      const release = { releaseKey: installed.releaseKey, flows: installed.flows };
+      // The Page request adapter forwards the exact evidence unchanged; the #544 interface is the
+      // only place that compares it with trusted state and consumes the single-use continuation.
+      const pageFormRequests = createPageFormRequestAdapter({
+        continuation: createFormContinuationService({
+          orchestrator: createFlowOrchestrator({
+            executor,
+            continuations: stores.continuations,
+            ledger: stores.ledger,
+            resolveRelease: async () => release,
+          }),
+          resolveInstallation: async ({ installation, flowId, node }) => {
+            // Another application is foreign, not stale: it gets the neutral refusal.
+            if (
+              installation.applicationRootId.toLowerCase() !==
+              installed.applicationRootId.toLowerCase()
+            )
+              return { kind: "unavailable" };
+            if (installation.installationReleaseRevision !== installed.installationRevision)
+              return { kind: "stale" };
+            const flow = installed.flows.get(flowId);
+            if (flow === undefined) return { kind: "unavailable" };
+            if (node !== undefined && !declaresPausedNode(flow, node)) return { kind: "unavailable" };
+            return { kind: "current", releaseKey: installed.releaseKey };
+          },
+        }),
+      });
+      return pageFormRequests.resume(session, selection, request);
+    };
+
+    const adaptFormSubmit = createPrivateFormSubmitAdapter();
     const endpoint = createFlowBindingEndpoint({
-      async readInstallation(session, selection) {
-        const read = await requests.run(session, selection, async (transaction) => {
-          const installation =
-            await createActiveApplicationInstallationRepository(transaction).readCurrent();
-          const releaseSet = await createDatabaseApplicationBoundReleaseSetService(
-            definitionCatalogue,
-            transaction,
-          ).read({ applicationReleaseRevision: installation.applicationReleaseRevision });
-          const application = releaseSet.application;
-          const flows = new Map<string, unknown>();
-          for (const flow of [
-            ...application.content.flows,
-            ...releaseSet.modules.flatMap((module) => module.content.flows),
-          ]) {
-            // One flow per identity: a Module flow never shadows an Application flow, and an
-            // ambiguous release is refused rather than run.
-            if (flows.has(String(flow.id))) throw new Error("FLOW_IDENTITY_AMBIGUOUS");
-            flows.set(String(flow.id), flow);
-          }
-          const installed: InstalledFlowBindings = {
-            organizationId: installation.organizationId,
-            installationRevision: installation.applicationReleaseRevision,
-            releaseKey: [
-              application.releaseVersion,
-              application.contentFingerprint,
-              application.resolutionFingerprint,
-            ].join(":"),
-            bindings: application.content.flowBindings,
-            flows,
-          };
-          return installed;
-        });
-        return read.kind === "available" ? read.value : undefined;
-      },
+      readInstallation: readInstalled,
+      adaptFormSubmit: async (binding, callerInputs) => adaptFormSubmit(binding, callerInputs),
+      continueForm,
       orchestratorFor: (release, runId) =>
         createFlowOrchestrator({
           executor,

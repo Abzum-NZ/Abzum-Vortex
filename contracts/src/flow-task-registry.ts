@@ -15,7 +15,6 @@ import {
   namespacedKeySchema,
   stableDefinitionReleaseVersionSchema,
 } from "./identifiers";
-import type { actionEffectSchema } from "./module-contracts";
 import type { RuleGraphNode } from "./rule-graph-contracts";
 
 /**
@@ -783,15 +782,6 @@ const task = (type: FlowRegisteredTaskTypeKey): FlowLegacyKindMapping => ({ kind
 const structural = (
   into: Extract<FlowLegacyKindMapping, { kind: "structural" }>["into"],
 ): FlowLegacyKindMapping => ({ kind: "structural", into });
-
-/** The effects a named action lists in `module-contracts.ts`; a named action becomes a transaction flow. */
-export const flowTaskMappingForActionEffect = {
-  set_field: task("record.set_fields"),
-  create_record: task("record.create"),
-  copy_relationships: task("record.changes"),
-  soft_delete_subject: task("record.delete"),
-  announce_event: task("event.announce"),
-} as const satisfies Record<z.infer<typeof actionEffectSchema>["kind"], FlowLegacyKindMapping>;
 
 /** The before-save rule graph nodes; a rule becomes a transaction flow with a BeforeSave trigger. */
 export const flowTaskMappingForRuleGraphNode = {
