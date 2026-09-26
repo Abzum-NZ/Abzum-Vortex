@@ -502,7 +502,25 @@ const sealPreparedRoleChangeTemplates = (core: unknown): PreparedApplicationRole
   if (typeof core !== "object" || core === null || Array.isArray(core))
     throw preparationUnavailable();
   const candidateFingerprint = fingerprintCanonicalValue(core);
-  return verifyPreparedApplicationRoleTemplates({ ...core, candidateFingerprint });
+  try {
+    return verifyPreparedApplicationRoleTemplates({ ...core, candidateFingerprint });
+  } catch {
+    throw preparationUnavailable();
+  }
+};
+
+/**
+ * Seals the role-change candidate with the canonical preparation. Evidence the canonical verifier
+ * refuses is never retried into a different answer, so it is the same neutral unavailability.
+ */
+const sealPreparedRoleChange = (
+  candidate: OrganizationRoleChangeCandidate,
+): PreparedOrganizationRoleChange => {
+  try {
+    return prepareOrganizationRoleChangeEvidence({ candidate });
+  } catch {
+    throw preparationUnavailable();
+  }
 };
 
 export type OrganizationAccessAdministrationDependencies = HumanOrganizationRequestDependencies &
@@ -1049,7 +1067,7 @@ export const createOrganizationAccessAdministrationService = (
           !Array.isArray(read.permissions)
         )
           throw preparationUnavailable();
-        const organizationId = read.organizationId;
+        const organizationId = scope.organizationId;
         const permissions = read.permissions as RolePermissionEntry[];
         if (command.data.operation === "create_custom") {
           const roleCandidate: OrganizationRoleChangeCandidate = {
@@ -1063,7 +1081,7 @@ export const createOrganizationAccessAdministrationService = (
             assignmentPolicy: { kind: "standing" },
             permissions,
           };
-          return prepareOrganizationRoleChangeEvidence({ candidate: roleCandidate });
+          return sealPreparedRoleChange(roleCandidate);
         }
         const templateContinuityRevision = revision(read.templateContinuityRevision);
         if (typeof templateContinuityRevision !== "number" || command.data.sourceRoleId === undefined)
@@ -1082,7 +1100,7 @@ export const createOrganizationAccessAdministrationService = (
           preparedTemplates: sealPreparedRoleChangeTemplates(read.preparedTemplatesCore),
           permissions,
         };
-        return prepareOrganizationRoleChangeEvidence({ candidate: templateCandidate });
+        return sealPreparedRoleChange(templateCandidate);
       });
     },
 

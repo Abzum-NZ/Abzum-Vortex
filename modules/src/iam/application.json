@@ -2320,43 +2320,6 @@
                         },
                         "slots": {}
                       },
-                      "input_create_custom_role_accept_broadened_authority": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "accept_broadened_authority"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Accept broadened authority"
-                          },
-                          "help_text": {
-                            "kind": "text",
-                            "value": "Type accept to confirm that you accept the authority this role grants. Any other value declines."
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
                       "button_create_custom_role": {
                         "block": {
                           "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -2398,7 +2361,6 @@
                         "input_create_custom_role_description",
                         "input_create_custom_role_privilege_classification",
                         "input_create_custom_role_permission_references",
-                        "input_create_custom_role_accept_broadened_authority",
                         "button_create_custom_role"
                       ]
                     }
@@ -2637,43 +2599,6 @@
                         },
                         "slots": {}
                       },
-                      "input_accept_application_role_template_accept_broadened_authority": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "accept_broadened_authority"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Accept broadened authority"
-                          },
-                          "help_text": {
-                            "kind": "text",
-                            "value": "Type accept to show that you have seen the template and accept the authority it grants. Any other value declines."
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
                       "button_accept_application_role_template": {
                         "block": {
                           "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -2716,7 +2641,6 @@
                         "input_accept_application_role_template_label",
                         "input_accept_application_role_template_description",
                         "input_accept_application_role_template_privilege_classification",
-                        "input_accept_application_role_template_accept_broadened_authority",
                         "button_accept_application_role_template"
                       ]
                     }
@@ -5795,6 +5719,91 @@
         },
         "tasks": [
           {
+            "id": "confirm",
+            "type": "interface.confirm",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Create custom role"
+                }
+              },
+              "message": {
+                "kind": "formula",
+                "formula": {
+                  "op": "join",
+                  "parts": [
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": "Create the custom role "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "role_key"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": " ("
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "label"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": ", "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "privilege_classification"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": "). Everyone later assigned to it gains exactly the permissions you listed, which broadens their authority. Confirm only if you accept that authority."
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "declined",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "confirm",
+                  "key": "confirmed"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_declined",
+                "type": "stop",
+                "outcome": "declined"
+              }
+            ]
+          },
+          {
             "id": "prepare",
             "type": "operation.call",
             "version": "1.0.0",
@@ -5831,19 +5840,7 @@
             }
           }
         ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "commit",
-                "key": "result"
-              }
-            }
-          }
-        }
+        "outputs": {}
       },
       {
         "contractVersion": "1.0.0",
@@ -5892,6 +5889,115 @@
         },
         "tasks": [
           {
+            "id": "confirm",
+            "type": "interface.confirm",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Accept role template"
+                }
+              },
+              "message": {
+                "kind": "formula",
+                "formula": {
+                  "op": "join",
+                  "parts": [
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": "Accept the application role template "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "source_role_id"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": " of application "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "template_application_root_id"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": " as the new role "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "role_key"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": " ("
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "label"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": ", "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "privilege_classification"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": "). The new role receives the template's complete current permissions, which broadens the authority of everyone later assigned to it. Confirm only if you accept that authority."
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "declined",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "confirm",
+                  "key": "confirmed"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_declined",
+                "type": "stop",
+                "outcome": "declined"
+              }
+            ]
+          },
+          {
             "id": "prepare",
             "type": "operation.call",
             "version": "1.0.0",
@@ -5928,19 +6034,7 @@
             }
           }
         ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "commit",
-                "key": "result"
-              }
-            }
-          }
-        }
+        "outputs": {}
       }
     ],
     "flow_bindings": [
@@ -6269,8 +6363,11 @@
             "name": "permission_references"
           },
           "accept_broadened_authority": {
-            "kind": "caller",
-            "name": "accept_broadened_authority"
+            "kind": "literal",
+            "literal": {
+              "type": "choice",
+              "value": "accept"
+            }
           }
         }
       },
@@ -6313,8 +6410,11 @@
             "name": "privilege_classification"
           },
           "accept_broadened_authority": {
-            "kind": "caller",
-            "name": "accept_broadened_authority"
+            "kind": "literal",
+            "literal": {
+              "type": "choice",
+              "value": "accept"
+            }
           }
         }
       }

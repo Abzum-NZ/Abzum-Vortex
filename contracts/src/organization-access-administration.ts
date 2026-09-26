@@ -432,13 +432,13 @@ export const prepareOrganizationAdministrationRoleChangeCommandSchema = z
         path: ["permissionReferences"],
         message: "Only a custom role names its own permission references",
       });
-    if (!creatingCustom && (value.templateApplicationRootId !== undefined) !== acceptingTemplate)
+    if ((value.templateApplicationRootId !== undefined) !== acceptingTemplate)
       context.addIssue({
         code: "custom",
         path: ["templateApplicationRootId"],
         message: "Accepting a template names its exact application",
       });
-    if (!creatingCustom && (value.sourceRoleId !== undefined) !== acceptingTemplate)
+    if ((value.sourceRoleId !== undefined) !== acceptingTemplate)
       context.addIssue({
         code: "custom",
         path: ["sourceRoleId"],
