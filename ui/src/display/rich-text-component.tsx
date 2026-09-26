@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { Card, CardContent, CardHeader } from "../components/card";
 import { DisplayHeader } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
@@ -6,9 +7,9 @@ import type { RichTextPayload } from "./projected-data";
 import { RichTextDocumentView } from "./rich-text";
 
 /**
- * Shared browser-safe display component for validated structured rich text.
- * Renders caller-supplied projected rich text, or the block's declared literal `document`
- * setting when no projection is supplied, as React elements only: never raw HTML or
+ * Shared browser-safe display component for validated structured rich text, rendered with the
+ * shadcn Card parts. Renders caller-supplied projected rich text, or the block's declared literal
+ * `document` setting when no projection is supplied, as React elements only: never raw HTML or
  * dangerouslySetInnerHTML. Never executes or fetches a Query.
  */
 export function RichTextDisplay(props: DisplayRenderProps<RichTextPayload>): ReactElement {
@@ -38,14 +39,16 @@ export function RichTextDisplay(props: DisplayRenderProps<RichTextPayload>): Rea
       emptyMessage={emptyMessage}
     >
       {values === undefined ? null : (
-        <div
-          data-vortex-display="rich_text"
-          data-vortex-placement-id={props.placementId}
-          className="vortex-display-rich-text"
-        >
-          <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
-          <RichTextDocumentView document={values.document} />
-        </div>
+        <Card data-vortex-display="rich_text" data-vortex-placement-id={props.placementId}>
+          {title === undefined && events?.refresh === undefined ? null : (
+            <CardHeader className="*:mb-0">
+              <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
+            </CardHeader>
+          )}
+          <CardContent>
+            <RichTextDocumentView document={values.document} />
+          </CardContent>
+        </Card>
       )}
     </DisplayStateContainer>
   );
