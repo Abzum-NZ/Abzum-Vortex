@@ -22,6 +22,13 @@ export async function proxy(request: NextRequest) {
       request: { headers: forwardedIdentitySessionHeaders(request.headers, state) },
     });
 
+  // A sign-in submission supersedes whatever session the browser still holds. Contacting the
+  // provider with that old pair would try to refresh a token that no longer exists (for example
+  // after a database reset) and would only add a deletion of the cookies the action is about to
+  // replace, so the submission is forwarded without touching the provider.
+  if (request.method === "POST" && request.nextUrl.pathname === "/auth/sign-in")
+    return privateResponse(responseFor("missing"));
+
   let response = responseFor("temporarily_unavailable");
   let boundary: ReturnType<typeof createIdentitySessionClient>;
   try {
@@ -43,7 +50,11 @@ export async function proxy(request: NextRequest) {
   }
   if (boundary.stage.initialState.kind === "missing") return responseFor("missing");
 
-  const claims = await boundary.client.auth.getClaims();
+  let claims = await boundary.client.auth.getClaims();
+  // One retry absorbs a transient provider or key-set fetch failure so the first load after
+  // sign-in is not shown as unavailable; a second failure is still reported as unavailable.
+  if (claims.error && isAuthRetryableFetchError(claims.error))
+    claims = await boundary.client.auth.getClaims();
   const staged = boundary.stage.snapshot();
   if (staged.refused) {
     response = responseFor("invalid");
