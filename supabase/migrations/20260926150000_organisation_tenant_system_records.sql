@@ -27,8 +27,8 @@
 -- accepting a tenant, organisation or application from the caller:
 --   * the organisation projection applies the fixed
 --     platform.tenant.hierarchy.read capability the tenant-structure reader
---     applies, on the caller's own resolved tenant, and returns only the caller's
---     own organisation, which is the row an organisation-shared record type owns;
+--     applies, on the caller's own resolved tenant, and returns every
+--     organisation of that one tenant, exactly as that reader does;
 --   * the tenant projection returns the active tenants the caller's effective
 --     structural administrator assignment already lists, the exact rule the
 --     tenant launcher applies;
@@ -108,7 +108,8 @@ reset role;
 
 -- ============================================================================
 -- Registered organisation projection. The key is the `tenant_structure`
--- protected read model, which the closed set already accepted.
+-- protected read model, which the closed set already accepted, and the rows are
+-- the tenant structure the tenant-structure reader lists.
 -- ============================================================================
 
 create or replace function vortex_identity.list_organizations_projection(
@@ -132,19 +133,21 @@ declare
   visible_organization_id uuid;
   actor_identity_id uuid;
   evaluated_at timestamptz := pg_catalog.statement_timestamp();
-  organization_row record;
 begin
   -- The projection keeps today's row visibility inside itself: the same fixed
   -- platform.tenant.hierarchy.read capability the bespoke tenant-structure reader
   -- requires is the only visibility, and the tenant is the caller's own resolved
-  -- tenant, never page input. A viewer the capability refuses sees no row, exactly
-  -- as a missing or foreign record, so the record adapters return their identical
-  -- refusal and a list page is empty rather than failing. The record identity is
-  -- the organisation and the revision is the organisation's own revision, so an
-  -- organisation-shared record type owns exactly the organisation the caller is
-  -- established in; its position in the tenant hierarchy is the parent reference
-  -- the projection returns. Creation and state-change evidence stay in the
-  -- protected storage and are never projected.
+  -- tenant, never page input. Exactly as that reader, a viewer the capability
+  -- admits sees every organisation of that one tenant, and a viewer it refuses
+  -- sees no row, exactly as a missing or foreign record, so the record adapters
+  -- return their identical refusal and a list page is empty rather than failing.
+  -- The record identity is the organisation and the revision is the
+  -- organisation's own revision; its position in the tenant hierarchy is the
+  -- parent reference the projection returns. The tenant structure is a
+  -- governance fact rather than an organisation-owned row, so the projected
+  -- organisation is the organisation the record is read in, the one the caller's
+  -- validated request context already established. Creation and state-change
+  -- evidence stay in the protected storage and are never projected.
   begin
     context_value := vortex_access.validated_human_request_context();
   exception
@@ -170,30 +173,24 @@ begin
     when sqlstate 'V3101' then
       return;
   end;
-  select organization.* into organization_row
+  return query
+  select
+    visible_organization_id,
+    organization.organization_id,
+    organization.revision,
+    pg_catalog.jsonb_build_object(
+      'tenant_id', organization.tenant_id,
+      'parent_organization_id', organization.parent_organization_id,
+      'short_name', organization.short_name,
+      'display_name', organization.display_name,
+      'state', organization.state,
+      'state_changed_at', organization.state_changed_at,
+      'created_at', organization.created_at
+    )
   from vortex_identity.organizations as organization
   where organization.tenant_id = visible_tenant_id
-    and organization.organization_id = visible_organization_id;
-  if organization_row.organization_id is null
-    or organization_row.organization_id is distinct from visible_organization_id then
-    return;
-  end if;
-  if p_record_id is not null and p_record_id <> organization_row.organization_id then
-    return;
-  end if;
-  return query select
-    organization_row.organization_id,
-    organization_row.organization_id,
-    organization_row.revision,
-    pg_catalog.jsonb_build_object(
-      'tenant_id', organization_row.tenant_id,
-      'parent_organization_id', organization_row.parent_organization_id,
-      'short_name', organization_row.short_name,
-      'display_name', organization_row.display_name,
-      'state', organization_row.state,
-      'state_changed_at', organization_row.state_changed_at,
-      'created_at', organization_row.created_at
-    );
+    and (p_record_id is null or p_record_id = organization.organization_id)
+  order by organization.organization_id;
 end
 $function$;
 
@@ -206,7 +203,7 @@ grant execute on function vortex_identity.list_organizations_projection(
 ) to vortex_record_owner, vortex_record_adapter;
 
 comment on function vortex_identity.list_organizations_projection(uuid, integer) is
-  'Registered organisation projection: returns the one organisation the current viewer is established in under the fixed platform.tenant.hierarchy.read capability, with the organisation, the organisation identity, the organisation revision and the safe projected attribute values keyed by lowercase field key, or no row when the capability refuses the viewer. Creation and state-change evidence are never projected.';
+  'Registered organisation projection: returns every organisation of the current viewer''s own tenant under the fixed platform.tenant.hierarchy.read capability, the exact rule the tenant-structure reader applies, with the organisation the record is read in, the organisation identity, the organisation revision and the safe projected attribute values keyed by lowercase field key, or no row when the capability refuses the viewer. Creation and state-change evidence are never projected.';
 
 -- ============================================================================
 -- Registered tenant projection. The projection keeps exactly the tenant
@@ -529,7 +526,8 @@ comment on function vortex_access.list_installed_applications_projection(uuid, i
 -- The one organisation settings record keeps the #1030 registration. Its reader
 -- is replaced only to project the default application the settings detail now
 -- declares, and it keeps the same fixed runtime-settings decision and the same
--- single settings row, read exactly as the private Identity reader read it.
+-- single settings row, still read through the private Identity reader; the
+-- default application is read from that same organisation's settings row.
 -- ============================================================================
 
 create or replace function vortex_access.list_organization_runtime_settings_projection(
@@ -550,6 +548,7 @@ as $function$
 declare
   scope_row record;
   settings_row record;
+  settings_default_application_root_id uuid;
 begin
   -- The projection keeps today's row visibility inside itself: the same fixed
   -- runtime-settings read decision the bespoke reader applies decides whether
@@ -568,9 +567,10 @@ begin
     when insufficient_privilege then
       return;
   end;
-  select settings.* into settings_row
-  from vortex_identity.organization_runtime_settings as settings
-  where settings.organization_id = scope_row.organization_id;
+  select result.* into settings_row
+  from vortex_identity.read_current_organization_runtime_settings_internal(
+    scope_row.organization_id
+  ) as result;
   if settings_row.organization_id is null
     or settings_row.organization_id is distinct from scope_row.organization_id then
     return;
@@ -578,6 +578,9 @@ begin
   if p_record_id is not null and p_record_id <> settings_row.organization_id then
     return;
   end if;
+  select settings.default_application_root_id into settings_default_application_root_id
+  from vortex_identity.organization_runtime_settings as settings
+  where settings.organization_id = settings_row.organization_id;
   return query select
     settings_row.organization_id,
     settings_row.organization_id,
@@ -588,7 +591,7 @@ begin
       'currency', settings_row.currency,
       'date_format', settings_row.date_format,
       'number_format', settings_row.number_format,
-      'default_application_root_id', settings_row.default_application_root_id
+      'default_application_root_id', settings_default_application_root_id
     );
 end
 $function$;

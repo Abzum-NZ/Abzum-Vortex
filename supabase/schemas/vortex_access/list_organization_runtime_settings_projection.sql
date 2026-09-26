@@ -16,6 +16,7 @@ as $function$
 declare
   scope_row record;
   settings_row record;
+  settings_default_application_root_id uuid;
 begin
   -- The projection keeps today's row visibility inside itself: the same fixed
   -- runtime-settings read decision the bespoke reader applies decides whether
@@ -34,9 +35,10 @@ begin
     when insufficient_privilege then
       return;
   end;
-  select settings.* into settings_row
-  from vortex_identity.organization_runtime_settings as settings
-  where settings.organization_id = scope_row.organization_id;
+  select result.* into settings_row
+  from vortex_identity.read_current_organization_runtime_settings_internal(
+    scope_row.organization_id
+  ) as result;
   if settings_row.organization_id is null
     or settings_row.organization_id is distinct from scope_row.organization_id then
     return;
@@ -44,6 +46,9 @@ begin
   if p_record_id is not null and p_record_id <> settings_row.organization_id then
     return;
   end if;
+  select settings.default_application_root_id into settings_default_application_root_id
+  from vortex_identity.organization_runtime_settings as settings
+  where settings.organization_id = settings_row.organization_id;
   return query select
     settings_row.organization_id,
     settings_row.organization_id,
@@ -54,7 +59,7 @@ begin
       'currency', settings_row.currency,
       'date_format', settings_row.date_format,
       'number_format', settings_row.number_format,
-      'default_application_root_id', settings_row.default_application_root_id
+      'default_application_root_id', settings_default_application_root_id
     );
 end
 $function$;

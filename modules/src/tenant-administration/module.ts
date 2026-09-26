@@ -15,9 +15,10 @@ const allRecordFields = [...editableRecordFields, "state"];
 // projected fields; they have no ordinary write path, and their changes go
 // through the tenant governance service's protected operations, never through
 // the record. Row visibility stays inside each registered reader: the
-// organisation needs the fixed platform.tenant.hierarchy.read capability on the
-// caller's own tenant, the tenant projection lists exactly the active tenants
-// the caller's effective structural administrator assignment already lists, and
+// organisations of the caller's own tenant need the fixed
+// platform.tenant.hierarchy.read capability on that tenant, the tenant
+// projection lists exactly the active tenants the caller's effective
+// structural administrator assignment already lists, and
 // tenant administrators need the fixed
 // platform.tenant.administrators.read capability. Grant, revocation and
 // correlation evidence is never projected.
