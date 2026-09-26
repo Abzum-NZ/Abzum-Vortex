@@ -1937,6 +1937,13 @@ comment on function vortex_record.apply_lifecycle_record_changes(
 ) is
   'The request role''s closed entry to the terminal delete, restore and ownership-transfer record-change writes: it refuses any other operation and delegates once to the one protected apply_record_changes operation.';
 
+-- Replaying on a fresh database: an earlier migration revoked EXECUTE from this
+-- function's owner, and replacing a function requires the owner to hold it.
+-- The revoke below removes this grant again, so the final ACL is unchanged.
+grant execute on function vortex_record.transfer_offboarding_active_owned_record(
+  uuid, uuid, uuid, bigint, text, uuid, uuid, uuid, bigint
+) to vortex_record_adapter;
+
 create or replace function vortex_record.transfer_offboarding_active_owned_record(
   p_command_id uuid,
   p_record_type_id uuid,
