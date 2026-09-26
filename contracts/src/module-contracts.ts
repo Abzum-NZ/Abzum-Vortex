@@ -13,6 +13,7 @@ import {
   semanticVersionSchema,
 } from "./identifiers";
 import { recordTypeReferenceSchema, versionRequirementSchema } from "./definitions";
+import { flowValueSchema } from "./flow-contracts";
 
 const parentDeleteSchema = z.enum(["refuse", "empty_optional", "soft_delete_dependent"]);
 
@@ -136,32 +137,19 @@ export const conditionNodeSchema: z.ZodType<ConditionNode> = conditionNodeTreeSc
 );
 
 /**
- * The value grammar a named-action task property reads. A value is a literal, one of the action's
- * declared inputs, one of the subject record's fields, the whole subject record, the current actor
- * or the one checked execution time. It is the authored grammar resolved to permanent identities;
- * moving it to the flow value grammar is a follow-up.
- */
-const actionTaskValueSchema = z.discriminatedUnion("source", [
-  z.object({ source: z.literal("literal"), value: jsonValueSchema }).strict(),
-  z.object({ source: z.literal("input"), inputKey: builderKeySchema }).strict(),
-  z.object({ source: z.literal("subject_field"), fieldId: fieldIdSchema }).strict(),
-  z.object({ source: z.literal("subject_record") }).strict(),
-  z.object({ source: z.literal("current_actor") }).strict(),
-  z.object({ source: z.literal("current_time") }).strict(),
-]);
-
-/**
  * One registry record task of a canonical Module or Application action, in authored order. A named
  * action's ordered task list is the one home of its behaviour; each task compiles into the same
  * registry record task of the action's `transaction` flow. The task type names and property names
- * are the flow task registry's, while each property value keeps the action value grammar above.
+ * are the flow task registry's, and each property value uses the flow value grammar
+ * (`flowValueSchema`): the `values` map is keyed by the permanent field identity and each entry is
+ * a flow value, exactly as the flow compiler resolves an authored flow's `field_values` map.
  */
 export const actionTaskSchema = z.discriminatedUnion("type", [
   z
     .object({
       id: builderKeySchema,
       type: z.literal("record.set_fields"),
-      properties: z.object({ values: z.record(fieldIdSchema, actionTaskValueSchema) }).strict(),
+      properties: z.object({ values: z.record(fieldIdSchema, flowValueSchema) }).strict(),
     })
     .strict(),
   z
@@ -171,7 +159,7 @@ export const actionTaskSchema = z.discriminatedUnion("type", [
       properties: z
         .object({
           recordType: recordTypeReferenceSchema,
-          values: z.record(fieldIdSchema, actionTaskValueSchema),
+          values: z.record(fieldIdSchema, flowValueSchema),
         })
         .strict(),
     })
