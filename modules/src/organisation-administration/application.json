@@ -2172,9 +2172,220 @@
     "flows": [
       {
         "contractVersion": "1.0.0",
-        "id": "org_admin_suspend_account",
-        "key": "org_admin_suspend_account",
-        "description": "Suspends the selected person row's organisation account through the protected suspend operation; the row supplies the account id and the revision it was read at.",
+        "id": "flow_update_runtime_settings",
+        "key": "update_runtime_settings",
+        "labels": {
+          "name": "Update runtime settings"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "expected_revision": {
+            "type": "whole_number",
+            "required": true
+          },
+          "language": {
+            "type": "text",
+            "required": true
+          },
+          "time_zone": {
+            "type": "text",
+            "required": true
+          },
+          "currency": {
+            "type": "text",
+            "required": true
+          },
+          "date_format": {
+            "type": "choice",
+            "required": true
+          },
+          "number_format": {
+            "type": "choice",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.update_runtime_settings"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_set_default_application",
+        "key": "set_default_application",
+        "labels": {
+          "name": "Set default application"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "expected_revision": {
+            "type": "whole_number",
+            "required": true
+          },
+          "default_application_root_id": {
+            "type": "text",
+            "required": false
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.set_default_application"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_record_organisation_notice",
+        "key": "record_organisation_notice",
+        "labels": {
+          "name": "Record organisation notice"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "title": {
+            "type": "text",
+            "required": true
+          },
+          "body": {
+            "type": "text",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.organisation_administration.organisation_notice.record_notice"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_record_privacy_request",
+        "key": "record_privacy_request",
+        "labels": {
+          "name": "Record privacy request case"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "subject": {
+            "type": "text",
+            "required": true
+          },
+          "details": {
+            "type": "text",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.organisation_administration.privacy_request_case.record_privacy_request"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_suspend_organization_account",
+        "key": "suspend_organization_account",
         "labels": {
           "name": "Suspend organisation account"
         },
@@ -2195,6 +2406,8 @@
             "required": true
           }
         },
+        "variables": {},
+        "triggers": [],
         "tasks": [
           {
             "id": "call",
@@ -2211,13 +2424,26 @@
             }
           }
         ],
-        "outputs": {}
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
       },
       {
         "contractVersion": "1.0.0",
-        "id": "org_admin_reactivate_account",
-        "key": "org_admin_reactivate_account",
-        "description": "Reactivates the selected person row's organisation account through the protected reactivate operation; the row supplies the account id and the revision it was read at.",
+        "id": "flow_reactivate_organization_account",
+        "key": "reactivate_organization_account",
         "labels": {
           "name": "Reactivate organisation account"
         },
@@ -2238,6 +2464,8 @@
             "required": true
           }
         },
+        "variables": {},
+        "triggers": [],
         "tasks": [
           {
             "id": "call",
@@ -2254,13 +2482,26 @@
             }
           }
         ],
-        "outputs": {}
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
       },
       {
         "contractVersion": "1.0.0",
-        "id": "org_admin_close_account",
-        "key": "org_admin_close_account",
-        "description": "Closes the selected person row's organisation account through the protected close operation; the row supplies the account id and the revision it was read at.",
+        "id": "flow_close_organization_account",
+        "key": "close_organization_account",
         "labels": {
           "name": "Close organisation account"
         },
@@ -2281,6 +2522,8 @@
             "required": true
           }
         },
+        "variables": {},
+        "triggers": [],
         "tasks": [
           {
             "id": "call",
@@ -2297,13 +2540,81 @@
             }
           }
         ],
-        "outputs": {}
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
       },
       {
         "contractVersion": "1.0.0",
-        "id": "org_admin_revoke_invitation",
-        "key": "org_admin_revoke_invitation",
-        "description": "Revokes the selected invitation row through the protected revoke operation; the row supplies the invitation id and the revision it was read at.",
+        "id": "flow_create_organization_invitation",
+        "key": "create_organization_invitation",
+        "labels": {
+          "name": "Create organisation invitation"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "invited_email": {
+            "type": "text",
+            "required": true
+          },
+          "expires_at": {
+            "type": "text",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.create_organization_invitation"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_revoke_organization_invitation",
+        "key": "revoke_organization_invitation",
         "labels": {
           "name": "Revoke organisation invitation"
         },
@@ -2324,6 +2635,8 @@
             "required": true
           }
         },
+        "variables": {},
+        "triggers": [],
         "tasks": [
           {
             "id": "call",
@@ -2340,16 +2653,114 @@
             }
           }
         ],
-        "outputs": {}
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
       }
     ],
     "flow_bindings": [
+      {
+        "id": "binding_update_runtime_settings",
+        "control": "button_update_runtime_settings",
+        "event_id": "event_organisation_settings_action",
+        "event": "action",
+        "flow": "flow_update_runtime_settings",
+        "inputs": {
+          "expected_revision": {
+            "kind": "caller",
+            "name": "expected_revision"
+          },
+          "language": {
+            "kind": "caller",
+            "name": "language"
+          },
+          "time_zone": {
+            "kind": "caller",
+            "name": "time_zone"
+          },
+          "currency": {
+            "kind": "caller",
+            "name": "currency"
+          },
+          "date_format": {
+            "kind": "caller",
+            "name": "date_format"
+          },
+          "number_format": {
+            "kind": "caller",
+            "name": "number_format"
+          }
+        }
+      },
+      {
+        "id": "binding_set_default_application",
+        "control": "button_set_default_application",
+        "event_id": "event_organisation_settings_action",
+        "event": "action",
+        "flow": "flow_set_default_application",
+        "inputs": {
+          "expected_revision": {
+            "kind": "caller",
+            "name": "expected_revision"
+          },
+          "default_application_root_id": {
+            "kind": "caller",
+            "name": "default_application_root_id"
+          }
+        }
+      },
+      {
+        "id": "binding_notice_form_submit",
+        "control": "notice_form",
+        "event_id": "event_organisation_notice_submit",
+        "event": "form_submit",
+        "flow": "flow_record_organisation_notice",
+        "inputs": {
+          "title": {
+            "kind": "caller",
+            "name": "title"
+          },
+          "body": {
+            "kind": "caller",
+            "name": "body"
+          }
+        }
+      },
+      {
+        "id": "binding_privacy_form_submit",
+        "control": "privacy_form",
+        "event_id": "event_organisation_privacy_request_submit",
+        "event": "form_submit",
+        "flow": "flow_record_privacy_request",
+        "inputs": {
+          "subject": {
+            "kind": "caller",
+            "name": "subject"
+          },
+          "details": {
+            "kind": "caller",
+            "name": "details"
+          }
+        }
+      },
       {
         "id": "binding_suspend_account",
         "control": "accounts_region",
         "event_id": "event_suspend_account",
         "event": "row_action",
-        "flow": "org_admin_suspend_account",
+        "flow": "flow_suspend_organization_account",
         "inputs": {
           "organization_account_id": {
             "kind": "caller",
@@ -2366,7 +2777,7 @@
         "control": "accounts_region",
         "event_id": "event_reactivate_account",
         "event": "row_action",
-        "flow": "org_admin_reactivate_account",
+        "flow": "flow_reactivate_organization_account",
         "inputs": {
           "organization_account_id": {
             "kind": "caller",
@@ -2383,7 +2794,7 @@
         "control": "accounts_region",
         "event_id": "event_close_account",
         "event": "row_action",
-        "flow": "org_admin_close_account",
+        "flow": "flow_close_organization_account",
         "inputs": {
           "organization_account_id": {
             "kind": "caller",
@@ -2396,11 +2807,28 @@
         }
       },
       {
+        "id": "binding_create_invitation",
+        "control": "button_create_invitation",
+        "event_id": "event_organisation_settings_action",
+        "event": "action",
+        "flow": "flow_create_organization_invitation",
+        "inputs": {
+          "invited_email": {
+            "kind": "caller",
+            "name": "invited_email"
+          },
+          "expires_at": {
+            "kind": "caller",
+            "name": "expires_at"
+          }
+        }
+      },
+      {
         "id": "binding_revoke_invitation",
         "control": "invitations_region",
         "event_id": "event_revoke_invitation",
         "event": "row_action",
-        "flow": "org_admin_revoke_invitation",
+        "flow": "flow_revoke_organization_invitation",
         "inputs": {
           "invitation_id": {
             "kind": "caller",

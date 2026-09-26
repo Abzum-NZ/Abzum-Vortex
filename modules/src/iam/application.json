@@ -105,7 +105,10 @@
           "vortex.organisation_administration.person.read",
           "vortex.organisation_administration.role.read",
           "vortex.organisation_administration.group.read",
-          "vortex.organisation_administration.role_assignment.read"
+          "vortex.organisation_administration.group_membership.read",
+          "vortex.organisation_administration.role_assignment.read",
+          "vortex.organisation_administration.role_activation.read",
+          "vortex.organisation_administration.delegation.read"
         ]
       }
     ],
@@ -1056,6 +1059,19 @@
                           "label": {
                             "kind": "text",
                             "value": "Member"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.organisation_administration:group_membership.group_id"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Group"
                           }
                         }
                       },
