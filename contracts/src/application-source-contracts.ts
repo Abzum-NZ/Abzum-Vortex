@@ -1,5 +1,9 @@
-﻿import { z } from "zod";
-import { applicationExperienceStateSchema } from "./catalogues";
+import { z } from "zod";
+import {
+  applicationExperienceStateSchema,
+  workflowNodeTypeKeys,
+  workflowValueTypeSchema,
+} from "./catalogues";
 import { applicationSourceContractVersion } from "./application-contract-versions";
 import { builderKeySchema, namespacedKeySchema, semanticVersionSchema } from "./identifiers";
 import { jsonValueSchema, labelSchema } from "./common";
@@ -29,6 +33,7 @@ import {
 } from "./application-composition-v2";
 import { sourceComponentFlowBindingSchema } from "./application-flow-bindings";
 import { flowAliasSchema, sourceFlowCollectionSchema } from "./flow-source-contracts";
+import { sourceWorkflowRunAsSchema } from "./run-as-vocabulary";
 
 const maximumSourceDocumentNodes = 50_000;
 const maximumSourceNestingDepth = 32;
@@ -304,6 +309,236 @@ export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
         });
     }),
 ]);
+// Legacy authored node-and-edge workflows. Application content no longer carries them (#1086): the
+// compiler validates them as source and compiles them to nothing. They remain only until the shipped
+// background workflows become durable flows (#1088, #1092); do not extend this shape.
+const sourceWorkflowValueSchema = z.discriminatedUnion("source", [
+  z.object({ source: z.literal("literal"), value: jsonValueSchema }).strict(),
+  z.object({ source: z.literal("trigger_field"), field: sourceQualifiedFieldSchema }).strict(),
+  z.object({ source: z.literal("trigger_input"), input: builderKeySchema }).strict(),
+  z
+    .object({
+      source: z.literal("node_output"),
+      node: sourceAliasSchema,
+      output: builderKeySchema,
+    })
+    .strict(),
+  z.object({ source: z.literal("current_record") }).strict(),
+  z.object({ source: z.literal("current_actor") }).strict(),
+  z.object({ source: z.literal("current_time") }).strict(),
+]);
+const isSourceRecordReferenceType = (type: string) =>
+  type === "record_reference" || type === "record_reference_list";
+const sourceWorkflowDeclaredOutputSchema = z
+  .object({
+    key: builderKeySchema,
+    type: workflowValueTypeSchema,
+    record_types: z.array(sourceQualifiedRecordTypeSchema).min(1).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (isSourceRecordReferenceType(value.type) !== (value.record_types !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["record_types"],
+        message: "Record-reference and record-list outputs require their allowed record types",
+      });
+  });
+const sourceWorkflowConfigByType = {
+  start: z.object({}).strict(),
+  condition: sourceQualifiedConditionSchema,
+  decision_table: z
+    .object({
+      decisions: z
+        .array(
+          z.object({ when: sourceQualifiedConditionSchema, output: builderKeySchema }).strict(),
+        )
+        .min(2),
+    })
+    .strict(),
+  bounded_loop: z
+    .object({ query: builderKeySchema, maximum_records: z.number().int().min(1).max(1_000) })
+    .strict(),
+  delay: z.object({ seconds: z.number().int().min(1).max(7_776_000) }).strict(),
+  wait_until: z.object({ field: sourceQualifiedFieldSchema }).strict(),
+  start_workflow: z.object({ workflow: builderKeySchema }).strict(),
+  stop: z.object({ reason_code: builderKeySchema }).strict(),
+  create_record: z
+    .object({
+      record_type: sourceQualifiedRecordTypeSchema,
+      values: z.record(builderKeySchema, sourceWorkflowValueSchema),
+    })
+    .strict(),
+  change_record: z
+    .object({
+      record_type: sourceQualifiedRecordTypeSchema,
+      record: sourceWorkflowValueSchema,
+      values: z.record(builderKeySchema, sourceWorkflowValueSchema),
+    })
+    .strict(),
+  run_action: z
+    .object({
+      action: namespacedKeySchema,
+      subject: sourceWorkflowValueSchema,
+      inputs: z.record(builderKeySchema, sourceWorkflowValueSchema),
+    })
+    .strict(),
+  soft_delete_record: z
+    .object({ record_type: sourceQualifiedRecordTypeSchema, record: sourceWorkflowValueSchema })
+    .strict(),
+  duplicate_record: z
+    .object({ record_type: sourceQualifiedRecordTypeSchema, record: sourceWorkflowValueSchema })
+    .strict(),
+  add_relationship: z
+    .object({
+      relationship: sourceQualifiedRelationshipSchema,
+      subject: sourceWorkflowValueSchema,
+      target: sourceWorkflowValueSchema,
+    })
+    .strict(),
+  copy_relationships: z
+    .object({
+      relationships: z.array(sourceQualifiedRelationshipSchema).min(1).max(100),
+      source_record: sourceWorkflowValueSchema,
+      target_record: sourceWorkflowValueSchema,
+    })
+    .strict(),
+  request_form: z
+    .object({
+      page: builderKeySchema,
+      responder_permission: namespacedKeySchema,
+      due_in_seconds: z.number().int().min(1).max(7_776_000),
+      timeout_outcome: builderKeySchema,
+      outputs: z.array(sourceWorkflowDeclaredOutputSchema).min(1).max(100),
+    })
+    .strict(),
+  query_records: z.object({ query: builderKeySchema }).strict(),
+  set_values: z
+    .object({
+      record: sourceWorkflowValueSchema,
+      values: z.record(sourceQualifiedFieldSchema, sourceWorkflowValueSchema),
+    })
+    .strict(),
+  format_value: z
+    .object({ formatter: builderKeySchema, input: sourceWorkflowValueSchema })
+    .strict(),
+  generate_export: z
+    .object({ query: builderKeySchema, maximum_rows: z.number().int().min(1).max(100_000) })
+    .strict(),
+  attach_file: z
+    .object({
+      record: sourceWorkflowValueSchema,
+      field: sourceQualifiedFieldSchema,
+      file: sourceWorkflowValueSchema,
+    })
+    .strict(),
+  move_file: z
+    .object({
+      record: sourceWorkflowValueSchema,
+      field: sourceQualifiedFieldSchema,
+      file: sourceWorkflowValueSchema,
+    })
+    .strict(),
+  call_connection: z
+    .object({
+      connection: sourceAliasSchema,
+      operation: builderKeySchema,
+      inputs: z.record(builderKeySchema, sourceWorkflowValueSchema),
+    })
+    .strict(),
+  acknowledge_message: z.object({ message: builderKeySchema }).strict(),
+} satisfies Record<(typeof workflowNodeTypeKeys)[number], z.ZodType>;
+const sourceWorkflowNodeMembers = workflowNodeTypeKeys.map((type) =>
+  z
+    .object({
+      id: sourceAliasSchema,
+      type: z.literal(type),
+      config: sourceWorkflowConfigByType[type],
+      permission: namespacedKeySchema.optional(),
+      timeout_seconds: z.number().int().min(1).max(7_776_000).optional(),
+      retry: z
+        .object({
+          maximum_attempts: z.number().int().min(1).max(20),
+          initial_delay_seconds: z.number().int().min(0).max(86_400),
+          maximum_delay_seconds: z.number().int().min(0).max(86_400),
+          backoff: z.enum(["fixed", "exponential"]),
+        })
+        .strict()
+        .optional(),
+      duplicate_protection: z.enum(["not_applicable", "required"]).optional(),
+      activity: builderKeySchema.optional(),
+      redaction: z.enum(["identifiers_only", "safe_fields", "no_payload"]).optional(),
+    })
+    .strict(),
+);
+const sourceWorkflowNodeSchema = z.discriminatedUnion(
+  "type",
+  sourceWorkflowNodeMembers as [
+    (typeof sourceWorkflowNodeMembers)[number],
+    (typeof sourceWorkflowNodeMembers)[number],
+    ...(typeof sourceWorkflowNodeMembers)[number][],
+  ],
+);
+const sourceWorkflowTriggerInputSchema = z
+  .object({
+    key: builderKeySchema,
+    type: workflowValueTypeSchema,
+    source: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("record_field"), field: builderKeySchema }).strict(),
+      z.object({ kind: z.literal("payload"), key: builderKeySchema }).strict(),
+    ]),
+    record_types: z.array(sourceQualifiedRecordTypeSchema).min(1).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (isSourceRecordReferenceType(value.type) !== (value.record_types !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["record_types"],
+        message: "Record-reference and record-list inputs require their allowed record types",
+      });
+  });
+const sourceWorkflowTriggerCommon = {
+  inputs: z.array(sourceWorkflowTriggerInputSchema).max(100),
+  condition: sourceConditionSchema.nullable(),
+  duplicate_protection: z.enum(["not_required", "required"]),
+};
+const sourceWorkflowScheduleSchema = z
+  .object({
+    cadence: z.enum(["hourly", "daily", "weekly", "monthly"]),
+    interval: z.number().int().min(1).max(365),
+    time_zone: z.string().min(1).max(100),
+    minute: z.number().int().min(0).max(59),
+    hour: z.number().int().min(0).max(23).optional(),
+    week_day: z.number().int().min(1).max(7).optional(),
+    month_day: z.number().int().min(1).max(31).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const valid =
+      (value.cadence === "hourly" &&
+        value.hour === undefined &&
+        value.week_day === undefined &&
+        value.month_day === undefined) ||
+      (value.cadence === "daily" &&
+        value.hour !== undefined &&
+        value.week_day === undefined &&
+        value.month_day === undefined) ||
+      (value.cadence === "weekly" &&
+        value.hour !== undefined &&
+        value.week_day !== undefined &&
+        value.month_day === undefined) ||
+      (value.cadence === "monthly" &&
+        value.hour !== undefined &&
+        value.week_day === undefined &&
+        value.month_day !== undefined);
+    if (!valid)
+      context.addIssue({
+        code: "custom",
+        path: ["cadence"],
+        message: "Schedule fields must match cadence",
+      });
+  });
 const sourceInterfaceValueTypeSchema = z.enum([
   "text",
   "number",
@@ -521,6 +756,67 @@ export const sourceApplicationBodyV2Schema = z
             .max(20),
           page_size: z.number().int().min(1).max(200),
           relationship_hops: z.number().int().min(0).max(2),
+        })
+        .strict(),
+    ).max(100),
+    /** Legacy node-and-edge workflows; validated as source, compiled to nothing (#1086). */
+    workflows: z.array(
+      z
+        .object({
+          id: sourceAliasSchema,
+          key: builderKeySchema,
+          name: z.string().min(1).max(120),
+          trigger: z.discriminatedUnion("kind", [
+            z
+              .object({
+                kind: z.literal("event"),
+                event: namespacedKeySchema,
+                record_type: sourceQualifiedRecordTypeSchema,
+                ...sourceWorkflowTriggerCommon,
+              })
+              .strict(),
+            z
+              .object({
+                kind: z.literal("schedule"),
+                schedule: sourceWorkflowScheduleSchema,
+                ...sourceWorkflowTriggerCommon,
+              })
+              .strict(),
+            z
+              .object({
+                kind: z.literal("incoming_message"),
+                message: builderKeySchema,
+                ...sourceWorkflowTriggerCommon,
+              })
+              .strict(),
+            z
+              .object({
+                kind: z.literal("button"),
+                action: namespacedKeySchema,
+                ...sourceWorkflowTriggerCommon,
+              })
+              .strict(),
+            z
+              .object({
+                kind: z.literal("interface"),
+                operation: builderKeySchema,
+                ...sourceWorkflowTriggerCommon,
+              })
+              .strict(),
+            z
+              .object({
+                kind: z.literal("workflow"),
+                workflow: builderKeySchema,
+                ...sourceWorkflowTriggerCommon,
+              })
+              .strict(),
+          ]),
+          run_as: sourceWorkflowRunAsSchema,
+          maximum_nesting_depth: z.number().int().min(1).max(5),
+          nodes: z.array(sourceWorkflowNodeSchema).min(1).max(100),
+          edges: z.array(
+            z.tuple([sourceAliasSchema, sourceAliasSchema, builderKeySchema.optional()]),
+          ).max(200),
         })
         .strict(),
     ).max(100),

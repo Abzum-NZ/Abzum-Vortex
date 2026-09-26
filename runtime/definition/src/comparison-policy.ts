@@ -1684,53 +1684,6 @@ const comparePipeline = (
     reasons.push(makeReason("patch", "presentation_changed", "pipeline", "order", id));
 };
 
-const compareWorkflow = (
-  reasons: VersionImpactReason[],
-  previous: RecordValue,
-  candidate: RecordValue,
-): void => {
-  const id = candidate.workflowId;
-  pushChange(
-    reasons,
-    previous.name,
-    candidate.name,
-    "patch",
-    "presentation_changed",
-    "workflow",
-    "name",
-    id,
-  );
-  pushChange(
-    reasons,
-    previous.key,
-    candidate.key,
-    "major",
-    "component_key_changed",
-    "workflow",
-    "key",
-    id,
-  );
-  for (const key of ["trigger", "runAs", "edges", "maximumNestingDepth"])
-    pushChange(
-      reasons,
-      previous[key],
-      candidate[key],
-      "major",
-      "existing_behavior_changed",
-      "workflow",
-      "behavior",
-      id,
-    );
-  compareKeyed(
-    reasons,
-    previous.nodes as RecordValue[],
-    candidate.nodes as RecordValue[],
-    "nodeId",
-    "workflow_node",
-    (left, right) => compareSimpleComponent(reasons, "workflow_node", right.nodeId, left, right),
-  );
-};
-
 const compareInterface = (
   reasons: VersionImpactReason[],
   previous: RecordValue,

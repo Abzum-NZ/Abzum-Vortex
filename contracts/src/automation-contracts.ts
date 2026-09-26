@@ -1,4 +1,4 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 import { duplicateProtectionKeySchema, jsonValueSchema } from "./common";
 import {
   activityIdSchema,
@@ -18,7 +18,6 @@ import {
   workflowNodeIdSchema,
   workflowRunIdSchema,
 } from "./identifiers";
-
 
 export const workflowExecutionReferenceSchema = z
   .object({
