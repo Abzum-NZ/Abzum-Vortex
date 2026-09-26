@@ -664,7 +664,6 @@
         "type": "form",
         "record_type": "vortex.tenant_administration:organization_lifecycle_request",
         "permission": "vortex.tenant_administration.organization_lifecycle_request.submit",
-        "commit_action": "vortex.tenant_administration.organization_lifecycle_request.submit",
         "states": [
           "normal",
           "loading",

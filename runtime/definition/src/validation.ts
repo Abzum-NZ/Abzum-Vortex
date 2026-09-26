@@ -70,6 +70,7 @@ import {
   validateApplicationSourceCatalogue,
 } from "./application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
+import { deriveFormCommitActionKeys } from "./form-commit";
 
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
@@ -3204,57 +3205,17 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           [`${recordTypeId}:${key.slice(key.lastIndexOf(".") + 1)}`, key] as const,
       ),
     );
-    /**
-     * The executable action keys a flow commits: a Save record task commits the standard create
-     * or update of its record type, and a Call protected operation task commits the named action it
-     * calls. An unresolvable Save commits an empty key, so it never matches a declared commit.
-     * A Run flow task commits whatever the flow it runs commits, followed once per flow.
-     */
     const flowsForCommits = new Map(
       array(content.flows).map((flow) => [String(flow.id), flow as unknown as FlowDefinition]),
     );
-    const flowCommitActionKeys = (flow: JsonObject): string[] => {
-      const keys: string[] = [];
-      const followed = new Set<string>();
-      const visitFlow = (canonical: FlowDefinition) => {
-        if (followed.has(String(canonical.id))) return;
-        followed.add(String(canonical.id));
-        visit(canonical.tasks);
-        visit(canonical.errors);
-        visit(canonical.finally);
-      };
-      const visit = (tasks: readonly FlowTask[]) => {
-        for (const task of tasks) {
-          if (task.type === "run_flow") {
-            const target = flowsForCommits.get(
-              String((task as Extract<FlowTask, { type: "run_flow" }>).flowId),
-            );
-            // A flow outside this release commits nothing a page could declare, so it never matches.
-            if (target === undefined) keys.push("");
-            else visitFlow(target);
-          }
-          const properties = (task as { properties?: Record<string, JsonObject> }).properties;
-          const literal = (name: string): string | undefined => {
-            const value = properties?.[name];
-            return value?.kind === "literal" ? String(object(value.literal).value) : undefined;
-          };
-          if (task.type === "record.save")
-            keys.push(
-              standardActionKeysByRecordAction.get(
-                `${literal("record_type")}:${properties?.record === undefined ? "create" : "update"}`,
-              ) ?? "",
-            );
-          else if (task.type === "operation.call") {
-            const called = literal("operation");
-            if (called !== undefined && executableActionKeys.has(called)) keys.push(called);
-          }
-          for (const child of flowTaskChildLists(task)) visit(child.tasks);
-        }
-      };
-      visitFlow(flow as unknown as FlowDefinition);
-      return keys;
-    };
     const executableActionKeys = new Set([...actionKeys, ...standardActionKeys]);
+    // The record type a committed executable action belongs to: a bound Module's standard record
+    // action resolves by its declared record, and a named action by its subject record.
+    const commitActionRecordType = (key: string): string | undefined =>
+      standardActionRecordTypes.get(key) ??
+      (actions.get(key)?.subjectRecordTypeId === undefined
+        ? undefined
+        : String(actions.get(key)!.subjectRecordTypeId));
     const events = new Map(
       [
         ...array(content.events),
@@ -3489,21 +3450,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     const applicationPlacementIds = new Set(
       applicationPlacementEntries.map(([placementId]) => placementId),
     );
-    // The declared commit action of every form page that places each component. A form's
-    // submission flow may commit only that action, so the page and its flow share one commit.
-    const pageCommitActionKeysByPlacement = new Map<string, Set<string>>();
-    for (const page of pages.values()) {
-      const pagePlacementIds = [
-        ...pageContentPlacementEntriesV2(page),
-        ...pageShellPlacementEntriesV2(page),
-      ].map(([placementId]) => placementId);
-      if (page.commitActionKey !== undefined)
-        for (const placementId of pagePlacementIds) {
-          const commitKeys = pageCommitActionKeysByPlacement.get(placementId) ?? new Set<string>();
-          commitKeys.add(String(page.commitActionKey));
-          pageCommitActionKeysByPlacement.set(placementId, commitKeys);
-        }
-    }
     const identityCollections: readonly (readonly [JsonObject[], string, string])[] = [
       [array(content.pages), "pageId", "key"],
       [array(content.roles), "roleId", "key"],
@@ -3651,10 +3597,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       const pageQueryRecordId = pageQuery
         ? String(object(pageQuery.recordType).recordTypeId)
         : undefined;
-      const commitActionRecordId = page.commitActionKey
-        ? (actions.get(String(page.commitActionKey))?.subjectRecordTypeId ??
-          standardActionRecordTypes.get(String(page.commitActionKey)))
-        : undefined;
       if (!pageNavigationPermissionKnown(page.accessPermissionKey))
         failures.push(
           failure(output, "vortex.definition.application_page_permission", "broken_reference"),
@@ -3667,13 +3609,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           failure(output, "vortex.definition.application_page_query", "broken_reference"),
         );
       const pageRecord = page.recordType ? records.get(pageRecordId!) : undefined;
-      if (
-        (page.recordType && !pageRecord) ||
-        (page.commitActionKey &&
-          (!executableActionKeys.has(String(page.commitActionKey)) ||
-            !pageRecordId ||
-            String(commitActionRecordId) !== pageRecordId))
-      )
+      if (page.recordType && !pageRecord)
         failures.push(
           failure(output, "vortex.definition.application_page_references", "broken_reference"),
         );
@@ -4190,17 +4126,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           bindingFailure("vortex.definition.application_flow_binding_target", "broken_reference"),
         );
       if (flow === undefined) continue;
-      // A form's submission may commit only the action its page declares.
-      const pageCommitKeys = pageCommitActionKeysByPlacement.get(String(binding.controlId));
-      const committed = flowCommitActionKeys(flow as unknown as JsonObject);
-      if (
-        binding.event === "form_submit" &&
-        pageCommitKeys !== undefined &&
-        committed.some((key) => pageCommitKeys.size !== 1 || !pageCommitKeys.has(key))
-      )
-        failures.push(
-          bindingFailure("vortex.definition.application_flow_binding_target", "scope_conflict"),
-        );
       const inputs = object(flowReference.inputs ?? {});
       if (Object.keys(inputs).some((name) => !Object.hasOwn(flow.inputs, name)))
         failures.push(
@@ -4213,6 +4138,39 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       )
         failures.push(
           bindingFailure("vortex.definition.application_flow_binding_inputs", "required_value"),
+        );
+    }
+
+    // A form declares no commit of its own: it commits what its bound `form_submit` flows commit.
+    // A form or guided-form page whose flows commit nothing, or a commit that resolves to no
+    // executable action, is refused rather than published as a page that cannot save; a commit of
+    // an action outside the page's record type is refused as out of the form's scope.
+    const formCommits = deriveFormCommitActionKeys(
+      {
+        pages: array(content.pages),
+        shells: array(content.shells),
+        flows: array(content.flows),
+        flowBindings: array(content.flowBindings),
+      },
+      { standardActionKeysByRecordAction, executableActionKeys },
+    );
+    for (const page of pages.values()) {
+      if (page.type !== "form" && page.type !== "guided_form") continue;
+      const recordTypeId = page.recordType
+        ? String(object(page.recordType).recordTypeId)
+        : undefined;
+      const committed = formCommits.get(String(page.pageId)) ?? [];
+      if (
+        recordTypeId === undefined ||
+        committed.length === 0 ||
+        committed.some((key) => !executableActionKeys.has(key))
+      )
+        failures.push(
+          failure(output, "vortex.definition.application_page_references", "broken_reference"),
+        );
+      else if (committed.some((key) => commitActionRecordType(key) !== recordTypeId))
+        failures.push(
+          failure(output, "vortex.definition.application_page_references", "scope_conflict"),
         );
     }
   }
