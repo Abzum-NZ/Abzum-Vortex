@@ -1,6 +1,31 @@
 "use client";
 
 import { useId, useState, type ReactElement } from "react";
+import { ChevronDownIcon, MoreHorizontalIcon } from "lucide-react";
+import type { RecordsTableActionContract } from "@vortex/contracts";
+import { Button } from "../components/button";
+import { Checkbox } from "../components/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "../components/dropdown-menu";
+import { Empty, EmptyHeader, EmptyTitle } from "../components/empty";
+import { Input } from "../components/input";
+import { Label } from "../components/label";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "../components/pagination";
+import { Skeleton } from "../components/skeleton";
+import { cn } from "../lib/utils";
 import type {
   DisplayCellValue,
   DisplayEventHandler,
@@ -21,27 +46,78 @@ export function DisplayHeader({
   const refresh = events?.refresh;
   if (title === undefined && refresh === undefined) return null;
   return (
-    <div className="vortex-display-header">
-      {title === undefined ? null : <h2 className="vortex-display-title">{title}</h2>}
+    <div className="mb-4 flex items-center justify-between gap-2">
+      {title === undefined ? null : (
+        <h2 className="m-0 font-heading text-lg font-semibold text-foreground">{title}</h2>
+      )}
       {refresh === undefined ? null : (
-        <button
-          type="button"
-          className="vortex-button-refresh"
+        <Button
+          variant="outline"
+          size="sm"
           aria-label={`Refresh ${accessibleName}`}
           onClick={() => refresh({ event: "refresh" })}
         >
           Refresh
-        </button>
+        </Button>
       )}
     </div>
   );
 }
 
 /**
+ * The loading state of the Records table and lists: a data-free skeleton announced as a status at
+ * the component, carrying the same state identity and accessible name the standard state container
+ * gives a loading state.
+ */
+export function RecordsLoadingState({
+  accessibleName,
+}: Readonly<{ accessibleName: string }>): ReactElement {
+  return (
+    <div
+      role="status"
+      aria-busy="true"
+      data-vortex-display-state="loading"
+      className="flex flex-col gap-2 rounded-lg border border-border bg-background p-4"
+      aria-label={`Loading ${accessibleName}`}
+    >
+      <Skeleton className="h-4 w-1/3" />
+      <Skeleton className="h-8 w-full" />
+      <Skeleton className="h-8 w-full" />
+      <Skeleton className="h-8 w-full" />
+    </div>
+  );
+}
+
+/**
+ * The no-rows state of the Records table and lists: the authored or default neutral message in the
+ * shadcn empty presentation, announced as a status with the same state identity and accessible name
+ * the standard state container gives an empty state.
+ */
+export function RecordsEmptyState({
+  accessibleName,
+  message,
+}: Readonly<{ accessibleName: string; message: string }>): ReactElement {
+  return (
+    <Empty
+      role="status"
+      data-vortex-display-state="empty"
+      className="border border-border text-muted-foreground"
+      aria-label={`${accessibleName}: empty`}
+    >
+      <EmptyHeader>
+        <EmptyTitle>{message}</EmptyTitle>
+      </EmptyHeader>
+    </Empty>
+  );
+}
+
+/**
  * The per-row selection control bound to the declared `selection_changed` event and stable record
- * identity. `multiple` renders a checkbox; `single` renders a radio whose `groupName` scopes its
- * group to one table, so choosing another row replaces the choice. It only reports the viewer's
- * choice; the host owns the selection and the projected `selectedRecordIds`.
+ * identity. `multiple` renders a shadcn Checkbox. `single` renders one radio group scoped to the
+ * table by `groupName`, so choosing another row replaces the choice; the shadcn radio group must
+ * wrap all of its radios in one element, which table rows cannot share, so that mode keeps the
+ * platform's own radio. Either way the control only reports the viewer's choice; the host owns the
+ * selection and the projected `selectedRecordIds`.
  */
 export function SelectionControl({
   row,
@@ -75,18 +151,12 @@ export function SelectionControl({
       />
     );
   return (
-    <input
-      type="checkbox"
-      className="vortex-selection-checkbox"
+    <Checkbox
       aria-label={`Select ${name}`}
       checked={selected}
       onClick={(event) => event.stopPropagation()}
-      onChange={(event) =>
-        onSelection({
-          event: "selection_changed",
-          recordId: row.recordId,
-          selected: event.currentTarget.checked,
-        })
+      onCheckedChange={(checked) =>
+        onSelection({ event: "selection_changed", recordId: row.recordId, selected: checked })
       }
     />
   );
@@ -107,15 +177,13 @@ export function SelectAllControl({
   const onSelection = events?.selection_changed;
   if (onSelection === undefined) return null;
   return (
-    <input
-      type="checkbox"
-      className="vortex-selection-checkbox vortex-selection-all"
+    <Checkbox
       aria-label={
         allSelected ? `Clear selection for ${accessibleName}` : `Select all ${accessibleName}`
       }
       checked={allSelected}
       disabled={recordIds.length === 0}
-      onChange={() => {
+      onCheckedChange={() => {
         for (const recordId of recordIds)
           onSelection({ event: "selection_changed", recordId, selected: !allSelected });
       }}
@@ -124,10 +192,8 @@ export function SelectAllControl({
 }
 
 /**
- * Row command bound to the declared `row_action` event; the bound flow decides its meaning. A
- * declared action carries the stable identity of its own binding, so several named commands on one
- * table reach different flows. An earlier release that declares no named action keeps the one
- * legacy control, identified by the placement itself.
+ * One row command of a list or record detail, bound to the declared `row_action` event; the bound
+ * flow decides its meaning. The Records table offers its own row commands as one Dropdown Menu.
  */
 export function RowActionControl({
   recordId,
@@ -146,9 +212,9 @@ export function RowActionControl({
   if (onRowAction === undefined) return null;
   const text = label ?? "Open";
   return (
-    <button
-      type="button"
-      className="vortex-button-row-action"
+    <Button
+      variant="outline"
+      size="sm"
       aria-label={`${text} ${name}`}
       onClick={(clickEvent) => {
         clickEvent.stopPropagation();
@@ -160,44 +226,189 @@ export function RowActionControl({
       }}
     >
       {text}
-    </button>
+    </Button>
   );
 }
 
 /**
- * One bulk command over the current selection. It is disabled until at least one row is selected,
- * and disabled while any selected row lacks the record action capability the command declares. It
- * sends the selected record identities as a bounded list, never an implicit first record.
+ * Every row command the row shows, as one Dropdown Menu bound to the declared `row_action` event.
+ * Each declared action carries the stable identity of its own binding, so several named commands on
+ * one table reach different flows. `actions` is undefined only for a release that declares no named
+ * action: that release keeps the one legacy control, identified by the placement itself, as the
+ * menu's single command. Declared actions the row does not show leave no command at all.
  */
-export function BulkActionControl({
-  eventId,
-  label,
-  recordIds,
-  capable = true,
+export function RowActionsMenu({
+  recordId,
+  name,
+  actions,
   events,
 }: Readonly<{
-  eventId: string;
-  label: string;
+  recordId: string;
+  name: string;
+  actions: readonly RecordsTableActionContract[] | undefined;
+  events: DisplayEventHandlers | undefined;
+}>): ReactElement | null {
+  const onRowAction = events?.row_action;
+  if (onRowAction === undefined) return null;
+  const commands: readonly {
+    key: string;
+    label: string;
+    eventId: string | undefined;
+  }[] =
+    actions === undefined
+      ? [{ key: "row_action", label: "Open", eventId: undefined }]
+      : actions.map((action) => ({
+          key: action.eventId,
+          label: action.label,
+          eventId: action.eventId,
+        }));
+  // A row that shows no command keeps an empty actions cell, as before.
+  if (commands.length === 0) return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label={`Actions for ${name}`}
+            // Opening the commands of a row is not a request to open the row itself.
+            onClick={(event) => event.stopPropagation()}
+          />
+        }
+      >
+        <MoreHorizontalIcon />
+      </DropdownMenuTrigger>
+      {/* The menu is portalled, but React still bubbles its clicks through the row; choosing a
+          command is not a request to open the row itself. */}
+      <DropdownMenuContent onClick={(event) => event.stopPropagation()}>
+        {commands.map((command) => (
+          <DropdownMenuItem
+            key={command.key}
+            onClick={() =>
+              onRowAction(
+                command.eventId === undefined
+                  ? { event: "row_action", recordId }
+                  : { event: "row_action", eventId: command.eventId, recordId },
+              )
+            }
+          >
+            {command.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
+ * Every bulk command over the current selection, as one Dropdown Menu bound to the declared
+ * `bulk_action` event. A command is unavailable until at least one row is selected, and unavailable
+ * while any selected row lacks the record action capability the command declares. It sends the
+ * selected record identities as a bounded list, never an implicit first record.
+ */
+export function BulkActionsMenu({
+  accessibleName,
+  actions,
+  recordIds,
+  canRun,
+  events,
+}: Readonly<{
+  accessibleName: string;
+  actions: readonly RecordsTableActionContract[];
   recordIds: readonly string[];
-  capable?: boolean;
+  canRun: (action: RecordsTableActionContract) => boolean;
   events: DisplayEventHandlers | undefined;
 }>): ReactElement | null {
   const onBulkAction = events?.bulk_action;
   if (onBulkAction === undefined) return null;
   return (
-    <button
-      type="button"
-      className="vortex-button-bulk-action"
-      disabled={recordIds.length === 0 || !capable}
-      onClick={() => onBulkAction({ event: "bulk_action", eventId, recordIds: [...recordIds] })}
-    >
-      {label}
-    </button>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="outline" size="sm" aria-label={`Bulk actions for ${accessibleName}`} />
+        }
+      >
+        Bulk actions
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        {actions.map((action) => (
+          <DropdownMenuItem
+            key={action.eventId}
+            disabled={recordIds.length === 0 || !canRun(action)}
+            onClick={() =>
+              onBulkAction({
+                event: "bulk_action",
+                eventId: action.eventId,
+                recordIds: [...recordIds],
+              })
+            }
+          >
+            {action.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
 /** The closed input kinds a declared filterable field's control can take. */
 export type FilterInputKind = "text" | "number" | "date" | "boolean";
+
+/** The three closed values a yes/no filter commits, and the label each one shows. */
+const BOOLEAN_FILTER_OPTIONS = [
+  { value: "", label: "Any" },
+  { value: "true", label: "Yes" },
+  { value: "false", label: "No" },
+] as const;
+
+/**
+ * A yes/no filter as a Dropdown Menu of its three closed values, keeping the committed value as the
+ * trigger's label and in its accessible name. It reports only a real change, exactly as the native
+ * choice list did.
+ */
+function BooleanFilterControl({
+  id,
+  label,
+  value,
+  onCommit,
+}: Readonly<{
+  id: string;
+  label: string;
+  value: string;
+  onCommit: (next: string) => void;
+}>): ReactElement {
+  const current = (
+    BOOLEAN_FILTER_OPTIONS.find((option) => option.value === value) ?? BOOLEAN_FILTER_OPTIONS[0]
+  ).label;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            id={id}
+            variant="outline"
+            size="default"
+            aria-label={`Filter by ${label}: ${current}`}
+            className="w-full justify-between"
+          />
+        }
+      >
+        {current}
+        <ChevronDownIcon data-icon="inline-end" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        <DropdownMenuRadioGroup value={value} onValueChange={(next: string) => onCommit(next)}>
+          {BOOLEAN_FILTER_OPTIONS.map((option) => (
+            <DropdownMenuRadioItem key={option.value} value={option.value} closeOnClick>
+              {option.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 /**
  * One filter control for a configured filterable field. It emits the declared `filter_changed`
@@ -231,27 +442,21 @@ export function FilterControl({
     switch (input) {
       case "boolean":
         return (
-          <select
+          <BooleanFilterControl
             id={inputId}
-            className="vortex-select"
-            aria-label={`Filter by ${label}`}
+            label={label}
             value={value}
-            onChange={(event) => {
-              setValue(event.currentTarget.value);
-              emit(event.currentTarget.value);
+            onCommit={(next) => {
+              setValue(next);
+              emit(next);
             }}
-          >
-            <option value="">Any</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
+          />
         );
       case "date":
         return (
-          <input
+          <Input
             id={inputId}
             type="date"
-            className="vortex-input"
             aria-label={`Filter by ${label}`}
             value={value}
             onChange={(event) => {
@@ -262,10 +467,9 @@ export function FilterControl({
         );
       case "number":
         return (
-          <input
+          <Input
             id={inputId}
             type="number"
-            className="vortex-input"
             aria-label={`Filter by ${label}`}
             value={value}
             onChange={(event) => setValue(event.currentTarget.value)}
@@ -281,10 +485,9 @@ export function FilterControl({
         );
       default:
         return (
-          <input
+          <Input
             id={inputId}
             type="search"
-            className="vortex-input"
             aria-label={`Filter by ${label}`}
             value={value}
             onChange={(event) => setValue(event.currentTarget.value)}
@@ -301,10 +504,8 @@ export function FilterControl({
     }
   })();
   return (
-    <div className="vortex-filter-control">
-      <label htmlFor={inputId} className="vortex-filter-label">
-        {label}
-      </label>
+    <div className="flex min-w-32 flex-col gap-1">
+      <Label htmlFor={inputId}>{label}</Label>
       {control}
     </div>
   );
@@ -327,26 +528,26 @@ export function SearchControl({
   if (onSearch === undefined) return null;
   return (
     <form
-      className="vortex-table-search"
+      className="flex items-end gap-1.5"
       role="search"
       onSubmit={(event) => {
         event.preventDefault();
         onSearch({ event: "search_changed", query });
       }}
     >
-      <label htmlFor={inputId} className="vortex-sr-only">
+      <Label htmlFor={inputId} className="sr-only">
         Search {accessibleName}
-      </label>
-      <input
+      </Label>
+      <Input
         id={inputId}
         type="search"
-        className="vortex-input vortex-table-search-input"
+        className="w-auto min-w-48"
         value={query}
         onChange={(event) => setQuery(event.currentTarget.value)}
       />
-      <button type="submit" className="vortex-button">
+      <Button type="submit" size="sm">
         Search
-      </button>
+      </Button>
     </form>
   );
 }
@@ -408,14 +609,11 @@ export function InlineEditCell({
   };
   if (value.kind === "boolean")
     return (
-      <input
-        type="checkbox"
-        className="vortex-inline-edit-checkbox"
+      <Checkbox
         aria-label={`Edit ${label}`}
         checked={checked}
         onClick={(event) => event.stopPropagation()}
-        onChange={(event) => {
-          const next = event.currentTarget.checked;
+        onCheckedChange={(next) => {
           setChecked(next);
           handler({
             event: "inline_edit",
@@ -429,9 +627,8 @@ export function InlineEditCell({
       />
     );
   return (
-    <input
+    <Input
       type={value.kind === "number" ? "number" : "text"}
-      className="vortex-inline-edit-input"
       aria-label={`Edit ${label}`}
       value={text}
       onClick={(event) => event.stopPropagation()}
@@ -462,31 +659,47 @@ export function PaginationControl({
 }>): ReactElement | null {
   if (page === undefined || pageCount === undefined) return null;
   const onPage = events?.page_changed;
+  const previousDisabled = page <= 1;
+  const nextDisabled = page >= pageCount;
+  // The shadcn paging links are anchors, so an unavailable page is announced as disabled and taken
+  // out of the tab order instead of carrying the native disabled attribute.
   return (
-    <nav className="vortex-pagination" aria-label={`Pages of ${accessibleName}`}>
-      <span className="vortex-pagination-info">
-        Page {page} of {pageCount}
-      </span>
-      {onPage === undefined ? null : (
-        <>
-          <button
-            type="button"
-            className="vortex-pagination-prev"
-            disabled={page <= 1}
-            onClick={() => onPage({ event: "page_changed", page: page - 1 })}
-          >
-            Previous page
-          </button>
-          <button
-            type="button"
-            className="vortex-pagination-next"
-            disabled={page >= pageCount}
-            onClick={() => onPage({ event: "page_changed", page: page + 1 })}
-          >
-            Next page
-          </button>
-        </>
-      )}
-    </nav>
+    <Pagination aria-label={`Pages of ${accessibleName}`} className="mt-2">
+      <PaginationContent>
+        {onPage === undefined ? null : (
+          <PaginationItem>
+            <PaginationPrevious
+              text="Previous page"
+              aria-disabled={previousDisabled}
+              tabIndex={previousDisabled ? -1 : 0}
+              className={cn(previousDisabled && "pointer-events-none opacity-50")}
+              onClick={() => {
+                if (previousDisabled) return;
+                onPage({ event: "page_changed", page: page - 1 });
+              }}
+            />
+          </PaginationItem>
+        )}
+        <PaginationItem>
+          <PaginationLink isActive size="default" aria-label={`Page ${page} of ${pageCount}`}>
+            {`${page} of ${pageCount}`}
+          </PaginationLink>
+        </PaginationItem>
+        {onPage === undefined ? null : (
+          <PaginationItem>
+            <PaginationNext
+              text="Next page"
+              aria-disabled={nextDisabled}
+              tabIndex={nextDisabled ? -1 : 0}
+              className={cn(nextDisabled && "pointer-events-none opacity-50")}
+              onClick={() => {
+                if (nextDisabled) return;
+                onPage({ event: "page_changed", page: page + 1 });
+              }}
+            />
+          </PaginationItem>
+        )}
+      </PaginationContent>
+    </Pagination>
   );
 }
