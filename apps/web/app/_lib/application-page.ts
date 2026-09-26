@@ -18,6 +18,7 @@ import {
   type ProtectedQueryRow,
 } from "@vortex/query";
 import {
+  createPageSubjectReader,
   createRecordsTableQueryResolver,
   createStoredNavigationProjectionService,
   createStoredPageCapabilityService,
@@ -26,6 +27,7 @@ import {
 } from "@vortex/page";
 import {
   readRecordDetailContract,
+  recordIdSchema,
   readRecordsTableContract,
   type ApplicationShellV2,
   type BlockPropertyValueV2Contract,
@@ -99,6 +101,13 @@ export type ApplicationPageResult =
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 type SearchParameters = Readonly<Record<string, string | readonly string[] | undefined>>;
+
+/**
+ * The page address parameter that carries a detail page's subject record id, the same name the
+ * component event vocabulary uses for a record identity. It is only a candidate: the record read
+ * path decides whether the viewer may read that record.
+ */
+const pageSubjectParameter = "record_id";
 
 const first = (value: string | readonly string[] | undefined): string | undefined =>
   typeof value === "string" ? value : value?.[0];
@@ -179,6 +188,9 @@ const logPlacementFailure = (
     | "query_not_bound"
     | "query_unavailable"
     | "query_refused"
+    | "subject_not_addressed"
+    | "subject_unavailable"
+    | "subject_refused"
     | "detail_command_invalid"
     | "detail_query_unavailable"
     | "detail_query_refused",
@@ -283,6 +295,7 @@ export const loadApplicationPage = async (
 
   const queries = createProtectedQueryService({ ...dependencies, continuationKey });
   const tables = createRecordsTableQueryResolver(queries);
+  const subjects = createPageSubjectReader(dependencies);
 
   const data: Record<string, PageDataState> = {};
   const bindings: Record<string, PlacementFlowBinding[]> = {};
@@ -309,6 +322,59 @@ export const loadApplicationPage = async (
     if (tableContract === undefined && detailContract === undefined) continue;
 
     const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
+
+    // A Record detail on a detail page that binds no query reads its page subject: the one record
+    // the page's own address names, of the page's declared record type, through the record read
+    // path under the viewer's own authority. Nothing here comes from the browser except the id.
+    if (detailContract !== undefined && queryId === undefined) {
+      const subjectType =
+        pageDefinition.type === "detail" && pageDefinition.recordType.state === "resolved"
+          ? pageDefinition.recordType
+          : undefined;
+      if (subjectType === undefined) {
+        logPlacementFailure(address, placementId, "query_not_bound");
+        data[placementId] = { status: "error" };
+        continue;
+      }
+      const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
+      if (!subjectId.success) {
+        logPlacementFailure(address, placementId, "subject_not_addressed");
+        data[placementId] = { status: "refused", reason: "not_found" };
+        continue;
+      }
+      const subjectModule = context.releaseSet.modules.find((module) =>
+        sameId(String(module.rootId), String(subjectType.moduleRootId)),
+      );
+      const subject = await subjects.read(session, selection, {
+        recordTypeId: String(subjectType.recordTypeId),
+        recordId: subjectId.data,
+      });
+      if (subject.kind === "temporarily_unavailable") {
+        logPlacementFailure(address, placementId, "subject_unavailable");
+        data[placementId] = { status: "error" };
+        continue;
+      }
+      if (subject.kind === "refused") {
+        logPlacementFailure(address, placementId, "subject_refused");
+        data[placementId] = { status: "refused", reason: "not_found" };
+        continue;
+      }
+      const display = projectRecordDetailData(
+        {
+          settings,
+          ...(subjectModule === undefined ? {} : { fieldLabels: fieldLabelsOf(subjectModule) }),
+        },
+        [subject.row],
+      );
+      data[placementId] =
+        display === undefined
+          ? { status: "refused", reason: "not_found" }
+          : display.status === "empty"
+            ? { status: "empty" }
+            : { status: "ready", values: display.values };
+      continue;
+    }
+
     const bound = queryId === undefined ? undefined : findModuleQuery(context, queryId);
     if (queryId === undefined || bound === undefined) {
       logPlacementFailure(address, placementId, "query_not_bound");
