@@ -479,12 +479,80 @@ export const flowFormulaSchema: z.ZodType<FlowFormula> = flowFormulaTreeSchema.s
   },
 );
 
-// ─── Values: literal, closed reference or formula ─────────────────────────────────────────────
+// ─── Values: literal, closed reference, formula or a map of values ───────────────────────────
+
+/** Closed bounds for one map value: how many entries it holds and how deeply maps may nest. */
+export const flowMaximumMapEntries = 100;
+export const flowMaximumMapDepth = 5;
+
+/**
+ * A map of named values. It is the one value kind that carries other values, so a task property
+ * declared as an input map can fill its entries from the flow's own inputs, variables and task
+ * outputs instead of only from a fixed literal. A plain JSON object literal is still exactly a
+ * literal: only this kind is ever resolved entry by entry, and an entry is a flow value of its own.
+ */
+export type FlowMapValue = Readonly<{
+  kind: "map";
+  entries: Readonly<Record<string, FlowValue>>;
+}>;
+
+export type FlowValueObject =
+  | Readonly<{ kind: "literal"; literal: FlowLiteral }>
+  | Readonly<{ kind: "reference"; reference: FlowReference }>
+  | Readonly<{ kind: "formula"; formula: FlowFormula }>
+  | FlowMapValue;
+
+/** Every value a task property, input map or binding may hold. */
+export type FlowValue = FlowValueObject;
+
+/** True while every nested map under `entries` is still within the closed nesting bound. */
+const flowMapEntriesWithinDepth = (
+  entries: Readonly<Record<string, FlowValue>>,
+  depth: number,
+): boolean =>
+  depth <= flowMaximumMapDepth &&
+  Object.values(entries).every(
+    (entry) => entry.kind !== "map" || flowMapEntriesWithinDepth(entry.entries, depth + 1),
+  );
+
+/**
+ * The entries of one map value: at most `flowMaximumMapEntries` named entries, and nesting no
+ * deeper than `flowMaximumMapDepth` maps. Both bounds are checked on the parsed entries, so a map
+ * that is deeper is refused wherever it is authored rather than at run time.
+ */
+const flowMapEntriesSchema = (): z.ZodType<Record<string, FlowValue>> =>
+  z
+    .record(builderKeySchema, flowValueSchema)
+    .refine((entries) => Object.keys(entries).length <= flowMaximumMapEntries, {
+      message: `A map value holds at most ${flowMaximumMapEntries} entries`,
+    })
+    .refine((entries) => flowMapEntriesWithinDepth(entries, 1), {
+      message: `A map value nests no deeper than ${flowMaximumMapDepth} maps`,
+    });
+
+const flowLiteralValueSchema = z
+  .object({ kind: z.literal("literal"), literal: flowLiteralSchema })
+  .strict();
+const flowReferenceValueSchema = z
+  .object({ kind: z.literal("reference"), reference: flowReferenceSchema })
+  .strict();
+const flowFormulaValueSchema = z
+  .object({ kind: z.literal("formula"), formula: flowFormulaSchema })
+  .strict();
+
+const flowMapValueSchema = z
+  .object({
+    kind: z.literal("map"),
+    // Built through a function so the recursive entry schema is created only when it is used.
+    entries: z.lazy(flowMapEntriesSchema),
+  })
+  .strict();
 
 export const flowValueObjectSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("literal"), literal: flowLiteralSchema }).strict(),
-  z.object({ kind: z.literal("reference"), reference: flowReferenceSchema }).strict(),
-  z.object({ kind: z.literal("formula"), formula: flowFormulaSchema }).strict(),
+  flowLiteralValueSchema,
+  flowReferenceValueSchema,
+  flowFormulaValueSchema,
+  flowMapValueSchema,
 ]);
 
 const shorthandReferenceValueSchema = z.string().transform((text, context) => {
@@ -502,10 +570,10 @@ const shorthandReferenceValueSchema = z.string().transform((text, context) => {
 
 /**
  * A value in a task property or input map. A bare string is only accepted as one whole closed
- * reference, so an untyped or malformed reference is refused rather than kept as text.
+ * reference, so an untyped or malformed reference is refused rather than kept as text. Its four
+ * object kinds are exactly the declared `FlowValue`, whose map entries recurse through this schema.
  */
 export const flowValueSchema = z.union([shorthandReferenceValueSchema, flowValueObjectSchema]);
-export type FlowValue = z.infer<typeof flowValueSchema>;
 
 // ─── Declarations ──────────────────────────────────────────────────────────────────────────────
 
@@ -934,8 +1002,15 @@ const taskFormulas = (task: FlowTask): FlowFormula[] => {
   } else {
     values.push(...Object.values((task as { properties: Record<string, FlowValue> }).properties));
   }
-  for (const value of values) if (value.kind === "formula") formulas.push(value.formula);
+  for (const value of values) collectValueFormulas(value, formulas);
   return formulas;
+};
+
+/** Every formula one value holds, including the formulas inside a map value's entries. */
+const collectValueFormulas = (value: FlowValue, into: FlowFormula[]): void => {
+  if (value.kind === "formula") into.push(value.formula);
+  else if (value.kind === "map")
+    for (const entry of Object.values(value.entries)) collectValueFormulas(entry, into);
 };
 
 // ─── The flow ────────────────────────────────────────────────────────────────────────────────
@@ -1079,7 +1154,10 @@ const refineFlow = (flow: FlowShape, context: z.RefinementCtx) => {
     issue(["tasks"], `A flow can hold at most ${flowMaximumTaskCount} tasks including nested tasks`);
 
   for (const [name, output] of Object.entries(flow.outputs)) {
-    if (output.value.kind === "formula" && !timeAllowed && flowFormulaUsesNow(output.value.formula))
+    if (timeAllowed) continue;
+    const formulas: FlowFormula[] = [];
+    collectValueFormulas(output.value, formulas);
+    if (formulas.some(flowFormulaUsesNow))
       issue(["outputs", name, "value"], "The now operator is allowed only in interactive and background flows");
   }
 };
@@ -1108,10 +1186,17 @@ export const flowBindingCallerValueSchema = z
   .object({ kind: z.literal("caller"), name: builderKeySchema })
   .strict();
 
+/**
+ * A binding's own input value. It is every value kind a task property may hold except a map: the
+ * invoking surface fills a binding input from what it already has, so it never resolves a map, and
+ * a binding that declared one would be refused by every surface that can start a flow.
+ */
 export const flowBindingInputSchema = z.union([
   shorthandReferenceValueSchema,
   z.discriminatedUnion("kind", [
-    ...flowValueObjectSchema.options,
+    flowLiteralValueSchema,
+    flowReferenceValueSchema,
+    flowFormulaValueSchema,
     flowBindingCallerValueSchema,
   ]),
 ]);

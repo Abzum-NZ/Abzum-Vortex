@@ -532,6 +532,12 @@ export function validateFlow(
         return resolveReference(value.reference, where, [...path, "reference"]);
       case "formula":
         return formulaType(value.formula, where, [...path, "formula"]);
+      // A map is a JSON object of values. Every entry is checked as a value of its own, so a
+      // reference inside it resolves or is refused exactly as one outside it would be.
+      case "map":
+        for (const [key, entry] of Object.entries(value.entries))
+          checkValue(entry, undefined, where, [...path, "entries", key]);
+        return "json";
     }
   };
 

@@ -280,6 +280,11 @@ type FlowValueJson = Readonly<
   | { kind: "reference"; reference: Readonly<Record<string, unknown>> }
 >;
 
+/**
+ * Only a single typed value is written to a field here, so a map value is not one and is refused
+ * rather than flattened or guessed. The composed flow resolves a map for the same field; this path
+ * never widens a field's written value to a map of values.
+ */
 const isFlowValue = (candidate: unknown): candidate is FlowValueJson => {
   if (!isPlainObject(candidate)) return false;
   if (candidate.kind === "literal")
