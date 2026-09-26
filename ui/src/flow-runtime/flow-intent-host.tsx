@@ -3,13 +3,20 @@
 import {
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
   type ReactElement,
   type ReactNode,
 } from "react";
+import { Button } from "../components/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/dialog";
 import type { LinkNavigationEnvironment } from "../launcher/link-navigation";
 import { performNavigateTask } from "../launcher/link-navigation";
 import type {
@@ -50,7 +57,17 @@ export type FlowIntentHostOptions = Readonly<{
   setFilter?: FlowIntentHost["setFilter"];
 }>;
 
-/** A modal surface on the native `<dialog>`: focus moves in, Tab stays inside, Escape dismisses. */
+/** Flow surface width, the same 36rem the theme's medium dialog scale used. */
+const FLOW_SURFACE_CLASS = "max-h-[calc(100%-2rem)] overflow-y-auto sm:max-w-xl";
+
+/**
+ * One modal flow surface on the shadcn Dialog (Base UI), like every other surface in the product.
+ * The primitive traps focus inside the surface, makes the rest of the page inert and returns focus
+ * to the element that had it when the surface opened, and the title it renders is the surface's
+ * accessible name. Escape is the only way the primitive can dismiss a surface, because a press
+ * outside it is not a dismissal; every dismissal settles the surface exactly as the person's own
+ * answer would, so a flow run is never left waiting on a surface that has gone.
+ */
 function FlowDialog({
   title,
   onDismiss,
@@ -62,36 +79,26 @@ function FlowDialog({
   actions?: ReactNode;
   children: ReactNode;
 }>): ReactElement {
-  const ref = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
-  useEffect(() => {
-    const surface = ref.current;
-    const previous = document.activeElement;
-    if (surface !== null && !surface.open) surface.showModal();
-    return () => {
-      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
-    };
-  }, []);
   return (
-    <dialog
-      ref={ref}
-      aria-labelledby={titleId}
-      className="vortex-dialog"
-      data-vortex-flow-surface="true"
-      style={{ width: "min(36rem, calc(100% - 2rem))", maxHeight: "calc(100% - 2rem)" }}
-      onCancel={(event) => {
-        event.preventDefault();
-        onDismiss();
+    <Dialog
+      open
+      disablePointerDismissal
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onDismiss();
       }}
     >
-      <div className="vortex-dialog-header">
-        <h2 id={titleId} className="vortex-dialog-title">
-          {title}
-        </h2>
-      </div>
-      <div className="vortex-dialog-body">{children}</div>
-      {actions === undefined ? null : <div className="vortex-dialog-actions">{actions}</div>}
-    </dialog>
+      <DialogContent
+        showCloseButton={false}
+        data-vortex-flow-surface="true"
+        className={FLOW_SURFACE_CLASS}
+      >
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <div>{children}</div>
+        {actions === undefined ? null : <DialogFooter>{actions}</DialogFooter>}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -158,9 +165,9 @@ export function useFlowIntentHost(
         title={message.tone === undefined ? "Message" : `Message (${message.tone})`}
         onDismiss={() => settle()}
         actions={
-          <button type="button" className="vortex-button vortex-button-primary" onClick={() => settle()}>
+          <Button type="button" onClick={() => settle()}>
             OK
-          </button>
+          </Button>
         }
       >
         <p role="status">{message.text}</p>
@@ -175,20 +182,12 @@ export function useFlowIntentHost(
         onDismiss={() => settle(false)}
         actions={
           <>
-            <button
-              type="button"
-              className="vortex-button vortex-button-secondary"
-              onClick={() => settle(false)}
-            >
+            <Button type="button" variant="secondary" onClick={() => settle(false)}>
               Cancel
-            </button>
-            <button
-              type="button"
-              className="vortex-button vortex-button-primary"
-              onClick={() => settle(true)}
-            >
+            </Button>
+            <Button type="button" onClick={() => settle(true)}>
               Confirm
-            </button>
+            </Button>
           </>
         }
       >

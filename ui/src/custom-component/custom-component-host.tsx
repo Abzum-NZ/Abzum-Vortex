@@ -13,6 +13,14 @@ import {
   jsonValueSchema,
   type CustomComponentReleaseV2,
 } from "@vortex/contracts";
+import { Button } from "../components/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/dialog";
 import { DefinitionRenderError } from "../definition-error";
 import type { PlatformBlockRenderProps } from "../registry";
 import { getAccessibleName } from "../display/display-state-container";
@@ -81,6 +89,9 @@ type PendingConfirmation = Readonly<{
 const EMPTY_RECORD: Readonly<Record<string, unknown>> = Object.freeze({});
 const EMPTY_BINDINGS: CustomComponentEventBindings = Object.freeze({});
 
+/** Confirmation width, the same 36rem the theme's medium dialog scale used. */
+const CONFIRMATION_CLASS = "max-h-[calc(100%-2rem)] overflow-y-auto sm:max-w-xl";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -138,46 +149,49 @@ const contractValues = (
   return Object.freeze(sent);
 };
 
-/** A modal confirmation on the native `<dialog>`: focus moves in, Escape cancels. */
+/**
+ * The host-rendered confirmation on the shadcn Dialog (Base UI), like every other surface in the
+ * product. The host renders it as a sibling of the sandboxed frame, never inside it, so the
+ * untrusted component can neither draw nor read it. The primitive traps focus inside the surface,
+ * makes the rest of the page inert and returns focus to the element that had it when the surface
+ * opened, and the title it renders is the surface's accessible name. Escape is the only way the
+ * primitive can dismiss a surface, because a press outside it is not a dismissal, and a dismissal
+ * declines the change just as the Cancel button does.
+ */
 function ConfirmationDialog({
   eventLabel,
   onConfirm,
   onCancel,
 }: Readonly<{ eventLabel: string; onConfirm: () => void; onCancel: () => void }>): ReactElement {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const surface = ref.current;
-    const previous = document.activeElement;
-    if (surface !== null && !surface.open) surface.showModal();
-    return () => {
-      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
-    };
-  }, []);
   return (
-    <dialog
-      ref={ref}
-      className="vortex-dialog"
-      data-vortex-custom-component-confirmation="true"
-      onCancel={(event) => {
-        event.preventDefault();
-        onCancel();
+    <Dialog
+      open
+      disablePointerDismissal
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onCancel();
       }}
     >
-      <div className="vortex-dialog-header">
-        <h2 className="vortex-dialog-title">Confirm</h2>
-      </div>
-      <div className="vortex-dialog-body">
-        <p>{`“${eventLabel}” may change data. Continue?`}</p>
-      </div>
-      <div className="vortex-dialog-actions">
-        <button type="button" className="vortex-button vortex-button-secondary" onClick={onCancel}>
-          Cancel
-        </button>
-        <button type="button" className="vortex-button vortex-button-primary" onClick={onConfirm}>
-          Confirm
-        </button>
-      </div>
-    </dialog>
+      <DialogContent
+        showCloseButton={false}
+        data-vortex-custom-component-confirmation="true"
+        className={CONFIRMATION_CLASS}
+      >
+        <DialogHeader>
+          <DialogTitle>Confirm</DialogTitle>
+        </DialogHeader>
+        <div>
+          <p>{`“${eventLabel}” may change data. Continue?`}</p>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={onConfirm}>
+            Confirm
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
