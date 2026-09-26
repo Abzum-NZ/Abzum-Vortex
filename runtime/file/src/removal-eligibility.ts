@@ -311,7 +311,7 @@ const evaluateFileRemovalEligibility = (
     },
     decidedAt,
   });
-  Object.freeze(decision.binding);
+  if (decision.eligible) Object.freeze(decision.binding);
   return Object.freeze(decision);
 };
 
