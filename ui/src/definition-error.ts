@@ -1,8 +1,10 @@
-import type {
-  ApplicationShellV2,
-  BlockPlacementV2Contract,
-  BlockPropertyValueV2Contract,
-  PlatformBlockReleaseV2,
+import {
+  repeatableSlotItemIdentitiesV2,
+  repeatableSlotKeyV2,
+  type ApplicationShellV2,
+  type BlockPlacementV2Contract,
+  type BlockPropertyValueV2Contract,
+  type PlatformBlockReleaseV2,
 } from "@vortex/contracts";
 import type { PlatformComponentRegistry } from "./registry";
 
@@ -222,7 +224,17 @@ export function validatePlacementSlots(
 ): void {
   const declaredSlots = new Map(metadata.slots.map((slot) => [slot.key, slot]));
 
+  // A repeatable slot owns one key per declared item identity, so resolve every item's own key to
+  // its declaration before judging the placement's slots.
+  const repeatableSlots = new Map<string, PlatformBlockReleaseV2["slots"][number]>();
   for (const declaration of metadata.slots) {
+    if (declaration.repeats === undefined) continue;
+    for (const identity of repeatableSlotItemIdentitiesV2(declaration, placement.settings))
+      repeatableSlots.set(repeatableSlotKeyV2(declaration.key, identity), declaration);
+  }
+
+  for (const declaration of metadata.slots) {
+    if (declaration.repeats !== undefined) continue;
     const childSlot = placement.slots[declaration.key];
     if (
       declaration.required &&
@@ -238,7 +250,7 @@ export function validatePlacementSlots(
   }
 
   for (const slotKey of Object.keys(placement.slots)) {
-    const declaration = declaredSlots.get(slotKey);
+    const declaration = declaredSlots.get(slotKey) ?? repeatableSlots.get(slotKey);
     if (!declaration) {
       throw new DefinitionRenderError(
         "UNDECLARED_CHILDREN",

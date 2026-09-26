@@ -983,8 +983,54 @@ export const blockSlotDeclarationV2Schema = z
     label: labelSchema,
     required: z.boolean(),
     allowedChildCategories: z.array(blockPaletteGroupSchema).min(1),
+    /**
+     * Present on a repeatable slot. The release then owns one child slot per item of the list
+     * property named by `items`, each keyed by the item's stable identity read from that item's
+     * text property named by `identity`. Absent on a fixed slot, whose `key` is its one slot key.
+     */
+    repeats: z
+      .object({ items: builderKeySchema, identity: builderKeySchema })
+      .strict()
+      .optional(),
   })
   .strict();
+
+/**
+ * The exact placement slot key one repeatable item owns: `${family}_${identity}`. The family is
+ * the repeatable slot declaration's key, so every slot the release declares stays a valid builder
+ * key and two repeatable slot families on one release never collide.
+ */
+export const repeatableSlotKeyV2 = (family: string, identity: string): string =>
+  `${family}_${identity}`;
+
+/**
+ * The stable item identities one repeatable slot declaration owns, read from a placement's
+ * settings. Only a list of grouped items whose identity property is non-empty text contributes;
+ * a malformed, absent or wrong-kind list contributes none, so a release declares no slot it
+ * cannot key. Identities are returned in item order, including duplicates, so callers can refuse
+ * a duplicate rather than silently collapsing two items onto one slot.
+ */
+export const repeatableSlotItemIdentitiesV2 = (
+  declaration: Readonly<{
+    key: string;
+    repeats?: Readonly<{ items: string; identity: string }> | undefined;
+  }>,
+  settings: Readonly<Record<string, ComponentSettingValue>>,
+): readonly string[] => {
+  const repeats = declaration.repeats;
+  if (repeats === undefined) return [];
+  const list = settings[repeats.items];
+  if (list?.kind !== "list") return [];
+  const identities: string[] = [];
+  for (const item of list.items) {
+    if (item.kind !== "group") continue;
+    const identity = item.properties[repeats.identity];
+    if (identity?.kind !== "text") continue;
+    const value = identity.value.trim();
+    if (value.length > 0) identities.push(value);
+  }
+  return identities;
+};
 
 const blockCapabilitiesV2Base = {
   responsiveVisibility: z.boolean(),
@@ -2280,6 +2326,11 @@ export type ComponentDiscoverySlotV2 = Readonly<{
   label: string;
   required: boolean;
   allowedChildCategories: readonly BlockPaletteGroup[];
+  /**
+   * Present on a repeatable slot: the inspector offers one child slot per item of the list
+   * property `items`, each keyed by the item's text property `identity`. Absent on a fixed slot.
+   */
+  repeats?: Readonly<{ items: string; identity: string }>;
   /** Exact releases validation admits in this slot on the projected surface. */
   allowedChildren: readonly PlatformBlockReleaseSummaryV2[];
 }>;
@@ -2413,6 +2464,9 @@ export const projectPlatformCatalogueDiscoveryV2 = (
               label: slot.label,
               required: slot.required,
               allowedChildCategories: Object.freeze([...slot.allowedChildCategories]),
+              ...(slot.repeats === undefined
+                ? {}
+                : { repeats: Object.freeze({ ...slot.repeats }) }),
               allowedChildren: Object.freeze(
                 summaries.filter((child) => categories.has(child.paletteGroup)),
               ),

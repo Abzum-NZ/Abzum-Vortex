@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, type KeyboardEvent, type ReactElement } from "react";
+import { builderKeySchema, repeatableSlotKeyV2 } from "@vortex/contracts";
 import { DefinitionRenderError } from "../definition-error";
 import type { TabsPayload } from "./projected-data";
 import {
@@ -12,7 +13,7 @@ import { useSeededState } from "./field-parts";
 
 export type TabsProps = ControlRenderProps<TabsPayload>;
 
-/** Declared tab slots in order, each with its label property. */
+/** Declared tab slots in the tabs 1.0.0 release, in order, each with its label property. */
 const TAB_SLOTS = [
   { key: "tab_one", labelKey: "tab_one_label", fallback: "Tab 1" },
   { key: "tab_two", labelKey: "tab_two_label", fallback: "Tab 2" },
@@ -20,32 +21,74 @@ const TAB_SLOTS = [
   { key: "tab_four", labelKey: "tab_four_label", fallback: "Tab 4" },
 ] as const;
 
-type TabKey = (typeof TAB_SLOTS)[number]["key"];
+/** One rendered tab: its semantic key, its label and the child slot its panel content lives in. */
+type Tab = Readonly<{ key: string; label: string; slotKey: string }>;
 
 /**
  * WAI-ARIA tabs with automatic activation. Arrow keys, Home and End move between tabs; pointer,
  * Enter and Space use the native button. Every panel stays mounted and inactive panels are
  * hidden, so switching tabs never loses entered values. The semantic tab key is the declared
- * slot key; only a change of tab emits the declared `tab_changed` event.
+ * slot key in the 1.0.0 release and the stable item identity in the 2.0.0 release; only a change
+ * of tab emits the declared `tab_changed` event.
  */
 export function Tabs(props: TabsProps): ReactElement {
   const context = resolveControlContext<TabsPayload>(props, ["tab_changed"]);
   const settings = readControlSettings(props, context.location);
   const baseId = useId();
-  const tabRefs = useRef<Partial<Record<TabKey, HTMLButtonElement | null>>>({});
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
-  const present = TAB_SLOTS.filter(
-    (tab) => props.slots[tab.key] !== undefined && props.slots[tab.key] !== null,
-  );
-  const tabs = (present.length > 0 ? present : TAB_SLOTS.slice(0, 1)).map((tab) => ({
-    key: tab.key,
-    label: settings.text(tab.labelKey) ?? tab.fallback,
-  }));
-  const isTab = (key: string | undefined): key is TabKey =>
+  // A repeatable release declares its tabs as items keyed by a stable identity, so it has no fixed
+  // slot list and may carry any number of tabs. A fixed release keeps its declared four slots.
+  const repeatableSlot = props.metadata.slots.find((slot) => slot.repeats !== undefined);
+  const repeats = repeatableSlot?.repeats;
+  let tabs: readonly Tab[];
+  if (repeatableSlot !== undefined && repeats !== undefined) {
+    const items = settings.groups(repeats.items);
+    tabs = items.flatMap((item): Tab[] => {
+      const identityValue = item[repeats.identity];
+      const identity = identityValue?.kind === "text" ? identityValue.value.trim() : "";
+      if (identity.length === 0) return [];
+      if (!builderKeySchema.safeParse(identity).success)
+        throw new DefinitionRenderError(
+          "INVALID_COMPOSITION",
+          `Tab identity '${identity}' must be a lowercase builder key`,
+          context.location,
+        );
+      const labelValue = item.label;
+      const label =
+        labelValue?.kind === "text" && labelValue.value.trim().length > 0
+          ? labelValue.value.trim()
+          : identity;
+      return [
+        {
+          key: identity,
+          label,
+          slotKey: repeatableSlotKeyV2(repeatableSlot.key, identity),
+        },
+      ];
+    });
+    if (tabs.length === 0)
+      throw new DefinitionRenderError(
+        "INVALID_COMPOSITION",
+        "A tabs block must declare at least one item",
+        context.location,
+      );
+  } else {
+    const present = TAB_SLOTS.filter(
+      (tab) => props.slots[tab.key] !== undefined && props.slots[tab.key] !== null,
+    );
+    tabs = (present.length > 0 ? present : TAB_SLOTS.slice(0, 1)).map((tab) => ({
+      key: tab.key,
+      label: settings.text(tab.labelKey) ?? tab.fallback,
+      slotKey: tab.key,
+    }));
+  }
+
+  const isTab = (key: string | undefined): key is string =>
     key !== undefined && tabs.some((tab) => tab.key === key);
 
   const projected = context.values?.activeTab;
-  let projectedTab: TabKey | undefined;
+  let projectedTab: string | undefined;
   if (projected !== undefined) {
     if (!isTab(projected))
       throw new DefinitionRenderError(
@@ -55,13 +98,14 @@ export function Tabs(props: TabsProps): ReactElement {
       );
     projectedTab = projected;
   }
-  const authoredDefault = settings.choice<TabKey>("default_tab", tabs[0]!.key);
-  const [selected, setSelected] = useSeededState<TabKey>(
+  const authoredDefault =
+    repeatableSlot === undefined ? settings.choice<string>("default_tab", tabs[0]!.key) : undefined;
+  const [selected, setSelected] = useSeededState<string>(
     projectedTab ?? (isTab(authoredDefault) ? authoredDefault : tabs[0]!.key),
   );
   const active = isTab(selected) ? selected : tabs[0]!.key;
 
-  const select = (key: TabKey): void => {
+  const select = (key: string): void => {
     if (key === active) return;
     setSelected(key);
     context.events?.tab_changed?.({ event: "tab_changed", tabKey: key });
@@ -86,8 +130,8 @@ export function Tabs(props: TabsProps): ReactElement {
     select(target);
   };
 
-  const tabId = (key: TabKey): string => `${baseId}-tab-${key}`;
-  const panelId = (key: TabKey): string => `${baseId}-panel-${key}`;
+  const tabId = (key: string): string => `${baseId}-tab-${key}`;
+  const panelId = (key: string): string => `${baseId}-panel-${key}`;
   const label = context.accessibleName ?? props.metadata.name;
 
   return (
@@ -130,7 +174,7 @@ export function Tabs(props: TabsProps): ReactElement {
           data-vortex-tab-key={tab.key}
           className="vortex-tabpanel"
         >
-          {props.slots[tab.key] ?? null}
+          {props.slots[tab.slotKey] ?? null}
         </div>
       ))}
     </div>

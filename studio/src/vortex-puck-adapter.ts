@@ -4,6 +4,8 @@ import {
   blockPropertyValueV2Schema,
   immutablePlatformBlockCatalogueV2Schema,
   placementSlotV2Schema,
+  repeatableSlotItemIdentitiesV2,
+  repeatableSlotKeyV2,
   validateComponentSettings,
   type ApplicationShellV2,
   type BlockPropertySchemaV2Contract,
@@ -187,8 +189,17 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
           order: clone(slot.order),
         },
       };
+      const repeatableKeys = new Set(
+        release.slots.flatMap((slot) =>
+          slot.repeats === undefined
+            ? []
+            : repeatableSlotItemIdentitiesV2(slot, placement.settings).map((identity) =>
+                repeatableSlotKeyV2(slot.key, identity),
+              ),
+        ),
+      );
       for (const [key, child] of Object.entries(placement.slots)) {
-        if (!release.slots.some((slot) => slot.key === key))
+        if (!release.slots.some((slot) => slot.key === key) && !repeatableKeys.has(key))
           throw new VortexPuckAdapterError(
             `Undeclared Puck slot ${key} for ${release.rendererKey}`,
           );
@@ -266,41 +277,63 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
         );
       }
 
-      const allowed = new Set([
-        "id",
-        "settings",
-        "vortex",
-        ...release.slots.map((slot) => slot.key),
-      ]);
-      if (Object.keys(props).some((key) => !allowed.has(key)))
-        throw new VortexPuckAdapterError(`Private or transient Puck data at ${at}[${index}].props`);
-
       const settings = validateSettings(
         props.settings,
         release.properties,
         `${at}[${index}].props.settings`,
       );
 
+      const repeatableKeys = new Set(
+        release.slots.flatMap((slot) =>
+          slot.repeats === undefined
+            ? []
+            : repeatableSlotItemIdentitiesV2(
+                slot,
+                settings as Readonly<Record<string, BlockPropertyValueV2Contract>>,
+              ).map((identity) => repeatableSlotKeyV2(slot.key, identity)),
+        ),
+      );
+      const allowed = new Set([
+        "id",
+        "settings",
+        "vortex",
+        ...release.slots.map((slot) => slot.key),
+        ...repeatableKeys,
+      ]);
+      if (Object.keys(props).some((key) => !allowed.has(key)))
+        throw new VortexPuckAdapterError(`Private or transient Puck data at ${at}[${index}].props`);
+
       const slots: Record<string, VortexSlot> = {};
       for (const declaration of release.slots) {
-        const slotInput = props[declaration.key];
-        if (slotInput === undefined) {
-          if (declaration.required) {
-            throw new VortexPuckAdapterError(
-              `Missing required slot "${declaration.key}" at ${at}[${index}].props`,
-            );
+        const slotKeys =
+          declaration.repeats === undefined
+            ? [declaration.key]
+            : repeatableSlotItemIdentitiesV2(
+                declaration,
+                settings as Readonly<Record<string, BlockPropertyValueV2Contract>>,
+              ).map((identity) => repeatableSlotKeyV2(declaration.key, identity));
+        for (const slotKey of slotKeys) {
+          const slotInput = props[slotKey];
+          if (slotInput === undefined) {
+            // Every item of a repeatable slot is optional: its own item list governs the count,
+            // so only a fixed required slot is refused when it is absent.
+            if (declaration.required && declaration.repeats === undefined) {
+              throw new VortexPuckAdapterError(
+                `Missing required slot "${slotKey}" at ${at}[${index}].props`,
+              );
+            }
+            continue;
           }
-          continue;
+          const childSlot = fromContent(
+            slotInput,
+            depth + 1,
+            seenPlacementIds,
+            state,
+            declaration,
+            `${at}[${index}].props.${slotKey}`,
+          );
+          slots[slotKey] = childSlot;
         }
-        const childSlot = fromContent(
-          slotInput,
-          depth + 1,
-          seenPlacementIds,
-          state,
-          declaration,
-          `${at}[${index}].props.${declaration.key}`,
-        );
-        slots[declaration.key] = childSlot;
       }
 
       if (meta.order !== undefined)

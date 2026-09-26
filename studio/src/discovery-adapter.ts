@@ -315,8 +315,12 @@ export function createStudioDiscoveryAdapter(
         return Object.freeze(summaries.filter((release) => categories.has(release.paletteGroup)));
       }
       case "slot": {
-        const slot = getComponent(target.parent)?.slots.find(
-          (entry) => entry.key === target.slotKey,
+        const component = getComponent(target.parent);
+        // A repeatable slot accepts every item key it declares, each `${slotFamily}_${identity}`.
+        const slot = component?.slots.find(
+          (entry) =>
+            entry.key === target.slotKey ||
+            (entry.repeats !== undefined && target.slotKey.startsWith(`${entry.key}_`)),
         );
         return Object.freeze(
           (slot?.allowedChildren ?? []).filter((release) =>

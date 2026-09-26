@@ -3,8 +3,11 @@ import {
   applicationShellV2Schema,
   applicationThemeV2Schema,
   blockPropertyValueV2Schema,
+  builderKeySchema,
   guidedFormPageCompositionV2Schema,
   pageCompositionV2Schema,
+  repeatableSlotItemIdentitiesV2,
+  repeatableSlotKeyV2,
   validateComponentSettingValue,
   validateComponentSettings,
   type ApplicationCompositionCatalogueSnapshotV2,
@@ -513,10 +516,55 @@ export const materialiseApplicationCompositionV2 = (
       }
 
       const declaredSlots = new Map(release.slots.map((slot) => [slot.key, slot]));
-      if (Object.keys(authoredPlacement.slots).some((key) => !declaredSlots.has(key)))
+      const repeatableSlots = new Map<string, (typeof release.slots)[number]>();
+      for (const declaration of release.slots) {
+        if (declaration.repeats === undefined) continue;
+        const identities = repeatableSlotItemIdentitiesV2(
+          declaration,
+          authoredPlacement.settings,
+        );
+        if (new Set(identities).size !== identities.length)
+          reject("vortex.definition.application_block_settings", "duplicate_key");
+        for (const identity of identities) {
+          const slotKey = repeatableSlotKeyV2(declaration.key, identity);
+          if (!builderKeySchema.safeParse(slotKey).success)
+            reject("vortex.definition.application_block_settings", "invalid_value");
+          repeatableSlots.set(slotKey, declaration);
+        }
+      }
+      if (
+        Object.keys(authoredPlacement.slots).some(
+          (key) => !declaredSlots.has(key) && !repeatableSlots.has(key),
+        )
+      )
         reject("vortex.definition.application_block_references", "unknown_property");
       const slots: Record<string, unknown> = {};
+      const compileChildSlot = (
+        declaration: (typeof release.slots)[number],
+        slotKey: string,
+      ): ReturnType<typeof compileSlot> =>
+        compileSlot(authoredPlacement.slots[slotKey]!, {
+          depth: options.depth + 1,
+          allowedCategories: new Set(declaration.allowedChildCategories),
+          responsiveOrderAllowed: release.capabilities.responsiveOrder,
+          publicSurface: options.publicSurface,
+          ...(options.reserved === undefined ? {} : { reserved: options.reserved }),
+          ...(options.captureShellPlacements === undefined
+            ? {}
+            : { captureShellPlacements: options.captureShellPlacements }),
+        });
       for (const declaration of release.slots) {
+        if (declaration.repeats !== undefined) {
+          for (const identity of repeatableSlotItemIdentitiesV2(
+            declaration,
+            authoredPlacement.settings,
+          )) {
+            const slotKey = repeatableSlotKeyV2(declaration.key, identity);
+            if (authoredPlacement.slots[slotKey] !== undefined)
+              slots[slotKey] = compileChildSlot(declaration, slotKey);
+          }
+          continue;
+        }
         const child = authoredPlacement.slots[declaration.key];
         const reserved = options.reserved?.has(`${alias}:${declaration.key}`) === true;
         if (child === undefined) {
@@ -526,17 +574,7 @@ export const materialiseApplicationCompositionV2 = (
         }
         if (declaration.required && Object.keys(child.placements).length === 0 && !reserved)
           reject("vortex.definition.application_block_references", "required_value");
-        const childOptions: Parameters<typeof compileSlot>[1] = {
-          depth: options.depth + 1,
-          allowedCategories: new Set(declaration.allowedChildCategories),
-          responsiveOrderAllowed: release.capabilities.responsiveOrder,
-          publicSurface: options.publicSurface,
-          ...(options.reserved === undefined ? {} : { reserved: options.reserved }),
-          ...(options.captureShellPlacements === undefined
-            ? {}
-            : { captureShellPlacements: options.captureShellPlacements }),
-        };
-        slots[declaration.key] = compileSlot(child, childOptions);
+        slots[declaration.key] = compileChildSlot(declaration, declaration.key);
       }
       const responsive = materialiseResponsive(authoredPlacement.responsive, release);
       const themeOverrides: Record<string, unknown> = {};
