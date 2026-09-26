@@ -126,7 +126,7 @@
             "type": "page",
             "label": "Organisation accounts",
             "page": "organisation_accounts",
-            "permission": "platform.organization.accounts.read"
+            "permission": "vortex.organisation_administration.person.read"
           },
           {
             "id": "nav_invitations",
@@ -478,7 +478,7 @@
         "key": "organisation_accounts",
         "name": "Organisation accounts",
         "type": "dashboard",
-        "permission": "platform.organization.accounts.read",
+        "permission": "vortex.organisation_administration.person.read",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_organisation_administration",

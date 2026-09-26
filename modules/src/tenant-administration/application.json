@@ -116,7 +116,7 @@
             "type": "page",
             "label": "Tenant administrators",
             "page": "tenant_administrators",
-            "permission": "platform.organization.assignments.read"
+            "permission": "vortex.tenant_administration.tenant_administrator.read"
           }
         ]
       }
@@ -495,7 +495,7 @@
         "key": "tenant_administrators",
         "name": "Tenant administrators",
         "type": "dashboard",
-        "permission": "platform.organization.assignments.read",
+        "permission": "vortex.tenant_administration.tenant_administrator.read",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_tenant_administration",
