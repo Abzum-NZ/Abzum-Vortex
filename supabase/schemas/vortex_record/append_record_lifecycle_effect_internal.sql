@@ -17,7 +17,7 @@ declare
   receipt vortex_record.command_receipts%rowtype;
   next_sequence integer;
 begin
-  bound_command_id := pg_catalog.nullif(
+  bound_command_id := nullif(
     pg_catalog.current_setting('vortex_record.lifecycle_command_id', true), ''
   )::uuid;
   if bound_command_id is null then
