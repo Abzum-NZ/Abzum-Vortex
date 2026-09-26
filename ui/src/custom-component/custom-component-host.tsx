@@ -82,6 +82,7 @@ const GRAPHICS_CONTEXT_LOST_MESSAGE_TYPE = "vortex:custom-component:graphics-con
 
 /** One host-rendered confirmation waiting for the person's answer. */
 type PendingConfirmation = Readonly<{
+  id: number;
   eventLabel: string;
   settle: (confirmed: boolean) => void;
 }>;
@@ -255,6 +256,7 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
   const handshakeFrameRef = useRef<HTMLIFrameElement | undefined>(undefined);
   const mountedRef = useRef(true);
   const confirmationsRef = useRef<PendingConfirmation[]>([]);
+  const nextConfirmationId = useRef(0);
   const runningRef = useRef(new Set<string>());
   const queuedRef = useRef(new Map<string, CustomComponentEventPayload>());
   const [generation, setGeneration] = useState(0);
@@ -269,18 +271,22 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
     }
   }, []);
 
-  // Confirmations are shown one at a time, in the order their events arrived.
-  const settleConfirmation = useCallback((confirmed: boolean) => {
+  // Confirmations are shown one at a time, in the order their events arrived. An answer settles
+  // only the confirmation it was given for, so a late answer from a surface that has already
+  // settled never answers the next one.
+  const settleConfirmation = useCallback((id: number, confirmed: boolean) => {
     const [pending, ...rest] = confirmationsRef.current;
+    if (pending === undefined || pending.id !== id) return;
     confirmationsRef.current = rest;
     setConfirmation(rest[0]);
-    pending?.settle(confirmed);
+    pending.settle(confirmed);
   }, []);
 
   const requestConfirmation = useCallback(
     (eventLabel: string) =>
       new Promise<boolean>((resolve) => {
-        const pending: PendingConfirmation = Object.freeze({ eventLabel, settle: resolve });
+        const id = (nextConfirmationId.current += 1);
+        const pending: PendingConfirmation = Object.freeze({ id, eventLabel, settle: resolve });
         confirmationsRef.current = [...confirmationsRef.current, pending];
         if (confirmationsRef.current.length === 1) setConfirmation(pending);
       }),
@@ -439,9 +445,10 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
       />
       {confirmation === undefined ? null : (
         <ConfirmationDialog
+          key={confirmation.id}
           eventLabel={confirmation.eventLabel}
-          onConfirm={() => settleConfirmation(true)}
-          onCancel={() => settleConfirmation(false)}
+          onConfirm={() => settleConfirmation(confirmation.id, true)}
+          onCancel={() => settleConfirmation(confirmation.id, false)}
         />
       )}
     </div>
