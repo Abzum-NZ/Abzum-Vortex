@@ -39,6 +39,14 @@ declare
   scope_index_columns text;
   result_storage_ids uuid[] := array[]::uuid[];
   any_change boolean := false;
+  is_projection boolean;
+  protected_view_key text;
+  reader_schema_value text;
+  reader_function_value text;
+  field_columns_sql text;
+  projection_view_sql text;
+  existing_columns text[];
+  expected_columns text[];
 begin
   if not vortex_context.is_non_nil_uuid(p_module_root_id::text)
     or p_module_release_revision not between 1 and 9007199254740991 then
@@ -149,114 +157,254 @@ begin
       else 'organisation_id, application_root_id'
     end;
 
+    -- A system projection record type has no generated storage. It is read
+    -- through one registered protected view, created here as an ordinary
+    -- record_data relation so the fixed read adapters resolve it unchanged,
+    -- while the projection itself keeps every row-visibility rule inside the
+    -- registered function. The view exposes exactly the record type's declared
+    -- fields as record-data columns, plus the protected row identity and
+    -- revision, and is read-only: the projection has no ordinary write path.
+    is_projection := record_type ? 'systemProjection';
+    if is_projection then
+      protected_view_key := record_type #>> '{systemProjection,protectedView}';
+      select view.reader_schema, view.reader_function
+      into reader_schema_value, reader_function_value
+      from vortex_record.protected_read_model_views as view
+      where view.protected_read_model_key = protected_view_key;
+      if not found then
+        raise exception using errcode = '42501',
+          message = 'Protected projection view is unavailable';
+      end if;
+      if storage_scope_value <> 'organization_shared' then
+        raise exception using errcode = '42501',
+          message = 'Protected projection storage must be organisation shared';
+      end if;
+      field_columns_sql := '';
+      expected_columns := array[]::text[];
+      for field_value in
+        select item.value
+        from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
+        order by item.value ->> 'fieldId'
+      loop
+        begin
+          field_id_value := (field_value ->> 'fieldId')::uuid;
+        exception when invalid_text_representation then
+          raise exception using errcode = '42501',
+            message = 'Record field storage identity is invalid';
+        end;
+        column_token := 'f_' || pg_catalog.replace(pg_catalog.lower(field_id_value::text), '-', '');
+        database_type := vortex_record.database_value_type(field_value);
+        if database_type is null then
+          raise exception using errcode = '23514',
+            message = 'Record field storage type is unsupported';
+        end if;
+        sql_type := vortex_record.sql_value_type(database_type);
+        expected_columns := expected_columns || column_token;
+        if field_value ->> 'fieldId' = record_type #>> '{systemProjection,organizationFieldId}' then
+          field_columns_sql := field_columns_sql
+            || pg_catalog.format('projection.organization_id::text as %I, ', column_token);
+        elsif field_value ->> 'fieldId' = record_type #>> '{systemProjection,revisionFieldId}' then
+          field_columns_sql := field_columns_sql
+            || pg_catalog.format('projection.revision as %I, ', column_token);
+        elsif database_type = 'json' then
+          field_columns_sql := field_columns_sql
+            || pg_catalog.format(
+              '(projection.values -> %L) as %I, ', field_value ->> 'key', column_token
+            );
+        else
+          field_columns_sql := field_columns_sql
+            || pg_catalog.format(
+              '(projection.values ->> %L)::%s as %I, ',
+              field_value ->> 'key', sql_type, column_token
+            );
+        end if;
+      end loop;
+      select pg_catalog.array_agg(item.column_name order by item.column_name)
+      into expected_columns
+      from pg_catalog.unnest(expected_columns) as item(column_name);
+      field_columns_sql := pg_catalog.left(
+        field_columns_sql, pg_catalog.length(field_columns_sql) - 2
+      );
+      projection_view_sql := pg_catalog.format(
+        'create view record_data.%I as select
+           projection.organization_id,
+           %L::uuid as module_root_id,
+           %L::uuid as record_type_id,
+           %L::uuid as storage_contract_id,
+           projection.record_id,
+           null::uuid as application_root_id,
+           %L::bigint as definition_revision,
+           null::uuid as owner_organisation_account_id,
+           null::uuid as owner_group_id,
+           ''active''::text as lifecycle_state,
+           projection.revision as concurrency_number,
+           null::timestamptz as created_at,
+           null::uuid as created_by,
+           null::timestamptz as updated_at,
+           null::uuid as updated_by,
+           null::timestamptz as deleted_at,
+           null::uuid as deleted_by,
+           null::timestamptz as removal_due_at,
+           %s
+         from %I.%I(null::uuid, null::integer) as projection',
+        table_token, p_module_root_id, record_type_id_value, storage_id,
+        p_module_release_revision, field_columns_sql,
+        reader_schema_value, reader_function_value
+      );
+    end if;
+
     select catalogue.* into stored_catalogue
     from vortex_record.storage_catalogue as catalogue
     where catalogue.storage_contract_id = storage_id
     for update;
 
     if not found then
-      scope_check := case storage_scope_value
-        when 'organization_shared' then 'application_root_id is null'
-        else 'application_root_id is not null'
-      end;
-      owner_check := case ownership_mode_value
-        when 'organization_account' then
-          'owner_organisation_account_id is not null and owner_group_id is null'
-        when 'group' then
-          'owner_organisation_account_id is null and owner_group_id is not null'
-        else 'owner_organisation_account_id is null and owner_group_id is null'
-      end;
-      execute pg_catalog.format(
-        'create table record_data.%I (
-          organisation_id uuid not null references vortex_identity.organizations (organization_id),
-          module_root_id uuid not null check (module_root_id = %L::uuid),
-          record_type_id uuid not null check (record_type_id = %L::uuid),
-          storage_contract_id uuid not null check (storage_contract_id = %L::uuid),
-          record_id uuid not null,
-          application_root_id uuid,
-          definition_revision bigint not null check (definition_revision between 1 and 9007199254740991),
-          owner_organisation_account_id uuid,
-          owner_group_id uuid,
-          lifecycle_state text not null check (lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')),
-          concurrency_number bigint not null check (concurrency_number between 1 and 9007199254740991),
-          created_at timestamptz not null,
-          created_by uuid not null,
-          updated_at timestamptz not null,
-          updated_by uuid not null,
-          deleted_at timestamptz,
-          deleted_by uuid,
-          removal_due_at timestamptz,
-          primary key (%s, record_id),
-          foreign key (organisation_id, owner_organisation_account_id)
-            references vortex_identity.organization_accounts (organization_id, organization_account_id),
-          foreign key (organisation_id, owner_group_id)
-            references vortex_access.organization_groups (organization_id, group_id),
-          check (%s), check (%s),
-          check ((deleted_at is null) = (deleted_by is null)),
-          check ((lifecycle_state = ''active'') = (deleted_at is null and deleted_by is null)),
-          check (updated_at >= created_at)
-        )', table_token, p_module_root_id, record_type_id_value, storage_id,
-        scope_index_columns, scope_check, owner_check
-      );
-      execute pg_catalog.format('alter table record_data.%I enable row level security', table_token);
-      execute pg_catalog.format('alter table record_data.%I force row level security', table_token);
-      execute pg_catalog.format(
-        'create policy record_select on record_data.%I for select to vortex_record_adapter using (
-          organisation_id = vortex_context.organization_id()
-          and case when application_root_id is null then true
-            else application_root_id = vortex_context.application_root_id(true) end
-        )', table_token
-      );
-      execute pg_catalog.format(
-        'create policy record_insert on record_data.%I for insert to vortex_record_adapter with check (
-          organisation_id = vortex_context.organization_id()
-          and case when application_root_id is null then true
-            else application_root_id = vortex_context.application_root_id(true) end
-        )', table_token
-      );
-      execute pg_catalog.format(
-        'create policy record_update on record_data.%I for update to vortex_record_adapter using (
-          organisation_id = vortex_context.organization_id()
-          and case when application_root_id is null then true
-            else application_root_id = vortex_context.application_root_id(true) end
-        ) with check (
-          organisation_id = vortex_context.organization_id()
-          and case when application_root_id is null then true
-            else application_root_id = vortex_context.application_root_id(true) end
-        )', table_token
-      );
-      execute pg_catalog.format(
-        'create policy record_delete on record_data.%I for delete to vortex_record_adapter using (
-          organisation_id = vortex_context.organization_id()
-          and case when application_root_id is null then true
-            else application_root_id = vortex_context.application_root_id(true) end
-        )', table_token
-      );
-      execute pg_catalog.format(
-        'grant select, insert, update, delete on record_data.%I to vortex_record_adapter',
-        table_token
-      );
+      if is_projection then
+        execute projection_view_sql;
+        execute pg_catalog.format(
+          'grant select on record_data.%I to vortex_record_adapter', table_token
+        );
+      else
+        scope_check := case storage_scope_value
+          when 'organization_shared' then 'application_root_id is null'
+          else 'application_root_id is not null'
+        end;
+        owner_check := case ownership_mode_value
+          when 'organization_account' then
+            'owner_organisation_account_id is not null and owner_group_id is null'
+          when 'group' then
+            'owner_organisation_account_id is null and owner_group_id is not null'
+          else 'owner_organisation_account_id is null and owner_group_id is null'
+        end;
+        execute pg_catalog.format(
+          'create table record_data.%I (
+            organisation_id uuid not null references vortex_identity.organizations (organization_id),
+            module_root_id uuid not null check (module_root_id = %L::uuid),
+            record_type_id uuid not null check (record_type_id = %L::uuid),
+            storage_contract_id uuid not null check (storage_contract_id = %L::uuid),
+            record_id uuid not null,
+            application_root_id uuid,
+            definition_revision bigint not null check (definition_revision between 1 and 9007199254740991),
+            owner_organisation_account_id uuid,
+            owner_group_id uuid,
+            lifecycle_state text not null check (lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')),
+            concurrency_number bigint not null check (concurrency_number between 1 and 9007199254740991),
+            created_at timestamptz not null,
+            created_by uuid not null,
+            updated_at timestamptz not null,
+            updated_by uuid not null,
+            deleted_at timestamptz,
+            deleted_by uuid,
+            removal_due_at timestamptz,
+            primary key (%s, record_id),
+            foreign key (organisation_id, owner_organisation_account_id)
+              references vortex_identity.organization_accounts (organization_id, organization_account_id),
+            foreign key (organisation_id, owner_group_id)
+              references vortex_access.organization_groups (organization_id, group_id),
+            check (%s), check (%s),
+            check ((deleted_at is null) = (deleted_by is null)),
+            check ((lifecycle_state = ''active'') = (deleted_at is null and deleted_by is null)),
+            check (updated_at >= created_at)
+          )', table_token, p_module_root_id, record_type_id_value, storage_id,
+          scope_index_columns, scope_check, owner_check
+        );
+        execute pg_catalog.format('alter table record_data.%I enable row level security', table_token);
+        execute pg_catalog.format('alter table record_data.%I force row level security', table_token);
+        execute pg_catalog.format(
+          'create policy record_select on record_data.%I for select to vortex_record_adapter using (
+            organisation_id = vortex_context.organization_id()
+            and case when application_root_id is null then true
+              else application_root_id = vortex_context.application_root_id(true) end
+          )', table_token
+        );
+        execute pg_catalog.format(
+          'create policy record_insert on record_data.%I for insert to vortex_record_adapter with check (
+            organisation_id = vortex_context.organization_id()
+            and case when application_root_id is null then true
+              else application_root_id = vortex_context.application_root_id(true) end
+          )', table_token
+        );
+        execute pg_catalog.format(
+          'create policy record_update on record_data.%I for update to vortex_record_adapter using (
+            organisation_id = vortex_context.organization_id()
+            and case when application_root_id is null then true
+              else application_root_id = vortex_context.application_root_id(true) end
+          ) with check (
+            organisation_id = vortex_context.organization_id()
+            and case when application_root_id is null then true
+              else application_root_id = vortex_context.application_root_id(true) end
+          )', table_token
+        );
+        execute pg_catalog.format(
+          'create policy record_delete on record_data.%I for delete to vortex_record_adapter using (
+            organisation_id = vortex_context.organization_id()
+            and case when application_root_id is null then true
+              else application_root_id = vortex_context.application_root_id(true) end
+          )', table_token
+        );
+        execute pg_catalog.format(
+          'grant select, insert, update, delete on record_data.%I to vortex_record_adapter',
+          table_token
+        );
+      end if;
 
       insert into vortex_record.storage_catalogue (
         storage_contract_id, physical_schema_token, physical_table_token,
         module_root_id, record_type_id, storage_scope,
         first_compatible_release_revision, last_compatible_release_revision,
-        state, content_fingerprint, record_type_definition
+        state, content_fingerprint, record_type_definition, protected_read_model_key
       ) values (
-        storage_id, 'record_data', table_token, p_module_root_id,
-        record_type_id_value, storage_scope_value, p_module_release_revision,
-        p_module_release_revision, 'active', shape_fingerprint, record_type
+        storage_id,
+        case when is_projection then 'system_projection' else 'record_data' end,
+        table_token, p_module_root_id, record_type_id_value, storage_scope_value,
+        p_module_release_revision, p_module_release_revision, 'active',
+        shape_fingerprint, record_type, protected_view_key
       );
       any_change := true;
     else
-      if stored_catalogue.module_root_id <> p_module_root_id
-        or stored_catalogue.record_type_id <> record_type_id_value
-        or stored_catalogue.storage_scope <> storage_scope_value
-        or stored_catalogue.state <> 'active'
-        or stored_catalogue.physical_schema_token <> 'record_data'
-        or stored_catalogue.physical_table_token <> table_token
-        or pg_catalog.to_regclass(pg_catalog.format('%I.%I', 'record_data', table_token)) is null then
-        raise exception using errcode = '55000', message = 'Record storage lineage is incompatible';
+      if is_projection then
+        if stored_catalogue.module_root_id <> p_module_root_id
+          or stored_catalogue.record_type_id <> record_type_id_value
+          or stored_catalogue.storage_scope <> storage_scope_value
+          or stored_catalogue.state <> 'active'
+          or stored_catalogue.physical_schema_token <> 'system_projection'
+          or stored_catalogue.protected_read_model_key is distinct from protected_view_key
+          or stored_catalogue.physical_table_token <> table_token
+          or pg_catalog.to_regclass(pg_catalog.format('%I.%I', 'record_data', table_token)) is null then
+          raise exception using errcode = '55000', message = 'Record storage lineage is incompatible';
+        end if;
+        select coalesce(
+            pg_catalog.array_agg(attribute.attname order by attribute.attname),
+            array[]::text[]
+          )
+        into existing_columns
+        from pg_catalog.pg_attribute as attribute
+        where attribute.attrelid = pg_catalog.to_regclass(
+            pg_catalog.format('%I.%I', 'record_data', table_token)
+          )
+          and attribute.attnum > 0
+          and not attribute.attisdropped
+          and attribute.attname like 'f\_%';
+        -- A release that changes the projected field set changes the view's
+        -- columns, so the view is recreated exactly; an unchanged set is left
+        -- alone. The projection has no indexes or dependent objects.
+        if existing_columns is distinct from expected_columns then
+          execute pg_catalog.format('drop view record_data.%I', table_token);
+          execute projection_view_sql;
+          execute pg_catalog.format(
+            'grant select on record_data.%I to vortex_record_adapter', table_token
+          );
+        end if;
+      else
+        if stored_catalogue.module_root_id <> p_module_root_id
+          or stored_catalogue.record_type_id <> record_type_id_value
+          or stored_catalogue.storage_scope <> storage_scope_value
+          or stored_catalogue.state <> 'active'
+          or stored_catalogue.physical_schema_token <> 'record_data'
+          or stored_catalogue.physical_table_token <> table_token
+          or pg_catalog.to_regclass(pg_catalog.format('%I.%I', 'record_data', table_token)) is null then
+          raise exception using errcode = '55000', message = 'Record storage lineage is incompatible';
+        end if;
       end if;
     end if;
 
@@ -308,15 +456,17 @@ begin
           raise exception using errcode = '55000', message = 'Existing record field storage is incompatible';
         end if;
       else
-        if stored_catalogue.storage_contract_id is not null
-          and (field_value ->> 'required')::boolean then
-          raise exception using errcode = '55000', message = 'Compatible storage upgrades may add only nullable fields';
+        if not is_projection then
+          if stored_catalogue.storage_contract_id is not null
+            and (field_value ->> 'required')::boolean then
+            raise exception using errcode = '55000', message = 'Compatible storage upgrades may add only nullable fields';
+          end if;
+          execute pg_catalog.format(
+            'alter table record_data.%I add column %I %s%s',
+            table_token, column_token, sql_type,
+            case when (field_value ->> 'required')::boolean then ' not null' else '' end
+          );
         end if;
-        execute pg_catalog.format(
-          'alter table record_data.%I add column %I %s%s',
-          table_token, column_token, sql_type,
-          case when (field_value ->> 'required')::boolean then ' not null' else '' end
-        );
         insert into vortex_record.field_storage_mappings (
           storage_contract_id, field_id, physical_column_token, database_value_type,
           field_definition, introduced_by_module_root_id, introduced_at_release_revision, state
@@ -324,7 +474,12 @@ begin
           storage_id, field_id_value, column_token, database_type, field_value,
           p_module_root_id, p_module_release_revision, 'active'
         );
-        if (field_value ->> 'unique')::boolean then
+        -- A projection field lives in the protected view, which carries no
+        -- indexes; the projection's own protected function applies visibility,
+        -- ordering and filtering, so no generated index is provisioned.
+        if is_projection then
+          null;
+        elsif (field_value ->> 'unique')::boolean then
           perform vortex_record.ensure_field_index_internal(
             storage_id, field_id_value, 'uniqueness', storage_scope_value,
             table_token, scope_index_columns, column_token

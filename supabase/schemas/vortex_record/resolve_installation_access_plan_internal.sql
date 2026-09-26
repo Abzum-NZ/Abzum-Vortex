@@ -154,7 +154,7 @@ begin
         or catalogue_row.module_root_id <> module_root_value
         or catalogue_row.record_type_id <> record_type_id_value
         or catalogue_row.storage_scope is distinct from (record_type_item ->> 'storageScope')
-        or catalogue_row.physical_schema_token <> 'record_data'
+        or catalogue_row.physical_schema_token not in ('record_data', 'system_projection')
         or not exists (
           select 1
           from vortex_record.release_provisions as provision
