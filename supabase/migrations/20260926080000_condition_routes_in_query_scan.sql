@@ -1,3 +1,689 @@
+-- #1081: push saved-condition and relationship-inheritance access routes into
+-- run_module_query's scan predicate.
+--
+-- The status quo narrows the scan to the caller's owner, owner-group and
+-- direct-share records only when every eligible alternative has an exact table
+-- form. A permission narrowed by a saved condition, however, still reached the
+-- database without its condition, so a selective condition spent the 500-row
+-- scan budget on rows it later refuses and returned short or empty pages.
+--
+-- This migration compiles each eligible alternative's saved condition into the
+-- same candidate-scan predicate, over the record catalogue's own columns and
+-- with the alternative's own bound parameters, and OR-es it with that
+-- alternative's exact route test. The predicate only NARROWS: the compiler is
+-- required to admit every row the condition engine admits, an unexpressible
+-- route or condition contributes true, and every row the scan returns still
+-- goes through read_record, the exact per-row decision. A route with no exact
+-- stored form, such as all-records, an inherited-ownership chase or a
+-- relationship chase, is left unrestricted so the per-row decision alone
+-- decides it; a condition over a field with no matching stored semantics, a
+-- read-time calculation, a missing condition, or any compiler failure likewise
+-- pushes nothing. The scan can therefore never admit a row the exact decision
+-- refuses.
+--
+-- Each statement below is identical to the canonical file
+-- supabase/schemas/<schema>/<function>.sql changed in this commit. The two
+-- functions whose return shape grows are dropped first, because PostgreSQL
+-- cannot change a function's return type in place.
+
+begin;
+
+drop function vortex_access.resolve_record_read_scan_routes_internal(jsonb, text);
+create or replace function vortex_access.resolve_record_read_scan_routes_internal(
+  p_declaration jsonb,
+  p_ownership_mode text
+)
+returns table (
+  restricted boolean,
+  owner_account_id uuid,
+  owner_group_ids uuid[],
+  shared_record_ids uuid[],
+  alternatives jsonb
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  -- The most directly shared record identifiers one query carries. A caller
+  -- with more is not narrowed by this route at all.
+  shared_limit constant integer := 10000;
+  ctx jsonb;
+  checked_at timestamptz;
+  binding jsonb;
+  routes jsonb;
+  eligibility jsonb;
+  candidate jsonb;
+  route jsonb;
+  route_kind text;
+  account_id uuid;
+  member_group_ids uuid[];
+  wants_owner boolean := false;
+  wants_share boolean := false;
+  -- Every route of every eligible alternative has an exact table form. When any
+  -- route does not, the whole plan is unrestricted so the exact per-row
+  -- decision alone narrows the scan.
+  pushable boolean := true;
+  shared_overflow boolean := false;
+  shared uuid[] := array[]::uuid[];
+  alternatives jsonb := '[]'::jsonb;
+begin
+  if p_declaration is null
+    or pg_catalog.jsonb_typeof(p_declaration) <> 'object'
+    or p_declaration -> 'action' ->> 'actionKind' is distinct from 'read'
+    or (p_declaration -> 'action') ? 'namedAction'
+    or p_ownership_mode is null
+    or p_ownership_mode not in ('none', 'organization_account', 'group', 'inherited') then
+    raise exception using errcode = '22023',
+      message = 'Record read scan declaration is invalid';
+  end if;
+
+  -- The same one context and time sample the exact-record decision uses, and
+  -- the same eligibility core: the eligible alternatives here are exactly the
+  -- ones that decision would union for any single record.
+  ctx := vortex_access.validated_human_request_context();
+  checked_at := pg_catalog.clock_timestamp();
+  binding := p_declaration -> 'recordBinding';
+  account_id := (ctx ->> 'organizationAccountId')::uuid;
+
+  eligibility := vortex_access.evaluate_organization_record_permission_eligibility_internal(
+    p_declaration, ctx, checked_at
+  );
+
+  -- An ineligible caller is refused for every record by that decision. The
+  -- empty alternative list narrows the scan to nothing; the exact decision
+  -- would refuse every row anyway.
+  if eligibility ->> 'outcome' <> 'eligible' then
+    return query select true, null::uuid, array[]::uuid[], array[]::uuid[], '[]'::jsonb;
+    return;
+  end if;
+
+  -- One alternative per eligible permission, reduced to the two facts the scan
+  -- plan consumes: its exact route list and its saved-condition envelope. A
+  -- route list that is not an array is never reasoned about; returning a null
+  -- alternative list leaves the scan unrestricted.
+  for candidate in
+    select item.value
+    from pg_catalog.jsonb_array_elements(eligibility -> 'eligiblePermissions') as item(value)
+  loop
+    routes := candidate -> 'recordScope' -> 'routes';
+    if pg_catalog.jsonb_typeof(routes) is distinct from 'array' then
+      return query select false, null::uuid, array[]::uuid[], array[]::uuid[], null::jsonb;
+      return;
+    end if;
+    alternatives := alternatives || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'routes', routes,
+      'savedCondition', case
+        when candidate -> 'recordScope' ? 'savedCondition'
+          then candidate -> 'recordScope' -> 'savedCondition'
+        else null::jsonb
+      end
+    ));
+    for route in
+      select item.value from pg_catalog.jsonb_array_elements(routes) as item(value)
+    loop
+      route_kind := route ->> 'kind';
+      if route_kind = 'ownership' then
+        wants_owner := true;
+        if p_ownership_mode not in ('organization_account', 'group') then
+          -- An inherited owner is reached only by a current-edge chase, and an
+          -- ownership route over a record type that stores no owner admits no
+          -- record: neither is a fixed stored predicate.
+          pushable := false;
+        end if;
+      elsif route_kind = 'direct_share' then
+        wants_share := true;
+      else
+        -- all_records admits every record; a relationship route is a
+        -- relationship chase. Neither is a fixed stored predicate, so the scan
+        -- is left unrestricted and the exact decision alone narrows it.
+        pushable := false;
+      end if;
+    end loop;
+  end loop;
+
+  -- The groups the caller belongs to now: an active group and a live,
+  -- started, unexpired membership, as the ownership and share tests require.
+  select coalesce(pg_catalog.array_agg(distinct membership.group_id), array[]::uuid[])
+  into member_group_ids
+  from vortex_access.organization_group_memberships as membership
+  join vortex_access.organization_groups as organization_group
+    on organization_group.organization_id = membership.organization_id
+    and organization_group.group_id = membership.group_id
+    and organization_group.state = 'active'
+  where membership.organization_id = (ctx ->> 'organizationId')::uuid
+    and membership.organization_account_id = account_id
+    and membership.state = 'live'
+    and membership.starts_at <= checked_at
+    and (membership.expires_at is null or membership.expires_at > checked_at);
+
+  if wants_share then
+    -- The same current-share conditions as the exact-record contribution
+    -- reader, over every record of this type instead of one. A caller with more
+    -- shares than one query carries gets a null array: that route is not
+    -- narrowed, rather than truncated.
+    select coalesce(pg_catalog.array_agg(listed.record_id), array[]::uuid[])
+    into shared
+    from (
+      select distinct share.record_id
+      from vortex_access.organization_direct_record_shares as share
+      where share.organization_id = (ctx ->> 'organizationId')::uuid
+        and share.storage_scope = binding ->> 'storageScope'
+        and share.application_root_id is not distinct from case
+          when binding ->> 'storageScope' = 'application_contained'
+            then (p_declaration -> 'target' ->> 'applicationRootId')::uuid
+          else null::uuid
+        end
+        and share.module_root_id = (binding ->> 'moduleRootId')::uuid
+        and share.record_type_id = (binding ->> 'recordTypeId')::uuid
+        and share.storage_contract_id = (binding ->> 'storageContractId')::uuid
+        and share.state = 'active'
+        and share.starts_at <= checked_at
+        and (share.expires_at is null or share.expires_at > checked_at)
+        and (
+          (share.recipient_kind = 'organization_account'
+            and share.organization_account_id = account_id)
+          or (share.recipient_kind = 'group'
+            and share.group_id = any (member_group_ids))
+        )
+      limit shared_limit + 1
+    ) as listed;
+    if pg_catalog.cardinality(shared) > shared_limit then
+      shared_overflow := true;
+    end if;
+  end if;
+
+  if shared_overflow then
+    -- That route is not narrowed, so no scanned row is guaranteed admitted.
+    pushable := false;
+  end if;
+
+  return query select
+    pushable,
+    case when wants_owner and p_ownership_mode = 'organization_account'
+      then account_id else null::uuid end,
+    case when wants_owner and p_ownership_mode = 'group'
+      then member_group_ids else array[]::uuid[] end,
+    case when wants_share and not shared_overflow
+      then shared else null::uuid[] end,
+    alternatives;
+end
+$function$;
+
+revoke all on function vortex_access.resolve_record_read_scan_routes_internal(jsonb, text)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_module_owner;
+grant execute on function vortex_access.resolve_record_read_scan_routes_internal(jsonb, text)
+  to vortex_record_adapter;
+
+comment on function vortex_access.resolve_record_read_scan_routes_internal(jsonb, text) is
+  'Private read-scan narrowing for the fixed record adapter: from the caller''s own current eligible read alternatives it returns the owner account, owner groups and directly shared record identifiers, the eligible alternatives reduced to their route lists and saved-condition envelopes, and whether every route has an exact stored predicate; it only narrows candidates and never replaces the exact-record decision.';
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+
+drop function vortex_record.plan_record_read_scan_internal(uuid);
+create or replace function vortex_record.plan_record_read_scan_internal(
+  p_record_type_id uuid
+)
+returns table (
+  restricted boolean,
+  owner_account_id uuid,
+  owner_group_ids uuid[],
+  shared_record_ids uuid[],
+  readable_field_ids text[],
+  access_predicate text,
+  access_parameters jsonb
+)
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
+  context_value jsonb;
+  context_organization_id uuid;
+  context_application_root_id uuid;
+  context_account_id uuid;
+  plan jsonb;
+  target_meta jsonb;
+  required_permissions jsonb;
+  declaration jsonb;
+  field_bounds jsonb;
+  ownership_mode text;
+  access_routes record;
+  alternative jsonb;
+  route jsonb;
+  route_terms text[];
+  route_sql text;
+  alternative_terms text[] := array[]::text[];
+  condition_sql text;
+  condition_entry jsonb;
+  condition_params jsonb;
+  condition_field_types jsonb;
+  condition_field_columns jsonb;
+  condition_field_database_types jsonb;
+  condition_field_definitions jsonb;
+  condition_parameter_types jsonb;
+  condition_parameter_values jsonb;
+  condition_referenced_ids text[];
+  declared_condition_ids text[];
+  field_item jsonb;
+  declaration_item jsonb;
+  binding_item jsonb;
+  field_id text;
+  field_kind text;
+  semantic_type text;
+  column_entry jsonb;
+  database_value_type text;
+  exact_values boolean;
+  parameter_offset integer;
+  supported boolean;
+  compiled jsonb;
+  readable_field_ids_value text[];
+  access_parameters_accum jsonb := '[]'::jsonb;
+  access_predicate_value text := 'true';
+  access_parameters_value jsonb := '[]'::jsonb;
+begin
+  -- Narrowing only. Any refusal or failure here leaves the scan unrestricted,
+  -- so the exact per-row decision, which raises or refuses for the same cause,
+  -- is the only thing that decides what a caller reads.
+  if p_record_type_id is null or p_record_type_id = nil_uuid then
+    raise exception using errcode = '22023',
+      message = 'Record adapter selector is invalid';
+  end if;
+
+  context_value := vortex_access.validated_human_request_context();
+  if not (context_value ? 'applicationRootId') then
+    raise exception using errcode = '42501',
+      message = 'Record adapter requires an application context';
+  end if;
+  context_organization_id := (context_value ->> 'organizationId')::uuid;
+  context_application_root_id := (context_value ->> 'applicationRootId')::uuid;
+  context_account_id := (context_value ->> 'organizationAccountId')::uuid;
+
+  plan := vortex_record.resolve_installation_access_plan_internal(
+    vortex_module.read_current_active_installation()
+  );
+  if (plan ->> 'organizationId')::uuid is distinct from context_organization_id
+    or (plan ->> 'applicationRootId')::uuid is distinct from context_application_root_id then
+    raise exception using errcode = '42501',
+      message = 'Record adapter requires an application context';
+  end if;
+
+  target_meta := plan -> 'recordTypes' -> pg_catalog.lower(p_record_type_id::text);
+  if target_meta is null then
+    raise exception using errcode = '55000',
+      message = 'Record type is not part of the active installation';
+  end if;
+  ownership_mode := target_meta ->> 'ownershipMode';
+
+  -- The declaration the record loader builds for a read: every record-scoped
+  -- read permission declared for this exact record type by the context
+  -- Application or the record type's own Module, in canonical order.
+  select pg_catalog.jsonb_agg(
+    pg_catalog.jsonb_build_object(
+      'applicationRootId', context_application_root_id,
+      'ownerKind', declared.value ->> 'ownerKind',
+      'ownerId', (declared.value ->> 'ownerId')::uuid,
+      'permissionId', declared.key::uuid
+    )
+    order by declared.value ->> 'ownerKind' collate "C", declared.key collate "C"
+  )
+  into required_permissions
+  from pg_catalog.jsonb_each(plan -> 'permissions') as declared(key, value)
+  where pg_catalog.lower(declared.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
+    and declared.value ->> 'actionKind' = 'read'
+    and (declared.value ->> 'namedAction') is null
+    and (
+      (declared.value ->> 'ownerKind') = 'application'
+      or (declared.value ->> 'ownerId')::uuid = (target_meta ->> 'moduleRootId')::uuid
+    );
+
+  if required_permissions is null then
+    return query select false, null::uuid, array[]::uuid[], array[]::uuid[],
+      array[]::text[], null::text, '[]'::jsonb;
+    return;
+  end if;
+
+  declaration := pg_catalog.jsonb_build_object(
+    'operationKey', 'record.read',
+    'action', pg_catalog.jsonb_build_object('actionKind', 'read'),
+    'target', pg_catalog.jsonb_build_object(
+      'kind', 'application', 'applicationRootId', context_application_root_id
+    ),
+    'requiredPermissions', required_permissions,
+    'recordBinding', pg_catalog.jsonb_build_object(
+      'moduleRootId', (target_meta ->> 'moduleRootId')::uuid,
+      'recordTypeId', p_record_type_id,
+      'storageContractId', (target_meta ->> 'storageContractId')::uuid,
+      'storageScope', target_meta ->> 'storageScope'
+    ),
+    'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+    'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+  );
+
+  -- The owner, owner-group and direct-share routes the scan can narrow, and the
+  -- eligible alternatives reduced to their route lists and saved-condition
+  -- envelopes. A null alternative list means no narrowing is possible.
+  select routes.* into access_routes
+  from vortex_access.resolve_record_read_scan_routes_internal(
+    declaration, ownership_mode
+  ) as routes;
+
+  -- The fields this reader is guaranteed to see on every record the read
+  -- decision admits. Any failure yields no fields, so the scan pushes neither
+  -- an order nor a filter on a value it cannot prove is visible.
+  begin
+    field_bounds := vortex_access.resolve_record_read_field_bounds_internal(declaration);
+  exception
+    when others then
+      field_bounds := '{}'::jsonb;
+  end;
+
+  -- Those fields may drive the scan only when every row the scan examines is a
+  -- row the exact decision admits: an unconditioned all-records alternative
+  -- admits every active record, and a restricted plan examines only owned and
+  -- directly shared records, which its routes admit unless a saved condition
+  -- narrows them. Otherwise the scan also examines rows the reader cannot read,
+  -- whose every value is hidden, so no field is readable for the scan.
+  readable_field_ids_value := case
+    when (field_bounds -> 'coversAllRecords') = 'true'::jsonb
+      or (access_routes.restricted and (field_bounds -> 'conditionFree') = 'true'::jsonb)
+    then coalesce(
+      (
+        select pg_catalog.array_agg(field.value order by field.value)
+        from pg_catalog.jsonb_array_elements_text(
+          field_bounds -> 'readableFieldIds'
+        ) as field(value)
+      ),
+      array[]::text[]
+    )
+    else array[]::text[]
+  end;
+
+  -- Access routes with an exact table form narrow the candidate rows here so a
+  -- reader limited to some records still gets full pages from a large table.
+  -- Every eligible alternative contributes one term: its route's exact stored
+  -- predicate (or true when the route has no exact form) AND its saved
+  -- condition compiled into the same scan. The terms are OR-ed deliberately:
+  -- the exact decision admits a record through any one alternative, so the
+  -- scan must keep every row any of them admits. The result only removes rows
+  -- the exact per-row decision below would refuse; every row the scan returns
+  -- still goes through read_record, so it cannot widen a result.
+  if access_routes.alternatives is null
+    or pg_catalog.jsonb_typeof(access_routes.alternatives) is distinct from 'array' then
+    access_predicate_value := 'true';
+  elsif pg_catalog.jsonb_array_length(access_routes.alternatives) = 0 then
+    -- No eligible alternative admits any record.
+    access_predicate_value := 'false';
+  else
+    for alternative in
+      select item.value
+      from pg_catalog.jsonb_array_elements(access_routes.alternatives) as item(value)
+    loop
+      route_terms := array[]::text[];
+      for route in
+        select item.value
+        from pg_catalog.jsonb_array_elements(alternative -> 'routes') as item(value)
+      loop
+        case route ->> 'kind'
+          when 'ownership' then
+            if ownership_mode = 'organization_account' then
+              route_terms := pg_catalog.array_append(
+                route_terms, 'stored.owner_organisation_account_id = $6');
+            elsif ownership_mode = 'group' then
+              route_terms := pg_catalog.array_append(
+                route_terms, 'stored.owner_group_id = any ($7)');
+            else
+              -- Inherited ownership is reached only by a current-edge chase.
+              route_terms := pg_catalog.array_append(route_terms, 'true');
+            end if;
+          when 'direct_share' then
+            if access_routes.shared_record_ids is null then
+              -- More current shares than one query carries: not narrowed.
+              route_terms := pg_catalog.array_append(route_terms, 'true');
+            else
+              route_terms := pg_catalog.array_append(
+                route_terms, 'stored.record_id = any ($8)');
+            end if;
+          else
+            -- all_records admits every record; a relationship route is a
+            -- current-edge chase. Neither has an exact stored predicate.
+            route_terms := pg_catalog.array_append(route_terms, 'true');
+        end case;
+      end loop;
+
+      if pg_catalog.cardinality(route_terms) = 0 then
+        route_sql := 'false';
+      elsif 'true' = any (route_terms) then
+        route_sql := 'true';
+      else
+        route_sql := '(' || pg_catalog.array_to_string(route_terms, ' or ') || ')';
+      end if;
+
+      -- A saved condition narrows every route of its alternative, including an
+      -- all-records route. It is compiled with the exact-semantics type map and
+      -- the alternative's own bound parameters; anything the compiler cannot
+      -- express exactly is left as true, so the per-row decision still decides.
+      condition_sql := null;
+      condition_params := '[]'::jsonb;
+      if alternative ? 'savedCondition'
+        and pg_catalog.jsonb_typeof(alternative -> 'savedCondition') = 'object' then
+        condition_entry := null;
+        select entry.value into condition_entry
+        from pg_catalog.jsonb_array_elements(plan -> 'sharingConditions') as entry(value)
+        where (entry.value ->> 'conditionId')
+            = (alternative -> 'savedCondition' ->> 'conditionId')
+          and (entry.value ->> 'publishedRevision')::numeric
+            = (alternative -> 'savedCondition' ->> 'publishedRevision')::numeric
+          and (entry.value ->> 'contractFingerprint')
+            = (alternative -> 'savedCondition' ->> 'contractFingerprint')
+          and pg_catalog.lower(entry.value ->> 'sourceRecordTypeId')
+            = pg_catalog.lower(p_record_type_id::text)
+        limit 1;
+
+        if condition_entry is not null then
+          exact_values := coalesce(target_meta ->> 'validationContractVersion', '')
+            in ('2.0.0', '3.0.0');
+          condition_field_types := '{}'::jsonb;
+          condition_field_columns := '{}'::jsonb;
+          condition_field_database_types := '{}'::jsonb;
+          condition_field_definitions := '{}'::jsonb;
+          for field_item in
+            select item.value
+            from pg_catalog.jsonb_array_elements(target_meta -> 'fields') as item(value)
+          loop
+            field_id := pg_catalog.lower(field_item ->> 'fieldId');
+            column_entry := target_meta -> 'columns' -> field_id;
+            if column_entry is not null then
+              field_kind := field_item ->> 'type';
+              -- The exact (current Module contract) semantics of the
+              -- saved-condition evaluator: calculation and total fields have no
+              -- fixed stored value here and stay out of the map.
+              semantic_type := case
+                when exact_values and field_kind = 'decimal_number' then 'decimal_number'
+                when exact_values and field_kind = 'money' then 'money'
+                when field_kind in ('whole_number', 'decimal_number', 'money') then 'number'
+                when field_kind = 'yes_no' then 'boolean'
+                when field_kind = 'date' then 'date'
+                when field_kind = 'date_time' then 'date_time'
+                when field_kind = 'several_choices' then 'text_collection'
+                when field_kind in ('table', 'attachment') then 'opaque_json'
+                when field_kind in ('link', 'link_to_one_of_several') then 'record_reference'
+                when field_kind = 'link_to_person' then 'organization_account_reference'
+                when field_kind in (
+                  'text', 'long_text', 'formatted_text', 'choice', 'reference_number',
+                  'email_address', 'phone_number', 'web_address'
+                ) then 'text'
+                else null end;
+              if semantic_type is not null then
+                condition_field_types := condition_field_types
+                  || pg_catalog.jsonb_build_object(field_id, semantic_type);
+                condition_field_columns := condition_field_columns
+                  || pg_catalog.jsonb_build_object(field_id, column_entry ->> 'token');
+                condition_field_database_types := condition_field_database_types
+                  || pg_catalog.jsonb_build_object(field_id, column_entry ->> 'databaseValueType');
+                condition_field_definitions := condition_field_definitions
+                  || pg_catalog.jsonb_build_object(
+                    field_id, pg_catalog.jsonb_build_object('filterable', true, 'type', field_kind));
+              end if;
+            end if;
+          end loop;
+
+          select coalesce(
+            pg_catalog.array_agg(distinct referenced.value #>> '{}'), array[]::text[])
+          into condition_referenced_ids
+          from pg_catalog.jsonb_path_query(
+            condition_entry -> 'condition', 'lax $.**?(@.source == "field").fieldId'
+          ) as referenced(value);
+          select coalesce(
+            pg_catalog.array_agg(pg_catalog.lower(declared.value #>> '{}')), array[]::text[])
+          into declared_condition_ids
+          from pg_catalog.jsonb_array_elements(
+            condition_entry -> 'declaredFieldIds'
+          ) as declared(value);
+
+          supported := true;
+          foreach field_id in array condition_referenced_ids loop
+            field_id := pg_catalog.lower(field_id);
+            if not (condition_field_types ? field_id)
+              or not (condition_field_columns ? field_id)
+              or not (condition_field_database_types ? field_id)
+              or not (field_id = any (declared_condition_ids)) then
+              supported := false;
+              exit;
+            end if;
+            semantic_type := condition_field_types ->> field_id;
+            database_value_type := condition_field_database_types ->> field_id;
+            if not (
+              (semantic_type = 'boolean' and database_value_type = 'boolean')
+              or (semantic_type = 'text' and database_value_type in ('text', 'json'))
+              or (semantic_type = 'text_collection' and database_value_type = 'json')
+              or (semantic_type = 'opaque_json' and database_value_type = 'json')
+              or (semantic_type = 'money' and database_value_type = 'json')
+              or (semantic_type = 'decimal_number' and database_value_type in ('decimal', 'text'))
+              or (semantic_type = 'number' and database_value_type in ('integer', 'decimal'))
+              or (semantic_type = 'date' and database_value_type in ('date', 'text'))
+              or (semantic_type = 'date_time'
+                and database_value_type in ('timestamp_with_time_zone', 'text'))
+            ) then
+              supported := false;
+              exit;
+            end if;
+          end loop;
+
+          if supported then
+            condition_parameter_types := '{}'::jsonb;
+            condition_parameter_values := '{}'::jsonb;
+            for declaration_item in
+              select item.value
+              from pg_catalog.jsonb_array_elements(condition_entry -> 'parameters') as item(value)
+            loop
+              condition_parameter_types := condition_parameter_types
+                || pg_catalog.jsonb_build_object(
+                  declaration_item ->> 'key', declaration_item ->> 'type');
+            end loop;
+            for binding_item in
+              select item.value
+              from pg_catalog.jsonb_array_elements(
+                alternative -> 'savedCondition' -> 'parameterBindings'
+              ) as item(value)
+            loop
+              if binding_item ->> 'source' = 'current_organization_account_id' then
+                condition_parameter_values := condition_parameter_values
+                  || pg_catalog.jsonb_build_object(
+                    binding_item ->> 'key', context_account_id::text);
+              elsif binding_item ->> 'source' = 'literal' then
+                condition_parameter_values := condition_parameter_values
+                  || pg_catalog.jsonb_build_object(
+                    binding_item ->> 'key', binding_item -> 'value');
+              else
+                supported := false;
+                exit;
+              end if;
+            end loop;
+          end if;
+
+          if supported then
+            parameter_offset := pg_catalog.jsonb_array_length(access_parameters_accum);
+            begin
+              compiled := vortex_record.compile_query_filter_internal(
+                condition_entry -> 'condition',
+                condition_field_types,
+                condition_field_columns,
+                condition_field_database_types,
+                condition_field_definitions,
+                '{}'::jsonb,
+                condition_parameter_types,
+                condition_parameter_values,
+                10,
+                parameter_offset
+              );
+              condition_sql := compiled ->> 'predicate';
+              condition_params := coalesce(compiled -> 'parameters', '[]'::jsonb);
+            exception
+              when others then
+                condition_sql := null;
+                condition_params := '[]'::jsonb;
+            end;
+          end if;
+
+          -- Keep every compiled parameter even when nothing was pushed, so the
+          -- next alternative's offsets stay aligned with the JSON array passed
+          -- to the scan.
+          access_parameters_accum := access_parameters_accum || condition_params;
+        end if;
+      end if;
+
+      if condition_sql is null then
+        alternative_terms := pg_catalog.array_append(alternative_terms, route_sql);
+      elsif route_sql = 'true' then
+        alternative_terms := pg_catalog.array_append(alternative_terms, condition_sql);
+      else
+        alternative_terms := pg_catalog.array_append(
+          alternative_terms, '(' || route_sql || ' and ' || condition_sql || ')');
+      end if;
+    end loop;
+
+    if 'true' = any (alternative_terms) then
+      access_predicate_value := 'true';
+      access_parameters_value := '[]'::jsonb;
+    else
+      access_predicate_value := '('
+        || pg_catalog.array_to_string(alternative_terms, ' or ') || ')';
+      access_parameters_value := access_parameters_accum;
+    end if;
+  end if;
+
+  return query select
+    access_routes.restricted,
+    access_routes.owner_account_id,
+    access_routes.owner_group_ids,
+    access_routes.shared_record_ids,
+    readable_field_ids_value,
+    access_predicate_value,
+    access_parameters_value;
+  return;
+exception
+  when others then
+    return query select false, null::uuid, array[]::uuid[], array[]::uuid[],
+      array[]::text[], null::text, '[]'::jsonb;
+    return;
+end
+$function$;
+
+revoke all on function vortex_record.plan_record_read_scan_internal(uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_module_owner;
+
+comment on function vortex_record.plan_record_read_scan_internal(uuid) is
+  'Private read-scan narrowing for the record query: builds the read declaration for one record type of the exact active installation and returns the owner account, owner groups and directly shared record identifiers a caller can be admitted through, the fields every eligible read alternative is guaranteed to expose, kept only when every row the scan examines is one the exact decision admits, and one scan predicate that OR-s every eligible alternative''s exact route test with its saved condition compiled into the same scan; any route without an exact stored predicate or any condition the compiler cannot express as a superset is left unrestricted or true, so the per-row decision remains the only thing that decides access.';
+
 create or replace function vortex_record.run_module_query(
   p_module_root_id uuid,
   p_query_id uuid,
@@ -941,3 +1627,10 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
 
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb) is
   'One bounded keyset page of rows readable through read_record for one installed Module query, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows the scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; works out read-time fields, such as a deadline-passed calculation, inside the query at one statement timestamp in the organisation time zone, so no query is refused for freshness.';
+
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+
+commit;

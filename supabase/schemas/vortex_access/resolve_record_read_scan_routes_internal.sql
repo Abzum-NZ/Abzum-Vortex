@@ -6,7 +6,8 @@ returns table (
   restricted boolean,
   owner_account_id uuid,
   owner_group_ids uuid[],
-  shared_record_ids uuid[]
+  shared_record_ids uuid[],
+  alternatives jsonb
 )
 language plpgsql
 volatile
@@ -24,11 +25,18 @@ declare
   eligibility jsonb;
   candidate jsonb;
   route jsonb;
+  route_kind text;
   account_id uuid;
   member_group_ids uuid[];
   wants_owner boolean := false;
   wants_share boolean := false;
+  -- Every route of every eligible alternative has an exact table form. When any
+  -- route does not, the whole plan is unrestricted so the exact per-row
+  -- decision alone narrows the scan.
+  pushable boolean := true;
+  shared_overflow boolean := false;
   shared uuid[] := array[]::uuid[];
+  alternatives jsonb := '[]'::jsonb;
 begin
   if p_declaration is null
     or pg_catalog.jsonb_typeof(p_declaration) <> 'object'
@@ -52,41 +60,55 @@ begin
     p_declaration, ctx, checked_at
   );
 
-  -- An ineligible caller is refused for every record by that decision.
+  -- An ineligible caller is refused for every record by that decision. The
+  -- empty alternative list narrows the scan to nothing; the exact decision
+  -- would refuse every row anyway.
   if eligibility ->> 'outcome' <> 'eligible' then
-    return query select true, null::uuid, array[]::uuid[], array[]::uuid[];
+    return query select true, null::uuid, array[]::uuid[], array[]::uuid[], '[]'::jsonb;
     return;
   end if;
 
-  -- Only a route whose per-record test has an exact table form is pushed down.
-  -- An all-records route, an inherited-ownership chase, a relationship route or
-  -- any route this function does not know leaves the scan unrestricted, so the
-  -- per-row decision alone narrows it.
+  -- One alternative per eligible permission, reduced to the two facts the scan
+  -- plan consumes: its exact route list and its saved-condition envelope. A
+  -- route list that is not an array is never reasoned about; returning a null
+  -- alternative list leaves the scan unrestricted.
   for candidate in
     select item.value
     from pg_catalog.jsonb_array_elements(eligibility -> 'eligiblePermissions') as item(value)
   loop
     routes := candidate -> 'recordScope' -> 'routes';
     if pg_catalog.jsonb_typeof(routes) is distinct from 'array' then
-      return query select false, null::uuid, array[]::uuid[], array[]::uuid[];
+      return query select false, null::uuid, array[]::uuid[], array[]::uuid[], null::jsonb;
       return;
     end if;
+    alternatives := alternatives || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'routes', routes,
+      'savedCondition', case
+        when candidate -> 'recordScope' ? 'savedCondition'
+          then candidate -> 'recordScope' -> 'savedCondition'
+        else null::jsonb
+      end
+    ));
     for route in
       select item.value from pg_catalog.jsonb_array_elements(routes) as item(value)
     loop
-      case route ->> 'kind'
-        when 'ownership' then
-          if p_ownership_mode = 'inherited' then
-            return query select false, null::uuid, array[]::uuid[], array[]::uuid[];
-            return;
-          end if;
-          wants_owner := true;
-        when 'direct_share' then
-          wants_share := true;
-        else
-          return query select false, null::uuid, array[]::uuid[], array[]::uuid[];
-          return;
-      end case;
+      route_kind := route ->> 'kind';
+      if route_kind = 'ownership' then
+        wants_owner := true;
+        if p_ownership_mode not in ('organization_account', 'group') then
+          -- An inherited owner is reached only by a current-edge chase, and an
+          -- ownership route over a record type that stores no owner admits no
+          -- record: neither is a fixed stored predicate.
+          pushable := false;
+        end if;
+      elsif route_kind = 'direct_share' then
+        wants_share := true;
+      else
+        -- all_records admits every record; a relationship route is a
+        -- relationship chase. Neither is a fixed stored predicate, so the scan
+        -- is left unrestricted and the exact decision alone narrows it.
+        pushable := false;
+      end if;
     end loop;
   end loop;
 
@@ -107,7 +129,9 @@ begin
 
   if wants_share then
     -- The same current-share conditions as the exact-record contribution
-    -- reader, over every record of this type instead of one.
+    -- reader, over every record of this type instead of one. A caller with more
+    -- shares than one query carries gets a null array: that route is not
+    -- narrowed, rather than truncated.
     select coalesce(pg_catalog.array_agg(listed.record_id), array[]::uuid[])
     into shared
     from (
@@ -135,18 +159,24 @@ begin
       limit shared_limit + 1
     ) as listed;
     if pg_catalog.cardinality(shared) > shared_limit then
-      return query select false, null::uuid, array[]::uuid[], array[]::uuid[];
-      return;
+      shared_overflow := true;
     end if;
   end if;
 
+  if shared_overflow then
+    -- That route is not narrowed, so no scanned row is guaranteed admitted.
+    pushable := false;
+  end if;
+
   return query select
-    true,
+    pushable,
     case when wants_owner and p_ownership_mode = 'organization_account'
       then account_id else null::uuid end,
     case when wants_owner and p_ownership_mode = 'group'
       then member_group_ids else array[]::uuid[] end,
-    shared;
+    case when wants_share and not shared_overflow
+      then shared else null::uuid[] end,
+    alternatives;
 end
 $function$;
 
@@ -157,4 +187,4 @@ grant execute on function vortex_access.resolve_record_read_scan_routes_internal
   to vortex_record_adapter;
 
 comment on function vortex_access.resolve_record_read_scan_routes_internal(jsonb, text) is
-  'Private read-scan narrowing for the fixed record adapter: from the caller''s own current eligible read alternatives it returns the owner account, owner groups and directly shared record identifiers that can be admitted, or unrestricted when any route has no exact table form; it only narrows candidates and never replaces the exact-record decision.';
+  'Private read-scan narrowing for the fixed record adapter: from the caller''s own current eligible read alternatives it returns the owner account, owner groups and directly shared record identifiers, the eligible alternatives reduced to their route lists and saved-condition envelopes, and whether every route has an exact stored predicate; it only narrows candidates and never replaces the exact-record decision.';
