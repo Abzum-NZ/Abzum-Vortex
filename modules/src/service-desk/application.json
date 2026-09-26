@@ -447,9 +447,10 @@
                                                                                        "content_1":  {
                                                                                                          "block":  {
                                                                                                                        "block_id":  "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                                                                                                                       "release_version":  "1.2.0"
+                                                                                                                       "release_version":  "1.3.0"
                                                                                                                    },
                                                                                                          "settings":  {
+                                                                                                                          "row_click": { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "event_sd_open_case" } } },
                                                                                                                           "columns": {
                                                                                                                             "kind": "list",
                                                                                                                             "items": [
@@ -1063,9 +1064,10 @@
                                                                                        "content_4":  {
                                                                                                          "block":  {
                                                                                                                        "block_id":  "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                                                                                                                       "release_version":  "1.2.0"
+                                                                                                                       "release_version":  "1.3.0"
                                                                                                                    },
                                                                                                          "settings":  {
+                                                                                                                          "row_click": { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "event_sd_open_article" } } },
                                                                                                                           "columns": {
                                                                                                                             "kind": "list",
                                                                                                                             "items": [
@@ -1405,9 +1407,10 @@
                                                                                        "content_7":  {
                                                                                                          "block":  {
                                                                                                                        "block_id":  "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                                                                                                                       "release_version":  "1.2.0"
+                                                                                                                       "release_version":  "1.3.0"
                                                                                                                    },
                                                                                                          "settings":  {
+                                                                                                                          "row_click": { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "event_sd_open_service_level" } } },
                                                                                                                           "columns": {
                                                                                                                             "kind": "list",
                                                                                                                             "items": [
@@ -1753,9 +1756,10 @@
                                                                                        "list_sd_customers":  {
                                                                                                                  "block":  {
                                                                                                                                "block_id":  "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                                                                                                                               "release_version":  "1.2.0"
+                                                                                                                               "release_version":  "1.3.0"
                                                                                                                            },
                                                                                                                  "settings":  {
+                                                                                                                                  "row_click": { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "event_sd_open_customer" } } },
                                                                                                                                   "columns": {
                                                                                                                                     "kind": "list",
                                                                                                                                     "items": [
@@ -1974,9 +1978,10 @@
                                                                                        "list_sd_requesters":  {
                                                                                                                   "block":  {
                                                                                                                                 "block_id":  "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                                                                                                                                "release_version":  "1.2.0"
+                                                                                                                                "release_version":  "1.3.0"
                                                                                                                             },
                                                                                                                   "settings":  {
+                                                                                                                                   "row_click": { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "event_sd_open_requester" } } },
                                                                                                                                    "columns": {
                                                                                                                                      "kind": "list",
                                                                                                                                      "items": [
@@ -2526,6 +2531,41 @@
         "id": "event_sd_service_level_pause",
         "key": "vortex.app.events.vortex_app_service_desk_pause_sla",
         "record_type": "vortex.service_desk.sla:service_level",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+    },
+    {
+        "id": "event_sd_open_case",
+        "key": "vortex.app.events.vortex_app_service_desk_open_case",
+        "record_type": "vortex.service_desk.cases:case",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+    },
+    {
+        "id": "event_sd_open_article",
+        "key": "vortex.app.events.vortex_app_service_desk_open_article",
+        "record_type": "vortex.service_desk.knowledge:article",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+    },
+    {
+        "id": "event_sd_open_service_level",
+        "key": "vortex.app.events.vortex_app_service_desk_open_service_level",
+        "record_type": "vortex.service_desk.sla:service_level",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+    },
+    {
+        "id": "event_sd_open_customer",
+        "key": "vortex.app.events.vortex_app_service_desk_open_customer",
+        "record_type": "vortex.crm.organisations:company",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+    },
+    {
+        "id": "event_sd_open_requester",
+        "key": "vortex.app.events.vortex_app_service_desk_open_requester",
+        "record_type": "vortex.crm.people:contact",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
     }
@@ -3131,6 +3171,231 @@
                              }
                          ],
                          "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "sd_open_case",
+                         "key": "sd_open_case",
+                         "description": "Opens the clicked case's own detail page with the record identity the clicked row carries.",
+                         "labels": {
+                             "name": "Open case"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record_id": {
+                                 "type": "record_reference",
+                                 "required": true,
+                                 "recordTypeIds": [
+                                     "vortex.service_desk.cases:case"
+                                 ]
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "open_detail",
+                                 "type": "interface.navigate",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "page": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "service_desk_case_detail"
+                                         }
+                                     },
+                                     "parameters": {
+                                         "kind": "map",
+                                         "entries": {
+                                             "record_id": "{{ inputs.record_id }}"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "sd_open_article",
+                         "key": "sd_open_article",
+                         "description": "Opens the clicked article's own detail page with the record identity the clicked row carries.",
+                         "labels": {
+                             "name": "Open article"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record_id": {
+                                 "type": "record_reference",
+                                 "required": true,
+                                 "recordTypeIds": [
+                                     "vortex.service_desk.knowledge:article"
+                                 ]
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "open_detail",
+                                 "type": "interface.navigate",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "page": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "service_desk_article"
+                                         }
+                                     },
+                                     "parameters": {
+                                         "kind": "map",
+                                         "entries": {
+                                             "record_id": "{{ inputs.record_id }}"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "sd_open_service_level",
+                         "key": "sd_open_service_level",
+                         "description": "Opens the clicked service level's own detail page with the record identity the clicked row carries.",
+                         "labels": {
+                             "name": "Open service level"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record_id": {
+                                 "type": "record_reference",
+                                 "required": true,
+                                 "recordTypeIds": [
+                                     "vortex.service_desk.sla:service_level"
+                                 ]
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "open_detail",
+                                 "type": "interface.navigate",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "page": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "service_desk_service_level_detail"
+                                         }
+                                     },
+                                     "parameters": {
+                                         "kind": "map",
+                                         "entries": {
+                                             "record_id": "{{ inputs.record_id }}"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "sd_open_customer",
+                         "key": "sd_open_customer",
+                         "description": "Opens the clicked customer's own detail page with the record identity the clicked row carries.",
+                         "labels": {
+                             "name": "Open customer"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record_id": {
+                                 "type": "record_reference",
+                                 "required": true,
+                                 "recordTypeIds": [
+                                     "vortex.crm.organisations:company"
+                                 ]
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "open_detail",
+                                 "type": "interface.navigate",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "page": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "service_desk_customer_detail"
+                                         }
+                                     },
+                                     "parameters": {
+                                         "kind": "map",
+                                         "entries": {
+                                             "record_id": "{{ inputs.record_id }}"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "sd_open_requester",
+                         "key": "sd_open_requester",
+                         "description": "Opens the clicked requester's own detail page with the record identity the clicked row carries.",
+                         "labels": {
+                             "name": "Open requester"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record_id": {
+                                 "type": "record_reference",
+                                 "required": true,
+                                 "recordTypeIds": [
+                                     "vortex.crm.people:contact"
+                                 ]
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "open_detail",
+                                 "type": "interface.navigate",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "page": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "service_desk_requester_detail"
+                                         }
+                                     },
+                                     "parameters": {
+                                         "kind": "map",
+                                         "entries": {
+                                             "record_id": "{{ inputs.record_id }}"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
                      }
                  ],
                  "flow_bindings":  [
@@ -3205,6 +3470,71 @@
                          "event": "action",
                          "flow": "sd_named_action_service_level_pause",
                          "inputs": {}
+                     },
+                     {
+                         "id": "row_binding_sd_open_case",
+                         "control": "content_1",
+                         "event_id": "event_sd_open_case",
+                         "event": "row_clicked",
+                         "flow": "sd_open_case",
+                         "inputs": {
+                             "record_id": {
+                                 "kind": "caller",
+                                 "name": "record_id"
+                             }
+                         }
+                     },
+                     {
+                         "id": "row_binding_sd_open_article",
+                         "control": "content_4",
+                         "event_id": "event_sd_open_article",
+                         "event": "row_clicked",
+                         "flow": "sd_open_article",
+                         "inputs": {
+                             "record_id": {
+                                 "kind": "caller",
+                                 "name": "record_id"
+                             }
+                         }
+                     },
+                     {
+                         "id": "row_binding_sd_open_service_level",
+                         "control": "content_7",
+                         "event_id": "event_sd_open_service_level",
+                         "event": "row_clicked",
+                         "flow": "sd_open_service_level",
+                         "inputs": {
+                             "record_id": {
+                                 "kind": "caller",
+                                 "name": "record_id"
+                             }
+                         }
+                     },
+                     {
+                         "id": "row_binding_sd_open_customer",
+                         "control": "list_sd_customers",
+                         "event_id": "event_sd_open_customer",
+                         "event": "row_clicked",
+                         "flow": "sd_open_customer",
+                         "inputs": {
+                             "record_id": {
+                                 "kind": "caller",
+                                 "name": "record_id"
+                             }
+                         }
+                     },
+                     {
+                         "id": "row_binding_sd_open_requester",
+                         "control": "list_sd_requesters",
+                         "event_id": "event_sd_open_requester",
+                         "event": "row_clicked",
+                         "flow": "sd_open_requester",
+                         "inputs": {
+                             "record_id": {
+                                 "kind": "caller",
+                                 "name": "record_id"
+                             }
+                         }
                      }
                  ]
              }
