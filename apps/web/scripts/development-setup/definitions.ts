@@ -23,6 +23,7 @@ import {
   organisationAdministrationModule,
   serviceDeskApplication,
   serviceDeskModuleSources,
+  systemDirectoryModule,
   tenantAdministrationApplication,
   tenantAdministrationModule,
 } from "@vortex/modules";
@@ -61,10 +62,18 @@ export const developmentPublicationCatalogue: ImmutableDefinitionPublicationCata
   },
 };
 
+/**
+ * Every shipped module source. A module is published, and from then on installed for the
+ * organisation, only because an application binds it: `modulesInDependencyOrder` walks each
+ * application's own module bindings, so a module that no shipped application binds is never
+ * published. The System Directory Module is bound by the administration applications, so it
+ * reaches every new organisation through their ordinary activation.
+ */
 const moduleSources = [
   iamModule,
   tenantAdministrationModule,
   organisationAdministrationModule,
+  systemDirectoryModule,
   ...crmModuleSources,
   ...serviceDeskModuleSources,
   ...operationsModuleSources,
