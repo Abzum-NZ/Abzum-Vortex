@@ -1,5 +1,6 @@
 import { registerHooks } from "node:module";
-import { readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -77,7 +78,36 @@ const platformThemes = byIdentity(
   platformThemeReleaseFingerprints,
 );
 
-const output = `${JSON.stringify({ platformBlocks, platformServiceOperations, platformThemes }, null, 2)}\n`;
+/**
+ * Every imported shadcn style CSS asset is fingerprinted by its own content, keyed by style id. A
+ * raw-text SHA-256 is used because the asset is CSS rather than a canonical JSON value; the
+ * catalogue fingerprint binds the style id to that content, so a changed asset or a reused id can
+ * never keep another asset's fingerprint.
+ */
+const styleDirectory = path.join(catalogueDirectory, "styles");
+const styleContentFingerprint = (css) =>
+  `sha256:${createHash("sha256").update(css, "utf8").digest("hex")}`;
+const styleFiles = (await readdir(styleDirectory).catch(() => []))
+  .filter((name) => name.endsWith(".css"))
+  .sort();
+const platformThemeStyleAssets = {};
+for (const file of styleFiles) {
+  const styleId = file.slice(0, -".css".length);
+  const css = (await readFile(path.join(styleDirectory, file), "utf8")).replace(/\r\n/g, "\n");
+  const contentFingerprint = styleContentFingerprint(css);
+  platformThemeStyleAssets[styleId] = {
+    contentFingerprint,
+    catalogueFingerprint: styleContentFingerprint(
+      `platform_theme_style:${styleId}:${contentFingerprint}`,
+    ),
+  };
+}
+
+const output = `${JSON.stringify(
+  { platformBlocks, platformServiceOperations, platformThemes, platformThemeStyleAssets },
+  null,
+  2,
+)}\n`;
 
 if (process.argv.includes("--check")) {
   const current = (await readFile(generatedFile, "utf8").catch(() => "")).replace(/\r\n/g, "\n");

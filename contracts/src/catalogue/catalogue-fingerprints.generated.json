@@ -256,6 +256,126 @@
     }
   },
   "platformThemes": {
+    "0fe5b13f-7a42-50cb-90d4-2ad72ddbb83c:4.21.0-default": {
+      "contentFingerprint": "sha256:eaaeabecc70f36bbea9ad5d7f74e3284ed340791d3f4ed31ddd5d9436e6c4dc7",
+      "catalogueFingerprint": "sha256:479b00b45b8c53d3c2fdb8f892b524c3b6ee8426dc70f675875a4f6f9af6dd04"
+    },
+    "0fe5b13f-7a42-50cb-90d4-2ad72ddbb83c:4.21.0-large": {
+      "contentFingerprint": "sha256:a44c2263dfe5faa3859b3dcc47279d6a3aaf7a195dc5dd6990ec5831706f17be",
+      "catalogueFingerprint": "sha256:120e7ade128db36e2ba0c44057d0a9f2a72ab1cf4d0efca6aff50d8c31b2d5fb"
+    },
+    "0fe5b13f-7a42-50cb-90d4-2ad72ddbb83c:4.21.0-medium": {
+      "contentFingerprint": "sha256:eaaeabecc70f36bbea9ad5d7f74e3284ed340791d3f4ed31ddd5d9436e6c4dc7",
+      "catalogueFingerprint": "sha256:7d43153ace9ec4c16bf20750c184981ab70ff0a145cfe2e6a758dc96efb27161"
+    },
+    "0fe5b13f-7a42-50cb-90d4-2ad72ddbb83c:4.21.0-none": {
+      "contentFingerprint": "sha256:4d72c17b005c55cb134e27d6fc4bba5fcc4b6e858af18f58017df9da3cbf2b7a",
+      "catalogueFingerprint": "sha256:7cc9fa6e2fda0647b00b4c4dcaedb2d6054c86dbba7713d44f77aa3652e41b4c"
+    },
+    "0fe5b13f-7a42-50cb-90d4-2ad72ddbb83c:4.21.0-small": {
+      "contentFingerprint": "sha256:198d49dee8751054e1528792e7e547045330264e03a8e260f07bb075ad69f138",
+      "catalogueFingerprint": "sha256:79389be22ef3bd091ce1639d6ba9101e7771427bf3bcac133e0b9145b77c9cc1"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-amber": {
+      "contentFingerprint": "sha256:f1f75445756ee23a1540aae6713262f6f9d51073b641d5dc598d44f7f36051c1",
+      "catalogueFingerprint": "sha256:5180d2abf7017ba7a618dfcd07882a7823a16bf7e8227228bef5f0ecff9ec788"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-blue": {
+      "contentFingerprint": "sha256:3b177bc1589b0ea5a4fe9b9bc0170ed12c13f43b65d11827b2925c3cd2f97dd1",
+      "catalogueFingerprint": "sha256:fb489eb415c784a35b36c4fc377dc06f803b79b5f57c1c332a055e71a231e6e3"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-cyan": {
+      "contentFingerprint": "sha256:6033f77bb465f197429dc5bc3fe26a49f969cf000d2b42cc657b043e7134caac",
+      "catalogueFingerprint": "sha256:173fbae7bd845aa9d70af018b6b3cff2c5997e77eefe65cbcc6f7237e700747a"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-emerald": {
+      "contentFingerprint": "sha256:a19340f44b6e45bb2cb944cb9a4eb74dfe42deb32632affbeb94a9605843e84a",
+      "catalogueFingerprint": "sha256:360d36f190c0c26072be31784dad9809c65993d2a732eda9948b5a3f7b6284c3"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-fuchsia": {
+      "contentFingerprint": "sha256:5e89564371a9d7b4ba2b57b2678d5080405dc17d12e4e9565188fbf284f66e4d",
+      "catalogueFingerprint": "sha256:88ac506b20b591e09392ecff7115d2c8805d3df73760859f7077c292f09f3fea"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-gray": {
+      "contentFingerprint": "sha256:f71560a1769e75bd4653328ec074b5a2ae45adf7e7c2a20be1c0722b24bef256",
+      "catalogueFingerprint": "sha256:a94e79c4b87bacec9ce548b6cc8bad00d394253c894b19ca3c64794cc6dee1e4"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-green": {
+      "contentFingerprint": "sha256:8528db0336c3aae7db4c355e793994bb24f79e9bcab2f4e0a54e5a74a315c475",
+      "catalogueFingerprint": "sha256:ae8128c6d76f9394b3f9f68dd6bc68770fcf6bb38ca2752379a04a40424481d7"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-indigo": {
+      "contentFingerprint": "sha256:ea936e14fcf54f11b793814d42ef9cb1a17bd4f37544330c5632717febdb8788",
+      "catalogueFingerprint": "sha256:5b6628f6b13da886af32e4c6f3d050a98bf5d1fc851d83a1877bcc601c6ec728"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-lime": {
+      "contentFingerprint": "sha256:d2c2c0658ac86e434b3e6bd897010777a2e8437b4d7f74e4874d5efa2c4957be",
+      "catalogueFingerprint": "sha256:fc91da7e2d3cb665deb075ad40a9c03e4be7c31deffb305dceb0aab5e6c38cfb"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-mauve": {
+      "contentFingerprint": "sha256:348757e69d9df1905960fede6f4ba2eed70e6fdfbc6af8324fb237c3220b8264",
+      "catalogueFingerprint": "sha256:a86deef105681607d13d213e58184fb32abf6057737934e3ec904b67b0f6888c"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-mist": {
+      "contentFingerprint": "sha256:2e620d004a6cb3228472e226f411f4bcd910d424eed56e9fb099057dba48c081",
+      "catalogueFingerprint": "sha256:c3710f92db9315741c6e933e10746dc8d8a6def59ef8d39116fbd65a04662029"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-neutral": {
+      "contentFingerprint": "sha256:51881a8d19cdec02daeeb8026a8525a3c59281966040443f64dccb43401c4ef5",
+      "catalogueFingerprint": "sha256:273baad05ef5f37e897c725518b787458caf8e83a6db1c2e162b0fe8132fafb7"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-olive": {
+      "contentFingerprint": "sha256:5c1e8dca907d05e4a6b4a594922dd9ca1de28fd931274bc9199f264384c502cf",
+      "catalogueFingerprint": "sha256:bbeb45be9a32982c4b795c2eb9f353fda48b30ef6305d3a989ad112d4514a7f7"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-orange": {
+      "contentFingerprint": "sha256:81f11311399fa8266e1d08d09891a07642f4e49d5d568a669352ebd9f8b54579",
+      "catalogueFingerprint": "sha256:d966c6bee43341889545a1148ede88ad00c6f9dc993d9ea63b7698beed359ffc"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-pink": {
+      "contentFingerprint": "sha256:635b45bb5330b96e3eae8708b1d203a6c04df57c87e3f95615f3fa4b97de4f46",
+      "catalogueFingerprint": "sha256:7a77a642acbf74f3752d2b9f69ca0e4706633b2cf97ccb4a12a9e88fefd28ac8"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-purple": {
+      "contentFingerprint": "sha256:415346eaf22d7780dc3916f673266c728545d941d0523af6b190415688ab177e",
+      "catalogueFingerprint": "sha256:28526ab2ec623093e58d7b5f6857bc006af0360c37ee47adf2d19cb57ed604b9"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-red": {
+      "contentFingerprint": "sha256:de313ed4eaec7720ed7a3b3f7b6c9bec20c7c3ec4b23147ca66ecc995b10eb1c",
+      "catalogueFingerprint": "sha256:f999672cfa15d0ec001ccc29a37e0dff2f3e642269fcc5c9da528b509fb8685a"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-rose": {
+      "contentFingerprint": "sha256:871911335bfb455000638158f6a9ada78468b076262371c07775b972bb04ce3e",
+      "catalogueFingerprint": "sha256:581b0acc89daecfe5ab7737273db81d8d61504cb390a4aa410e7a3358d60595d"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-sky": {
+      "contentFingerprint": "sha256:ec2c54bbb21b136731a7461321285ff7f6a7186df7d5475179e399d2c9c1a1f4",
+      "catalogueFingerprint": "sha256:0dd340f4c2e9845894fe04e8ed61625d4307445e2d6f17503b4460d7630dc0e6"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-stone": {
+      "contentFingerprint": "sha256:ad300dc4387819edb2638c862fd46577f99192200e3e72aee47b036df35d34f8",
+      "catalogueFingerprint": "sha256:e0af9033dd9de85fb35f60a6303719017db2a501718bfdc0f8df059388e1fdaa"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-taupe": {
+      "contentFingerprint": "sha256:ad738927029ca5b509f491eefd51a8ebcbe6875e291d5b37a5493bf1b2bde37d",
+      "catalogueFingerprint": "sha256:7b4a9466f080d612bbcfb94be8005b557c08bb98bb804676c4fc2a04255d9898"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-teal": {
+      "contentFingerprint": "sha256:0908a9021ed32c0d0b77aa35486e6bc0d021e3d5ee42ba7fc1e002dc80d60036",
+      "catalogueFingerprint": "sha256:3c49d6c0a31e771c1ae90da912d9e4b1bec738992a1e30ade8505353aadab26e"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-violet": {
+      "contentFingerprint": "sha256:6b80205c9d8d3301ee856e4c11d54251fcfa4204bdec5e978e6cb701520a2600",
+      "catalogueFingerprint": "sha256:1a28d86381f9ad5b71a6e3a7ce6a9937d3a393c4e3a7f6429d3ac37832f3358d"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-yellow": {
+      "contentFingerprint": "sha256:4db47e503e27be953c760e7af1e1fe00cbccdbcd7b22bf7e2a643f01bcfb0e2a",
+      "catalogueFingerprint": "sha256:411c7941aa9f1d034c7094c656396e007f04a8407fbb1c51886fa437df6a13ed"
+    },
+    "185e14f2-9f02-5b1f-b8da-7880c65d0511:4.21.0-zinc": {
+      "contentFingerprint": "sha256:232772190bf927ead4945642f421cf7cff7ec28c7f1de4f1309c324c8729016d",
+      "catalogueFingerprint": "sha256:2adc29f34c6c4f615f01f6cd306033d9b34428c495f07c5199e19ee29a10ac06"
+    },
     "3f0a2b14-9c6d-4e58-8a71-6d2e5f4b1c09:2.0.0": {
       "contentFingerprint": "sha256:fbb5b219abf1012517b1eb57d0438d0b9ac989039b38bb48ede5178f6cfa53f3",
       "catalogueFingerprint": "sha256:6df126d1e56dddf89e7501b508be4822329d5d0d2230b66041f7f9228996ff83"
@@ -263,6 +383,164 @@
     "3f0a2b14-9c6d-4e58-8a71-6d2e5f4b1c09:3.0.0": {
       "contentFingerprint": "sha256:71a593ed8de29ea3bfdf6cc1fb263bcbe0a9b82b8b132f35f49557d213c5da48",
       "catalogueFingerprint": "sha256:6f9846903b82e100e6d7e4e4673bc4aefae892ed5fe2211e146a4b0e39b1cf19"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-amber": {
+      "contentFingerprint": "sha256:bb5d555c447040326069e70b2d116c27b99940673d725be4218733ef0e40cc8e",
+      "catalogueFingerprint": "sha256:0532c5a86d882da63bc38ac9349009d4127e05523e363dc03c4bf60960e3524d"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-blue": {
+      "contentFingerprint": "sha256:e898097086795b1ccb7bc86dbf08252f3f68b3e0e3f1c9682a664477cefbe282",
+      "catalogueFingerprint": "sha256:fe6e8d48bcbf559914d12f4ae55c7ca3e9bc19043918b8f47910f5ad079e4dec"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-cyan": {
+      "contentFingerprint": "sha256:b7c018a19682e20846751714218dd3282f821c8af44611b589dd1b8e16e798c1",
+      "catalogueFingerprint": "sha256:78e69c26af249696a37aadafafa422e5d7661fae4e743cc5390f5d58b5449258"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-emerald": {
+      "contentFingerprint": "sha256:5585b7a69665fdccfb9cea739d2db869f8673bb04e5f5c0ccbaf162f9f28d1c3",
+      "catalogueFingerprint": "sha256:a59de60a582906faa0c820ae29b9cfd76b9c1b76ccbf76a9977376345c03204d"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-fuchsia": {
+      "contentFingerprint": "sha256:321fa77c342fbfec37d338ccbed5857dd72f1df0c058275bcb1af90bd93a14bc",
+      "catalogueFingerprint": "sha256:49c9506ce9ba2fcd19a251db091803cb2cf582c369e62a263aaf01976a6c9920"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-gray": {
+      "contentFingerprint": "sha256:77f02096544f00fde2b0b3d7c9fae1c0c1067b8b880662c47a06b0d92e2edf30",
+      "catalogueFingerprint": "sha256:4dd3e40f32e3f5daa340b3d4ea2f11e415eff2922741c631dff4d4662c8f06c7"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-green": {
+      "contentFingerprint": "sha256:f3cd83f95665e513ccdf04da84bfb74131fd73388df69fbea4f3a743f543cbe3",
+      "catalogueFingerprint": "sha256:0023871b6a7677c4fbd308d499110712ee0f953bb167d18350b0a7cab833c8b6"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-indigo": {
+      "contentFingerprint": "sha256:43ae5decd0f997bcf4e95ecdf3dca437e10ba42102cd5ed23c943251610d926f",
+      "catalogueFingerprint": "sha256:ca07c3dc021bf9a163d866b45b04e92695df8a3e46d7ce594b6fdd5408f8e002"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-mauve": {
+      "contentFingerprint": "sha256:04dd4534dc0076df45cc224dce7557dfaaf51e760edb5b26bb570424dc2c6558",
+      "catalogueFingerprint": "sha256:5bf85dccab49e2e1ffd1fccc9a70a7a76ffc6b8264ca35b95fb393d395dc6359"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-mist": {
+      "contentFingerprint": "sha256:8adb5a54d7839cf872003ffbc27207f8fdc1c45ab7dba9eb61dbcd420f37bb7f",
+      "catalogueFingerprint": "sha256:335edcd85f4bd6c658020ba095ee1eab77010873c17185363d05c49b0c24393f"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-neutral": {
+      "contentFingerprint": "sha256:9b204f0323f36d15c73c5daaa576a7c4f5c53f774e08ed06ba40b827b62e3ff4",
+      "catalogueFingerprint": "sha256:1b4714b10adf988dd0ca310afcfc905fae3f02117d5d525f423e53478002239f"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-olive": {
+      "contentFingerprint": "sha256:7df1ecc1bb65e75cccfc22f174bde5b5a8f1ed10b9b72e98df276795dbd8f1f0",
+      "catalogueFingerprint": "sha256:e050f54a977794db981a659854eac7d241c9b66405b78dc5dc608c7b9f31a276"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-orange": {
+      "contentFingerprint": "sha256:45a8c1849e9694c4752a28b3fe879b58bd7d35c05bd71288f2d5c080860520c4",
+      "catalogueFingerprint": "sha256:38b92a8335c175b974724de180bfd645f1dde1d2fbde5a8cd4f18efda5ffdc22"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-pink": {
+      "contentFingerprint": "sha256:d2eece15a38e2bc9e46733cc22febcc7bc66daf4acae4f10caca8453a18fd5d3",
+      "catalogueFingerprint": "sha256:90e465df43e1c9941d9d725d5a4cd4f52aeff622d3b738c0415647a14c18e1ba"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-purple": {
+      "contentFingerprint": "sha256:ff2d0025d96f463fa915b5894b9c97aa4f497306fc224e0228f89cb890ee3ca3",
+      "catalogueFingerprint": "sha256:0b1b005f6d49748f92c2d4263d1e110911f409cc92409d593baa7e91c543e24f"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-red": {
+      "contentFingerprint": "sha256:ec5c3939aed7cd27c0390de2c3e618f51302515a19ad8b32645fb42330f1832b",
+      "catalogueFingerprint": "sha256:3a94fb0226478f013d7ed08a8d02e08b9eac14eec1d1a57d9d3f4c61c354eb29"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-rose": {
+      "contentFingerprint": "sha256:8de8f15f9d5783435598c0eb9ab8af6eb60bf28c3c8723e50decf956c00fd8a3",
+      "catalogueFingerprint": "sha256:d3569b51c6ef9aa7abe8e459964051d6a11c5dec12a1dd792b19d9377330ca28"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-sky": {
+      "contentFingerprint": "sha256:bab94b913ef454fda2b6a2ccd671d5cd2ce2b77a8b17977c277b60d38880e6d1",
+      "catalogueFingerprint": "sha256:e3d46aa90ba38a31c1adc06fce8c4926ba32dc3b5244c0c69d20210a7efa7788"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-stone": {
+      "contentFingerprint": "sha256:3c47b0ecc2c984e94ce29086d2d652580a47c4549f7e6a264906de59662d1c26",
+      "catalogueFingerprint": "sha256:0fc7c1ae220b2e337bda113b9ef57f52a49477101ab1e64912c6ae9bb0dd2e84"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-taupe": {
+      "contentFingerprint": "sha256:538d65e97b1c553b9d29b21ae6439ec4d104334cc93cf74929ab0b1dc8682737",
+      "catalogueFingerprint": "sha256:27f293294fb331c270ab1b5b9c280f8f4c9f249652f6731bbdd0631139686fc2"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-teal": {
+      "contentFingerprint": "sha256:ad1ae8d4b8a6b095fdf0aea244d2b2c79a4d049182938798d1ac2c7a3cfac6f1",
+      "catalogueFingerprint": "sha256:afe0c139c39b6f2b79671d8d0a0b9c46b3bf440775614910a470aa4c078675a5"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-violet": {
+      "contentFingerprint": "sha256:8500008fd5ed6b221362c3a89780e41524e01a5b63f5ee55cefe98f065243d46",
+      "catalogueFingerprint": "sha256:333ffdc9a26f607cc29d65fb2661af9e1c188cfe11cc4bd110a087e5c7ee0723"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-yellow": {
+      "contentFingerprint": "sha256:4ba98a929632c4e00e005be1391032b767ee57630831fd62f6c457652c037d6c",
+      "catalogueFingerprint": "sha256:a319bbb584df6e1a0aec9a76959634f0e7f3a544fd2edce87fcaf5593b3f76a6"
+    },
+    "bbe64c07-773f-553c-8c6a-99fedd1647ff:4.21.0-zinc": {
+      "contentFingerprint": "sha256:2875a06cb0ad6498a73ace293ad54ed91c55370f03907251d1455684a744bbc2",
+      "catalogueFingerprint": "sha256:7cbb27801e3aa95637735a6e322d0d95933f7212301b5341ba8b0327e7e595cc"
+    },
+    "f56f0ebe-c1b3-5c10-a17d-a3b2f33eb0d8:4.21.0-gray": {
+      "contentFingerprint": "sha256:3f9a8dd015b49c427d77803398ce98a4d340dd19704695ae435de85708b07b11",
+      "catalogueFingerprint": "sha256:68b06be398cb6d6382de9974ee3ebc75460e0eb0abf11f1f7f9e7a752d8f9a23"
+    },
+    "f56f0ebe-c1b3-5c10-a17d-a3b2f33eb0d8:4.21.0-mauve": {
+      "contentFingerprint": "sha256:1399ad5d21a377e2db297bb6b00dd12286d984f52e85c5b15788d7d1fb1a3aca",
+      "catalogueFingerprint": "sha256:e7b4f7729d481d05f2813a7fdf8d6fe661785899708bb88d2459ae3cbbdf6c4f"
+    },
+    "f56f0ebe-c1b3-5c10-a17d-a3b2f33eb0d8:4.21.0-mist": {
+      "contentFingerprint": "sha256:87e7558de90db56afbc38f40a36d5d30a77c7c3dffb6d947d7548dba77ef38a7",
+      "catalogueFingerprint": "sha256:64305691df7e0d7bda27fe33bc055ef0dd7e3e048c11b01a2a581b24ef61df7a"
+    },
+    "f56f0ebe-c1b3-5c10-a17d-a3b2f33eb0d8:4.21.0-neutral": {
+      "contentFingerprint": "sha256:da90ca91e4dbdff41147b9490a965ce5fc15e2bdd71091054829d33109086905",
+      "catalogueFingerprint": "sha256:accc571e77492ffb2542f117bead9d38715d204bb1fa901e2d7d64b5895c66bc"
+    },
+    "f56f0ebe-c1b3-5c10-a17d-a3b2f33eb0d8:4.21.0-stone": {
+      "contentFingerprint": "sha256:6c5fc14e246c2047f6b6994ebefdd6be8faaf6062af60d5c8235f9f04b426372",
+      "catalogueFingerprint": "sha256:a5b2df34332eb7ad6d1c13f3c457f8ec78a45e384db09e80eaa49f5d99fc6697"
+    },
+    "f56f0ebe-c1b3-5c10-a17d-a3b2f33eb0d8:4.21.0-taupe": {
+      "contentFingerprint": "sha256:c695f8327aeb148a6d7d3daf72e2438b7675d9d46e594a8510d300965e40be34",
+      "catalogueFingerprint": "sha256:6415e049c2628fa3f4dee38142f75f94ee467286b18cfeed53c89519156cc385"
+    },
+    "f56f0ebe-c1b3-5c10-a17d-a3b2f33eb0d8:4.21.0-zinc": {
+      "contentFingerprint": "sha256:538f3a6f29d182e7dd7eaa5162da6df5adcec869bc0cbafc3b9b2d3b031147f6",
+      "catalogueFingerprint": "sha256:e6d49c26fad29b82694b6b444d955b5d963ee9563649dd266b8d63c2f30b0929"
+    }
+  },
+  "platformThemeStyleAssets": {
+    "luma": {
+      "contentFingerprint": "sha256:64f4143173c02fe25f2b521a4b23bea4acbb6a8f3f12eb256d6d4720753834cb",
+      "catalogueFingerprint": "sha256:04bcbef09cb9efa3e976a1752726e58422b42c84b07299c5b3d87e2b21a6261d"
+    },
+    "lyra": {
+      "contentFingerprint": "sha256:a1790091cd6858dcdebbfde8ef50268c71dd50b588c7e31145f9fe872457a974",
+      "catalogueFingerprint": "sha256:dd3bb462aad905f5eb49ceef8bb13e830a5e0b4813134cde274079548befa56a"
+    },
+    "maia": {
+      "contentFingerprint": "sha256:3b31da3fceb008ee5c74a4fc092da4da2cc57ca59e3e959e7e1fe172c91ca442",
+      "catalogueFingerprint": "sha256:128081eb6dffdcb1b18791358ebd44044e60f86cc1feb90296b9ec536407ab18"
+    },
+    "mira": {
+      "contentFingerprint": "sha256:ead3eec5048011b8a8f4d7312bc7fdf3e08aa722a6ecf91645d8622558143988",
+      "catalogueFingerprint": "sha256:e914e451ef32ba18ac0e6531e6d172e4f01f8bbd1a60ffd79daac4a84d436a35"
+    },
+    "nova": {
+      "contentFingerprint": "sha256:e612f44a402502f5323a1e4b64ac57e89d16f1f2227d768a6736953274d4fdba",
+      "catalogueFingerprint": "sha256:302585b8d2323354539c639e26dcca4019459005c06241914af3702bfc5311df"
+    },
+    "rhea": {
+      "contentFingerprint": "sha256:19c0032a050e23607388b38342aa7eb79b8635f7240da236db1cc03b776e2eb6",
+      "catalogueFingerprint": "sha256:f07d4dd2936a66cf3281333dc074e4ac1acaa5d0374d72470829cf82be465d1f"
+    },
+    "sera": {
+      "contentFingerprint": "sha256:9e00ed3acbd67f70cdf09be17e7226219c1610eaab0c9691376d3c5cd4796d9a",
+      "catalogueFingerprint": "sha256:25577b9d70eec84760bc60012e7822a08ce67a8817c096a558c5a08930b28895"
+    },
+    "vega": {
+      "contentFingerprint": "sha256:21fcc3c38159551b3c65bc97298c1e9912cce47bba1dbcf2ca2a46db169ff87f",
+      "catalogueFingerprint": "sha256:5b9643d4fe34c087478fbf801ded52a94a1176ddc5eb1be53c82622abcb27558"
     }
   }
 }

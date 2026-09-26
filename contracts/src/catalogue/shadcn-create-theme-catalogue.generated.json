@@ -1,0 +1,687 @@
+{
+  "schemaVersion": "1.0.0",
+  "registry": {
+    "package": "shadcn",
+    "packageVersion": "4.21.0",
+    "tag": "shadcn@4.21.0",
+    "registryUrl": "https://ui.shadcn.com/r",
+    "fetchedAt": "2026-09-26T10:38:32.079Z",
+    "licence": {
+      "spdx": "MIT",
+      "copyright": "Copyright (c) 2023 shadcn",
+      "notice": "shadcn/ui is distributed under the MIT licence. The theme and style values in this snapshot are copied from the pinned shadcn 4.21.0 registry and repository."
+    }
+  },
+  "dimensions": {
+    "style": {
+      "label": "Visual style",
+      "options": [
+        {
+          "id": "nova",
+          "label": "Nova",
+          "description": "Reduced padding and margins",
+          "base": "base",
+          "asset": {
+            "path": "styles/nova.css",
+            "contentFingerprint": "sha256:e612f44a402502f5323a1e4b64ac57e89d16f1f2227d768a6736953274d4fdba"
+          }
+        },
+        {
+          "id": "vega",
+          "label": "Vega",
+          "description": "Clean, neutral, and familiar",
+          "base": "base",
+          "asset": {
+            "path": "styles/vega.css",
+            "contentFingerprint": "sha256:21fcc3c38159551b3c65bc97298c1e9912cce47bba1dbcf2ca2a46db169ff87f"
+          }
+        },
+        {
+          "id": "maia",
+          "label": "Maia",
+          "description": "Rounded, with generous spacing.",
+          "base": "base",
+          "asset": {
+            "path": "styles/maia.css",
+            "contentFingerprint": "sha256:3b31da3fceb008ee5c74a4fc092da4da2cc57ca59e3e959e7e1fe172c91ca442"
+          }
+        },
+        {
+          "id": "lyra",
+          "label": "Lyra",
+          "description": "Boxy and sharp. For mono fonts.",
+          "base": "base",
+          "asset": {
+            "path": "styles/lyra.css",
+            "contentFingerprint": "sha256:a1790091cd6858dcdebbfde8ef50268c71dd50b588c7e31145f9fe872457a974"
+          }
+        },
+        {
+          "id": "mira",
+          "label": "Mira",
+          "description": "Made for compact interfaces.",
+          "base": "base",
+          "asset": {
+            "path": "styles/mira.css",
+            "contentFingerprint": "sha256:ead3eec5048011b8a8f4d7312bc7fdf3e08aa722a6ecf91645d8622558143988"
+          }
+        },
+        {
+          "id": "luma",
+          "label": "Luma",
+          "description": "Fluid, luminous, and soft.",
+          "base": "base",
+          "asset": {
+            "path": "styles/luma.css",
+            "contentFingerprint": "sha256:64f4143173c02fe25f2b521a4b23bea4acbb6a8f3f12eb256d6d4720753834cb"
+          }
+        },
+        {
+          "id": "sera",
+          "label": "Sera",
+          "description": "Editorial and typographic.",
+          "base": "base",
+          "asset": {
+            "path": "styles/sera.css",
+            "contentFingerprint": "sha256:9e00ed3acbd67f70cdf09be17e7226219c1610eaab0c9691376d3c5cd4796d9a"
+          }
+        },
+        {
+          "id": "rhea",
+          "label": "Rhea",
+          "description": "Like Luma but compact.",
+          "base": "base",
+          "asset": {
+            "path": "styles/rhea.css",
+            "contentFingerprint": "sha256:19c0032a050e23607388b38342aa7eb79b8635f7240da236db1cc03b776e2eb6"
+          }
+        }
+      ]
+    },
+    "baseColor": {
+      "label": "Base colour",
+      "options": [
+        {
+          "id": "neutral",
+          "label": "Neutral",
+          "release": {
+            "catalogueThemeId": "f56f0ebe-c1b3-5c10-a17d-a3b2f33eb0d8",
+            "releaseVersion": "4.21.0-neutral"
+          }
+        },
+        {
+          "id": "stone",
+          "label": "Stone",
+          "release": {
+            "catalogueThemeId": "f56f0ebe-c1b3-5c10-a17d-a3b2f33eb0d8",
+            "releaseVersion": "4.21.0-stone"
+          }
+        },
+        {
+          "id": "zinc",
+          "label": "Zinc",
+          "release": {
+            "catalogueThemeId": "f56f0ebe-c1b3-5c10-a17d-a3b2f33eb0d8",
+            "releaseVersion": "4.21.0-zinc"
+          }
+        },
+        {
+          "id": "gray",
+          "label": "Gray",
+          "release": {
+            "catalogueThemeId": "f56f0ebe-c1b3-5c10-a17d-a3b2f33eb0d8",
+            "releaseVersion": "4.21.0-gray"
+          }
+        },
+        {
+          "id": "mauve",
+          "label": "Mauve",
+          "release": {
+            "catalogueThemeId": "f56f0ebe-c1b3-5c10-a17d-a3b2f33eb0d8",
+            "releaseVersion": "4.21.0-mauve"
+          }
+        },
+        {
+          "id": "olive",
+          "label": "Olive"
+        },
+        {
+          "id": "mist",
+          "label": "Mist",
+          "release": {
+            "catalogueThemeId": "f56f0ebe-c1b3-5c10-a17d-a3b2f33eb0d8",
+            "releaseVersion": "4.21.0-mist"
+          }
+        },
+        {
+          "id": "taupe",
+          "label": "Taupe",
+          "release": {
+            "catalogueThemeId": "f56f0ebe-c1b3-5c10-a17d-a3b2f33eb0d8",
+            "releaseVersion": "4.21.0-taupe"
+          }
+        }
+      ]
+    },
+    "theme": {
+      "label": "Theme colour",
+      "options": [
+        {
+          "id": "neutral",
+          "label": "Neutral",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-neutral"
+          }
+        },
+        {
+          "id": "stone",
+          "label": "Stone",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-stone"
+          }
+        },
+        {
+          "id": "zinc",
+          "label": "Zinc",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-zinc"
+          }
+        },
+        {
+          "id": "gray",
+          "label": "Gray",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-gray"
+          }
+        },
+        {
+          "id": "amber",
+          "label": "Amber",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-amber"
+          }
+        },
+        {
+          "id": "blue",
+          "label": "Blue",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-blue"
+          }
+        },
+        {
+          "id": "cyan",
+          "label": "Cyan",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-cyan"
+          }
+        },
+        {
+          "id": "emerald",
+          "label": "Emerald",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-emerald"
+          }
+        },
+        {
+          "id": "fuchsia",
+          "label": "Fuchsia",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-fuchsia"
+          }
+        },
+        {
+          "id": "green",
+          "label": "Green",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-green"
+          }
+        },
+        {
+          "id": "indigo",
+          "label": "Indigo",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-indigo"
+          }
+        },
+        {
+          "id": "lime",
+          "label": "Lime"
+        },
+        {
+          "id": "orange",
+          "label": "Orange",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-orange"
+          }
+        },
+        {
+          "id": "pink",
+          "label": "Pink",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-pink"
+          }
+        },
+        {
+          "id": "purple",
+          "label": "Purple",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-purple"
+          }
+        },
+        {
+          "id": "red",
+          "label": "Red",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-red"
+          }
+        },
+        {
+          "id": "rose",
+          "label": "Rose",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-rose"
+          }
+        },
+        {
+          "id": "sky",
+          "label": "Sky",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-sky"
+          }
+        },
+        {
+          "id": "teal",
+          "label": "Teal",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-teal"
+          }
+        },
+        {
+          "id": "violet",
+          "label": "Violet",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-violet"
+          }
+        },
+        {
+          "id": "yellow",
+          "label": "Yellow",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-yellow"
+          }
+        },
+        {
+          "id": "mauve",
+          "label": "Mauve",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-mauve"
+          }
+        },
+        {
+          "id": "olive",
+          "label": "Olive",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-olive"
+          }
+        },
+        {
+          "id": "mist",
+          "label": "Mist",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-mist"
+          }
+        },
+        {
+          "id": "taupe",
+          "label": "Taupe",
+          "release": {
+            "catalogueThemeId": "bbe64c07-773f-553c-8c6a-99fedd1647ff",
+            "releaseVersion": "4.21.0-taupe"
+          }
+        }
+      ]
+    },
+    "chartColor": {
+      "label": "Chart colour",
+      "options": [
+        {
+          "id": "neutral",
+          "label": "Neutral",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-neutral"
+          }
+        },
+        {
+          "id": "stone",
+          "label": "Stone",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-stone"
+          }
+        },
+        {
+          "id": "zinc",
+          "label": "Zinc",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-zinc"
+          }
+        },
+        {
+          "id": "gray",
+          "label": "Gray",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-gray"
+          }
+        },
+        {
+          "id": "amber",
+          "label": "Amber",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-amber"
+          }
+        },
+        {
+          "id": "blue",
+          "label": "Blue",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-blue"
+          }
+        },
+        {
+          "id": "cyan",
+          "label": "Cyan",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-cyan"
+          }
+        },
+        {
+          "id": "emerald",
+          "label": "Emerald",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-emerald"
+          }
+        },
+        {
+          "id": "fuchsia",
+          "label": "Fuchsia",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-fuchsia"
+          }
+        },
+        {
+          "id": "green",
+          "label": "Green",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-green"
+          }
+        },
+        {
+          "id": "indigo",
+          "label": "Indigo",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-indigo"
+          }
+        },
+        {
+          "id": "lime",
+          "label": "Lime",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-lime"
+          }
+        },
+        {
+          "id": "orange",
+          "label": "Orange",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-orange"
+          }
+        },
+        {
+          "id": "pink",
+          "label": "Pink",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-pink"
+          }
+        },
+        {
+          "id": "purple",
+          "label": "Purple",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-purple"
+          }
+        },
+        {
+          "id": "red",
+          "label": "Red",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-red"
+          }
+        },
+        {
+          "id": "rose",
+          "label": "Rose",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-rose"
+          }
+        },
+        {
+          "id": "sky",
+          "label": "Sky",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-sky"
+          }
+        },
+        {
+          "id": "teal",
+          "label": "Teal",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-teal"
+          }
+        },
+        {
+          "id": "violet",
+          "label": "Violet",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-violet"
+          }
+        },
+        {
+          "id": "yellow",
+          "label": "Yellow",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-yellow"
+          }
+        },
+        {
+          "id": "mauve",
+          "label": "Mauve",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-mauve"
+          }
+        },
+        {
+          "id": "olive",
+          "label": "Olive",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-olive"
+          }
+        },
+        {
+          "id": "mist",
+          "label": "Mist",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-mist"
+          }
+        },
+        {
+          "id": "taupe",
+          "label": "Taupe",
+          "release": {
+            "catalogueThemeId": "185e14f2-9f02-5b1f-b8da-7880c65d0511",
+            "releaseVersion": "4.21.0-taupe"
+          }
+        }
+      ]
+    },
+    "radius": {
+      "label": "Radius",
+      "options": [
+        {
+          "id": "default",
+          "label": "Default",
+          "rem": 0.625,
+          "release": {
+            "catalogueThemeId": "0fe5b13f-7a42-50cb-90d4-2ad72ddbb83c",
+            "releaseVersion": "4.21.0-default"
+          }
+        },
+        {
+          "id": "none",
+          "label": "None",
+          "rem": 0,
+          "release": {
+            "catalogueThemeId": "0fe5b13f-7a42-50cb-90d4-2ad72ddbb83c",
+            "releaseVersion": "4.21.0-none"
+          }
+        },
+        {
+          "id": "small",
+          "label": "Small",
+          "rem": 0.45,
+          "release": {
+            "catalogueThemeId": "0fe5b13f-7a42-50cb-90d4-2ad72ddbb83c",
+            "releaseVersion": "4.21.0-small"
+          }
+        },
+        {
+          "id": "medium",
+          "label": "Medium",
+          "rem": 0.625,
+          "release": {
+            "catalogueThemeId": "0fe5b13f-7a42-50cb-90d4-2ad72ddbb83c",
+            "releaseVersion": "4.21.0-medium"
+          }
+        },
+        {
+          "id": "large",
+          "label": "Large",
+          "rem": 0.875,
+          "release": {
+            "catalogueThemeId": "0fe5b13f-7a42-50cb-90d4-2ad72ddbb83c",
+            "releaseVersion": "4.21.0-large"
+          }
+        }
+      ]
+    },
+    "menuColor": {
+      "label": "Menu colour",
+      "options": [
+        {
+          "id": "default",
+          "label": "Default",
+          "color": "default",
+          "surface": "solid",
+          "classes": ""
+        },
+        {
+          "id": "inverted",
+          "label": "Inverted",
+          "color": "inverted",
+          "surface": "solid",
+          "classes": "dark"
+        },
+        {
+          "id": "default-translucent",
+          "label": "Default Translucent",
+          "color": "default",
+          "surface": "translucent",
+          "classes": "animate-none! relative bg-popover/70 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground!"
+        },
+        {
+          "id": "inverted-translucent",
+          "label": "Inverted Translucent",
+          "color": "inverted",
+          "surface": "translucent",
+          "classes": "dark animate-none! relative bg-popover/70 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground!"
+        }
+      ]
+    },
+    "menuAccent": {
+      "label": "Menu accent",
+      "options": [
+        {
+          "id": "subtle",
+          "label": "Subtle",
+          "effect": "none"
+        },
+        {
+          "id": "bold",
+          "label": "Bold",
+          "effect": "accent_from_primary"
+        }
+      ]
+    }
+  },
+  "refused": [
+    {
+      "dimension": "baseColor",
+      "option": "olive",
+      "failures": [
+        "muted_text/background light=4.26"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "lime",
+      "failures": [
+        "primary_foreground/primary dark=4.46"
+      ]
+    }
+  ]
+}
