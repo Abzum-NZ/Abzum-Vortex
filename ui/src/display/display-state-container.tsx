@@ -2,9 +2,9 @@ import type { ReactElement, ReactNode } from "react";
 import type { BlockPropertyValueV2Contract, PlatformBlockReleaseV2 } from "@vortex/contracts";
 import { Alert, AlertDescription } from "../components/alert";
 import { Badge } from "../components/badge";
+import { Card } from "../components/card";
 import { Empty, EmptyHeader, EmptyDescription } from "../components/empty";
 import { Skeleton } from "../components/skeleton";
-import { cn } from "../lib/utils";
 import type { DisplayDataState, DisplayRefusalReason } from "./projected-data";
 
 /** Safe, data-free presentation text for fixed refusal reasons. */
@@ -53,10 +53,10 @@ export type DisplayStateContainerProps<Values> = Readonly<{
 }>;
 
 /**
- * Standard container for display component states, rendered with shadcn Skeleton, Empty, Alert
- * and Badge parts. Loading, empty, refused and error states render data-free text (fixed, or
- * authored for a block that declares it) announced at the component. A viewable placement
- * whose use is unavailable keeps its permitted content with a fixed unavailable note;
+ * Standard container for display component states, rendered with the shadcn Card, Skeleton,
+ * Empty, Alert and Badge parts. Loading, empty, refused and error states render data-free text
+ * (fixed, or authored for a block that declares it) announced at the component. A viewable
+ * placement whose use is unavailable keeps its permitted content with a fixed unavailable note;
  * its components receive no semantic callbacks.
  */
 export function DisplayStateContainer<Values>({
@@ -70,20 +70,19 @@ export function DisplayStateContainer<Values>({
 }: DisplayStateContainerProps<Values>): ReactElement {
   if (projectedData.status === "loading") {
     return (
-      <div
+      <Card
         role="status"
         aria-busy="true"
         data-vortex-display-state="loading"
-        className={cn("flex flex-col gap-2", "vortex-display-state vortex-display-loading")}
         aria-label={`Loading ${accessibleName}`}
       >
-        <Skeleton className="h-4 w-2/5" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-4/5" />
-        <span className={cn("text-sm text-muted-foreground", "vortex-state-message")}>
-          Loading…
-        </span>
-      </div>
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-4 w-2/5" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-4/5" />
+        </div>
+        <span className="text-sm text-muted-foreground">Loading…</span>
+      </Card>
     );
   }
 
@@ -92,13 +91,11 @@ export function DisplayStateContainer<Values>({
       <Empty
         role="status"
         data-vortex-display-state="empty"
-        className={cn("vortex-display-state vortex-display-empty")}
+        className="border"
         aria-label={`${accessibleName}: empty`}
       >
         <EmptyHeader>
-          <EmptyDescription className={cn("vortex-state-message")}>
-            {emptyMessage}
-          </EmptyDescription>
+          <EmptyDescription>{emptyMessage}</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );
@@ -110,11 +107,11 @@ export function DisplayStateContainer<Values>({
         role="status"
         data-vortex-display-state="refused"
         data-vortex-refusal-reason={projectedData.reason}
-        className={cn("vortex-display-state vortex-display-refused")}
+        className="border border-l-4 border-l-destructive"
         aria-label={`${accessibleName}: unavailable`}
       >
         <EmptyHeader>
-          <EmptyDescription className={cn("vortex-state-message")}>
+          <EmptyDescription>
             {refusedMessage ?? REFUSAL_MESSAGES[projectedData.reason]}
           </EmptyDescription>
         </EmptyHeader>
@@ -127,12 +124,9 @@ export function DisplayStateContainer<Values>({
       <Alert
         variant="destructive"
         data-vortex-display-state="error"
-        className={cn("vortex-display-state vortex-display-error")}
         aria-label={`${accessibleName}: could not be loaded`}
       >
-        <AlertDescription className={cn("vortex-state-message")}>
-          {errorMessage ?? "Content could not be loaded"}
-        </AlertDescription>
+        <AlertDescription>{errorMessage ?? "Content could not be loaded"}</AlertDescription>
       </Alert>
     );
   }
@@ -140,14 +134,8 @@ export function DisplayStateContainer<Values>({
   return (
     <>
       {availability === "unavailable" ? (
-        <div
-          role="status"
-          data-vortex-display-state="unavailable"
-          className={cn("vortex-display-state vortex-display-unavailable")}
-        >
-          <Badge variant="secondary" className={cn("vortex-state-message")}>
-            Actions are unavailable
-          </Badge>
+        <div role="status" data-vortex-display-state="unavailable" className="mb-2">
+          <Badge variant="secondary">Actions are unavailable</Badge>
         </div>
       ) : null}
       {children}

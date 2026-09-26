@@ -1,12 +1,22 @@
 import type { ReactElement, ReactNode } from "react";
 import { richTextDocumentV2Schema } from "@vortex/contracts";
 import { DefinitionRenderError } from "../definition-error";
-import { cn } from "../lib/utils";
 import type {
   DisplayRichTextBlock,
   DisplayRichTextDocument,
   DisplayRichTextInline,
 } from "./projected-data";
+
+/**
+ * Type-scale step for each heading level the closed rich-text contract permits, so a document keeps
+ * the hierarchy its author chose. Every value is a Tailwind step, so the theme bridge keeps owning
+ * the resolved size.
+ */
+const HEADING_CLASSES: Readonly<Record<"2" | "3" | "4", string>> = {
+  "2": "my-3 text-xl",
+  "3": "my-3 text-lg",
+  "4": "my-3 text-base",
+};
 
 const renderInline = (inline: DisplayRichTextInline, key: number): ReactNode => {
   switch (inline.kind) {
@@ -21,7 +31,7 @@ const renderInline = (inline: DisplayRichTextInline, key: number): ReactNode => 
           return <em key={key}>{children}</em>;
         case "code":
           return (
-            <code key={key} className={cn("rounded bg-muted px-1 py-0.5 text-sm")}>
+            <code key={key} className="rounded bg-muted px-1 py-0.5 font-mono text-sm">
               {children}
             </code>
           );
@@ -31,17 +41,14 @@ const renderInline = (inline: DisplayRichTextInline, key: number): ReactNode => 
       return (
         <a
           key={key}
-          className={cn("text-primary underline underline-offset-4")}
+          className="text-primary underline underline-offset-4"
           href={inline.address}
           target="_blank"
           rel="noopener noreferrer"
         >
           {inline.children.map(renderInline)}
           <span aria-hidden="true"> ↗</span>
-          <span className={cn("sr-only", "vortex-sr-only")}>
-            {" "}
-            (external link, opens in a new page)
-          </span>
+          <span className="sr-only"> (external link, opens in a new page)</span>
         </a>
       );
   }
@@ -51,7 +58,7 @@ const renderBlock = (block: DisplayRichTextBlock, key: number): ReactNode => {
   switch (block.kind) {
     case "paragraph":
       return (
-        <p key={key} className={cn("my-2 text-sm leading-relaxed")}>
+        <p key={key} className="my-2 text-sm leading-relaxed">
           {block.children.map(renderInline)}
         </p>
       );
@@ -60,7 +67,7 @@ const renderBlock = (block: DisplayRichTextBlock, key: number): ReactNode => {
       return (
         <HeadingTag
           key={key}
-          className={cn("font-heading my-3 font-medium tracking-tight")}
+          className={`${HEADING_CLASSES[block.level]} font-heading font-medium tracking-tight`}
         >
           {block.children.map(renderInline)}
         </HeadingTag>
@@ -68,7 +75,7 @@ const renderBlock = (block: DisplayRichTextBlock, key: number): ReactNode => {
     }
     case "bulleted_list":
       return (
-        <ul key={key} className={cn("my-2 list-disc pl-6 text-sm leading-relaxed")}>
+        <ul key={key} className="my-2 list-disc pl-6 text-sm leading-relaxed">
           {block.items.map((item, index) => (
             <li key={index}>{item.map(renderInline)}</li>
           ))}
@@ -76,7 +83,7 @@ const renderBlock = (block: DisplayRichTextBlock, key: number): ReactNode => {
       );
     case "numbered_list":
       return (
-        <ol key={key} className={cn("my-2 list-decimal pl-6 text-sm leading-relaxed")}>
+        <ol key={key} className="my-2 list-decimal pl-6 text-sm leading-relaxed">
           {block.items.map((item, index) => (
             <li key={index}>{item.map(renderInline)}</li>
           ))}

@@ -2,7 +2,6 @@ import type { ReactElement } from "react";
 import { readRecordDetailContract } from "@vortex/contracts";
 import { Card, CardContent, CardHeader } from "../components/card";
 import { Separator } from "../components/separator";
-import { cn } from "../lib/utils";
 import { DisplayCellView } from "./cell";
 import { DisplayHeader, RowActionControl } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
@@ -10,10 +9,12 @@ import { DisplayStateContainer } from "./display-state-container";
 import type { DisplayField, RecordDetailPayload } from "./projected-data";
 
 /**
- * Shared browser-safe display component for record details, rendered with shadcn Card parts.
- * Renders labelled fields for one permission-projected record identity. A placement that declares
- * detail fields shows exactly those fields in declared order; the projected fields supply their
- * values and any label the placement left unset. Never executes or fetches a Query.
+ * Shared browser-safe display component for record details, rendered with the shadcn Card and
+ * Separator parts. Renders labelled fields for one permission-projected record identity inside a
+ * named region. A placement that declares detail fields shows exactly those fields in declared
+ * order; the projected fields supply their values and any label the placement left unset. A field
+ * the viewer cannot read is absent from the projection and stays absent here. Never executes or
+ * fetches a Query.
  */
 export function RecordDetailDisplay(
   props: DisplayRenderProps<RecordDetailPayload>,
@@ -53,28 +54,25 @@ export function RecordDetailDisplay(
           data-vortex-display="record_detail"
           data-vortex-placement-id={placementId}
           data-vortex-record-id={values.recordId}
-          className={cn("vortex-display-record-detail")}
           role="region"
           aria-label={accessibleName}
         >
           {hasHeader ? (
-            <CardHeader className={cn("vortex-display-header")}>
+            <CardHeader>
               <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
             </CardHeader>
           ) : null}
           {hasHeader ? <Separator /> : null}
           <CardContent>
-            <dl className={cn("grid gap-4 sm:grid-cols-2", "vortex-record-detail-fields")}>
+            <dl className="grid gap-4 sm:grid-cols-2">
               {fields.map((field) => (
                 <div
                   key={field.key}
                   data-vortex-field-key={field.key}
-                  className={cn("flex flex-col gap-1", "vortex-record-detail-field")}
+                  className="flex flex-col gap-1"
                 >
-                  <dt className={cn("text-sm text-muted-foreground", "vortex-field-label")}>
-                    {field.label}
-                  </dt>
-                  <dd className={cn("text-sm", "vortex-field-value")}>
+                  <dt className="text-sm font-medium text-muted-foreground">{field.label}</dt>
+                  <dd className="text-sm">
                     <DisplayCellView value={field.value} />
                   </dd>
                 </div>
