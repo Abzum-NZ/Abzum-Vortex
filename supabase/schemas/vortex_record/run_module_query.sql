@@ -300,7 +300,12 @@ begin
     or catalogue_row.module_root_id <> (resolved ->> 'recordTypeModuleRootId')::uuid
     or catalogue_row.record_type_id <> record_type_id_value
     or catalogue_row.storage_scope is distinct from (record_type_item ->> 'storageScope')
-    or catalogue_row.physical_schema_token <> 'record_data' then
+    or catalogue_row.physical_schema_token not in ('record_data', 'system_projection')
+    or (catalogue_row.physical_schema_token = 'system_projection')
+      is distinct from (record_type_item ? 'systemProjection')
+    or (catalogue_row.physical_schema_token = 'system_projection'
+      and catalogue_row.protected_read_model_key
+        is distinct from (record_type_item #>> '{systemProjection,protectedView}')) then
     raise exception using errcode = '55000',
       message = 'Record storage disagrees with the installed definition';
   end if;

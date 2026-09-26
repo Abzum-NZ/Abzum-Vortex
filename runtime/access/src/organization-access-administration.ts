@@ -72,6 +72,8 @@ import {
   type ReactivateOrganizationAccountCommand,
   type RevokeOrganizationInvitationForAdministrationCommand,
   type SuspendOrganizationAccountCommand,
+  type UpdateOwnProfileCommand,
+  type UpdateOwnProfileResult,
   type ListOrganizationAdministrationGroupsCommand,
   type ListOrganizationAdministrationGroupsResult,
   type ListOrganizationAdministrationApplicationRoleTemplatesCommand,
@@ -1249,6 +1251,13 @@ export const createOrganizationAccessAdministrationService = (
       candidate: OrganizationSelectionCandidate,
       commandCandidate: CloseOrganizationAccountCommand,
     ) => localAdministration.closeOrganizationAccount(session, candidate, commandCandidate),
+
+    updateOwnProfile: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: UpdateOwnProfileCommand,
+    ): Promise<HumanOrganizationRequestResult<UpdateOwnProfileResult>> =>
+      localAdministration.updateOwnProfile(session, candidate, commandCandidate),
 
     createOrganizationInvitation: async (
       session: IdentitySession,

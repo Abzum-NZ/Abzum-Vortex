@@ -26,6 +26,7 @@ import {
   reviseOrganizationAdministrationRoleMetadataCommandSchema,
   stableDefinitionReleaseVersionSchema,
   suspendOrganizationAccountCommandSchema,
+  updateOwnProfileCommandSchema,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -122,6 +123,7 @@ export type ProtectedOperationExecutorDependencies = Readonly<{
     | "suspendOrganizationAccount"
     | "reactivateOrganizationAccount"
     | "closeOrganizationAccount"
+    | "updateOwnProfile"
     | "createOrganizationInvitation"
     | "revokeOrganizationInvitation"
   >;
@@ -601,6 +603,37 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
           access_version: value.accessVersion,
         }),
       ),
+  }),
+  update_own_profile: operation({
+    schema: updateOwnProfileCommandSchema,
+    command: (inputs) => ({
+      organizationAccountId: inputs.organization_account_id,
+      expectedRevision: inputs.expected_revision,
+      displayName: inputs.display_name,
+      ...(optionalText(inputs.language) === undefined
+        ? {}
+        : { language: optionalText(inputs.language) }),
+      ...(optionalText(inputs.time_zone) === undefined
+        ? {}
+        : { timeZone: optionalText(inputs.time_zone) }),
+    }),
+    run: async (services, caller, command) => {
+      const result = await services.accessAdministration.updateOwnProfile(
+        caller.session,
+        caller.selection,
+        command,
+      );
+      if (result.kind !== "available") return result;
+      if (result.value.outcome === "refused") return { kind: "unavailable" };
+      return {
+        kind: "available",
+        value: {
+          organization_account_id: result.value.account.organizationAccountId,
+          revision: result.value.account.revision,
+          access_version: result.value.accessVersion,
+        },
+      };
+    },
   }),
   create_organization_invitation: operation({
     schema: createOrganizationInvitationForAdministrationCommandSchema,
