@@ -6,7 +6,13 @@ import {
   searchPrioritySchema,
   sharingParameterValueTypeV2Schema,
 } from "./catalogues";
-import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "./common";
+import {
+  calculationMaximumNestingDepth,
+  calculationMaximumOperandCount,
+  jsonValueSchema,
+  labelSchema,
+  safeHttpsUrlSchema,
+} from "./common";
 import { moduleDefinitionEnvelopeSchema, recordTypeReferenceSchema } from "./definitions";
 import { parseExactDecimal } from "./exact-decimal";
 import {
@@ -271,10 +277,64 @@ const personLinkSettingsSchema = z
     onPersonDeactivation: z.enum(["retain_reference", "empty_optional", "refuse_deactivation"]),
   })
   .strict();
+/** A named field or one exact decimal literal. A date offset takes only these. */
 const calculationNumberOperandSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("field"), fieldId: fieldIdSchema }).strict(),
   z.object({ source: z.literal("literal"), value: exactDecimalTextV2Schema }).strict(),
 ]);
+const calculationNumberOperationSchema = z.enum(["add", "subtract", "multiply", "divide"]);
+type CalculationNumberOperationV3 = z.infer<typeof calculationNumberOperationSchema>;
+/**
+ * One value of a numeric calculation: a named field, an exact decimal literal, or a further
+ * numeric operation over further values. A nested operation is the same closed form the
+ * calculation itself uses, so a new formula needs no new expression kind and no engine change.
+ */
+type CalculationNumberValueV3 =
+  | z.infer<typeof calculationNumberOperandSchema>
+  | {
+      source: "numeric";
+      operation: CalculationNumberOperationV3;
+      operands: CalculationNumberValueV3[];
+    };
+const inspectCalculationNumberValueV3 = (
+  value: CalculationNumberValueV3,
+  depth = 1,
+): { depth: number; values: number } => {
+  if (value.source !== "numeric") return { depth, values: 1 };
+  const inspected = value.operands.map((operand) =>
+    inspectCalculationNumberValueV3(operand, depth + 1),
+  );
+  return {
+    depth: Math.max(depth, ...inspected.map((operand) => operand.depth)),
+    values: 1 + inspected.reduce((total, operand) => total + operand.values, 0),
+  };
+};
+const calculationNumberValueSchema: z.ZodType<CalculationNumberValueV3> = z.lazy(() =>
+  z
+    .discriminatedUnion("source", [
+      ...calculationNumberOperandSchema.options,
+      z
+        .object({
+          source: z.literal("numeric"),
+          operation: calculationNumberOperationSchema,
+          operands: z.array(calculationNumberValueSchema).min(2).max(20),
+        })
+        .strict(),
+    ])
+    .superRefine((value, context) => {
+      const inspected = inspectCalculationNumberValueV3(value);
+      if (inspected.depth > calculationMaximumNestingDepth)
+        context.addIssue({
+          code: "custom",
+          message: `Numeric nesting cannot exceed ${calculationMaximumNestingDepth} levels`,
+        });
+      if (inspected.values > calculationMaximumOperandCount)
+        context.addIssue({
+          code: "custom",
+          message: `A numeric calculation cannot exceed ${calculationMaximumOperandCount} values`,
+        });
+    }),
+);
 const calculationExpressionSchema = z.discriminatedUnion("kind", [
   z
     .object({
@@ -286,15 +346,8 @@ const calculationExpressionSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("numeric"),
-      operation: z.enum(["add", "subtract", "multiply", "divide"]),
-      operands: z.array(calculationNumberOperandSchema).min(2).max(20),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("subtract_percentage"),
-      amountFieldId: fieldIdSchema,
-      percentageFieldId: fieldIdSchema,
+      operation: calculationNumberOperationSchema,
+      operands: z.array(calculationNumberValueSchema).min(2).max(20),
     })
     .strict(),
   z.object({ kind: z.literal("condition"), condition: conditionNodeSchema }).strict(),
@@ -356,9 +409,7 @@ const calculationSettingsSchema = z
       (value.expression.kind === "numeric" &&
         (value.resultType === "whole_number" ||
           value.resultType === "decimal_number" ||
-          value.resultType === "money")) ||
-      (value.expression.kind === "subtract_percentage" &&
-        (value.resultType === "decimal_number" || value.resultType === "money"));
+          value.resultType === "money"));
     if (!valid)
       context.addIssue({
         code: "custom",

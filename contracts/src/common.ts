@@ -39,6 +39,9 @@ export const correlationIdSchema = platformIdSchema.brand<"CorrelationId">();
 /** Closed safety limits shared by every authored and canonical condition tree. */
 export const conditionMaximumNestingDepth = 10;
 export const conditionMaximumOperandCount = 100;
+/** Closed safety limits shared by every authored and canonical nested numeric calculation. */
+export const calculationMaximumNestingDepth = 8;
+export const calculationMaximumOperandCount = 40;
 
 export type JsonValue =
   string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };

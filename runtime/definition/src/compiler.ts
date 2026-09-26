@@ -6,6 +6,7 @@ import {
   applicationCompilationRequestV2Schema,
   applicationDraftV2Schema,
   applicationToolBundleSchema,
+  calculationMaximumNestingDepth,
   descriptionSchema,
   conditionNodeSchema,
   jsonValueSchema,
@@ -2926,28 +2927,30 @@ function fieldSettings(
       if (expression.operation === "join_text") {
         dependencies = (expression.fields as string[]).map(localField);
         compiled = { kind: "join_text", fieldIds: dependencies, separator: expression.separator };
-      } else if (expression.operation === "subtract_percentage") {
-        dependencies = [
-          localField(String(expression.amount_field)),
-          localField(String(expression.percentage_field)),
-        ];
-        compiled = {
-          kind: "subtract_percentage",
-          amountFieldId: dependencies[0],
-          percentageFieldId: dependencies[1],
-        };
       } else if (expression.operation === "numeric") {
+        const dependenciesInOrder: string[] = [];
+        const numberValue = (operand: JsonObject, depth: number): unknown => {
+          if (depth > calculationMaximumNestingDepth)
+            fail("vortex.definition.invalid_object", "invalid_value");
+          if (operand.source === "numeric")
+            return {
+              source: "numeric",
+              operation: operand.numeric_operation,
+              operands: (operand.operands as JsonObject[]).map((nested) =>
+                numberValue(asObject(nested), depth + 1),
+              ),
+            };
+          if (operand.source === "field") {
+            const fieldId = localField(String(operand.field));
+            dependenciesInOrder.push(fieldId);
+            return { source: "field", fieldId };
+          }
+          return { source: "literal", value: normaliseExactV2(operand.value) };
+        };
         const operands = (expression.operands as JsonObject[]).map((operand) =>
-          operand.source === "field"
-            ? { source: "field", fieldId: localField(String(operand.field)) }
-            : {
-                source: "literal",
-                value: normaliseExactV2(operand.value),
-              },
+          numberValue(asObject(operand), 1),
         );
-        dependencies = (expression.operands as JsonObject[])
-          .filter((operand) => operand.source === "field")
-          .map((operand) => localField(String(operand.field)));
+        dependencies = dependenciesInOrder;
         compiled = {
           kind: "numeric",
           operation: expression.numeric_operation,
