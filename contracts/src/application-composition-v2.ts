@@ -281,6 +281,12 @@ const propertySchemaBase = {
   help: z.string().min(1).max(1_000).optional(),
   required: z.boolean(),
   defaultValue: blockPropertyValueV2Schema.optional(),
+  /**
+   * Present only on the `field_reference` property an automatic field input binds its record field
+   * to: the compiler derives that input's name, label, requirement, choices and control from the
+   * referenced module field. Authored and canonical values of the release are unchanged.
+   */
+  derivesFieldInput: z.boolean().optional(),
 };
 
 /**
@@ -1009,16 +1015,11 @@ export const blockPropertySchemaV2Schema: z.ZodType<BlockPropertySchemaV2Contrac
  * release. The compiler reads this declaration to derive the input's name, label, requirement,
  * choices and control from the referenced module field.
  */
-export type FieldInputBinding = Extract<
-  BlockPropertySchemaV2Contract,
-  { kind: "field_reference" }
->;
 export const findFieldInputBinding = (
   properties: readonly BlockPropertySchemaV2Contract[],
-): FieldInputBinding | undefined =>
+): BlockPropertySchemaV2Contract | undefined =>
   properties.find(
-    (property): property is FieldInputBinding =>
-      property.kind === "field_reference" && property.derivesFieldInput === true,
+    (property) => property.kind === "field_reference" && property.derivesFieldInput === true,
   );
 
 export const blockSlotDeclarationV2Schema = z

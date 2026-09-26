@@ -4428,7 +4428,9 @@ const applicationCompositionResolutionV2 = (
     field: (reference) => qualifiedField(resolution, reference),
     fieldInput: (fieldId) => {
       const pair = valueIndex.fieldById(fieldId);
-      if (pair === undefined) return undefined;
+      // Only a field of an exactly bound V3 module release can drive an automatic field input; a
+      // V1 module field is refused rather than derived, matching the one module contract (#998).
+      if (pair === undefined || !pair.moduleV2) return undefined;
       const field = pair.field;
       const type = String(field.type);
       const settings = field.settings === undefined ? {} : asObject(field.settings);

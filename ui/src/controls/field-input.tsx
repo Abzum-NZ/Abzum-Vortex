@@ -40,7 +40,8 @@ const asTarget = (metadata: PlatformBlockReleaseV2, component: unknown): FieldIn
  * The one renderer for every automatic field input. The compiler derived its `control` from the
  * referenced module field type, so this adapter delegates to the exact registered input control and
  * its own release metadata; the placement's settings already carry that control's derived values.
- * A placement without a derived control is refused rather than rendered with an invented one.
+ * A placement without a derived control, or carrying values of a different control's shape, is
+ * refused rather than rendered with an invented one.
  */
 const TARGETS: Readonly<Record<FieldInputControlKey, FieldInputTarget>> = Object.freeze({
   text: asTarget(TEXT_INPUT_BLOCK_RELEASE, TextInput),
@@ -52,8 +53,20 @@ const TARGETS: Readonly<Record<FieldInputControlKey, FieldInputTarget>> = Object
   link: asTarget(LINK_INPUT_BLOCK_RELEASE, LinkInput),
 });
 
+/** The exact projected-value kind each derived control accepts, so a mismatch fails closed. */
+const EXPECTED_PAYLOAD_KIND: Readonly<Record<FieldInputControlKey, FieldInputPayload["kind"]>> =
+  Object.freeze({
+    text: "text_input",
+    rich_text: "rich_text_input",
+    number: "number_input",
+    boolean: "boolean_input",
+    date: "date_input",
+    choice: "choice_input",
+    link: "link_input",
+  });
+
 export function FieldInput(props: FieldInputProps): ReactElement {
-  const { settings, metadata, placementId } = props;
+  const { settings, metadata, placementId, data } = props;
   const location = {
     placementId,
     blockId: metadata.blockId,
@@ -69,7 +82,14 @@ export function FieldInput(props: FieldInputProps): ReactElement {
       "An automatic field input requires its derived control",
       location,
     );
-  const target = TARGETS[control.value as FieldInputControlKey];
+  const key = control.value as FieldInputControlKey;
+  if (data?.status === "ready" && data.values.kind !== EXPECTED_PAYLOAD_KIND[key])
+    throw new DefinitionRenderError(
+      "INVALID_COMPOSITION",
+      `An automatic field input with control '${key}' cannot carry '${data.values.kind}' projected values`,
+      location,
+    );
+  const target = TARGETS[key];
   const Component = target.component;
   return <Component {...props} metadata={target.metadata} />;
 }

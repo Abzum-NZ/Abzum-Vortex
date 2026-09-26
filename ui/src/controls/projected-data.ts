@@ -149,6 +149,7 @@ export type NumberInputData = ControlDataState<NumberInputPayload>;
 export type BooleanInputData = ControlDataState<BooleanInputPayload>;
 export type DateInputData = ControlDataState<DateInputPayload>;
 export type ChoiceInputData = ControlDataState<ChoiceInputPayload>;
+export type FieldInputData = ControlDataState<FieldInputPayload>;
 export type ValidationData = ControlDataState<ValidationPayload>;
 export type ButtonData = ControlDataState<ButtonPayload>;
 export type TabsData = ControlDataState<TabsPayload>;
