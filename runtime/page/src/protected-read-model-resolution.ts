@@ -9,10 +9,16 @@ import {
   type ListOrganizationAccountsResult,
   type ListOrganizationInvitationsCommand,
   type ListOrganizationInvitationsResult,
+  type ListOrganizationAdministrationDelegationAuthoritiesCommand,
+  type ListOrganizationAdministrationDelegationAuthoritiesResult,
   type ListOrganizationAdministrationGroupsCommand,
   type ListOrganizationAdministrationGroupsResult,
   type ListOrganizationAdministrationMembershipsCommand,
   type ListOrganizationAdministrationMembershipsResult,
+  type ListOrganizationAdministrationPermissionsCommand,
+  type ListOrganizationAdministrationPermissionsResult,
+  type ListOrganizationAdministrationRoleActivationsCommand,
+  type ListOrganizationAdministrationRoleActivationsResult,
   type ListOrganizationAdministrationRoleAssignmentsCommand,
   type ListOrganizationAdministrationRoleAssignmentsResult,
   type ListOrganizationAdministrationRolesCommand,
@@ -52,11 +58,26 @@ export type ProtectedReadModelReaders = Readonly<{
       selection: OrganizationSelectionCandidate,
       command: ListOrganizationAdministrationRolesCommand,
     ): Promise<OwnerResult<ListOrganizationAdministrationRolesResult>>;
+    listPermissions(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      command: ListOrganizationAdministrationPermissionsCommand,
+    ): Promise<OwnerResult<ListOrganizationAdministrationPermissionsResult>>;
     listRoleAssignments(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
       command: ListOrganizationAdministrationRoleAssignmentsCommand,
     ): Promise<OwnerResult<ListOrganizationAdministrationRoleAssignmentsResult>>;
+    listRoleActivations(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      command: ListOrganizationAdministrationRoleActivationsCommand,
+    ): Promise<OwnerResult<ListOrganizationAdministrationRoleActivationsResult>>;
+    listDelegationAuthorities(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      command: ListOrganizationAdministrationDelegationAuthoritiesCommand,
+    ): Promise<OwnerResult<ListOrganizationAdministrationDelegationAuthoritiesResult>>;
     listOrganizationAccounts(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
@@ -172,6 +193,34 @@ export const createProtectedReadModelResolver = (readers: ProtectedReadModelRead
               ...(page.after === undefined ? {} : { afterRoleAssignmentId: page.after }),
             } as ListOrganizationAdministrationRoleAssignmentsCommand),
           );
+        case "role_activations":
+          return fromOwner(
+            model,
+            await readers.access.listRoleActivations(context.session, context.selection, {
+              pageSize: page.pageSize,
+              ...(page.after === undefined ? {} : { afterRoleActivationId: page.after }),
+            } as ListOrganizationAdministrationRoleActivationsCommand),
+          );
+        case "delegations":
+          return fromOwner(
+            model,
+            await readers.access.listDelegationAuthorities(context.session, context.selection, {
+              pageSize: page.pageSize,
+              ...(page.after === undefined ? {} : { afterDelegationAuthorityId: page.after }),
+            } as ListOrganizationAdministrationDelegationAuthoritiesCommand),
+          );
+        case "permissions": {
+          // The permission catalogue cursor is an exact owner-qualified
+          // reference, not a record cursor, so a continuation cursor is never
+          // meaningful here.
+          if (page.after !== undefined) return refused;
+          return fromOwner(
+            model,
+            await readers.access.listPermissions(context.session, context.selection, {
+              pageSize: page.pageSize,
+            } as ListOrganizationAdministrationPermissionsCommand),
+          );
+        }
         case "organization_invitations":
           return fromOwner(
             model,
