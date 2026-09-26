@@ -26,6 +26,16 @@ export {
 } from "./document-store";
 
 export {
+  derivedFieldInputIds,
+  searchFieldDisclosure,
+  searchIndexDisclosableFieldIds,
+  searchIndexFieldDiscloses,
+  type PublishedSearchField,
+  type SearchFieldDisclosure,
+  type SearchIndexShareMetadata,
+} from "./sensitivity-policy";
+
+export {
   permittedSearchCandidates,
   permittedSearchLimits,
   permittedSearchRefusalReasonCodes,
@@ -39,6 +49,24 @@ export {
   type PermittedSearchRequest,
   type PermittedSearchResult,
 } from "./permitted-search";
+
+export {
+  sharedResultGroupDecisions,
+  sharedResultGroupExclusionReasonCodes,
+  sharedResultPolicyLimits,
+  sharedResultRefusalReasonCodes,
+  type SharedResultCapabilityReadRequest,
+  type SharedResultGroupDecision,
+  type SharedResultGroupExclusionReasonCode,
+  type SharedResultGroupIdentity,
+  type SharedResultPolicyDependencies,
+  type SharedResultPolicyInput,
+  type SharedResultPolicyRequest,
+  type SharedResultPolicyResult,
+  type SharedResultRecipientScope,
+  type SharedResultRefusalReasonCode,
+  type SharedSearchableProjection,
+} from "./shared-result-policy";
 
 export {
   consumeSearchEvents,
