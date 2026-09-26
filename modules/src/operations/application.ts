@@ -1,10 +1,13 @@
 import {
+  APPLICATION_NAVIGATION_BLOCK_RELEASE,
   applicationSourceDocumentV2Schema,
   BUTTON_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE,
+  CONTAINER_BLOCK_RELEASE,
   DEFAULT_PLATFORM_THEME_RELEASE_V2,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   FORM_CONTAINER_BLOCK_RELEASE,
+  HEADING_BLOCK_RELEASE,
   PLATFORM_BLOCK_RELEASES,
   RECORD_DETAIL_BLOCK_RELEASE,
   RICH_TEXT_INPUT_BLOCK_RELEASE,
@@ -368,6 +371,74 @@ const pages = [
   },
 ];
 
+const applicationShell = {
+  id: "shell_operations",
+  key: "operations_shell",
+  name: "Operations shell",
+  layout: slot({
+    shell_root: placement(
+      CONTAINER_BLOCK_RELEASE,
+      {
+        direction: { kind: "choice", value: "column" },
+        gap: { kind: "choice", value: "medium" },
+      },
+      {
+        header: slot({
+          shell_heading: placement(HEADING_BLOCK_RELEASE, {
+            text: { kind: "text", value: "Operations" },
+            level: { kind: "choice", value: "one" },
+          }),
+        }),
+        content: slot({
+          shell_body: placement(
+            CONTAINER_BLOCK_RELEASE,
+            {
+              direction: { kind: "choice", value: "row" },
+              gap: { kind: "choice", value: "medium" },
+            },
+            {
+              menu: slot({
+                shell_navigation: placement(APPLICATION_NAVIGATION_BLOCK_RELEASE, {
+                  title: { kind: "text", value: "Operations" },
+                }),
+              }),
+              content: slot({}),
+            },
+          ),
+        }),
+      },
+    ),
+  }),
+  content_slots: [
+    {
+      id: "slot_primary",
+      key: "primary",
+      label: "Primary",
+      required: true,
+      allowed_child_categories: [
+        "content",
+        "data",
+        "figures",
+        "record",
+        "actions",
+        "input",
+        "layout",
+      ],
+      parent_placement: "shell_body",
+      parent_slot: "content",
+    },
+  ],
+};
+
+const applicationPages = pages.map((page) => ({
+  ...page,
+  composition: {
+    shell_kind: "application",
+    shell: "shell_operations",
+    content: { slot_primary: page.composition.main },
+  },
+}));
+
 /** Every placed block release as `block_id@release_version`: one block can have several releases. */
 const collectBlockReleases = (value: unknown, result = new Set<string>()): Set<string> => {
   if (Array.isArray(value)) {
@@ -388,8 +459,10 @@ const releasesByKey = new Map<string, PlatformBlockReleaseV2>(
     release,
   ]),
 );
-/** Exactly the registered block releases the pages place, in permanent-identity order. */
-const platformBlockDependencies = [...collectBlockReleases(pages)].sort().map((releaseKey) => {
+/** Exactly the registered block releases the shell and pages place, in permanent-identity order. */
+const platformBlockDependencies = [
+  ...collectBlockReleases({ shell: applicationShell, pages: applicationPages }),
+].sort().map((releaseKey) => {
   const release = releasesByKey.get(releaseKey);
   if (!release) throw new TypeError(`Unregistered platform block release: ${releaseKey}`);
   return {
@@ -597,8 +670,8 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
       ],
       public_addresses: [],
       platform_block_dependencies: platformBlockDependencies,
-      shells: [],
-      pages,
+      shells: [applicationShell],
+      pages: applicationPages,
       theme,
       // Each form or operator button commits through one flow with one task: the default Save of
       // the incident form, or a call of the incident's attach, acknowledge, escalate or resolve

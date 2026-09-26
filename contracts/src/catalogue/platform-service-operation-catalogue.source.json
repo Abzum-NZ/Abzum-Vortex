@@ -40,10 +40,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "6185dc64-464b-4776-97dc-c64a6f299550",
-        "key": "platform.organization.groups.manage"
-      },
       "effect": "change",
       "expectedRevision": "not_required",
       "confirmation": "required",
@@ -53,7 +49,12 @@
         "refused",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "6185dc64-464b-4776-97dc-c64a6f299550",
+        "key": "platform.organization.groups.manage"
+      }
     }
   },
   "rename_group": {
@@ -101,10 +102,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "6185dc64-464b-4776-97dc-c64a6f299550",
-        "key": "platform.organization.groups.manage"
-      },
       "effect": "change",
       "expectedRevision": "required",
       "confirmation": "required",
@@ -115,7 +112,12 @@
         "conflict",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "6185dc64-464b-4776-97dc-c64a6f299550",
+        "key": "platform.organization.groups.manage"
+      }
     }
   },
   "retire_group": {
@@ -159,10 +161,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "6185dc64-464b-4776-97dc-c64a6f299550",
-        "key": "platform.organization.groups.manage"
-      },
       "effect": "change",
       "expectedRevision": "required",
       "confirmation": "required",
@@ -173,7 +171,12 @@
         "conflict",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "6185dc64-464b-4776-97dc-c64a6f299550",
+        "key": "platform.organization.groups.manage"
+      }
     }
   },
   "remove_group_membership": {
@@ -217,10 +220,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "6185dc64-464b-4776-97dc-c64a6f299550",
-        "key": "platform.organization.groups.manage"
-      },
       "effect": "change",
       "expectedRevision": "required",
       "confirmation": "required",
@@ -231,7 +230,12 @@
         "conflict",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "6185dc64-464b-4776-97dc-c64a6f299550",
+        "key": "platform.organization.groups.manage"
+      }
     }
   },
   "revise_role_metadata": {
@@ -283,10 +287,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
-        "key": "platform.organization.roles.manage"
-      },
       "effect": "change",
       "expectedRevision": "required",
       "confirmation": "required",
@@ -297,7 +297,12 @@
         "conflict",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
+        "key": "platform.organization.roles.manage"
+      }
     }
   },
   "retire_role": {
@@ -341,10 +346,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
-        "key": "platform.organization.roles.manage"
-      },
       "effect": "change",
       "expectedRevision": "required",
       "confirmation": "required",
@@ -355,7 +356,12 @@
         "conflict",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
+        "key": "platform.organization.roles.manage"
+      }
     }
   },
   "revoke_role_assignment": {
@@ -399,10 +405,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "156d01f3-8f80-45fb-8fc8-b31c47dbb1df",
-        "key": "platform.organization.assignments.manage"
-      },
       "effect": "change",
       "expectedRevision": "required",
       "confirmation": "required",
@@ -413,7 +415,12 @@
         "conflict",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "156d01f3-8f80-45fb-8fc8-b31c47dbb1df",
+        "key": "platform.organization.assignments.manage"
+      }
     }
   },
   "deactivate_role_activation": {
@@ -457,10 +464,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "156d01f3-8f80-45fb-8fc8-b31c47dbb1df",
-        "key": "platform.organization.assignments.manage"
-      },
       "effect": "change",
       "expectedRevision": "required",
       "confirmation": "required",
@@ -471,7 +474,12 @@
         "conflict",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "156d01f3-8f80-45fb-8fc8-b31c47dbb1df",
+        "key": "platform.organization.assignments.manage"
+      }
     }
   },
   "revoke_delegation_authority": {
@@ -515,10 +523,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "156d01f3-8f80-45fb-8fc8-b31c47dbb1df",
-        "key": "platform.organization.assignments.manage"
-      },
       "effect": "change",
       "expectedRevision": "required",
       "confirmation": "required",
@@ -529,7 +533,12 @@
         "conflict",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "156d01f3-8f80-45fb-8fc8-b31c47dbb1df",
+        "key": "platform.organization.assignments.manage"
+      }
     }
   },
   "update_runtime_settings": {
@@ -581,10 +590,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "c658c254-2884-414a-9012-512c0cfe4b34",
-        "key": "platform.organization.runtime_settings.manage"
-      },
       "effect": "change",
       "expectedRevision": "required",
       "confirmation": "required",
@@ -595,7 +600,12 @@
         "conflict",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "c658c254-2884-414a-9012-512c0cfe4b34",
+        "key": "platform.organization.runtime_settings.manage"
+      }
     }
   },
   "set_default_application": {
@@ -635,10 +645,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "c658c254-2884-414a-9012-512c0cfe4b34",
-        "key": "platform.organization.runtime_settings.manage"
-      },
       "effect": "change",
       "expectedRevision": "required",
       "confirmation": "required",
@@ -649,7 +655,12 @@
         "conflict",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "c658c254-2884-414a-9012-512c0cfe4b34",
+        "key": "platform.organization.runtime_settings.manage"
+      }
     }
   },
   "add_group_membership": {
@@ -701,10 +712,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "6185dc64-464b-4776-97dc-c64a6f299550",
-        "key": "platform.organization.groups.manage"
-      },
       "effect": "change",
       "expectedRevision": "not_required",
       "confirmation": "required",
@@ -714,7 +721,12 @@
         "refused",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "6185dc64-464b-4776-97dc-c64a6f299550",
+        "key": "platform.organization.groups.manage"
+      }
     }
   },
   "assign_role_assignment": {
@@ -782,10 +794,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "156d01f3-8f80-45fb-8fc8-b31c47dbb1df",
-        "key": "platform.organization.assignments.manage"
-      },
       "effect": "change",
       "expectedRevision": "required",
       "confirmation": "required",
@@ -796,7 +804,12 @@
         "conflict",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "156d01f3-8f80-45fb-8fc8-b31c47dbb1df",
+        "key": "platform.organization.assignments.manage"
+      }
     }
   },
   "create_custom_role": {
@@ -836,10 +849,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
-        "key": "platform.organization.roles.manage"
-      },
       "effect": "change",
       "expectedRevision": "not_required",
       "confirmation": "required",
@@ -849,7 +858,12 @@
         "refused",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
+        "key": "platform.organization.roles.manage"
+      }
     }
   },
   "create_custom_role_from_template": {
@@ -889,10 +903,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
-        "key": "platform.organization.roles.manage"
-      },
       "effect": "change",
       "expectedRevision": "not_required",
       "confirmation": "required",
@@ -902,7 +912,12 @@
         "refused",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
+        "key": "platform.organization.roles.manage"
+      }
     }
   },
   "accept_application_role_template": {
@@ -942,10 +957,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
-        "key": "platform.organization.roles.manage"
-      },
       "effect": "change",
       "expectedRevision": "not_required",
       "confirmation": "required",
@@ -955,7 +966,12 @@
         "refused",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
+        "key": "platform.organization.roles.manage"
+      }
     }
   },
   "accept_application_role_revision": {
@@ -995,9 +1011,176 @@
           "required": true
         }
       },
-      "permission": {
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "conflict",
+        "validation",
+        "failed"
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
         "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
         "key": "platform.organization.roles.manage"
+      }
+    }
+  },
+  "rename_tenant_organization": {
+    "key": "rename_tenant_organization",
+    "name": "Rename tenant organisation",
+    "release": {
+      "serviceId": "a90f1734-08a8-4dac-bbc5-23e1c7b68d92",
+      "operationId": "ac8e1419-fcc4-4d59-92d3-a8195a153aac",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "a90f1734-08a8-4dac-bbc5-23e1c7b68d92"
+        },
+        "operationId": "ac8e1419-fcc4-4d59-92d3-a8195a153aac"
+      },
+      "inputs": {
+        "organization_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected_revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "display_name": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "outputs": {
+        "organization_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "requiredAuthority": {
+        "kind": "tenant_capability",
+        "capability": "platform.tenant.organizations.rename"
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "conflict",
+        "validation",
+        "failed"
+      ]
+    }
+  },
+  "suspend_tenant_organization": {
+    "key": "suspend_tenant_organization",
+    "name": "Suspend tenant organisation",
+    "release": {
+      "serviceId": "a90f1734-08a8-4dac-bbc5-23e1c7b68d92",
+      "operationId": "f5cae902-b130-4dad-8e85-2c55ce618516",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "a90f1734-08a8-4dac-bbc5-23e1c7b68d92"
+        },
+        "operationId": "f5cae902-b130-4dad-8e85-2c55ce618516"
+      },
+      "inputs": {
+        "organization_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected_revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "outputs": {
+        "organization_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "requiredAuthority": {
+        "kind": "tenant_capability",
+        "capability": "platform.tenant.organizations.lifecycle"
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "conflict",
+        "validation",
+        "failed"
+      ]
+    }
+  },
+  "reactivate_tenant_organization": {
+    "key": "reactivate_tenant_organization",
+    "name": "Restore tenant organisation",
+    "release": {
+      "serviceId": "a90f1734-08a8-4dac-bbc5-23e1c7b68d92",
+      "operationId": "aa09a4e0-4644-439a-b7d9-740d7875758e",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "a90f1734-08a8-4dac-bbc5-23e1c7b68d92"
+        },
+        "operationId": "aa09a4e0-4644-439a-b7d9-740d7875758e"
+      },
+      "inputs": {
+        "organization_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected_revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "outputs": {
+        "organization_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "requiredAuthority": {
+        "kind": "tenant_capability",
+        "capability": "platform.tenant.organizations.lifecycle"
       },
       "effect": "change",
       "expectedRevision": "required",
@@ -1053,10 +1236,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "630a980c-0ff5-40b1-a329-7326a2122395",
-        "key": "platform.organization.accounts.manage"
-      },
       "effect": "change",
       "expectedRevision": "required",
       "confirmation": "required",
@@ -1067,7 +1246,12 @@
         "conflict",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "630a980c-0ff5-40b1-a329-7326a2122395",
+        "key": "platform.organization.accounts.manage"
+      }
     }
   },
   "reactivate_organization_account": {
@@ -1111,10 +1295,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "630a980c-0ff5-40b1-a329-7326a2122395",
-        "key": "platform.organization.accounts.manage"
-      },
       "effect": "change",
       "expectedRevision": "required",
       "confirmation": "required",
@@ -1125,7 +1305,12 @@
         "conflict",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "630a980c-0ff5-40b1-a329-7326a2122395",
+        "key": "platform.organization.accounts.manage"
+      }
     }
   },
   "close_organization_account": {
@@ -1169,10 +1354,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "630a980c-0ff5-40b1-a329-7326a2122395",
-        "key": "platform.organization.accounts.manage"
-      },
       "effect": "change",
       "expectedRevision": "required",
       "confirmation": "required",
@@ -1183,7 +1364,12 @@
         "conflict",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "630a980c-0ff5-40b1-a329-7326a2122395",
+        "key": "platform.organization.accounts.manage"
+      }
     }
   },
   "create_organization_invitation": {
@@ -1234,10 +1420,6 @@
       "sensitiveOutputs": [
         "invitation_secret"
       ],
-      "permission": {
-        "permissionId": "c2e03f58-debe-478e-b1e0-a4a8b8f1b9cb",
-        "key": "platform.organization.invitations.manage"
-      },
       "effect": "change",
       "expectedRevision": "not_required",
       "confirmation": "required",
@@ -1247,7 +1429,12 @@
         "refused",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "c2e03f58-debe-478e-b1e0-a4a8b8f1b9cb",
+        "key": "platform.organization.invitations.manage"
+      }
     }
   },
   "revoke_organization_invitation": {
@@ -1291,10 +1478,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "c2e03f58-debe-478e-b1e0-a4a8b8f1b9cb",
-        "key": "platform.organization.invitations.manage"
-      },
       "effect": "change",
       "expectedRevision": "required",
       "confirmation": "required",
@@ -1305,7 +1488,12 @@
         "conflict",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "c2e03f58-debe-478e-b1e0-a4a8b8f1b9cb",
+        "key": "platform.organization.invitations.manage"
+      }
     }
   },
   "update_own_profile": {
@@ -1361,10 +1549,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "630a980c-0ff5-40b1-a329-7326a2122395",
-        "key": "platform.organization.accounts.manage"
-      },
       "effect": "change",
       "expectedRevision": "required",
       "confirmation": "required",
@@ -1375,7 +1559,12 @@
         "conflict",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "630a980c-0ff5-40b1-a329-7326a2122395",
+        "key": "platform.organization.accounts.manage"
+      }
     }
   },
   "prepare_role_change_evidence": {
@@ -1439,10 +1628,6 @@
           "required": true
         }
       },
-      "permission": {
-        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
-        "key": "platform.organization.roles.manage"
-      },
       "effect": "read",
       "expectedRevision": "not_required",
       "confirmation": "not_required",
@@ -1452,7 +1637,12 @@
         "refused",
         "validation",
         "failed"
-      ]
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
+        "key": "platform.organization.roles.manage"
+      }
     }
   }
 }
