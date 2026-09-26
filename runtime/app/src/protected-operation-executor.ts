@@ -98,17 +98,13 @@ export type ProtectedOperationExecutionRequest = Readonly<{
 /** A value a descriptor can declare for an input or output of a registered operation. */
 export type ProtectedOperationValue = JsonValue;
 
-/**
- * The safe results the executor itself can report. `conflict` is not reported separately: the
- * owning services fold a stale revision into their neutral refusal, so it surfaces as `refused`
- * or `failed` and never as a distinguishable signal about another person's data.
- */
+/** The safe results the executor itself can report. */
 export type ProtectedOperationExecution =
   | Readonly<{
       outcome: "committed";
       outputs: Readonly<Record<string, ProtectedOperationValue>>;
     }>
-  | Readonly<{ outcome: "refused" | "validation" | "failed" }>;
+  | Readonly<{ outcome: "refused" | "conflict" | "validation" | "failed" }>;
 
 type Inputs = Readonly<Record<string, ProtectedOperationValue | undefined>>;
 type Outputs = Readonly<Record<string, ProtectedOperationValue | null | undefined>>;
@@ -187,7 +183,7 @@ type OperationRunner = (
   services: ProtectedOperationExecutorDependencies,
   caller: ProtectedOperationCaller,
   inputs: Inputs,
-) => Promise<HumanOrganizationRequestResult<Outputs> | "validation">;
+) => Promise<HumanOrganizationRequestResult<Outputs> | "validation" | "conflict">;
 type Operation = Readonly<{
   authorityKind: ProtectedOperationDescriptor["requiredAuthority"]["kind"];
   execute: OperationRunner;
@@ -231,7 +227,7 @@ const operation =
       services: ProtectedOperationExecutorDependencies,
       caller: ProtectedOperationCaller,
       command: z.output<Schema>,
-    ) => Promise<HumanOrganizationRequestResult<Outputs>>;
+    ) => Promise<HumanOrganizationRequestResult<Outputs> | "conflict">;
   }, authorityKind: Operation["authorityKind"] = "permission"): Operation =>
     Object.freeze({
       authorityKind,
@@ -271,12 +267,13 @@ const runTenantOrganizationMutation = async (
   services: ProtectedOperationExecutorDependencies,
   caller: ProtectedOperationCaller,
   execute: (scope: TenantGovernanceRequestScope) => Promise<TenantOrganizationMutationResult>,
-): Promise<HumanOrganizationRequestResult<Outputs>> => {
+): Promise<HumanOrganizationRequestResult<Outputs> | "conflict"> => {
   const scoped = await services.tenantGovernance.run(
     caller.session,
     caller.selection,
     async (scope) => {
       const result = await execute(scope);
+      if (result.outcome === "refused" && result.code === "stale_revision") return "conflict" as const;
       if (result.outcome === "refused") return { kind: "unavailable" } as const;
       return {
         kind: "available",
@@ -656,7 +653,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
       ),
   }),
   rename_tenant_organization: operation({
-    schema: renameTenantOrganizationCommandSchema.omit({ tenantId: true }),
+    schema: renameTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
     command: (inputs, _selection, effectKey) => ({
       duplicateKey: duplicateKeyFor(effectKey, randomUUID),
       organizationId: inputs.organization_id,
@@ -665,11 +662,15 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
     }),
     run: async (services, caller, command) =>
       runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
-        operations.renameOrganization(caller.session, { ...command, tenantId }),
+        operations.renameOrganization(caller.session, {
+          ...command,
+          operation: "rename_tenant_organization",
+          tenantId,
+        }),
       ),
   }, "tenant_capability"),
   suspend_tenant_organization: operation({
-    schema: suspendTenantOrganizationCommandSchema.omit({ tenantId: true }),
+    schema: suspendTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
     command: (inputs, _selection, effectKey) => ({
       duplicateKey: duplicateKeyFor(effectKey, randomUUID),
       organizationId: inputs.organization_id,
@@ -677,11 +678,15 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
     }),
     run: async (services, caller, command) =>
       runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
-        operations.suspendOrganization(caller.session, { ...command, tenantId }),
+        operations.suspendOrganization(caller.session, {
+          ...command,
+          operation: "suspend_tenant_organization",
+          tenantId,
+        }),
       ),
   }, "tenant_capability"),
   reactivate_tenant_organization: operation({
-    schema: reactivateTenantOrganizationCommandSchema.omit({ tenantId: true }),
+    schema: reactivateTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
     command: (inputs, _selection, effectKey) => ({
       duplicateKey: duplicateKeyFor(effectKey, randomUUID),
       organizationId: inputs.organization_id,
@@ -689,7 +694,11 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
     }),
     run: async (services, caller, command) =>
       runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
-        operations.reactivateOrganization(caller.session, { ...command, tenantId }),
+        operations.reactivateOrganization(caller.session, {
+          ...command,
+          operation: "reactivate_tenant_organization",
+          tenantId,
+        }),
       ),
   }, "tenant_capability"),
   suspend_organization_account: operation({
@@ -928,6 +937,7 @@ export const createProtectedOperationExecutor = (
           inputs,
         );
         if (result === "validation") return { outcome: "validation" };
+        if (result === "conflict") return { outcome: "conflict" };
         if (result.kind === "unavailable") return { outcome: "refused" };
         if (result.kind === "temporarily_unavailable") return { outcome: "failed" };
         const outputs = declaredOutputs(registered.descriptor, result.value);
