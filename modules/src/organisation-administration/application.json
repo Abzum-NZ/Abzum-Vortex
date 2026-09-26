@@ -35,6 +35,42 @@
         "description": "Allows managing Organisation Administration definition-level administration.",
         "action_kind": "manage",
         "administrative": true
+      },
+      {
+        "id": "app_permission_3",
+        "key": "application.organisation_administration.organisation_notice.read",
+        "label": "Open organisation notice pages",
+        "description": "Allows open organisation notice pages.",
+        "action_kind": "named",
+        "named_action": "organisation_notice_read",
+        "administrative": false
+      },
+      {
+        "id": "app_permission_4",
+        "key": "application.organisation_administration.organisation_notice.record_notice",
+        "label": "Open organisation notice record notice pages",
+        "description": "Allows open organisation notice record notice pages.",
+        "action_kind": "named",
+        "named_action": "organisation_notice_record_notice",
+        "administrative": false
+      },
+      {
+        "id": "app_permission_5",
+        "key": "application.organisation_administration.privacy_request_case.read",
+        "label": "Open privacy request case pages",
+        "description": "Allows open privacy request case pages.",
+        "action_kind": "named",
+        "named_action": "privacy_request_case_read",
+        "administrative": false
+      },
+      {
+        "id": "app_permission_6",
+        "key": "application.organisation_administration.privacy_request_case.record_privacy_request",
+        "label": "Open privacy request case record privacy request pages",
+        "description": "Allows open privacy request case record privacy request pages.",
+        "action_kind": "named",
+        "named_action": "record_privacy_request",
+        "administrative": false
       }
     ],
     "roles": [
@@ -47,19 +83,23 @@
           "application.organisation_administration.open",
           "vortex.organisation_administration.organisation_notice.create",
           "vortex.organisation_administration.organisation_notice.read",
+          "application.organisation_administration.organisation_notice.read",
           "vortex.organisation_administration.organisation_notice.update",
           "vortex.organisation_administration.organisation_notice.soft_delete",
           "vortex.organisation_administration.organisation_notice.restore",
           "vortex.organisation_administration.organisation_notice.export",
           "vortex.organisation_administration.organisation_notice.record_notice",
+          "application.organisation_administration.organisation_notice.record_notice",
           "vortex.organisation_administration.organisation_notice.withdraw",
           "vortex.organisation_administration.privacy_request_case.create",
           "vortex.organisation_administration.privacy_request_case.read",
+          "application.organisation_administration.privacy_request_case.read",
           "vortex.organisation_administration.privacy_request_case.update",
           "vortex.organisation_administration.privacy_request_case.soft_delete",
           "vortex.organisation_administration.privacy_request_case.restore",
           "vortex.organisation_administration.privacy_request_case.export",
           "vortex.organisation_administration.privacy_request_case.record_privacy_request",
+          "application.organisation_administration.privacy_request_case.record_privacy_request",
           "vortex.organisation_administration.privacy_request_case.complete",
           "vortex.organisation_administration.privacy_request_case.refuse"
         ]
@@ -111,28 +151,28 @@
             "type": "page",
             "label": "Notices",
             "page": "organisation_notices",
-            "permission": "vortex.organisation_administration.organisation_notice.read"
+            "permission": "application.organisation_administration.organisation_notice.read"
           },
           {
             "id": "nav_record_notice",
             "type": "page",
             "label": "Record notice",
             "page": "record_organisation_notice",
-            "permission": "vortex.organisation_administration.organisation_notice.record_notice"
+            "permission": "application.organisation_administration.organisation_notice.record_notice"
           },
           {
             "id": "nav_privacy_cases",
             "type": "page",
             "label": "Privacy request cases",
             "page": "privacy_request_cases",
-            "permission": "vortex.organisation_administration.privacy_request_case.read"
+            "permission": "application.organisation_administration.privacy_request_case.read"
           },
           {
             "id": "nav_record_privacy_request",
             "type": "page",
             "label": "Record privacy request",
             "page": "record_privacy_request_case",
-            "permission": "vortex.organisation_administration.privacy_request_case.record_privacy_request"
+            "permission": "application.organisation_administration.privacy_request_case.record_privacy_request"
           }
         ]
       }
@@ -1899,7 +1939,7 @@
         "name": "Organisation notices",
         "type": "list",
         "record_type": "vortex.organisation_administration:organisation_notice",
-        "permission": "vortex.organisation_administration.organisation_notice.read",
+        "permission": "application.organisation_administration.organisation_notice.read",
         "query": "vortex.organisation_administration:organisation_notices",
         "composition": {
           "shell_kind": "application",
@@ -2006,7 +2046,7 @@
         "name": "Record organisation notice",
         "type": "form",
         "record_type": "vortex.organisation_administration:organisation_notice",
-        "permission": "vortex.organisation_administration.organisation_notice.record_notice",
+        "permission": "application.organisation_administration.organisation_notice.record_notice",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_organisation_administration",
@@ -2161,7 +2201,7 @@
         "name": "Privacy request cases",
         "type": "list",
         "record_type": "vortex.organisation_administration:privacy_request_case",
-        "permission": "vortex.organisation_administration.privacy_request_case.read",
+        "permission": "application.organisation_administration.privacy_request_case.read",
         "query": "vortex.organisation_administration:privacy_request_cases",
         "composition": {
           "shell_kind": "application",
@@ -2281,7 +2321,7 @@
         "name": "Record privacy request case",
         "type": "form",
         "record_type": "vortex.organisation_administration:privacy_request_case",
-        "permission": "vortex.organisation_administration.privacy_request_case.record_privacy_request",
+        "permission": "application.organisation_administration.privacy_request_case.record_privacy_request",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_organisation_administration",

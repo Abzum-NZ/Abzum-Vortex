@@ -35,6 +35,24 @@
         "description": "Allows managing Tenant Administration definition-level administration.",
         "action_kind": "manage",
         "administrative": true
+      },
+      {
+        "id": "app_permission_3",
+        "key": "application.tenant_administration.organization_lifecycle_request.read",
+        "label": "Open organization lifecycle request pages",
+        "description": "Allows open organization lifecycle request pages.",
+        "action_kind": "named",
+        "named_action": "organization_lifecycle_request_read",
+        "administrative": false
+      },
+      {
+        "id": "app_permission_4",
+        "key": "application.tenant_administration.organization_lifecycle_request.submit",
+        "label": "Open organization lifecycle request submit pages",
+        "description": "Allows open organization lifecycle request submit pages.",
+        "action_kind": "named",
+        "named_action": "organization_lifecycle_request_submit",
+        "administrative": false
       }
     ],
     "roles": [
@@ -47,11 +65,13 @@
           "application.tenant_administration.open",
           "vortex.tenant_administration.organization_lifecycle_request.create",
           "vortex.tenant_administration.organization_lifecycle_request.read",
+          "application.tenant_administration.organization_lifecycle_request.read",
           "vortex.tenant_administration.organization_lifecycle_request.update",
           "vortex.tenant_administration.organization_lifecycle_request.soft_delete",
           "vortex.tenant_administration.organization_lifecycle_request.restore",
           "vortex.tenant_administration.organization_lifecycle_request.export",
-          "vortex.tenant_administration.organization_lifecycle_request.submit"
+          "vortex.tenant_administration.organization_lifecycle_request.submit",
+          "application.tenant_administration.organization_lifecycle_request.submit"
         ]
       }
     ],
@@ -80,7 +100,7 @@
             "type": "page",
             "label": "Lifecycle requests",
             "page": "organization_lifecycle_requests",
-            "permission": "vortex.tenant_administration.organization_lifecycle_request.read"
+            "permission": "application.tenant_administration.organization_lifecycle_request.read"
           }
         ]
       },
@@ -482,7 +502,7 @@
         "name": "Organisation lifecycle requests",
         "type": "list",
         "record_type": "vortex.tenant_administration:organization_lifecycle_request",
-        "permission": "vortex.tenant_administration.organization_lifecycle_request.read",
+        "permission": "application.tenant_administration.organization_lifecycle_request.read",
         "query": "vortex.tenant_administration:organization_lifecycle_requests",
         "composition": {
           "shell_kind": "application",
@@ -602,7 +622,7 @@
         "name": "Submit organisation lifecycle request",
         "type": "form",
         "record_type": "vortex.tenant_administration:organization_lifecycle_request",
-        "permission": "vortex.tenant_administration.organization_lifecycle_request.submit",
+        "permission": "application.tenant_administration.organization_lifecycle_request.submit",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_tenant_administration",

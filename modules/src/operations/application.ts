@@ -29,6 +29,12 @@ const incidentRecordType = "vortex.operations.incidents:incident";
 /** The open-incidents query the Incidents module exposes, by module key and query key. */
 const openIncidentsQuery = "vortex.operations.incidents:operations_open_incidents";
 const createAction = "vortex.operations.incidents.incident.create";
+/**
+ * Page access permissions. A page is opened by an application permission; the record permissions
+ * behind it (incident.read and incident.create) still decide what its data and forms allow.
+ */
+const readIncidentsPage = "application.operations.incident.read";
+const createIncidentPage = "application.operations.incident.create";
 const attachAction = "vortex.operations.incidents.incident.attach";
 const incidentActionEventId = "event_operations_incident_action";
 
@@ -216,7 +222,7 @@ const pages = [
     name: "Incidents",
     type: "list",
     record_type: incidentRecordType,
-    permission: "vortex.operations.incidents.incident.read",
+    permission: readIncidentsPage,
     query: openIncidentsQuery,
     composition: {
       shell_kind: "default",
@@ -234,7 +240,7 @@ const pages = [
     name: "Incident",
     type: "detail",
     record_type: incidentRecordType,
-    permission: "vortex.operations.incidents.incident.read",
+    permission: readIncidentsPage,
     composition: {
       shell_kind: "default",
       main: slot({
@@ -277,7 +283,7 @@ const pages = [
     name: "Create incident",
     type: "form",
     record_type: incidentRecordType,
-    permission: createAction,
+    permission: createIncidentPage,
     composition: {
       shell_kind: "default",
       main: slot({
@@ -389,6 +395,24 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
           named_action: "open",
           administrative: false,
         },
+        {
+          id: "app_permission_operations_incident_read",
+          key: readIncidentsPage,
+          label: "Open incident pages",
+          description: "Allows opening the incident list and incident pages.",
+          action_kind: "named",
+          named_action: "incident_read",
+          administrative: false,
+        },
+        {
+          id: "app_permission_operations_incident_create",
+          key: createIncidentPage,
+          label: "Open incident creation",
+          description: "Allows opening the create incident page.",
+          action_kind: "named",
+          named_action: "incident_create",
+          administrative: false,
+        },
       ],
       roles: [
         {
@@ -399,7 +423,9 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
           permissions: [
             "application.operations.open",
             createAction,
+            createIncidentPage,
             "vortex.operations.incidents.incident.read",
+            readIncidentsPage,
             "vortex.operations.incidents.incident.update",
             "vortex.operations.incidents.incident.soft_delete",
             "vortex.operations.incidents.incident.restore",
@@ -427,14 +453,14 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
               type: "page",
               label: "Incidents",
               page: "operations_incidents",
-              permission: "vortex.operations.incidents.incident.read",
+              permission: readIncidentsPage,
             },
             {
               id: "nav_operations_new_incident",
               type: "page",
               label: "Create incident",
               page: "operations_new_incident",
-              permission: createAction,
+              permission: createIncidentPage,
             },
           ],
         },

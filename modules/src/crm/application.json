@@ -94,6 +94,114 @@
                                          "action_kind":  "named",
                                          "named_action":  "collaborate",
                                          "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_5",
+                                         "key":  "application.crm.company.read",
+                                         "label":  "Open company pages",
+                                         "description":  "Allows open company pages.",
+                                         "action_kind":  "named",
+                                         "named_action":  "company_read",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_6",
+                                         "key":  "application.crm.contact.read",
+                                         "label":  "Open contact pages",
+                                         "description":  "Allows open contact pages.",
+                                         "action_kind":  "named",
+                                         "named_action":  "contact_read",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_7",
+                                         "key":  "application.crm.lead.read",
+                                         "label":  "Open lead pages",
+                                         "description":  "Allows open lead pages.",
+                                         "action_kind":  "named",
+                                         "named_action":  "lead_read",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_8",
+                                         "key":  "application.crm.opportunity.read",
+                                         "label":  "Open opportunity pages",
+                                         "description":  "Allows open opportunity pages.",
+                                         "action_kind":  "named",
+                                         "named_action":  "opportunity_read",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_9",
+                                         "key":  "application.crm.activity.read",
+                                         "label":  "Open activity pages",
+                                         "description":  "Allows open activity pages.",
+                                         "action_kind":  "named",
+                                         "named_action":  "activity_read",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_10",
+                                         "key":  "application.crm.lead.convert",
+                                         "label":  "Open lead conversion",
+                                         "description":  "Allows open lead conversion.",
+                                         "action_kind":  "named",
+                                         "named_action":  "lead_convert",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_11",
+                                         "key":  "application.crm.company.create",
+                                         "label":  "Open company creation",
+                                         "description":  "Allows open company creation.",
+                                         "action_kind":  "named",
+                                         "named_action":  "company_create",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_12",
+                                         "key":  "application.crm.company.update",
+                                         "label":  "Open company editing",
+                                         "description":  "Allows open company editing.",
+                                         "action_kind":  "named",
+                                         "named_action":  "company_update",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_13",
+                                         "key":  "application.crm.contact.create",
+                                         "label":  "Open contact creation",
+                                         "description":  "Allows open contact creation.",
+                                         "action_kind":  "named",
+                                         "named_action":  "contact_create",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_14",
+                                         "key":  "application.crm.contact.update",
+                                         "label":  "Open contact editing",
+                                         "description":  "Allows open contact editing.",
+                                         "action_kind":  "named",
+                                         "named_action":  "contact_update",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_15",
+                                         "key":  "application.crm.lead.create",
+                                         "label":  "Open lead creation",
+                                         "description":  "Allows open lead creation.",
+                                         "action_kind":  "named",
+                                         "named_action":  "lead_create",
+                                         "administrative":  false
+                                     },
+                                     {
+                                         "id":  "app_permission_16",
+                                         "key":  "application.crm.lead.update",
+                                         "label":  "Open lead editing",
+                                         "description":  "Allows open lead editing.",
+                                         "action_kind":  "named",
+                                         "named_action":  "lead_update",
+                                         "administrative":  false
                                      }
                                  ],
                  "roles":  [
@@ -105,22 +213,31 @@
                                    "permissions":  [
                                                        "application.crm.open",
                                                        "vortex.crm.organisations.company.read",
+                                                       "application.crm.company.read",
                                                        "vortex.crm.people.contact.create",
+                                                       "application.crm.contact.create",
                                                        "vortex.crm.people.contact.read",
+                                                       "application.crm.contact.read",
                                                        "vortex.crm.people.contact.update",
+                                                       "application.crm.contact.update",
                                                        "vortex.crm.people.contact.soft_delete",
                                                        "vortex.crm.people.contact.restore",
                                                        "vortex.crm.people.contact.export",
                                                        "vortex.crm.people.contact.view_sensitive_notes",
                                                        "vortex.crm.people.lead.create",
+                                                       "application.crm.lead.create",
                                                        "vortex.crm.people.lead.read",
+                                                       "application.crm.lead.read",
                                                        "vortex.crm.people.lead.update",
+                                                       "application.crm.lead.update",
                                                        "vortex.crm.people.lead.soft_delete",
                                                        "vortex.crm.people.lead.restore",
                                                        "vortex.crm.people.lead.export",
                                                        "vortex.crm.people.lead.convert",
+                                                       "application.crm.lead.convert",
                                                        "vortex.crm.opportunities.opportunity.create",
                                                        "vortex.crm.opportunities.opportunity.read",
+                                                       "application.crm.opportunity.read",
                                                        "vortex.crm.opportunities.opportunity.update",
                                                        "vortex.crm.opportunities.opportunity.soft_delete",
                                                        "vortex.crm.opportunities.opportunity.restore",
@@ -128,6 +245,7 @@
                                                        "vortex.crm.opportunities.opportunity.mark_won",
                                                        "vortex.crm.activities.activity.create",
                                                        "vortex.crm.activities.activity.read",
+                                                       "application.crm.activity.read",
                                                        "vortex.crm.activities.activity.update",
                                                        "vortex.crm.activities.activity.soft_delete",
                                                        "vortex.crm.activities.activity.restore",
@@ -149,28 +267,39 @@
                                                        "application.crm.shared_cases.read",
                                                        "application.crm.shared_cases.collaborate",
                                                        "vortex.crm.organisations.company.create",
+                                                       "application.crm.company.create",
                                                        "vortex.crm.organisations.company.read",
+                                                       "application.crm.company.read",
                                                        "vortex.crm.organisations.company.update",
+                                                       "application.crm.company.update",
                                                        "vortex.crm.organisations.company.soft_delete",
                                                        "vortex.crm.organisations.company.restore",
                                                        "vortex.crm.organisations.company.export",
                                                        "vortex.crm.organisations.company.merge",
                                                        "vortex.crm.people.contact.create",
+                                                       "application.crm.contact.create",
                                                        "vortex.crm.people.contact.read",
+                                                       "application.crm.contact.read",
                                                        "vortex.crm.people.contact.update",
+                                                       "application.crm.contact.update",
                                                        "vortex.crm.people.contact.soft_delete",
                                                        "vortex.crm.people.contact.restore",
                                                        "vortex.crm.people.contact.export",
                                                        "vortex.crm.people.lead.create",
+                                                       "application.crm.lead.create",
                                                        "vortex.crm.people.lead.read",
+                                                       "application.crm.lead.read",
                                                        "vortex.crm.people.lead.update",
+                                                       "application.crm.lead.update",
                                                        "vortex.crm.people.lead.soft_delete",
                                                        "vortex.crm.people.lead.restore",
                                                        "vortex.crm.people.lead.export",
                                                        "vortex.crm.people.lead.convert",
+                                                       "application.crm.lead.convert",
                                                        "vortex.crm.people.contact.view_sensitive_notes",
                                                        "vortex.crm.opportunities.opportunity.create",
                                                        "vortex.crm.opportunities.opportunity.read",
+                                                       "application.crm.opportunity.read",
                                                        "vortex.crm.opportunities.opportunity.update",
                                                        "vortex.crm.opportunities.opportunity.soft_delete",
                                                        "vortex.crm.opportunities.opportunity.restore",
@@ -184,6 +313,7 @@
                                                        "vortex.crm.opportunities.opportunity.mark_won",
                                                        "vortex.crm.activities.activity.create",
                                                        "vortex.crm.activities.activity.read",
+                                                       "application.crm.activity.read",
                                                        "vortex.crm.activities.activity.update",
                                                        "vortex.crm.activities.activity.soft_delete",
                                                        "vortex.crm.activities.activity.restore",
@@ -222,21 +352,21 @@
                                                              "type":  "page",
                                                              "label":  "Companies",
                                                              "page":  "crm_companies",
-                                                             "permission":  "vortex.crm.organisations.company.read"
+                                                             "permission":  "application.crm.company.read"
                                                          },
                                                          {
                                                              "id":  "nav_crm_contacts",
                                                              "type":  "page",
                                                              "label":  "Contacts",
                                                              "page":  "crm_contacts",
-                                                             "permission":  "vortex.crm.people.contact.read"
+                                                             "permission":  "application.crm.contact.read"
                                                          },
                                                          {
                                                              "id":  "nav_crm_leads",
                                                              "type":  "page",
                                                              "label":  "Leads",
                                                              "page":  "crm_leads",
-                                                             "permission":  "vortex.crm.people.lead.read"
+                                                             "permission":  "application.crm.lead.read"
                                                          }
                                                      ]
                                     },
@@ -250,14 +380,14 @@
                                                              "type":  "page",
                                                              "label":  "Opportunities",
                                                              "page":  "crm_opportunities",
-                                                             "permission":  "vortex.crm.opportunities.opportunity.read"
+                                                             "permission":  "application.crm.opportunity.read"
                                                          },
                                                          {
                                                              "id":  "nav_crm_activities",
                                                              "type":  "page",
                                                              "label":  "Activities",
                                                              "page":  "crm_activities",
-                                                             "permission":  "vortex.crm.activities.activity.read"
+                                                             "permission":  "application.crm.activity.read"
                                                          },
                                                          {
                                                              "id":  "nav_crm_cases",
@@ -328,7 +458,7 @@
                                    "name":  "Companies",
                                    "type":  "list",
                                    "record_type":  "vortex.crm.organisations:company",
-                                   "permission":  "vortex.crm.organisations.company.read",
+                                   "permission":  "application.crm.company.read",
                                    "query":  "vortex.crm.organisations:crm_companies",
                                    "composition":  {
                                                        "shell_kind":  "application",
@@ -422,7 +552,7 @@
                                    "name":  "Contacts",
                                    "type":  "list",
                                    "record_type":  "vortex.crm.people:contact",
-                                   "permission":  "vortex.crm.people.contact.read",
+                                   "permission":  "application.crm.contact.read",
                                    "query":  "vortex.crm.people:crm_contacts",
                                    "composition":  {
                                                        "shell_kind":  "application",
@@ -516,7 +646,7 @@
                                    "name":  "Leads",
                                    "type":  "list",
                                    "record_type":  "vortex.crm.people:lead",
-                                   "permission":  "vortex.crm.people.lead.read",
+                                   "permission":  "application.crm.lead.read",
                                    "query":  "vortex.crm.people:crm_leads",
                                    "composition":  {
                                                        "shell_kind":  "application",
@@ -624,7 +754,7 @@
                                    "name":  "Opportunities",
                                    "type":  "list",
                                    "record_type":  "vortex.crm.opportunities:opportunity",
-                                   "permission":  "vortex.crm.opportunities.opportunity.read",
+                                   "permission":  "application.crm.opportunity.read",
                                    "query":  "vortex.crm.opportunities:crm_pipeline",
                                    "composition":  {
                                                        "shell_kind":  "application",
@@ -732,7 +862,7 @@
                                    "name":  "Activities",
                                    "type":  "list",
                                    "record_type":  "vortex.crm.activities:activity",
-                                   "permission":  "vortex.crm.activities.activity.read",
+                                   "permission":  "application.crm.activity.read",
                                    "query":  "vortex.crm.activities:crm_activities",
                                    "composition":  {
                                                        "shell_kind":  "application",
@@ -833,7 +963,7 @@
                                    "name":  "Qualify lead",
                                    "type":  "guided_form",
                                    "record_type":  "vortex.crm.people:lead",
-                                   "permission":  "vortex.crm.people.lead.convert",
+                                   "permission":  "application.crm.lead.convert",
                                    "steps":  [
                                                  {
                                                      "id":  "page_crm_qualify_lead_details",
@@ -1522,7 +1652,7 @@
                                    "name":  "Create company",
                                    "type":  "form",
                                    "record_type":  "vortex.crm.organisations:company",
-                                   "permission":  "vortex.crm.organisations.company.create",
+                                   "permission":  "application.crm.company.create",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -1645,7 +1775,7 @@
                                    "name":  "Edit company",
                                    "type":  "form",
                                    "record_type":  "vortex.crm.organisations:company",
-                                   "permission":  "vortex.crm.organisations.company.update",
+                                   "permission":  "application.crm.company.update",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -1768,7 +1898,7 @@
                                    "name":  "Create contact",
                                    "type":  "form",
                                    "record_type":  "vortex.crm.people:contact",
-                                   "permission":  "vortex.crm.people.contact.create",
+                                   "permission":  "application.crm.contact.create",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -1899,7 +2029,7 @@
                                    "name":  "Edit contact",
                                    "type":  "form",
                                    "record_type":  "vortex.crm.people:contact",
-                                   "permission":  "vortex.crm.people.contact.update",
+                                   "permission":  "application.crm.contact.update",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -2030,7 +2160,7 @@
                                    "name":  "Create lead",
                                    "type":  "form",
                                    "record_type":  "vortex.crm.people:lead",
-                                   "permission":  "vortex.crm.people.lead.create",
+                                   "permission":  "application.crm.lead.create",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -2157,7 +2287,7 @@
                                    "name":  "Edit lead",
                                    "type":  "form",
                                    "record_type":  "vortex.crm.people:lead",
-                                   "permission":  "vortex.crm.people.lead.update",
+                                   "permission":  "application.crm.lead.update",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -2284,7 +2414,7 @@
                                    "name":  "Company detail",
                                    "type":  "detail",
                                    "record_type":  "vortex.crm.organisations:company",
-                                   "permission":  "vortex.crm.organisations.company.read",
+                                   "permission":  "application.crm.company.read",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -2540,7 +2670,7 @@
                                    "name":  "Contact detail",
                                    "type":  "detail",
                                    "record_type":  "vortex.crm.people:contact",
-                                   "permission":  "vortex.crm.people.contact.read",
+                                   "permission":  "application.crm.contact.read",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -2667,7 +2797,7 @@
                                    "name":  "Lead detail",
                                    "type":  "detail",
                                    "record_type":  "vortex.crm.people:lead",
-                                   "permission":  "vortex.crm.people.lead.read",
+                                   "permission":  "application.crm.lead.read",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -2794,7 +2924,7 @@
                                    "name":  "Opportunity detail",
                                    "type":  "detail",
                                    "record_type":  "vortex.crm.opportunities:opportunity",
-                                   "permission":  "vortex.crm.opportunities.opportunity.read",
+                                   "permission":  "application.crm.opportunity.read",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -2956,7 +3086,7 @@
                                    "name":  "Activity detail",
                                    "type":  "detail",
                                    "record_type":  "vortex.crm.activities:activity",
-                                   "permission":  "vortex.crm.activities.activity.read",
+                                   "permission":  "application.crm.activity.read",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
