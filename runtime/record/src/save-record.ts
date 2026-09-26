@@ -5,7 +5,7 @@ import {
   activityIdSchema,
   eventOccurrenceIdSchema,
   fieldIdSchema,
-  recordTypeDefinitionV2Schema,
+  recordTypeDefinitionV3Schema,
   saveRecordCommandV2Schema,
   saveRecordResultV2Schema,
   type IdentitySession,
@@ -51,7 +51,7 @@ type SaveRow = DatabaseRow & { readonly result: unknown };
 /** @internal Shared only by the fixed named-action save composition. */
 export type PreparedSave = Readonly<{
   outcome: "prepared";
-  recordType: ReturnType<typeof recordTypeDefinitionV2Schema.parse>;
+  recordType: ReturnType<typeof recordTypeDefinitionV3Schema.parse>;
   existingValues: Readonly<Record<string, unknown>>;
   readableFieldIds: ReadonlySet<string>;
   correlationId: string;
@@ -148,7 +148,7 @@ const parsePreparation = (candidate: unknown): PreparationOutcome => {
     return { outcome: "conflict", ...(correlationId ? { correlationId } : {}) };
   if (value.outcome !== "prepared")
     return { outcome: "unavailable", ...(correlationId ? { correlationId } : {}) };
-  const recordType = recordTypeDefinitionV2Schema.safeParse(value.recordType);
+  const recordType = recordTypeDefinitionV3Schema.safeParse(value.recordType);
   if (
     !recordType.success ||
     typeof value.existingValues !== "object" ||
@@ -330,7 +330,7 @@ export const calculateAndFinalize = (
 
 /** @internal Shared only by the fixed named-action save composition. */
 export const operationClock = (
-  recordTypes: readonly ReturnType<typeof recordTypeDefinitionV2Schema.parse>[],
+  recordTypes: readonly ReturnType<typeof recordTypeDefinitionV3Schema.parse>[],
   issuedAt: string,
   timeZone: string | undefined,
 ): Readonly<{ instant: string; organizationLocalDate: string }> | undefined => {
@@ -447,7 +447,7 @@ export const parseRelationshipTotalPreparation = (
     if (typeof candidateRecord !== "object" || candidateRecord === null)
       return { outcome: "refused" };
     const record = candidateRecord as Record<string, unknown>;
-    const recordType = recordTypeDefinitionV2Schema.safeParse(record.recordType);
+    const recordType = recordTypeDefinitionV3Schema.safeParse(record.recordType);
     const concurrencyNumber =
       record.concurrencyNumber === undefined ? undefined : revision(record.concurrencyNumber);
     if (
@@ -466,7 +466,7 @@ export const parseRelationshipTotalPreparation = (
       if (typeof candidateSource !== "object" || candidateSource === null)
         return { outcome: "refused" };
       const source = candidateSource as Record<string, unknown>;
-      const sourceRecordType = recordTypeDefinitionV2Schema.safeParse(source.sourceRecordType);
+      const sourceRecordType = recordTypeDefinitionV3Schema.safeParse(source.sourceRecordType);
       if (
         !sourceRecordType.success ||
         typeof source.relationshipId !== "string" ||

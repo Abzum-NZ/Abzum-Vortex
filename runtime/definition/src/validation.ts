@@ -8,8 +8,7 @@ import {
   moduleDraftV3Schema,
   moduleSourceDocumentSchema,
   moduleCompilationRequestV3Schema,
-  savedSharingConditionV2Schema,
-  savedSharingConditionSchema,
+  savedSharingConditionV3Schema,
   connectionTypeSchema,
   exactDecimalTextV2Schema,
   moneyValueV2Schema,
@@ -39,7 +38,7 @@ import {
   type ApplicationCompilationRequestV2,
   type ModuleCompilationRequestV3,
   type ModuleSourceDocument,
-  type ModuleFieldV2,
+  type ModuleFieldV3,
   type ApplicationSourceDocumentV2,
   type ConditionNode,
   type DefinitionSourceDocument,
@@ -47,7 +46,6 @@ import {
   type DefinitionPublicationHistoryEvidence,
   type DefinitionRuleFailure,
   type DefinitionValidationLocation,
-  type FieldDefinition,
   type FlowDefinition,
   type FlowTask,
   type PlatformBlockReleaseV2,
@@ -56,10 +54,8 @@ import {
 } from "@vortex/contracts";
 import type { z } from "zod";
 import {
-  evaluateTypedCondition,
   evaluateTypedConditionV2,
   TypedConditionEvaluationError,
-  type TypedConditionParameterDeclaration,
   type TypedConditionParameterDeclarationV2,
 } from "@vortex/rule";
 import { satisfies } from "semver";
@@ -2809,25 +2805,16 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         record !== undefined &&
         (condition.declaredFieldIds as string[]).every((fieldId) => fields.has(fieldId)) &&
         fieldReferencesValid(condition.condition, fields) &&
-        (moduleV2
-          ? conditionTypesValidV2(condition.condition, fieldMap, parameterTypes)
-          : conditionTypesValid(condition.condition, fieldMap, parameterTypes));
+        conditionTypesValidV2(condition.condition, fieldMap, parameterTypes);
       try {
         for (const publicationTest of array(condition.publicationTests))
           if (
-            (moduleV2
-              ? evaluateSavedSharingConditionV2(
-                  condition,
-                  object(publicationTest.fieldValues),
-                  object(publicationTest.parameters),
-                  [...fieldMap.values()] as ModuleFieldV2[],
-                )
-              : evaluateSavedSharingCondition(
-                  condition,
-                  object(publicationTest.fieldValues),
-                  object(publicationTest.parameters),
-                  [...fieldMap.values()] as FieldDefinition[],
-                )) !== publicationTest.expected
+            evaluateSavedSharingCondition(
+              condition,
+              object(publicationTest.fieldValues),
+              object(publicationTest.parameters),
+              [...fieldMap.values()] as ModuleFieldV3[],
+            ) !== publicationTest.expected
           )
             valid = false;
       } catch {
@@ -6034,45 +6021,7 @@ export function evaluateSavedSharingCondition(
   input: unknown,
   fieldValues: Readonly<Record<string, unknown>>,
   parameters: Readonly<Record<string, unknown>>,
-  sourceRecordFields: readonly FieldDefinition[],
-): boolean {
-  const candidate = object(input);
-  let result: boolean;
-  try {
-    result = evaluateTypedCondition({
-      condition: candidate.condition as ConditionNode,
-      sourceRecordFields,
-      declaredFieldIds: candidate.declaredFieldIds as string[],
-      parameterDeclarations: candidate.parameters as TypedConditionParameterDeclaration[],
-      fieldValues,
-      parameterValues: parameters,
-    });
-  } catch (error) {
-    if (!(error instanceof TypedConditionEvaluationError)) throw error;
-    const mapping = {
-      input_refused: "vortex.definition.sharing_condition_input_refused",
-      field_refused: "vortex.definition.sharing_condition_field_refused",
-      parameter_refused: "vortex.definition.sharing_condition_parameter_refused",
-      operator_refused: "vortex.definition.sharing_condition_operator_refused",
-    } as const;
-    throw new DefinitionCompilationError(
-      mapping[error.reason],
-      error.reason === "operator_refused" ? "unsupported_choice" : "scope_conflict",
-    );
-  }
-  if (!savedSharingConditionSchema.safeParse(input).success)
-    throw new DefinitionCompilationError(
-      "vortex.definition.sharing_condition_input_refused",
-      "scope_conflict",
-    );
-  return result;
-}
-
-export function evaluateSavedSharingConditionV2(
-  input: unknown,
-  fieldValues: Readonly<Record<string, unknown>>,
-  parameters: Readonly<Record<string, unknown>>,
-  sourceRecordFields: readonly ModuleFieldV2[],
+  sourceRecordFields: readonly ModuleFieldV3[],
 ): boolean {
   const candidate = object(input);
   let result: boolean;
@@ -6098,7 +6047,7 @@ export function evaluateSavedSharingConditionV2(
       error.reason === "operator_refused" ? "unsupported_choice" : "scope_conflict",
     );
   }
-  if (!savedSharingConditionV2Schema.safeParse(input).success)
+  if (!savedSharingConditionV3Schema.safeParse(input).success)
     throw new DefinitionCompilationError(
       "vortex.definition.sharing_condition_input_refused",
       "scope_conflict",
