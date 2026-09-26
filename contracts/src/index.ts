@@ -8,6 +8,7 @@ export * from "./platform-service-operation-catalogue";
 export * from "./platform-permission-catalogue";
 export * from "./application-flow-bindings";
 export * from "./flow-contracts";
+export { workflowRunAsSchema, type WorkflowRunAs } from "./run-as-vocabulary";
 export * from "./form-continuation-contracts";
 export * from "./flow-source-contracts";
 export * from "./flow-task-registry";

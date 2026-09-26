@@ -727,7 +727,9 @@ const requiredHealthCheckOutcome = (
 ): Check<ConnectionAdministrationHealthCheckOutcome> =>
   value === "healthy" || value === "unhealthy" ? valid(value) : invalid;
 
-const requiredApplicationChange = (value: unknown) => {
+const requiredApplicationChange = (
+  value: unknown,
+): Check<ConnectionAdministrationApplicationChange> => {
   if (value !== "grant" && value !== "revoke") return invalid;
   return valid(value);
 };

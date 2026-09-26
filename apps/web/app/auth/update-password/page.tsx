@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { buttonVariants } from "@vortex/ui/components/button";
+import { Field } from "@vortex/ui/components/field";
+import { Input } from "@vortex/ui/components/input";
+import { Label } from "@vortex/ui/components/label";
 import { AuthShell } from "../_components/auth-shell";
 import { SubmitButton } from "../_components/submit-button";
 import { updatePassword } from "../actions";
@@ -51,30 +55,36 @@ export default function UpdatePasswordPage() {
             : "This recovery link is incomplete or has expired. Request a new link to continue."
       }
     >
-      <form className="auth-form" action={updatePassword} hidden={!validLink}>
+      <form className="flex flex-col gap-5" action={updatePassword} hidden={!validLink}>
         <input name="access_token" type="hidden" value={tokens.accessToken} readOnly />
         <input name="refresh_token" type="hidden" value={tokens.refreshToken} readOnly />
-        <label htmlFor="password">New password</label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="new-password"
-          minLength={8}
-          pattern="(?=.*[A-Za-z])(?=.*\d).{8,1024}"
-          required
-        />
-        <p className="auth-hint">Use at least 8 characters, including a letter and a number.</p>
+        <Field>
+          <Label htmlFor="password">New password</Label>
+          <Input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            pattern="(?=.*[A-Za-z])(?=.*\d).{8,1024}"
+            required
+          />
+          <p className="text-sm text-muted-foreground">
+            Use at least 8 characters, including a letter and a number.
+          </p>
+        </Field>
         <SubmitButton pendingLabel="Updating password…">Update password</SubmitButton>
       </form>
       {!checkedLink ? (
-        <p className="auth-hint" role="status">
+        <p className="text-sm text-muted-foreground" role="status">
           Checking your recovery link…
         </p>
       ) : !validLink ? (
-        <Link className="auth-submit" href="/auth/recover">
-          <span>Request a new link</span>
-          <span aria-hidden="true">→</span>
+        <Link
+          className={buttonVariants({ className: "w-full" })}
+          href="/auth/recover"
+        >
+          Request a new link
         </Link>
       ) : null}
     </AuthShell>

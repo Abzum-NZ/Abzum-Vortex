@@ -80,7 +80,10 @@ import {
   materialiseApplicationCompositionV2,
   type MaterialisedApplicationCompositionV2,
 } from "./application-v2-composition";
-import type { ApplicationCompositionResolutionV2 } from "./application-v2-resolution";
+import type {
+  ApplicationCompositionResolutionV2,
+  FieldInputSourceField,
+} from "./application-v2-resolution";
 import { validateApplicationSourceCatalogue } from "./application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
 import { compileFlowSources, type ResolvedFlowIdentity } from "./flow-compilation";
@@ -4482,6 +4485,53 @@ const applicationCompositionResolutionV2 = (
   return {
     identity: (kind, alias, scope = "content") => resolution.id(definitionKey, kind, alias, scope),
     field: (reference) => qualifiedField(resolution, reference),
+    fieldInput: (fieldId) => {
+      const pair = valueIndex.fieldById(fieldId);
+      // Only a field of an exactly bound V3 module release can drive an automatic field input; a
+      // V1 module field is refused rather than derived, matching the one module contract (#998).
+      if (pair === undefined || !pair.moduleV2) return undefined;
+      const field = pair.field;
+      const type = String(field.type);
+      const settings = field.settings === undefined ? {} : asObject(field.settings);
+      const resolvedRecordType = (
+        value: unknown,
+      ): FieldInputSourceField["recordTypes"][number] => {
+        const recordType = asObject(value);
+        // A canonical module field resolves every link target; anything else is refused rather
+        // than derived, so an automatic field input never invents a record type identity.
+        if (recordType.state !== "resolved")
+          fail("vortex.definition.module_field_references", "broken_reference");
+        return {
+          state: "resolved",
+          moduleRootId: String(recordType.moduleRootId),
+          recordTypeId: String(recordType.recordTypeId),
+        };
+      };
+      const choices =
+        type === "choice" && Array.isArray(settings.options)
+          ? (settings.options as JsonObject[]).map((option) => ({
+              key: String(option.value),
+              label: String(option.label),
+            }))
+          : [];
+      const recordTypes: FieldInputSourceField["recordTypes"] =
+        type === "link" && settings.target !== undefined
+          ? [resolvedRecordType(settings.target)]
+          : type === "link_to_one_of_several" && Array.isArray(settings.targets)
+            ? (settings.targets as unknown[]).map(resolvedRecordType)
+            : [];
+      return {
+        key: String(field.key),
+        label: String(field.label),
+        required: field.required === true,
+        type,
+        ...(type === "text" && settings.format !== undefined
+          ? { textFormat: String(settings.format) }
+          : {}),
+        choices,
+        recordTypes,
+      };
+    },
     relationship: (reference) => {
       const [recordType, alias] = splitMember(
         reference,

@@ -327,7 +327,7 @@ export const createSupabaseComponentBundleObjectStore = (
   const readUrl = (objectPath: string): string =>
     `${base}/storage/v1/object/authenticated/${encodeURIComponent(COMPONENT_BUNDLE_BUCKET)}/${encodeObjectPath(objectPath)}`;
 
-  return Object.freeze({
+  const store: ComponentBundleObjectStore = {
     async writeObject({ objectPath, bytes, contentType }) {
       const token = (await config.mintCredential({ operation: "upload", objectPath })).token;
       const response = await fetchImplementation(uploadUrl(objectPath), {
@@ -364,7 +364,8 @@ export const createSupabaseComponentBundleObjectStore = (
       }
       return new Uint8Array(await response.arrayBuffer());
     },
-  });
+  };
+  return Object.freeze(store);
 };
 
 const readObjectOrRefuse = async (

@@ -9,6 +9,7 @@ export {
   parseDateInputPayload,
   parseDialogPayload,
   parseDrawerPayload,
+  parseFieldInputPayload,
   parseFormPayload,
   parseLinkInputPayload,
   parseNumberInputPayload,
@@ -35,6 +36,8 @@ export {
   type DialogPayload,
   type DrawerData,
   type DrawerPayload,
+  type FieldInputData,
+  type FieldInputPayload,
   type FormContainerData,
   type FormPayload,
   type LinkInputData,
@@ -63,6 +66,7 @@ export { NumberInput, type NumberInputProps } from "./number-input";
 export { BooleanInput, type BooleanInputProps } from "./boolean-input";
 export { DateInput, type DateInputProps } from "./date-input";
 export { ChoiceInput, type ChoiceInputProps } from "./choice-input";
+export { FieldInput, type FieldInputProps } from "./field-input";
 export { ValidationMessage, type ValidationMessageProps } from "./validation-message";
 export {
   FieldDraftFeedback,
@@ -92,6 +96,7 @@ export {
   DATE_INPUT_BLOCK_RELEASE,
   DIALOG_BLOCK_RELEASE,
   DRAWER_BLOCK_RELEASE,
+  FIELD_INPUT_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
   LINK_INPUT_BLOCK_RELEASE,
   NUMBER_INPUT_BLOCK_RELEASE,
