@@ -3992,17 +3992,13 @@
                     "placements": {
                       "iam_request_new_title": {
                         "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                           "release_version": "1.0.0"
                         },
                         "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "title"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Title"
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.title"
                           }
                         },
                         "theme_overrides": {},
@@ -4021,126 +4017,13 @@
                       },
                       "iam_request_new_type": {
                         "block": {
-                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                           "release_version": "1.0.0"
                         },
                         "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "request_type"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Request type"
-                          },
-                          "options": {
-                            "kind": "list",
-                            "items": [
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "grant_role"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Grant role"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "remove_role"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Remove role"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "group_membership"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Group membership"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "role_activation"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Activate privileged role"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "role_deactivation"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Deactivate privileged role"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "delegation"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Delegated management"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "group_change"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Change a group"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "other"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Other"
-                                  }
-                                }
-                              }
-                            ]
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.request_type"
                           }
                         },
                         "theme_overrides": {},
@@ -4159,17 +4042,13 @@
                       },
                       "iam_request_new_role": {
                         "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                           "release_version": "1.0.0"
                         },
                         "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "target_role_key"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Target role"
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.target_role_key"
                           }
                         },
                         "theme_overrides": {},
@@ -4188,17 +4067,13 @@
                       },
                       "iam_request_new_group": {
                         "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                           "release_version": "1.0.0"
                         },
                         "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "target_group_key"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Target group"
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.target_group_key"
                           }
                         },
                         "theme_overrides": {},
@@ -4217,13 +4092,13 @@
                       },
                       "iam_request_new_application": {
                         "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                           "release_version": "1.0.0"
                         },
                         "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "application_context"
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.application_context"
                           },
                           "label": {
                             "kind": "text",
@@ -4246,21 +4121,13 @@
                       },
                       "iam_request_new_reason": {
                         "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                           "release_version": "1.0.0"
                         },
                         "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "reason"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Reason"
-                          },
-                          "multiline": {
-                            "kind": "boolean",
-                            "value": true
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.reason"
                           }
                         },
                         "theme_overrides": {},
@@ -4279,17 +4146,13 @@
                       },
                       "iam_request_new_starts": {
                         "block": {
-                          "block_id": "a5610880-05be-426b-a82b-7f3b645bf255",
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                           "release_version": "1.0.0"
                         },
                         "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "starts_on"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Starts on"
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.starts_on"
                           }
                         },
                         "theme_overrides": {},
@@ -4308,17 +4171,13 @@
                       },
                       "iam_request_new_expires": {
                         "block": {
-                          "block_id": "a5610880-05be-426b-a82b-7f3b645bf255",
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                           "release_version": "1.0.0"
                         },
                         "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "expires_on"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Expires on"
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.expires_on"
                           }
                         },
                         "theme_overrides": {},
@@ -4433,17 +4292,13 @@
                     "placements": {
                       "iam_request_edit_title": {
                         "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                           "release_version": "1.0.0"
                         },
                         "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "title"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Title"
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.title"
                           }
                         },
                         "theme_overrides": {},
@@ -4462,126 +4317,13 @@
                       },
                       "iam_request_edit_type": {
                         "block": {
-                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                           "release_version": "1.0.0"
                         },
                         "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "request_type"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Request type"
-                          },
-                          "options": {
-                            "kind": "list",
-                            "items": [
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "grant_role"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Grant role"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "remove_role"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Remove role"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "group_membership"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Group membership"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "role_activation"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Activate privileged role"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "role_deactivation"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Deactivate privileged role"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "delegation"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Delegated management"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "group_change"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Change a group"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "other"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Other"
-                                  }
-                                }
-                              }
-                            ]
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.request_type"
                           }
                         },
                         "theme_overrides": {},
@@ -4600,17 +4342,13 @@
                       },
                       "iam_request_edit_role": {
                         "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                           "release_version": "1.0.0"
                         },
                         "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "target_role_key"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Target role"
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.target_role_key"
                           }
                         },
                         "theme_overrides": {},
@@ -4629,17 +4367,13 @@
                       },
                       "iam_request_edit_group": {
                         "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                           "release_version": "1.0.0"
                         },
                         "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "target_group_key"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Target group"
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.target_group_key"
                           }
                         },
                         "theme_overrides": {},
@@ -4658,13 +4392,13 @@
                       },
                       "iam_request_edit_application": {
                         "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                           "release_version": "1.0.0"
                         },
                         "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "application_context"
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.application_context"
                           },
                           "label": {
                             "kind": "text",
@@ -4687,21 +4421,13 @@
                       },
                       "iam_request_edit_reason": {
                         "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                           "release_version": "1.0.0"
                         },
                         "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "reason"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Reason"
-                          },
-                          "multiline": {
-                            "kind": "boolean",
-                            "value": true
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.reason"
                           }
                         },
                         "theme_overrides": {},
@@ -4720,17 +4446,13 @@
                       },
                       "iam_request_edit_starts": {
                         "block": {
-                          "block_id": "a5610880-05be-426b-a82b-7f3b645bf255",
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                           "release_version": "1.0.0"
                         },
                         "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "starts_on"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Starts on"
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.starts_on"
                           }
                         },
                         "theme_overrides": {},
@@ -4749,17 +4471,13 @@
                       },
                       "iam_request_edit_expires": {
                         "block": {
-                          "block_id": "a5610880-05be-426b-a82b-7f3b645bf255",
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                           "release_version": "1.0.0"
                         },
                         "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "expires_on"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Expires on"
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.expires_on"
                           }
                         },
                         "theme_overrides": {},
