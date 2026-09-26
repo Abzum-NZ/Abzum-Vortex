@@ -24,6 +24,14 @@ import {
   type ProtectedOperationRequest,
   type SemanticVersion,
 } from "@vortex/contracts";
+import {
+  legacyWorkflowDefinitionSchema,
+  legacyWorkflowNodeTypeKeys,
+  type WorkflowDefinition,
+  type WorkflowEdge,
+  type WorkflowNode,
+  type WorkflowTrigger,
+} from "./legacy-workflow-definition";
 
 /**
  * The permanent environment a candidate flow is scoped to. The generated
@@ -179,11 +187,21 @@ export const kestraFlowCompilerRefusalReasons = [
   "invalid_identity",
   "invalid_definition",
   "not_durable",
-  "legacy_workflow_definition",
   "unsupported_trigger",
   "unsupported_task",
+  "unsupported_node",
   "unresolved_child_flow_revision",
   "duplicate_switch_case",
+  "duplicate_node_id",
+  "missing_start_node",
+  "multiple_start_nodes",
+  "unknown_edge_node",
+  "self_edge",
+  "duplicate_edge",
+  "invalid_outcome_routing",
+  "graph_cycle",
+  "unreachable_node",
+  "depth_exceeded",
   "template_text",
   "unsafe_builder_text",
 ] as const;
@@ -361,9 +379,16 @@ const generatedFlowId = (
 /** Raw-wrapped JSON keeps builder text inert: Pebble never evaluates inside the block. */
 const rawJson = (value: JsonValue): string => `{% raw %}${canonicalJson(value)}{% endraw %}`;
 
+/** The part of a compile context every generic callback needs, shared by both input shapes. */
+type CallbackContext = {
+  readonly identity: KestraFlowIdentity;
+  readonly allowedTemplateTokens: Set<string>;
+  readonly nodes: KestraFlowNodeBinding[];
+};
+
 const callbackBinding = (
-  ctx: CompileContext,
-  nodeIdSeed: string,
+  ctx: CallbackContext,
+  nodeId: string,
   operationKey: string,
   inputs: Record<string, JsonValue>,
 ): KestraProtectedOperationBinding => ({
@@ -371,7 +396,7 @@ const callbackBinding = (
   organizationId: ctx.identity.organizationId,
   applicationRootId: ctx.identity.applicationRootId,
   workflowRevision: ctx.identity.workflowRevision,
-  nodeId: deriveNodeId(ctx.identity, ctx.flow.id, nodeIdSeed) as ProtectedOperationRequest["nodeId"],
+  nodeId: nodeId as ProtectedOperationRequest["nodeId"],
   operationKey: operationKey as ProtectedOperationRequest["operationKey"],
   inputs: inputs as ProtectedOperationRequest["inputs"],
 });
@@ -383,13 +408,13 @@ const callbackBinding = (
  * ever evaluated as template text.
  */
 const protectedCallbackTask = (
-  ctx: CompileContext,
+  ctx: CallbackContext,
   taskId: string,
-  nodeIdSeed: string,
+  nodeId: string,
   operationKey: string,
   inputs: Record<string, JsonValue>,
 ): KestraCompiledTask => {
-  const binding = callbackBinding(ctx, nodeIdSeed, operationKey, inputs);
+  const binding = callbackBinding(ctx, nodeId, operationKey, inputs);
   ctx.allowedTemplateTokens.add(kestraCallbackKeyReference);
   ctx.nodes.push({
     taskId,
@@ -404,6 +429,10 @@ const protectedCallbackTask = (
   };
 };
 
+/** The deterministic node id of one published task of the flow being compiled. */
+const derivedNodeId = (ctx: CompileContext, seed: string): string =>
+  deriveNodeId(ctx.identity, ctx.flow.id, seed);
+
 const jsonOf = (value: unknown): JsonValue => value as unknown as JsonValue;
 
 type EvaluatedValue = Readonly<{ tasks: KestraCompiledTask[]; reference: string }>;
@@ -417,7 +446,7 @@ type ValueExpression = Readonly<{ tasks: KestraCompiledTask[]; expression: JsonV
  */
 const evaluateValue = (ctx: CompileContext, seed: string, value: FlowValue): EvaluatedValue => {
   const taskId = kestraTaskId("e", seed);
-  const task = protectedCallbackTask(ctx, taskId, taskId, kestraEvaluatorOperationKey, {
+  const task = protectedCallbackTask(ctx, taskId, derivedNodeId(ctx, taskId), kestraEvaluatorOperationKey, {
     expression: jsonOf(value),
   });
   const reference = `{{ outputs.${taskId}.value }}`;
@@ -730,7 +759,7 @@ const compileControlTask = (
     }
     case "wait_for_person": {
       const taskId = kestraTaskId("t", task.id);
-      const request = protectedCallbackTask(ctx, taskId, task.id, kestraHumanTaskOperationKey, {
+      const request = protectedCallbackTask(ctx, taskId, derivedNodeId(ctx, task.id), kestraHumanTaskOperationKey, {
         form_id: jsonOf(task.formId),
         assignee: jsonOf(task.assignee),
         inputs: jsonOf(task.inputs),
@@ -770,7 +799,13 @@ const compileRegisteredTask = (
   };
   if (task.allowRefusal === true) inputs.allow_refusal = true;
   return ok([
-    protectedCallbackTask(ctx, kestraTaskId("t", task.id), task.id, operationKey, inputs),
+    protectedCallbackTask(
+      ctx,
+      kestraTaskId("t", task.id),
+      derivedNodeId(ctx, task.id),
+      operationKey,
+      inputs,
+    ),
   ]);
 };
 
@@ -921,6 +956,636 @@ const isLegacyWorkflowDefinition = (definition: unknown): boolean =>
   Array.isArray(definition.edges) &&
   typeof definition.workflowId === "string";
 
+// ─── Legacy node-and-edge workflows ──────────────────────────────────────────────────────────
+//
+// The seven workflows still shipped in the node-and-edge shape (#1088/#1092) keep compiling
+// through the private `legacy-workflow-definition.ts` module until the last one is converted.
+// This section and that module are deleted together when nothing needs them.
+
+type LegacyDecisionTableConfig = Readonly<{ decisions: readonly Readonly<{ output: string }>[] }>;
+type LegacyBoundedLoopConfig = Readonly<{ queryId: string; maximumRecords: number }>;
+type LegacyDelayConfig = Readonly<{ seconds: number }>;
+type LegacyWaitUntilConfig = Readonly<{ dateTimeFieldId: string }>;
+type LegacyStartWorkflowConfig = Readonly<{ workflowId: string }>;
+type LegacyStopConfig = Readonly<{ reasonCode: string }>;
+type LegacyRequestFormConfig = Readonly<{
+  pageId: string;
+  responderPermissionKey: string;
+  dueInSeconds: number;
+  timeoutOutcome: string;
+  outputs: readonly Readonly<{ key: string; type: string }>[];
+}>;
+
+type LegacyGraphOutcome =
+  | Readonly<{
+      outcome: "ok";
+      nodeById: ReadonlyMap<string, WorkflowNode>;
+      outgoing: ReadonlyMap<string, readonly WorkflowEdge[]>;
+      loopBackEdges: ReadonlySet<WorkflowEdge>;
+      startNodeId: string;
+    }>
+  | Readonly<{ outcome: "refused"; reason: KestraFlowCompilerRefusalReason }>;
+
+const legacyRefused = (reason: KestraFlowCompilerRefusalReason): LegacyGraphOutcome => ({
+  outcome: "refused",
+  reason,
+});
+
+/** The outcomes each legacy routing node must publish exactly once, as publication required. */
+const legacyRequiredOutcomes = (node: WorkflowNode): readonly string[] | undefined => {
+  switch (node.type) {
+    case "condition":
+      return ["matched", "not_matched"];
+    case "decision_table":
+      return (node.config as LegacyDecisionTableConfig).decisions.map((decision) => decision.output);
+    case "bounded_loop":
+      return ["record", "completed"];
+    case "request_form":
+      return ["submitted", (node.config as LegacyRequestFormConfig).timeoutOutcome];
+    default:
+      return undefined;
+  }
+};
+
+/**
+ * Rejects a legacy graph that cannot compile to one exact candidate, applying the same structural
+ * rules publication applied: one start, known and unique edges, complete outcome routing, full
+ * reachability, and only bounded-loop cycles.
+ */
+const legacyValidateGraph = (definition: WorkflowDefinition): LegacyGraphOutcome => {
+  const nodeById = new Map<string, WorkflowNode>();
+  const taskIds = new Set<string>();
+  for (const node of definition.nodes) {
+    const taskId = `t_${node.nodeId.toLowerCase()}`;
+    if (nodeById.has(node.nodeId) || taskIds.has(taskId)) return legacyRefused("duplicate_node_id");
+    if (!(legacyWorkflowNodeTypeKeys as readonly string[]).includes(node.type))
+      return legacyRefused("unsupported_node");
+    nodeById.set(node.nodeId, node);
+    taskIds.add(taskId);
+  }
+
+  const starts = definition.nodes.filter((node) => node.type === "start");
+  if (starts.length === 0) return legacyRefused("missing_start_node");
+  if (starts.length > 1) return legacyRefused("multiple_start_nodes");
+  const startNodeId = starts[0]!.nodeId;
+
+  const outgoing = new Map<string, WorkflowEdge[]>(
+    definition.nodes.map((node) => [node.nodeId, []]),
+  );
+  const edgeKeys = new Set<string>();
+  for (const edge of definition.edges) {
+    if (!nodeById.has(edge.fromNodeId) || !nodeById.has(edge.toNodeId))
+      return legacyRefused("unknown_edge_node");
+    const edgeKey = `${edge.fromNodeId}\0${edge.toNodeId}\0${edge.outcome ?? ""}`;
+    if (edgeKeys.has(edgeKey)) return legacyRefused("duplicate_edge");
+    edgeKeys.add(edgeKey);
+    outgoing.get(edge.fromNodeId)!.push(edge);
+  }
+
+  for (const node of definition.nodes) {
+    const nodeEdges = outgoing.get(node.nodeId)!;
+    if (node.type === "stop" && nodeEdges.length > 0) return legacyRefused("invalid_outcome_routing");
+    const expected = legacyRequiredOutcomes(node);
+    if (expected === undefined) continue;
+    const actual = nodeEdges.map((edge) => edge.outcome);
+    if (
+      new Set(actual).size !== actual.length ||
+      actual.length !== expected.length ||
+      expected.some((outcome) => !actual.includes(outcome))
+    )
+      return legacyRefused("invalid_outcome_routing");
+  }
+
+  for (const edge of definition.edges)
+    if (
+      edge.fromNodeId === edge.toNodeId &&
+      !(nodeById.get(edge.fromNodeId)!.type === "bounded_loop" && edge.outcome === "record")
+    )
+      return legacyRefused("self_edge");
+
+  const reachable = new Set<string>([startNodeId]);
+  const queue = [startNodeId];
+  while (queue.length > 0)
+    for (const edge of outgoing.get(queue.shift()!)!)
+      if (!reachable.has(edge.toNodeId)) {
+        reachable.add(edge.toNodeId);
+        queue.push(edge.toNodeId);
+      }
+  if (reachable.size !== definition.nodes.length) return legacyRefused("unreachable_node");
+
+  // Every cycle holds exactly one bounded loop whose `record` edge stays inside the cycle and
+  // whose `completed` edge leaves it.
+  let unboundedCycle = false;
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visitCycle = (nodeId: string, path: readonly string[]): void => {
+    if (unboundedCycle) return;
+    if (visiting.has(nodeId)) {
+      const cycleIds = new Set(path.slice(path.indexOf(nodeId)));
+      const loops = [...cycleIds].filter((id) => nodeById.get(id)!.type === "bounded_loop");
+      const loopEdges = loops.length === 1 ? outgoing.get(loops[0]!)! : [];
+      unboundedCycle = !(
+        loops.length === 1 &&
+        loopEdges.some((edge) => edge.outcome === "record" && cycleIds.has(edge.toNodeId)) &&
+        loopEdges.some((edge) => edge.outcome === "completed" && !cycleIds.has(edge.toNodeId))
+      );
+      return;
+    }
+    if (visited.has(nodeId)) return;
+    visiting.add(nodeId);
+    for (const edge of outgoing.get(nodeId)!) visitCycle(edge.toNodeId, [...path, nodeId]);
+    visiting.delete(nodeId);
+    visited.add(nodeId);
+  };
+  for (const node of definition.nodes) visitCycle(node.nodeId, []);
+  if (unboundedCycle) return legacyRefused("graph_cycle");
+
+  const loopBackEdges = new Set<WorkflowEdge>();
+  for (const node of definition.nodes) {
+    if (node.type !== "bounded_loop") continue;
+    const recordEdge = outgoing.get(node.nodeId)!.find((edge) => edge.outcome === "record")!;
+    const body = new Set<string>();
+    const pending: string[] = recordEdge.toNodeId === node.nodeId ? [] : [recordEdge.toNodeId];
+    while (pending.length > 0) {
+      const current = pending.shift()!;
+      if (body.has(current)) continue;
+      body.add(current);
+      for (const edge of outgoing.get(current)!)
+        if (edge.toNodeId !== node.nodeId) pending.push(edge.toNodeId);
+    }
+    for (const edge of definition.edges)
+      if (edge.toNodeId === node.nodeId && (body.has(edge.fromNodeId) || edge === recordEdge))
+        loopBackEdges.add(edge);
+  }
+
+  const indegree = new Map<string, number>(definition.nodes.map((node) => [node.nodeId, 0]));
+  for (const edge of definition.edges)
+    if (!loopBackEdges.has(edge)) indegree.set(edge.toNodeId, indegree.get(edge.toNodeId)! + 1);
+  const ready = definition.nodes
+    .filter((node) => indegree.get(node.nodeId) === 0)
+    .map((node) => node.nodeId);
+  let ordered = 0;
+  while (ready.length > 0) {
+    const nodeId = ready.shift()!;
+    ordered += 1;
+    for (const edge of outgoing.get(nodeId)!) {
+      if (loopBackEdges.has(edge)) continue;
+      const remaining = indegree.get(edge.toNodeId)! - 1;
+      indegree.set(edge.toNodeId, remaining);
+      if (remaining === 0) ready.push(edge.toNodeId);
+    }
+  }
+  if (ordered !== definition.nodes.length) return legacyRefused("graph_cycle");
+
+  // Nesting depth counts child-workflow levels from this workflow at depth 1, as publication did.
+  const children = definition.nodes.filter((node) => node.type === "start_workflow");
+  if (
+    children.some(
+      (node) =>
+        (node.config as LegacyStartWorkflowConfig).workflowId.toLowerCase() ===
+        definition.workflowId.toLowerCase(),
+    )
+  )
+    return legacyRefused("graph_cycle");
+  if ((children.length > 0 ? 2 : 1) > definition.maximumNestingDepth)
+    return legacyRefused("depth_exceeded");
+
+  return { outcome: "ok", nodeById, outgoing, loopBackEdges, startNodeId };
+};
+
+type LegacyContext = {
+  readonly identity: KestraFlowIdentity;
+  readonly flowId: string;
+  readonly childFlowRevisions: ReadonlyMap<string, number>;
+  readonly allowedTemplateTokens: Set<string>;
+  readonly nodes: KestraFlowNodeBinding[];
+  readonly nodeById: ReadonlyMap<string, WorkflowNode>;
+  readonly outgoing: ReadonlyMap<string, readonly WorkflowEdge[]>;
+  readonly loopBackEdges: ReadonlySet<WorkflowEdge>;
+  refusal: KestraFlowCompilerRefusalReason | undefined;
+};
+
+type LegacyStep = Readonly<{ tasks: KestraCompiledTask[]; next: string | undefined }>;
+
+const legacyForwardEdges = (ctx: LegacyContext, nodeId: string): readonly WorkflowEdge[] =>
+  (ctx.outgoing.get(nodeId) ?? []).filter((edge) => !ctx.loopBackEdges.has(edge));
+
+const legacyNext = (ctx: LegacyContext, nodeId: string): string | undefined => {
+  const forward = legacyForwardEdges(ctx, nodeId);
+  return forward.length === 1 ? forward[0]!.toNodeId : undefined;
+};
+
+const legacyDistances = (ctx: LegacyContext, start: string): ReadonlyMap<string, number> => {
+  const distances = new Map<string, number>([[start, 0]]);
+  const queue = [start];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const distance = distances.get(current)!;
+    for (const edge of legacyForwardEdges(ctx, current))
+      if (!distances.has(edge.toNodeId)) {
+        distances.set(edge.toNodeId, distance + 1);
+        queue.push(edge.toNodeId);
+      }
+  }
+  return distances;
+};
+
+/** The nearest node every branch target can still reach, the point the branches merge again. */
+const legacyMerge = (ctx: LegacyContext, targets: readonly string[]): string | undefined => {
+  if (targets.length < 2) return undefined;
+  const maps = targets.map((target) => legacyDistances(ctx, target));
+  const common = [...maps[0]!.keys()].filter((id) => maps.every((map) => map.has(id)));
+  let best: string | undefined;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const id of common) {
+    const score = Math.max(...maps.map((map) => map.get(id)!));
+    if (score < bestScore || (score === bestScore && (best === undefined || id < best))) {
+      best = id;
+      bestScore = score;
+    }
+  }
+  return best;
+};
+
+const legacyPauseTask = (nodeId: string, durationSeconds: number): KestraCompiledTask => ({
+  id: `c_${nodeId.toLowerCase()}`,
+  type: "io.kestra.plugin.core.flow.Pause",
+  pauseDuration: `PT${durationSeconds}S`,
+});
+
+const legacyStopTask = (node: WorkflowNode): KestraCompiledTask => ({
+  id: `c_${node.nodeId.toLowerCase()}`,
+  type: "io.kestra.plugin.core.execution.Exit",
+  state: "SUCCESS",
+  outputs: { vortex_outcome: (node.config as LegacyStopConfig).reasonCode },
+});
+
+const legacyEffectTask = (ctx: LegacyContext, node: WorkflowNode): KestraCompiledTask =>
+  protectedCallbackTask(
+    ctx,
+    `t_${node.nodeId.toLowerCase()}`,
+    node.nodeId,
+    `workflow.node.${node.type}`,
+    { node_type: node.type, config: jsonOf(node.config) },
+  );
+
+const legacySubflowTask = (ctx: LegacyContext, node: WorkflowNode): KestraCompiledTask | undefined => {
+  const child = (node.config as LegacyStartWorkflowConfig).workflowId.toLowerCase();
+  const revision = ctx.childFlowRevisions.get(child);
+  if (revision === undefined) {
+    ctx.refusal = "unresolved_child_flow_revision";
+    return undefined;
+  }
+  return {
+    id: `c_${node.nodeId.toLowerCase()}`,
+    type: "io.kestra.plugin.core.flow.Subflow",
+    namespace: installationNamespace(ctx.identity),
+    flowId: generatedFlowId(ctx.identity, child, revision),
+    inputs: {},
+    wait: true,
+  };
+};
+
+const legacyWaitUntilTasks = (ctx: LegacyContext, node: WorkflowNode): KestraCompiledTask[] => {
+  const evaluator = protectedCallbackTask(
+    ctx,
+    `e_${node.nodeId.toLowerCase()}`,
+    node.nodeId,
+    kestraEvaluatorOperationKey,
+    { field: (node.config as LegacyWaitUntilConfig).dateTimeFieldId },
+  );
+  ctx.allowedTemplateTokens.add(`{{ outputs.e_${node.nodeId.toLowerCase()}.value }}`);
+  return [
+    evaluator,
+    {
+      id: `c_${node.nodeId.toLowerCase()}`,
+      type: "io.kestra.plugin.core.flow.Pause",
+      pauseDuration: `{{ outputs.e_${node.nodeId.toLowerCase()}.value }}`,
+    },
+  ];
+};
+
+const legacyCompileBranch = (
+  ctx: LegacyContext,
+  node: WorkflowNode,
+  stop: ReadonlySet<string>,
+): LegacyStep => {
+  const edges = ctx.outgoing.get(node.nodeId) ?? [];
+  const edgeFor = (outcome: string): WorkflowEdge | undefined =>
+    edges.find((edge) => edge.outcome === outcome);
+
+  if (node.type === "condition") {
+    const matched = edgeFor("matched");
+    const notMatched = edgeFor("not_matched");
+    if (matched === undefined || notMatched === undefined) {
+      ctx.refusal = "invalid_outcome_routing";
+      return { tasks: [], next: undefined };
+    }
+    const merge = legacyMerge(ctx, [matched.toNodeId, notMatched.toNodeId]);
+    const branchStop = new Set(stop);
+    if (merge !== undefined) branchStop.add(merge);
+    const evaluator = protectedCallbackTask(
+      ctx,
+      `e_${node.nodeId.toLowerCase()}`,
+      node.nodeId,
+      kestraEvaluatorOperationKey,
+      { condition: jsonOf((node.config as { condition: unknown }).condition) },
+    );
+    const reference = `{{ outputs.e_${node.nodeId.toLowerCase()}.value }}`;
+    ctx.allowedTemplateTokens.add(reference);
+    const then = compileLegacyLinear(ctx, matched.toNodeId, branchStop).tasks;
+    const otherwise = compileLegacyLinear(ctx, notMatched.toNodeId, branchStop).tasks;
+    return {
+      tasks: [
+        evaluator,
+        {
+          id: `c_${node.nodeId.toLowerCase()}`,
+          type: "io.kestra.plugin.core.flow.If",
+          condition: reference,
+          then,
+          ...(otherwise.length === 0 ? {} : { else: otherwise }),
+        },
+      ],
+      next: merge,
+    };
+  }
+
+  if (node.type === "decision_table") {
+    const decisions = (node.config as LegacyDecisionTableConfig).decisions;
+    const targets = decisions.map((decision) => edgeFor(decision.output)?.toNodeId);
+    if (targets.some((target) => target === undefined)) {
+      ctx.refusal = "invalid_outcome_routing";
+      return { tasks: [], next: undefined };
+    }
+    const merge = legacyMerge(ctx, targets as string[]);
+    const branchStop = new Set(stop);
+    if (merge !== undefined) branchStop.add(merge);
+    const cases: Record<string, JsonValue> = {};
+    for (const [index, decision] of decisions.entries()) {
+      const compiled = compileLegacyLinear(ctx, targets[index]!, branchStop).tasks;
+      cases[decision.output] = compiled as unknown as JsonValue;
+    }
+    const evaluator = protectedCallbackTask(
+      ctx,
+      `e_${node.nodeId.toLowerCase()}`,
+      node.nodeId,
+      kestraEvaluatorOperationKey,
+      { decisions: jsonOf(decisions) },
+    );
+    const reference = `{{ outputs.e_${node.nodeId.toLowerCase()}.value }}`;
+    ctx.allowedTemplateTokens.add(reference);
+    return {
+      tasks: [
+        evaluator,
+        {
+          id: `c_${node.nodeId.toLowerCase()}`,
+          type: "io.kestra.plugin.core.flow.Switch",
+          value: reference,
+          cases: Object.fromEntries(
+            Object.entries(cases).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)),
+          ),
+        },
+      ],
+      next: merge,
+    };
+  }
+
+  if (node.type === "bounded_loop") {
+    const record = edgeFor("record");
+    const completed = edgeFor("completed");
+    if (record === undefined || completed === undefined) {
+      ctx.refusal = "invalid_outcome_routing";
+      return { tasks: [], next: undefined };
+    }
+    const bodyStop = new Set(stop);
+    bodyStop.add(node.nodeId);
+    const body = compileLegacyLinear(ctx, record.toNodeId, bodyStop).tasks;
+    const config = node.config as LegacyBoundedLoopConfig;
+    const evaluator = protectedCallbackTask(
+      ctx,
+      `e_${node.nodeId.toLowerCase()}`,
+      node.nodeId,
+      kestraEvaluatorOperationKey,
+      { query_id: config.queryId, maximum_records: config.maximumRecords },
+    );
+    const reference = `{{ outputs.e_${node.nodeId.toLowerCase()}.value }}`;
+    ctx.allowedTemplateTokens.add(reference);
+    return {
+      tasks: [
+        evaluator,
+        {
+          id: `c_${node.nodeId.toLowerCase()}`,
+          type: "io.kestra.plugin.core.flow.ForEachItem",
+          items: reference,
+          tasks: body,
+        },
+      ],
+      next: completed.toNodeId,
+    };
+  }
+
+  // request_form: create the person's task through the callback, pause with typed answers, then
+  // branch on the evaluator's submitted/timeout result.
+  const submitted = edgeFor("submitted");
+  const config = node.config as LegacyRequestFormConfig;
+  const timedOut = edgeFor(config.timeoutOutcome);
+  if (submitted === undefined || timedOut === undefined) {
+    ctx.refusal = "invalid_outcome_routing";
+    return { tasks: [], next: undefined };
+  }
+  const merge = legacyMerge(ctx, [submitted.toNodeId, timedOut.toNodeId]);
+  const branchStop = new Set(stop);
+  if (merge !== undefined) branchStop.add(merge);
+  const request = protectedCallbackTask(
+    ctx,
+    `t_${node.nodeId.toLowerCase()}`,
+    node.nodeId,
+    kestraHumanTaskOperationKey,
+    {
+      form_id: config.pageId,
+      responder_permission_key: config.responderPermissionKey,
+      due_in_seconds: config.dueInSeconds,
+      outputs: jsonOf(config.outputs),
+    },
+  );
+  const outcomeNodeId = deriveNodeId(ctx.identity, ctx.flowId, `${node.nodeId}__outcome`);
+  const outcome = protectedCallbackTask(
+    ctx,
+    `e_${node.nodeId.toLowerCase()}__outcome`,
+    outcomeNodeId,
+    kestraEvaluatorOperationKey,
+    { form_id: config.pageId, timeout_outcome: config.timeoutOutcome },
+  );
+  const reference = `{{ outputs.e_${node.nodeId.toLowerCase()}__outcome.value }}`;
+  ctx.allowedTemplateTokens.add(reference);
+  const submittedTasks = compileLegacyLinear(ctx, submitted.toNodeId, branchStop).tasks;
+  const timedOutTasks = compileLegacyLinear(ctx, timedOut.toNodeId, branchStop).tasks;
+  const onResume = config.outputs
+    .map((output) => ({ id: output.key, type: kestraInputType(output.type), required: false }))
+    .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+  return {
+    tasks: [
+      request,
+      { id: `p_${node.nodeId.toLowerCase()}`, type: "io.kestra.plugin.core.flow.Pause", onResume },
+      outcome,
+      {
+        id: `c_${node.nodeId.toLowerCase()}`,
+        type: "io.kestra.plugin.core.flow.If",
+        condition: reference,
+        then: submittedTasks,
+        ...(timedOutTasks.length === 0 ? {} : { else: timedOutTasks }),
+      },
+    ],
+    next: merge,
+  };
+};
+
+const compileLegacyLinear = (
+  ctx: LegacyContext,
+  startId: string,
+  stop: ReadonlySet<string>,
+): LegacyStep => {
+  const tasks: KestraCompiledTask[] = [];
+  let current: string | undefined = startId;
+  const guard = new Set<string>();
+  while (current !== undefined && !stop.has(current) && !ctx.refusal) {
+    if (guard.has(current)) break;
+    guard.add(current);
+    const node = ctx.nodeById.get(current);
+    if (node === undefined) break;
+    if (node.type === "start") {
+      // The published start node is structural: it produces no Kestra task.
+    } else if (
+      node.type === "condition" ||
+      node.type === "decision_table" ||
+      node.type === "bounded_loop" ||
+      node.type === "request_form"
+    ) {
+      const branch = legacyCompileBranch(ctx, node, stop);
+      tasks.push(...branch.tasks);
+      current = branch.next;
+      continue;
+    } else if (node.type === "stop") {
+      tasks.push(legacyStopTask(node));
+      return { tasks, next: undefined };
+    } else if (node.type === "delay") {
+      tasks.push(legacyPauseTask(node.nodeId, (node.config as LegacyDelayConfig).seconds));
+    } else if (node.type === "wait_until") {
+      tasks.push(...legacyWaitUntilTasks(ctx, node));
+    } else if (node.type === "start_workflow") {
+      const subflow = legacySubflowTask(ctx, node);
+      if (subflow !== undefined) tasks.push(subflow);
+    } else {
+      tasks.push(legacyEffectTask(ctx, node));
+    }
+    current = legacyNext(ctx, current);
+  }
+  return { tasks, next: current !== undefined && stop.has(current) ? current : undefined };
+};
+
+const legacyTriggerSummary = (
+  identity: KestraFlowIdentity,
+  workflowId: string,
+  trigger: WorkflowTrigger,
+): Readonly<{ summary: KestraFlowTrigger; yaml: Record<string, JsonValue> | undefined }> => {
+  if (trigger.kind === "schedule")
+    return {
+      summary: { id: "trigger_schedule", kind: "schedule", disabled: true, trigger: null },
+      yaml: {
+        id: "trigger_schedule",
+        type: "io.kestra.plugin.core.trigger.Schedule",
+        cron: scheduleCron(trigger.schedule),
+        timezone: trigger.schedule.timeZone,
+        disabled: true,
+      },
+    };
+  if (trigger.kind === "incoming_message")
+    return {
+      summary: { id: "trigger_incoming_message", kind: "incoming_message", disabled: true, trigger: null },
+      yaml: {
+        id: "trigger_incoming_message",
+        type: "io.kestra.plugin.core.trigger.Webhook",
+        key: webhookKey(identity, workflowId, trigger.messageKey),
+        disabled: true,
+      },
+    };
+  return { summary: { id: "trigger_none", kind: "workflow", disabled: true, trigger: null }, yaml: undefined };
+};
+
+const compileLegacyKestraFlow = (
+  identity: KestraFlowIdentity,
+  definition: WorkflowDefinition,
+  childFlowRevisions: ReadonlyMap<string, number>,
+): KestraFlowCompilation => {
+  const graph = legacyValidateGraph(definition);
+  if (graph.outcome === "refused") return refused(graph.reason);
+
+  const ctx: LegacyContext = {
+    identity,
+    flowId: definition.workflowId,
+    childFlowRevisions,
+    allowedTemplateTokens: new Set<string>(),
+    nodes: [],
+    nodeById: graph.nodeById,
+    outgoing: graph.outgoing,
+    loopBackEdges: graph.loopBackEdges,
+    refusal: undefined,
+  };
+
+  const compiled = compileLegacyLinear(ctx, graph.startNodeId, new Set<string>());
+  if (ctx.refusal !== undefined) return refused(ctx.refusal);
+
+  const namespace = installationNamespace(identity);
+  const id = generatedFlowId(identity, definition.workflowId, identity.workflowRevision);
+  if (namespace.length > maximumNamespaceLength || id.length > maximumFlowIdLength)
+    return refused("invalid_identity");
+
+  const trigger = legacyTriggerSummary(identity, definition.workflowId, definition.trigger);
+  const fixedLabels: Record<string, string> = {
+    vortex_environment: identity.environment,
+    vortex_organization_id: identity.organizationId,
+    vortex_application_root_id: identity.applicationRootId,
+    vortex_application_version: identity.applicationVersion,
+    vortex_installation_revision: String(identity.installationRevision),
+    vortex_workflow_id: definition.workflowId,
+    vortex_workflow_key: definition.key,
+    vortex_workflow_revision: String(identity.workflowRevision),
+  };
+  const yamlLabels: Record<string, JsonValue> = {};
+  for (const key of Object.keys(fixedLabels).sort()) yamlLabels[key] = fixedLabels[key]!;
+
+  const flowData: Record<string, JsonValue> = {
+    id,
+    namespace,
+    labels: yamlLabels,
+    tasks: compiled.tasks as unknown as JsonValue,
+    ...(trigger.yaml === undefined ? {} : { triggers: [trigger.yaml] }),
+  };
+
+  const yaml = renderYaml(flowData as unknown as JsonValue, "");
+  if (!containsOnlyGeneratedTemplateText(yaml, ctx.allowedTemplateTokens))
+    return refused("template_text");
+
+  const candidate: KestraFlowCandidate = Object.freeze({
+    namespace,
+    id,
+    workflowRevision: identity.workflowRevision,
+    active: false,
+    trigger: Object.freeze(trigger.summary),
+    triggers: Object.freeze(trigger.yaml === undefined ? [] : [trigger.summary]),
+    tasks: Object.freeze(compiled.tasks),
+    nodes: Object.freeze(
+      [...ctx.nodes].sort((left, right) =>
+        left.taskId < right.taskId ? -1 : left.taskId > right.taskId ? 1 : 0,
+      ),
+    ),
+    labels: Object.freeze(fixedLabels),
+    yaml,
+  });
+
+  return { outcome: "compiled", flow: candidate };
+};
+
 // ─── Entry point ─────────────────────────────────────────────────────────────────────────────
 
 const parseChildFlowRevisions = (candidate: unknown): ReadonlyMap<string, number> | undefined => {
@@ -958,15 +1623,24 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
   const identity = parseIdentity(inputCandidate.identity);
   if (identity === undefined) return refused("invalid_identity");
 
-  if (isLegacyWorkflowDefinition(inputCandidate.definition))
-    return refused("legacy_workflow_definition");
-
   const childFlowRevisions = parseChildFlowRevisions(inputCandidate.childFlowRevisions);
   if (childFlowRevisions === undefined) return refused("invalid_input");
+
+  // Route by published shape. The retired node-and-edge form keeps compiling through the private
+  // legacy module until the last shipped workflow is converted (#1088/#1092); this whole legacy
+  // branch and `legacy-workflow-definition.ts` are deleted together at that point.
+  if (isLegacyWorkflowDefinition(inputCandidate.definition)) {
+    const legacy = legacyWorkflowDefinitionSchema.safeParse(inputCandidate.definition);
+    if (!legacy.success) return refused("invalid_definition");
+    if (JSON.stringify(legacy.data).includes("{% endraw %}")) return refused("unsafe_builder_text");
+    return compileLegacyKestraFlow(identity, legacy.data, childFlowRevisions);
+  }
 
   const builderLabels = readBuilderLabels(inputCandidate.definition);
   for (const value of Object.values(builderLabels))
     if (!labelIsRenderable(value)) return refused("unsafe_builder_text");
+  if (JSON.stringify(inputCandidate.definition).includes("{% endraw %}"))
+    return refused("unsafe_builder_text");
 
   const parsedDefinition = flowSchema.safeParse(neutralizeLabelDelimiters(inputCandidate.definition));
   if (!parsedDefinition.success) return refused("invalid_definition");
