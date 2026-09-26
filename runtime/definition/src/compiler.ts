@@ -4434,6 +4434,20 @@ const applicationCompositionResolutionV2 = (
       const field = pair.field;
       const type = String(field.type);
       const settings = field.settings === undefined ? {} : asObject(field.settings);
+      const resolvedRecordType = (
+        value: unknown,
+      ): FieldInputSourceField["recordTypes"][number] => {
+        const recordType = asObject(value);
+        // A canonical module field resolves every link target; anything else is refused rather
+        // than derived, so an automatic field input never invents a record type identity.
+        if (recordType.state !== "resolved")
+          fail("vortex.definition.module_field_references", "broken_reference");
+        return {
+          state: "resolved",
+          moduleRootId: String(recordType.moduleRootId),
+          recordTypeId: String(recordType.recordTypeId),
+        };
+      };
       const choices =
         type === "choice" && Array.isArray(settings.options)
           ? (settings.options as JsonObject[]).map((option) => ({
@@ -4443,11 +4457,9 @@ const applicationCompositionResolutionV2 = (
           : [];
       const recordTypes: FieldInputSourceField["recordTypes"] =
         type === "link" && settings.target !== undefined
-          ? [asObject(settings.target) as FieldInputSourceField["recordTypes"][number]]
+          ? [resolvedRecordType(settings.target)]
           : type === "link_to_one_of_several" && Array.isArray(settings.targets)
-            ? (settings.targets as JsonObject[]).map(
-                (target) => asObject(target) as FieldInputSourceField["recordTypes"][number],
-              )
+            ? (settings.targets as unknown[]).map(resolvedRecordType)
             : [];
       return {
         key: String(field.key),

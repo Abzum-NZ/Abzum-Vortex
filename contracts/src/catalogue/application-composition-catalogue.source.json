@@ -3350,7 +3350,7 @@
       "responsiveVisibility": true,
       "responsiveOrder": true,
       "gridWidth": true,
-      "height": "content",
+      "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
       "accessibleNamePropertyPath": [
