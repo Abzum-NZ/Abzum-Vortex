@@ -1,6 +1,8 @@
 "use client";
 
 import type { ChangeEvent, ReactElement } from "react";
+import { Field, FieldLabel } from "../components/field";
+import { Input } from "../components/input";
 import { DefinitionRenderError } from "../definition-error";
 import type { NumberInputPayload } from "./projected-data";
 import {
@@ -76,17 +78,16 @@ export function NumberInput(props: NumberInputProps): ReactElement {
   };
 
   return (
-    <div
+    <Field
       data-vortex-control="number-input"
       hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
-      className="vortex-field"
     >
-      <label htmlFor={ids.control} className="vortex-field-label">
+      <FieldLabel htmlFor={ids.control}>
         <FieldLabelText label={label} required={required} />
-      </label>
-      <input
+      </FieldLabel>
+      <Input
         id={ids.control}
         type="number"
         inputMode={integer ? "numeric" : "decimal"}
@@ -102,7 +103,6 @@ export function NumberInput(props: NumberInputProps): ReactElement {
         step={step ?? (integer ? 1 : "any")}
         aria-invalid={error !== undefined}
         {...describedBy(ids, help, error, note, draftFeedback)}
-        className="vortex-input"
       />
       <FieldMessages
         ids={ids}
@@ -111,6 +111,6 @@ export function NumberInput(props: NumberInputProps): ReactElement {
         note={note}
         draftFeedback={draftFeedback}
       />
-    </div>
+    </Field>
   );
 }
