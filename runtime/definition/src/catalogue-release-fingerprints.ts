@@ -26,6 +26,7 @@ export const platformBlockReleaseFingerprints = (definition: {
   capabilities: unknown;
   supportedEvents: unknown;
   supportedStateOperations: unknown;
+  customComponent?: unknown;
 }): CatalogueReleaseFingerprints => {
   const contentFingerprint = fingerprintCanonicalValue({
     name: definition.name,
@@ -37,6 +38,12 @@ export const platformBlockReleaseFingerprints = (definition: {
     capabilities: definition.capabilities,
     supportedEvents: definition.supportedEvents,
     supportedStateOperations: definition.supportedStateOperations,
+    // A custom component release's bundle manifest and declared events are part of its content,
+    // so any bundle digest change moves its content and catalogue fingerprints. The field is
+    // omitted for platform block releases, whose fingerprints stay unchanged.
+    ...(definition.customComponent === undefined
+      ? {}
+      : { customComponent: definition.customComponent }),
   });
   return {
     contentFingerprint,

@@ -395,6 +395,9 @@ importers:
       '@vortex/app':
         specifier: workspace:*
         version: link:../app
+      '@vortex/connection':
+        specifier: workspace:*
+        version: link:../connection
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
