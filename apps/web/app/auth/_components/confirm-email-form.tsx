@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { confirmEmail } from "../actions";
 
 export function ConfirmEmailForm() {
@@ -46,12 +47,16 @@ export function ConfirmEmailForm() {
         <input name="type" type="hidden" />
       </form>
       {invalidLink ? (
-        <div className="auth-status auth-status--error" role="alert">
-          <p>This confirmation link is incomplete or has expired.</p>
-          <Link href="/auth/register">Create a new account</Link>
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>
+            <p>This confirmation link is incomplete or has expired.</p>
+            <Link className="font-medium underline underline-offset-4" href="/auth/register">
+              Create a new account
+            </Link>
+          </AlertDescription>
+        </Alert>
       ) : (
-        <p className="auth-hint" role="status">
+        <p className="text-sm text-muted-foreground" role="status">
           Checking your confirmation link…
         </p>
       )}

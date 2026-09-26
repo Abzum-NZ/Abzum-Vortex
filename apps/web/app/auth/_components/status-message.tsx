@@ -1,3 +1,5 @@
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
+
 type StatusMessageProps = Readonly<{
   status?: string | undefined;
 }>;
@@ -14,8 +16,8 @@ const messages: Readonly<Record<string, string>> = {
 export function StatusMessage({ status }: StatusMessageProps) {
   const message = status && Object.hasOwn(messages, status) ? messages[status] : undefined;
   return message ? (
-    <p className="auth-message" role="alert">
-      {message}
-    </p>
+    <Alert variant="destructive">
+      <AlertDescription>{message}</AlertDescription>
+    </Alert>
   ) : null;
 }
