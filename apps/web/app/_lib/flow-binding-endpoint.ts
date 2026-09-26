@@ -368,7 +368,14 @@ const continuationResult = (
         outputs: outcome.presentation.outputs === "available" ? outcome.outputs : {},
         intents: outcome.intents as SafeIntents,
         unavailable: outcome.unavailable,
-        ...(outcome.failure === undefined ? {} : { failure: outcome.failure }),
+        ...(outcome.failure === undefined
+          ? {}
+          : {
+              failure: {
+                code: outcome.failure.code,
+                ...(outcome.failure.taskId === undefined ? {} : { taskId: outcome.failure.taskId }),
+              },
+            }),
       };
     case "form_requested":
       return {

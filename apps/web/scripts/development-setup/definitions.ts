@@ -2,6 +2,7 @@ import {
   DEFAULT_PLATFORM_THEME_RELEASE_V2,
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
   PLATFORM_BLOCK_RELEASES,
+  platformIdSchema,
   type SessionContext,
   type StoredDefinitionSource,
 } from "@vortex/contracts";
@@ -160,7 +161,7 @@ const publishOne = async (
     // A resumed run authors the current shipped source over the unpublished draft.
     const saved = await inSystemTransaction(context, (transaction) =>
       createDefinitionStore(transaction, authority).saveDraft({
-        rootId: draft!.rootId,
+        rootId: platformIdSchema.parse(draft!.rootId),
         expectedDraftRevision: draft!.draftRevision,
         source,
       }),
