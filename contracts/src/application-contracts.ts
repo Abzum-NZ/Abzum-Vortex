@@ -13,7 +13,6 @@ import {
   conditionNodeSchema,
   eventDefinitionSchema,
 } from "./module-contracts";
-import { workflowDefinitionSchema } from "./automation-contracts";
 import { interfaceDefinitionSchema } from "./integration-contracts";
 import {
   builderKeySchema,
@@ -447,7 +446,6 @@ const applicationSharedContentSchema = z
     permissions: z.array(permissionDeclarationSchema),
     actions: z.array(actionDefinitionSchema),
     events: z.array(eventDefinitionSchema),
-    workflows: z.array(workflowDefinitionSchema),
     connectionBindings: z.array(applicationConnectionBindingSchema),
     interfaces: z.array(interfaceDefinitionSchema),
     publicAddresses: z.array(publicAddressSchema),

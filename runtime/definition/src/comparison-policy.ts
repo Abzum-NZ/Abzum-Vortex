@@ -1381,15 +1381,6 @@ const compareApplicationSharedContent = (
   );
   compareKeyed(
     reasons,
-    previous.workflows as RecordValue[],
-    candidate.workflows as RecordValue[],
-    "workflowId",
-    "workflow",
-    (left, right) => compareWorkflow(reasons, left, right),
-    () => "major",
-  );
-  compareKeyed(
-    reasons,
     previous.connectionBindings as RecordValue[],
     candidate.connectionBindings as RecordValue[],
     "bindingId",
@@ -2083,14 +2074,6 @@ const normaliseApplicationSharedContent = (content: ApplicationContentV2): Recor
       })),
       "eventId",
     ),
-    workflows: sorted(
-      (value.workflows as RecordValue[]).map((workflow) => ({
-        ...workflow,
-        nodes: sorted(workflow.nodes as unknown[], "nodeId"),
-        edges: sorted(workflow.edges as unknown[]),
-      })),
-      "workflowId",
-    ),
     connectionBindings: sorted(
       (value.connectionBindings as RecordValue[]).map((binding) => ({
         ...binding,
@@ -2135,16 +2118,6 @@ const assertUniqueValues = (values: unknown[]): void => {
   const identities = values.map(canonicalJson);
   if (new Set(identities).size !== identities.length)
     refuseVersionImpact("ambiguous_component_identity");
-};
-
-const assertUniqueWorkflowEdges = (edges: RecordValue[]): void => {
-  assertUniqueValues(
-    edges.map((edge) => ({
-      fromNodeId: edge.fromNodeId,
-      toNodeId: edge.toNodeId,
-      ...(edge.outcome === undefined ? {} : { outcome: edge.outcome }),
-    })),
-  );
 };
 
 const currencyConfiguration = (settings: RecordValue): RecordValue => ({
@@ -2237,7 +2210,6 @@ const assertUnambiguousApplicationSharedContent = (content: unknown): void => {
     ["pipelines", "pipelineId"],
     ["actions", "actionId"],
     ["events", "eventId"],
-    ["workflows", "workflowId"],
     ["connectionBindings", "bindingId"],
     ["interfaces", "interfaceId"],
     ["publicAddresses", "addressId"],
@@ -2250,10 +2222,6 @@ const assertUnambiguousApplicationSharedContent = (content: unknown): void => {
     assertUniqueValues(role.permissionKeys as unknown[]);
   for (const pipeline of value.pipelines as RecordValue[])
     assertUnique(pipeline.stages as RecordValue[], "key");
-  for (const workflow of value.workflows as RecordValue[]) {
-    assertUnique(workflow.nodes as RecordValue[], "nodeId");
-    assertUniqueWorkflowEdges(workflow.edges as RecordValue[]);
-  }
   const flowBindings = value.flowBindings as RecordValue[];
   const flowBindingKeys = flowBindings.map(
     (binding) => `${binding.controlId}:${binding.eventId}`,
@@ -2848,7 +2816,6 @@ export const normaliseApplicationContentV2 = (
     permissions: common.permissions,
     actions: common.actions,
     events: common.events,
-    workflows: common.workflows,
     connectionBindings: common.connectionBindings,
     interfaces: common.interfaces,
     publicAddresses: common.publicAddresses,

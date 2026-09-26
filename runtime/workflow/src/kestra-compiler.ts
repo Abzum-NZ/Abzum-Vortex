@@ -1,22 +1,24 @@
-import "server-only";
+﻿import "server-only";
 
 import {
   applicationRootIdSchema,
   organizationIdSchema,
   revisionSchema,
   stableDefinitionReleaseVersionSchema,
-  workflowDefinitionSchema,
-  workflowNodeTypeKeys,
   type ApplicationRootId,
   type BuilderKey,
   type OrganizationId,
   type ProtectedOperationRequest,
   type SemanticVersion,
+} from "@vortex/contracts";
+import {
+  legacyWorkflowDefinitionSchema,
+  legacyWorkflowNodeTypeKeys,
   type WorkflowDefinition,
   type WorkflowEdge,
   type WorkflowNode,
   type WorkflowTrigger,
-} from "@vortex/contracts";
+} from "./legacy-workflow-definition";
 
 /**
  * The permanent environment a candidate flow is scoped to. The generated
@@ -291,7 +293,7 @@ const validateGraph = (definition: WorkflowDefinition): ValidatedGraph | KestraF
   for (const node of definition.nodes) {
     const taskId = `t_${node.nodeId.toLowerCase()}`;
     if (nodeById.has(node.nodeId) || taskIds.has(taskId)) return refused("duplicate_node_id");
-    if (!(workflowNodeTypeKeys as readonly string[]).includes(node.type))
+    if (!(legacyWorkflowNodeTypeKeys as readonly string[]).includes(node.type))
       return refused("unsupported_node");
     nodeById.set(node.nodeId, node);
     taskIdByNodeId.set(node.nodeId, taskId);
@@ -462,7 +464,7 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
   const identity = parseIdentity(inputCandidate.identity);
   if (identity === undefined) return refused("invalid_identity");
 
-  const parsedDefinition = workflowDefinitionSchema.safeParse(inputCandidate.definition);
+  const parsedDefinition = legacyWorkflowDefinitionSchema.safeParse(inputCandidate.definition);
   if (!parsedDefinition.success) return refused("invalid_definition");
   const definition = parsedDefinition.data;
 

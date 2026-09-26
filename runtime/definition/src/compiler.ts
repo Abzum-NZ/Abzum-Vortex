@@ -4801,22 +4801,6 @@ function compileApplication(
           personalOrSensitiveValuesAllowed: false,
         };
       }),
-      workflows: (body.workflows as JsonObject[]).map((workflow) =>
-        compileWorkflow(
-          workflow,
-          definitionKey,
-          resolution,
-          valueIndex,
-          new Map(
-            (body.actions as JsonObject[]).map((action) => [String(action.key), action] as const),
-          ),
-          new Map(
-            (body.workflows as JsonObject[]).map(
-              (candidate) => [String(candidate.key), candidate] as const,
-            ),
-          ),
-        ),
-      ),
       connectionBindings: (body.connection_bindings as JsonObject[]).map((binding) => {
         const requirement = binding.version as Parameters<typeof compatibleVersion>[0];
         const target = resolution.definition(String(binding.connection_type), "connection_type");

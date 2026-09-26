@@ -1,4 +1,4 @@
-import {
+﻿import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
   applicationDraftV2Schema,
   protectedReadModelKeys,
@@ -18,7 +18,6 @@ import {
   moduleFieldValueV2Schemas,
   sourceModuleFieldValueV2Schemas,
   parseExactDecimal,
-  workflowDefinitionSchema,
   jsonValueSchema,
   walkDefinitionContract,
   definitionSourceDocumentSchema,
@@ -28,7 +27,6 @@ import {
   platformIdSchema,
   namespacedKeySchema,
   translateDefinitionSchemaError,
-  workflowNodeOutputKeysByType,
   workflowNodeOutputsByType,
   canonicalWorkflowValueType,
   valueTypesCompatible,
@@ -2924,185 +2922,6 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
   return failures;
 }
 
-// Removal point (Phase 9): the workflow reachability checks in validateWorkflow are superseded by the
-// one flow validator (runtime/definition/src/flow-validation.ts, #985). Durable workflows keep their
-// node-and-edge shape until Phase 9 converts them to durable flows, so they stay until then.
-
-const outputsByNodeType: Readonly<Record<string, readonly string[]>> = workflowNodeOutputKeysByType;
-
-function validateWorkflow(output: Output, workflow: JsonObject): DefinitionRuleFailure[] {
-  const walkValues = createContractValueWalker([
-    { schema: workflowDefinitionSchema, value: workflow },
-  ]);
-  const failures: DefinitionRuleFailure[] = [];
-  const workflowFailure = (ruleCode: string, family: DefinitionRuleFailure["family"]) =>
-    failure(output, ruleCode, family, { kind: "workflow", key: String(workflow.key) });
-  const nodes = array(workflow.nodes);
-  const edges = array(workflow.edges);
-  const byId = new Map(nodes.map((node) => [String(node.nodeId), node]));
-  const starts = nodes.filter((node) => node.type === "start");
-  if (starts.length !== 1)
-    failures.push(workflowFailure("vortex.definition.workflow_single_start", "invalid_value"));
-  const edgeKeys = edges.map(
-    (edge) => `${edge.fromNodeId}\0${edge.toNodeId}\0${edge.outcome ?? ""}`,
-  );
-  if (new Set(edgeKeys).size !== edgeKeys.length)
-    failures.push(workflowFailure("vortex.definition.workflow_edges_unique", "duplicate_key"));
-  for (const edge of edges)
-    if (!byId.has(String(edge.fromNodeId)) || !byId.has(String(edge.toNodeId)))
-      failures.push(
-        workflowFailure("vortex.definition.workflow_edge_endpoints", "broken_reference"),
-      );
-  if (starts.length === 1) {
-    const reachable = new Set<string>();
-    const queue = [String(starts[0]!.nodeId)];
-    while (queue.length) {
-      const current = queue.shift()!;
-      if (reachable.has(current)) continue;
-      reachable.add(current);
-      edges
-        .filter((edge) => edge.fromNodeId === current)
-        .forEach((edge) => queue.push(String(edge.toNodeId)));
-    }
-    if (reachable.size !== nodes.length)
-      failures.push(workflowFailure("vortex.definition.workflow_reachable", "broken_reference"));
-  }
-  for (const node of nodes) {
-    const outgoing = edges.filter((edge) => edge.fromNodeId === node.nodeId);
-    if (node.type === "stop" && outgoing.length > 0)
-      failures.push(workflowFailure("vortex.definition.workflow_stop_terminal", "scope_conflict"));
-    let expected: string[] | undefined;
-    if (node.type === "condition") expected = ["matched", "not_matched"];
-    if (node.type === "decision_table")
-      expected = array(object(node.config).decisions).map((decision) => String(decision.output));
-    if (node.type === "bounded_loop") expected = ["record", "completed"];
-    if (node.type === "request_form")
-      expected = ["submitted", String(object(node.config).timeoutOutcome)];
-    if (expected) {
-      const actual = outgoing.map((edge) => String(edge.outcome));
-      if (
-        new Set(actual).size !== actual.length ||
-        actual.length !== expected.length ||
-        expected.some((outcome) => !actual.includes(outcome))
-      )
-        failures.push(
-          workflowFailure("vortex.definition.workflow_outcomes_complete", "broken_reference"),
-        );
-    }
-  }
-
-  const predecessors = new Map<string, Set<string>>(
-    nodes.map((node) => [String(node.nodeId), new Set()]),
-  );
-  edges.forEach((edge) => predecessors.get(String(edge.toNodeId))?.add(String(edge.fromNodeId)));
-  const allIds = new Set(nodes.map((node) => String(node.nodeId)));
-  const startId = starts.length === 1 ? String(starts[0]!.nodeId) : "";
-  const dominators = new Map<string, Set<string>>(
-    nodes.map((node) => [
-      String(node.nodeId),
-      String(node.nodeId) === startId ? new Set([startId]) : new Set(allIds),
-    ]),
-  );
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const node of nodes) {
-      const id = String(node.nodeId);
-      if (id === startId) continue;
-      const parents = [...(predecessors.get(id) ?? [])];
-      const intersection = parents.length
-        ? new Set(
-            [...allIds].filter((candidate) =>
-              parents.every((parent) => dominators.get(parent)?.has(candidate)),
-            ),
-          )
-        : new Set<string>();
-      intersection.add(id);
-      const current = dominators.get(id)!;
-      if (
-        current.size !== intersection.size ||
-        [...current].some((entry) => !intersection.has(entry))
-      ) {
-        dominators.set(id, intersection);
-        changed = true;
-      }
-    }
-  }
-  for (const consumer of nodes)
-    walkValues(consumer.config, (value) => {
-      if (value.source !== "node_output") return;
-      const producerId = String(value.nodeId);
-      const producer = byId.get(producerId);
-      const allowed = producer
-        ? producer.type === "request_form"
-          ? array(object(producer.config).outputs).map((entry) => String(entry.key))
-          : outputsByNodeType[String(producer.type)]
-        : undefined;
-      if (!producer || !allowed?.includes(String(value.outputKey)))
-        failures.push(
-          workflowFailure("vortex.definition.workflow_output_exists", "broken_reference"),
-        );
-      if (!dominators.get(String(consumer.nodeId))?.has(producerId))
-        failures.push(
-          workflowFailure("vortex.definition.workflow_output_dominates", "scope_conflict"),
-        );
-    });
-
-  const canTerminate = new Set(
-    nodes
-      .filter(
-        (node) =>
-          node.type === "stop" || node.type === "wait_until" || node.type === "request_form",
-      )
-      .map((node) => String(node.nodeId)),
-  );
-  changed = true;
-  while (changed) {
-    changed = false;
-    for (const edge of edges)
-      if (canTerminate.has(String(edge.toNodeId)) && !canTerminate.has(String(edge.fromNodeId))) {
-        canTerminate.add(String(edge.fromNodeId));
-        changed = true;
-      }
-  }
-  if (nodes.some((node) => !canTerminate.has(String(node.nodeId))))
-    failures.push(workflowFailure("vortex.definition.workflow_termination", "dependency_cycle"));
-
-  const visiting = new Set<string>();
-  const visited = new Set<string>();
-  const visitCycle = (nodeId: string, path: string[]) => {
-    if (visiting.has(nodeId)) {
-      const cycle = path.slice(path.indexOf(nodeId));
-      const cycleIds = new Set(cycle);
-      const boundedLoops = cycle.filter((id) => byId.get(id)?.type === "bounded_loop");
-      const loopEdges =
-        boundedLoops.length === 1
-          ? edges.filter((edge) => edge.fromNodeId === boundedLoops[0])
-          : [];
-      const bounded =
-        boundedLoops.length === 1 &&
-        loopEdges.some(
-          (edge) => edge.outcome === "record" && cycleIds.has(String(edge.toNodeId)),
-        ) &&
-        loopEdges.some(
-          (edge) => edge.outcome === "completed" && !cycleIds.has(String(edge.toNodeId)),
-        );
-      if (!bounded)
-        failures.push(
-          workflowFailure("vortex.definition.workflow_cycles_bounded", "dependency_cycle"),
-        );
-      return;
-    }
-    if (visited.has(nodeId)) return;
-    visiting.add(nodeId);
-    for (const edge of edges.filter((candidate) => candidate.fromNodeId === nodeId))
-      visitCycle(String(edge.toNodeId), [...path, nodeId]);
-    visiting.delete(nodeId);
-    visited.add(nodeId);
-  };
-  nodes.forEach((node) => visitCycle(String(node.nodeId), []));
-  return failures;
-}
 
 export function workflowValueCompatible(
   value: JsonObject,
@@ -4665,7 +4484,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       }
     }
     for (const workflow of workflows.values()) {
-      failures.push(...validateWorkflow(output, workflow));
       const workflowFailure = (ruleCode: string, family: DefinitionRuleFailure["family"]) =>
         failure(output, ruleCode, family, { kind: "workflow", key: String(workflow.key) });
       const workflowNodes = new Map(
@@ -4702,12 +4520,8 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         trigger.kind === "event" || trigger.kind === "button" || trigger.kind === "workflow"
           ? workflowTriggerRecordType(workflow)
           : undefined;
-      const sourceWorkflow =
-        request?.source.kind === "application"
-          ? (request.source.body as ApplicationSourceDocumentV2["body"]).workflows.find(
-              (candidate) => candidate.key === String(workflow.key),
-            )
-          : undefined;
+      const sourceWorkflow: { trigger?: { kind: string; record_type: string } } | undefined =
+        undefined;
       const sourceTrigger = sourceWorkflow?.trigger;
       let authoredEventRecordId: string | undefined;
       if (sourceTrigger?.kind === "event") {
