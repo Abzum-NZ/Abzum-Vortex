@@ -191,6 +191,9 @@ export function ApplicationPageView({
           .then((body: unknown) => (typeof body === "object" && body !== null ? (body as Record<string, unknown>) : undefined))
           .catch(() => undefined);
         // A page rendered from an older installation reloads instead of running a stale binding.
+        if (result?.kind === "reload" || result?.kind === "result")
+          // A selection made before the run may name records the run changed or removed.
+          setSelection({});
         if (result?.kind === "reload") return router.refresh();
         if (result?.kind === "result") {
           const descriptor = result.descriptor as { outcome?: string } | undefined;
