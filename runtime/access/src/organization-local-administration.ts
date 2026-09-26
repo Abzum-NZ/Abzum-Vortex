@@ -1,7 +1,8 @@
 import "server-only";
 
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
+  activityIdSchema,
   closeOrganizationAccountCommandSchema,
   closeOrganizationAccountResultSchema,
   createOrganizationInvitationForAdministrationCommandSchema,
@@ -23,6 +24,8 @@ import {
   revokeOrganizationInvitationForAdministrationResultSchema,
   suspendOrganizationAccountCommandSchema,
   suspendOrganizationAccountResultSchema,
+  updateOwnProfileCommandSchema,
+  updateOwnProfileResultSchema,
   type CloseOrganizationAccountCommand,
   type CloseOrganizationAccountResult,
   type CreateOrganizationInvitationForAdministrationCommand,
@@ -45,6 +48,8 @@ import {
   type RevokeOrganizationInvitationForAdministrationResult,
   type SuspendOrganizationAccountCommand,
   type SuspendOrganizationAccountResult,
+  type UpdateOwnProfileCommand,
+  type UpdateOwnProfileResult,
 } from "@vortex/contracts";
 import type { DatabaseRow } from "@vortex/db";
 import {
@@ -110,8 +115,19 @@ type InvitationChangeRow = DatabaseRow & {
   access_version: unknown;
 };
 
+type ProfileChangeRow = DatabaseRow & {
+  outcome: unknown;
+  operation: unknown;
+  organization_id: unknown;
+  organization_account_id: unknown;
+  account_summary: unknown;
+  correlation_id: unknown;
+  accepted_at: unknown;
+  access_version: unknown;
+};
+
 export type OrganizationLocalAdministrationDependencies = HumanOrganizationRequestDependencies &
-  Readonly<{ generateInvitationSecret?: () => string }>;
+  Readonly<{ generateInvitationSecret?: () => string; activityId?: () => string }>;
 
 const unavailable = (): Error => new Error("ORGANIZATION_LOCAL_ADMINISTRATION_UNAVAILABLE");
 
@@ -172,6 +188,7 @@ export const createOrganizationLocalAdministrationService = (
   const requests = createHumanOrganizationRequestService(dependencies);
   const generateInvitationSecret =
     dependencies.generateInvitationSecret ?? (() => randomBytes(32).toString("base64url"));
+  const newActivityId = dependencies.activityId ?? randomUUID;
 
   const accountChange = <Result>(
     row: AccountChangeRow,
@@ -525,6 +542,66 @@ export const createOrganizationLocalAdministrationService = (
           },
           closeOrganizationAccountResultSchema,
         );
+      });
+    },
+
+    async updateOwnProfile(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: UpdateOwnProfileCommand,
+    ): Promise<HumanOrganizationRequestResult<UpdateOwnProfileResult>> {
+      const command = updateOwnProfileCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+      let activityId: string;
+      try {
+        activityId = activityIdSchema.parse(newActivityId());
+      } catch {
+        return { kind: "temporarily_unavailable" };
+      }
+      return requests.runChange(session, selection, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<ProfileChangeRow>`
+            select outcome, operation, organization_id, organization_account_id,
+              account_summary, correlation_id, accepted_at, access_version
+            from vortex_access.update_own_profile(
+              ${command.data.organizationAccountId}::uuid,
+              ${command.data.expectedRevision}::bigint,
+              ${command.data.displayName}::text,
+              ${command.data.language ?? null}::text,
+              ${command.data.timeZone ?? null}::text,
+              ${activityId}::uuid
+            )
+          `,
+        );
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          typeof row.organization_account_id !== "string" ||
+          !sameUuid(row.organization_account_id, command.data.organizationAccountId) ||
+          revision(row.access_version) !== scope.accessVersion
+        )
+          throw unavailable();
+        const result = updateOwnProfileResultSchema.parse({
+          outcome: row.outcome,
+          operation: row.operation,
+          organizationId: row.organization_id,
+          organizationAccountId: row.organization_account_id,
+          correlationId: row.correlation_id,
+          acceptedAt: timestamp(row.accepted_at),
+          accessVersion: revision(row.access_version),
+          ...(row.outcome === "accepted" &&
+          row.account_summary !== null &&
+          row.account_summary !== undefined
+            ? { account: normalizeRevision(row.account_summary) }
+            : {}),
+        });
+        if (
+          result.outcome === "accepted" &&
+          (!sameUuid(result.account.organizationAccountId, command.data.organizationAccountId) ||
+            result.account.revision !== command.data.expectedRevision + 1)
+        )
+          throw unavailable();
+        return result;
       });
     },
 

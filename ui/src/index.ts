@@ -250,6 +250,7 @@ export {
   NUMBER_INPUT_BLOCK_RELEASE,
   RICH_TEXT_INPUT_BLOCK_RELEASE,
   TABS_BLOCK_RELEASE,
+  TABS_BLOCK_RELEASE_2_0_0,
   TEXT_INPUT_BLOCK_RELEASE,
   VALIDATION_MESSAGE_BLOCK_RELEASE,
 } from "./controls";
@@ -377,3 +378,54 @@ export {
   type ThemeMode,
   type ThemeRootProps,
 } from "./theme";
+
+// Browser Flow Runtime (#1013)
+export {
+  FLOW_INTENT_KINDS,
+  createFlowInvokeClient,
+  createFlowRuntime,
+  driveServerFlow,
+  flowRunsOnlyInBrowser,
+  isFlowIntent,
+  parseServerFlowResponse,
+  performPresentationIntent,
+  readConfirmIntent,
+  readFormIntent,
+  readMessageIntent,
+  runBrowserFlow,
+  useFlowIntentHost,
+  type BrowserFlowRequest,
+  type BrowserFlowResult,
+  type FlowAnswer,
+  type FlowApplicationAddress,
+  type FlowConfirmIntent,
+  type FlowDispatchResult,
+  type FlowFormAnswer,
+  type FlowFormIntent,
+  type FlowInstallationContext,
+  type FlowIntent,
+  type FlowIntentHost,
+  type FlowIntentHostOptions,
+  type FlowIntentKind,
+  type FlowInvokeClient,
+  type FlowInvokeClientOptions,
+  type FlowMessageIntent,
+  type FlowRuntime,
+  type FlowRuntimeOptions,
+  type ServerDrivenResult,
+  type ServerFlowResponse,
+} from "./flow-runtime";
+
+// Link Navigation and the Navigate task (#1013)
+export {
+  activateLinkTarget,
+  externalLinkActivation,
+  linkTargetForNavigateIntent,
+  navigateIntentForPage,
+  performNavigateTask,
+  type LinkNavigationEnvironment,
+  type LinkOpenBehavior,
+  type LinkTarget,
+  type NavigateTaskIntent,
+  type UnsavedWorkGuard,
+} from "./launcher";

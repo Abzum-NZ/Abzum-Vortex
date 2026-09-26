@@ -157,6 +157,11 @@ export type ControlSettings = Readonly<{
   number: (key: string) => number | undefined;
   choice: <Option extends string>(key: string, fallback: Option) => Option;
   options: (key: string) => readonly ChoiceOption[];
+  /**
+   * The grouped property records of a list setting, in declared order. A repeatable component reads
+   * its item identities and labels here, so it never reaches into the raw setting map itself.
+   */
+  groups: (key: string) => readonly Readonly<Record<string, BlockPropertyValueV2Contract>>[];
   /** The resolved record-type identifiers declared by a list of record_type_reference settings. */
   recordTypeIds: (key: string) => readonly string[];
   /** The required authored field key, validated as a builder key. */
@@ -203,6 +208,20 @@ export function readControlSettings(
           };
         }),
         { ...location, propertyPath: [key] },
+      );
+    },
+    groups: (key) => {
+      const value = read(key, "list");
+      if (value?.kind !== "list") return Object.freeze([]);
+      return Object.freeze(
+        value.items.map((item) => {
+          if (item.kind !== "group")
+            return fail(`Setting '${key}' items must be grouped records`, {
+              ...location,
+              propertyPath: [key],
+            });
+          return item.properties;
+        }),
       );
     },
     fieldKey: () => {
