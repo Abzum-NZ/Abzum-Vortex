@@ -12,6 +12,7 @@ import {
 } from "@vortex/ui";
 import { signOut } from "../auth/actions";
 import { AuthShell } from "../auth/_components/auth-shell";
+import { SubmitButton } from "../auth/_components/submit-button";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { loadOrganizationLauncher } from "../_lib/organization-context";
 
@@ -129,7 +130,7 @@ export default async function SignedInPage() {
         </div>
       ) : null}
       <form action={signOut} className="auth-form">
-        <button type="submit">Sign out</button>
+        <SubmitButton pendingLabel="Signing out…">Sign out</SubmitButton>
       </form>
     </AuthShell>
   );
