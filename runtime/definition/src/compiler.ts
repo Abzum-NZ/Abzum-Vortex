@@ -744,6 +744,24 @@ function permissionFieldPolicyTargets(
   ];
 }
 
+/**
+ * An interface operation that changes data or starts background work targets an application flow
+ * entry point by its source alias, which compiles to that flow's permanent identity (#1097).
+ */
+function isInterfaceOperationFlowTargetPath(source: JsonObject, sourcePath: Path): boolean {
+  return (
+    source.kind === "application" &&
+    sourcePath.length === 7 &&
+    sourcePath[0] === "body" &&
+    sourcePath[1] === "interfaces" &&
+    typeof sourcePath[2] === "number" &&
+    sourcePath[3] === "operations" &&
+    typeof sourcePath[4] === "number" &&
+    sourcePath[5] === "target" &&
+    sourcePath[6] === "flow"
+  );
+}
+
 function explicitSourceTargets(
   source: JsonObject,
   canonical: unknown,
@@ -751,6 +769,8 @@ function explicitSourceTargets(
   positions: SourceContractPositions,
   resolution: Resolution,
 ): Path[] | undefined {
+  if (isInterfaceOperationFlowTargetPath(source, sourcePath))
+    return [["content", ...sourcePath.slice(1, -1), "flowId"]];
   const fieldPolicyTargets = permissionFieldPolicyTargets(
     source,
     canonical,
@@ -1146,13 +1166,20 @@ function explicitSourceTargets(
             [...fieldBase, "dependencyFieldIds", dependencyIndex],
           ];
       }
+      // A numeric operand may itself be a numeric operation over nested operands; the nesting keeps
+      // its shape and only the operation and field keys are renamed.
+      let leafIndex = 9;
+      while (sourcePath[leafIndex] === "operands" && typeof sourcePath[leafIndex + 1] === "number")
+        leafIndex += 2;
+      const leaf = sourcePath[leafIndex];
       if (
         sourcePath[7] === "operands" &&
         typeof sourcePath[8] === "number" &&
-        typeof sourcePath[9] === "string"
+        typeof leaf === "string"
       ) {
-        const operandBase: Path = [...expressionBase, "operands", sourcePath[8]];
-        if (sourcePath[9] === "field") {
+        const operandBase: Path = [...expressionBase, ...sourcePath.slice(7, leafIndex)];
+        if (leaf === "numeric_operation") return [[...operandBase, "operation"]];
+        if (leaf === "field") {
           const expression = asObject(
             valueAtPath(source, [
               "body",
@@ -1164,16 +1191,24 @@ function explicitSourceTargets(
               "expression",
             ]),
           );
-          const dependencyIndex =
-            (expression.operands as JsonObject[])
-              .slice(0, sourcePath[8] + 1)
-              .filter((operand) => operand.source === "field").length - 1;
+          // Field dependencies are collected depth first, in operand order, as the compiler does.
+          const fieldOperandPaths: string[] = [];
+          const collect = (operands: JsonObject[], prefix: Path) =>
+            operands.forEach((operand, index) => {
+              if (operand.source === "field") fieldOperandPaths.push(pathKey([...prefix, index]));
+              else if (operand.source === "numeric")
+                collect(operand.operands as JsonObject[], [...prefix, index, "operands"]);
+            });
+          collect(expression.operands as JsonObject[], ["operands"]);
+          const dependencyIndex = fieldOperandPaths.indexOf(
+            pathKey(sourcePath.slice(7, leafIndex)),
+          );
           return [
             [...operandBase, "fieldId"],
             [...fieldBase, "dependencyFieldIds", dependencyIndex],
           ];
         }
-        return [[...operandBase, sourcePath[9]]];
+        return [[...operandBase, leaf]];
       }
       if (sourcePath[7] === "amount" && typeof sourcePath[8] === "string") {
         if (sourcePath[8] === "field")
@@ -1276,7 +1311,7 @@ const moduleSourceTransformPatterns = [
   /^body\/record_types\/#\/fields\/#\/settings\/columns\/#\/settings\/(?:currency_mode|display_time_zone)$/,
   /^body\/record_types\/#\/fields\/#\/settings\/display_time_zone$/,
   /^body\/record_types\/#\/fields\/#\/settings\/expression\/(?:operation|numeric_operation|amount_field|percentage_field|fields\/#|date_field|due_field|status_field)$/,
-  /^body\/record_types\/#\/fields\/#\/settings\/expression\/operands\/#\/(?:field|source|value)(?:\/.*)?$/,
+  /^body\/record_types\/#\/fields\/#\/settings\/expression\/operands\/#\/(?:operands\/#\/)*(?:field|source|value|numeric_operation)(?:\/.*)?$/,
   /^body\/record_types\/#\/fields\/#\/settings\/expression\/amount\/(?:field|source|value)(?:\/.*)?$/,
   /^body\/(?:permissions|events|rules|extension_points)\/#\/record_type$/,
   /^body\/events\/#\/carries\/#$/,
@@ -1469,6 +1504,34 @@ function isSystemCanonicalPath(path: Path): boolean {
   return leaf !== "rootId" && leaf !== "key";
 }
 
+/**
+ * A calculation field that does not author its evaluation compiles to a fixed default (#1132):
+ * stored, or read-time for a deadline or a calculation over a read-time field.
+ */
+function isCalculationEvaluationDefaultPath(source: JsonObject, path: Path): boolean {
+  if (
+    source.kind !== "module" ||
+    path.length !== 7 ||
+    path[0] !== "content" ||
+    path[1] !== "recordTypes" ||
+    typeof path[2] !== "number" ||
+    path[3] !== "fields" ||
+    typeof path[4] !== "number" ||
+    path[5] !== "settings" ||
+    path[6] !== "evaluation"
+  )
+    return false;
+  const field = valueAtPath(source, ["body", "record_types", path[2], "fields", path[4]]);
+  if (field === null || typeof field !== "object" || Array.isArray(field)) return false;
+  const { type, settings } = field as JsonObject;
+  return (
+    type === "calculation" &&
+    settings !== null &&
+    typeof settings === "object" &&
+    (settings as JsonObject).evaluation === undefined
+  );
+}
+
 function isFixedWorkflowDefaultPath(path: Path): boolean {
   const joined = path.join(".");
   return (
@@ -1590,8 +1653,10 @@ function provenanceFor(
     const isPublicationMetadata =
       canonicalPath.at(-1) === "publishedRevision" ||
       canonicalPath.at(-1) === "contractFingerprint";
-    const isFixedWorkflowDefault = isFixedWorkflowDefaultPath(canonicalPath);
-    if (isSystem || isPublicationMetadata || isFixedWorkflowDefault) {
+    const isFixedDefault =
+      isFixedWorkflowDefaultPath(canonicalPath) ||
+      isCalculationEvaluationDefaultPath(sourceObject, canonicalPath);
+    if (isSystem || isPublicationMetadata || isFixedDefault) {
       entries.push({
         canonicalPath,
         origin: isSystem || isPublicationMetadata ? "system_metadata" : "fixed_default",
@@ -4982,6 +5047,7 @@ function applicationProvenanceV2(
         sourceResolvesIdentity(sourcePath, positions) ||
         recordScopeSourceResolvesIdentity(sourcePath) ||
         fieldPolicySourceResolvesIdentity(sourcePath) ||
+        isInterfaceOperationFlowTargetPath(sourceObject, sourcePath) ||
         pageReference ||
         compositionReference ||
         (v2SpecialRoot(sourcePath) &&
