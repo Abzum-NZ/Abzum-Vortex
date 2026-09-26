@@ -887,7 +887,8 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
       for (const definition of array(body.interfaces))
         for (const operation of array(definition.operations)) {
           const target = object(operation.target);
-          if (target.kind === "query" && !queries.has(String(target.key))) valid = false;
+          // A read names a query a bound Module exposes; only the compiled Module releases hold
+          // it, so the compiled application validation checks that reference.
           if (target.kind === "flow" && !flows.has(String(target.flow))) valid = false;
         }
       for (const address of array(body.public_addresses))
@@ -3951,7 +3952,14 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     const allInterfaceOperationKeys = array(content.interfaces).flatMap((definition) =>
       array(definition.operations).map((operation) => String(operation.key)),
     );
-    const queriesByKey = new Map([...queries.values()].map((query) => [String(query.key), query]));
+    // An interface read names a bound Module's query by its key; a key two bound Modules share
+    // is ambiguous and resolves to no query.
+    const queriesByKey = new Map<string, JsonObject | undefined>();
+    for (const query of moduleQueries.values())
+      queriesByKey.set(
+        String(query.key),
+        queriesByKey.has(String(query.key)) ? undefined : query,
+      );
     const interfaceActionInputType = (type: unknown, moduleV2 = false): string | undefined => {
       const value = String(type);
       if (moduleV2 && ["decimal_number", "money"].includes(value)) return undefined;
