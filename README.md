@@ -70,7 +70,7 @@ The development server binds to `127.0.0.1`. Authentication and protected data o
 
 ### Local development setup
 
-A fresh local database has no organisation, so a signed-in developer sees "No organisations available". The development-only setup command provisions one organisation, publishes and installs the shipped applications and grants one nominated first owner their operating role. It runs only on your machine against the Supabase CLI database on loopback: it refuses `NODE_ENV=production`, any other database host or port, and a run without the explicit `--local-development` flag.
+A fresh local database has no organisation, so a signed-in developer sees "No organisations available". The development-only setup command provisions one organisation, publishes and installs the shipped administration applications and gives one nominated first owner their access. It runs only on your machine against the Supabase CLI database on loopback: it refuses `NODE_ENV=production`, any other database host or port, and a run without the explicit `--local-development` flag.
 
 1. Start the local stack and build a fresh database (this deletes local data, including local sign-ups):
 
@@ -80,28 +80,32 @@ A fresh local database has no organisation, so a signed-in developer sees "No or
    pnpm db:reset
    ```
 
-2. Start the web application with your usual local environment (the same variables `pnpm dev` uses) and sign up as the person who should own the organisation at `http://127.0.0.1:3000`. Confirm the sign-up email in Mailpit at `http://127.0.0.1:54324`.
+2. Start the web application with your usual local environment (the same variables `pnpm dev` uses) and sign up at `http://127.0.0.1:3000` as the person who should own the organisation. Confirm the sign-up email in Mailpit at `http://127.0.0.1:54324`.
 
-3. Nominate that account and run the setup with the same environment (in particular the same `VORTEX_IDENTITY_AUTHORITY_ID` as the web application; the runtime database variables default to the local Supabase values):
+3. Nominate that account and run the setup in a shell with the same `VORTEX_IDENTITY_AUTHORITY_ID` as the web application (the runtime database variables default to the local Supabase values):
 
    ```sh
    pnpm setup:local -- --local-development --first-owner-email you@example.com
    ```
 
-   `--first-owner-identity-id <uuid>` nominates by Supabase user id instead of email. Exactly one account is accepted, and it comes only from this command line; nothing is read from a browser.
+   `--first-owner-identity-id <uuid>` nominates by Supabase user id instead of email. Exactly one account is accepted, and it comes only from this command line; nothing is read from a browser. The account must already exist locally (step 2).
 
-4. Sign in at `http://127.0.0.1:3000` with the nominated account and open the organisation "Abzum Development".
+4. Sign in at `http://127.0.0.1:3000` with the nominated account and select the organisation "Abzum Development". It has three installed applications: IAM, Organisation Administration and Tenant Administration.
 
 What the setup does, in order, through the protected entry points only (no table is written directly):
 
 | Step | Result |
 | --- | --- |
-| Provision | The tenant and organisation "Abzum Development" with the nominated account as its steward (`provision_tenant` with two fixed development UUIDs, recorded as the provisioning receipt). |
-| Publish | The shipped module and application releases from `modules/` are published into that organisation through the Definition store and publication service. |
-| Install | IAM, Organisation Administration, Tenant Administration, CRM and Service Desk are prepared and activated through the App installation coordinator. |
-| Grant | The App first-owner composition calls the Access-owned initial operating-role grant once: the nominated account receives the IAM administrator role (`iam_administrator`) as a standing assignment. The owner then grants further roles, such as CRM access, through the IAM application. |
+| Provision | The tenant and organisation "Abzum Development" with the nominated account as its steward (`provision_tenant` with a fixed development duplicate key, recorded as the provisioning receipt). |
+| Publish | The IAM, Organisation Administration and Tenant Administration modules and applications from `modules/` are published as 1.0.0 through the Definition store and publication service. |
+| Installer access | The steward, through the ordinary Access administration operations, creates the custom role "Application installer" (`platform.organization.applications.manage` only) and assigns it to themselves. A provisioned steward holds no installation permission. |
+| Install | Organisation Administration and Tenant Administration, then IAM, are prepared and activated through the App installation coordinator, with an explicit initial record lifecycle policy (delete, 30-day recovery window) for each record type. |
+| Grant | The App first-owner composition installs IAM and calls the Access-owned initial operating-role grant once with the provisioning receipt: the nominated account receives the IAM reviewer role (`iam_reviewer`) as a standing assignment. |
+| Administration roles | The steward accepts and assigns to themselves `iam_administrator`, `organisation_administrator` and `tenant_administrator` through the ordinary Access administration operations, so the owner can administer the organisation from IAM. |
 
-The configured manifest is `apps/web/scripts/development-setup/manifest.ts`. Management status or a first sign-in never implies application permission: the account can use only what the grant and later IAM assignments give it. The command is not a general grant tool. Extra beneficiaries, later access expansion, releases outside the manifest and any browser input are refused. Running it again is safe: provisioning replays by its fixed key, published releases are reused, installation reports "unchanged", and the operating-role grant replays its original result; a different nominated account is refused once the grant exists. `pnpm db:reset` starts over.
+The configured manifest is `apps/web/scripts/development-setup/manifest.ts`. Management status or a first sign-in never implies application permission: the account can use only what these roles and later IAM assignments give it. The command is not a general grant tool: further access is granted in the IAM application. CRM, Service Desk and Operations are shipped but not installed: CRM and Service Desk pin 2.0.0 module releases that a fresh organisation does not publish yet, and Operations does not publish from a fresh organisation yet.
+
+An interrupted run resumes: provisioning replays by its fixed key and the steps recorded in `supabase/.temp/development-setup-state.json` are skipped. Once every step has completed, the command is disabled: running it again only calls the initial operating-role grant with the original receipt and the same manifest, which replays the stored result. A different nominated account is refused. `pnpm db:reset` starts over.
 
 Existing developer utilities (`pnpm verify`, `pnpm fixtures`, `pnpm db:verify`) remain in the workspace for local use. They are not fleet completion requirements, and the current development workflow does not run them or treat their output as acceptance.
 
