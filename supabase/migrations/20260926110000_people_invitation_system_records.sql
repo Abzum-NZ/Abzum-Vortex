@@ -8,9 +8,12 @@
 -- ordinary query path reads them exactly as the #1030 organisation
 -- runtime-settings projection is read.
 --
--- Row visibility stays inside each registered reader: the person projection
--- applies the fixed accounts.read decision and the invitation projection applies
--- the fixed invitations.read decision. The readers are registered in the closed
+-- Row visibility stays inside each registered reader and follows today's rules.
+-- The person projection shows every account to a viewer the fixed accounts.read
+-- decision admits, and otherwise only the active accounts, with their display
+-- name and state, to a live member of the organisation, exactly as the
+-- organisation-account choice reader. The invitation projection applies the
+-- fixed invitations.read decision. The readers are registered in the closed
 -- vortex_record.protected_read_model_views registry, so storage provisioning can
 -- only ever catalogue them under their exact declared key. The raw invitation
 -- secret and its stored fingerprint are never projected.
@@ -23,7 +26,8 @@ begin;
 -- ============================================================================
 
 create or replace function vortex_identity.list_organization_accounts_projection_internal(
-  p_organization_id uuid
+  p_organization_id uuid,
+  p_active_members_only boolean
 )
 returns table (
   organization_account_id uuid,
@@ -38,21 +42,44 @@ stable
 security definer
 set search_path = ''
 as $function$
+  -- Two fixed visibility modes, chosen only by the Access-owned reader. The
+  -- administration mode returns every account of the organisation. The member
+  -- mode applies today's account-choice rule: only active accounts whose
+  -- identity, organisation and tenant are active, and only the display name and
+  -- state, exactly the facts any active member may already list.
   select account.organization_account_id, account.display_name, account.state,
-    account.language, account.time_zone, account.revision
+    case when p_active_members_only then null else account.language end,
+    case when p_active_members_only then null else account.time_zone end,
+    account.revision
   from vortex_identity.organization_accounts as account
+  join vortex_identity.identity_projections as projection
+    on projection.identity_id = account.identity_id
+  join vortex_identity.organizations as organization
+    on organization.organization_id = account.organization_id
+  join vortex_identity.tenants as tenant
+    on tenant.tenant_id = organization.tenant_id
   where account.organization_id = p_organization_id
     and p_organization_id is not null
     and p_organization_id <> '00000000-0000-0000-0000-000000000000'::uuid
+    and p_active_members_only is not null
+    and (
+      not p_active_members_only
+      or (
+        account.state = 'active'
+        and projection.state = 'active'
+        and organization.state = 'active'
+        and tenant.state = 'active'
+      )
+    )
   order by account.organization_account_id
 $function$;
 
-revoke all on function vortex_identity.list_organization_accounts_projection_internal(uuid)
+revoke all on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner;
 
-comment on function vortex_identity.list_organization_accounts_projection_internal(uuid) is
-  'Identity-owned set-returning safe organisation-account projection bounded to the given organisation: identity, originating invitation and state-change evidence are never exposed, and the already-decided request scope is the only visibility.';
+comment on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean) is
+  'Identity-owned set-returning safe organisation-account projection bounded to the given organisation: every account in administration mode, or only active accounts with their display name and state in member mode; identity, originating invitation and state-change evidence are never exposed, and the already-decided request scope is the only visibility.';
 
 create or replace function vortex_identity.list_organization_invitations_projection_internal(
   p_organization_id uuid
@@ -94,7 +121,7 @@ comment on function vortex_identity.list_organization_invitations_projection_int
 
 -- ============================================================================
 -- Access-registered projection readers. One reader per protected read-model
--- key, applying that read model's own fixed decision and returning the
+-- key, applying that read model's own visibility and returning the
 -- organisation, the projected row identity, the projected revision and the
 -- projected safe attribute values for the current viewer.
 -- ============================================================================
@@ -116,27 +143,45 @@ set search_path = ''
 as $function$
 declare
   scope_row record;
+  context_value jsonb;
+  visible_organization_id uuid;
+  active_members_only boolean;
 begin
-  -- The projection keeps today's row visibility inside itself: the same fixed
-  -- accounts.read decision the bespoke administration reader applies decides
-  -- whether the viewer sees any account at all, and the caller's current
-  -- organisation is never an input. A viewer the decision refuses sees no rows,
-  -- exactly as a missing or foreign record, so the record adapters return their
-  -- identical refusal and a list page is empty rather than failing. The record
-  -- identity is the organisation account, the revision is the account's own
-  -- revision and the attribute names are the lowercase field keys a projection
-  -- record type declares. The raw identity, invitation link and state-change
-  -- evidence stay in the protected storage and are never projected.
+  -- The projection keeps today's row visibility inside itself, and the caller's
+  -- current organisation is never an input. A viewer the fixed accounts.read
+  -- decision admits sees every account of the organisation, exactly as the
+  -- bespoke administration reader. Any other viewer whose human request context
+  -- is still live sees only the active accounts of that organisation with their
+  -- display name and state, exactly as the organisation-account choice reader.
+  -- A viewer neither rule admits sees no rows, exactly as a missing or foreign
+  -- record, so the record adapters return their identical refusal and a list
+  -- page is empty rather than failing. The record identity is the organisation
+  -- account, the revision is the account's own revision and the attribute
+  -- names are the lowercase field keys a projection record type declares. The
+  -- raw identity, invitation link and state-change evidence stay in the
+  -- protected storage and are never projected.
   begin
     select authorized.* into strict scope_row
     from vortex_access.organization_accounts_administration_scope() as authorized;
+    visible_organization_id := scope_row.organization_id;
+    active_members_only := false;
   exception
     when insufficient_privilege then
-      return;
+      visible_organization_id := null;
   end;
+  if visible_organization_id is null then
+    begin
+      context_value := vortex_access.validated_human_request_context();
+    exception
+      when insufficient_privilege then
+        return;
+    end;
+    visible_organization_id := (context_value ->> 'organizationId')::uuid;
+    active_members_only := true;
+  end if;
   return query
   select
-    scope_row.organization_id,
+    visible_organization_id,
     projected.organization_account_id,
     projected.revision,
     pg_catalog.jsonb_build_object(
@@ -146,7 +191,7 @@ begin
       'time_zone', projected.time_zone
     )
   from vortex_identity.list_organization_accounts_projection_internal(
-    scope_row.organization_id
+    visible_organization_id, active_members_only
   ) as projected
   where p_record_id is null or p_record_id = projected.organization_account_id;
 end
@@ -161,7 +206,7 @@ grant execute on function vortex_access.list_organization_accounts_projection(
 ) to vortex_record_owner, vortex_record_adapter;
 
 comment on function vortex_access.list_organization_accounts_projection(uuid, integer) is
-  'Registered organisation-account projection: returns every account the current viewer may read under the fixed accounts.read decision, with the organisation, the account identity, the account revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer.';
+  'Registered organisation-account projection: returns every account of the organisation to a viewer the fixed accounts.read decision admits, otherwise only the active accounts with their display name and state to a live human member, with the organisation, the account identity, the account revision and the safe projected attribute values keyed by lowercase field key, or no row when neither rule admits the viewer.';
 
 create or replace function vortex_access.list_organization_invitations_projection(
   p_record_id uuid,
@@ -228,12 +273,18 @@ comment on function vortex_access.list_organization_invitations_projection(uuid,
 -- ============================================================================
 -- Register the two readers under their exact closed keys, so a projection
 -- record type can only ever be catalogued against the reader registered here.
+-- The registry is owned by vortex_record_owner, whose policy is the only write
+-- path, so the rows are inserted as that role.
 -- ============================================================================
+
+set local role vortex_record_owner;
 
 insert into vortex_record.protected_read_model_views (
   protected_read_model_key, reader_schema, reader_function
 ) values
   ('organization_accounts', 'vortex_access', 'list_organization_accounts_projection'),
   ('organization_invitations', 'vortex_access', 'list_organization_invitations_projection');
+
+reset role;
 
 commit;

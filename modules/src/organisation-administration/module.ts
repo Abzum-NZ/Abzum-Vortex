@@ -10,6 +10,10 @@ const privacyAllFields = [...privacyEditableFields, "state", "received_at", "clo
 // The person and invitation system record types are read-only projections of
 // protected Identity facts. They declare only safe, projected fields; their
 // changes go through registered protected operations, never through the record.
+// Row visibility stays inside each registered reader: people need the fixed
+// accounts.read decision to see every account, and otherwise a live member sees
+// only active accounts with their display name and state; invitations need the
+// fixed invitations.read decision.
 const personAllFields = [
   "organization_id",
   "revision",
