@@ -106,6 +106,20 @@
         "permission": "platform.organization.permissions.read"
       },
       {
+        "id": "nav_iam_profile_heading",
+        "type": "heading",
+        "label": "Your profile",
+        "children": [
+          {
+            "id": "nav_iam_profile",
+            "type": "page",
+            "label": "My profile",
+            "page": "iam_profile",
+            "permission": "application.iam.open"
+          }
+        ]
+      },
+      {
         "id": "nav_iam_people_heading",
         "type": "heading",
         "label": "People",
@@ -248,6 +262,310 @@
     "platform_block_dependencies": [],
     "shells": [],
     "pages": [
+      {
+        "id": "page_iam_profile",
+        "key": "iam_profile",
+        "name": "My profile",
+        "type": "dashboard",
+        "permission": "application.iam.open",
+        "states": [
+          "normal",
+          "loading",
+          "validation",
+          "refused",
+          "conflict",
+          "failure",
+          "recovery"
+        ],
+        "composition": {
+          "shell_kind": "default",
+          "main": {
+            "placements": {
+              "iam_profile_heading": {
+                "block": {
+                  "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                  "release_version": "1.0.0"
+                },
+                "settings": {
+                  "title": {
+                    "kind": "text",
+                    "value": "My profile"
+                  },
+                  "text": {
+                    "kind": "text",
+                    "value": "Change your own display name, language and time zone. Changing another person's profile needs the manage-accounts permission. Each change runs under your own authority in protected Access and is checked against the revision you read."
+                  }
+                },
+                "theme_overrides": {},
+                "responsive": {
+                  "desktop": {
+                    "visible": true,
+                    "width": {
+                      "kind": "fill"
+                    },
+                    "height": {
+                      "kind": "content"
+                    }
+                  }
+                },
+                "slots": {}
+              },
+              "iam_profile_form": {
+                "block": {
+                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                  "release_version": "1.0.0"
+                },
+                "settings": {
+                  "title": {
+                    "kind": "text",
+                    "value": "Update profile"
+                  }
+                },
+                "theme_overrides": {},
+                "responsive": {
+                  "desktop": {
+                    "visible": true,
+                    "width": {
+                      "kind": "fill"
+                    },
+                    "height": {
+                      "kind": "content"
+                    }
+                  }
+                },
+                "slots": {
+                  "content": {
+                    "placements": {
+                      "input_update_own_profile_organization_account_id": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "organization_account_id"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Person account id"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_update_own_profile_expected_revision": {
+                        "block": {
+                          "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "expected_revision"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Expected revision"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          },
+                          "integer": {
+                            "kind": "boolean",
+                            "value": true
+                          },
+                          "min_value": {
+                            "kind": "number",
+                            "value": 1
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_update_own_profile_display_name": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "display_name"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Display name"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_update_own_profile_language": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "language"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Language"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": false
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_update_own_profile_time_zone": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "time_zone"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Time zone"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": false
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "button_update_own_profile": {
+                        "block": {
+                          "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "label": {
+                            "kind": "text",
+                            "value": "Update profile"
+                          },
+                          "action_kind": {
+                            "kind": "choice",
+                            "value": "action"
+                          },
+                          "variant": {
+                            "kind": "choice",
+                            "value": "primary"
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      }
+                    },
+                    "order": {
+                      "desktop": [
+                        "input_update_own_profile_organization_account_id",
+                        "input_update_own_profile_expected_revision",
+                        "input_update_own_profile_display_name",
+                        "input_update_own_profile_language",
+                        "input_update_own_profile_time_zone",
+                        "button_update_own_profile"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "order": {
+              "desktop": [
+                "iam_profile_heading",
+                "iam_profile_form"
+              ]
+            }
+          }
+        }
+      },
       {
         "id": "page_iam_overview",
         "key": "iam_overview",
@@ -4022,6 +4340,69 @@
     "flows": [
       {
         "contractVersion": "1.0.0",
+        "id": "flow_update_own_profile",
+        "key": "update_own_profile",
+        "labels": {
+          "name": "Update profile"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "organization_account_id": {
+            "type": "text",
+            "required": true
+          },
+          "expected_revision": {
+            "type": "whole_number",
+            "required": true
+          },
+          "display_name": {
+            "type": "text",
+            "required": true
+          },
+          "language": {
+            "type": "text",
+            "required": false
+          },
+          "time_zone": {
+            "type": "text",
+            "required": false
+          }
+        },
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.update_own_profile"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        }
+      },
+      {
+        "contractVersion": "1.0.0",
         "id": "flow_revise_role_metadata",
         "key": "revise_role_metadata",
         "labels": {
@@ -4763,6 +5144,35 @@
       }
     ],
     "flow_bindings": [
+      {
+        "id": "binding_update_own_profile",
+        "control": "button_update_own_profile",
+        "event_id": "event_iam_administration_action",
+        "event": "action",
+        "flow": "flow_update_own_profile",
+        "inputs": {
+          "organization_account_id": {
+            "kind": "caller",
+            "name": "organization_account_id"
+          },
+          "expected_revision": {
+            "kind": "caller",
+            "name": "expected_revision"
+          },
+          "display_name": {
+            "kind": "caller",
+            "name": "display_name"
+          },
+          "language": {
+            "kind": "caller",
+            "name": "language"
+          },
+          "time_zone": {
+            "kind": "caller",
+            "name": "time_zone"
+          }
+        }
+      },
       {
         "id": "binding_revise_role_metadata",
         "control": "button_revise_role_metadata",
