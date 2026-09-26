@@ -1,0 +1,79 @@
+/*
+ * shadcn base-nova style, scoped to [data-vortex-style="nova"] on the root element.
+ *
+ * The component source in ui/src/components carries the style's class names. This file holds the
+ * style's base layer and the neutral shadcn variable defaults it needs to render. The Vortex theme
+ * bridge still sets only its own --vortex-* variables, so these defaults are what the components
+ * paint until the resolved theme is mapped onto the shadcn variables.
+ */
+[data-vortex-style="nova"] {
+  color-scheme: light dark;
+  --radius: 0.625rem;
+  --background: light-dark(oklch(1 0 0), oklch(0.145 0 0));
+  --foreground: light-dark(oklch(0.145 0 0), oklch(0.985 0 0));
+  --card: light-dark(oklch(1 0 0), oklch(0.205 0 0));
+  --card-foreground: light-dark(oklch(0.145 0 0), oklch(0.985 0 0));
+  --popover: light-dark(oklch(1 0 0), oklch(0.205 0 0));
+  --popover-foreground: light-dark(oklch(0.145 0 0), oklch(0.985 0 0));
+  --primary: light-dark(oklch(0.205 0 0), oklch(0.922 0 0));
+  --primary-foreground: light-dark(oklch(0.985 0 0), oklch(0.205 0 0));
+  --secondary: light-dark(oklch(0.97 0 0), oklch(0.269 0 0));
+  --secondary-foreground: light-dark(oklch(0.205 0 0), oklch(0.985 0 0));
+  --muted: light-dark(oklch(0.97 0 0), oklch(0.269 0 0));
+  --muted-foreground: light-dark(oklch(0.556 0 0), oklch(0.708 0 0));
+  --accent: light-dark(oklch(0.97 0 0), oklch(0.269 0 0));
+  --accent-foreground: light-dark(oklch(0.205 0 0), oklch(0.985 0 0));
+  --destructive: light-dark(oklch(0.577 0.245 27.325), oklch(0.704 0.191 22.216));
+  --border: light-dark(oklch(0.922 0 0), oklch(1 0 0 / 10%));
+  --input: light-dark(oklch(0.922 0 0), oklch(1 0 0 / 15%));
+  --ring: light-dark(oklch(0.708 0 0), oklch(0.556 0 0));
+  --chart-1: light-dark(oklch(0.809 0.105 251.813), oklch(0.809 0.105 251.813));
+  --chart-2: light-dark(oklch(0.623 0.214 259.815), oklch(0.623 0.214 259.815));
+  --chart-3: light-dark(oklch(0.546 0.245 262.881), oklch(0.546 0.245 262.881));
+  --chart-4: light-dark(oklch(0.488 0.243 264.376), oklch(0.488 0.243 264.376));
+  --chart-5: light-dark(oklch(0.424 0.199 265.638), oklch(0.424 0.199 265.638));
+  --sidebar: light-dark(oklch(0.985 0 0), oklch(0.205 0 0));
+  --sidebar-foreground: light-dark(oklch(0.145 0 0), oklch(0.985 0 0));
+  --sidebar-primary: light-dark(oklch(0.205 0 0), oklch(0.488 0.243 264.376));
+  --sidebar-primary-foreground: light-dark(oklch(0.985 0 0), oklch(0.985 0 0));
+  --sidebar-accent: light-dark(oklch(0.97 0 0), oklch(0.269 0 0));
+  --sidebar-accent-foreground: light-dark(oklch(0.205 0 0), oklch(0.985 0 0));
+  --sidebar-border: light-dark(oklch(0.922 0 0), oklch(1 0 0 / 10%));
+  --sidebar-ring: light-dark(oklch(0.708 0 0), oklch(0.556 0 0));
+}
+
+@layer base {
+  /*
+   * Tailwind's preflight is not loaded (see globals.css), so the reset the style's class names rely
+   * on is applied to shadcn component elements (and their content) only. Existing screens carry no
+   * data-slot and keep their look: no border, outline, spacing or font change reaches them.
+   */
+  [data-vortex-style="nova"] :where([data-slot], [data-slot] *) {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid;
+    @apply border-border outline-ring/50;
+  }
+
+  [data-vortex-style="nova"] :where(button, input, select, textarea):where([data-slot], [data-slot] *) {
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    background-color: transparent;
+    border-radius: 0;
+  }
+
+  [data-vortex-style="nova"] :where(fieldset[data-slot]) {
+    min-width: 0;
+  }
+
+  [data-vortex-style="nova"] :where(svg):where([data-slot], [data-slot] *) {
+    display: block;
+    vertical-align: middle;
+  }
+
+  [data-vortex-style="nova"] body {
+    @apply bg-background text-foreground;
+  }
+}
