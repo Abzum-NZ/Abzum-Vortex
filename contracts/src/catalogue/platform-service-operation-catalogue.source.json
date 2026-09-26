@@ -1307,5 +1307,75 @@
         "failed"
       ]
     }
+  },
+  "update_own_profile": {
+    "key": "update_own_profile",
+    "name": "Update own profile",
+    "release": {
+      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
+      "operationId": "0d8fe4b3-eb4f-48a1-9221-88ce3bad0a7a",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
+        },
+        "operationId": "0d8fe4b3-eb4f-48a1-9221-88ce3bad0a7a"
+      },
+      "inputs": {
+        "organization_account_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected_revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "display_name": {
+          "type": "text",
+          "required": true
+        },
+        "language": {
+          "type": "text",
+          "required": false
+        },
+        "time_zone": {
+          "type": "text",
+          "required": false
+        }
+      },
+      "outputs": {
+        "organization_account_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "access_version": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "permission": {
+        "permissionId": "630a980c-0ff5-40b1-a329-7326a2122395",
+        "key": "platform.organization.accounts.manage"
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "conflict",
+        "validation",
+        "failed"
+      ]
+    }
   }
 }

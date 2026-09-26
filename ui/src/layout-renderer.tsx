@@ -1,12 +1,14 @@
 import { useId, type CSSProperties, type ReactElement, type ReactNode } from "react";
-import type {
-  ApplicationContentV2,
-  ApplicationShellV2,
-  BlockPlacementV2Contract,
-  GuidedFormPageCompositionV2,
-  PageCompositionV2,
-  PageDefinitionV2,
-  ProjectedNavigation,
+import {
+  repeatableSlotItemIdentitiesV2,
+  repeatableSlotKeyV2,
+  type ApplicationContentV2,
+  type ApplicationShellV2,
+  type BlockPlacementV2Contract,
+  type GuidedFormPageCompositionV2,
+  type PageCompositionV2,
+  type PageDefinitionV2,
+  type ProjectedNavigation,
 } from "@vortex/contracts";
 import {
   ALL_UI_STYLES_CSS,
@@ -484,30 +486,39 @@ function PlacementView({
   // rather than keeping the values its ancestors computed.
   const placementTheme = resolvePlacementTheme(themeScope, placement.themeOverrides);
 
-  // 6. Recursively render declared named child slots in deterministic order
+  // 6. Recursively render declared named child slots in deterministic order. A repeatable slot
+  //    renders one keyed slot per declared item identity, so each tab item carries its own content.
   const renderedSlots: Record<string, ReactNode> = {};
   for (const declaredSlot of metadata.slots) {
-    const childSlot = placement.slots[declaredSlot.key];
-    if (childSlot && Object.keys(childSlot.placements).length > 0) {
-      renderedSlots[declaredSlot.key] = (
-        <PlacementSlotView
-          slot={childSlot}
-          slotKey={declaredSlot.key}
-          breakpoint={breakpoint}
-          registry={registry}
-          parentPlacementId={placementId}
-          location={{ ...currentLocation, slotKey: declaredSlot.key }}
-          allowEmptyRequiredSlots={allowEmptyRequiredSlots}
-          runtimeInputs={runtimeInputs}
-          projectedNavigation={projectedNavigation}
-          resolvePageHref={resolvePageHref}
-          currentPageId={currentPageId}
-          themeScope={placementTheme.scope}
-          responsive={responsive}
-        />
-      );
-    } else {
-      renderedSlots[declaredSlot.key] = null;
+    const slotKeys =
+      declaredSlot.repeats === undefined
+        ? [declaredSlot.key]
+        : repeatableSlotItemIdentitiesV2(declaredSlot, placement.settings).map((identity) =>
+            repeatableSlotKeyV2(declaredSlot.key, identity),
+          );
+    for (const slotKey of slotKeys) {
+      const childSlot = placement.slots[slotKey];
+      if (childSlot && Object.keys(childSlot.placements).length > 0) {
+        renderedSlots[slotKey] = (
+          <PlacementSlotView
+            slot={childSlot}
+            slotKey={slotKey}
+            breakpoint={breakpoint}
+            registry={registry}
+            parentPlacementId={placementId}
+            location={{ ...currentLocation, slotKey }}
+            allowEmptyRequiredSlots={allowEmptyRequiredSlots}
+            runtimeInputs={runtimeInputs}
+            projectedNavigation={projectedNavigation}
+            resolvePageHref={resolvePageHref}
+            currentPageId={currentPageId}
+            themeScope={placementTheme.scope}
+            responsive={responsive}
+          />
+        );
+      } else {
+        renderedSlots[slotKey] = null;
+      }
     }
   }
 
