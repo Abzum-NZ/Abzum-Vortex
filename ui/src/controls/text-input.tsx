@@ -1,6 +1,9 @@
 "use client";
 
 import type { ChangeEvent, ReactElement } from "react";
+import { Field, FieldLabel } from "../components/field";
+import { Input } from "../components/input";
+import { Textarea } from "../components/textarea";
 import type { TextInputPayload } from "./projected-data";
 import {
   readControlSettings,
@@ -68,21 +71,16 @@ export function TextInput(props: TextInputProps): ReactElement {
   };
 
   return (
-    <div
+    <Field
       data-vortex-control="text-input"
       hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
-      className="vortex-field"
     >
-      <label htmlFor={ids.control} className="vortex-field-label">
+      <FieldLabel htmlFor={ids.control}>
         <FieldLabelText label={label} required={required} />
-      </label>
-      {multiline ? (
-        <textarea {...controlProps} className="vortex-textarea" />
-      ) : (
-        <input {...controlProps} type={inputType} className="vortex-input" />
-      )}
+      </FieldLabel>
+      {multiline ? <Textarea {...controlProps} /> : <Input {...controlProps} type={inputType} />}
       <FieldMessages
         ids={ids}
         help={help}
@@ -90,6 +88,6 @@ export function TextInput(props: TextInputProps): ReactElement {
         note={note}
         draftFeedback={draftFeedback}
       />
-    </div>
+    </Field>
   );
 }
