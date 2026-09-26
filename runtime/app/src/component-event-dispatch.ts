@@ -22,7 +22,6 @@ import type { HumanOrganizationRequestResult } from "@vortex/access";
 import {
   protectedQueryCommandSchema,
   protectedQuerySortSchema,
-  supportedRecordSystemFieldKeySchema,
   type ProtectedQueryCommand,
   type ProtectedQueryPage,
   type ProtectedQueryPageRow,
@@ -32,6 +31,7 @@ import { z } from "zod";
 import {
   componentContextSchema,
   createComponentContextResolver,
+  type ComponentContext,
   type ComponentContextMismatchCode,
   type ComponentPlacement,
 } from "./component-context-resolver";
@@ -56,8 +56,9 @@ import type { FlowOrchestrator, FlowOrchestratorResponse } from "./flow-orchestr
  *   then reports `rowsScope: "local_page"` and `locallyFiltered: true`, keeps the engine's own page
  *   size and next cursor, and never presents the narrowed rows as a filtered dataset.
  *
- * Every failure is a closed refusal with a stable code: a request that does not parse, a context or
- * binding the resolver rejects, an event with no placement to query, a query the viewer may not run,
+ * Every failure is a closed refusal with a stable code: a request that does not parse, an installed
+ * context for another organisation or Application than the selection, a context or binding the
+ * resolver rejects, an event with no placement to query, a query the viewer may not run,
  * and a filter supplied for an event that returns no page. The module never throws to its caller and
  * never runs a half-resolved flow or query.
  */
@@ -86,6 +87,7 @@ export const componentEventDispatchRefusalCodes = [
   "input_values_invalid",
   "query_refused",
   "query_unavailable",
+  "local_filter_invalid",
   "local_filter_without_page",
 ] as const;
 export type ComponentEventDispatchRefusalCode =
@@ -103,7 +105,13 @@ export const componentLocalDisplayFilterConditionSchema = z
     operator: z.enum(["equals", "not_equals", "contains", "empty", "not_empty"]),
     value: z.string().max(200).optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (condition) =>
+      (condition.operator === "empty" || condition.operator === "not_empty") ===
+      (condition.value === undefined),
+    { message: "A comparison names a value; an emptiness check names none" },
+  );
 export type ComponentLocalDisplayFilterCondition = z.infer<
   typeof componentLocalDisplayFilterConditionSchema
 >;
@@ -118,14 +126,15 @@ export type ComponentLocalDisplayFilter = z.infer<typeof componentLocalDisplayFi
 
 /**
  * The viewer's dataset view for one view event, in the Query engine's own vocabulary. A filter is
- * the typed condition tree the engine parses; an empty sort uses the query's declared sort.
+ * the typed condition tree the engine parses; an empty sort uses the query's declared sort. The
+ * page size is never the viewer's: it is the placement's declared page size. The continuation token
+ * is the engine's own opaque, authenticated cursor from an earlier page, passed back unchanged.
  */
 const componentEventViewSchema = z
   .object({
     sort: z.array(protectedQuerySortSchema).max(20).default([]),
     filter: conditionNodeSchema.optional(),
     search: z.string().min(1).max(200).optional(),
-    pageSize: z.number().int().min(1).max(200).optional(),
     continuationToken: z.string().min(1).max(65_536).optional(),
   })
   .strict();
@@ -152,13 +161,6 @@ export const componentEventDispatchRequestSchema = z
     /** Values the page supplies for the placement's declared page parameters. */
     pageParameters: z.record(builderKeySchema, z.unknown()).default({}),
     view: componentEventViewSchema.default({}),
-    requestedSystemFieldKeys: z
-      .array(supportedRecordSystemFieldKeySchema)
-      .max(5)
-      .refine((keys) => new Set(keys).size === keys.length, {
-        message: "Each system field is declared once",
-      })
-      .default([]),
     localFilter: componentLocalDisplayFilterSchema.optional(),
   })
   .strict();
@@ -186,6 +188,7 @@ export type ComponentEventDataResult = Readonly<{
   moduleReleaseVersion: string;
   rows: readonly ComponentEventDataRow[];
   nextContinuationToken?: string;
+  /** How many rows the engine returned for this page, before any local display filter. */
   datasetPageSize: number;
   /** `local_page` only when a display filter narrowed the returned page; otherwise `dataset_page`. */
   rowsScope: "dataset_page" | "local_page";
@@ -225,6 +228,12 @@ export type ComponentEventDispatchDependencies = Readonly<{
   ) => Promise<HumanOrganizationRequestResult<ProtectedQueryResult>>;
   /** Starts the flow the component event is bound to (#579). */
   flow: Pick<FlowOrchestrator, "start">;
+  /**
+   * The flow release key of the exact installed release this context was assembled from, in the
+   * same form the orchestrator's release resolver issues (the composition owns that form). Every
+   * flow start is pinned to it, so a flow resolved against this release never runs against another.
+   */
+  flowReleaseKeyOf: (installed: InstalledRuntimeContext) => string;
 }>;
 
 type DeclaredDataContract = Readonly<{
@@ -293,14 +302,13 @@ const buildQueryCommand = (
   inputValues: Readonly<Record<string, JsonValue>>,
   contract: DeclaredDataContract,
   view: ComponentEventView,
-  requestedSystemFieldKeys: readonly string[],
 ): ProtectedQueryCommand | undefined => {
   const parsed = protectedQueryCommandSchema.safeParse({
     moduleRootId: resolved.moduleRootId,
     queryId: resolved.queryId,
     inputValues,
     requestedFieldIds: contract.fieldIds,
-    requestedSystemFieldKeys,
+    requestedSystemFieldKeys: [],
     sort: contract.kind === "table" ? view.sort : [],
     ...(contract.kind === "table" && view.filter !== undefined ? { filter: view.filter } : {}),
     ...(contract.kind === "table" && contract.search && view.search !== undefined
@@ -311,7 +319,7 @@ const buildQueryCommand = (
     // The table contract declares only a search box, not a searchable field list; an empty declared
     // set tells the engine to search every field the record type marks searchable.
     searchableFieldIds: [],
-    pageSize: contract.kind === "table" ? (view.pageSize ?? contract.pageSize) : 1,
+    pageSize: contract.pageSize,
     ...(view.continuationToken === undefined
       ? {}
       : { continuationToken: view.continuationToken }),
@@ -412,6 +420,10 @@ const refused = (
 ): ComponentEventDispatchResult =>
   field === undefined ? { kind: "refused", code } : { kind: "refused", code, field };
 
+/** Whether a component context is one a dataset view event declares: never a row or selection. */
+const datasetViewContext = (context: ComponentContext): boolean =>
+  context.kind === "page_subject" || context.kind === "related_record" || context.kind === "no_record";
+
 /**
  * Binds one already-verified installed context, so a page dispatches many component events without
  * passing the trusted context each time. `placement` is the event's data placement, taken by the
@@ -434,11 +446,23 @@ export const createComponentEventDispatcher = (dependencies: ComponentEventDispa
         return refused("invalid_request");
 
       let resolver: ReturnType<typeof createComponentContextResolver>;
+      let releaseKey: string;
       try {
         resolver = createComponentContextResolver(installed);
+        releaseKey = dependencies.flowReleaseKeyOf(installed);
       } catch {
         return refused("invalid_context");
       }
+      // The flow and the query run under the selected organisation and Application; both must be
+      // the ones this installed context was assembled for, or the event would resolve against one
+      // release and run against another.
+      if (
+        !sameId(selection.data.organizationId, installed.organizationId) ||
+        selection.data.applicationRootId === undefined ||
+        !sameId(selection.data.applicationRootId, installed.applicationRootId) ||
+        releaseKey.length === 0
+      )
+        return refused("invalid_context");
 
       const { controlId, eventId, event, context, suppliedValues, pageParameters, view, localFilter } =
         request.data;
@@ -457,18 +481,31 @@ export const createComponentEventDispatcher = (dependencies: ComponentEventDispa
       const isDatasetView = datasetViewEventSet.has(event);
       // An event with neither a dataset cause nor a bound flow has nothing to dispatch.
       if (!isDatasetView && flowResolution.kind !== "resolved") return refused("unsupported_event");
+      // A display filter needs a returned page to narrow; one supplied for an event that reads no
+      // page is refused before anything runs rather than silently ignored.
+      if (!isDatasetView && localFilter !== undefined) return refused("local_filter_without_page");
 
+      // Every check below completes before the flow or the query runs, so a wrong context, field,
+      // value or filter refuses the whole event instead of reaching either half-filled.
       let contract: DeclaredDataContract | undefined;
+      let command: ProtectedQueryCommand | undefined;
       if (isDatasetView) {
+        // A dataset view reads the page subject, a related record or no record. The resolver checks
+        // this only for a bound flow, so it is checked here for the query as well.
+        if (!datasetViewContext(context)) return refused("unexpected_event_context");
         if (placement === undefined) return refused("missing_placement");
         contract = readDeclaredDataContract(placement.settings);
         if (contract === undefined) return refused("component_data_contract_invalid");
-      }
+        const declaredFieldIds = contract.fieldIds;
+        // A display filter may only read the placement's declared row fields.
+        if (
+          localFilter !== undefined &&
+          !localFilter.conditions.every((condition) =>
+            declaredFieldIds.some((fieldId) => sameId(fieldId, condition.fieldId)),
+          )
+        )
+          return refused("local_filter_invalid");
 
-      // Resolve the dataset query's typed inputs before running anything, so a wrong context, field
-      // or value refuses the whole event instead of reaching the flow or the engine half-filled.
-      let command: ProtectedQueryCommand | undefined;
-      if (contract !== undefined && placement !== undefined) {
         const queryResolution = resolver.resolveQueryInputs(placement, context, pageParameters);
         if (queryResolution.kind === "mismatch")
           return refused(queryResolution.code, queryResolution.field);
@@ -476,38 +513,42 @@ export const createComponentEventDispatcher = (dependencies: ComponentEventDispa
           .record(builderKeySchema, jsonValueSchema)
           .safeParse(queryResolution.inputValues);
         if (!inputValues.success) return refused("input_values_invalid");
-        command = buildQueryCommand(
-          queryResolution,
-          inputValues.data,
-          contract,
-          view,
-          request.data.requestedSystemFieldKeys,
-        );
+        command = buildQueryCommand(queryResolution, inputValues.data, contract, view);
         if (command === undefined) return refused("component_data_contract_invalid");
       }
 
-      // The event's own flow runs exactly once, for the verified initiator and selected organisation.
+      // The event's own flow runs exactly once, for the verified initiator and selected
+      // organisation, pinned to the exact installed release its inputs were resolved against.
       let flow: FlowOrchestratorResponse | undefined;
       if (flowResolution.kind === "resolved")
-        flow = await dependencies.flow.start({
-          session: session.data,
-          selection: selection.data,
-          binding: { flowId: flowResolution.flowId, inputs: flowResolution.inputs },
-        });
+        flow = await dependencies.flow.start(
+          {
+            session: session.data,
+            selection: selection.data,
+            binding: { flowId: flowResolution.flowId, inputs: flowResolution.inputs },
+          },
+          { releaseKey },
+        );
 
-      // The event's exact Module query runs exactly once, under the viewer's current authority.
+      // The event's exact Module query runs exactly once, under the viewer's current authority. A
+      // query that fails is reported, never retried.
       let data: ComponentEventDataResult | undefined;
       let dataRefusal: ComponentEventDataRefusal | undefined;
       if (command !== undefined && contract !== undefined) {
-        const run = await dependencies.runQuery(session.data, selection.data, command);
-        if (run.kind !== "available") dataRefusal = { code: "query_unavailable" };
-        else if (run.value.outcome === "refused")
-          dataRefusal = { code: "query_refused", reason: run.value.reasonCode };
-        else data = projectPage(run.value, contract, localFilter);
-      } else if (localFilter !== undefined) {
-        // A display filter needs a returned page to narrow; supplying one for an event that reads
-        // no page is refused rather than silently ignored.
-        return refused("local_filter_without_page");
+        let run: HumanOrganizationRequestResult<ProtectedQueryResult> | undefined;
+        try {
+          run = await dependencies.runQuery(session.data, selection.data, command);
+        } catch {
+          run = undefined;
+        }
+        if (run === undefined || run.kind !== "available") {
+          dataRefusal = { code: "query_unavailable" };
+        } else {
+          const page = run.value;
+          if (page.outcome === "refused")
+            dataRefusal = { code: "query_refused", reason: page.reasonCode };
+          else data = projectPage(page, contract, localFilter);
+        }
       }
 
       return {
