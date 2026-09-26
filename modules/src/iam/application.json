@@ -144,7 +144,7 @@
             "type": "page",
             "label": "People",
             "page": "iam_people",
-            "permission": "platform.organization.accounts.read"
+            "permission": "vortex.organisation_administration.person.read"
           }
         ]
       },
@@ -832,7 +832,7 @@
         "key": "iam_people",
         "name": "People",
         "type": "dashboard",
-        "permission": "platform.organization.accounts.read",
+        "permission": "vortex.organisation_administration.person.read",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_iam",
