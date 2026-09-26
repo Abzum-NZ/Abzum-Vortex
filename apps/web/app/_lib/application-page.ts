@@ -167,6 +167,27 @@ const fieldLabelsOf = (module: ModuleRelease): Record<string, string> =>
     ),
   );
 
+/**
+ * Logs one data placement that could not be loaded, server side only: the application, page and
+ * placement identities that are already in the address, and a fixed reason code. Never a message,
+ * value, row, query input or secret, so the log names the failing step without leaking data.
+ */
+const logPlacementFailure = (
+  address: Readonly<{ application: PermittedApplication; pageKey: string }>,
+  placementId: string,
+  reason:
+    | "query_not_bound"
+    | "query_unavailable"
+    | "query_refused"
+    | "detail_command_invalid"
+    | "detail_query_unavailable"
+    | "detail_query_refused",
+): void => {
+  console.error(
+    `[page] data placement not loaded: application=${address.application.key} page=${address.pageKey} placement=${placementId} reason=${reason}`,
+  );
+};
+
 const requestState = (
   placementId: string,
   parameters: SearchParameters,
@@ -290,6 +311,7 @@ export const loadApplicationPage = async (
     const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
     const bound = queryId === undefined ? undefined : findModuleQuery(context, queryId);
     if (queryId === undefined || bound === undefined) {
+      logPlacementFailure(address, placementId, "query_not_bound");
       data[placementId] = { status: "error" };
       continue;
     }
@@ -317,9 +339,13 @@ export const loadApplicationPage = async (
         filters: state.filters,
         search: state.search,
       });
-      if (resolved.kind === "unavailable") data[placementId] = { status: "error" };
-      else if (resolved.kind === "refused")
+      if (resolved.kind === "unavailable") {
+        logPlacementFailure(address, placementId, "query_unavailable");
+        data[placementId] = { status: "error" };
+      } else if (resolved.kind === "refused") {
+        logPlacementFailure(address, placementId, "query_refused");
         data[placementId] = { status: "refused", reason: "not_permitted" };
+      }
       else if (resolved.display.status === "empty") data[placementId] = { status: "empty" };
       else
         data[placementId] = {
@@ -356,14 +382,18 @@ export const loadApplicationPage = async (
       pageSize: 1,
     });
     if (!command.success) {
+      logPlacementFailure(address, placementId, "detail_command_invalid");
       data[placementId] = { status: "refused", reason: "not_permitted" };
       continue;
     }
     const result = await queries.run(session, selection, command.data);
-    if (result.kind === "temporarily_unavailable") data[placementId] = { status: "error" };
-    else if (result.kind !== "available" || result.value.outcome !== "completed")
+    if (result.kind === "temporarily_unavailable") {
+      logPlacementFailure(address, placementId, "detail_query_unavailable");
+      data[placementId] = { status: "error" };
+    } else if (result.kind !== "available" || result.value.outcome !== "completed") {
+      logPlacementFailure(address, placementId, "detail_query_refused");
       data[placementId] = { status: "refused", reason: "not_permitted" };
-    else {
+    } else {
       const rows: readonly ProtectedQueryRow[] = result.value.rows;
       const display = projectRecordDetailData({ settings, fieldLabels }, rows);
       data[placementId] =

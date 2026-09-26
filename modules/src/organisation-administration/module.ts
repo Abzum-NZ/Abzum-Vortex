@@ -2870,6 +2870,54 @@ export const organisationAdministrationModule: ModuleSourceDocument =
       flows: [],
       extension_points: [],
       sharing_conditions: [],
-      queries: [],
+      queries: [
+        {
+          "id": "qry_organisation_notices",
+          "key": "organisation_notices",
+          "record_type": "organisation_notice",
+          "inputs": [],
+          "select": [
+            "title",
+            "body",
+            "state",
+            "published_at"
+          ],
+          "filter": null,
+          "group_by": [],
+          "aggregates": [],
+          "sort": [
+            {
+              "field": "title",
+              "direction": "ascending"
+            }
+          ],
+          "page_size": 50,
+          "relationship_hops": 0
+        },
+        {
+          "id": "qry_privacy_request_cases",
+          "key": "privacy_request_cases",
+          "record_type": "privacy_request_case",
+          "inputs": [],
+          "select": [
+            "subject",
+            "request_kind",
+            "state",
+            "received_at",
+            "closed_at"
+          ],
+          "filter": null,
+          "group_by": [],
+          "aggregates": [],
+          "sort": [
+            {
+              "field": "received_at",
+              "direction": "descending"
+            }
+          ],
+          "page_size": 50,
+          "relationship_hops": 0
+        }
+      ],
     },
   });

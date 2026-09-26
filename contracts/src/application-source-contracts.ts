@@ -16,6 +16,7 @@ import {
   sourceQualifiedFieldSchema,
   sourceQualifiedRelationshipSchema,
   sourceQualifiedConditionSchema,
+  sourceQualifiedQueryReferenceSchema,
   sourceQualifiedRecordTypeSchema,
 } from "./definition-source-common";
 import {
@@ -215,7 +216,7 @@ const sourceListPageV2Schema = z
     type: z.literal("list"),
     record_type: sourceQualifiedRecordTypeSchema,
     permission: namespacedKeySchema,
-    query: builderKeySchema,
+    query: sourceQualifiedQueryReferenceSchema,
     arrangements: retiredSourcePageSettingV2Schema,
     calendar_mapping: retiredSourcePageSettingV2Schema,
   })

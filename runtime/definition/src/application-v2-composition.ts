@@ -265,7 +265,7 @@ const compilePropertyValue = (
       compiled = { kind: authored.kind, pageId: resolution.identity("page", authored.page) };
       break;
     case "query_reference":
-      compiled = { kind: authored.kind, queryId: resolution.identity("query", authored.query) };
+      compiled = { kind: authored.kind, queryId: resolution.moduleQuery(authored.query) };
       break;
     case "pipeline_reference":
       compiled = {
@@ -800,7 +800,7 @@ export const materialiseApplicationCompositionV2 = (
           : { visibilityCondition: resolution.condition(authoredPlacement.visibility_condition) }),
         ...(authoredPlacement.query === undefined
           ? {}
-          : { queryId: resolution.identity("query", authoredPlacement.query) }),
+          : { queryId: resolution.moduleQuery(authoredPlacement.query) }),
         ...(authoredPlacement.read_model === undefined
           ? {}
           : { readModel: { key: authoredPlacement.read_model } }),

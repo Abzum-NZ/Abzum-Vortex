@@ -467,5 +467,32 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
         ],
       },
     ],
+    queries: [
+      {
+        "id": "qry_iam_access_requests",
+        "key": "iam_access_requests",
+        "record_type": "access_request",
+        "inputs": [],
+        "select": [
+          "request_number",
+          "title",
+          "request_type",
+          "state",
+          "beneficiary",
+          "submitted_at"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "request_number",
+            "direction": "descending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      }
+    ],
   },
 });

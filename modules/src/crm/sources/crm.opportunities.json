@@ -995,6 +995,41 @@
         ]
       }
     ],
-    "sharing_conditions": []
+    "sharing_conditions": [],
+    "queries": [
+      {
+        "id": "qry_crm_pipeline",
+        "key": "crm_pipeline",
+        "record_type": "opportunity",
+        "inputs": [],
+        "select": [
+          "opportunity_number",
+          "name",
+          "company",
+          "value",
+          "net_value",
+          "stage",
+          "expected_close_date"
+        ],
+        "filter": {
+          "field": "stage",
+          "operator": "not_in",
+          "value": [
+            "won",
+            "lost"
+          ]
+        },
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "expected_close_date",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      }
+    ]
   }
 }

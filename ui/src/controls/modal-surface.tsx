@@ -1,13 +1,25 @@
 "use client";
 
+import type { ReactElement } from "react";
+import { XIcon } from "lucide-react";
+import { Button } from "../components/button";
 import {
-  useEffect,
-  useId,
-  useRef,
-  type CSSProperties,
-  type ReactElement,
-  type SyntheticEvent,
-} from "react";
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/dialog";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "../components/sheet";
+import { cn } from "../lib/utils";
 import {
   readControlSettings,
   resolveControlContext,
@@ -16,106 +28,154 @@ import {
 import { useSeededState } from "./field-parts";
 
 export type ModalSurfaceKind = "dialog" | "drawer";
-
-const focusIfConnected = (element: HTMLElement | null): void => {
-  if (element !== null && element.isConnected) element.focus();
-};
+export type DrawerPlacement = "left" | "right" | "top" | "bottom";
 
 /** The one payload member both modal surfaces read: the projected open state. */
 type ModalSurfacePayload = Readonly<{ open: boolean }>;
 
+type SurfaceSize = "small" | "medium" | "large";
+
+/** Dialog widths from the theme's scale, centered on the page and never taller than the viewport. */
+const DIALOG_SIZES: Readonly<Record<SurfaceSize, string>> = {
+  small: "sm:max-w-sm",
+  medium: "sm:max-w-xl",
+  large: "sm:max-w-4xl",
+};
+
 /**
- * Shared modal surface for dialogs and drawers, built on the native modal `<dialog>`: the
- * browser makes the rest of the page inert, moves focus into the surface and keeps Tab inside
- * it. Escape and the close button dismiss it, emitting only the declared `action` event with
- * intent `dismiss`, and focus returns to the element that was focused when it opened. A projected
- * `open` value drives the declared `open` and `close` state operations, and the rendered surface
- * advertises exactly those declared operations for the placement's flow tasks.
+ * Drawer extents from the theme's scale, measured across the declared edge. The side-attached
+ * widths use the same side-scoped variants as the Sheet's own default width so they replace it.
+ */
+const DRAWER_EDGE_SIZES = {
+  vertical: {
+    small: "data-[side=left]:sm:max-w-xs data-[side=right]:sm:max-w-xs",
+    medium: "data-[side=left]:sm:max-w-md data-[side=right]:sm:max-w-md",
+    large: "data-[side=left]:sm:max-w-2xl data-[side=right]:sm:max-w-2xl",
+  },
+  horizontal: {
+    small: "max-h-80",
+    medium: "max-h-112",
+    large: "max-h-160",
+  },
+} as const;
+
+const drawerSizeClass = (placement: DrawerPlacement, size: SurfaceSize): string =>
+  placement === "left" || placement === "right"
+    ? DRAWER_EDGE_SIZES.vertical[size]
+    : DRAWER_EDGE_SIZES.horizontal[size];
+
+/**
+ * Shared modal surface for dialogs and drawers, built on the shadcn Dialog and Sheet components
+ * (Base UI): the primitive traps focus inside the surface, makes the rest of the page inert and
+ * returns focus to the element that had focus when the surface opened. Escape and the primitive's
+ * own close control dismiss it, emitting only the declared `action` event with intent `dismiss`;
+ * a press outside the surface never dismisses. A projected `open` value drives the declared `open`
+ * and `close` state operations, and the rendered surface advertises exactly those declared
+ * operations for the placement's flow tasks.
  */
 export function ModalSurface<Values extends ModalSurfacePayload>({
   props,
   kind,
-  surfaceStyle,
+  drawerPlacement,
   dataAttributes,
 }: Readonly<{
   props: ControlRenderProps<Values>;
   kind: ModalSurfaceKind;
-  surfaceStyle: (size: "small" | "medium" | "large") => CSSProperties;
+  drawerPlacement?: DrawerPlacement;
   dataAttributes?: Readonly<Record<`data-${string}`, string>>;
 }>): ReactElement {
   const context = resolveControlContext<Values>(props, ["action"]);
   const settings = readControlSettings(props, context.location);
-  const size = settings.choice<"small" | "medium" | "large">("size", "medium");
+  const size = settings.choice<SurfaceSize>("size", "medium");
   const title = context.accessibleName ?? props.metadata.name;
-  const titleId = useId();
   const [open, setOpen] = useSeededState(context.values?.open ?? settings.boolean("open"));
-  const surfaceRef = useRef<HTMLDialogElement>(null);
-  const returnFocusRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    const surface = surfaceRef.current;
-    if (surface === null) return;
-    if (open && !surface.open) {
-      const focused = document.activeElement;
-      returnFocusRef.current = focused instanceof HTMLElement ? focused : null;
-      surface.showModal();
-    } else if (!open && surface.open) {
-      surface.close();
-    }
-  }, [open]);
-
-  // Unmounting while open (for example a page transition) still returns focus.
-  useEffect(() => () => focusIfConnected(returnFocusRef.current), []);
 
   const dismiss = (): void => {
     setOpen(false);
     context.events?.action?.({ event: "action", intent: "dismiss" });
   };
 
-  const onCancel = (event: SyntheticEvent<HTMLDialogElement>): void => {
-    event.preventDefault();
-    dismiss();
+  // Pointer dismissal is switched off on the root and the remaining close reasons are filtered, so
+  // only the two declared dismissal paths, Escape and the close control, emit the event.
+  const onOpenChange = (nextOpen: boolean, eventDetails: { reason?: string }): void => {
+    if (nextOpen) return;
+    if (eventDetails.reason === "escape-key" || eventDetails.reason === "close-press") dismiss();
   };
 
-  const onClose = (): void => {
-    focusIfConnected(returnFocusRef.current);
-    returnFocusRef.current = null;
-    // The browser may close a modal itself (for example a repeated Escape); keep state truthful.
-    if (open) dismiss();
+  const sharedDataAttributes = {
+    "data-vortex-control": kind,
+    "data-vortex-placement-id": props.placementId,
+    "data-vortex-open": String(open),
+    "data-vortex-state-operations": props.metadata.supportedStateOperations.join(" "),
+    "data-vortex-size": size,
+    ...(dataAttributes ?? {}),
   };
+
+  const closeClassName = cn("absolute", kind === "dialog" ? "top-2 right-2" : "top-3 right-3");
+
+  if (kind === "drawer") {
+    const side = drawerPlacement ?? "right";
+    return (
+      <Sheet open={open} onOpenChange={onOpenChange} disablePointerDismissal>
+        <SheetContent
+          side={side}
+          showCloseButton={false}
+          className={drawerSizeClass(side, size)}
+          {...sharedDataAttributes}
+        >
+          <SheetHeader>
+            <SheetTitle>{title}</SheetTitle>
+          </SheetHeader>
+          <SheetClose
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className={closeClassName}
+                aria-label={`Close ${title}`}
+              />
+            }
+          >
+            <XIcon />
+          </SheetClose>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4">{props.slots.content ?? null}</div>
+          {props.slots.actions === undefined || props.slots.actions === null ? null : (
+            <SheetFooter>{props.slots.actions}</SheetFooter>
+          )}
+        </SheetContent>
+      </Sheet>
+    );
+  }
 
   return (
-    <dialog
-      ref={surfaceRef}
-      aria-labelledby={titleId}
-      data-vortex-control={kind}
-      data-vortex-placement-id={props.placementId}
-      data-vortex-open={String(open)}
-      data-vortex-state-operations={props.metadata.supportedStateOperations.join(" ")}
-      data-vortex-size={size}
-      {...(dataAttributes ?? {})}
-      onCancel={onCancel}
-      onClose={onClose}
-      className={`vortex-${kind}`}
-      style={surfaceStyle(size)}
-    >
-      <div className={`vortex-${kind}-header`}>
-        <h2 id={titleId} className={`vortex-${kind}-title`}>
-          {title}
-        </h2>
-        <button
-          type="button"
-          aria-label={`Close ${title}`}
-          onClick={dismiss}
-          className={`vortex-${kind}-close`}
+    <Dialog open={open} onOpenChange={onOpenChange} disablePointerDismissal>
+      <DialogContent
+        showCloseButton={false}
+        className={cn("max-h-[calc(100%-2rem)] overflow-y-auto", DIALOG_SIZES[size])}
+        {...sharedDataAttributes}
+      >
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <DialogClose
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className={closeClassName}
+              aria-label={`Close ${title}`}
+            />
+          }
         >
-          <span aria-hidden="true">×</span>
-        </button>
-      </div>
-      <div className={`vortex-${kind}-body`}>{props.slots.content ?? null}</div>
-      {props.slots.actions === undefined || props.slots.actions === null ? null : (
-        <div className={`vortex-${kind}-actions`}>{props.slots.actions}</div>
-      )}
-    </dialog>
+          <XIcon />
+        </DialogClose>
+        <div>{props.slots.content ?? null}</div>
+        {props.slots.actions === undefined || props.slots.actions === null ? null : (
+          <DialogFooter>{props.slots.actions}</DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

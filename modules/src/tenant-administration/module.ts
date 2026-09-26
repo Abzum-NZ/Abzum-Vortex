@@ -764,6 +764,31 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
     flows: [],
     extension_points: [],
     sharing_conditions: [],
-    queries: [],
+    queries: [
+      {
+        "id": "qry_lifecycle_requests",
+        "key": "organization_lifecycle_requests",
+        "record_type": "organization_lifecycle_request",
+        "inputs": [],
+        "select": [
+          "subject_display_name",
+          "change_kind",
+          "requested_display_name",
+          "requested_parent_reference",
+          "state"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "subject_display_name",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      }
+    ],
   },
 });

@@ -269,191 +269,7 @@
                                                      ]
                                     }
                                 ],
-                 "queries":  [
-                                 {
-                                     "id":  "qry_crm_pipeline",
-                                     "key":  "crm_pipeline",
-                                     "record_type":  "vortex.crm.opportunities:opportunity",
-                                     "select":  [
-                                                    "opportunity_number",
-                                                    "name",
-                                                    "company",
-                                                    "value",
-                                                    "net_value",
-                                                    "stage",
-                                                    "expected_close_date"
-                                                ],
-                                     "filter":  {
-                                                    "field":  "stage",
-                                                    "operator":  "not_in",
-                                                    "value":  [
-                                                                  "won",
-                                                                  "lost"
-                                                              ]
-                                                },
-                                     "sort":  [
-                                                  {
-                                                      "field":  "expected_close_date",
-                                                      "direction":  "ascending"
-                                                  }
-                                              ],
-                                     "group_by":  [
-
-                                                  ],
-                                     "aggregates":  [
-
-                                                    ],
-                                     "page_size":  50,
-                                     "relationship_hops":  0
-                                 },
-                                 {
-                                     "id":  "qry_crm_companies",
-                                     "key":  "crm_companies",
-                                     "record_type":  "vortex.crm.organisations:company",
-                                     "select":  [
-                                                    "company_number",
-                                                    "name",
-                                                    "industry",
-                                                    "phone",
-                                                    "website"
-                                                ],
-                                     "filter":  null,
-                                     "sort":  [
-                                                  {
-                                                      "field":  "name",
-                                                      "direction":  "ascending"
-                                                  }
-                                              ],
-                                     "group_by":  [
-
-                                                  ],
-                                     "aggregates":  [
-
-                                                    ],
-                                     "page_size":  50,
-                                     "relationship_hops":  0
-                                 },
-                                 {
-                                     "id":  "qry_crm_contacts",
-                                     "key":  "crm_contacts",
-                                     "record_type":  "vortex.crm.people:contact",
-                                     "select":  [
-                                                    "contact_number",
-                                                    "full_name",
-                                                    "email",
-                                                    "company",
-                                                    "relationship_owner"
-                                                ],
-                                     "filter":  null,
-                                     "sort":  [
-                                                  {
-                                                      "field":  "full_name",
-                                                      "direction":  "ascending"
-                                                  }
-                                              ],
-                                     "group_by":  [
-
-                                                  ],
-                                     "aggregates":  [
-
-                                                    ],
-                                     "page_size":  50,
-                                     "relationship_hops":  0
-                                 },
-                                 {
-                                     "id":  "qry_crm_leads",
-                                     "key":  "crm_leads",
-                                     "record_type":  "vortex.crm.people:lead",
-                                     "select":  [
-                                                    "lead_number",
-                                                    "display_name",
-                                                    "company_name",
-                                                    "source",
-                                                    "score",
-                                                    "status",
-                                                    "received_at"
-                                                ],
-                                     "filter":  {
-                                                    "field":  "status",
-                                                    "operator":  "not_equals",
-                                                    "value":  "converted"
-                                                },
-                                     "sort":  [
-                                                  {
-                                                      "field":  "received_at",
-                                                      "direction":  "descending"
-                                                  }
-                                              ],
-                                     "group_by":  [
-
-                                                  ],
-                                     "aggregates":  [
-
-                                                    ],
-                                     "page_size":  50,
-                                     "relationship_hops":  0
-                                 },
-                                 {
-                                     "id":  "qry_crm_activities",
-                                     "key":  "crm_activities",
-                                     "record_type":  "vortex.crm.activities:activity",
-                                     "select":  [
-                                                    "subject",
-                                                    "activity_type",
-                                                    "due_at",
-                                                    "completed",
-                                                    "regarding",
-                                                    "owner"
-                                                ],
-                                     "filter":  {
-                                                    "field":  "completed",
-                                                    "operator":  "equals",
-                                                    "value":  false
-                                                },
-                                     "sort":  [
-                                                  {
-                                                      "field":  "due_at",
-                                                      "direction":  "ascending"
-                                                  }
-                                              ],
-                                     "group_by":  [
-
-                                                  ],
-                                     "aggregates":  [
-
-                                                    ],
-                                     "page_size":  50,
-                                     "relationship_hops":  0
-                                 },
-                                 {
-                                     "id":  "qry_crm_shared_cases",
-                                     "key":  "crm_shared_cases",
-                                     "record_type":  "vortex.service_desk.cases:case",
-                                     "select":  [
-                                                    "case_number",
-                                                    "subject",
-                                                    "status",
-                                                    "priority",
-                                                    "customer_company",
-                                                    "resolved_at"
-                                                ],
-                                     "filter":  null,
-                                     "sort":  [
-                                                  {
-                                                      "field":  "case_number",
-                                                      "direction":  "descending"
-                                                  }
-                                              ],
-                                     "group_by":  [
-
-                                                  ],
-                                     "aggregates":  [
-
-                                                    ],
-                                     "page_size":  50,
-                                     "relationship_hops":  0
-                                 }
-                             ],
+                 "queries":  [],
                  "pages":  [
                                {
                                    "id":  "page_crm_dashboard",
@@ -513,7 +329,7 @@
                                    "type":  "list",
                                    "record_type":  "vortex.crm.organisations:company",
                                    "permission":  "vortex.crm.organisations.company.read",
-                                   "query":  "crm_companies",
+                                   "query":  "vortex.crm.organisations:crm_companies",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -588,7 +404,7 @@
                                                                                                          "slots":  {
 
                                                                                                                    },
-                                                                                                         "query":  "crm_companies"
+                                                                                                         "query":  "vortex.crm.organisations:crm_companies"
                                                                                                      }
                                                                                    },
                                                                     "order":  {
@@ -607,7 +423,7 @@
                                    "type":  "list",
                                    "record_type":  "vortex.crm.people:contact",
                                    "permission":  "vortex.crm.people.contact.read",
-                                   "query":  "crm_contacts",
+                                   "query":  "vortex.crm.people:crm_contacts",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -682,7 +498,7 @@
                                                                                                          "slots":  {
 
                                                                                                                    },
-                                                                                                         "query":  "crm_contacts"
+                                                                                                         "query":  "vortex.crm.people:crm_contacts"
                                                                                                      }
                                                                                    },
                                                                     "order":  {
@@ -701,7 +517,7 @@
                                    "type":  "list",
                                    "record_type":  "vortex.crm.people:lead",
                                    "permission":  "vortex.crm.people.lead.read",
-                                   "query":  "crm_leads",
+                                   "query":  "vortex.crm.people:crm_leads",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -790,7 +606,7 @@
                                                                                                          "slots":  {
 
                                                                                                                    },
-                                                                                                         "query":  "crm_leads"
+                                                                                                         "query":  "vortex.crm.people:crm_leads"
                                                                                                      }
                                                                                    },
                                                                     "order":  {
@@ -809,7 +625,7 @@
                                    "type":  "list",
                                    "record_type":  "vortex.crm.opportunities:opportunity",
                                    "permission":  "vortex.crm.opportunities.opportunity.read",
-                                   "query":  "crm_pipeline",
+                                   "query":  "vortex.crm.opportunities:crm_pipeline",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -898,7 +714,7 @@
                                                                                                          "slots":  {
 
                                                                                                                    },
-                                                                                                         "query":  "crm_pipeline"
+                                                                                                         "query":  "vortex.crm.opportunities:crm_pipeline"
                                                                                                      }
                                                                                    },
                                                                     "order":  {
@@ -917,7 +733,7 @@
                                    "type":  "list",
                                    "record_type":  "vortex.crm.activities:activity",
                                    "permission":  "vortex.crm.activities.activity.read",
-                                   "query":  "crm_activities",
+                                   "query":  "vortex.crm.activities:crm_activities",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -999,7 +815,7 @@
                                                                                                          "slots":  {
 
                                                                                                                    },
-                                                                                                         "query":  "crm_activities"
+                                                                                                         "query":  "vortex.crm.activities:crm_activities"
                                                                                                      }
                                                                                    },
                                                                     "order":  {
@@ -1606,7 +1422,7 @@
                                    "type":  "list",
                                    "record_type":  "vortex.service_desk.cases:case",
                                    "permission":  "application.crm.shared_cases.read",
-                                   "query":  "crm_shared_cases",
+                                   "query":  "vortex.service_desk.cases:crm_shared_cases",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_crm",
@@ -1688,7 +1504,7 @@
                                                                                                          "slots":  {
 
                                                                                                                    },
-                                                                                                         "query":  "crm_shared_cases"
+                                                                                                         "query":  "vortex.service_desk.cases:crm_shared_cases"
                                                                                                      }
                                                                                    },
                                                                     "order":  {
