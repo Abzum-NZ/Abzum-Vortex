@@ -336,6 +336,9 @@ importers:
       server-only:
         specifier: 0.0.1
         version: 0.0.1
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
 
   runtime/identity:
     dependencies:
@@ -562,6 +565,9 @@ importers:
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@vortex/rule':
+        specifier: workspace:*
+        version: link:../runtime/rule
       react:
         specifier: 19.3.0
         version: 19.3.0
