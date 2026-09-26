@@ -772,14 +772,26 @@ export const organisationAdministrationModule: ModuleSourceDocument =
               validation: { maximum_length: 2_000 },
             },
           ],
-          effects: [
-            { kind: "set_field", field: "title", value: { source: "input", input: "title" } },
-            { kind: "set_field", field: "body", value: { source: "input", input: "body" } },
-            { kind: "set_field", field: "state", value: { source: "literal", value: "published" } },
+          tasks: [
             {
-              kind: "set_field",
-              field: "published_at",
-              value: { source: "current_time" },
+              id: "set_title",
+              type: "record.set_fields",
+              properties: { values: { title: { source: "input", input: "title" } } },
+            },
+            {
+              id: "set_body",
+              type: "record.set_fields",
+              properties: { values: { body: { source: "input", input: "body" } } },
+            },
+            {
+              id: "set_state",
+              type: "record.set_fields",
+              properties: { values: { state: { source: "literal", value: "published" } } },
+            },
+            {
+              id: "set_published_at",
+              type: "record.set_fields",
+              properties: { values: { published_at: { source: "current_time" } } },
             },
           ],
         },
@@ -792,8 +804,14 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           shareable: false,
           precondition: { field: "state", operator: "equals", value: "published" },
           inputs: [],
-          effects: [
-            { kind: "set_field", field: "state", value: { source: "literal", value: "withdrawn" } },
+          tasks: [
+            {
+              id: "set_state_withdrawn",
+              type: "record.set_fields",
+              properties: {
+                values: { state: { source: "literal", value: "withdrawn" } },
+              },
+            },
           ],
         },
         {
@@ -820,14 +838,26 @@ export const organisationAdministrationModule: ModuleSourceDocument =
               validation: { maximum_length: 2_000 },
             },
           ],
-          effects: [
-            { kind: "set_field", field: "subject", value: { source: "input", input: "subject" } },
-            { kind: "set_field", field: "details", value: { source: "input", input: "details" } },
-            { kind: "set_field", field: "state", value: { source: "literal", value: "received" } },
+          tasks: [
             {
-              kind: "set_field",
-              field: "received_at",
-              value: { source: "current_time" },
+              id: "set_subject",
+              type: "record.set_fields",
+              properties: { values: { subject: { source: "input", input: "subject" } } },
+            },
+            {
+              id: "set_details",
+              type: "record.set_fields",
+              properties: { values: { details: { source: "input", input: "details" } } },
+            },
+            {
+              id: "set_state",
+              type: "record.set_fields",
+              properties: { values: { state: { source: "literal", value: "received" } } },
+            },
+            {
+              id: "set_received_at",
+              type: "record.set_fields",
+              properties: { values: { received_at: { source: "current_time" } } },
             },
           ],
         },
@@ -840,9 +870,17 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           shareable: false,
           precondition: { field: "state", operator: "equals", value: "received" },
           inputs: [],
-          effects: [
-            { kind: "set_field", field: "state", value: { source: "literal", value: "completed" } },
-            { kind: "set_field", field: "closed_at", value: { source: "current_time" } },
+          tasks: [
+            {
+              id: "set_state",
+              type: "record.set_fields",
+              properties: { values: { state: { source: "literal", value: "completed" } } },
+            },
+            {
+              id: "set_closed_at",
+              type: "record.set_fields",
+              properties: { values: { closed_at: { source: "current_time" } } },
+            },
           ],
         },
         {
@@ -854,9 +892,17 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           shareable: false,
           precondition: { field: "state", operator: "equals", value: "received" },
           inputs: [],
-          effects: [
-            { kind: "set_field", field: "state", value: { source: "literal", value: "refused" } },
-            { kind: "set_field", field: "closed_at", value: { source: "current_time" } },
+          tasks: [
+            {
+              id: "set_state",
+              type: "record.set_fields",
+              properties: { values: { state: { source: "literal", value: "refused" } } },
+            },
+            {
+              id: "set_closed_at",
+              type: "record.set_fields",
+              properties: { values: { closed_at: { source: "current_time" } } },
+            },
           ],
         },
         {
@@ -867,7 +913,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           permission: "vortex.organisation_administration.person.suspend",
           shareable: false,
           inputs: [],
-          effects: [],
+          tasks: [],
           protected_operation: "suspend_organization_account",
         },
         {
@@ -878,7 +924,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           permission: "vortex.organisation_administration.person.reactivate",
           shareable: false,
           inputs: [],
-          effects: [],
+          tasks: [],
           protected_operation: "reactivate_organization_account",
         },
         {
@@ -889,7 +935,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           permission: "vortex.organisation_administration.person.close",
           shareable: false,
           inputs: [],
-          effects: [],
+          tasks: [],
           protected_operation: "close_organization_account",
         },
         {
@@ -900,7 +946,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           permission: "vortex.organisation_administration.organization_invitation.revoke",
           shareable: false,
           inputs: [],
-          effects: [],
+          tasks: [],
           protected_operation: "revoke_organization_invitation",
         },
       ],
