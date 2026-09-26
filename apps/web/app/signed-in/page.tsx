@@ -78,7 +78,9 @@ export default async function SignedInPage() {
         title="Organisations are temporarily unavailable"
         description="Your sign-in is still active. Try loading your organisations again."
       >
-        <Link href="/signed-in">Try again</Link>
+        <Link className="font-medium underline underline-offset-4" href="/signed-in">
+          Try again
+        </Link>
       </AuthShell>
     );
   if (result.kind === "invalid_session_state" || result.kind === "expired_or_revoked")
@@ -93,7 +95,9 @@ export default async function SignedInPage() {
         title="Organisations are temporarily unavailable"
         description="Your sign-in is still active. Try loading your organisations again."
       >
-        <Link href="/signed-in">Try again</Link>
+        <Link className="font-medium underline underline-offset-4" href="/signed-in">
+          Try again
+        </Link>
       </AuthShell>
     );
   if (launcher.kind !== "available") redirect("/auth/session-ended");
@@ -129,7 +133,7 @@ export default async function SignedInPage() {
           />
         </div>
       ) : null}
-      <form action={signOut} className="auth-form">
+      <form action={signOut}>
         <SubmitButton pendingLabel="Signing out…">Sign out</SubmitButton>
       </form>
     </AuthShell>
