@@ -1,6 +1,9 @@
 "use client";
 
 import type { ReactElement } from "react";
+import { Checkbox } from "../components/checkbox";
+import { Field, FieldLabel } from "../components/field";
+import { Switch } from "../components/switch";
 import type { BooleanInputPayload } from "./projected-data";
 import {
   readControlSettings,
@@ -22,7 +25,7 @@ export type BooleanInputProps = ControlRenderProps<BooleanInputPayload>;
 
 /**
  * Checkbox or switch emitting only its declared `field_changed` event with a typed boolean.
- * Both variants are native controls, so Space (and Enter for the switch button) toggles once.
+ * Space toggles either variant once, and Enter toggles the switch.
  */
 export function BooleanInput(props: BooleanInputProps): ReactElement {
   const context = resolveControlContext<BooleanInputPayload>(props, ["field_changed"]);
@@ -50,46 +53,40 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
 
   const described = describedBy(ids, help, error, note, draftFeedback);
   return (
-    <div
+    <Field
+      orientation="horizontal"
       data-vortex-control="boolean-input"
       hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
       data-vortex-variant={variant}
-      className="vortex-field vortex-field-inline"
     >
       {variant === "switch" ? (
-        <button
+        <Switch
           id={ids.control}
-          type="button"
-          role="switch"
-          aria-checked={checked}
+          checked={checked}
+          onCheckedChange={change}
+          disabled={disabled}
           aria-labelledby={ids.label}
           aria-invalid={error !== undefined}
           {...described}
-          disabled={disabled}
-          onClick={() => change(!checked)}
-          className="vortex-switch"
-        >
-          <span aria-hidden="true" className="vortex-switch-thumb" />
-        </button>
+        />
       ) : (
-        <input
+        <Checkbox
           id={ids.control}
-          type="checkbox"
           name={fieldKey}
           checked={checked}
-          onChange={(event) => change(event.target.checked)}
+          onCheckedChange={change}
           disabled={disabled}
           required={required}
+          aria-labelledby={ids.label}
           aria-invalid={error !== undefined}
           {...described}
-          className="vortex-checkbox"
         />
       )}
-      <label id={ids.label} htmlFor={ids.control} className="vortex-field-label">
+      <FieldLabel id={ids.label} htmlFor={ids.control}>
         <FieldLabelText label={label} required={required} />
-      </label>
+      </FieldLabel>
       <FieldMessages
         ids={ids}
         help={help}
@@ -97,6 +94,6 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
         note={note}
         draftFeedback={draftFeedback}
       />
-    </div>
+    </Field>
   );
 }

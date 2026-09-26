@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState, type ReactElement } from "react";
+import { FieldDescription, FieldError } from "../components/field";
 import type { ControlContext } from "./control-context";
 import { FieldDraftFeedback, type FormFieldDraftFeedback } from "./draft-feedback";
 
@@ -80,7 +81,7 @@ export function FieldLabelText({
     <>
       {label}
       {required ? (
-        <span aria-hidden="true" className="vortex-field-required">
+        <span aria-hidden="true" className="text-destructive">
           {" *"}
         </span>
       ) : null}
@@ -108,21 +109,9 @@ export function FieldMessages({
 }>): ReactElement {
   return (
     <>
-      {help === undefined ? null : (
-        <span id={ids.help} className="vortex-field-help">
-          {help}
-        </span>
-      )}
-      {error === undefined ? null : (
-        <span id={ids.error} role="alert" className="vortex-field-error">
-          {error}
-        </span>
-      )}
-      {note === undefined ? null : (
-        <span id={ids.note} className="vortex-field-note">
-          {note}
-        </span>
-      )}
+      {help === undefined ? null : <FieldDescription id={ids.help}>{help}</FieldDescription>}
+      {error === undefined ? null : <FieldError id={ids.error}>{error}</FieldError>}
+      {note === undefined ? null : <FieldDescription id={ids.note}>{note}</FieldDescription>}
       <FieldDraftFeedback id={ids.feedback} feedback={draftFeedback} />
     </>
   );
