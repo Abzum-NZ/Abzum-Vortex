@@ -22,6 +22,11 @@ export type SetupState = {
   releases: Record<string, PublishedRelease>;
   installerRoleGranted: boolean;
   lifecyclePolicies: Record<string, boolean>;
+  /**
+   * Organisation-shared record types whose one lifecycle policy is stored, by storage contract id.
+   * Every application that binds the owning module needs it, but only the first stores it.
+   */
+  sharedLifecyclePolicies: Record<string, boolean>;
   rolesGranted: Record<string, boolean>;
   /** Every step, including the initial operating-role grant, completed once for this organisation. */
   setupCompleted: boolean;
@@ -46,6 +51,7 @@ export const loadSetupState = (organizationId: string): SetupState => {
   let drafts: Record<string, CreatedDraft> = {};
   let installerRoleGranted = false;
   let lifecyclePolicies: Record<string, boolean> = {};
+  let sharedLifecyclePolicies: Record<string, boolean> = {};
   let rolesGranted: Record<string, boolean> = {};
   let setupCompleted = false;
   try {
@@ -55,6 +61,7 @@ export const loadSetupState = (organizationId: string): SetupState => {
       drafts?: Record<string, CreatedDraft>;
       installerRoleGranted?: boolean;
       lifecyclePolicies?: Record<string, boolean>;
+      sharedLifecyclePolicies?: Record<string, boolean>;
       rolesGranted?: Record<string, boolean>;
       setupCompleted?: boolean;
     };
@@ -63,6 +70,7 @@ export const loadSetupState = (organizationId: string): SetupState => {
       drafts = stored.drafts ?? {};
       installerRoleGranted = stored.installerRoleGranted === true;
       lifecyclePolicies = stored.lifecyclePolicies ?? {};
+      sharedLifecyclePolicies = stored.sharedLifecyclePolicies ?? {};
       rolesGranted = stored.rolesGranted ?? {};
       setupCompleted = stored.setupCompleted === true;
     }
@@ -75,6 +83,7 @@ export const loadSetupState = (organizationId: string): SetupState => {
     releases,
     installerRoleGranted,
     lifecyclePolicies,
+    sharedLifecyclePolicies,
     rolesGranted,
     setupCompleted,
     save() {
@@ -88,6 +97,7 @@ export const loadSetupState = (organizationId: string): SetupState => {
             releases: state.releases,
             installerRoleGranted: state.installerRoleGranted,
             lifecyclePolicies: state.lifecyclePolicies,
+            sharedLifecyclePolicies: state.sharedLifecyclePolicies,
             rolesGranted: state.rolesGranted,
             setupCompleted: state.setupCompleted,
           },
