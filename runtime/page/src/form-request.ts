@@ -15,8 +15,8 @@ import type {
  * from the person's current private draft (#587). `createPrivateFormSubmitAdapter` normalises that
  * submission into the caller inputs the binding declares, so the form endpoint runs the bound flow
  * exactly once, a surface can neither add an input the binding does not declare nor choose the
- * next node, and a submission whose draft evidence is missing or malformed is refused instead of
- * run half-filled. A value the surface supplies is an input; nothing here reads authority or the
+ * next node, and an unbounded answers bag or a malformed draft identity is refused instead of run
+ * half-filled. A value the surface supplies is an input; nothing here reads authority or the
  * organisation from it.
  *
  * Continue, Cancel and resume carry the exact installation, release, form, flow, pending node and
@@ -89,10 +89,11 @@ export const createPrivateFormSubmitAdapter =
     const adapted: Record<string, unknown> = {};
     for (const input of Object.values(binding.flow.inputs)) {
       if (typeof input !== "object" || input === null || input.kind !== "caller") continue;
-      if (Object.hasOwn(submission.values, input.name))
+      // A binding that declares the whole answer receives the submission's own values record;
+      // every other declared caller input is named exactly and must be present.
+      if (input.name === "values") adapted[input.name] = submission.values;
+      else if (Object.hasOwn(submission.values, input.name))
         adapted[input.name] = submission.values[input.name];
-      // A binding that declares the whole answer receives the submission's own values record.
-      else if (input.name === "values") adapted[input.name] = submission.values;
       else return undefined;
     }
     return adapted;
