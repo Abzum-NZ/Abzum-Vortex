@@ -5,6 +5,7 @@ dist/
 .pnpm-store/
 node_modules/
 pnpm-lock.yaml
+apps/web/public/styles/
 supabase/.temp/
 docs/
 testing/fixtures/
