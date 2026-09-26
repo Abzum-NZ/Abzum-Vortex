@@ -18,6 +18,19 @@ import { loadOrganizationLauncher } from "../_lib/organization-context";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * The first read right after sign-in can meet a cold connection or a just-committed session, so
+ * one transient failure is retried once before the person is shown the unavailable page.
+ */
+const loadOrganizationLauncherWithRetry = async (
+  session: Parameters<typeof loadOrganizationLauncher>[0],
+) => {
+  const first = await loadOrganizationLauncher(session);
+  if (first.kind !== "temporarily_unavailable") return first;
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  return loadOrganizationLauncher(session);
+};
+
 const organizationAddressPath = (entry: {
   tenantShortName: string;
   organizationShortName: string;
@@ -87,7 +100,7 @@ export default async function SignedInPage() {
     redirect("/auth/session-ended");
   if (result.kind !== "active") redirect("/auth/sign-in?status=session-ended");
 
-  const launcher = await loadOrganizationLauncher(result.session);
+  const launcher = await loadOrganizationLauncherWithRetry(result.session);
   if (launcher.kind === "temporarily_unavailable")
     return (
       <AuthShell
