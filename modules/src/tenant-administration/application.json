@@ -329,14 +329,6 @@
         "name": "Tenant overview",
         "type": "dashboard",
         "permission": "application.tenant_administration.open",
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "application",
           "shell": "shell_tenant_administration",
@@ -388,14 +380,6 @@
         "name": "Tenant structure",
         "type": "dashboard",
         "permission": "application.tenant_administration.open",
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "application",
           "shell": "shell_tenant_administration",
@@ -444,14 +428,6 @@
         "name": "Tenant administrators",
         "type": "dashboard",
         "permission": "platform.organization.assignments.read",
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "application",
           "shell": "shell_tenant_administration",
@@ -532,19 +508,6 @@
         "record_type": "vortex.tenant_administration:organization_lifecycle_request",
         "permission": "vortex.tenant_administration.organization_lifecycle_request.read",
         "query": "organization_lifecycle_requests",
-        "arrangements": [
-          "table",
-          "summary"
-        ],
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "access_ended",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "application",
           "shell": "shell_tenant_administration",
@@ -665,15 +628,6 @@
         "record_type": "vortex.tenant_administration:organization_lifecycle_request",
         "permission": "vortex.tenant_administration.organization_lifecycle_request.submit",
         "commit_action": "vortex.tenant_administration.organization_lifecycle_request.submit",
-        "states": [
-          "normal",
-          "loading",
-          "validation",
-          "refused",
-          "conflict",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "application",
           "shell": "shell_tenant_administration",

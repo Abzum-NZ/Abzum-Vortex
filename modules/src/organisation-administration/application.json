@@ -403,14 +403,6 @@
         "name": "Organisation overview",
         "type": "dashboard",
         "permission": "platform.organization.accounts.read",
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "application",
           "shell": "shell_organisation_administration",
@@ -462,14 +454,6 @@
         "name": "Organisation accounts",
         "type": "dashboard",
         "permission": "platform.organization.accounts.read",
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "application",
           "shell": "shell_organisation_administration",
@@ -983,14 +967,6 @@
         "name": "Invitations",
         "type": "dashboard",
         "permission": "platform.organization.invitations.read",
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "application",
           "shell": "shell_organisation_administration",
@@ -1351,14 +1327,6 @@
         "name": "Runtime settings",
         "type": "dashboard",
         "permission": "platform.organization.runtime_settings.read",
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "application",
           "shell": "shell_organisation_administration",
@@ -1979,19 +1947,6 @@
         "record_type": "vortex.organisation_administration:organisation_notice",
         "permission": "vortex.organisation_administration.organisation_notice.read",
         "query": "organisation_notices",
-        "arrangements": [
-          "table",
-          "summary"
-        ],
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "access_ended",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "application",
           "shell": "shell_organisation_administration",
@@ -2099,15 +2054,6 @@
         "record_type": "vortex.organisation_administration:organisation_notice",
         "permission": "vortex.organisation_administration.organisation_notice.record_notice",
         "commit_action": "vortex.organisation_administration.organisation_notice.record_notice",
-        "states": [
-          "normal",
-          "loading",
-          "validation",
-          "refused",
-          "conflict",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "application",
           "shell": "shell_organisation_administration",
@@ -2276,19 +2222,6 @@
         "record_type": "vortex.organisation_administration:privacy_request_case",
         "permission": "vortex.organisation_administration.privacy_request_case.read",
         "query": "privacy_request_cases",
-        "arrangements": [
-          "table",
-          "summary"
-        ],
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "access_ended",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "application",
           "shell": "shell_organisation_administration",
@@ -2409,15 +2342,6 @@
         "record_type": "vortex.organisation_administration:privacy_request_case",
         "permission": "vortex.organisation_administration.privacy_request_case.record_privacy_request",
         "commit_action": "vortex.organisation_administration.privacy_request_case.record_privacy_request",
-        "states": [
-          "normal",
-          "loading",
-          "validation",
-          "refused",
-          "conflict",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "application",
           "shell": "shell_organisation_administration",
