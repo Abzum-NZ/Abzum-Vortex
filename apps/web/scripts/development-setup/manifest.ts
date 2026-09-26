@@ -21,13 +21,14 @@ import { z } from "zod";
  */
 
 /**
- * The applications the setup installs, in installation order, by their definition key. Each must
- * be a shipped application of `@vortex/modules`; anything else is refused before any write.
+ * The shipped applications of `@vortex/modules` the setup can install, by definition key. Anything
+ * else is refused before any write.
  */
-const installedApplicationKeys = [
+const shippedApplicationKeys = [
   "vortex.app.iam",
   "vortex.app.organisation_administration",
   "vortex.app.tenant_administration",
+  "vortex.app.operations",
   "vortex.app.crm",
   "vortex.app.service_desk",
 ] as const;
@@ -50,7 +51,7 @@ export const developmentSetupManifestSchema = z
         currency: z.string(),
       })
       .strict(),
-    applicationKeys: z.array(z.enum(installedApplicationKeys)).min(1),
+    applicationKeys: z.array(z.enum(shippedApplicationKeys)).min(1),
     /**
      * The one application whose operating role the first owner receives through the Access-owned
      * initial operating-role grant, and that role's key. Later access expansion is not this
@@ -58,7 +59,7 @@ export const developmentSetupManifestSchema = z
      */
     operatingRole: z
       .object({
-        applicationKey: z.enum(installedApplicationKeys),
+        applicationKey: z.enum(shippedApplicationKeys),
         roleKey: z.string(),
         /** The identity of the new organisation role and of its one standing assignment. */
         roleId: roleIdSchema,
@@ -89,7 +90,15 @@ export const developmentSetupManifest: DevelopmentSetupManifest =
       timeZone: "Pacific/Auckland",
       currency: "NZD",
     },
-    applicationKeys: [...installedApplicationKeys],
+    // In installation order. CRM and Service Desk are shipped but not installed here: their
+    // applications pin exact 2.0.0 releases of their modules, and a fresh organisation publishes
+    // every module as 1.0.0, so their release sets cannot resolve yet.
+    applicationKeys: [
+      "vortex.app.iam",
+      "vortex.app.organisation_administration",
+      "vortex.app.tenant_administration",
+      "vortex.app.operations",
+    ],
     operatingRole: {
       applicationKey: "vortex.app.iam",
       roleKey: "iam_administrator",

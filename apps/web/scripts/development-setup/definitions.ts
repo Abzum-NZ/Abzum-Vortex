@@ -16,6 +16,7 @@ import {
   crmModuleSources,
   iamApplication,
   iamModule,
+  operationsApplication,
   operationsModuleSources,
   organisationAdministrationApplication,
   organisationAdministrationModule,
@@ -70,6 +71,7 @@ const applicationSources = [
   iamApplication,
   tenantAdministrationApplication,
   organisationAdministrationApplication,
+  operationsApplication,
   crmApplication,
   serviceDeskApplication,
 ] as readonly StoredDefinitionSource[];
@@ -119,8 +121,9 @@ const modulesInDependencyOrder = (applicationKeys: readonly string[]): StoredDef
 
 /**
  * Publishes one definition source as an initial release, or returns the release the state file
- * already records for it. A root that exists without a record is refused: the setup never guesses
- * which release it belongs to.
+ * already records for it. The created draft root is recorded before it is published, so an
+ * interrupted run resumes at publication. A root that exists without any record is refused: the
+ * setup never guesses which draft or release it belongs to.
  */
 const publishOne = async (
   facts: SystemContextFacts,
@@ -131,28 +134,48 @@ const publishOne = async (
   const recorded = state.releases[source.key];
   if (recorded !== undefined) return recorded;
 
+  log(`publishing ${source.key}`);
   const authority = developmentBuilderAuthority(facts.organizationId);
   const context: SessionContext = mintSystemContext(facts);
-  const draft = await inSystemTransaction(context, (transaction) =>
-    createDefinitionStore(transaction, authority)
-      .createRoot({ source })
-      .catch((error: unknown) => {
-        if (
-          error instanceof DefinitionStoreError &&
-          error.code === "DEFINITION_ROOT_ALREADY_EXISTS"
-        )
-          throw new Error(
-            `${source.key} already exists in this organisation but the setup state does not record it. Reset the local database (pnpm db:reset) and run the setup again.`,
-          );
-        throw error;
+  let draft = state.drafts[source.key];
+  if (draft === undefined) {
+    const created = await inSystemTransaction(context, (transaction) =>
+      createDefinitionStore(transaction, authority)
+        .createRoot({ source })
+        .catch((error: unknown) => {
+          if (
+            error instanceof DefinitionStoreError &&
+            error.code === "DEFINITION_ROOT_ALREADY_EXISTS"
+          )
+            throw new Error(
+              `${source.key} already exists in this organisation but the setup state does not record it. Reset the local database (pnpm db:reset) and run the setup again.`,
+            );
+          throw error;
+        }),
+    );
+    draft = { rootId: created.rootId, draftRevision: created.draftRevision };
+    state.drafts[source.key] = draft;
+    state.save();
+  } else {
+    // A resumed run authors the current shipped source over the unpublished draft.
+    const saved = await inSystemTransaction(context, (transaction) =>
+      createDefinitionStore(transaction, authority).saveDraft({
+        rootId: draft!.rootId,
+        expectedDraftRevision: draft!.draftRevision,
+        source,
       }),
-  );
+    );
+    draft = { rootId: saved.rootId, draftRevision: saved.draftRevision };
+    state.drafts[source.key] = draft;
+    state.save();
+  }
+  const { rootId, draftRevision } = draft;
   const prepared = await inSystemTransaction(context, (transaction) =>
     createDatabaseDefinitionPublicationService(
       developmentPublicationCatalogue,
       transaction,
       authority,
-    ).prepare(context, { rootId: draft.rootId, expectedDraftRevision: draft.draftRevision }),
+    ).prepare(context, { rootId, expectedDraftRevision: draftRevision }),
   );
   const published = await inSystemTransaction(context, (transaction) =>
     createDatabaseDefinitionPublicationService(

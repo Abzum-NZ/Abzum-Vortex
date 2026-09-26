@@ -13,8 +13,12 @@ export type PublishedRelease = Readonly<{
   releaseVersion: string;
 }>;
 
+/** A draft root created but not yet published, so an interrupted run resumes instead of repeating. */
+export type CreatedDraft = Readonly<{ rootId: string; draftRevision: number }>;
+
 export type SetupState = {
   organizationId: string;
+  drafts: Record<string, CreatedDraft>;
   releases: Record<string, PublishedRelease>;
   save(): void;
 };
@@ -34,24 +38,33 @@ const stateFile = (): string =>
 
 export const loadSetupState = (organizationId: string): SetupState => {
   let releases: Record<string, PublishedRelease> = {};
+  let drafts: Record<string, CreatedDraft> = {};
   try {
     const stored = JSON.parse(readFileSync(stateFile(), "utf8")) as {
       organizationId?: unknown;
       releases?: Record<string, PublishedRelease>;
+      drafts?: Record<string, CreatedDraft>;
     };
-    if (stored.organizationId === organizationId && stored.releases !== undefined)
-      releases = stored.releases;
+    if (stored.organizationId === organizationId) {
+      releases = stored.releases ?? {};
+      drafts = stored.drafts ?? {};
+    }
   } catch {
     // No usable state: start empty.
   }
   const state: SetupState = {
     organizationId,
+    drafts,
     releases,
     save() {
       mkdirSync(dirname(stateFile()), { recursive: true });
       writeFileSync(
         stateFile(),
-        `${JSON.stringify({ organizationId: state.organizationId, releases: state.releases }, null, 2)}\n`,
+        `${JSON.stringify(
+          { organizationId: state.organizationId, drafts: state.drafts, releases: state.releases },
+          null,
+          2,
+        )}\n`,
       );
     },
   };
