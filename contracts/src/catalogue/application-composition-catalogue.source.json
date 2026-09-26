@@ -2544,6 +2544,98 @@
       "select_tab"
     ]
   },
+  "TABS_BLOCK_RELEASE_2_0_0": {
+    "blockId": "a3b7065b-47ef-4c92-93d1-59300f8b059c",
+    "key": "platform.layout.tabs",
+    "releaseVersion": "2.0.0",
+    "name": "Tabs",
+    "icon": "folder",
+    "paletteGroup": "layout",
+    "rendererKey": "platform.renderer.tabs",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "title",
+        "label": "Title",
+        "help": "Accessible name for the tabs container",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "list",
+        "key": "items",
+        "label": "Tabs",
+        "help": "Ordered tabs, each with a stable key and a label",
+        "required": true,
+        "minimumItems": 1,
+        "maximumItems": 32,
+        "item": {
+          "kind": "group",
+          "key": "tab_item",
+          "label": "Tab",
+          "required": false,
+          "properties": [
+            {
+              "kind": "text",
+              "key": "key",
+              "label": "Key",
+              "help": "Stable identity for this tab: lowercase words separated by underscores",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 36
+            },
+            {
+              "kind": "text",
+              "key": "label",
+              "label": "Label",
+              "help": "Label shown on this tab button",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 120
+            }
+          ]
+        }
+      }
+    ],
+    "slots": [
+      {
+        "key": "tab",
+        "label": "Tab content",
+        "required": false,
+        "allowedChildCategories": [
+          "data",
+          "figures",
+          "record",
+          "input",
+          "actions",
+          "layout",
+          "content"
+        ],
+        "repeats": {
+          "items": "items",
+          "identity": "key"
+        }
+      }
+    ],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content_or_bounded",
+      "publicSurface": "allowed",
+      "accessibleName": "required",
+      "accessibleNamePropertyPath": [
+        "title"
+      ]
+    },
+    "supportedEvents": [
+      "tab_changed"
+    ],
+    "supportedStateOperations": [
+      "select_tab"
+    ]
+  },
   "DIALOG_BLOCK_RELEASE": {
     "blockId": "651460f1-5fce-4443-bc9d-4dd4b6ae8a8b",
     "key": "platform.layout.dialog",
