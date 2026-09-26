@@ -16,7 +16,8 @@ import {
   createVortexStyleRootProps,
   resolvePlacementTheme,
   resolveVortexStyleSelection,
-  vortexStyleStylesheetHref,
+  VortexStyleRoot,
+  VortexStyleStylesheet,
   type ApplicationThemeV2,
   type PlacementThemeScope,
   type ThemeMode,
@@ -886,18 +887,16 @@ export function PageLayoutRenderer({
   // The theme root serves runtime pages and preview canvases alike; React hoists and
   // de-duplicates the one shared stylesheet however many layouts render, and the resolved style's
   // own stylesheet with it. Only the resolved style is linked, and the server emits both the link
-  // and the attribute in the first response, so a page never paints a moment of another style.
+  // and the attribute in the first response, so a page never paints a moment of another style. A
+  // client-side navigation to another application renders the new link beside the hoisted one, so
+  // the stylesheet component drops the superseded sheet once the new one is in place.
   return (
-    <div
+    <VortexStyleRoot
       {...createThemeRootProps(applicationTheme, themeMode)}
       {...vortexStyleProps}
       {...(breakpoint === undefined ? { [LIVE_LAYOUT_SCOPE_ATTRIBUTE]: liveLayoutScope } : {})}
     >
-      <link
-        rel="stylesheet"
-        href={vortexStyleStylesheetHref(vortexStyle.style)}
-        precedence="vortex-style"
-      />
+      <VortexStyleStylesheet style={vortexStyle.style} />
       <style href="vortex-ui-styles" precedence="default">
         {ALL_UI_STYLES_CSS}
       </style>
@@ -930,7 +929,7 @@ export function PageLayoutRenderer({
           />
         )}
       </DateFormatProvider>
-    </div>
+    </VortexStyleRoot>
   );
 }
 

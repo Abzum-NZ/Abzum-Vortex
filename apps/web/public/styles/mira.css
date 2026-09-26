@@ -8,8 +8,16 @@
  * It carries its own registrations of the `--tw-*` custom properties its rules read, because the
  * shared stylesheet registers only those its own utilities use; a registration the shared
  * stylesheet also makes is identical, so the repeat is harmless.
+ *
+ * Its rules are wrapped in the named `vortex-style` cascade layer, which the shared
+ * stylesheet declares after `vortex-style-default`: the style owns every property a
+ * component's structural classes leave to it, a utility a caller passes through `className` still
+ * outranks it, and the platform default it sits above can never decide an application that resolved
+ * a style of its own.
  */
 
+@layer vortex-style {
+@scope ([data-vortex-style="mira"]) to ([data-vortex-style]) {
 /*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */
 @layer properties;
 [data-vortex-style="mira"] .cn-accordion {
@@ -8490,4 +8498,6 @@
       --tw-numeric-fraction: initial;
     }
   }
+}
+}
 }
