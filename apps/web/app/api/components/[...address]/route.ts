@@ -114,7 +114,7 @@ export function OPTIONS(): Response {
     status: 204,
     headers: {
       "Access-Control-Allow-Origin": COMPONENT_BUNDLE_CORS_ORIGIN,
-      "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
       "Access-Control-Allow-Headers": "*",
       "Access-Control-Max-Age": "86400",
       "Cache-Control": COMPONENT_BUNDLE_IMMUTABLE_CACHE_CONTROL,

@@ -459,19 +459,22 @@ export const publishComponentBundle = async (
     }
     if (!bytesEqual(encodeComponentBundleManifest(decoded), encodedManifest))
       return refuse("bundle_conflict");
-  } else {
-    await writeObjectOrRefuse(store, {
-      objectPath: manifestObjectPath,
-      bytes: encodedManifest,
-      contentType: "application/json; charset=utf-8",
-    });
   }
 
+  // The files are written first and the manifest last, so the manifest is the
+  // address's commit point: a partial write leaves no address to serve.
   for (const [path, bytes] of byPath) {
     await writeObjectOrRefuse(store, {
       objectPath: componentBundleFileObjectPath(contentAddress, path),
       bytes,
       contentType: componentBundleMediaType(path),
+    });
+  }
+  if (existingManifest === undefined) {
+    await writeObjectOrRefuse(store, {
+      objectPath: manifestObjectPath,
+      bytes: encodedManifest,
+      contentType: "application/json; charset=utf-8",
     });
   }
 
