@@ -1833,7 +1833,6 @@ function actionValueTypeV2(
   value: unknown,
   fields: ReadonlyMap<string, JsonObject>,
   inputs: ReadonlyMap<string, JsonObject>,
-  dialect: ModuleV2ValueDialect,
 ): string | undefined {
   const reference = actionValueReference(value);
   if (reference === undefined) return undefined;
@@ -1868,7 +1867,7 @@ function actionValueCompatibleV2(
   const compatible =
     entry.kind === "literal"
       ? fieldValueMatchesV2(actionValueLiteral(value), targetField, dialect)
-      : valueTypesCompatible(actionValueTypeV2(value, fields, inputs, dialect), expectedType, "exact");
+      : valueTypesCompatible(actionValueTypeV2(value, fields, inputs), expectedType, "exact");
   const expectedRecordTypeIds = fieldRecordTypeIds(targetField);
   if (!compatible || expectedRecordTypeIds === undefined) return compatible;
   if (entry.kind === "literal") return compatible;
@@ -1974,7 +1973,7 @@ function applicationActionValueCompatible(
   if (
     target.moduleV2 &&
     !valueTypesCompatible(
-      actionValueTypeV2(value, subjectFields, inputs, "canonical"),
+      actionValueTypeV2(value, subjectFields, inputs),
       applicationFieldType(target),
       "mapping",
     )
