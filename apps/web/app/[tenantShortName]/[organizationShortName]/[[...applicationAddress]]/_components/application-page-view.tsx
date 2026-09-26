@@ -93,12 +93,20 @@ const cellToJson = (value: unknown): unknown => {
  * What a component event supplies to its bound flow, by the caller input names the flow declares.
  * The vocabulary is closed and event-shaped: `record_id`, `record_ids`, `revision`, `field` and
  * `value`. A binding receives only the names it declares, and the endpoint refuses anything else.
+ *
+ * A row action carries the row's server-projected current revision exactly as an inline-edit commit
+ * does, so a command that changes one existing row is bound at the revision the person actually saw.
+ * The value comes from the projected row, never from anything the person types.
  */
 const suppliedValues = (event: DisplaySemanticEvent): Record<string, unknown> => {
   switch (event.event) {
     case "row_clicked":
-    case "row_action":
       return { record_id: event.recordId };
+    case "row_action":
+      return {
+        record_id: event.recordId,
+        ...(event.revision === undefined ? {} : { revision: event.revision }),
+      };
     case "bulk_action":
       return { record_ids: [...event.recordIds] };
     case "inline_edit":
