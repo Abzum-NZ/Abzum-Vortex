@@ -147,6 +147,16 @@ export const BUTTON_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.BUTT
 /** Exact immutable metadata release for the tabs block. */
 export const TABS_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.TABS_BLOCK_RELEASE);
 
+/**
+ * Release 2.0.0 of the tabs block replaces its four fixed child slots with repeatable items: an
+ * authored `items` list, each item keyed by a stable identity that names one child slot, so a tab
+ * set may hold any number of tabs. The 1.0.0 release stays published unchanged, so an application
+ * pinned to it keeps its exact four-slot behaviour.
+ */
+export const TABS_BLOCK_RELEASE_2_0_0: PlatformBlockReleaseV2 = release(
+  sources.TABS_BLOCK_RELEASE_2_0_0,
+);
+
 /** Exact immutable metadata release for the dialog block. */
 export const DIALOG_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.DIALOG_BLOCK_RELEASE);
 
@@ -208,7 +218,7 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   TABLE_BLOCK_RELEASE_1_4_0,
 ]);
 
-/** All thirteen immutable form, layout and action block releases. */
+/** All fourteen immutable form, layout and action block releases. */
 export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   TEXT_INPUT_BLOCK_RELEASE,
   LINK_INPUT_BLOCK_RELEASE,
@@ -220,6 +230,7 @@ export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   VALIDATION_MESSAGE_BLOCK_RELEASE,
   BUTTON_BLOCK_RELEASE,
   TABS_BLOCK_RELEASE,
+  TABS_BLOCK_RELEASE_2_0_0,
   DIALOG_BLOCK_RELEASE,
   DRAWER_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -243,7 +254,7 @@ export const NAVIGATION_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Obje
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
 ]);
 
-/** All thirty-seven immutable platform block releases registered for the page builder. */
+/** All thirty-eight immutable platform block releases registered for the page builder. */
 export const PLATFORM_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   ...DISPLAY_BLOCK_RELEASES,
   ...CONTROL_BLOCK_RELEASES,

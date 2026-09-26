@@ -1,5 +1,6 @@
 import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
+  isRepeatableSlotIdentityV2,
   platformBlockReleaseIdentityV2,
   projectPlatformCatalogueDiscoveryV2,
   type BlockPaletteGroup,
@@ -315,9 +316,19 @@ export function createStudioDiscoveryAdapter(
         return Object.freeze(summaries.filter((release) => categories.has(release.paletteGroup)));
       }
       case "slot": {
-        const slot = getComponent(target.parent)?.slots.find(
-          (entry) => entry.key === target.slotKey,
-        );
+        const component = getComponent(target.parent);
+        // A fixed slot matches its own key exactly; a repeatable slot accepts each item key it
+        // can own, `${family}_${identity}` with an admissible identity.
+        const slot =
+          component?.slots.find(
+            (entry) => entry.repeats === undefined && entry.key === target.slotKey,
+          ) ??
+          component?.slots.find(
+            (entry) =>
+              entry.repeats !== undefined &&
+              target.slotKey.startsWith(`${entry.key}_`) &&
+              isRepeatableSlotIdentityV2(entry.key, target.slotKey.slice(entry.key.length + 1)),
+          );
         return Object.freeze(
           (slot?.allowedChildren ?? []).filter((release) =>
             offered.has(platformBlockReleaseIdentityV2(release)),

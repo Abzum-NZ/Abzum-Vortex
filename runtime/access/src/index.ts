@@ -82,6 +82,7 @@ export {
   createPermissionRegistryDefinitionAdapter,
   PermissionRegistryPreparationError,
   permissionRegistryPreparationErrorCodes,
+  prepareApplicationPermissionRegistrationForHumanRequest,
   prepareApplicationPermissionRegistrationFromReleaseSet,
   verifyPreparedApplicationPermissionRegistration,
   type PermissionRegistryDefinitionSetReader,

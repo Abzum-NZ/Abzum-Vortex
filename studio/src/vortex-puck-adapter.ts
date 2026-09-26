@@ -3,7 +3,10 @@ import {
   applicationShellV2Schema,
   blockPropertyValueV2Schema,
   immutablePlatformBlockCatalogueV2Schema,
+  isRepeatableSlotIdentityV2,
   placementSlotV2Schema,
+  repeatableSlotItemIdentitiesV2,
+  repeatableSlotKeyV2,
   validateComponentSettings,
   type ApplicationShellV2,
   type BlockPropertySchemaV2Contract,
@@ -187,8 +190,20 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
           order: clone(slot.order),
         },
       };
+      const repeatableKeys = new Set(
+        release.slots.flatMap((slot) =>
+          slot.repeats === undefined
+            ? []
+            : repeatableSlotItemIdentitiesV2(slot, placement.settings).map((identity) =>
+                repeatableSlotKeyV2(slot.key, identity),
+              ),
+        ),
+      );
       for (const [key, child] of Object.entries(placement.slots)) {
-        if (!release.slots.some((slot) => slot.key === key))
+        if (
+          !release.slots.some((slot) => slot.repeats === undefined && slot.key === key) &&
+          !repeatableKeys.has(key)
+        )
           throw new VortexPuckAdapterError(
             `Undeclared Puck slot ${key} for ${release.rendererKey}`,
           );
@@ -266,41 +281,58 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
         );
       }
 
-      const allowed = new Set([
-        "id",
-        "settings",
-        "vortex",
-        ...release.slots.map((slot) => slot.key),
-      ]);
-      if (Object.keys(props).some((key) => !allowed.has(key)))
-        throw new VortexPuckAdapterError(`Private or transient Puck data at ${at}[${index}].props`);
-
       const settings = validateSettings(
         props.settings,
         release.properties,
         `${at}[${index}].props.settings`,
       );
 
-      const slots: Record<string, VortexSlot> = {};
-      for (const declaration of release.slots) {
-        const slotInput = props[declaration.key];
-        if (slotInput === undefined) {
-          if (declaration.required) {
-            throw new VortexPuckAdapterError(
-              `Missing required slot "${declaration.key}" at ${at}[${index}].props`,
-            );
-          }
-          continue;
-        }
-        const childSlot = fromContent(
-          slotInput,
-          depth + 1,
-          seenPlacementIds,
-          state,
+      // Each declared slot's keys: a fixed slot's own key, or one key per repeatable item, whose
+      // identities must be admissible and distinct so no two items share a slot.
+      const slotKeysByDeclaration = release.slots.map((declaration) => {
+        if (declaration.repeats === undefined) return [declaration.key];
+        const identities = repeatableSlotItemIdentitiesV2(
           declaration,
-          `${at}[${index}].props.${declaration.key}`,
+          settings as Readonly<Record<string, BlockPropertyValueV2Contract>>,
         );
-        slots[declaration.key] = childSlot;
+        if (
+          new Set(identities).size !== identities.length ||
+          identities.some((identity) => !isRepeatableSlotIdentityV2(declaration.key, identity))
+        )
+          throw new VortexPuckAdapterError(
+            `Repeatable item keys must be distinct builder keys at ${at}[${index}].props.settings`,
+          );
+        return identities.map((identity) => repeatableSlotKeyV2(declaration.key, identity));
+      });
+      const allowed = new Set(["id", "settings", "vortex", ...slotKeysByDeclaration.flat()]);
+      if (Object.keys(props).some((key) => !allowed.has(key)))
+        throw new VortexPuckAdapterError(`Private or transient Puck data at ${at}[${index}].props`);
+
+      const slots: Record<string, VortexSlot> = {};
+      for (const [declarationIndex, declaration] of release.slots.entries()) {
+        const slotKeys = slotKeysByDeclaration[declarationIndex]!;
+        for (const slotKey of slotKeys) {
+          const slotInput = props[slotKey];
+          if (slotInput === undefined) {
+            // Every item of a repeatable slot is optional: its own item list governs the count,
+            // so only a fixed required slot is refused when it is absent.
+            if (declaration.required && declaration.repeats === undefined) {
+              throw new VortexPuckAdapterError(
+                `Missing required slot "${slotKey}" at ${at}[${index}].props`,
+              );
+            }
+            continue;
+          }
+          const childSlot = fromContent(
+            slotInput,
+            depth + 1,
+            seenPlacementIds,
+            state,
+            declaration,
+            `${at}[${index}].props.${slotKey}`,
+          );
+          slots[slotKey] = childSlot;
+        }
       }
 
       if (meta.order !== undefined)
