@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { prepareVerificationDatabase } from "./prepare-verification-database.mjs";
 
 // Pinned Supabase Postgres image: the same image used by the shared development
 // stack (`supabase start`) and by hosted Testing/Production delivery. A fresh
@@ -42,16 +43,18 @@ const removeContainer = (containerName, spawn) =>
 
 /**
  * Starts one fresh, database-only Postgres cluster for a single verification
- * run: a dedicated container plus a dedicated Docker network, migrated and
- * seeded from this working tree. The caller must always pair a successful
- * call with `stopVerificationDatabase`.
+ * run: a dedicated container plus a dedicated Docker network, prepared with the
+ * Supabase schemas the plain image lacks, then migrated and seeded from this
+ * working tree. The caller must always pair a successful call with
+ * `stopVerificationDatabase`.
  *
  * On failure before the container exists, any partial resource (for example a
  * created network) is removed immediately, because it holds no diagnostic
  * value. On failure after the container exists (it never became ready, or
- * migrations/seed failed to apply), the container and network are left
- * running and the thrown `VerificationDatabaseStartupError` carries the
- * partial `handle` so the caller can report it and leave it for diagnosis.
+ * schema preparation, migrations or seed failed to apply), the container and
+ * network are left running and the thrown `VerificationDatabaseStartupError`
+ * carries the partial `handle` so the caller can report it and leave it for
+ * diagnosis.
  */
 export const startVerificationDatabase = async ({
   root,
@@ -207,6 +210,28 @@ export const startVerificationDatabase = async ({
     password,
     worktree,
   });
+
+  // The plain Postgres image has no Storage, Auth or Realtime tables, and the
+  // Vortex migrations read them (`storage.buckets`, `storage.objects`,
+  // `auth.jwt()`, `auth.sessions`, `realtime.messages`), so prepare those
+  // schemas from the pinned Supabase service images before applying any
+  // migration. A preparation failure carries the same handle as a failed
+  // migration, so the caller can identify the cluster.
+  try {
+    prepareVerificationDatabase({
+      containerName,
+      jwtSecret,
+      postgresImage: verificationDatabaseImage,
+      spawn,
+      stdout,
+      stderr,
+    });
+  } catch (cause) {
+    throw new VerificationDatabaseStartupError(
+      `Preparing the Supabase schemas for verification database container ${containerName} failed: ${cause.message}`,
+      { handle, cause },
+    );
+  }
 
   const cliPath = resolve(root, "node_modules", "supabase", "dist", "supabase.js");
   const pushResult = spawn(
