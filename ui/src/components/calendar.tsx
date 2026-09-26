@@ -26,7 +26,7 @@ function Calendar({
     <DayPicker
       showOutsideDays={showOutsideDays}
       className={cn(
-        "group/calendar bg-background p-2 [--cell-radius:var(--radius-md)] [--cell-size:--spacing(7)] in-data-[slot=card-content]:bg-transparent in-data-[slot=popover-content]:bg-transparent",
+        "cn-calendar group/calendar bg-background in-data-[slot=card-content]:bg-transparent in-data-[slot=popover-content]:bg-transparent",
         String.raw`rtl:**:[.rdp-button\_next>svg]:rotate-180`,
         String.raw`rtl:**:[.rdp-button\_previous>svg]:rotate-180`,
         className,
@@ -63,8 +63,13 @@ function Calendar({
           "flex h-(--cell-size) w-full items-center justify-center gap-1.5 text-sm font-medium",
           defaultClassNames.dropdowns,
         ),
+        // The pinned nova rule draws the border and focus ring of the registry's dropdown trigger.
+        // This calendar's month dropdown has no such trigger, so the part carries no calendar slot
+        // class: adding one would give nova a border today's calendar does not have.
         dropdown_root: cn("relative rounded-(--cell-radius)", defaultClassNames.dropdown_root),
         dropdown: cn("absolute inset-0 bg-popover opacity-0", defaultClassNames.dropdown),
+        // The pinned nova rule fixes this label's height and padding, which the label does not set
+        // today, so it carries no caption-label slot class: adding one would change nova's caption.
         caption_label: cn(
           "font-medium select-none",
           captionLayout === "label"
