@@ -23,9 +23,9 @@ import {
  * maps and only the bindings its declared events name.
  */
 
-const fail = (message: string, location: DefinitionRenderErrorLocation): never => {
+function fail(message: string, location: DefinitionRenderErrorLocation): never {
   throw new DefinitionRenderError("INVALID_COMPOSITION", message, location);
-};
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

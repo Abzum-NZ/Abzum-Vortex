@@ -79,7 +79,7 @@ export type ApplicationCompositionCatalogueDefinitionV2 = Readonly<{
    * with the platform block releases at materialisation and carry the same placement identity
    * shape, with the custom-component payload on top.
    */
-  customComponentReleases?: readonly CustomComponentReleaseDefinitionV2[];
+  customComponentReleases?: readonly CustomComponentReleaseDefinitionV2[] | undefined;
 }>;
 
 export type ApplicationCompositionCatalogueSelectionV2 = Readonly<{
