@@ -25,6 +25,7 @@ import {
   type ApplicationReleaseAdoptionTarget,
 } from "@vortex/definition";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
+import { installedReleaseCatalogue } from "./definition-catalogue";
 
 /**
  * The deliberate release adoption of one installed application (#610). The offered target is the
@@ -33,9 +34,6 @@ import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-config
  * successful adoption changes the installation the next request resolves; a refusal, stale
  * revision or preparation failure leaves the previous active release exactly as it was.
  */
-
-/** The publication catalogue the installed release was published against (see the page loader). */
-const definitionCatalogue = { connectionTypeReleases: [] } as const;
 
 const telemetry = createAppTelemetryCollector({ downstream: createOperationsAlertSink() });
 
@@ -60,7 +58,7 @@ const humanDefinitionAccess = (): HumanInstallationDefinitionAccess => ({
       { organizationId: target.organizationId, applicationRootId: target.applicationRootId },
       (transaction) =>
         createDatabaseApplicationReleaseAdoptionReleaseSetService(
-          definitionCatalogue,
+          installedReleaseCatalogue,
           transaction,
         ).read({
           applicationRootId: target.applicationRootId,

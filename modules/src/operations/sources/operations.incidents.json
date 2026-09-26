@@ -837,10 +837,7 @@
             "type": "record.set_fields",
             "properties": {
               "values": {
-                "attached_signal_key": {
-                  "source": "input",
-                  "input": "deduplication_key"
-                }
+                "attached_signal_key": "{{ inputs.deduplication_key }}"
               }
             }
           },
@@ -849,10 +846,7 @@
             "type": "record.set_fields",
             "properties": {
               "values": {
-                "attached_signal_evidence": {
-                  "source": "input",
-                  "input": "evidence"
-                }
+                "attached_signal_evidence": "{{ inputs.evidence }}"
               }
             }
           },
@@ -861,9 +855,7 @@
             "type": "record.set_fields",
             "properties": {
               "values": {
-                "attached_at": {
-                  "source": "current_time"
-                }
+                "attached_at": "{{ execution.now }}"
               }
             }
           },
@@ -898,10 +890,7 @@
             "type": "record.set_fields",
             "properties": {
               "values": {
-                "state": {
-                  "source": "literal",
-                  "value": "acknowledged"
-                }
+                "state": { "kind": "literal", "literal": { "type": "json", "value": "acknowledged" } }
               }
             }
           },
@@ -936,10 +925,7 @@
             "type": "record.set_fields",
             "properties": {
               "values": {
-                "severity": {
-                  "source": "literal",
-                  "value": "critical"
-                }
+                "severity": { "kind": "literal", "literal": { "type": "json", "value": "critical" } }
               }
             }
           },
@@ -974,10 +960,7 @@
             "type": "record.set_fields",
             "properties": {
               "values": {
-                "state": {
-                  "source": "literal",
-                  "value": "resolved"
-                }
+                "state": { "kind": "literal", "literal": { "type": "json", "value": "resolved" } }
               }
             }
           },

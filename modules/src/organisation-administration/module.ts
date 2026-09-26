@@ -2223,22 +2223,22 @@ export const organisationAdministrationModule: ModuleSourceDocument =
             {
               id: "set_title",
               type: "record.set_fields",
-              properties: { values: { title: { source: "input", input: "title" } } },
+              properties: { values: { title: "{{ inputs.title }}" } },
             },
             {
               id: "set_body",
               type: "record.set_fields",
-              properties: { values: { body: { source: "input", input: "body" } } },
+              properties: { values: { body: "{{ inputs.body }}" } },
             },
             {
               id: "set_state",
               type: "record.set_fields",
-              properties: { values: { state: { source: "literal", value: "published" } } },
+              properties: { values: { state: { kind: "literal", literal: { type: "json", value: "published" } } } },
             },
             {
               id: "set_published_at",
               type: "record.set_fields",
-              properties: { values: { published_at: { source: "current_time" } } },
+              properties: { values: { published_at: "{{ execution.now }}" } },
             },
           ],
         },
@@ -2256,7 +2256,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
               id: "set_state_withdrawn",
               type: "record.set_fields",
               properties: {
-                values: { state: { source: "literal", value: "withdrawn" } },
+                values: { state: { kind: "literal", literal: { type: "json", value: "withdrawn" } } },
               },
             },
           ],
@@ -2289,22 +2289,22 @@ export const organisationAdministrationModule: ModuleSourceDocument =
             {
               id: "set_subject",
               type: "record.set_fields",
-              properties: { values: { subject: { source: "input", input: "subject" } } },
+              properties: { values: { subject: "{{ inputs.subject }}" } },
             },
             {
               id: "set_details",
               type: "record.set_fields",
-              properties: { values: { details: { source: "input", input: "details" } } },
+              properties: { values: { details: "{{ inputs.details }}" } },
             },
             {
               id: "set_state",
               type: "record.set_fields",
-              properties: { values: { state: { source: "literal", value: "received" } } },
+              properties: { values: { state: { kind: "literal", literal: { type: "json", value: "received" } } } },
             },
             {
               id: "set_received_at",
               type: "record.set_fields",
-              properties: { values: { received_at: { source: "current_time" } } },
+              properties: { values: { received_at: "{{ execution.now }}" } },
             },
           ],
         },
@@ -2321,12 +2321,12 @@ export const organisationAdministrationModule: ModuleSourceDocument =
             {
               id: "set_state",
               type: "record.set_fields",
-              properties: { values: { state: { source: "literal", value: "completed" } } },
+              properties: { values: { state: { kind: "literal", literal: { type: "json", value: "completed" } } } },
             },
             {
               id: "set_closed_at",
               type: "record.set_fields",
-              properties: { values: { closed_at: { source: "current_time" } } },
+              properties: { values: { closed_at: "{{ execution.now }}" } },
             },
           ],
         },
@@ -2343,12 +2343,12 @@ export const organisationAdministrationModule: ModuleSourceDocument =
             {
               id: "set_state",
               type: "record.set_fields",
-              properties: { values: { state: { source: "literal", value: "refused" } } },
+              properties: { values: { state: { kind: "literal", literal: { type: "json", value: "refused" } } } },
             },
             {
               id: "set_closed_at",
               type: "record.set_fields",
-              properties: { values: { closed_at: { source: "current_time" } } },
+              properties: { values: { closed_at: "{{ execution.now }}" } },
             },
           ],
         },

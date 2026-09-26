@@ -970,10 +970,7 @@
             "type": "record.set_fields",
             "properties": {
               "values": {
-                "owner": {
-                  "source": "input",
-                  "input": "owner"
-                }
+                "owner": "{{ inputs.owner }}"
               }
             }
           },
@@ -1007,10 +1004,7 @@
             "type": "record.set_fields",
             "properties": {
               "values": {
-                "status": {
-                  "source": "literal",
-                  "value": "resolved"
-                }
+                "status": { "kind": "literal", "literal": { "type": "json", "value": "resolved" } }
               }
             }
           },
@@ -1019,9 +1013,7 @@
             "type": "record.set_fields",
             "properties": {
               "values": {
-                "resolved_at": {
-                  "source": "current_time"
-                }
+                "resolved_at": "{{ execution.now }}"
               }
             }
           },
@@ -1031,23 +1023,11 @@
             "properties": {
               "record_type": "vortex.service_desk.cases:case_comment",
               "values": {
-                "case": {
-                  "source": "subject_record"
-                },
-                "body": {
-                  "source": "input",
-                  "input": "resolution"
-                },
-                "customer_visible": {
-                  "source": "literal",
-                  "value": false
-                },
-                "created_by": {
-                  "source": "current_actor"
-                },
-                "created_at": {
-                  "source": "current_time"
-                }
+                "case": "{{ inputs.record }}",
+                "body": "{{ inputs.resolution }}",
+                "customer_visible": { "kind": "literal", "literal": { "type": "json", "value": false } },
+                "created_by": "{{ execution.actor }}",
+                "created_at": "{{ execution.now }}"
               }
             }
           },
@@ -1082,23 +1062,11 @@
             "properties": {
               "record_type": "vortex.service_desk.cases:case_comment",
               "values": {
-                "case": {
-                  "source": "subject_record"
-                },
-                "body": {
-                  "source": "input",
-                  "input": "body"
-                },
-                "customer_visible": {
-                  "source": "literal",
-                  "value": true
-                },
-                "created_by": {
-                  "source": "current_actor"
-                },
-                "created_at": {
-                  "source": "current_time"
-                }
+                "case": "{{ inputs.record }}",
+                "body": "{{ inputs.body }}",
+                "customer_visible": { "kind": "literal", "literal": { "type": "json", "value": true } },
+                "created_by": "{{ execution.actor }}",
+                "created_at": "{{ execution.now }}"
               }
             }
           },
