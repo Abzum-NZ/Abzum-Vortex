@@ -811,8 +811,6 @@ export const actionInputDefinitionV3Schema = z
       });
   });
 
-
-
 const sharingConditionParameterSchema = z
   .object({ key: builderKeySchema, type: sharingParameterValueTypeV2Schema })
   .strict();
@@ -1274,6 +1272,7 @@ export const moduleContentV3Schema = z
 
 export const moduleDraftV3Schema = z
   .object({ envelope: moduleDefinitionEnvelopeSchema, content: moduleContentV3Schema })
+  .strict()
   .superRefine((draft, context) => {
     const invalid = (message: string, path: (string | number)[]) =>
       context.addIssue({ code: "custom", path: ["content", ...path], message });
@@ -1332,7 +1331,6 @@ export const moduleDraftV3Schema = z
     });
   });
 
-
 export const moduleCanonicalDocumentV3Schema = z
   .object({
     validationContractVersion: z.literal(moduleValidationContractVersionV3),
@@ -1341,6 +1339,9 @@ export const moduleCanonicalDocumentV3Schema = z
   .strict();
 
 export type ModuleContractVersionPairV3 = z.infer<typeof moduleContractVersionPairV3Schema>;
+export type ModuleFieldV3 = z.infer<typeof moduleFieldV3Schema>;
+export type ActionInputDefinitionV3 = z.infer<typeof actionInputDefinitionV3Schema>;
+export type SavedSharingConditionV3 = z.infer<typeof savedSharingConditionV3Schema>;
 export type ModuleQuerySort = z.infer<typeof moduleQuerySortSchema>;
 export type ModuleQueryAggregate = z.infer<typeof moduleQueryAggregateSchema>;
 export type ModuleQueryDefinitionV3 = z.infer<typeof moduleQueryDefinitionV3Schema>;

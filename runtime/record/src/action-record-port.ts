@@ -127,6 +127,7 @@ const parseCreateTargets = (candidate: unknown): readonly NamedActionCreateTarge
     const recordType = recordTypeDefinitionV3Schema.safeParse(value.recordType);
     if (
       !recordType.success ||
+      recordType.data.systemProjection !== undefined ||
       typeof value.ordinal !== "number" ||
       !Number.isSafeInteger(value.ordinal) ||
       value.ordinal < 0 ||
@@ -170,9 +171,14 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
   const actionV2 = actionDefinitionV3Schema.safeParse(value.action);
   const recordType = recordTypeDefinitionV3Schema.safeParse(value.recordType);
   const createTargets = parseCreateTargets(value.createTargets);
+  // An action that targets a registered protected operation, and every action of a system
+  // projection record type, runs through that operation's owning service, never through ordered
+  // record effects.
   if (
     !actionV2.success ||
+    actionV2.data.protectedOperation !== undefined ||
     !recordType.success ||
+    recordType.data.systemProjection !== undefined ||
     createTargets === undefined ||
     value.validationContractVersion !== moduleValidationContractVersionV3 ||
     typeof value.recordId !== "string" ||

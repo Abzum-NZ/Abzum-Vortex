@@ -2582,7 +2582,6 @@ function compilePermissionRecordScope(
   resolution: Resolution,
   sharingConditions: readonly JsonObject[] = [],
   valueContext?: ModuleValueContext,
-  referencedModuleV2 = false,
 ): unknown | undefined {
   if (permission.record_scope === undefined) return undefined;
   const sourceScope = asObject(permission.record_scope);
@@ -2635,9 +2634,9 @@ function compilePermissionRecordScope(
                   binding.value,
                   valueContext,
                 )
-              : referencedModuleV2 && parameterTypes.get(String(binding.key)) === "decimal_number"
+              : parameterTypes.get(String(binding.key)) === "decimal_number"
                 ? normaliseExactV2(binding.value)
-                : referencedModuleV2 && parameterTypes.get(String(binding.key)) === "money"
+                : parameterTypes.get(String(binding.key)) === "money"
                   ? normaliseMoneyV2(binding.value)
                   : binding.value,
           }
@@ -2686,10 +2685,10 @@ function applicationPermissionSharingConditions(
   resolution: Resolution,
   organizationId: unknown,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
-): Readonly<{ conditions: readonly JsonObject[]; moduleV2: boolean }> {
-  if (permission.record_scope === undefined) return { conditions: [], moduleV2: false };
+): readonly JsonObject[] {
+  if (permission.record_scope === undefined) return [];
   const sourceScope = asObject(permission.record_scope);
-  if (sourceScope.saved_condition === undefined) return { conditions: [], moduleV2: false };
+  if (sourceScope.saved_condition === undefined) return [];
   if (permission.record_type === undefined)
     fail("vortex.definition.saved_condition_revision_required", "unresolved_reference");
   const qualifiedRecordType = String(permission.record_type);
@@ -2731,10 +2730,7 @@ function applicationPermissionSharingConditions(
     records.length !== 1
   )
     fail("vortex.definition.saved_condition_revision_required", "unresolved_reference");
-  return {
-    conditions: content.sharingConditions as JsonObject[],
-    moduleV2: "validationContractVersion" in output,
-  };
+  return content.sharingConditions as JsonObject[];
 }
 
 /**
@@ -2776,7 +2772,6 @@ function fieldSettings(
   qualifiedRecordType: string,
   resolution: Resolution,
   permissionOwners: readonly string[],
-  moduleV2 = false,
   valueContext?: ModuleValueContext,
 ): unknown {
   const settings = asObject(field.settings);
@@ -2805,10 +2800,10 @@ function fieldSettings(
         digitsBeforeDecimal: settings.digits_before_decimal,
         decimalPlaces: settings.decimal_places,
         ...(settings.minimum !== undefined
-          ? { minimum: moduleV2 ? normaliseExactV2(settings.minimum) : settings.minimum }
+          ? { minimum: normaliseExactV2(settings.minimum) }
           : {}),
         ...(settings.maximum !== undefined
-          ? { maximum: moduleV2 ? normaliseExactV2(settings.maximum) : settings.maximum }
+          ? { maximum: normaliseExactV2(settings.maximum) }
           : {}),
       };
     case "money":
@@ -2819,10 +2814,10 @@ function fieldSettings(
             : settings.currency_mode,
         ...(settings.currency ? { currency: settings.currency } : {}),
         ...(settings.minimum !== undefined
-          ? { minimum: moduleV2 ? normaliseExactV2(settings.minimum) : settings.minimum }
+          ? { minimum: normaliseExactV2(settings.minimum) }
           : {}),
         ...(settings.maximum !== undefined
-          ? { maximum: moduleV2 ? normaliseExactV2(settings.maximum) : settings.maximum }
+          ? { maximum: normaliseExactV2(settings.maximum) }
           : {}),
       };
     case "yes_no":
@@ -2900,7 +2895,6 @@ function fieldSettings(
                   qualifiedRecordType,
                   resolution,
                   permissionOwners,
-                  moduleV2,
                   valueContext,
                 ),
               }),
@@ -2948,7 +2942,7 @@ function fieldSettings(
             ? { source: "field", fieldId: localField(String(operand.field)) }
             : {
                 source: "literal",
-                value: moduleV2 ? normaliseExactV2(operand.value) : operand.value,
+                value: normaliseExactV2(operand.value),
               },
         );
         dependencies = (expression.operands as JsonObject[])
@@ -2979,7 +2973,7 @@ function fieldSettings(
             ? { source: "field", fieldId: localField(String(amount.field)) }
             : {
                 source: "literal",
-                value: moduleV2 ? normaliseExactV2(amount.value) : amount.value,
+                value: normaliseExactV2(amount.value),
               };
         dependencies = [
           dateFieldId,
@@ -3470,7 +3464,7 @@ function compileModule(
       personalData: field.personal_data,
       publicDisplay: field.public_display,
       type: field.type,
-      settings: fieldSettings(field, qualified, resolution, permissionOwners, true, valueContext),
+      settings: fieldSettings(field, qualified, resolution, permissionOwners, valueContext),
     }));
     const fields = inheritReadTimeEvaluation(recordType.fields as JsonObject[], compiledFields);
     const relationships = (recordType.relationships as JsonObject[]).map((relationship) => ({
@@ -4543,9 +4537,7 @@ function compileApplication(
       permission,
       source,
       resolution,
-      referencedSharing.conditions,
-      undefined,
-      referencedSharing.moduleV2,
+      referencedSharing,
     );
     const fieldPolicy = compilePermissionFieldPolicy(permission, source, resolution);
     return {

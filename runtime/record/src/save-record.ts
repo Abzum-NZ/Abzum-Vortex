@@ -149,8 +149,11 @@ const parsePreparation = (candidate: unknown): PreparationOutcome => {
   if (value.outcome !== "prepared")
     return { outcome: "unavailable", ...(correlationId ? { correlationId } : {}) };
   const recordType = recordTypeDefinitionV3Schema.safeParse(value.recordType);
+  // A system projection record type has no ordinary write path: it changes only through its
+  // registered protected operations, so a generated-table save never accepts one.
   if (
     !recordType.success ||
+    recordType.data.systemProjection !== undefined ||
     typeof value.existingValues !== "object" ||
     value.existingValues === null ||
     Array.isArray(value.existingValues)
