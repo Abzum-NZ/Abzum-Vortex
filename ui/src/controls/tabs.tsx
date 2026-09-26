@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactElement } from "react";
-import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 import { isRepeatableSlotIdentityV2, repeatableSlotKeyV2 } from "@vortex/contracts";
 import { DefinitionRenderError } from "../definition-error";
 import { Tabs as ShadcnTabs, TabsContent, TabsList, TabsTrigger } from "../components/tabs";
@@ -106,8 +105,11 @@ export function Tabs(props: TabsProps): ReactElement {
     context.events?.tab_changed?.({ event: "tab_changed", tabKey: key });
   };
 
-  const onValueChange = (value: TabsPrimitive.Tab.Value): void => {
-    select(String(value));
+  // A declared tab key is always a string, so a value the primitive can report without one is not a
+  // tab change and never emits the declared event.
+  const onValueChange = (value: unknown): void => {
+    if (typeof value !== "string") return;
+    select(value);
   };
 
   const label = context.accessibleName ?? props.metadata.name;

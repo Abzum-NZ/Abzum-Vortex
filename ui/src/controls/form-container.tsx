@@ -176,7 +176,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
         </h2>
       )}
       {note === undefined ? null : (
-        <p data-vortex-field-note className="text-sm text-destructive">
+        <p data-vortex-field-note className="text-sm text-muted-foreground">
           {note}
         </p>
       )}

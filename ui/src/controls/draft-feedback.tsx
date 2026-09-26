@@ -224,14 +224,13 @@ export function FormDraftFeedbackRegion({
 }: Readonly<{ id: string; summary: FormDraftFeedbackSummary | undefined }>): ReactElement {
   const messages = summary?.messages ?? [];
   return (
-    <div
-      id={id}
-      role="status"
-      data-vortex-draft-feedback="form"
-      className="flex flex-col gap-2"
-    >
+    <div id={id} role="status" data-vortex-draft-feedback="form" className="flex flex-col gap-2">
       {messages.map((message, index) => (
-        <Alert key={index} variant={message.severity === "error" ? "destructive" : "default"}>
+        <Alert
+          key={index}
+          role="status"
+          variant={message.severity === "error" ? "destructive" : "default"}
+        >
           <AlertTitle>{message.severity === "error" ? "Error" : "Note"}</AlertTitle>
           <AlertDescription>{message.text}</AlertDescription>
         </Alert>

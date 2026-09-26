@@ -4,13 +4,16 @@ import type { ReactElement } from "react";
 import { XIcon } from "lucide-react";
 import { Button } from "../components/button";
 import {
-  Dialog as DialogRoot,
+  Dialog,
+  DialogClose,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "../components/dialog";
 import {
+  Sheet,
+  SheetClose,
   SheetContent,
   SheetFooter,
   SheetHeader,
@@ -61,11 +64,11 @@ const drawerSizeClass = (placement: DrawerPlacement, size: SurfaceSize): string 
 /**
  * Shared modal surface for dialogs and drawers, built on the shadcn Dialog and Sheet components
  * (Base UI): the primitive traps focus inside the surface, makes the rest of the page inert and
- * returns focus to the element that had focus when the surface opened. Escape and the close
- * control dismiss it, emitting only the declared `action` event with intent `dismiss`; pressing
- * outside the surface never dismisses. A projected `open` value drives the declared `open` and
- * `close` state operations, and the rendered surface advertises exactly those declared operations
- * for the placement's flow tasks.
+ * returns focus to the element that had focus when the surface opened. Escape and the primitive's
+ * own close control dismiss it, emitting only the declared `action` event with intent `dismiss`;
+ * a press outside the surface never dismisses. A projected `open` value drives the declared `open`
+ * and `close` state operations, and the rendered surface advertises exactly those declared
+ * operations for the placement's flow tasks.
  */
 export function ModalSurface<Values extends ModalSurfacePayload>({
   props,
@@ -89,13 +92,10 @@ export function ModalSurface<Values extends ModalSurfacePayload>({
     context.events?.action?.({ event: "action", intent: "dismiss" });
   };
 
-  const onOpenChange = (
-    nextOpen: boolean,
-    eventDetails: { reason?: string },
-  ): void => {
+  // Pointer dismissal is switched off on the root and the remaining close reasons are filtered, so
+  // only the two declared dismissal paths, Escape and the close control, emit the event.
+  const onOpenChange = (nextOpen: boolean, eventDetails: { reason?: string }): void => {
     if (nextOpen) return;
-    // Only the declared dismissal paths close the surface: Escape and the close control exit,
-    // while pressing the backdrop does not.
     if (eventDetails.reason === "escape-key" || eventDetails.reason === "close-press") dismiss();
   };
 
@@ -108,55 +108,71 @@ export function ModalSurface<Values extends ModalSurfacePayload>({
     ...(dataAttributes ?? {}),
   };
 
-  const closeButton = (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-sm"
-      className={cn("absolute", kind === "dialog" ? "top-2 right-2" : "top-3 right-3")}
-      aria-label={`Close ${title}`}
-      onClick={dismiss}
-    >
-      <XIcon />
-    </Button>
-  );
+  const closeClassName = cn("absolute", kind === "dialog" ? "top-2 right-2" : "top-3 right-3");
 
   if (kind === "drawer") {
+    const side = drawerPlacement ?? "right";
     return (
-      <DialogRoot open={open} onOpenChange={onOpenChange}>
-        <SheetContent side={drawerPlacement ?? "right"} showCloseButton={false}
-          className={cn(drawerSizeClass(drawerPlacement ?? "right", size))}
+      <Sheet open={open} onOpenChange={onOpenChange} disablePointerDismissal>
+        <SheetContent
+          side={side}
+          showCloseButton={false}
+          className={drawerSizeClass(side, size)}
           {...sharedDataAttributes}
         >
           <SheetHeader>
             <SheetTitle>{title}</SheetTitle>
           </SheetHeader>
-          {closeButton}
+          <SheetClose
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className={closeClassName}
+                aria-label={`Close ${title}`}
+              />
+            }
+          >
+            <XIcon />
+          </SheetClose>
           <div className="flex-1 overflow-y-auto px-4">{props.slots.content ?? null}</div>
           {props.slots.actions === undefined || props.slots.actions === null ? null : (
             <SheetFooter>{props.slots.actions}</SheetFooter>
           )}
         </SheetContent>
-      </DialogRoot>
+      </Sheet>
     );
   }
 
   return (
-    <DialogRoot open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange} disablePointerDismissal>
       <DialogContent
         showCloseButton={false}
-        className={cn(DIALOG_SIZES[size])}
+        className={DIALOG_SIZES[size]}
         {...sharedDataAttributes}
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        {closeButton}
+        <DialogClose
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className={closeClassName}
+              aria-label={`Close ${title}`}
+            />
+          }
+        >
+          <XIcon />
+        </DialogClose>
         <div>{props.slots.content ?? null}</div>
         {props.slots.actions === undefined || props.slots.actions === null ? null : (
           <DialogFooter>{props.slots.actions}</DialogFooter>
         )}
       </DialogContent>
-    </DialogRoot>
+    </Dialog>
   );
 }
