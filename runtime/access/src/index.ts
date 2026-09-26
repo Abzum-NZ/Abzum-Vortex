@@ -260,16 +260,6 @@ export {
   type VerifiedDurableActorRequestContext,
 } from "./durable-actor-request";
 
-export {
-  createInitialOperatingRoleGrantService,
-  establishInitialOperatingRoleGrant,
-  InitialOperatingRoleGrantError,
-  initialOperatingRoleGrantErrorCodes,
-  type InitialOperatingRoleGrant,
-  type InitialOperatingRoleGrantDependencies,
-  type InitialOperatingRoleGrantErrorCode,
-} from "./initial-operating-role-grant";
-
 export const AccessService = Object.freeze({
   key: "access",
   boundary: "@vortex/access",

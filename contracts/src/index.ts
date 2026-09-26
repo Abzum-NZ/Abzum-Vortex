@@ -45,7 +45,6 @@ export * from "./organization-group-changes";
 export * from "./organization-group-membership-changes";
 export * from "./organization-invitation-access";
 export * from "./organization-local-administration";
-export * from "./organization-management-application";
 export * from "./organization-role-assignment-changes";
 export * from "./organization-role-activation-changes";
 export * from "./organization-role-changes";
