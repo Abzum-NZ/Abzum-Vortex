@@ -37,8 +37,8 @@ import { personalDataClassSchema, type PersonalDataClass } from "@vortex/contrac
 export type PublishedSearchField = Readonly<{
   fieldId: string;
   type: string;
+  /** The published data class; anything other than a known class is not disclosable. */
   personalData: PersonalDataClass | string;
-  searchPriority?: string;
   /** Type-specific published settings; only field references are read. */
   settings?: unknown;
 }>;
