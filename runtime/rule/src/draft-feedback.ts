@@ -1,4 +1,4 @@
-import type { JsonValue, ModuleFieldV2 } from "@vortex/contracts";
+import type { JsonValue, ModuleFieldV3 } from "@vortex/contracts";
 import {
   evaluateBeforeSaveRuleGraphs,
   type BeforeSaveRuleRefusal,
@@ -91,7 +91,7 @@ const isPlainRecord = (value: unknown): value is Readonly<Record<string, unknown
 };
 
 /** Field types Record generates itself and refuses as submitted input (`generated_field_input`). */
-const generatedFieldTypes = new Set<ModuleFieldV2["type"]>([
+const generatedFieldTypes = new Set<ModuleFieldV3["type"]>([
   "reference_number",
   "calculation",
   "total",

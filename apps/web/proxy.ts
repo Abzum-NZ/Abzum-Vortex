@@ -81,5 +81,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  // The component bundle host on the dedicated component domain is public,
+  // content-addressed and immutable, so it must not receive the session
+  // proxy's private no-store response.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|api/components/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

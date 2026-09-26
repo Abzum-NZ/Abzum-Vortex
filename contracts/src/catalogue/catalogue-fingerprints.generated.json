@@ -88,6 +88,10 @@
       "contentFingerprint": "sha256:3dd3e78d528ff6b8c5addf7e3974b36d44f48222c919a5fd6e5b0f3cfcf39a5d",
       "catalogueFingerprint": "sha256:f6392c7de7ede3c5ef39368b999c81fabcc1b26df1170a35dfbe894636f4d456"
     },
+    "a3b7065b-47ef-4c92-93d1-59300f8b059c:2.0.0": {
+      "contentFingerprint": "sha256:f31fd461b27414ca1ed5433d80438a51a01d067d6138d514b9380084844c8739",
+      "catalogueFingerprint": "sha256:84477cc7c8778b3b1dec19828edc8d47bad730f0bdc6c09a53bf7b13527a9302"
+    },
     "a5610880-05be-426b-a82b-7f3b645bf255:1.0.0": {
       "contentFingerprint": "sha256:9b809e15aeecf3f0fd67383d98a9c1fabac04c94db2e00368f74339965ed76de",
       "catalogueFingerprint": "sha256:6abc82387c20258387aa69bd4735f19a3f3007a738735d5d598bc87cfddc5e39"
@@ -157,6 +161,10 @@
     "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8:0913006c-ea2a-49a9-bff9-6e1d53c8f2db:1.0.0": {
       "contentFingerprint": "sha256:39c11ac81d5335ee55a009a6241b3650849fa2917e9cc8ff0b8de80c5b2097c0",
       "catalogueFingerprint": "sha256:81e7545eb52d95703fa587415bae59eee217cde11291ef2f8c3ac5e5f5396d4c"
+    },
+    "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8:0d8fe4b3-eb4f-48a1-9221-88ce3bad0a7a:1.0.0": {
+      "contentFingerprint": "sha256:a4196c58dca0721fb83dd0dc5f532f36f5113621af6ba446cd9f142003218798",
+      "catalogueFingerprint": "sha256:02d664cad22161bf4e4337a605f55769c4f0ef89792f791cdabbd13701d02751"
     },
     "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8:1545959f-7005-4751-85e9-3e877c3a3fd6:1.0.0": {
       "contentFingerprint": "sha256:696916d89df7429a3e28d1e950ebfe9ab18e9d0aade9be07c635748ed3c86ab3",

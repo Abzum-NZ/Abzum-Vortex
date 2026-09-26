@@ -6,9 +6,9 @@ import {
   recordIdSchema,
   recordTypeIdSchema,
   type FieldType,
-  type ModuleFieldV2,
+  type ModuleFieldV3,
   type PersonalDataClass,
-  type RecordTypeDefinitionV2,
+  type RecordTypeDefinitionV3,
   type SearchPriority,
 } from "@vortex/contracts";
 import { searchIndexFieldDiscloses } from "./sensitivity-policy";
@@ -99,7 +99,7 @@ const isIndexableField = (
   (field.personalData === "none" ||
     (field.personalData === "personal" && policy.personalDataPermitted === true));
 
-const optionLabelsFor = (field: ModuleFieldV2): Readonly<Record<string, string>> | undefined =>
+const optionLabelsFor = (field: ModuleFieldV3): Readonly<Record<string, string>> | undefined =>
   field.type === "choice" || field.type === "several_choices"
     ? Object.freeze(
         Object.fromEntries(
@@ -115,7 +115,7 @@ const optionLabelsFor = (field: ModuleFieldV2): Readonly<Record<string, string>>
  * treated as an indexer.
  */
 export const searchableFieldConfigurationFor = (
-  recordType: Pick<RecordTypeDefinitionV2, "recordTypeId" | "fields">,
+  recordType: Pick<RecordTypeDefinitionV3, "recordTypeId" | "fields">,
   policy: SearchableFieldPolicy,
 ): SearchableFieldConfiguration =>
   Object.freeze({

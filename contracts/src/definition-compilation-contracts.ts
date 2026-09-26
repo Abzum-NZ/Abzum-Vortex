@@ -2,13 +2,18 @@ import { z } from "zod";
 import { applicationDraftV2Schema } from "./application-contracts";
 import { applicationCompositionCatalogueSnapshotV2Schema } from "./application-composition-v2";
 import { applicationSourceDocumentV2Schema } from "./application-source-contracts";
-import { publishedApplicationDefinitionSchema } from "./application-contracts";
+import {
+  actionInputDefinitionSchema,
+  publishedApplicationDefinitionSchema,
+} from "./application-contracts";
 import { flowValueDeclarationSchema } from "./application-flow-bindings";
 import { connectionTypeSourceDocumentSchema } from "./connection-source-contracts";
 import { connectionTypeSchema } from "./integration-contracts";
-import { actionInputDefinitionSchema } from "./module-contracts";
-import { actionInputDefinitionV2Schema } from "./module-contracts-v2";
-import { moduleContractVersionPairV3Schema, moduleDraftV3Schema } from "./module-contracts-v3";
+import {
+  actionInputDefinitionV3Schema,
+  moduleContractVersionPairV3Schema,
+  moduleDraftV3Schema,
+} from "./module-contracts-v3";
 import { moduleSourceDocumentSchema } from "./definition-source";
 import { descriptionSchema } from "./common";
 import { definitionProvenanceEntrySchema } from "./definition-provenance";
@@ -340,7 +345,7 @@ export const applicationToolInputSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("module_inputs"),
-      inputs: z.array(actionInputDefinitionV2Schema).max(50),
+      inputs: z.array(actionInputDefinitionV3Schema).max(50),
     })
     .strict(),
   z

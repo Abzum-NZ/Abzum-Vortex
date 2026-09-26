@@ -2,13 +2,13 @@ import "server-only";
 
 import { z } from "zod";
 import {
-  actionInputDefinitionV2Schema,
+  actionInputDefinitionV3Schema,
   compareExactDecimals,
   compileTextInputPattern,
   normalizeExactDecimal,
   parseExactDecimal,
   recordRichTextDocumentV2Schema,
-  type ActionInputDefinitionV2,
+  type ActionInputDefinitionV3,
   type JsonValue,
 } from "@vortex/contracts";
 
@@ -34,12 +34,12 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 const isoDate = z.iso.date();
 const isoDateTime = z.iso.datetime({ offset: true });
 
-const inputDeclarationsSchema = z.array(actionInputDefinitionV2Schema).max(50);
+const inputDeclarationsSchema = z.array(actionInputDefinitionV3Schema).max(50);
 
 /** Parses the installed input contract the database returned; a malformed one is not guessed at. */
 export const parseQueryInputDeclarations = (
   candidate: unknown,
-): readonly ActionInputDefinitionV2[] | undefined => {
+): readonly ActionInputDefinitionV3[] | undefined => {
   const parsed = inputDeclarationsSchema.safeParse(candidate);
   return parsed.success ? parsed.data : undefined;
 };
@@ -52,7 +52,7 @@ export const parseQueryInputDeclarations = (
  * reader checks the same values again against the condition engine's types.
  */
 export const validateQueryInputValues = (
-  inputs: readonly ActionInputDefinitionV2[],
+  inputs: readonly ActionInputDefinitionV3[],
   suppliedValues: Readonly<Record<string, JsonValue>>,
 ): Readonly<Record<string, JsonValue>> => {
   const declaredKeys = new Set(inputs.map((input) => input.key));
@@ -87,7 +87,7 @@ const exactWithinRange = (
   return normalized;
 };
 
-const validateOne = (input: ActionInputDefinitionV2, value: JsonValue): JsonValue => {
+const validateOne = (input: ActionInputDefinitionV3, value: JsonValue): JsonValue => {
   switch (input.type) {
     case "text": {
       if (typeof value !== "string") return refuse();

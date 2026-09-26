@@ -1,6 +1,4 @@
 import type {
-  ModuleContent,
-  ModuleContentV2,
   ModuleContentV3,
   ModuleContributionV3,
 } from "@vortex/contracts";
@@ -20,7 +18,7 @@ export type InstalledModuleContributionRelease = Readonly<{
   moduleRootId: string;
   definitionKey: string;
   releaseVersion: string;
-  content: ModuleContent | ModuleContentV2 | ModuleContentV3;
+  content: ModuleContentV3;
 }>;
 
 /**
@@ -86,7 +84,7 @@ export type ModuleContributionResolution = Readonly<{
   fingerprint: `sha256:${string}`;
 }>;
 
-type AnyModuleContent = ModuleContent | ModuleContentV2 | ModuleContentV3;
+type AnyModuleContent = ModuleContentV3;
 
 /** Only the exact fields the resolver reads; the contract schema already guarantees their shapes. */
 type ModuleContentView = Readonly<{
