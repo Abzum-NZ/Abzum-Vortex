@@ -79,10 +79,12 @@ insert into vortex_record.protected_read_model_views (
   'list_organization_runtime_settings_projection'
 );
 
-alter table vortex_record.protected_read_model_views owner to vortex_record_owner;
-
+-- The comment is set while the creating role still owns the table; the owner
+-- change below would otherwise make it fail on a fresh database replay.
 comment on table vortex_record.protected_read_model_views is
   'Closed, migration-populated registry of protected projection readers: one security-definer reader per protected read-model key, applying that read model''s own organisation and viewer access.';
+
+alter table vortex_record.protected_read_model_views owner to vortex_record_owner;
 
 -- ============================================================================
 -- The storage kind. A projection relation is a record_data view, but its
@@ -200,6 +202,10 @@ grant execute on function vortex_access.list_organization_runtime_settings_proje
 
 comment on function vortex_access.list_organization_runtime_settings_projection(uuid, integer) is
   'Registered organisation runtime-settings projection: returns the one settings row the current viewer may read under the fixed runtime-settings decision, with the organisation, the record identity, the settings revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer or no settings exist.';
+
+-- The next function already exists and is owned by vortex_record_owner, so
+-- a fresh database replay replaces it as that role.
+set local role vortex_record_owner;
 
 create or replace function vortex_record.provision_exact_module_storage(
   p_module_root_id uuid,
@@ -840,6 +846,14 @@ grant execute on function vortex_record.provision_exact_module_storage(uuid, big
   to vortex_module_owner;
 comment on function vortex_record.provision_exact_module_storage(uuid, bigint) is
   'Private exact-release Module storage provisioner: creates or evolves the generated record_data storage, or the read-only record_data view over one registered protected projection reader for a system projection record type, for one published Module release and records its immutable provision evidence.';
+
+-- The next two functions are owned by vortex_record_adapter, so they are replaced
+-- as that role, which holds CREATE on the schema only for this stretch.
+reset role;
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
 
 create or replace function vortex_record.resolve_installation_access_plan_internal(
   p_installation jsonb
@@ -2225,7 +2239,10 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb) is
   'One bounded keyset page of rows readable through read_record for one installed Module query, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows the scan to the caller''s owner, owner-group and direct-share records where those routes have an exact table form, and still decides every returned row through read_record; works out read-time fields, such as a deadline-passed calculation, inside the query at one statement timestamp in the organisation time zone, so no query is refused for freshness.';
 
+reset role;
+
 set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
 revoke create on schema vortex_record from postgres;
 reset role;
 
