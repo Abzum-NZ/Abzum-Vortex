@@ -25,6 +25,11 @@ export type ApplicationCompositionResolutionV2 = Readonly<{
     scope?: string,
   ): string;
   field(reference: string): string;
+  /**
+   * The module field an automatic field input binds, read by permanent field identity. Undefined
+   * when the field is not part of an exactly bound module release, so publication refuses it.
+   */
+  fieldInput(fieldId: string): FieldInputSourceField | undefined;
   relationship(reference: string): string;
   action(reference: string): string;
   permission(reference: string): string;
@@ -34,6 +39,24 @@ export type ApplicationCompositionResolutionV2 = Readonly<{
     moduleRootId: string;
     recordTypeId: string;
   }>;
+}>;
+
+/**
+ * The exact module-field metadata the compiler derives one automatic field input from: its stable
+ * key, its label, whether it is required, its module field type, its choices (choice fields only)
+ * and the record types it targets (link fields only).
+ */
+export type FieldInputSourceField = Readonly<{
+  key: string;
+  label: string;
+  required: boolean;
+  type: string;
+  choices: readonly Readonly<{ key: string; label: string }>[];
+  recordTypes: readonly Readonly<{
+    state: "resolved";
+    moduleRootId: string;
+    recordTypeId: string;
+  }>[];
 }>;
 
 type ResolutionEvidenceV2 = Pick<DefinitionResolutionSnapshotV2, "definitions" | "identities">;

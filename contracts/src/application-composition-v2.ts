@@ -202,12 +202,33 @@ export const sourceBlockPropertyValueV2Schema: z.ZodType<SourceBlockPropertyValu
     ]),
   );
 
+/**
+ * The control an automatic field input renders, chosen from its referenced module field type by the
+ * compiler. A field that has no compatible control here is refused at publication.
+ */
+export const fieldInputControlKeys = [
+  "text",
+  "rich_text",
+  "number",
+  "boolean",
+  "date",
+  "choice",
+  "link",
+] as const;
+export type FieldInputControlKey = (typeof fieldInputControlKeys)[number];
+
 type BlockPropertySchemaV2Base = {
   key: string;
   label: string;
   help?: string | undefined;
   required: boolean;
   defaultValue?: BlockPropertyValueV2Contract | undefined;
+  /**
+   * Present only on the `field_reference` property an automatic field input binds its record field
+   * to: the compiler then derives that input's name, label, requirement, choices and control from
+   * the referenced module field. Authored and canonical values of the release are unchanged.
+   */
+  derivesFieldInput?: boolean | undefined;
 };
 
 export type BlockPropertySchemaV2Contract =
@@ -974,8 +995,31 @@ export const blockPropertySchemaV2Schema: z.ZodType<BlockPropertySchemaV2Contrac
           path: ["defaultValue"],
           message: "Default value must satisfy its declared property schema",
         });
+      if (value.derivesFieldInput === true && value.kind !== "field_reference")
+        context.addIssue({
+          code: "custom",
+          path: ["derivesFieldInput"],
+          message: "Only a field reference can derive an automatic field input",
+        });
     }),
 );
+
+/**
+ * The one `field_reference` property of an automatic field input, or undefined for every other
+ * release. The compiler reads this declaration to derive the input's name, label, requirement,
+ * choices and control from the referenced module field.
+ */
+export type FieldInputBinding = Extract<
+  BlockPropertySchemaV2Contract,
+  { kind: "field_reference" }
+>;
+export const findFieldInputBinding = (
+  properties: readonly BlockPropertySchemaV2Contract[],
+): FieldInputBinding | undefined =>
+  properties.find(
+    (property): property is FieldInputBinding =>
+      property.kind === "field_reference" && property.derivesFieldInput === true,
+  );
 
 export const blockSlotDeclarationV2Schema = z
   .object({
@@ -1323,6 +1367,12 @@ export const platformBlockReleaseV2Schema = z
         code: "custom",
         path: ["properties"],
         message: "Property keys must be unique",
+      });
+    if (value.properties.filter((property) => property.derivesFieldInput === true).length > 1)
+      context.addIssue({
+        code: "custom",
+        path: ["properties"],
+        message: "A release may bind at most one automatic field input",
       });
     if (new Set(value.slots.map((slot) => slot.key)).size !== value.slots.length)
       context.addIssue({ code: "custom", path: ["slots"], message: "Slot keys must be unique" });

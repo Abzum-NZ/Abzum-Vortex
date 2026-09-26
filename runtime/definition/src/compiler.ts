@@ -81,7 +81,10 @@ import {
   materialiseApplicationCompositionV2,
   type MaterialisedApplicationCompositionV2,
 } from "./application-v2-composition";
-import type { ApplicationCompositionResolutionV2 } from "./application-v2-resolution";
+import type {
+  ApplicationCompositionResolutionV2,
+  FieldInputSourceField,
+} from "./application-v2-resolution";
 import { validateApplicationSourceCatalogue } from "./application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
 import { compileFlowSources, type ResolvedFlowIdentity } from "./flow-compilation";
@@ -4423,6 +4426,36 @@ const applicationCompositionResolutionV2 = (
   return {
     identity: (kind, alias, scope = "content") => resolution.id(definitionKey, kind, alias, scope),
     field: (reference) => qualifiedField(resolution, reference),
+    fieldInput: (fieldId) => {
+      const pair = valueIndex.fieldById(fieldId);
+      if (pair === undefined) return undefined;
+      const field = pair.field;
+      const type = String(field.type);
+      const settings = field.settings === undefined ? {} : asObject(field.settings);
+      const choices =
+        type === "choice" && Array.isArray(settings.options)
+          ? (settings.options as JsonObject[]).map((option) => ({
+              key: String(option.value),
+              label: String(option.label),
+            }))
+          : [];
+      const recordTypes: FieldInputSourceField["recordTypes"] =
+        type === "link" && settings.target !== undefined
+          ? [asObject(settings.target) as FieldInputSourceField["recordTypes"][number]]
+          : type === "link_to_one_of_several" && Array.isArray(settings.targets)
+            ? (settings.targets as JsonObject[]).map(
+                (target) => asObject(target) as FieldInputSourceField["recordTypes"][number],
+              )
+            : [];
+      return {
+        key: String(field.key),
+        label: String(field.label),
+        required: field.required === true,
+        type,
+        choices,
+        recordTypes,
+      };
+    },
     relationship: (reference) => {
       const [recordType, alias] = splitMember(
         reference,

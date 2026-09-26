@@ -5,6 +5,7 @@ import {
   blockPropertyValueV2Schema,
   guidedFormPageCompositionV2Schema,
   isRepeatableSlotIdentityV2,
+  findFieldInputBinding,
   pageCompositionV2Schema,
   repeatableSlotItemIdentitiesV2,
   repeatableSlotKeyV2,
@@ -18,6 +19,7 @@ import {
   type BlockPropertyValueV2Contract,
   type ComponentSettingFailure,
   type DefinitionValidationLocation,
+  type FieldInputControlKey,
   type PlatformBlockReleaseV2,
   type PlatformId,
   type ProtectedReadModelKey,
@@ -29,7 +31,10 @@ import {
   isDefinitionCompilerRefusalCode,
   type DefinitionCompilerRefusalCode,
 } from "./compilation-error";
-import type { ApplicationCompositionResolutionV2 } from "./application-v2-resolution";
+import type {
+  ApplicationCompositionResolutionV2,
+  FieldInputSourceField,
+} from "./application-v2-resolution";
 import {
   createThemeLocation,
   validateApplicationTheme,
@@ -313,6 +318,117 @@ const compileSettings = (
     }
   }
   return result;
+};
+
+/**
+ * The control one automatic field input renders and the settings that follow from its field type.
+ * A type with no compatible control is refused by the caller with `unsupported_field_type`.
+ */
+type DerivedFieldInput = Readonly<{
+  control: FieldInputControlKey;
+  multiline?: boolean | undefined;
+  integer?: boolean | undefined;
+  choices: readonly Readonly<{ key: string; label: string }>[];
+  recordTypes: readonly Readonly<{
+    state: "resolved";
+    moduleRootId: string;
+    recordTypeId: string;
+  }>[];
+}>;
+
+const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInput => {
+  switch (field.type) {
+    case "text":
+      return { control: "text", choices: [], recordTypes: [] };
+    case "long_text":
+      return { control: "text", multiline: true, choices: [], recordTypes: [] };
+    case "formatted_text":
+      return { control: "rich_text", choices: [], recordTypes: [] };
+    case "whole_number":
+      return { control: "number", integer: true, choices: [], recordTypes: [] };
+    case "decimal_number":
+    case "money":
+      return { control: "number", choices: [], recordTypes: [] };
+    case "yes_no":
+      return { control: "boolean", choices: [], recordTypes: [] };
+    case "date":
+      return { control: "date", choices: [], recordTypes: [] };
+    case "choice":
+      return { control: "choice", choices: field.choices, recordTypes: [] };
+    case "link":
+    case "link_to_one_of_several":
+      return { control: "link", choices: [], recordTypes: field.recordTypes };
+    default:
+      return reject("vortex.definition.unsupported_field_type", "unsupported_choice");
+  }
+};
+
+const choiceOptionValues = (
+  choices: readonly Readonly<{ key: string; label: string }>[],
+): BlockPropertyValueV2Contract => ({
+  kind: "list",
+  items: choices.map((choice) => ({
+    kind: "group",
+    properties: {
+      key: { kind: "text", value: choice.key },
+      label: { kind: "text", value: choice.label },
+    },
+  })),
+});
+
+const recordTypeReferenceValues = (
+  recordTypes: DerivedFieldInput["recordTypes"],
+): BlockPropertyValueV2Contract => ({
+  kind: "list",
+  items: recordTypes.map((recordType) => ({
+    kind: "record_type_reference",
+    recordType,
+  })),
+});
+
+/**
+ * Derives an automatic field input's canonical settings from the module field its `field` setting
+ * binds: the field's key becomes the form field key, its label the accessible name (unless the
+ * author overrode it), its required flag the requirement, and its type and choices the control.
+ * The binding field is resolved by the caller, so a missing field was already refused.
+ */
+const applyFieldInputDerivation = (
+  release: PlatformBlockReleaseV2,
+  settings: Record<string, BlockPropertyValueV2Contract>,
+  resolution: ApplicationCompositionResolutionV2,
+): void => {
+  const binding = findFieldInputBinding(release.properties);
+  if (binding === undefined) return;
+  const compiledBinding = settings[binding.key];
+  if (compiledBinding === undefined || compiledBinding.kind !== "field_reference")
+    reject("vortex.definition.application_block_settings", "invalid_value");
+  const field = resolution.fieldInput(compiledBinding.fieldId);
+  if (field === undefined)
+    reject("vortex.definition.module_field_references", "broken_reference");
+  const derived = deriveFieldInputContract(field);
+  const authoredLabel = settings["label"];
+  const label: BlockPropertyValueV2Contract =
+    authoredLabel?.kind === "text" && authoredLabel.value.trim().length > 0
+      ? authoredLabel
+      : { kind: "text", value: field.label };
+  const values: Record<string, BlockPropertyValueV2Contract> = {
+    name: { kind: "text", value: field.key },
+    label,
+    required: { kind: "boolean", value: field.required },
+    control: { kind: "choice", value: derived.control },
+    ...(derived.multiline === true ? { multiline: { kind: "boolean", value: true } } : {}),
+    ...(derived.integer === true ? { integer: { kind: "boolean", value: true } } : {}),
+    ...(derived.control === "choice" ? { options: choiceOptionValues(derived.choices) } : {}),
+    ...(derived.control === "link"
+      ? { record_types: recordTypeReferenceValues(derived.recordTypes) }
+      : {}),
+  };
+  for (const [key, value] of Object.entries(values)) {
+    const parsed = blockPropertyValueV2Schema.safeParse(value);
+    if (!parsed.success)
+      reject("vortex.definition.application_block_settings", "invalid_value");
+    settings[key] = parsed.data!;
+  }
 };
 
 const validateAccessibleName = (
@@ -604,6 +720,7 @@ export const materialiseApplicationCompositionV2 = (
         resolution,
         theme,
       );
+      applyFieldInputDerivation(release, settings, resolution);
       validateAccessibleName(settings, release);
       placements[canonicalId] = {
         block: {

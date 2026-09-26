@@ -3286,6 +3286,82 @@
     ],
     "supportedStateOperations": []
   },
+  "FIELD_INPUT_BLOCK_RELEASE": {
+    "blockId": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+    "key": "platform.form.field_input",
+    "releaseVersion": "1.0.0",
+    "name": "Automatic field",
+    "icon": "zap",
+    "paletteGroup": "input",
+    "rendererKey": "platform.renderer.field_input",
+    "properties": [
+      {
+        "kind": "field_reference",
+        "key": "field",
+        "label": "Field",
+        "help": "Module field this input edits; its label, requirement, choices and control follow the field",
+        "required": true,
+        "derivesFieldInput": true
+      },
+      {
+        "kind": "text",
+        "key": "label",
+        "label": "Label override",
+        "help": "Overrides the field's label; leave unset to follow the field",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "text",
+        "key": "placeholder",
+        "label": "Placeholder",
+        "help": "Placeholder hint text",
+        "required": false,
+        "minLength": 0,
+        "maxLength": 200
+      },
+      {
+        "kind": "text",
+        "key": "help_text",
+        "label": "Help text",
+        "help": "Descriptive help text below the input",
+        "required": false,
+        "minLength": 0,
+        "maxLength": 500
+      },
+      {
+        "kind": "boolean",
+        "key": "disabled",
+        "label": "Disabled",
+        "help": "Whether the field is disabled",
+        "required": false
+      },
+      {
+        "kind": "boolean",
+        "key": "read_only",
+        "label": "Read-only",
+        "help": "Whether the field is read-only",
+        "required": false
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content",
+      "publicSurface": "allowed",
+      "accessibleName": "optional",
+      "accessibleNamePropertyPath": [
+        "label"
+      ]
+    },
+    "supportedEvents": [
+      "field_changed"
+    ],
+    "supportedStateOperations": []
+  },
   "APPLICATION_LAUNCHER_BLOCK_RELEASE": {
     "blockId": "b1a7c2e4-5d3f-4a91-8c26-0e7f4b9a1d33",
     "key": "platform.launcher.application_launcher",
