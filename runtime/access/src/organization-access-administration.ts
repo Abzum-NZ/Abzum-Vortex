@@ -48,6 +48,8 @@ import {
   readOrganizationAdministrationRoleActivationResultSchema,
   readOrganizationAdministrationRoleAssignmentCommandSchema,
   readOrganizationAdministrationRoleAssignmentResultSchema,
+  prepareOrganizationAdministrationRoleChangeCommandSchema,
+  roleIdSchema,
   removeOrganizationAdministrationMembershipCommandSchema,
   renameOrganizationAdministrationGroupCommandSchema,
   retireOrganizationAdministrationGroupCommandSchema,
@@ -90,8 +92,11 @@ import {
   type ListOrganizationAdministrationRoleActivationsResult,
   type ListOrganizationAdministrationRoleAssignmentsCommand,
   type ListOrganizationAdministrationRoleAssignmentsResult,
+  type OrganizationRoleChangeCandidate,
   type OrganizationSelectionCandidate,
+  type PreparedApplicationRoleTemplates,
   type PreparedOrganizationRoleChange,
+  type PrepareOrganizationAdministrationRoleChangeCommand,
   type ReadOrganizationAdministrationGroupCommand,
   type ReadOrganizationAdministrationGroupResult,
   type ReadOrganizationAdministrationApplicationRoleTemplateCommand,
@@ -113,11 +118,16 @@ import {
   type RetireOrganizationAdministrationGroupCommand,
   type RetireOrganizationAdministrationRoleCommand,
   type ReviseOrganizationAdministrationRoleMetadataCommand,
+  type RolePermissionEntry,
   type RevokeOrganizationAdministrationRoleAssignmentCommand,
   type DeactivateOrganizationAdministrationRoleActivationCommand,
   type RevokeOrganizationAdministrationDelegationAuthorityCommand,
 } from "@vortex/contracts";
 import type { DatabaseRow } from "@vortex/db";
+import { fingerprintCanonicalValue } from "@vortex/definition";
+import {
+  verifyPreparedApplicationRoleTemplates,
+} from "./application-role-template-adapter";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
@@ -244,6 +254,10 @@ type RoleAssignmentChangeRow = DatabaseRow & {
   organization_id: unknown;
   assignment_summary: unknown;
   access_version: unknown;
+};
+
+type RoleChangePreparationRow = DatabaseRow & {
+  preparation: unknown;
 };
 
 type DelegationAuthorityChangeRow = DatabaseRow & {
@@ -466,6 +480,29 @@ const mapRecordedRefusal = async <Result>(
   if (result.kind !== "available") return result;
   if (result.value === recordedRefusal) return { kind: "unavailable" };
   return { kind: "available", value: result.value as Result };
+};
+
+/**
+ * A preparation read that finds nothing usable is a permission-shaped refusal, so the protected
+ * request runner maps it to the same neutral unavailability as a refused operation.
+ */
+const preparationUnavailable = (): Error => {
+  const error = new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+  Object.assign(error, { code: "42501" });
+  return error;
+};
+
+/**
+ * The read returns the stored permission and template evidence for the caller's organisation. The
+ * one container fingerprint that only the server can derive is added here, then the canonical
+ * verifier re-derives it and proves the evidence self-consistent before it is handed to the
+ * protected operation.
+ */
+const sealPreparedRoleChangeTemplates = (core: unknown): PreparedApplicationRoleTemplates => {
+  if (typeof core !== "object" || core === null || Array.isArray(core))
+    throw preparationUnavailable();
+  const candidateFingerprint = fingerprintCanonicalValue(core);
+  return verifyPreparedApplicationRoleTemplates({ ...core, candidateFingerprint });
 };
 
 export type OrganizationAccessAdministrationDependencies = HumanOrganizationRequestDependencies &
@@ -953,6 +990,100 @@ export const createOrganizationAccessAdministrationService = (
           return parsed.data;
         }),
       );
+    },
+
+    prepareRoleChange: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: PrepareOrganizationAdministrationRoleChangeCommand,
+    ): Promise<HumanOrganizationRequestResult<PreparedOrganizationRoleChange>> => {
+      const command =
+        prepareOrganizationAdministrationRoleChangeCommandSchema.safeParse(commandCandidate);
+      if (!command.success || command.data.acceptBroadenedAuthority !== "accept")
+        return { kind: "unavailable" };
+      let roleId: string;
+      try {
+        roleId = roleIdSchema.parse(randomUUID());
+      } catch {
+        return { kind: "temporarily_unavailable" };
+      }
+      return requests.run(session, candidate, async (transaction, scope) => {
+        const preparation = {
+          operation: command.data.operation,
+          roleKey: command.data.roleKey,
+          label: command.data.label,
+          description: command.data.description,
+          privilegeClassification: command.data.privilegeClassification,
+          acceptBroadenedAuthority: command.data.acceptBroadenedAuthority,
+          ...(command.data.permissionReferences === undefined
+            ? {}
+            : { permissions: command.data.permissionReferences }),
+          ...(command.data.templateApplicationRootId === undefined
+            ? {}
+            : { applicationRootId: command.data.templateApplicationRootId }),
+          ...(command.data.sourceRoleId === undefined
+            ? {}
+            : { sourceRoleId: command.data.sourceRoleId }),
+        };
+        const row = requireOne(
+          await transaction.query<RoleChangePreparationRow>`
+            select vortex_access.read_organization_role_change_evidence_for_administration(
+              ${JSON.stringify(preparation)}::text::jsonb
+            ) as preparation
+          `,
+        );
+        const read = row.preparation as
+          | Readonly<{
+              outcome?: unknown;
+              organizationId?: unknown;
+              permissions?: unknown;
+              templateContinuityRevision?: unknown;
+              preparedTemplatesCore?: unknown;
+            }>
+          | undefined;
+        if (
+          read === undefined ||
+          read.outcome !== "available" ||
+          typeof read.organizationId !== "string" ||
+          !sameUuid(read.organizationId, scope.organizationId) ||
+          !Array.isArray(read.permissions)
+        )
+          throw preparationUnavailable();
+        const organizationId = read.organizationId;
+        const permissions = read.permissions as RolePermissionEntry[];
+        if (command.data.operation === "create_custom") {
+          const roleCandidate: OrganizationRoleChangeCandidate = {
+            operation: "create_custom",
+            organizationId,
+            roleId,
+            key: command.data.roleKey,
+            label: command.data.label,
+            description: command.data.description,
+            privilegeClassification: command.data.privilegeClassification,
+            assignmentPolicy: { kind: "standing" },
+            permissions,
+          };
+          return prepareOrganizationRoleChangeEvidence({ candidate: roleCandidate });
+        }
+        const templateContinuityRevision = revision(read.templateContinuityRevision);
+        if (typeof templateContinuityRevision !== "number" || command.data.sourceRoleId === undefined)
+          throw preparationUnavailable();
+        const templateCandidate: OrganizationRoleChangeCandidate = {
+          operation: "accept_new_application_role",
+          organizationId,
+          roleId,
+          key: command.data.roleKey,
+          label: command.data.label,
+          description: command.data.description,
+          privilegeClassification: command.data.privilegeClassification,
+          assignmentPolicy: { kind: "standing" },
+          sourceRoleId: command.data.sourceRoleId,
+          templateContinuityRevision,
+          preparedTemplates: sealPreparedRoleChangeTemplates(read.preparedTemplatesCore),
+          permissions,
+        };
+        return prepareOrganizationRoleChangeEvidence({ candidate: templateCandidate });
+      });
     },
 
     createCustomRole: async (
