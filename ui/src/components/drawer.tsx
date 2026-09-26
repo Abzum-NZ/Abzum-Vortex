@@ -139,10 +139,7 @@ function DrawerContent({ className, children, ...props }: DrawerPrimitive.Popup.
           <DrawerPrimitive.Content
             data-slot="drawer-content"
             className={cn(
-              // The four surface utilities are the pinned nova rule's own declarations for this
-              // part. They stay inline so nova paints exactly what it painted before the parts were
-              // slotted; every other style's rule outranks a class list and still owns them.
-              "cn-drawer-content bg-popover text-popover-foreground h-auto text-sm min-h-0 flex-1 overflow-hidden overscroll-contain rounded-[inherit] transition-opacity duration-300 ease-[cubic-bezier(0.45,1.005,0,1.005)] select-text group-data-nested-drawer-open/drawer-popup:opacity-0 group-data-nested-drawer-swiping/drawer-popup:opacity-100 group-data-swiping/drawer-popup:select-none",
+              "cn-drawer-content min-h-0 flex-1 overflow-hidden overscroll-contain rounded-[inherit] transition-opacity duration-300 ease-[cubic-bezier(0.45,1.005,0,1.005)] select-text group-data-nested-drawer-open/drawer-popup:opacity-0 group-data-nested-drawer-swiping/drawer-popup:opacity-100 group-data-swiping/drawer-popup:select-none",
             )}
           >
             {children}

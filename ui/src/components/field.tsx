@@ -80,10 +80,7 @@ function FieldContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="field-content"
-      className={cn(
-        "cn-field-content group/field-content flex flex-1 flex-col leading-snug",
-        className,
-      )}
+      className={cn("cn-field-content group/field-content flex flex-1 flex-col leading-snug", className)}
       {...props}
     />
   );
@@ -103,10 +100,6 @@ function FieldLabel({ className, ...props }: React.ComponentProps<typeof Label>)
   );
 }
 
-/**
- * The pinned nova rule for this part also sets a line height the title does not set today, so the
- * title carries no field-title slot class: adding one would change nova's own field titles.
- */
 function FieldTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div

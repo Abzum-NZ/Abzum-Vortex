@@ -29,3 +29,5 @@ export {
   type VortexStyleRootProps,
   type VortexStyleSelection,
 } from "./vortex-style";
+
+export { VortexStyleStylesheet } from "./vortex-style-stylesheet";

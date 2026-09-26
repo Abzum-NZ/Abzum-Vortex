@@ -4,8 +4,17 @@
  * Tailwind's preflight reset is deliberately not imported yet: the existing screens are styled by
  * their own stylesheets and would change under it. It joins this file when the screens migrate
  * to the shadcn components (#1280-#1287). The theme layer and the utilities are loaded as usual.
+ *
+ * `vortex-style-default` and `vortex-style` are deliberate. The platform default's component rules
+ * are imported below into the first, and the resolved style's stylesheet (linked by the layout
+ * renderer, one file per shadcn style) declares its rules in the second, so an application that
+ * resolved a style of its own always paints with that style and the default only fills what nothing
+ * else has. Both sit between `components` and `utilities`: a style owns the properties the shared
+ * components leave to it, while a utility a caller passes through `className` still outranks it.
+ * The components therefore keep only structural classes that no style rule sets, so no component
+ * class and no style rule declare the same property and this order decides every conflict.
  */
-@layer theme, base, components, utilities;
+@layer theme, base, components, vortex-style-default, vortex-style, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "tw-animate-css";
@@ -13,6 +22,9 @@
 
 /* Every shadcn style, each scoped to [data-vortex-style="<style>"]. */
 @import "./base-nova.css";
+
+/* The platform default style's component rules, for the screens that resolve no style of their own. */
+@import "./base-nova-components.css" layer(vortex-style-default);
 
 /* Class names used by components in these workspaces generate utilities. */
 @source "../..";
