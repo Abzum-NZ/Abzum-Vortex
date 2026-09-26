@@ -97,12 +97,12 @@ begin
     p_action_id, p_record_type_id
   );
   if coalesce((action_context ->> 'rulesUnsupported')::boolean, false)
-    or pg_catalog.jsonb_array_length(action_context -> 'action' -> 'effects') not between 1 and 10
+    or pg_catalog.jsonb_array_length(action_context -> 'action' -> 'tasks') not between 1 and 10
     or exists (
       select 1 from pg_catalog.jsonb_array_elements(
-        action_context -> 'action' -> 'effects'
+        action_context -> 'action' -> 'tasks'
       ) item(value)
-      where item.value ->> 'kind' not in ('set_field', 'create_record', 'copy_relationships', 'soft_delete_subject', 'announce_event')
+      where item.value ->> 'type' not in ('record.set_fields', 'record.create', 'record.changes', 'record.delete', 'event.announce')
     ) then
     return pg_catalog.jsonb_build_object(
       'outcome', 'unsupported', 'correlationId', context_value -> 'correlationId'

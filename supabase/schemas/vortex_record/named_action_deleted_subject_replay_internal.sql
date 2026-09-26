@@ -24,9 +24,9 @@ begin
   );
   if not exists (
     select 1 from pg_catalog.jsonb_array_elements(
-      action_context -> 'action' -> 'effects'
+      action_context -> 'action' -> 'tasks'
     ) item(value)
-    where item.value ->> 'kind' = 'soft_delete_subject'
+    where item.value ->> 'type' = 'record.delete'
   ) then
     return null;
   end if;
@@ -60,4 +60,4 @@ revoke all on function vortex_record.named_action_deleted_subject_replay_interna
 comment on function vortex_record.named_action_deleted_subject_replay_internal(
   uuid, text, uuid, bigint, uuid, uuid, uuid, bigint
 ) is
-  'Private named-action step: for an installed action that declares soft_delete_subject, reports the stored outcome of the completed protected delete carrying the same command identity and revision (the deleted revision and no values), because a deleted subject cannot be projected. Returns null otherwise.';
+  'Private named-action step: for an installed action that declares record.delete, reports the stored outcome of the completed protected delete carrying the same command identity and revision (the deleted revision and no values), because a deleted subject cannot be projected. Returns null otherwise.';
