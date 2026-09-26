@@ -194,7 +194,7 @@ export const sourceQualifiedConditionSchema: z.ZodType<SourceQualifiedCondition>
         message: `Condition operands cannot exceed ${conditionMaximumOperandCount}`,
       });
   });
-export const sourceActionValueSchema = z.discriminatedUnion("source", [
+const sourceActionTaskValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("literal"), value: jsonValueSchema }).strict(),
   z.object({ source: z.literal("input"), input: builderKeySchema }).strict(),
   z.object({ source: z.literal("subject_field"), field: builderKeySchema }).strict(),
@@ -202,30 +202,64 @@ export const sourceActionValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("current_actor") }).strict(),
   z.object({ source: z.literal("current_time") }).strict(),
 ]);
-export const sourceActionEffectSchema = z.discriminatedUnion("kind", [
+export const sourceActionTaskSchema = z.discriminatedUnion("type", [
   z
     .object({
-      kind: z.literal("set_field"),
-      field: builderKeySchema,
-      value: sourceActionValueSchema,
+      id: sourceAliasSchema,
+      type: z.literal("record.set_fields"),
+      properties: z
+        .object({ values: z.record(builderKeySchema, sourceActionTaskValueSchema) })
+        .strict(),
     })
     .strict(),
   z
     .object({
-      kind: z.literal("create_record"),
-      record_type: sourceQualifiedRecordTypeSchema,
-      values: z.record(builderKeySchema, sourceActionValueSchema),
+      id: sourceAliasSchema,
+      type: z.literal("record.create"),
+      properties: z
+        .object({
+          record_type: sourceQualifiedRecordTypeSchema,
+          values: z.record(builderKeySchema, sourceActionTaskValueSchema),
+        })
+        .strict(),
     })
     .strict(),
   z
     .object({
-      kind: z.literal("copy_relationships"),
-      relationships: z.array(builderKeySchema).min(1),
-      target_input: builderKeySchema,
+      id: sourceAliasSchema,
+      type: z.literal("record.changes"),
+      properties: z
+        .object({
+          changes: z
+            .array(
+              z
+                .object({
+                  kind: z.literal("copy_relationships"),
+                  relationships: z.array(builderKeySchema).min(1),
+                  target_input: builderKeySchema,
+                })
+                .strict(),
+            )
+            .min(1)
+            .max(10),
+        })
+        .strict(),
     })
     .strict(),
-  z.object({ kind: z.literal("soft_delete_subject") }).strict(),
-  z.object({ kind: z.literal("announce_event"), event: namespacedKeySchema }).strict(),
+  z
+    .object({
+      id: sourceAliasSchema,
+      type: z.literal("record.delete"),
+      properties: z.object({}).strict(),
+    })
+    .strict(),
+  z
+    .object({
+      id: sourceAliasSchema,
+      type: z.literal("event.announce"),
+      properties: z.object({ event: namespacedKeySchema }).strict(),
+    })
+    .strict(),
 ]);
 
 export const authoredSourceBase = {

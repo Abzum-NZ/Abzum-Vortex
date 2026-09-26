@@ -244,12 +244,12 @@ const actionPermissionsMatch = (
  * refuses the same combination when it composes the action (#571).
  */
 const actionDeleteEffectsSupported = (action: JsonObject): boolean => {
-  const kinds = array(action.effects).map((effect) => String(effect.kind));
+  const types = array(action.tasks).map((task) => String(task.type));
   return (
-    !kinds.includes("soft_delete_subject") ||
-    (kinds.filter((kind) => kind === "soft_delete_subject").length === 1 &&
-      kinds.every((kind) =>
-        ["soft_delete_subject", "copy_relationships", "announce_event"].includes(kind),
+    !types.includes("record.delete") ||
+    (types.filter((type) => type === "record.delete").length === 1 &&
+      types.every((type) =>
+        ["record.delete", "record.changes", "event.announce"].includes(type),
       ))
   );
 };
@@ -720,18 +720,28 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
           !conditionValid(action.precondition, fields, new Set(inputs.keys()))
         )
           valid = false;
-        for (const effect of array(action.effects)) {
-          if (effect.kind === "set_field" && !fields.has(String(effect.field))) valid = false;
+        for (const task of array(action.tasks)) {
+          const properties = object(task.properties);
+          if (String(task.type) === "record.set_fields")
+            for (const field of Object.keys(object(properties.values)))
+              if (!fields.has(field)) valid = false;
+          if (String(task.type) === "record.changes")
+            for (const change of array(properties.changes))
+              if (
+                ((change.relationships as string[]) ?? []).some(
+                  (key) => !relationships.has(key),
+                ) ||
+                inputs.get(String(change.target_input)) !== "record_reference"
+              )
+                valid = false;
+          if (String(task.type) === "event.announce" && !events.has(String(properties.event)))
+            valid = false;
           if (
-            effect.kind === "copy_relationships" &&
-            (((effect.relationships as string[]) ?? []).some((key) => !relationships.has(key)) ||
-              inputs.get(String(effect.target_input)) !== "record_reference")
+            String(task.type) === "record.create" &&
+            !qualifiedRecordValid(properties.record_type)
           )
             valid = false;
-          if (effect.kind === "announce_event" && !events.has(String(effect.event))) valid = false;
-          if (effect.kind === "create_record" && !qualifiedRecordValid(effect.record_type))
-            valid = false;
-          walkValues(effect, (entry) => {
+          walkValues(task, (entry) => {
             if (entry.source === "input" && !inputs.has(String(entry.input))) valid = false;
             if (entry.source === "subject_field" && !fields.has(String(entry.field))) valid = false;
           });
@@ -1013,19 +1023,19 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
           subjectRecordType,
           "source",
         );
-      for (const effect of array(action.effects)) {
-        if (
-          effect.kind === "set_field" &&
-          !sourceValueCompatible(effect.value, subjectFields.get(String(effect.field)))
-        )
-          valid = false;
-        if (effect.kind === "create_record") {
-          const qualified = String(effect.record_type);
+      for (const task of array(action.tasks)) {
+        const properties = object(task.properties);
+        if (String(task.type) === "record.set_fields") {
+          for (const [fieldKey, candidate] of Object.entries(object(properties.values)))
+            if (!sourceValueCompatible(candidate, subjectFields.get(fieldKey))) valid = false;
+        }
+        if (String(task.type) === "record.create") {
+          const qualified = String(properties.record_type);
           const split = qualified.lastIndexOf(":");
           if (split >= 0 && qualified.slice(0, split) === source.key) {
             const targetFields = fieldsFor(records.get(qualified.slice(split + 1)));
             if (
-              Object.entries(object(effect.values)).some(
+              Object.entries(object(properties.values)).some(
                 ([fieldKey, candidate]) =>
                   !sourceValueCompatible(candidate, targetFields.get(fieldKey)),
               )
@@ -1033,13 +1043,15 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
               valid = false;
           }
         }
-        if (effect.kind === "copy_relationships") {
-          const targetInput = inputs.get(String(effect.target_input));
-          if (
-            targetInput?.type !== "record_reference" ||
-            !array(targetInput.record_types).map(String).includes(subjectRecordType)
-          )
-            valid = false;
+        if (String(task.type) === "record.changes") {
+          for (const change of array(properties.changes)) {
+            const targetInput = inputs.get(String(change.target_input));
+            if (
+              targetInput?.type !== "record_reference" ||
+              !array(targetInput.record_types).map(String).includes(subjectRecordType)
+            )
+              valid = false;
+          }
         }
       }
     }
@@ -2588,38 +2600,44 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
           )
         )
           valid = false;
-      for (const effect of array(action.effects)) {
-        if (
-          effect.kind === "set_field" &&
-          (!fields.has(String(effect.fieldId)) ||
-            !actionValueCompatibleV2(
-              effect.value,
-              fieldMap.get(String(effect.fieldId)),
-              fieldMap,
-              inputMap,
-              String(action.subjectRecordTypeId),
-            ))
-        )
-          valid = false;
-        if (effect.kind === "copy_relationships") {
-          if (
-            (effect.relationshipIds as string[]).some((id) => !relationships.has(id)) ||
-            inputMap.get(String(effect.targetInputKey))?.type !== "record_reference" ||
-            !array(inputMap.get(String(effect.targetInputKey))?.recordTypes)
-              .map((reference) => String(reference.recordTypeId))
-              .includes(String(action.subjectRecordTypeId))
-          )
-            valid = false;
+      for (const task of array(action.tasks)) {
+        const properties = object(task.properties);
+        if (String(task.type) === "record.set_fields") {
+          for (const [id, value] of Object.entries(object(properties.values)))
+            if (
+              !fields.has(id) ||
+              !actionValueCompatibleV2(
+                value,
+                fieldMap.get(id),
+                fieldMap,
+                inputMap,
+                String(action.subjectRecordTypeId),
+              )
+            )
+              valid = false;
         }
-        if (effect.kind === "announce_event" && !events.has(String(effect.eventKey))) valid = false;
-        if (effect.kind === "create_record") {
-          const target = recordReference(effect.recordType, allowedModuleRoots);
+        if (String(task.type) === "record.changes") {
+          for (const change of array(properties.changes)) {
+            if (
+              (change.relationshipIds as string[]).some((id) => !relationships.has(id)) ||
+              inputMap.get(String(change.targetInputKey))?.type !== "record_reference" ||
+              !array(inputMap.get(String(change.targetInputKey))?.recordTypes)
+                .map((reference) => String(reference.recordTypeId))
+                .includes(String(action.subjectRecordTypeId))
+            )
+              valid = false;
+          }
+        }
+        if (String(task.type) === "event.announce" && !events.has(String(properties.eventKey)))
+          valid = false;
+        if (String(task.type) === "record.create") {
+          const target = recordReference(properties.recordType, allowedModuleRoots);
           const targetFields = new Map(
             target ? array(target.fields).map((field) => [String(field.fieldId), field]) : [],
           );
           if (
             !target ||
-            Object.entries(object(effect.values)).some(
+            Object.entries(object(properties.values)).some(
               ([id, value]) =>
                 !targetFields.has(id) ||
                 !actionValueCompatibleV2(
@@ -2633,7 +2651,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
           )
             valid = false;
         }
-        walkValues(effect, (entry) => {
+        walkValues(task, (entry) => {
           if (entry.source === "input" && !inputKeys.has(String(entry.inputKey))) valid = false;
           if (entry.source === "subject_field" && !fields.has(String(entry.fieldId))) valid = false;
         });
@@ -3129,14 +3147,17 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         });
       };
       inspectSubjectReferences(action.precondition);
-      for (const effect of array(action.effects)) {
-        if (effect.kind === "set_field") {
-          if (!subjectFieldIds.has(String(effect.fieldId))) safe = false;
-          inspectSubjectReferences(effect.value);
+      for (const task of array(action.tasks)) {
+        const properties = object(task.properties);
+        if (String(task.type) === "record.set_fields") {
+          for (const [fieldId, value] of Object.entries(object(properties.values))) {
+            if (!subjectFieldIds.has(fieldId)) safe = false;
+            inspectSubjectReferences(value);
+          }
         }
-        if (effect.kind === "create_record") {
-          const targetRecord = records.get(String(object(effect.recordType).recordTypeId));
-          const targetRecordId = String(object(effect.recordType).recordTypeId);
+        if (String(task.type) === "record.create") {
+          const targetRecord = records.get(String(object(properties.recordType).recordTypeId));
+          const targetRecordId = String(object(properties.recordType).recordTypeId);
           const targetPublicFields =
             expectedSubjectRecordId !== undefined
               ? (restrictedSubjectFieldIds ?? new Set<string>())
@@ -3144,14 +3165,19 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           if (
             !targetRecord ||
             (expectedSubjectRecordId !== undefined && targetRecordId !== expectedSubjectRecordId) ||
-            Object.keys(object(effect.values)).some((fieldId) => !targetPublicFields.has(fieldId))
+            Object.keys(object(properties.values)).some(
+              (fieldId) => !targetPublicFields.has(fieldId),
+            )
           )
             safe = false;
-          for (const value of Object.values(object(effect.values))) inspectSubjectReferences(value);
+          for (const value of Object.values(object(properties.values)))
+            inspectSubjectReferences(value);
         }
         if (
-          effect.kind === "copy_relationships" &&
-          array(effect.relationshipIds).some((id) => !allowedRelationshipIds.has(String(id)))
+          String(task.type) === "record.changes" &&
+          array(properties.changes).some((change) =>
+            array(change.relationshipIds).some((id) => !allowedRelationshipIds.has(String(id))),
+          )
         )
           safe = false;
       }
@@ -3368,38 +3394,44 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
             subjectModuleV2,
             inputTypes,
           ));
-      for (const effect of array(action.effects)) {
-        if (
-          effect.kind === "set_field" &&
-          (!fields.has(String(effect.fieldId)) ||
-            !applicationActionValueCompatible(
-              effect.value,
-              fieldValuePairs.get(String(effect.fieldId)),
-              fieldMap,
-              subjectModuleV2,
-              inputMap,
-              String(action.subjectRecordTypeId),
-            ))
-        )
+      for (const task of array(action.tasks)) {
+        const properties = object(task.properties);
+        if (String(task.type) === "record.set_fields") {
+          for (const [id, value] of Object.entries(object(properties.values)))
+            if (
+              !fields.has(id) ||
+              !applicationActionValueCompatible(
+                value,
+                fieldValuePairs.get(id),
+                fieldMap,
+                subjectModuleV2,
+                inputMap,
+                String(action.subjectRecordTypeId),
+              )
+            )
+              valid = false;
+        }
+        if (String(task.type) === "record.changes") {
+          for (const change of array(properties.changes))
+            if (
+              (change.relationshipIds as string[]).some((id) => !relationships.has(id)) ||
+              inputMap.get(String(change.targetInputKey))?.type !== "record_reference" ||
+              !array(inputMap.get(String(change.targetInputKey))?.recordTypes)
+                .map((reference) => String(reference.recordTypeId))
+                .includes(String(action.subjectRecordTypeId))
+            )
+              valid = false;
+        }
+        if (String(task.type) === "event.announce" && !events.has(String(properties.eventKey)))
           valid = false;
-        if (
-          effect.kind === "copy_relationships" &&
-          ((effect.relationshipIds as string[]).some((id) => !relationships.has(id)) ||
-            inputMap.get(String(effect.targetInputKey))?.type !== "record_reference" ||
-            !array(inputMap.get(String(effect.targetInputKey))?.recordTypes)
-              .map((reference) => String(reference.recordTypeId))
-              .includes(String(action.subjectRecordTypeId)))
-        )
-          valid = false;
-        if (effect.kind === "announce_event" && !events.has(String(effect.eventKey))) valid = false;
-        if (effect.kind === "create_record") {
-          const target = records.get(String(object(effect.recordType).recordTypeId));
+        if (String(task.type) === "record.create") {
+          const target = records.get(String(object(properties.recordType).recordTypeId));
           const targetFields = new Map(
             target ? array(target.fields).map((field) => [String(field.fieldId), field]) : [],
           );
           if (
             !target ||
-            Object.entries(object(effect.values)).some(
+            Object.entries(object(properties.values)).some(
               ([id, value]) =>
                 !targetFields.has(id) ||
                 !applicationActionValueCompatible(
@@ -3414,7 +3446,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           )
             valid = false;
         }
-        walkValues(effect, (entry) => {
+        walkValues(task, (entry) => {
           if (entry.source === "input" && !inputs.has(String(entry.inputKey))) valid = false;
           if (entry.source === "subject_field" && !fields.has(String(entry.fieldId))) valid = false;
         });

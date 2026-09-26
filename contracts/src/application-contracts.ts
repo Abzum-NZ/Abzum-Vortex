@@ -9,7 +9,7 @@ import {
 } from "./definitions";
 import type { ResolveRecordTypeReferences } from "./definitions";
 import {
-  actionEffectSchema,
+  actionTaskSchema,
   conditionNodeSchema,
   eventDefinitionSchema,
 } from "./module-contracts";
@@ -180,7 +180,7 @@ export const actionDefinitionSchema = z
     sharing: z.enum(["refused", "allowed"]),
     inputs: z.array(actionInputDefinitionSchema).max(50),
     precondition: conditionNodeSchema.optional(),
-    effects: z.array(actionEffectSchema).min(1).max(10),
+    tasks: z.array(actionTaskSchema).min(1).max(10),
   })
   .strict()
   .superRefine((value, context) => {

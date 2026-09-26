@@ -28,7 +28,6 @@ import {
   isPlatformPermissionKey,
   PLATFORM_SERVICE_OPERATIONS,
   flowContractVersion,
-  flowTaskMappingForActionEffect,
   normalizeExactDecimal,
   readModuleSourceRecordOwnershipMode,
   type ApplicationCompilationOutputV2,
@@ -328,7 +327,7 @@ function dynamicMapKeyPosition(sourcePath: Path): number | undefined {
   const normalized = sourcePath.map((segment) => (typeof segment === "number" ? "#" : segment));
   const path = normalized.join("/");
   const markers = [
-    "/effects/#/values/",
+    "/tasks/#/properties/values/",
     "/publication_tests/#/field_values/",
     "/publication_tests/#/parameters/",
     "/nodes/#/config/values/",
@@ -414,7 +413,7 @@ function sourceToCanonicalPath(
     (source.kind === "module" || source.kind === "application") &&
     sourcePath[0] === "body" &&
     sourcePath[1] === "actions" &&
-    sourcePath.includes("effects") &&
+    sourcePath.includes("tasks") &&
     sourcePath.at(-1) === "input"
   )
     mapped[mapped.length - 1] = "inputKey";
@@ -827,17 +826,19 @@ function explicitSourceTargets(
     sourcePath[0] === "body" &&
     sourcePath[1] === "actions" &&
     typeof sourcePath[2] === "number" &&
-    sourcePath[3] === "effects" &&
+    sourcePath[3] === "tasks" &&
     typeof sourcePath[4] === "number" &&
-    sourcePath[5] === "record_type" &&
-    sourcePath.length === 6
+    sourcePath[5] === "properties" &&
+    sourcePath[6] === "record_type" &&
+    sourcePath.length === 7
   ) {
     const targetPath: Path = [
       "content",
       "actions",
       sourcePath[2],
-      "effects",
+      "tasks",
       sourcePath[4],
+      "properties",
       "recordType",
     ];
     return leafPaths(valueAtPath(canonical, targetPath), targetPath);
@@ -1226,21 +1227,27 @@ function explicitSourceTargets(
     sourcePath[0] === "body" &&
     sourcePath[1] === "actions" &&
     typeof sourcePath[2] === "number" &&
-    sourcePath[3] === "effects" &&
+    sourcePath[3] === "tasks" &&
     typeof sourcePath[4] === "number" &&
-    sourcePath[5] === "relationships" &&
-    typeof sourcePath[6] === "number" &&
-    sourcePath.length === 7
+    sourcePath[5] === "properties" &&
+    sourcePath[6] === "changes" &&
+    typeof sourcePath[7] === "number" &&
+    sourcePath[8] === "relationships" &&
+    typeof sourcePath[9] === "number" &&
+    sourcePath.length === 10
   )
     return [
       [
         "content",
         "actions",
         sourcePath[2],
-        "effects",
+        "tasks",
         sourcePath[4],
+        "properties",
+        "changes",
+        sourcePath[7],
         "relationshipIds",
-        sourcePath[6],
+        sourcePath[9],
       ],
     ];
   return undefined;
@@ -1274,9 +1281,9 @@ const moduleSourceTransformPatterns = [
   /^body\/actions\/#\/inputs\/#\/(?:type|record_types\/#)$/,
   /^body\/actions\/#\/inputs\/#\/validation\/(?:minimum|maximum)$/,
   /^body\/actions\/#\/protected_operation$/,
-  /^body\/actions\/#\/effects\/#\/(?:field|record_type|relationships\/#|target_input|event)$/,
-  /^body\/actions\/#\/effects\/#\/value\/(?:source|input|field|value)(?:\/.*)?$/,
-  /^body\/actions\/#\/effects\/#\/values\/[^/]+\/(?:source|input|field|value)(?:\/.*)?$/,
+  /^body\/actions\/#\/tasks\/#\/properties\/(?:record_type|event)$/,
+  /^body\/actions\/#\/tasks\/#\/properties\/changes\/#\/(?:relationships\/#|target_input)$/,
+  /^body\/actions\/#\/tasks\/#\/properties\/values\/[^/]+\/(?:source|input|field|value)(?:\/.*)?$/,
   /^body\/queries\/#\/(?:id|record_type|select\/#|group_by\/#)$/,
   /^body\/queries\/#\/inputs\/#\/(?:type|record_types\/#)$/,
   /^body\/queries\/#\/inputs\/#\/validation\/(?:minimum|maximum)$/,
@@ -1322,9 +1329,9 @@ const applicationSourceTransformPatterns = [
   /^body\/permissions\/#\/field_policy\/(?:readable_fields|changeable_fields)\/#$/,
   /^body\/actions\/#\/(?:permission|sharing)$/,
   /^body\/actions\/#\/inputs\/#\/(?:type|record_types\/#)$/,
-  /^body\/actions\/#\/effects\/#\/(?:field|record_type|relationships\/#|target_input|event)$/,
-  /^body\/actions\/#\/effects\/#\/value\/(?:source|input|field|value)(?:\/.*)?$/,
-  /^body\/actions\/#\/effects\/#\/values\/[^/]+\/(?:source|input|field|value)(?:\/.*)?$/,
+  /^body\/actions\/#\/tasks\/#\/properties\/(?:record_type|event)$/,
+  /^body\/actions\/#\/tasks\/#\/properties\/changes\/#\/(?:relationships\/#|target_input)$/,
+  /^body\/actions\/#\/tasks\/#\/properties\/values\/[^/]+\/(?:source|input|field|value)(?:\/.*)?$/,
   /^body\/rules\/#\/effect\/(?:field|message|component|workflow|reason_code)$/,
   /^body\/rules\/#\/effect\/value(?:\/.*)?$/,
   /^body\/pipelines\/#\/stages\/#\/(?:entry_actions|exit_actions)\/#$/,
@@ -1407,7 +1414,7 @@ function sourceResolvesIdentity(sourcePath: Path, positions: SourceContractPosit
   const path = normalized.join("/");
   const last = sourcePath.at(-1);
   const resolvesDynamicMapKey =
-    /\/(?:effects\/#\/values|sharing_conditions\/#\/publication_tests\/#\/field_values)\/[^/]+\//.test(
+    /\/(?:tasks\/#\/properties\/values|sharing_conditions\/#\/publication_tests\/#\/field_values)\/[^/]+\//.test(
       path,
     );
   if (isOpaqueDataPath(positions, sourcePath)) return resolvesDynamicMapKey;
@@ -1444,7 +1451,7 @@ function fieldPolicySourceResolvesIdentity(sourcePath: Path): boolean {
 
 function sourceCombinesResolvedKeyAndValue(sourcePath: Path): boolean {
   const path = sourcePath.map((segment) => (typeof segment === "number" ? "#" : segment)).join("/");
-  return /\/(?:effects\/#\/values|sharing_conditions\/#\/publication_tests\/#\/field_values)\/[^/]+\//.test(
+  return /\/(?:tasks\/#\/properties\/values|sharing_conditions\/#\/publication_tests\/#\/field_values)\/[^/]+\//.test(
     path,
   );
 }
@@ -3029,59 +3036,53 @@ function compileActionFlow(
   const subjectRecordTypeId = String(canonicalAction.subjectRecordTypeId);
   const scope: ActionFlowScope = { subjectFieldKeyById, subjectInput };
 
-  const effectTasks: FlowTask[] = (canonicalAction.effects as JsonObject[]).map(
-    (effect, effectIndex) => {
-      const mapping =
-        flowTaskMappingForActionEffect[
-          String(effect.kind) as keyof typeof flowTaskMappingForActionEffect
-        ];
-      if (mapping === undefined || mapping.kind !== "task")
-        return fail("vortex.definition.invalid_compilation_output", "invalid_value");
-      const id = `effect_${effectIndex + 1}`;
-      switch (effect.kind) {
-        case "set_field":
-          return actionEffectTask(id, mapping.type, {
-            values: actionFlowFieldValues({ [String(effect.fieldId)]: effect.value }, scope),
-          });
-        case "create_record":
-          return actionEffectTask(id, mapping.type, {
-            record_type: flowTextValue(String(asObject(effect.recordType).recordTypeId)),
-            values: actionFlowFieldValues(asObject(effect.values), scope),
-          });
-        case "copy_relationships":
-          return actionEffectTask(id, mapping.type, {
-            changes: {
-              kind: "literal",
-              literal: {
-                type: "json",
-                value: [
-                  {
+  const effectTasks: FlowTask[] = (canonicalAction.tasks as JsonObject[]).map((task, taskIndex) => {
+    const id = task.id === undefined ? `effect_${taskIndex + 1}` : String(task.id);
+    const properties = asObject(task.properties);
+    switch (String(task.type)) {
+      case "record.set_fields":
+        return actionEffectTask(id, "record.set_fields", {
+          values: actionFlowFieldValues(asObject(properties.values), scope),
+        });
+      case "record.create":
+        return actionEffectTask(id, "record.create", {
+          record_type: flowTextValue(String(asObject(properties.recordType).recordTypeId)),
+          values: actionFlowFieldValues(asObject(properties.values), scope),
+        });
+      case "record.changes":
+        return actionEffectTask(id, "record.changes", {
+          changes: {
+            kind: "literal",
+            literal: {
+              type: "json",
+              value: (properties.changes as JsonObject[]).map(
+                (change) =>
+                  ({
                     kind: "copy_relationships",
-                    relationshipIds: effect.relationshipIds as JsonValue,
+                    relationshipIds: change.relationshipIds as JsonValue,
                     subject: flowReferenceValue({ source: "input", name: subjectInput }),
                     target: flowReferenceValue({
                       source: "input",
-                      name: String(effect.targetInputKey),
+                      name: String(change.targetInputKey),
                     }),
-                  } as unknown as JsonValue,
-                ],
-              },
+                  }) as unknown as JsonValue,
+              ),
             },
-          });
-        case "soft_delete_subject":
-          return actionEffectTask(id, mapping.type, {
-            record_type: flowTextValue(subjectRecordTypeId),
-            record: flowReferenceValue({ source: "input", name: subjectInput }),
-          });
-        case "announce_event":
-          return actionEffectTask(id, mapping.type, {
-            event: flowTextValue(String(effect.eventKey)),
-          });
-        default:
-          return fail("vortex.definition.invalid_compilation_output", "invalid_value");
-      }
-    },
-  );
+          },
+        });
+      case "record.delete":
+        return actionEffectTask(id, "record.delete", {
+          record_type: flowTextValue(subjectRecordTypeId),
+          record: flowReferenceValue({ source: "input", name: subjectInput }),
+        });
+      case "event.announce":
+        return actionEffectTask(id, "event.announce", {
+          event: flowTextValue(String(properties.eventKey)),
+        });
+      default:
+        return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+    }
+  });
 
   const precondition = canonicalAction.precondition;
   const tasks: FlowTask[] =
@@ -3330,43 +3331,70 @@ function compileModule(
       ...(action.precondition
         ? { precondition: condition(action.precondition, localField, valueContext) }
         : {}),
-      effects: (action.effects as JsonObject[]).map((effect) => {
-        if (effect.kind === "set_field")
-          return (() => {
-            const fieldId = localField(String(effect.field));
+      tasks: (action.tasks as JsonObject[]).map((task) => {
+        const id = String(task.id);
+        const properties = asObject(task.properties);
+        switch (String(task.type)) {
+          case "record.set_fields":
             return {
-              kind: "set_field",
-              fieldId,
-              value: actionValue(effect.value, localField, fieldsById.get(fieldId), valueContext),
+              id,
+              type: "record.set_fields",
+              properties: {
+                values: objectFromUniqueEntries(
+                  Object.entries(asObject(properties.values)).map(([key, value]) => {
+                    const fieldId = localField(key);
+                    return [
+                      fieldId,
+                      actionValue(value, localField, fieldsById.get(fieldId), valueContext),
+                    ];
+                  }),
+                ),
+              },
             };
-          })();
-        if (effect.kind === "create_record") {
-          const target = String(effect.record_type);
-          return {
-            kind: "create_record",
-            recordType: resolution.recordType(target),
-            values: objectFromUniqueEntries(
-              Object.entries(asObject(effect.values)).map(([key, value]) => {
-                const fieldId = resolution.field(target, key);
-                return [
-                  fieldId,
-                  actionValue(value, localField, fieldsById.get(fieldId), valueContext),
-                ];
-              }),
-            ),
-          };
+          case "record.create": {
+            const target = String(properties.record_type);
+            return {
+              id,
+              type: "record.create",
+              properties: {
+                recordType: resolution.recordType(target),
+                values: objectFromUniqueEntries(
+                  Object.entries(asObject(properties.values)).map(([key, value]) => {
+                    const fieldId = resolution.field(target, key);
+                    return [
+                      fieldId,
+                      actionValue(value, localField, fieldsById.get(fieldId), valueContext),
+                    ];
+                  }),
+                ),
+              },
+            };
+          }
+          case "record.changes":
+            return {
+              id,
+              type: "record.changes",
+              properties: {
+                changes: (properties.changes as JsonObject[]).map((change) => ({
+                  kind: "copy_relationships",
+                  relationshipIds: (change.relationships as string[]).map((alias) =>
+                    resolution.relationship(record, alias),
+                  ),
+                  targetInputKey: change.target_input,
+                })),
+              },
+            };
+          case "record.delete":
+            return { id, type: "record.delete", properties: {} };
+          case "event.announce":
+            return {
+              id,
+              type: "event.announce",
+              properties: { eventKey: properties.event },
+            };
+          default:
+            return fail("vortex.definition.invalid_compilation_output", "invalid_value");
         }
-        if (effect.kind === "copy_relationships")
-          return {
-            kind: "copy_relationships",
-            relationshipIds: (effect.relationships as string[]).map((alias) =>
-              resolution.relationship(record, alias),
-            ),
-            targetInputKey: effect.target_input,
-          };
-        if (effect.kind === "announce_event")
-          return { kind: "announce_event", eventKey: effect.event };
-        return { kind: "soft_delete_subject" };
       }),
     };
   });
@@ -4004,49 +4032,80 @@ function compileApplication(
           ...(action.precondition
             ? { precondition: condition(action.precondition, localField, subjectContext) }
             : {}),
-          effects: (action.effects as JsonObject[]).map((effect) => {
-            if (effect.kind === "set_field") {
-              const fieldId = localField(String(effect.field));
-              const pair = valueIndex.fieldById(fieldId);
-              return {
-                kind: "set_field",
-                fieldId,
-                value: actionValue(
-                  effect.value,
-                  localField,
-                  pair?.field,
-                  pair?.moduleV2 ? subjectContext : undefined,
-                ),
-              };
+          tasks: (action.tasks as JsonObject[]).map((task) => {
+            const id = String(task.id);
+            const properties = asObject(task.properties);
+            switch (String(task.type)) {
+              case "record.set_fields":
+                return {
+                  id,
+                  type: "record.set_fields",
+                  properties: {
+                    values: objectFromUniqueEntries(
+                      Object.entries(asObject(properties.values)).map(([key, value]) => {
+                        const fieldId = localField(key);
+                        const pair = valueIndex.fieldById(fieldId);
+                        return [
+                          fieldId,
+                          actionValue(
+                            value,
+                            localField,
+                            pair?.field,
+                            pair?.moduleV2 ? subjectContext : undefined,
+                          ),
+                        ];
+                      }),
+                    ),
+                  },
+                };
+              case "record.create": {
+                const target = String(properties.record_type);
+                const targetContext = valueIndex.record(target)?.moduleV2
+                  ? valueIndex.context(target)
+                  : undefined;
+                return {
+                  id,
+                  type: "record.create",
+                  properties: {
+                    recordType: resolution.recordType(target),
+                    values: objectFromUniqueEntries(
+                      Object.entries(asObject(properties.values)).map(([key, value]) => {
+                        const fieldId = resolution.field(target, key);
+                        const pair = valueIndex.fieldById(fieldId);
+                        return [
+                          fieldId,
+                          actionValue(value, localField, pair?.field, targetContext),
+                        ];
+                      }),
+                    ),
+                  },
+                };
+              }
+              case "record.changes":
+                return {
+                  id,
+                  type: "record.changes",
+                  properties: {
+                    changes: (properties.changes as JsonObject[]).map((change) => ({
+                      kind: "copy_relationships",
+                      relationshipIds: (change.relationships as string[]).map((alias) =>
+                        resolution.relationship(record, alias),
+                      ),
+                      targetInputKey: change.target_input,
+                    })),
+                  },
+                };
+              case "record.delete":
+                return { id, type: "record.delete", properties: {} };
+              case "event.announce":
+                return {
+                  id,
+                  type: "event.announce",
+                  properties: { eventKey: properties.event },
+                };
+              default:
+                return fail("vortex.definition.invalid_compilation_output", "invalid_value");
             }
-            if (effect.kind === "create_record") {
-              const target = String(effect.record_type);
-              const targetContext = valueIndex.record(target)?.moduleV2
-                ? valueIndex.context(target)
-                : undefined;
-              return {
-                kind: "create_record",
-                recordType: resolution.recordType(target),
-                values: objectFromUniqueEntries(
-                  Object.entries(asObject(effect.values)).map(([key, value]) => {
-                    const fieldId = resolution.field(target, key);
-                    const pair = valueIndex.fieldById(fieldId);
-                    return [fieldId, actionValue(value, localField, pair?.field, targetContext)];
-                  }),
-                ),
-              };
-            }
-            if (effect.kind === "copy_relationships")
-              return {
-                kind: "copy_relationships",
-                relationshipIds: (effect.relationships as string[]).map((alias) =>
-                  resolution.relationship(record, alias),
-                ),
-                targetInputKey: effect.target_input,
-              };
-            if (effect.kind === "announce_event")
-              return { kind: "announce_event", eventKey: effect.event };
-            return { kind: "soft_delete_subject" };
           }),
         };
       }),

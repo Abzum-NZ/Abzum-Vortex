@@ -41,7 +41,7 @@ import {
   type FormattedTextAllowedBlockV2,
 } from "./module-field-values-v2";
 import {
-  actionEffectSchema,
+  actionTaskSchema,
   conditionNodeSchema,
   eventDefinitionSchema,
   moduleDependencySchema,
@@ -1244,7 +1244,7 @@ export const actionDefinitionV3Schema = z
     sharing: z.enum(["refused", "allowed"]),
     inputs: z.array(actionInputDefinitionV3Schema).max(50),
     precondition: conditionNodeSchema.optional(),
-    effects: z.array(actionEffectSchema).max(10),
+    tasks: z.array(actionTaskSchema).max(10),
     protectedOperation: protectedOperationReferenceSchema.optional(),
   })
   .strict()
@@ -1282,11 +1282,11 @@ export const actionDefinitionV3Schema = z
   })
   .superRefine((value, context) => {
     const operation = value.protectedOperation;
-    if ((operation !== undefined) === value.effects.length > 0)
+    if ((operation !== undefined) === value.tasks.length > 0)
       context.addIssue({
         code: "custom",
         path: ["protectedOperation"],
-        message: "An action targets either ordered effects or one registered protected operation",
+        message: "An action targets either ordered tasks or one registered protected operation",
       });
     if (operation !== undefined && !isSystemRecordProtectedOperation(operation))
       context.addIssue({
