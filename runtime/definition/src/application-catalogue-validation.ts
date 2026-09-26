@@ -148,12 +148,11 @@ export function validateApplicationSourceCatalogue(
     flowBindingByControlEvent.set(`${binding.control}\u0000${binding.event_id}`, binding);
 
   /**
-   * A Records table or Record detail may map only fields its bound data source allows. Mapped
-   * columns and detail fields must be selected by the bound query (or, for a detail with no query,
-   * belong to its page's record type); default sort, sortable and filterable fields must also be
-   * orderable: a grouped or aggregating query exposes only its grouping fields. A default sort
-   * must be the bound query's leading sort, the order the Query engine actually applies. Every
-   * refusal names the placement and the setting that carries the field.
+   * A Records table or Record detail may map only fields of its page's record type. Its bound
+   * Module query lives in another document, so the check that mapped columns, sort and filter
+   * fields are selected by that query, and that the default sort is its leading sort, runs in the
+   * compiled application validation. Every refusal here names the placement and the setting that
+   * carries the field.
    */
   const validateDataContract = (
     placement: SourcePlacement,

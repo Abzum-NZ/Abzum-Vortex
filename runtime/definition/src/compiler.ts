@@ -5320,13 +5320,56 @@ function compileApplicationToolBundle(
       permission: { discover: "page_access", use: "delegated_operations" },
     });
 
-  for (const query of content.queries)
+  // The queries this Application reads are the ones bound Modules expose: each page, placement and
+  // interface read that names one gets a read tool owned by that Module, described from its exact
+  // bound release.
+  const moduleQueriesById = new Map(
+    boundModuleOutputs.flatMap((output) =>
+      output.canonical.content.queries.map(
+        (query) => [String(query.queryId), { moduleRootId: String(output.artifact.rootId), query }] as const,
+      ),
+    ),
+  );
+  const boundModuleQueriesByKey = new Map<string, string[]>();
+  for (const [queryId, { query }] of moduleQueriesById)
+    boundModuleQueriesByKey.set(String(query.key), [
+      ...(boundModuleQueriesByKey.get(String(query.key)) ?? []),
+      queryId,
+    ]);
+  const referencedQueryIds = new Set<string>();
+  const collectQueryIds = (value: unknown): void => {
+    if (Array.isArray(value)) value.forEach(collectQueryIds);
+    else if (value !== null && typeof value === "object") {
+      const item = value as JsonObject;
+      if (typeof item.queryId === "string") referencedQueryIds.add(item.queryId);
+      Object.values(item).forEach(collectQueryIds);
+    }
+  };
+  collectQueryIds(content.pages);
+  for (const definition of content.interfaces)
+    for (const operation of definition.operations)
+      if (operation.target.kind === "query") {
+        const matches = boundModuleQueriesByKey.get(String(operation.target.key)) ?? [];
+        if (matches.length === 1) referencedQueryIds.add(matches[0]!);
+      }
+  for (const queryId of [...referencedQueryIds].sort(compareCanonicalStrings)) {
+    const bound = moduleQueriesById.get(queryId);
+    if (bound === undefined) continue;
     add({
-      name: applicationToolName(applicationKey, "query", String(query.key)),
-      inputSchema: { kind: "none" },
-      operation: { kind: "query", owner: applicationOwner, key: query.key, queryId: query.queryId },
+      name: applicationToolName(applicationKey, "query", String(bound.query.key)),
+      inputSchema:
+        bound.query.inputs.length === 0
+          ? { kind: "none" }
+          : { kind: "module_inputs", inputs: bound.query.inputs },
+      operation: {
+        kind: "query",
+        owner: { kind: "module", moduleRootId: bound.moduleRootId },
+        key: bound.query.key,
+        queryId: bound.query.queryId,
+      },
       permission: { discover: "page_access", use: "none" },
     });
+  }
 
   const addNavigation = (items: readonly NavigationItem[]): void => {
     for (const item of items) {

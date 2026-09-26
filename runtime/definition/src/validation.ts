@@ -3,6 +3,8 @@ import {
   applicationDraftV2Schema,
   calculationMaximumNestingDepth,
   protectedReadModelKeys,
+  readRecordDetailContract,
+  readRecordsTableContract,
   isPlatformPermissionKey,
   applicationSourceDocumentV2Schema,
   applicationCompilationRequestV2Schema,
@@ -3747,6 +3749,49 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         ...pageContentPlacementEntriesV2(page).map(([, placement]) => placement),
         ...pageShellPlacementEntriesV2(page).map(([, placement]) => placement),
       ];
+      // A Records table or Record detail may map only fields its bound Module query selects, and
+      // may order only by fields the query can order (a grouped or aggregating query orders by its
+      // grouping fields). The default sort must be the query's leading sort, the order the Query
+      // engine actually applies. The Query engine refuses a request for an unselected field.
+      for (const placement of placements) {
+        const bound =
+          placement.queryId === undefined ? undefined : moduleQueries.get(String(placement.queryId));
+        if (bound === undefined) continue;
+        const settings = object(placement.settings) as Parameters<typeof readRecordsTableContract>[0];
+        const table = readRecordsTableContract(settings);
+        const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
+        if (table === undefined && detail === undefined) continue;
+        const lower = (ids: readonly unknown[]): Set<string> =>
+          new Set(ids.map((id) => String(id).toLowerCase()));
+        const selected = lower(array(bound.selectedFieldIds));
+        const grouped = array(bound.groupByFieldIds).length > 0 || array(bound.aggregates).length > 0;
+        const orderable = grouped ? lower(array(bound.groupByFieldIds)) : selected;
+        const mapped = (fields: readonly string[], allowed: ReadonlySet<string>): boolean =>
+          fields.every((field) => allowed.has(field.toLowerCase()));
+        const leading = array(bound.sort)[0];
+        if (
+          (table !== undefined &&
+            (!mapped(
+              table.columns.map((column) => column.field),
+              selected,
+            ) ||
+              !mapped(table.sortableFields, orderable) ||
+              !mapped(table.filterableFields, orderable) ||
+              (table.defaultSort !== undefined &&
+                (!orderable.has(table.defaultSort.field.toLowerCase()) ||
+                  leading === undefined ||
+                  String(leading.fieldId).toLowerCase() !== table.defaultSort.field.toLowerCase() ||
+                  leading.direction !== table.defaultSort.direction)))) ||
+          (detail !== undefined &&
+            !mapped(
+              detail.fields.map((entry) => entry.field),
+              selected,
+            ))
+        )
+          failures.push(
+            failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+          );
+      }
       // A placement reads one data source: a declared protected read model or a query, never both.
       if (
         placements.some(
