@@ -77,8 +77,9 @@ export type ApplicationPageModel = Readonly<{
   /** Permitted pages of this application, so a menu or navigate intent can be turned into an address. */
   pages: readonly Readonly<{ pageId: string; key: string }>[];
   /**
-   * The deliberate adoption control, present only for a caller who may manage installations and
-   * only when the application root publishes a release other than the installed one.
+   * The deliberate adoption offer, present only for a caller who may manage installations and
+   * only when the application root publishes a release newer than the installed one. Its presence
+   * is a rendering hint; the adoption action re-checks everything on the server.
    */
   adoption?: Readonly<{
     offeredReleaseRevision: number;
@@ -391,7 +392,7 @@ export const loadApplicationPage = async (
         .filter((candidate) => permittedKeys.has(candidate.key))
         .map((candidate) => ({ pageId: candidate.pageId, key: candidate.key })),
       ...(adoptionTarget !== undefined &&
-      adoptionTarget.currentReleaseRevision !== context.applicationReleaseRevision
+      adoptionTarget.currentReleaseRevision > context.applicationReleaseRevision
         ? {
             adoption: {
               offeredReleaseRevision: adoptionTarget.currentReleaseRevision,

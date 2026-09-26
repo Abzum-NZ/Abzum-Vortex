@@ -132,13 +132,29 @@ export type AdoptApplicationReleaseRequest = Readonly<{
   expectedActiveReleaseRevision: number;
 }>;
 
-/** Deliberately upgrades the installation to the exact offered release, or refuses. */
+/**
+ * Deliberately upgrades the installation to the exact offered release, or refuses. The browser's
+ * offered target is never trusted: the published-current release is re-read under the caller's
+ * own permission-gated request and must be exactly the offered revision and strictly newer than
+ * the loaded installation. The #598 coordinator then re-checks installation authority and refuses
+ * as stale unless the active release is still exactly the one the page loaded.
+ */
 export const adoptApplicationRelease = async (
   session: IdentitySession,
   request: AdoptApplicationReleaseRequest,
 ): Promise<void> => {
-  await coordinator().activate(
-    session,
-    applicationInstallationActivationRequestSchema.parse(request),
-  );
+  const activation = applicationInstallationActivationRequestSchema.parse(request);
+  const target = await readApplicationReleaseAdoption(session, {
+    organizationId: activation.organizationId,
+    applicationRootId: activation.applicationRootId,
+  });
+  if (
+    target === undefined ||
+    target.organizationId.toLowerCase() !== activation.organizationId.toLowerCase() ||
+    target.currentReleaseRevision !== activation.applicationReleaseRevision ||
+    activation.expectedActiveReleaseRevision === null ||
+    activation.applicationReleaseRevision <= activation.expectedActiveReleaseRevision
+  )
+    throw new ApplicationInstallationCoordinatorError("APPLICATION_INSTALLATION_STALE");
+  await coordinator().activate(session, activation);
 };

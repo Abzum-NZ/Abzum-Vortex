@@ -104,10 +104,10 @@ export default async function ApplicationAddressPage({
   /**
    * Deliberately adopts the offered release of the addressed application. The browser supplies the
    * offered target and the installation revision the page loaded; the server re-resolves the
-   * signed-in person's address, re-reads the exact target release and the active installation, and
-   * refuses on any mismatch, so a stale page can never upgrade the wrong release. On success the
-   * address is revalidated so the next request resolves the new release; on any refusal the prior
-   * release keeps rendering.
+   * signed-in person's address, re-reads the offered release and the active installation, and
+   * refuses on any mismatch, so a stale page can never upgrade the wrong release. The page model is
+   * never cached (the page is dynamic, ADR 9): only a committed switch revalidates this address so
+   * the client drops its rendered copy, and on any refusal the prior release keeps rendering.
    */
   async function adoptRelease(formData: FormData): Promise<void> {
     "use server";
@@ -154,7 +154,7 @@ export default async function ApplicationAddressPage({
       refused = true;
     }
     // A refusal, a stale revision or a failed preparation changes nothing; the page keeps showing
-    // the prior release. Only a committed switch invalidates the cached page model.
+    // the prior release. Only a committed switch revalidates the address.
     if (refused) redirect(`${back}?adoption=refused`);
     revalidatePath(back);
     redirect(`${back}?adoption=adopted`);
@@ -263,6 +263,7 @@ export default async function ApplicationAddressPage({
 
   // The addressed page: the permission-filtered page, the viewer's menu, the theme and the
   // persisted data are all composed on the server from this person's own request.
+  const parameters = await searchParams;
   const page = await loadApplicationPage(
     identity.session,
     {
@@ -272,7 +273,7 @@ export default async function ApplicationAddressPage({
       application: resolved.application,
       pageKey: resolved.pageKey,
     },
-    await searchParams,
+    parameters,
   );
   if (page.kind === "temporarily_unavailable")
     return (
@@ -286,8 +287,21 @@ export default async function ApplicationAddressPage({
     );
   if (page.kind === "unavailable") return unavailableFallback;
   const adoption = page.model.adoption;
+  // The outcome notice is display only: it never selects a release, and the page below always
+  // renders whatever installation the server resolved for this request.
+  const adoptionOutcome =
+    parameters.adoption === "adopted"
+      ? "The new release is now in use."
+      : parameters.adoption === "refused"
+        ? "The release could not be adopted. The current release is still in use."
+        : undefined;
   return (
     <>
+      {adoptionOutcome === undefined ? null : (
+        <p role="status" data-vortex-release-adoption="outcome">
+          {adoptionOutcome}
+        </p>
+      )}
       {adoption === undefined ? null : (
         <form action={adoptRelease} data-vortex-release-adoption="offered">
           <input type="hidden" name="applicationKey" value={resolved.application.key} />

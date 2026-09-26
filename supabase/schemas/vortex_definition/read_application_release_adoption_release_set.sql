@@ -4,7 +4,7 @@ create or replace function vortex_definition.read_application_release_adoption_r
 )
 returns jsonb
 language plpgsql
-stable
+volatile
 security definer
 set search_path = ''
 as $function$

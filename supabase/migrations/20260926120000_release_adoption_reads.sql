@@ -3,7 +3,7 @@ create or replace function vortex_definition.read_application_release_adoption_t
 )
 returns jsonb
 language plpgsql
-stable
+volatile
 security definer
 set search_path = ''
 as $function$
@@ -54,9 +54,16 @@ begin
   end if;
 
   -- Only an application this organisation has installed offers an adoption
-  -- target. Publication advances the root pointer but never touches the
-  -- installation, so the offered target is the discovery pointer, not the
-  -- active release.
+  -- target. Module owns installation facts: its fixed postgres-granted reader
+  -- refuses an organisation/application scope with no complete active
+  -- installation, so this function never reads Module storage directly.
+  perform vortex_module.read_active_installation_for_scope_internal(
+    permission_decision.organization_id,
+    p_application_root_id
+  );
+
+  -- Publication advances the root pointer but never touches the installation,
+  -- so the offered target is the discovery pointer, not the active release.
   select pg_catalog.jsonb_build_object(
     'organizationId', root.organization_id,
     'applicationRootId', root.root_id,
@@ -70,14 +77,7 @@ begin
     and release.release_revision = root.current_release_revision
   where root.root_id = p_application_root_id
     and root.kind = 'application'
-    and root.organization_id = permission_decision.organization_id
-    and exists (
-      select 1
-      from vortex_module.installation_bindings as binding
-      where binding.organization_id = root.organization_id
-        and binding.application_root_id = root.root_id
-        and binding.state = 'active'
-    );
+    and root.organization_id = permission_decision.organization_id;
 
   if target_value is null then
     raise exception using errcode = 'P0002',
@@ -101,7 +101,7 @@ create or replace function vortex_definition.read_application_release_adoption_r
 )
 returns jsonb
 language plpgsql
-stable
+volatile
 security definer
 set search_path = ''
 as $function$
