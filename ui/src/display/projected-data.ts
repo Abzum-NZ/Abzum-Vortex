@@ -182,11 +182,21 @@ export type DisplaySemanticEventName = Extract<
  * exact configured control that fired, because one table placement may declare several named
  * commands that each bind to a different flow. A legacy `row_action` from an earlier release that
  * declares only one command may leave it absent.
+ *
+ * A row action carries the row's server-projected current revision, exactly as an inline-edit commit
+ * does, so a command that changes one existing row is bound at the revision the person actually saw
+ * and the server still refuses a stale one. The value is never typed by the person.
  */
 export type DisplaySemanticEvent =
   | Readonly<{ event: "refresh" }>
   | Readonly<{ event: "row_clicked"; eventId: string; recordId: string }>
-  | Readonly<{ event: "row_action"; eventId?: string; recordId: string }>
+  | Readonly<{
+      event: "row_action";
+      eventId?: string;
+      recordId: string;
+      /** The record revision the row was read at; a stale one is refused by the server. */
+      revision?: number;
+    }>
   | Readonly<{ event: "selection_changed"; recordId: string; selected: boolean }>
   | Readonly<{
       event: "filter_changed";

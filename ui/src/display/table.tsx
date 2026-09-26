@@ -409,6 +409,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                       <TableCell className="w-px">
                         <RowActionsMenu
                           recordId={row.recordId}
+                          revision={row.revision}
                           name={name}
                           actions={shownActions}
                           events={events}
