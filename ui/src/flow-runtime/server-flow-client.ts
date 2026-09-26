@@ -151,7 +151,13 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
         headers: { "content-type": "application/json" },
         credentials: "same-origin",
         cache: "no-store",
-        body: JSON.stringify({ ...options.address, invocation }),
+        // Exactly the endpoint's strict request shape: the three address parts and the invocation.
+        body: JSON.stringify({
+          tenantShortName: options.address.tenantShortName,
+          organizationShortName: options.address.organizationShortName,
+          applicationKey: options.address.applicationKey,
+          invocation,
+        }),
       });
       if (response.status === 401 || response.status === 403 || response.status === 413)
         return refused;

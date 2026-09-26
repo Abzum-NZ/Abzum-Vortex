@@ -113,8 +113,13 @@ export type NavigateTaskIntent = FlowIntent & Readonly<{ kind: "navigate" }>;
 /** The Navigate task intent that opens one page; a link activation runs exactly this intent. */
 export const navigateIntentForPage = (
   pageId: string,
+  parameters?: Readonly<Record<string, JsonValue>>,
   taskId = "link_activation",
-): NavigateTaskIntent => ({ kind: "navigate", taskId, properties: { page: pageId } });
+): NavigateTaskIntent => ({
+  kind: "navigate",
+  taskId,
+  properties: parameters === undefined ? { page: pageId } : { page: pageId, parameters },
+});
 
 /** The page target a Navigate task intent names; undefined when it names no valid page. */
 export const linkTargetForNavigateIntent = (intent: FlowIntent): LinkTarget | undefined => {
@@ -174,10 +179,7 @@ export async function activateLinkTarget(
   }
   // A same-context page link is the Navigate task, so links and flows share one navigation path.
   if (target.kind === "page" && behavior === "replace")
-    return performNavigateTask(
-      navigateIntentForPage(target.pageId),
-      environment,
-    );
+    return performNavigateTask(navigateIntentForPage(target.pageId, target.parameters), environment);
   if (!(await environment.recheckInternalTarget(target))) return false;
   if (behavior === "new_page") {
     const address = sameOriginAddress(environment.resolveInternalAddress(target));

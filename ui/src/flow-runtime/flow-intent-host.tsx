@@ -108,11 +108,22 @@ export function useFlowIntentHost(
   const nextId = useRef(0);
   const optionsRef = useRef(options);
   optionsRef.current = options;
+  // Rejects every unanswered surface, so a run whose host went away is abandoned, never left waiting.
+  const abandon = useRef(new Map<number, () => void>());
+  useEffect(() => {
+    const pending = abandon.current;
+    return () => {
+      for (const reject of pending.values()) reject();
+      pending.clear();
+    };
+  }, []);
 
   const enqueue = useCallback(<Result,>(build: (id: number, settle: (result: Result) => void) => Surface) => {
-    return new Promise<Result>((resolve) => {
+    return new Promise<Result>((resolve, reject) => {
       const id = (nextId.current += 1);
+      abandon.current.set(id, () => reject(new Error("FLOW_SURFACE_ABANDONED")));
       const surface = build(id, (result) => {
+        if (!abandon.current.delete(id)) return;
         setSurfaces((current) => current.filter((entry) => entry.id !== id));
         resolve(result);
       });

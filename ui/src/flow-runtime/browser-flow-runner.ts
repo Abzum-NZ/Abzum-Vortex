@@ -86,7 +86,7 @@ export async function runBrowserFlow(
         };
 
       if (step.awaiting === "form") {
-        const form = waiting === undefined ? undefined : readFormIntent(waiting);
+        const form = waiting?.kind === "show_form" ? readFormIntent(waiting) : undefined;
         if (form === undefined)
           return { kind: "failed", failure: { outcome: "failed", code: "value_unresolved" } };
         const answer = await host.showForm(form);
@@ -100,7 +100,7 @@ export async function runBrowserFlow(
           library,
         );
       } else {
-        const confirmation = waiting === undefined ? undefined : readConfirmIntent(waiting);
+        const confirmation = waiting?.kind === "confirm" ? readConfirmIntent(waiting) : undefined;
         if (confirmation === undefined)
           return { kind: "failed", failure: { outcome: "failed", code: "value_unresolved" } };
         step = resumeFlowRun(

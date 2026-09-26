@@ -37,6 +37,8 @@ export function Button(props: ButtonProps): ReactElement {
   // An action handler may return the promise of the flow it started; the button stays busy until it
   // settles, so one gesture cannot start the same flow twice.
   const [running, setRunning] = useState(false);
+  // Guards the gap before the busy state renders, so a second click in the same frame is ignored.
+  const runningNow = useRef(false);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -72,14 +74,20 @@ export function Button(props: ButtonProps): ReactElement {
         aria-busy={pending}
         {...(note === undefined ? {} : { "aria-describedby": noteId })}
         onClick={() => {
-          if (mode !== "action" || disabled) return;
+          if (mode !== "action" || disabled || runningNow.current) return;
           const outcome: unknown = context.events?.action?.({ event: "action", intent: "activate" });
-          if (outcome instanceof Promise) {
+          if (
+            typeof outcome === "object" &&
+            outcome !== null &&
+            typeof (outcome as PromiseLike<unknown>).then === "function"
+          ) {
+            runningNow.current = true;
             setRunning(true);
             const settle = (): void => {
+              runningNow.current = false;
               if (mounted.current) setRunning(false);
             };
-            outcome.then(settle, settle);
+            (outcome as PromiseLike<unknown>).then(settle, settle);
           }
         }}
         className={`vortex-button vortex-button-${variant}`}
