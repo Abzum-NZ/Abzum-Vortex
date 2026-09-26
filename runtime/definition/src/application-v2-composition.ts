@@ -3,9 +3,11 @@ import {
   applicationShellV2Schema,
   applicationThemeV2Schema,
   blockPropertyValueV2Schema,
+  builderKeySchema,
   guidedFormPageCompositionV2Schema,
   isRepeatableSlotIdentityV2,
   findFieldInputBinding,
+  FIELD_INPUT_CONTROL_RELEASES,
   pageCompositionV2Schema,
   repeatableSlotItemIdentitiesV2,
   repeatableSlotKeyV2,
@@ -321,76 +323,104 @@ const compileSettings = (
 };
 
 /**
- * The control one automatic field input renders and the settings that follow from its field type.
- * A type with no compatible control is refused by the caller with `unsupported_field_type`.
+ * The control one automatic field input renders and the canonical settings that follow from its
+ * field type. A type with no exact existing control is refused with `unsupported_field_type`.
  */
 type DerivedFieldInput = Readonly<{
   control: FieldInputControlKey;
-  multiline?: boolean | undefined;
-  integer?: boolean | undefined;
-  choices: readonly Readonly<{ key: string; label: string }>[];
-  recordTypes: readonly Readonly<{
-    state: "resolved";
-    moduleRootId: string;
-    recordTypeId: string;
-  }>[];
+  settings: Readonly<Record<string, unknown>>;
 }>;
+
+/** The text input type a text field's declared format selects; any other format stays plain text. */
+const TEXT_FORMAT_INPUT_TYPES: Readonly<Record<string, string>> = Object.freeze({
+  email_address: "email",
+  web_address: "url",
+});
 
 const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInput => {
   switch (field.type) {
-    case "text":
-      return { control: "text", choices: [], recordTypes: [] };
+    case "text": {
+      const inputType =
+        field.textFormat === undefined ? undefined : TEXT_FORMAT_INPUT_TYPES[field.textFormat];
+      return {
+        control: "text",
+        settings: inputType === undefined ? {} : { input_type: { kind: "choice", value: inputType } },
+      };
+    }
     case "long_text":
-      return { control: "text", multiline: true, choices: [], recordTypes: [] };
+      return { control: "text", settings: { multiline: { kind: "boolean", value: true } } };
     case "formatted_text":
-      return { control: "rich_text", choices: [], recordTypes: [] };
+      return { control: "rich_text", settings: {} };
     case "whole_number":
-      return { control: "number", integer: true, choices: [], recordTypes: [] };
+      return { control: "number", settings: { integer: { kind: "boolean", value: true } } };
     case "decimal_number":
     case "money":
-      return { control: "number", choices: [], recordTypes: [] };
+      return { control: "number", settings: {} };
     case "yes_no":
-      return { control: "boolean", choices: [], recordTypes: [] };
+      return { control: "boolean", settings: {} };
     case "date":
-      return { control: "date", choices: [], recordTypes: [] };
+      return { control: "date", settings: {} };
     case "choice":
-      return { control: "choice", choices: field.choices, recordTypes: [] };
+      // The choice control keys its options by builder key; a field whose stored option values
+      // are not builder keys cannot be offered exactly, so it is refused rather than rewritten.
+      if (!field.choices.every((choice) => builderKeySchema.safeParse(choice.key).success))
+        reject("vortex.definition.unsupported_field_type", "unsupported_choice");
+      return {
+        control: "choice",
+        settings: {
+          options: {
+            kind: "list",
+            items: field.choices.map((choice) => ({
+              kind: "group",
+              properties: {
+                key: { kind: "text", value: choice.key },
+                label: { kind: "text", value: choice.label },
+              },
+            })),
+          },
+        },
+      };
     case "link":
     case "link_to_one_of_several":
-      return { control: "link", choices: [], recordTypes: field.recordTypes };
+      return {
+        control: "link",
+        settings: {
+          record_types: {
+            kind: "list",
+            items: field.recordTypes.map((recordType) => ({
+              kind: "record_type_reference",
+              recordType,
+            })),
+          },
+        },
+      };
     default:
       return reject("vortex.definition.unsupported_field_type", "unsupported_choice");
   }
 };
 
-const choiceOptionValues = (
-  choices: readonly Readonly<{ key: string; label: string }>[],
-): BlockPropertyValueV2Contract => ({
-  kind: "list",
-  items: choices.map((choice) => ({
-    kind: "group",
-    properties: {
-      key: { kind: "text", value: choice.key },
-      label: { kind: "text", value: choice.label },
-    },
-  })),
-});
-
-const recordTypeReferenceValues = (
-  recordTypes: DerivedFieldInput["recordTypes"],
-): BlockPropertyValueV2Contract => ({
-  kind: "list",
-  items: recordTypes.map((recordType) => ({
-    kind: "record_type_reference",
-    recordType,
-  })),
-});
+/** One canonical value, parsed through the closed value contract and checked by its declaration. */
+const derivedPropertyValue = (
+  value: unknown,
+  declaration: BlockPropertySchemaV2Contract | undefined,
+): BlockPropertyValueV2Contract => {
+  const parsed = blockPropertyValueV2Schema.safeParse(value);
+  const canonical = parsed.success
+    ? parsed.data
+    : reject("vortex.definition.unsupported_field_type", "unsupported_choice");
+  if (declaration === undefined || validateComponentSettingValue(canonical, declaration).length > 0)
+    reject("vortex.definition.unsupported_field_type", "unsupported_choice");
+  return canonical;
+};
 
 /**
- * Derives an automatic field input's canonical settings from the module field its `field` setting
- * binds: the field's key becomes the form field key, its label the accessible name (unless the
- * author overrode it), its required flag the requirement, and its type and choices the control.
- * The binding field is resolved by the caller, so a missing field was already refused.
+ * Derives an automatic field input's canonical settings from the module field its binding setting
+ * references: the field's key becomes the form field key, its label the accessible name (unless the
+ * author overrode it), its required flag the requirement, and its type, format, choices and link
+ * targets the control. Every resulting setting must satisfy the delegated input release's own
+ * declarations, so the renderer receives exactly the values that control already accepts: a field
+ * it cannot represent exactly is refused with `unsupported_field_type`, and an authored override
+ * the delegated control does not declare with `application_block_settings`.
  */
 const applyFieldInputDerivation = (
   release: PlatformBlockReleaseV2,
@@ -400,35 +430,41 @@ const applyFieldInputDerivation = (
   const binding = findFieldInputBinding(release.properties);
   if (binding === undefined) return;
   const compiledBinding = settings[binding.key];
-  if (compiledBinding === undefined || compiledBinding.kind !== "field_reference")
-    reject("vortex.definition.application_block_settings", "invalid_value");
-  const field = resolution.fieldInput(compiledBinding.fieldId);
-  if (field === undefined)
-    reject("vortex.definition.module_field_references", "broken_reference");
+  const fieldId =
+    compiledBinding?.kind === "field_reference"
+      ? compiledBinding.fieldId
+      : reject("vortex.definition.application_block_settings", "required_value");
+  const field = requireValue(
+    resolution.fieldInput(fieldId),
+    "vortex.definition.module_field_references",
+    "broken_reference",
+  );
   const derived = deriveFieldInputContract(field);
-  const authoredLabel = settings["label"];
-  const label: BlockPropertyValueV2Contract =
-    authoredLabel?.kind === "text" && authoredLabel.value.trim().length > 0
-      ? authoredLabel
-      : { kind: "text", value: field.label };
-  const values: Record<string, BlockPropertyValueV2Contract> = {
-    name: { kind: "text", value: field.key },
-    label,
-    required: { kind: "boolean", value: field.required },
-    control: { kind: "choice", value: derived.control },
-    ...(derived.multiline === true ? { multiline: { kind: "boolean", value: true } } : {}),
-    ...(derived.integer === true ? { integer: { kind: "boolean", value: true } } : {}),
-    ...(derived.control === "choice" ? { options: choiceOptionValues(derived.choices) } : {}),
-    ...(derived.control === "link"
-      ? { record_types: recordTypeReferenceValues(derived.recordTypes) }
-      : {}),
-  };
-  for (const [key, value] of Object.entries(values)) {
-    const parsed = blockPropertyValueV2Schema.safeParse(value);
-    if (!parsed.success)
-      reject("vortex.definition.application_block_settings", "invalid_value");
-    settings[key] = parsed.data!;
+  const target = FIELD_INPUT_CONTROL_RELEASES[derived.control];
+  const declaration = (key: string): BlockPropertySchemaV2Contract | undefined =>
+    target.properties.find((property) => property.key === key);
+  for (const [key, value] of Object.entries(settings)) {
+    if (key === binding.key) continue;
+    const targetDeclaration = declaration(key);
+    if (targetDeclaration === undefined)
+      reject("vortex.definition.application_block_settings", "unknown_property");
+    else rejectSettingFailures(validateComponentSettingValue(value, targetDeclaration));
   }
+  const authoredLabel = settings["label"];
+  const derivedValues: Record<string, unknown> = {
+    name: { kind: "text", value: field.key },
+    ...(authoredLabel?.kind === "text" && authoredLabel.value.trim().length > 0
+      ? {}
+      : { label: { kind: "text", value: field.label } }),
+    required: { kind: "boolean", value: field.required },
+    ...derived.settings,
+  };
+  for (const [key, value] of Object.entries(derivedValues))
+    settings[key] = derivedPropertyValue(value, declaration(key));
+  settings["control"] = { kind: "choice", value: derived.control };
+  for (const property of target.properties)
+    if (property.required && settings[property.key] === undefined)
+      reject("vortex.definition.unsupported_field_type", "unsupported_choice");
 };
 
 const validateAccessibleName = (

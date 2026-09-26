@@ -43,14 +43,15 @@ export type ApplicationCompositionResolutionV2 = Readonly<{
 
 /**
  * The exact module-field metadata the compiler derives one automatic field input from: its stable
- * key, its label, whether it is required, its module field type, its choices (choice fields only)
- * and the record types it targets (link fields only).
+ * key, its label, whether it is required, its module field type, its declared format (text fields
+ * only), its choices (choice fields only) and the record types it targets (link fields only).
  */
 export type FieldInputSourceField = Readonly<{
   key: string;
   label: string;
   required: boolean;
   type: string;
+  textFormat?: string | undefined;
   choices: readonly Readonly<{ key: string; label: string }>[];
   recordTypes: readonly Readonly<{
     state: "resolved";

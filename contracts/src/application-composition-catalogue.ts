@@ -1,4 +1,5 @@
 import {
+  type FieldInputControlKey,
   type PlatformBlockReleaseV2,
   platformBlockReleaseV2Schema,
   type ImmutablePlatformBlockCatalogueV2,
@@ -193,6 +194,22 @@ export const RICH_TEXT_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sou
  * input can never publish against a missing field and a label follows a field rename.
  */
 export const FIELD_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.FIELD_INPUT_BLOCK_RELEASE);
+
+/**
+ * The existing input release each derived automatic field control delegates to. The compiler
+ * validates the derived settings against this release's declared properties, and the renderer
+ * draws the placement with this release's metadata, so both read one mapping.
+ */
+export const FIELD_INPUT_CONTROL_RELEASES: Readonly<Record<FieldInputControlKey, PlatformBlockReleaseV2>> =
+  Object.freeze({
+    text: TEXT_INPUT_BLOCK_RELEASE,
+    rich_text: RICH_TEXT_INPUT_BLOCK_RELEASE,
+    number: NUMBER_INPUT_BLOCK_RELEASE,
+    boolean: BOOLEAN_INPUT_BLOCK_RELEASE,
+    date: DATE_INPUT_BLOCK_RELEASE,
+    choice: CHOICE_INPUT_BLOCK_RELEASE,
+    link: LINK_INPUT_BLOCK_RELEASE,
+  });
 
 /** Exact immutable metadata release for the application launcher block. */
 export const APPLICATION_LAUNCHER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.APPLICATION_LAUNCHER_BLOCK_RELEASE);

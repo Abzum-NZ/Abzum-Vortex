@@ -2,16 +2,9 @@
 
 import type { ComponentType, ReactElement } from "react";
 import {
-  BOOLEAN_INPUT_BLOCK_RELEASE,
-  CHOICE_INPUT_BLOCK_RELEASE,
-  DATE_INPUT_BLOCK_RELEASE,
-  LINK_INPUT_BLOCK_RELEASE,
-  NUMBER_INPUT_BLOCK_RELEASE,
-  RICH_TEXT_INPUT_BLOCK_RELEASE,
-  TEXT_INPUT_BLOCK_RELEASE,
+  FIELD_INPUT_CONTROL_RELEASES,
   fieldInputControlKeys,
   type FieldInputControlKey,
-  type PlatformBlockReleaseV2,
 } from "@vortex/contracts";
 import { DefinitionRenderError } from "../definition-error";
 import type { ControlRenderProps } from "./control-context";
@@ -26,31 +19,24 @@ import { ChoiceInput } from "./choice-input";
 
 export type FieldInputProps = ControlRenderProps<FieldInputPayload>;
 
-type FieldInputTarget = Readonly<{
-  metadata: PlatformBlockReleaseV2;
-  component: ComponentType<ControlRenderProps<FieldInputPayload>>;
-}>;
-
-const asTarget = (metadata: PlatformBlockReleaseV2, component: unknown): FieldInputTarget => ({
-  metadata,
-  component: component as ComponentType<ControlRenderProps<FieldInputPayload>>,
-});
+type FieldInputComponent = ComponentType<ControlRenderProps<FieldInputPayload>>;
 
 /**
  * The one renderer for every automatic field input. The compiler derived its `control` from the
- * referenced module field type, so this adapter delegates to the exact registered input control and
- * its own release metadata; the placement's settings already carry that control's derived values.
- * A placement without a derived control, or carrying values of a different control's shape, is
- * refused rather than rendered with an invented one.
+ * referenced module field type and validated the derived settings against that control's own
+ * release, so this adapter delegates to the exact registered input control with the release
+ * metadata in FIELD_INPUT_CONTROL_RELEASES. A placement without a derived control, or carrying
+ * projected values of a different control's shape, is refused rather than rendered with an
+ * invented one.
  */
-const TARGETS: Readonly<Record<FieldInputControlKey, FieldInputTarget>> = Object.freeze({
-  text: asTarget(TEXT_INPUT_BLOCK_RELEASE, TextInput),
-  rich_text: asTarget(RICH_TEXT_INPUT_BLOCK_RELEASE, RichTextInput),
-  number: asTarget(NUMBER_INPUT_BLOCK_RELEASE, NumberInput),
-  boolean: asTarget(BOOLEAN_INPUT_BLOCK_RELEASE, BooleanInput),
-  date: asTarget(DATE_INPUT_BLOCK_RELEASE, DateInput),
-  choice: asTarget(CHOICE_INPUT_BLOCK_RELEASE, ChoiceInput),
-  link: asTarget(LINK_INPUT_BLOCK_RELEASE, LinkInput),
+const COMPONENTS: Readonly<Record<FieldInputControlKey, FieldInputComponent>> = Object.freeze({
+  text: TextInput as unknown as FieldInputComponent,
+  rich_text: RichTextInput as unknown as FieldInputComponent,
+  number: NumberInput as unknown as FieldInputComponent,
+  boolean: BooleanInput as unknown as FieldInputComponent,
+  date: DateInput as unknown as FieldInputComponent,
+  choice: ChoiceInput as unknown as FieldInputComponent,
+  link: LinkInput as unknown as FieldInputComponent,
 });
 
 /** The exact projected-value kind each derived control accepts, so a mismatch fails closed. */
@@ -89,7 +75,6 @@ export function FieldInput(props: FieldInputProps): ReactElement {
       `An automatic field input with control '${key}' cannot carry '${data.values.kind}' projected values`,
       location,
     );
-  const target = TARGETS[key];
-  const Component = target.component;
-  return <Component {...props} metadata={target.metadata} />;
+  const Component = COMPONENTS[key];
+  return <Component {...props} metadata={FIELD_INPUT_CONTROL_RELEASES[key]} />;
 }
