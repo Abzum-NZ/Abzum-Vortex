@@ -96,6 +96,7 @@ export {
 } from "./component-event-dispatch";
 
 export {
+  acceptComponentReread,
   acceptComponentResult,
   beginComponentInvocation,
   componentDisplayOutcomeKinds,
@@ -109,6 +110,7 @@ export {
   refreshComponentAfterSave,
   type ComponentConfirmedWrite,
   type ComponentDatasetReread,
+  type ComponentDatasetRereader,
   type ComponentDisplayOutcome,
   type ComponentDisplayOutcomeKind,
   type ComponentDisplayRecovery,
@@ -120,6 +122,7 @@ export {
   type ComponentInvocationId,
   type ComponentInvocationStart,
   type ComponentInvocationStartInput,
+  type ComponentRefreshAfterSave,
   type ComponentResultReduction,
   type ComponentResultReductionReason,
   type ComponentResultState,

@@ -36,15 +36,17 @@ import type { FlowOrchestratorResponse } from "./flow-orchestrator";
  *   its cause, the selected row it belongs to and a per-component request generation. A response
  *   whose generation is older than the component's current generation, or that belongs to a
  *   selection the component has moved past, is discarded: a late response can never replace newer
- *   rows or restore revoked content. Discarding a stale display response never cancels a confirmed
- *   write outcome, which is held separately (specification, frontend-rule-designer.md: "Discard
- *   obsolete display responses without pretending that a committed write was cancelled").
+ *   rows or restore revoked content. A confirmed write is recorded whenever its response arrives,
+ *   even when that response is too late to change the display, and is never removed (specification,
+ *   frontend-rule-designer.md: "Discard obsolete display responses without pretending that a
+ *   committed write was cancelled").
  *
  * - **A write-triggered refresh that cannot write.** `refreshComponentAfterSave` re-reads a
  *   component's dataset through a callback whose result type carries no flow, so the action that
- *   made the saved change can never run again (specification, frontend-rule-designer.md: "A
- *   write's own invalidation refreshes affected read results without recursively rerunning its
- *   originating write path").
+ *   made the saved change can never run again. Each confirmed write refreshes at most once, and the
+ *   re-read is accepted through the same generation guard, so a slow refresh can never replace a
+ *   newer result (specification, frontend-rule-designer.md: "A write's own invalidation
+ *   refreshes affected read results without recursively rerunning its originating write path").
  *
  * The module is pure apart from that read callback: it reads no identity, authority, organisation
  * or record from its inputs. The dispatch result it receives is already the viewer's permitted
@@ -191,9 +193,10 @@ const projectDispatchRefusal = (code: string): ComponentDisplayOutcome => {
  * `completed` and a failure that preserved commits is `partial`. A plain completed flow defers to
  * the read's own state, so a zero-row page stays `empty` and is never reported as an error. A flow
  * refusal or failure with no commit is `refused`; an uncertain effect is `unavailable` with
- * `reconcile_before_retry`; a transient query failure is `unavailable` with `retry`; and a
- * suspended interactive flow is `unavailable` with `awaiting_person` (or `partial` when it already
- * committed effects). Nothing here reads authority or content beyond the already-permitted page.
+ * `reconcile_before_retry`; a transient query failure is `unavailable` with `retry`; a
+ * suspended interactive flow is `unavailable` with `awaiting_person` (or `partial`, with any page,
+ * when it already committed effects); and a bound flow the orchestrator refused is `refused` even
+ * when the page was read. Nothing here reads authority or content beyond the already-permitted page.
  */
 export const projectComponentResult = (
   result: ComponentEventDispatchResult,
@@ -201,6 +204,22 @@ export const projectComponentResult = (
   if (result.kind === "refused") return projectDispatchRefusal(result.code);
 
   const data = result.data;
+  // A bound flow the orchestrator refused could not be resolved or was not permitted: the event is
+  // refused whether or not its page was read, so a refusal never renders as ordinary data.
+  if (result.flow?.kind === "refused")
+    return { kind: "refused", reason: "flow_refused", recovery: "change_request" };
+  // A suspended flow that already committed effects is partial even when a page came back, so the
+  // confirmed commits are never hidden behind the read.
+  if (result.flow?.kind === "suspended" && result.flow.committedEffects > 0)
+    return {
+      kind: "partial",
+      flow: {
+        descriptor: safeFlowResultDescriptors.partial,
+        committedEffects: result.flow.committedEffects,
+      },
+      ...(data === undefined ? {} : { data }),
+    };
+
   const flow = flowDisplay(result.flow);
 
   if (flow !== undefined) {
@@ -229,20 +248,10 @@ export const projectComponentResult = (
   if (data !== undefined)
     return data.rows.length === 0 ? { kind: "empty", data } : { kind: "completed", data };
 
-  // No read and no finished flow. A suspended flow awaits the person; a refused flow could not be
-  // resolved or was not permitted; anything else is a completed event that reads no page.
+  // No read and no finished flow. A suspended flow with no commit awaits the person; anything else
+  // is a completed event that reads no page.
   if (result.flow?.kind === "suspended")
-    return result.flow.committedEffects > 0
-      ? {
-          kind: "partial",
-          flow: {
-            descriptor: safeFlowResultDescriptors.partial,
-            committedEffects: result.flow.committedEffects,
-          },
-        }
-      : { kind: "unavailable", reason: "awaiting_person", recovery: "await_person" };
-  if (result.flow?.kind === "refused")
-    return { kind: "refused", reason: "flow_refused", recovery: "change_request" };
+    return { kind: "unavailable", reason: "awaiting_person", recovery: "await_person" };
   return { kind: "completed" };
 };
 
@@ -276,21 +285,24 @@ export type ComponentInvocation = Readonly<{
 }>;
 
 /**
- * A confirmed protected effect (at least one committed change) that a stale display must not
- * cancel.
+ * A confirmed protected effect (at least one committed change). It is recorded whenever its
+ * response arrives, even when that response is too late to change the display, so a stale display
+ * never cancels it. `refreshedBy` names the one read-only refresh this write has started.
  */
 export type ComponentConfirmedWrite = Readonly<{
   flow: ComponentFlowDisplay;
   invocationId: ComponentInvocationId;
   generation: number;
   selectedRow?: ComponentSelection;
+  refreshedBy?: ComponentInvocationId;
 }>;
 
 /**
  * The current viewer-safe state of one component. `generation` is the newest request issued for the
- * component; `display` is the accepted projection for the current selection; and `write` is the
- * latest confirmed protected effect, which survives a discarded display response and is never
- * cleared by a later refusal.
+ * component; `display` is the accepted projection of that newest request for the current
+ * selection; and `writes` holds every confirmed protected effect the component has seen, in
+ * generation order. A write is never removed: not by a discarded display response, a changed
+ * selection or a later refusal.
  */
 export type ComponentResultState = Readonly<{
   componentId: ContainedComponentId;
@@ -298,17 +310,18 @@ export type ComponentResultState = Readonly<{
   selectedRow?: ComponentSelection;
   display?: ComponentDisplayOutcome;
   displayInvocation?: ComponentInvocation;
-  write?: ComponentConfirmedWrite;
+  writes: readonly ComponentConfirmedWrite[];
 }>;
 
 /** The state of a component before any invocation has run. */
 export const openComponentResultState = (
   componentId: ContainedComponentId,
-): ComponentResultState => ({ componentId, generation: 0 });
+): ComponentResultState => ({ componentId, generation: 0, writes: [] });
 
 export type ComponentInvocationStartInput = Readonly<{
   componentId: ContainedComponentId;
-  cause: ComponentInvocationCause;
+  /** Only a semantic event starts here; a write invalidation starts via `refreshComponentAfterSave`. */
+  cause: Extract<ComponentInvocationCause, { kind: "semantic_event" }>;
   selectedRow?: ComponentSelection;
   /** The caller's own invocation id; a valid one is kept, otherwise a fresh one is issued. */
   invocationId?: string;
@@ -329,35 +342,30 @@ const sameSelection = (
     ? left === right
     : sameId(left.recordId, right.recordId) && left.revision === right.revision;
 
-/**
- * Starts one invocation for a component: it issues the invocation record at the next generation and
- * moves the state onto that request. A changed selection discards the now-stale display
- * immediately, so it can never be shown for the new selection, while a confirmed write outcome is
- * carried forward. When the same selection is kept, the current display stays until a newer result
- * replaces it, but its older generation means a late response can no longer be accepted.
- */
-export const beginComponentInvocation = (
+const startInvocation = (
   state: ComponentResultState | undefined,
-  input: ComponentInvocationStartInput,
+  componentId: ContainedComponentId,
+  cause: ComponentInvocationCause,
+  selectedRowInput: ComponentSelection | undefined,
+  invocationIdInput: string | undefined,
 ): ComponentInvocationStart => {
-  const base =
-    state !== undefined && sameId(state.componentId, input.componentId) ? state : undefined;
+  const base = state !== undefined && sameId(state.componentId, componentId) ? state : undefined;
   const generation = (base?.generation ?? 0) + 1;
-  const selectedRow = input.selectedRow === undefined ? base?.selectedRow : input.selectedRow;
+  const selectedRow = selectedRowInput === undefined ? base?.selectedRow : selectedRowInput;
   const selectionChanged = !sameSelection(base?.selectedRow, selectedRow);
   const carriedDisplay = base !== undefined && !selectionChanged ? base.display : undefined;
-  const parsedId = componentInvocationIdSchema.safeParse(input.invocationId);
+  const parsedId = componentInvocationIdSchema.safeParse(invocationIdInput);
   const invocation: ComponentInvocation = {
     invocationId: parsedId.success
       ? parsedId.data
       : componentInvocationIdSchema.parse(randomUUID()),
-    componentId: input.componentId,
-    cause: input.cause,
+    componentId,
+    cause,
     generation,
     ...(selectedRow === undefined ? {} : { selectedRow }),
   };
   const nextState: ComponentResultState = {
-    componentId: input.componentId,
+    componentId,
     generation,
     ...(selectedRow === undefined ? {} : { selectedRow }),
     ...(carriedDisplay === undefined
@@ -368,10 +376,25 @@ export const beginComponentInvocation = (
             ? {}
             : { displayInvocation: base.displayInvocation }),
         }),
-    ...(base?.write === undefined ? {} : { write: base.write }),
+    writes: base?.writes ?? [],
   };
   return { state: nextState, invocation };
 };
+
+/**
+ * Starts one semantic-event invocation for a component: it issues the invocation record at the next
+ * generation and moves the state onto that request. A changed selection discards the now-stale
+ * display immediately, so it can never be shown for the new selection, while every confirmed write
+ * is carried forward. When the same selection is kept, the current display stays until a newer
+ * result replaces it, but its older generation means a late response can no longer be accepted.
+ * Two concurrent invocations therefore resolve by generation, not by arrival order: only the newer
+ * one may set the display, whichever finishes first.
+ */
+export const beginComponentInvocation = (
+  state: ComponentResultState | undefined,
+  input: ComponentInvocationStartInput,
+): ComponentInvocationStart =>
+  startInvocation(state, input.componentId, input.cause, input.selectedRow, input.invocationId);
 
 export type ComponentResultReductionReason =
   | "accepted"
@@ -382,6 +405,10 @@ export type ComponentResultReductionReason =
   | "no_confirmed_write"
   | "already_refreshed";
 
+/**
+ * The outcome of one reduction. `accepted` says whether the display changed; `state` is always the
+ * state to keep, because a rejected display response may still have recorded a confirmed write.
+ */
 export type ComponentResultReduction = Readonly<{
   state: ComponentResultState;
   accepted: boolean;
@@ -393,53 +420,76 @@ const unchanged = (
   reason: ComponentResultReductionReason,
 ): ComponentResultReduction => ({ state, accepted: false, reason });
 
-/** The confirmed write an outcome proves, if it committed at least one protected effect. */
+/**
+ * The confirmed write a dispatch result proves: any finished or suspended flow that committed at
+ * least one protected effect, whatever its display outcome. An uncertain run that committed earlier
+ * effects is displayed as `reconcile_before_retry`, but its confirmed commits are still recorded.
+ */
 const confirmedWriteOf = (
-  outcome: ComponentDisplayOutcome,
+  result: ComponentEventDispatchResult,
   invocation: ComponentInvocation,
 ): ComponentConfirmedWrite | undefined => {
-  const flow =
-    outcome.kind === "partial"
-      ? outcome.flow
-      : outcome.kind === "completed" && outcome.flow?.descriptor.commit === "confirmed"
-        ? outcome.flow
-        : undefined;
-  if (flow === undefined) return undefined;
+  if (result.kind !== "completed") return undefined;
+  const flow = result.flow;
+  if (flow === undefined || flow.kind === "refused" || flow.committedEffects <= 0) return undefined;
+  // A suspended run has no finished descriptor; its commits are reported as partial, as displayed.
+  const display: ComponentFlowDisplay = flowDisplay(flow) ?? {
+    descriptor: safeFlowResultDescriptors.partial,
+    committedEffects: flow.committedEffects,
+  };
   return {
-    flow,
+    flow: display,
     invocationId: invocation.invocationId,
     generation: invocation.generation,
     ...(invocation.selectedRow === undefined ? {} : { selectedRow: invocation.selectedRow }),
   };
 };
 
+/** Records a confirmed write once, in generation order; a repeated response keeps the first record. */
+const recordWrite = (
+  state: ComponentResultState,
+  write: ComponentConfirmedWrite | undefined,
+): ComponentResultState => {
+  if (write === undefined) return state;
+  if (state.writes.some((existing) => sameId(existing.invocationId, write.invocationId)))
+    return state;
+  const writes = [...state.writes, write].sort((left, right) => left.generation - right.generation);
+  return { ...state, writes };
+};
+
+/** Whether an invocation's generation is one this state issued (a positive integer not beyond it). */
+const issuedGeneration = (state: ComponentResultState, invocation: ComponentInvocation): boolean =>
+  Number.isInteger(invocation.generation) &&
+  invocation.generation > 0 &&
+  invocation.generation <= state.generation;
+
 /**
- * Reduces one dispatch result into the component state. A result for a different component, an
- * older generation, or a selection the component has moved past is discarded and the state is
- * returned unchanged, so a late response never replaces newer rows or restores revoked content. An
- * accepted result replaces the display and records a confirmed commit as the component's write;
- * a refusal never clears that write.
+ * Reduces one semantic-event dispatch result into the component state. A confirmed write the result
+ * proves is recorded first, whatever happens to the display. The display changes only for the
+ * component's newest generation and current selection: a result for an older generation or a
+ * selection the component has moved past leaves the display unchanged, so a late response never
+ * replaces newer rows or restores revoked content, and an out-of-order completion of two concurrent
+ * invocations can never let the older one win. A refresh after save is never accepted here: its data
+ * is accepted only as a flow-free re-read through `acceptComponentReread`.
  */
 export const acceptComponentResult = (
   state: ComponentResultState,
   invocation: ComponentInvocation,
   result: ComponentEventDispatchResult,
 ): ComponentResultReduction => {
-  if (!sameId(invocation.componentId, state.componentId))
+  if (
+    !sameId(invocation.componentId, state.componentId) ||
+    invocation.cause.kind !== "semantic_event" ||
+    !issuedGeneration(state, invocation)
+  )
     return unchanged(state, "malformed_invocation");
-  if (!Number.isInteger(invocation.generation) || invocation.generation < state.generation)
-    return unchanged(state, "obsolete_generation");
-  if (!sameSelection(invocation.selectedRow, state.selectedRow))
-    return unchanged(state, "superseded_selection");
-  const display = projectComponentResult(result);
-  const write = confirmedWriteOf(display, invocation);
+  const recorded = recordWrite(state, confirmedWriteOf(result, invocation));
+  if (invocation.generation !== recorded.generation)
+    return unchanged(recorded, "obsolete_generation");
+  if (!sameSelection(invocation.selectedRow, recorded.selectedRow))
+    return unchanged(recorded, "superseded_selection");
   return {
-    state: {
-      ...state,
-      display,
-      displayInvocation: invocation,
-      ...(write === undefined ? {} : { write }),
-    },
+    state: { ...recorded, display: projectComponentResult(result), displayInvocation: invocation },
     accepted: true,
     reason: "accepted",
   };
@@ -447,61 +497,130 @@ export const acceptComponentResult = (
 
 /**
  * The read-only result of re-reading a component's dataset after a saved change. It carries no flow
- * by construction, so the callback that produces it cannot run the action that made the change.
+ * by construction and is not assignable from a dispatch result, so a dispatcher response (which may
+ * have run a flow) cannot be passed off as a re-read.
  */
 export type ComponentDatasetReread =
-  | Readonly<{ kind: "page"; data: ComponentEventDataResult }>
-  | Readonly<{ kind: "refused"; code: "query_refused" | "query_unavailable" }>;
+  | Readonly<{ kind: "page"; data: ComponentEventDataResult; flow?: never }>
+  | Readonly<{ kind: "refused"; code: "query_refused" | "query_unavailable"; flow?: never }>;
 
+/**
+ * The composition's read-only dataset query for this component. It receives nothing it could use to
+ * start a flow and must be built from the protected query path alone, never from the component
+ * event dispatcher, which may run the event's bound flow.
+ */
+export type ComponentDatasetRereader = () => Promise<ComponentDatasetReread>;
+
+const unavailableReread: ComponentDatasetReread = Object.freeze({
+  kind: "refused",
+  code: "query_unavailable",
+});
+
+/** Projects a re-read; anything that is not exactly a page or a read refusal is unavailable. */
 const projectDatasetReread = (read: ComponentDatasetReread): ComponentDisplayOutcome => {
+  if (typeof read !== "object" || read === null || "flow" in read)
+    return { kind: "unavailable", reason: "query_unavailable", recovery: "retry" };
   if (read.kind === "page")
     return read.data.rows.length === 0
       ? { kind: "empty", data: read.data }
       : { kind: "completed", data: read.data };
-  return read.code === "query_refused"
+  return read.kind === "refused" && read.code === "query_refused"
     ? { kind: "refused", reason: "not_permitted", recovery: "change_request" }
     : { kind: "unavailable", reason: "query_unavailable", recovery: "retry" };
 };
 
 /**
- * Refreshes one component after its own write committed. The refresh runs at a new generation with
- * cause `write_invalidation`, and the data comes from `reread`, whose result type carries no flow:
- * the changing flow can never be invoked again. The refresh is refused when the write is not the
- * component's current invocation, when it belongs to a selection the component has moved past, when
- * it did not commit, or when it was already a refresh (explicit same-cause re-entry is refused).
- * The confirmed write outcome is preserved, and a read failure becomes a safe unavailable outcome
- * rather than throwing.
+ * A started (or refused) refresh after save. When started, the state has already moved to the
+ * refresh's generation; the caller awaits `read` and hands it, with `invocation`, to
+ * `acceptComponentReread` against its then-current state, so a refresh that finishes after a newer
+ * invocation began is discarded like any other obsolete response.
  */
-export const refreshComponentAfterSave = async (
+export type ComponentRefreshAfterSave =
+  | Readonly<{ started: false; state: ComponentResultState; reason: ComponentResultReductionReason }>
+  | Readonly<{
+      started: true;
+      state: ComponentResultState;
+      invocation: ComponentInvocation;
+      read: Promise<ComponentDatasetReread>;
+    }>;
+
+/**
+ * Refreshes one component after one of its own confirmed writes. The refresh runs at a new
+ * generation with cause `write_invalidation`, and its data comes only from `reread`, whose result
+ * type carries no flow: the changing flow is never invoked again. It is refused when the write is
+ * not a confirmed write this state recorded, when that write already started its refresh (so each
+ * write refreshes exactly once and a refresh can never cause another), or when the write belongs to
+ * a selection the component has moved past. The write record stays in the state, and a read that
+ * throws becomes a safe unavailable re-read rather than an error.
+ */
+export const refreshComponentAfterSave = (
   state: ComponentResultState,
   write: ComponentInvocation,
-  reread: () => Promise<ComponentDatasetReread>,
-): Promise<ComponentResultReduction> => {
+  reread: ComponentDatasetRereader,
+): ComponentRefreshAfterSave => {
   if (!sameId(write.componentId, state.componentId))
-    return unchanged(state, "malformed_invocation");
-  if (write.cause.kind !== "semantic_event") return unchanged(state, "already_refreshed");
-  if (!sameSelection(write.selectedRow, state.selectedRow))
-    return unchanged(state, "superseded_selection");
-  if (state.write === undefined || !sameId(state.write.invocationId, write.invocationId))
-    return unchanged(state, "no_confirmed_write");
-  if (write.generation < state.generation) return unchanged(state, "obsolete_generation");
+    return { started: false, state, reason: "malformed_invocation" };
+  if (write.cause.kind !== "semantic_event")
+    return { started: false, state, reason: "already_refreshed" };
+  const recorded = state.writes.find((entry) => sameId(entry.invocationId, write.invocationId));
+  if (recorded === undefined) return { started: false, state, reason: "no_confirmed_write" };
+  if (recorded.refreshedBy !== undefined)
+    return { started: false, state, reason: "already_refreshed" };
+  if (!sameSelection(recorded.selectedRow, state.selectedRow))
+    return { started: false, state, reason: "superseded_selection" };
 
-  const started = beginComponentInvocation(state, {
-    componentId: state.componentId,
-    cause: { kind: "write_invalidation" },
-  });
-  let read: ComponentDatasetReread;
-  try {
-    read = await reread();
-  } catch {
-    read = { kind: "refused", code: "query_unavailable" };
-  }
+  const started = startInvocation(
+    state,
+    state.componentId,
+    { kind: "write_invalidation" },
+    undefined,
+    undefined,
+  );
+  const refreshedBy = started.invocation.invocationId;
+  const writes = started.state.writes.map((entry) =>
+    entry === recorded ? { ...entry, refreshedBy } : entry,
+  );
+  const read = (async (): Promise<ComponentDatasetReread> => {
+    try {
+      return await reread();
+    } catch {
+      return unavailableReread;
+    }
+  })();
   return {
-    state: {
-      ...started.state,
-      display: projectDatasetReread(read),
-      displayInvocation: started.invocation,
-    },
+    started: true,
+    state: { ...started.state, writes },
+    invocation: started.invocation,
+    read,
+  };
+};
+
+/**
+ * Accepts the re-read of a refresh after save. Only an invocation that `refreshComponentAfterSave`
+ * issued for a recorded write is accepted, and only while it is still the component's newest
+ * generation for the current selection; otherwise the state is returned unchanged. Every confirmed
+ * write stays recorded either way.
+ */
+export const acceptComponentReread = (
+  state: ComponentResultState,
+  invocation: ComponentInvocation,
+  read: ComponentDatasetReread,
+): ComponentResultReduction => {
+  if (
+    !sameId(invocation.componentId, state.componentId) ||
+    invocation.cause.kind !== "write_invalidation" ||
+    !issuedGeneration(state, invocation) ||
+    !state.writes.some(
+      (entry) =>
+        entry.refreshedBy !== undefined && sameId(entry.refreshedBy, invocation.invocationId),
+    )
+  )
+    return unchanged(state, "malformed_invocation");
+  if (invocation.generation !== state.generation) return unchanged(state, "obsolete_generation");
+  if (!sameSelection(invocation.selectedRow, state.selectedRow))
+    return unchanged(state, "superseded_selection");
+  return {
+    state: { ...state, display: projectDatasetReread(read), displayInvocation: invocation },
     accepted: true,
     reason: "refresh_after_save",
   };
