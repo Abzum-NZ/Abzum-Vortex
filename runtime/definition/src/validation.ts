@@ -3,6 +3,8 @@ import {
   applicationDraftV2Schema,
   calculationMaximumNestingDepth,
   protectedReadModelKeys,
+  readRecordDetailContract,
+  readRecordsTableContract,
   isPlatformPermissionKey,
   applicationSourceDocumentV2Schema,
   applicationCompilationRequestV2Schema,
@@ -854,8 +856,11 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
       const connections = new Set(
         array(body.connection_bindings).map((binding) => String(binding.id)),
       );
-      for (const page of array(body.pages))
-        if (page.query && !queries.has(String(page.query))) valid = false;
+      for (const page of array(body.pages)) {
+        // A page binds a Module query by "module_key:query_key"; the Module must be bound here.
+        if (page.query && !moduleBindings.has(String(page.query).slice(0, String(page.query).lastIndexOf(":"))))
+          valid = false;
+      }
       const visitNavigation = (items: JsonObject[]) => {
         for (const item of items) {
           if (item.type === "page" && !pages.has(String(item.page))) valid = false;
@@ -884,7 +889,8 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
       for (const definition of array(body.interfaces))
         for (const operation of array(definition.operations)) {
           const target = object(operation.target);
-          if (target.kind === "query" && !queries.has(String(target.key))) valid = false;
+          // A read names a query a bound Module exposes; only the compiled Module releases hold
+          // it, so the compiled application validation checks that reference.
           if (target.kind === "flow" && !flows.has(String(target.flow))) valid = false;
         }
       for (const address of array(body.public_addresses))
@@ -3362,6 +3368,14 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       return collectPlacementEntriesV2(shells.get(String(composition.shellId))?.layout);
     };
     const queries = new Map(array(content.queries).map((query) => [String(query.queryId), query]));
+    // The queries a page or placement binds are the ones a bound Module exposes, by exact identity.
+    const moduleQueries = new Map(
+      boundModules.flatMap((module) =>
+        array(object(object(module.canonical).content).queries).map(
+          (query) => [String(query.queryId), query] as const,
+        ),
+      ),
+    );
     const pipelines = new Map(
       array(content.pipelines).map((pipeline) => [String(pipeline.pipelineId), pipeline]),
     );
@@ -3711,7 +3725,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       const pageRecordId = page.recordType
         ? String(object(page.recordType).recordTypeId)
         : undefined;
-      const pageQuery = page.queryId ? queries.get(String(page.queryId)) : undefined;
+      const pageQuery = page.queryId ? moduleQueries.get(String(page.queryId)) : undefined;
       const pageQueryRecordId = pageQuery
         ? String(object(pageQuery.recordType).recordTypeId)
         : undefined;
@@ -3735,6 +3749,49 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         ...pageContentPlacementEntriesV2(page).map(([, placement]) => placement),
         ...pageShellPlacementEntriesV2(page).map(([, placement]) => placement),
       ];
+      // A Records table or Record detail may map only fields its bound Module query selects, and
+      // may order only by fields the query can order (a grouped or aggregating query orders by its
+      // grouping fields). The default sort must be the query's leading sort, the order the Query
+      // engine actually applies. The Query engine refuses a request for an unselected field.
+      for (const placement of placements) {
+        const bound =
+          placement.queryId === undefined ? undefined : moduleQueries.get(String(placement.queryId));
+        if (bound === undefined) continue;
+        const settings = object(placement.settings) as Parameters<typeof readRecordsTableContract>[0];
+        const table = readRecordsTableContract(settings);
+        const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
+        if (table === undefined && detail === undefined) continue;
+        const lower = (ids: readonly unknown[]): Set<string> =>
+          new Set(ids.map((id) => String(id).toLowerCase()));
+        const selected = lower(array(bound.selectedFieldIds));
+        const grouped = array(bound.groupByFieldIds).length > 0 || array(bound.aggregates).length > 0;
+        const orderable = grouped ? lower(array(bound.groupByFieldIds)) : selected;
+        const mapped = (fields: readonly string[], allowed: ReadonlySet<string>): boolean =>
+          fields.every((field) => allowed.has(field.toLowerCase()));
+        const leading = array(bound.sort)[0];
+        if (
+          (table !== undefined &&
+            (!mapped(
+              table.columns.map((column) => column.field),
+              selected,
+            ) ||
+              !mapped(table.sortableFields, orderable) ||
+              !mapped(table.filterableFields, orderable) ||
+              (table.defaultSort !== undefined &&
+                (!orderable.has(table.defaultSort.field.toLowerCase()) ||
+                  leading === undefined ||
+                  String(leading.fieldId).toLowerCase() !== table.defaultSort.field.toLowerCase() ||
+                  leading.direction !== table.defaultSort.direction)))) ||
+          (detail !== undefined &&
+            !mapped(
+              detail.fields.map((entry) => entry.field),
+              selected,
+            ))
+        )
+          failures.push(
+            failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+          );
+      }
       // A placement reads one data source: a declared protected read model or a query, never both.
       if (
         placements.some(
@@ -3794,7 +3851,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
               publicBlockReferencesSafe = false;
             if (setting.kind === "pipeline_reference") publicBlockReferencesSafe = false;
             if (setting.kind === "query_reference") {
-              const query = queries.get(String(setting.queryId));
+              const query = moduleQueries.get(String(setting.queryId));
               if (!publicQuerySafe(query, pageRecordId, pagePublicFields))
                 publicBlockReferencesSafe = false;
             }
@@ -3802,7 +3859,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           walkValues(placement.settings, inspectPublicSetting);
           if (placement.readModel !== undefined) publicBlockReferencesSafe = false;
           if (placement.queryId) {
-            const query = queries.get(String(placement.queryId));
+            const query = moduleQueries.get(String(placement.queryId));
             if (!publicQuerySafe(query, pageRecordId, pagePublicFields))
               publicBlockReferencesSafe = false;
           }
@@ -3811,7 +3868,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           (page.publicFieldIds as string[]).some((id) => !publicFields.has(id)) ||
           !publicPermissionSafe(page.accessPermissionKey) ||
           (page.queryId &&
-            !publicQuerySafe(queries.get(String(page.queryId)), pageRecordId, pagePublicFields)) ||
+            !publicQuerySafe(moduleQueries.get(String(page.queryId)), pageRecordId, pagePublicFields)) ||
           (page.publicActionKey &&
             !publicActionSafe(page.publicActionKey, pageRecordId, pagePublicFields)) ||
           !publicBlockReferencesSafe
@@ -3940,7 +3997,14 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     const allInterfaceOperationKeys = array(content.interfaces).flatMap((definition) =>
       array(definition.operations).map((operation) => String(operation.key)),
     );
-    const queriesByKey = new Map([...queries.values()].map((query) => [String(query.key), query]));
+    // An interface read names a bound Module's query by its key; a key two bound Modules share
+    // is ambiguous and resolves to no query.
+    const queriesByKey = new Map<string, JsonObject | undefined>();
+    for (const query of moduleQueries.values())
+      queriesByKey.set(
+        String(query.key),
+        queriesByKey.has(String(query.key)) ? undefined : query,
+      );
     const interfaceActionInputType = (type: unknown, moduleV2 = false): string | undefined => {
       const value = String(type);
       if (moduleV2 && ["decimal_number", "money"].includes(value)) return undefined;

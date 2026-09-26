@@ -1048,6 +1048,41 @@
       }
     ],
     "sharing_conditions": [],
-    "queries": []
+    "queries": [
+      {
+        "id": "qry_operations_open_incidents",
+        "key": "operations_open_incidents",
+        "record_type": "incident",
+        "inputs": [],
+        "select": [
+          "incident_number",
+          "code",
+          "severity",
+          "affected_service",
+          "owning_role",
+          "runbook_reference",
+          "state",
+          "attached_at"
+        ],
+        "filter": {
+          "field": "state",
+          "operator": "not_in",
+          "value": [
+            "resolved",
+            "closed"
+          ]
+        },
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "incident_number",
+            "direction": "descending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      }
+    ]
   }
 }

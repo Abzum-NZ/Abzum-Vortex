@@ -1064,6 +1064,85 @@
         ]
       }
     ],
-    "sharing_conditions": []
+    "sharing_conditions": [],
+    "queries": [
+      {
+        "id": "qry_crm_contacts",
+        "key": "crm_contacts",
+        "record_type": "contact",
+        "inputs": [],
+        "select": [
+          "contact_number",
+          "full_name",
+          "email",
+          "company",
+          "relationship_owner"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "full_name",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_crm_leads",
+        "key": "crm_leads",
+        "record_type": "lead",
+        "inputs": [],
+        "select": [
+          "lead_number",
+          "display_name",
+          "company_name",
+          "source",
+          "score",
+          "status",
+          "received_at"
+        ],
+        "filter": {
+          "field": "status",
+          "operator": "not_equals",
+          "value": "converted"
+        },
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "received_at",
+            "direction": "descending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_sd_requesters",
+        "key": "service_desk_requesters",
+        "record_type": "contact",
+        "inputs": [],
+        "select": [
+          "contact_number",
+          "full_name",
+          "email",
+          "company"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "full_name",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      }
+    ]
   }
 }

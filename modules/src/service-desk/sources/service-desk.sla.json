@@ -676,6 +676,32 @@
         ]
       }
     ],
-    "sharing_conditions": []
+    "sharing_conditions": [],
+    "queries": [
+      {
+        "id": "qry_sd_sla",
+        "key": "service_desk_service_levels",
+        "record_type": "service_level",
+        "inputs": [],
+        "select": [
+          "name",
+          "calendar",
+          "first_response_minutes",
+          "resolution_minutes",
+          "active"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "name",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      }
+    ]
   }
 }

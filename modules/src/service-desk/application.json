@@ -256,161 +256,7 @@
                                                      ]
                                     }
                                 ],
-                 "queries":  [
-                                 {
-                                     "id":  "qry_sd_open_cases",
-                                     "key":  "service_desk_open_cases",
-                                     "record_type":  "vortex.service_desk.cases:case",
-                                     "select":  [
-                                                    "case_number",
-                                                    "subject",
-                                                    "customer_company",
-                                                    "requester",
-                                                    "owner",
-                                                    "status",
-                                                    "priority",
-                                                    "resolution_due_at",
-                                                    "breached"
-                                                ],
-                                     "filter":  {
-                                                    "field":  "status",
-                                                    "operator":  "not_in",
-                                                    "value":  [
-                                                                  "resolved",
-                                                                  "closed"
-                                                              ]
-                                                },
-                                     "sort":  [
-                                                  {
-                                                      "field":  "priority",
-                                                      "direction":  "descending"
-                                                  },
-                                                  {
-                                                      "field":  "resolution_due_at",
-                                                      "direction":  "ascending"
-                                                  }
-                                              ],
-                                     "group_by":  [
-
-                                                  ],
-                                     "aggregates":  [
-
-                                                    ],
-                                     "page_size":  50,
-                                     "relationship_hops":  0
-                                 },
-                                 {
-                                     "id":  "qry_sd_knowledge",
-                                     "key":  "service_desk_knowledge",
-                                     "record_type":  "vortex.service_desk.knowledge:article",
-                                     "select":  [
-                                                    "article_number",
-                                                    "title",
-                                                    "status",
-                                                    "public",
-                                                    "review_date",
-                                                    "author"
-                                                ],
-                                     "filter":  null,
-                                     "sort":  [
-                                                  {
-                                                      "field":  "review_date",
-                                                      "direction":  "ascending"
-                                                  }
-                                              ],
-                                     "group_by":  [
-
-                                                  ],
-                                     "aggregates":  [
-
-                                                    ],
-                                     "page_size":  50,
-                                     "relationship_hops":  0
-                                 },
-                                 {
-                                     "id":  "qry_sd_sla",
-                                     "key":  "service_desk_service_levels",
-                                     "record_type":  "vortex.service_desk.sla:service_level",
-                                     "select":  [
-                                                    "name",
-                                                    "calendar",
-                                                    "first_response_minutes",
-                                                    "resolution_minutes",
-                                                    "active"
-                                                ],
-                                     "filter":  null,
-                                     "sort":  [
-                                                  {
-                                                      "field":  "name",
-                                                      "direction":  "ascending"
-                                                  }
-                                              ],
-                                     "group_by":  [
-
-                                                  ],
-                                     "aggregates":  [
-
-                                                    ],
-                                     "page_size":  50,
-                                     "relationship_hops":  0
-                                 },
-                                 {
-                                     "id":  "qry_sd_customers",
-                                     "key":  "service_desk_customers",
-                                     "record_type":  "vortex.crm.organisations:company",
-                                     "select":  [
-                                                    "company_number",
-                                                    "name",
-                                                    "phone",
-                                                    "website"
-                                                ],
-                                     "filter":  {
-                                                    "field":  "company_kind",
-                                                    "operator":  "contains",
-                                                    "value":  "customer"
-                                                },
-                                     "sort":  [
-                                                  {
-                                                      "field":  "name",
-                                                      "direction":  "ascending"
-                                                  }
-                                              ],
-                                     "group_by":  [
-
-                                                  ],
-                                     "aggregates":  [
-
-                                                    ],
-                                     "page_size":  50,
-                                     "relationship_hops":  0
-                                 },
-                                 {
-                                     "id":  "qry_sd_requesters",
-                                     "key":  "service_desk_requesters",
-                                     "record_type":  "vortex.crm.people:contact",
-                                     "select":  [
-                                                    "contact_number",
-                                                    "full_name",
-                                                    "email",
-                                                    "company"
-                                                ],
-                                     "filter":  null,
-                                     "group_by":  [
-
-                                                  ],
-                                     "aggregates":  [
-
-                                                    ],
-                                     "sort":  [
-                                                  {
-                                                      "field":  "full_name",
-                                                      "direction":  "ascending"
-                                                  }
-                                              ],
-                                     "page_size":  50,
-                                     "relationship_hops":  0
-                                 }
-                             ],
+                 "queries":  [],
                  "pages":  [
                                {
                                    "id":  "page_sd_overview",
@@ -470,7 +316,7 @@
                                    "type":  "list",
                                    "record_type":  "vortex.service_desk.cases:case",
                                    "permission":  "vortex.service_desk.cases.case.read",
-                                   "query":  "service_desk_open_cases",
+                                   "query":  "vortex.service_desk.cases:service_desk_open_cases",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_service_desk",
@@ -573,7 +419,7 @@
                                                                                                          "slots":  {
 
                                                                                                                    },
-                                                                                                         "query":  "service_desk_open_cases"
+                                                                                                         "query":  "vortex.service_desk.cases:service_desk_open_cases"
                                                                                                      }
                                                                                    },
                                                                     "order":  {
@@ -1086,7 +932,7 @@
                                    "type":  "list",
                                    "record_type":  "vortex.service_desk.knowledge:article",
                                    "permission":  "vortex.service_desk.knowledge.article.read",
-                                   "query":  "service_desk_knowledge",
+                                   "query":  "vortex.service_desk.knowledge:service_desk_knowledge",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_service_desk",
@@ -1168,7 +1014,7 @@
                                                                                                          "slots":  {
 
                                                                                                                    },
-                                                                                                         "query":  "service_desk_knowledge"
+                                                                                                         "query":  "vortex.service_desk.knowledge:service_desk_knowledge"
                                                                                                      }
                                                                                    },
                                                                     "order":  {
@@ -1428,7 +1274,7 @@
                                    "type":  "list",
                                    "record_type":  "vortex.service_desk.sla:service_level",
                                    "permission":  "vortex.service_desk.sla.service_level.read",
-                                   "query":  "service_desk_service_levels",
+                                   "query":  "vortex.service_desk.sla:service_desk_service_levels",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_service_desk",
@@ -1503,7 +1349,7 @@
                                                                                                          "slots":  {
 
                                                                                                                    },
-                                                                                                         "query":  "service_desk_service_levels"
+                                                                                                         "query":  "vortex.service_desk.sla:service_desk_service_levels"
                                                                                                      }
                                                                                    },
                                                                     "order":  {
@@ -1776,7 +1622,7 @@
                                    "type":  "list",
                                    "record_type":  "vortex.crm.organisations:company",
                                    "permission":  "vortex.crm.organisations.company.read",
-                                   "query":  "service_desk_customers",
+                                   "query":  "vortex.crm.organisations:service_desk_customers",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_service_desk",
@@ -1844,7 +1690,7 @@
                                                                                                                  "slots":  {
 
                                                                                                                            },
-                                                                                                                 "query":  "service_desk_customers"
+                                                                                                                 "query":  "vortex.crm.organisations:service_desk_customers"
                                                                                                              }
                                                                                    },
                                                                     "order":  {
@@ -1997,7 +1843,7 @@
                                    "type":  "list",
                                    "record_type":  "vortex.crm.people:contact",
                                    "permission":  "vortex.crm.people.contact.read",
-                                   "query":  "service_desk_requesters",
+                                   "query":  "vortex.crm.people:service_desk_requesters",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_service_desk",
@@ -2065,7 +1911,7 @@
                                                                                                                   "slots":  {
 
                                                                                                                             },
-                                                                                                                  "query":  "service_desk_requesters"
+                                                                                                                  "query":  "vortex.crm.people:service_desk_requesters"
                                                                                                               }
                                                                                    },
                                                                     "order":  {
