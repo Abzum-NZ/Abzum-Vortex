@@ -134,6 +134,20 @@
         "record_type": "vortex.tenant_administration:organization_lifecycle_request",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_suspend_organization",
+        "key": "vortex.app.tenant_administration.organization_suspend",
+        "record_type": "vortex.tenant_administration:organization",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_restore_organization",
+        "key": "vortex.app.tenant_administration.organization_restore",
+        "record_type": "vortex.tenant_administration:organization",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "public_addresses": [],
@@ -459,6 +473,37 @@
                             "label": {
                               "kind": "text",
                               "value": "Created"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "row_actions": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "event_id": {
+                              "kind": "text",
+                              "value": "event_suspend_organization"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Suspend organisation"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "event_id": {
+                              "kind": "text",
+                              "value": "event_restore_organization"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Restore organisation"
                             }
                           }
                         }
@@ -902,6 +947,122 @@
         "outputs": {},
         "errors": [],
         "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_suspend_tenant_organization",
+        "key": "suspend_tenant_organization",
+        "labels": {
+          "name": "Suspend organisation"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "organization_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.tenant_administration:organization"
+            ]
+          },
+          "expected_revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.suspend_tenant_organization"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_reactivate_tenant_organization",
+        "key": "reactivate_tenant_organization",
+        "labels": {
+          "name": "Restore organisation"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "organization_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.tenant_administration:organization"
+            ]
+          },
+          "expected_revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.reactivate_tenant_organization"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
       }
     ],
     "flow_bindings": [
@@ -915,6 +1076,40 @@
           "reason": {
             "kind": "caller",
             "name": "reason"
+          }
+        }
+      },
+      {
+        "id": "binding_suspend_organization",
+        "control": "structure_region",
+        "event_id": "event_suspend_organization",
+        "event": "row_action",
+        "flow": "flow_suspend_tenant_organization",
+        "inputs": {
+          "organization_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_revision": {
+            "kind": "caller",
+            "name": "revision"
+          }
+        }
+      },
+      {
+        "id": "binding_restore_organization",
+        "control": "structure_region",
+        "event_id": "event_restore_organization",
+        "event": "row_action",
+        "flow": "flow_reactivate_tenant_organization",
+        "inputs": {
+          "organization_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_revision": {
+            "kind": "caller",
+            "name": "revision"
           }
         }
       }
