@@ -410,6 +410,18 @@ const calculationSettingsSchema = z
         (value.resultType === "whole_number" ||
           value.resultType === "decimal_number" ||
           value.resultType === "money"));
+    if (
+      value.expression.kind === "numeric" &&
+      value.expression.operands.reduce(
+        (total, operand) => total + inspectCalculationNumberValueV3(operand).values,
+        0,
+      ) > calculationMaximumOperandCount
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["expression", "operands"],
+        message: `A numeric calculation cannot exceed ${calculationMaximumOperandCount} values`,
+      });
     if (!valid)
       context.addIssue({
         code: "custom",

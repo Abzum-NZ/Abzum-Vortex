@@ -736,6 +736,18 @@ const sourceCalculationSettingsSchema = z
         path: ["result_type"],
         message: "Calculation result type must match its operation",
       });
+    if (
+      value.expression.operation === "numeric" &&
+      value.expression.operands.reduce(
+        (total, operand) => total + inspectSourceCalculationNumberValue(operand).values,
+        0,
+      ) > calculationMaximumOperandCount
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["expression", "operands"],
+        message: `A numeric calculation cannot exceed ${calculationMaximumOperandCount} values`,
+      });
     if (value.evaluation === "stored" && operation === "deadline_passed")
       context.addIssue({
         code: "custom",

@@ -472,7 +472,11 @@ export const evaluateRecordCalculationsV2 = (
       if (entries.every((entry) => typeof entry === "string"))
         calculated = (entries as string[]).join(expression.separator);
     } else if (expression.kind === "numeric") {
-      const outcome = numberValue(expression);
+      const outcome = numberValue({
+        source: "numeric",
+        operation: expression.operation,
+        operands: expression.operands,
+      });
       if (outcome.kind === "refused") evaluationIssue = outcome.code;
       else if (outcome.kind === "value") {
         const resultIsMoney = outcome.value.currency !== undefined;
