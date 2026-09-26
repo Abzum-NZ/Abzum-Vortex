@@ -1,0 +1,1614 @@
+{
+  "schemaVersion": "1.0.0",
+  "registry": {
+    "package": "shadcn",
+    "packageVersion": "4.21.0",
+    "tag": "shadcn@4.21.0",
+    "registryUrl": "https://ui.shadcn.com/r",
+    "repository": "https://github.com/shadcn-ui/ui",
+    "fetchedAt": "2026-09-26T10:38:32.079Z",
+    "sources": [
+      "https://ui.shadcn.com/r/colors/<baseColor>.json (cssVarsV4)",
+      "https://raw.githubusercontent.com/shadcn-ui/ui/shadcn@4.21.0/apps/v4/registry/themes.ts",
+      "https://raw.githubusercontent.com/shadcn-ui/ui/shadcn@4.21.0/apps/v4/registry/styles.tsx",
+      "https://raw.githubusercontent.com/shadcn-ui/ui/shadcn@4.21.0/apps/v4/registry/styles/style-<style>.css",
+      "https://raw.githubusercontent.com/shadcn-ui/ui/shadcn@4.21.0/apps/v4/registry/config.ts",
+      "https://raw.githubusercontent.com/shadcn-ui/ui/shadcn@4.21.0/packages/shadcn/src/utils/transformers/transform-menu.ts",
+      "https://raw.githubusercontent.com/shadcn-ui/ui/shadcn@4.21.0/LICENSE.md",
+      "shadcn@4.21.0 npm package dist/preset (PRESET_STYLES, PRESET_BASE_COLORS, PRESET_THEMES, PRESET_CHART_COLORS, PRESET_RADII, PRESET_MENU_ACCENTS, PRESET_MENU_COLORS)"
+    ],
+    "licence": {
+      "spdx": "MIT",
+      "copyright": "Copyright (c) 2023 shadcn",
+      "notice": "shadcn/ui is distributed under the MIT licence. The theme and style values in this snapshot are copied from the pinned shadcn 4.21.0 registry and repository."
+    }
+  },
+  "baseRelease": {
+    "catalogueThemeId": "3f0a2b14-9c6d-4e58-8a71-6d2e5f4b1c09",
+    "releaseVersion": "3.0.0"
+  },
+  "releasesFile": "shadcn-create-theme-releases.generated.json",
+  "dimensions": {
+    "style": {
+      "label": "Visual style",
+      "options": [
+        {
+          "id": "nova",
+          "label": "Nova",
+          "description": "Reduced padding and margins",
+          "base": "base",
+          "asset": {
+            "path": "styles/nova.css",
+            "contentFingerprint": "sha256:1ff9d64bd0a057b833a1e20d9d295ef2ed31dae4fcd2cf0a12a02ab6a3cdfa7a"
+          }
+        },
+        {
+          "id": "vega",
+          "label": "Vega",
+          "description": "Clean, neutral, and familiar",
+          "base": "base",
+          "asset": {
+            "path": "styles/vega.css",
+            "contentFingerprint": "sha256:5dfa439f81132cd208d26624430b81f5a228e57d83bb3b38551e9e28d12ff36b"
+          }
+        },
+        {
+          "id": "maia",
+          "label": "Maia",
+          "description": "Rounded, with generous spacing.",
+          "base": "base",
+          "asset": {
+            "path": "styles/maia.css",
+            "contentFingerprint": "sha256:d15d4a37e8f0219f3e4ee3820a6b91b3a0375ebf4efb187f0c2f04b83cb88b4e"
+          }
+        },
+        {
+          "id": "lyra",
+          "label": "Lyra",
+          "description": "Boxy and sharp. For mono fonts.",
+          "base": "base",
+          "asset": {
+            "path": "styles/lyra.css",
+            "contentFingerprint": "sha256:4e34b26f771d6d828c653c70ea9e3f66d7feb2339a51884c81051eef288db72b"
+          }
+        },
+        {
+          "id": "mira",
+          "label": "Mira",
+          "description": "Made for compact interfaces.",
+          "base": "base",
+          "asset": {
+            "path": "styles/mira.css",
+            "contentFingerprint": "sha256:405bc4bd0c7db5e723b6ec44f6fca9d42dcac3bfc19b834590b0bc054ebde69c"
+          }
+        },
+        {
+          "id": "luma",
+          "label": "Luma",
+          "description": "Fluid, luminous, and soft.",
+          "base": "base",
+          "asset": {
+            "path": "styles/luma.css",
+            "contentFingerprint": "sha256:1d370585e17222e0dcb9893f278c494046ef2669b2aaa09e4b3d7c259a3dcdf7"
+          }
+        },
+        {
+          "id": "sera",
+          "label": "Sera",
+          "description": "Editorial and typographic.",
+          "base": "base",
+          "asset": {
+            "path": "styles/sera.css",
+            "contentFingerprint": "sha256:28625bd40bd49d3aeb3ac734d90ac87c6fe93df0e4e3ca7e5308591d862af988"
+          }
+        },
+        {
+          "id": "rhea",
+          "label": "Rhea",
+          "description": "Like Luma but compact.",
+          "base": "base",
+          "asset": {
+            "path": "styles/rhea.css",
+            "contentFingerprint": "sha256:1d37a2cabea84101dc8e5fe0b7b677f28808973680669edd5d6a90f14f05295a"
+          }
+        }
+      ]
+    },
+    "baseColor": {
+      "label": "Base colour",
+      "options": [
+        {
+          "id": "neutral",
+          "label": "Neutral",
+          "releaseKey": "SHADCN_CREATE_BASE_COLOR_NEUTRAL",
+          "tokenKeys": [
+            "background",
+            "surface",
+            "text",
+            "card",
+            "card_foreground",
+            "popover",
+            "popover_foreground",
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "muted",
+            "muted_text",
+            "accent",
+            "accent_foreground",
+            "danger",
+            "danger_text",
+            "border_color",
+            "input",
+            "ring",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5",
+            "sidebar",
+            "sidebar_foreground",
+            "sidebar_primary",
+            "sidebar_primary_foreground",
+            "sidebar_accent",
+            "sidebar_accent_foreground",
+            "sidebar_border",
+            "sidebar_ring"
+          ],
+          "release": {
+            "catalogueThemeId": "62d66270-63ec-5860-91de-332109366e93",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "stone",
+          "label": "Stone",
+          "releaseKey": "SHADCN_CREATE_BASE_COLOR_STONE",
+          "tokenKeys": [
+            "background",
+            "surface",
+            "text",
+            "card",
+            "card_foreground",
+            "popover",
+            "popover_foreground",
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "muted",
+            "muted_text",
+            "accent",
+            "accent_foreground",
+            "danger",
+            "danger_text",
+            "border_color",
+            "input",
+            "ring",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5",
+            "sidebar",
+            "sidebar_foreground",
+            "sidebar_primary",
+            "sidebar_primary_foreground",
+            "sidebar_accent",
+            "sidebar_accent_foreground",
+            "sidebar_border",
+            "sidebar_ring"
+          ],
+          "release": {
+            "catalogueThemeId": "15794aff-93dd-5c57-a3de-425c270dac7d",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "zinc",
+          "label": "Zinc",
+          "releaseKey": "SHADCN_CREATE_BASE_COLOR_ZINC",
+          "tokenKeys": [
+            "background",
+            "surface",
+            "text",
+            "card",
+            "card_foreground",
+            "popover",
+            "popover_foreground",
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "muted",
+            "muted_text",
+            "accent",
+            "accent_foreground",
+            "danger",
+            "danger_text",
+            "border_color",
+            "input",
+            "ring",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5",
+            "sidebar",
+            "sidebar_foreground",
+            "sidebar_primary",
+            "sidebar_primary_foreground",
+            "sidebar_accent",
+            "sidebar_accent_foreground",
+            "sidebar_border",
+            "sidebar_ring"
+          ],
+          "release": {
+            "catalogueThemeId": "0e8fdb85-f085-5987-b169-36cf02aa6aae",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "gray",
+          "label": "Gray",
+          "releaseKey": "SHADCN_CREATE_BASE_COLOR_GRAY",
+          "tokenKeys": [
+            "background",
+            "surface",
+            "text",
+            "card",
+            "card_foreground",
+            "popover",
+            "popover_foreground",
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "muted",
+            "muted_text",
+            "accent",
+            "accent_foreground",
+            "danger",
+            "danger_text",
+            "border_color",
+            "input",
+            "ring",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5",
+            "sidebar",
+            "sidebar_foreground",
+            "sidebar_primary",
+            "sidebar_primary_foreground",
+            "sidebar_accent",
+            "sidebar_accent_foreground",
+            "sidebar_border",
+            "sidebar_ring"
+          ],
+          "release": {
+            "catalogueThemeId": "c60c7981-7b21-5045-bd04-020985d2df9b",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "mauve",
+          "label": "Mauve",
+          "releaseKey": "SHADCN_CREATE_BASE_COLOR_MAUVE",
+          "tokenKeys": [
+            "background",
+            "surface",
+            "text",
+            "card",
+            "card_foreground",
+            "popover",
+            "popover_foreground",
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "muted",
+            "muted_text",
+            "accent",
+            "accent_foreground",
+            "danger",
+            "danger_text",
+            "border_color",
+            "input",
+            "ring",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5",
+            "sidebar",
+            "sidebar_foreground",
+            "sidebar_primary",
+            "sidebar_primary_foreground",
+            "sidebar_accent",
+            "sidebar_accent_foreground",
+            "sidebar_border",
+            "sidebar_ring"
+          ],
+          "release": {
+            "catalogueThemeId": "84aa5ab8-6bc8-5062-900e-4e3b038ae519",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "olive",
+          "label": "Olive",
+          "releaseKey": "SHADCN_CREATE_BASE_COLOR_OLIVE",
+          "tokenKeys": [
+            "background",
+            "surface",
+            "text",
+            "card",
+            "card_foreground",
+            "popover",
+            "popover_foreground",
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "muted",
+            "muted_text",
+            "accent",
+            "accent_foreground",
+            "danger",
+            "danger_text",
+            "border_color",
+            "input",
+            "ring",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5",
+            "sidebar",
+            "sidebar_foreground",
+            "sidebar_primary",
+            "sidebar_primary_foreground",
+            "sidebar_accent",
+            "sidebar_accent_foreground",
+            "sidebar_border",
+            "sidebar_ring"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "mist",
+          "label": "Mist",
+          "releaseKey": "SHADCN_CREATE_BASE_COLOR_MIST",
+          "tokenKeys": [
+            "background",
+            "surface",
+            "text",
+            "card",
+            "card_foreground",
+            "popover",
+            "popover_foreground",
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "muted",
+            "muted_text",
+            "accent",
+            "accent_foreground",
+            "danger",
+            "danger_text",
+            "border_color",
+            "input",
+            "ring",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5",
+            "sidebar",
+            "sidebar_foreground",
+            "sidebar_primary",
+            "sidebar_primary_foreground",
+            "sidebar_accent",
+            "sidebar_accent_foreground",
+            "sidebar_border",
+            "sidebar_ring"
+          ],
+          "release": {
+            "catalogueThemeId": "3b3c7792-c7de-5ad2-a6a3-d46d1202d4b5",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "taupe",
+          "label": "Taupe",
+          "releaseKey": "SHADCN_CREATE_BASE_COLOR_TAUPE",
+          "tokenKeys": [
+            "background",
+            "surface",
+            "text",
+            "card",
+            "card_foreground",
+            "popover",
+            "popover_foreground",
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "muted",
+            "muted_text",
+            "accent",
+            "accent_foreground",
+            "danger",
+            "danger_text",
+            "border_color",
+            "input",
+            "ring",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5",
+            "sidebar",
+            "sidebar_foreground",
+            "sidebar_primary",
+            "sidebar_primary_foreground",
+            "sidebar_accent",
+            "sidebar_accent_foreground",
+            "sidebar_border",
+            "sidebar_ring"
+          ],
+          "release": {
+            "catalogueThemeId": "86b80069-9c51-5096-9fd9-7f80364a4be5",
+            "releaseVersion": "4.21.0"
+          }
+        }
+      ]
+    },
+    "theme": {
+      "label": "Theme colour",
+      "options": [
+        {
+          "id": "neutral",
+          "label": "Neutral",
+          "releaseKey": "SHADCN_CREATE_THEME_NEUTRAL",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "efaa6d1a-e054-5167-b12b-9293664ad5ae",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "stone",
+          "label": "Stone",
+          "releaseKey": "SHADCN_CREATE_THEME_STONE",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "d38a9323-af78-5420-9a34-1b3345fb0499",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "zinc",
+          "label": "Zinc",
+          "releaseKey": "SHADCN_CREATE_THEME_ZINC",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "d86cf98e-3ded-5ccb-9857-6bc00c5298d5",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "gray",
+          "label": "Gray",
+          "releaseKey": "SHADCN_CREATE_THEME_GRAY",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "d647ccc9-7fd3-51d3-a232-525823cb721d",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "amber",
+          "label": "Amber",
+          "releaseKey": "SHADCN_CREATE_THEME_AMBER",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "blue",
+          "label": "Blue",
+          "releaseKey": "SHADCN_CREATE_THEME_BLUE",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "cyan",
+          "label": "Cyan",
+          "releaseKey": "SHADCN_CREATE_THEME_CYAN",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "emerald",
+          "label": "Emerald",
+          "releaseKey": "SHADCN_CREATE_THEME_EMERALD",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "fuchsia",
+          "label": "Fuchsia",
+          "releaseKey": "SHADCN_CREATE_THEME_FUCHSIA",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "green",
+          "label": "Green",
+          "releaseKey": "SHADCN_CREATE_THEME_GREEN",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "indigo",
+          "label": "Indigo",
+          "releaseKey": "SHADCN_CREATE_THEME_INDIGO",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "lime",
+          "label": "Lime",
+          "releaseKey": "SHADCN_CREATE_THEME_LIME",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "orange",
+          "label": "Orange",
+          "releaseKey": "SHADCN_CREATE_THEME_ORANGE",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "pink",
+          "label": "Pink",
+          "releaseKey": "SHADCN_CREATE_THEME_PINK",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "purple",
+          "label": "Purple",
+          "releaseKey": "SHADCN_CREATE_THEME_PURPLE",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "red",
+          "label": "Red",
+          "releaseKey": "SHADCN_CREATE_THEME_RED",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "rose",
+          "label": "Rose",
+          "releaseKey": "SHADCN_CREATE_THEME_ROSE",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "sky",
+          "label": "Sky",
+          "releaseKey": "SHADCN_CREATE_THEME_SKY",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "teal",
+          "label": "Teal",
+          "releaseKey": "SHADCN_CREATE_THEME_TEAL",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "violet",
+          "label": "Violet",
+          "releaseKey": "SHADCN_CREATE_THEME_VIOLET",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "yellow",
+          "label": "Yellow",
+          "releaseKey": "SHADCN_CREATE_THEME_YELLOW",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "refused": true
+          }
+        },
+        {
+          "id": "mauve",
+          "label": "Mauve",
+          "releaseKey": "SHADCN_CREATE_THEME_MAUVE",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "308a000d-15c9-52fa-978a-45d297ca39b2",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "olive",
+          "label": "Olive",
+          "releaseKey": "SHADCN_CREATE_THEME_OLIVE",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "0ad33a01-bcef-5198-8123-aff5e30c9ac1",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "mist",
+          "label": "Mist",
+          "releaseKey": "SHADCN_CREATE_THEME_MIST",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "e64849ab-315d-588f-9fad-645523f82174",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "taupe",
+          "label": "Taupe",
+          "releaseKey": "SHADCN_CREATE_THEME_TAUPE",
+          "tokenKeys": [
+            "primary",
+            "primary_foreground",
+            "secondary",
+            "secondary_foreground",
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "e3587e4e-24a8-5dab-94d6-3f6b9fc0e0d4",
+            "releaseVersion": "4.21.0"
+          }
+        }
+      ]
+    },
+    "chartColor": {
+      "label": "Chart colour",
+      "options": [
+        {
+          "id": "neutral",
+          "label": "Neutral",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_NEUTRAL",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "5669f285-8c4e-5284-b8ed-5be8fda4b007",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "stone",
+          "label": "Stone",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_STONE",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "3fa6bbe5-9783-5998-9aed-a6946d2f764d",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "zinc",
+          "label": "Zinc",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_ZINC",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "89da51fa-7dd8-50f1-8039-4363db458a04",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "gray",
+          "label": "Gray",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_GRAY",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "fa0bfba2-d5b1-5730-ac33-0d046c17c8be",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "amber",
+          "label": "Amber",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_AMBER",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "0e045acf-e1b3-5a5c-9753-49f60548835a",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "blue",
+          "label": "Blue",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_BLUE",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "55e9aeb5-f425-508a-870b-1e826759efba",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "cyan",
+          "label": "Cyan",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_CYAN",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "a725d310-38af-593e-a34d-91cbe728def6",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "emerald",
+          "label": "Emerald",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_EMERALD",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "a1833261-c101-58d9-873f-db39cac8d463",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "fuchsia",
+          "label": "Fuchsia",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_FUCHSIA",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "df293490-4506-5870-9cdd-71cbf45f284b",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "green",
+          "label": "Green",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_GREEN",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "ab4ba2e3-9524-583a-ab4e-8a12dfc154f0",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "indigo",
+          "label": "Indigo",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_INDIGO",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "0972b977-eb84-5dd5-a3cb-962e86a6f51a",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "lime",
+          "label": "Lime",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_LIME",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "564cc989-3d7c-50a2-be69-212d38e49c17",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "orange",
+          "label": "Orange",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_ORANGE",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "d9e41082-dff6-5753-bfc5-5515c85de508",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "pink",
+          "label": "Pink",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_PINK",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "7af682b2-c312-5b2a-b1fc-e9055b2be92c",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "purple",
+          "label": "Purple",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_PURPLE",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "69668a50-257e-54eb-9dd3-9cd263b88fc3",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "red",
+          "label": "Red",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_RED",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "1c6b7a84-f139-5db0-a726-383b602c27ba",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "rose",
+          "label": "Rose",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_ROSE",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "85d9f9a8-07b8-5762-a084-bec08ec42a54",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "sky",
+          "label": "Sky",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_SKY",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "de0180d3-9aaa-5794-97af-0bdedffdc48c",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "teal",
+          "label": "Teal",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_TEAL",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "2299d7e0-c76f-5aa8-ac86-38868d50cf20",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "violet",
+          "label": "Violet",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_VIOLET",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "8d2a9740-4b35-5d63-9b3c-f5b486638305",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "yellow",
+          "label": "Yellow",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_YELLOW",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "5dffd10d-1a9e-58d7-b8af-56afe8e25881",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "mauve",
+          "label": "Mauve",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_MAUVE",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "21c92e41-fb44-5e51-a4c8-b8b1e0f01684",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "olive",
+          "label": "Olive",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_OLIVE",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "32487a5d-6333-57d4-88e5-b57cced60127",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "mist",
+          "label": "Mist",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_MIST",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "eb7f09e3-759e-5cf7-8202-655d172e6f0b",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "taupe",
+          "label": "Taupe",
+          "releaseKey": "SHADCN_CREATE_CHART_COLOR_TAUPE",
+          "tokenKeys": [
+            "chart_1",
+            "chart_2",
+            "chart_3",
+            "chart_4",
+            "chart_5"
+          ],
+          "release": {
+            "catalogueThemeId": "6f3a32d0-1d5b-55a3-8a7c-6ca569b8b908",
+            "releaseVersion": "4.21.0"
+          }
+        }
+      ]
+    },
+    "radius": {
+      "label": "Radius",
+      "options": [
+        {
+          "id": "default",
+          "label": "Default",
+          "rem": 0.625,
+          "releaseKey": "SHADCN_CREATE_RADIUS_DEFAULT",
+          "tokenKeys": [
+            "radius_base"
+          ],
+          "release": {
+            "catalogueThemeId": "a1258913-c3be-55a6-aec7-144d7e96f341",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "none",
+          "label": "None",
+          "rem": 0,
+          "releaseKey": "SHADCN_CREATE_RADIUS_NONE",
+          "tokenKeys": [
+            "radius_base"
+          ],
+          "release": {
+            "catalogueThemeId": "b14b192b-6731-5c14-be1a-636843705f2d",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "small",
+          "label": "Small",
+          "rem": 0.45,
+          "releaseKey": "SHADCN_CREATE_RADIUS_SMALL",
+          "tokenKeys": [
+            "radius_base"
+          ],
+          "release": {
+            "catalogueThemeId": "e15e1201-cde6-5314-b195-9b3da61a3446",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "medium",
+          "label": "Medium",
+          "rem": 0.625,
+          "releaseKey": "SHADCN_CREATE_RADIUS_MEDIUM",
+          "tokenKeys": [
+            "radius_base"
+          ],
+          "release": {
+            "catalogueThemeId": "a0c050f1-12b9-5bcf-a5e9-9e52a7459b2b",
+            "releaseVersion": "4.21.0"
+          }
+        },
+        {
+          "id": "large",
+          "label": "Large",
+          "rem": 0.875,
+          "releaseKey": "SHADCN_CREATE_RADIUS_LARGE",
+          "tokenKeys": [
+            "radius_base"
+          ],
+          "release": {
+            "catalogueThemeId": "c3d480f6-6731-532f-87b4-88c0a7d9b58f",
+            "releaseVersion": "4.21.0"
+          }
+        }
+      ]
+    },
+    "menuColor": {
+      "label": "Menu colour",
+      "options": [
+        {
+          "id": "default",
+          "label": "Default",
+          "color": "default",
+          "surface": "solid",
+          "classes": ""
+        },
+        {
+          "id": "inverted",
+          "label": "Inverted",
+          "color": "inverted",
+          "surface": "solid",
+          "classes": "dark"
+        },
+        {
+          "id": "default-translucent",
+          "label": "Default Translucent",
+          "color": "default",
+          "surface": "translucent",
+          "classes": "animate-none! relative bg-popover/70 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground!"
+        },
+        {
+          "id": "inverted-translucent",
+          "label": "Inverted Translucent",
+          "color": "inverted",
+          "surface": "translucent",
+          "classes": "dark animate-none! relative bg-popover/70 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground!"
+        }
+      ]
+    },
+    "menuAccent": {
+      "label": "Menu accent",
+      "options": [
+        {
+          "id": "subtle",
+          "label": "Subtle",
+          "effect": "none"
+        },
+        {
+          "id": "bold",
+          "label": "Bold",
+          "effect": "accent_from_primary"
+        }
+      ]
+    }
+  },
+  "refused": [
+    {
+      "dimension": "baseColor",
+      "option": "olive",
+      "failures": [
+        "muted_text/background light=4.26"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "amber",
+      "failures": [
+        "primary/background dark=2.78"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "blue",
+      "failures": [
+        "primary/background dark=2.24"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "cyan",
+      "failures": [
+        "primary/background dark=2.73"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "emerald",
+      "failures": [
+        "primary/background dark=2.61"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "fuchsia",
+      "failures": [
+        "primary/background dark=2.37"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "green",
+      "failures": [
+        "primary/background dark=2.79"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "indigo",
+      "failures": [
+        "primary/background dark=1.96"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "lime",
+      "failures": [
+        "primary/background light=1.54",
+        "primary_foreground/primary dark=4.46"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "orange",
+      "failures": [
+        "primary/background dark=2.69"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "pink",
+      "failures": [
+        "primary/background dark=2.51"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "purple",
+      "failures": [
+        "primary/background dark=2.23"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "red",
+      "failures": [
+        "primary/background dark=2.36"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "rose",
+      "failures": [
+        "primary/background dark=2.50"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "sky",
+      "failures": [
+        "primary/background dark=2.63"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "teal",
+      "failures": [
+        "primary/background dark=2.63"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "violet",
+      "failures": [
+        "primary/background dark=2.16"
+      ]
+    },
+    {
+      "dimension": "theme",
+      "option": "yellow",
+      "failures": [
+        "primary/background light=1.57"
+      ]
+    }
+  ]
+}

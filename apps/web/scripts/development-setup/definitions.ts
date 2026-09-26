@@ -26,6 +26,7 @@ import {
   tenantAdministrationApplication,
   tenantAdministrationModule,
 } from "@vortex/modules";
+import { developmentPlaceholderConnectionTypeReleases } from "./placeholder-connection-types";
 import {
   developmentBuilderAuthority,
   inSystemTransaction,
@@ -42,10 +43,11 @@ import type { PublishedRelease, SetupState } from "./state";
 
 /**
  * The platform release catalogue the shipped applications were authored against: every registered
- * platform block release and the default platform theme, and no custom component releases.
+ * platform block release and the default platform theme, no custom component releases, and the
+ * development placeholder connection types CRM and Service Desk bind until #1316 ships them.
  */
 export const developmentPublicationCatalogue: ImmutableDefinitionPublicationCatalogueDefinition = {
-  connectionTypeReleases: [],
+  connectionTypeReleases: developmentPlaceholderConnectionTypeReleases,
   applicationCompositionV2: {
     compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.compositionPolicy,
     platformBlockReleases: PLATFORM_BLOCK_RELEASES.map(

@@ -118,13 +118,15 @@ export const developmentSetupManifest: DevelopmentSetupManifest =
       timeZone: "Pacific/Auckland",
       currency: "NZD",
     },
-    // In installation order: the administration applications the first owner needs. CRM, Service
-    // Desk and Operations are shipped but this setup does not install them; adding one here is a
-    // separate, verified change.
+    // In installation order: every shipped application, so the owner's local preview shows all of
+    // them. IAM is the operating application and is installed last with the initial role grant.
     applicationKeys: [
       "vortex.app.iam",
       "vortex.app.organisation_administration",
       "vortex.app.tenant_administration",
+      "vortex.app.crm",
+      "vortex.app.service_desk",
+      "vortex.app.operations",
     ],
     operatingRole: {
       applicationKey: "vortex.app.iam",
@@ -150,6 +152,24 @@ export const developmentSetupManifest: DevelopmentSetupManifest =
         roleKey: "tenant_administrator",
         roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d0e",
         roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d0f",
+      },
+      {
+        applicationKey: "vortex.app.crm",
+        roleKey: "crm_manager",
+        roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d10",
+        roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d11",
+      },
+      {
+        applicationKey: "vortex.app.service_desk",
+        roleKey: "service_manager",
+        roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d12",
+        roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d13",
+      },
+      {
+        applicationKey: "vortex.app.operations",
+        roleKey: "operations_operator",
+        roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d14",
+        roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d15",
       },
     ],
     installerRole: {

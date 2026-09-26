@@ -215,7 +215,6 @@ const pages = [
     record_type: incidentRecordType,
     permission: "vortex.operations.incidents.incident.read",
     query: "operations_open_incidents",
-    arrangements: ["table"],
     composition: {
       shell_kind: "default",
       main: slot({
