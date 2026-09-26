@@ -10,17 +10,29 @@
 -- The registration shape is deliberately small. A record type that declares
 -- `systemProjection` gets a storage_catalogue row whose physical_schema_token is
 -- 'system_projection' and whose protected_read_model_key names one registered
--- protected view. The provisioner creates a read-only record_data view over that
--- view's function, exposing the standard record-data columns and one column per
--- declared field, so `read_record`, `run_module_query`, reference choices and
--- arrangements all read it through their existing paths. Every row-visibility
--- rule stays inside the registered protected function: the view adds no
--- authority of its own and never widens what the viewer may see. The view is
--- read-only, so the record engine can never write the projection.
+-- protected view; the key is one of the closed protected read-model keys and
+-- must reference the registry, so an unregistered key can never be catalogued.
+-- The provisioner creates a read-only record_data view over that view's
+-- function, exposing the standard record-data columns and one column per
+-- declared field, so `read_record` and its capabilities, `run_module_query`,
+-- reference choices and arrangements all read it through their existing paths.
+-- The installation access plan and the query refuse a catalogue row whose
+-- storage kind or protected key disagrees with the installed definition. Every
+-- row-visibility rule stays inside the registered protected function: the view
+-- adds no authority of its own and never widens what the viewer may see. The
+-- view is read-only, so the record engine can never write the projection.
+--
+-- The registry is closed: only a migration adds a row, and no runtime, request
+-- or adapter role can read or write it.
 --
 -- One projection is registered here to prove the path: organisation runtime
--- settings, whose bespoke reader is the fixed runtime-settings decision. The
--- remaining protected read models are registered by their own projection work.
+-- settings. Its reader applies exactly the fixed runtime_settings.read decision
+-- and the same settings row as the bespoke
+-- vortex_access.read_organization_runtime_settings_for_administration() reader,
+-- returning no row where that reader refuses or has no settings. The remaining
+-- protected read models are registered by their own projection work.
+
+begin;
 
 -- ============================================================================
 -- The registered protected views. One row per protected-read-model key that has
@@ -69,6 +81,9 @@ insert into vortex_record.protected_read_model_views (
 
 alter table vortex_record.protected_read_model_views owner to vortex_record_owner;
 
+comment on table vortex_record.protected_read_model_views is
+  'Closed, migration-populated registry of protected projection readers: one security-definer reader per protected read-model key, applying that read model''s own organisation and viewer access.';
+
 -- ============================================================================
 -- The storage kind. A projection relation is a record_data view, but its
 -- catalogue row carries the distinct 'system_projection' token so write, index
@@ -107,6 +122,11 @@ alter table vortex_record.storage_catalogue
     )
   );
 
+alter table vortex_record.storage_catalogue
+  add constraint storage_catalogue_protected_read_model_key_fkey
+  foreign key (protected_read_model_key)
+  references vortex_record.protected_read_model_views (protected_read_model_key);
+
 reset role;
 
 
@@ -118,7 +138,7 @@ returns table (
   organization_id uuid,
   record_id uuid,
   revision bigint,
-  values jsonb
+  attribute_values jsonb
 )
 language plpgsql
 volatile
@@ -132,15 +152,25 @@ begin
   -- The projection keeps today's row visibility inside itself: the same fixed
   -- runtime-settings read decision the bespoke reader applies decides whether
   -- any row exists at all, and the caller's current organisation is never an
-  -- input. The record identity is the organisation, whose settings are a
-  -- single row, and the revision is the settings document's own revision.
-  select authorized.* into strict scope_row
-  from vortex_access.organization_runtime_settings_administration_read_scope() as authorized;
+  -- input. A viewer the decision refuses sees no row, exactly as a missing or
+  -- foreign record, so the record adapters return their identical refusal and
+  -- a list page is empty rather than failing. The record identity is the
+  -- organisation, whose settings are a single row, and the revision is the
+  -- settings document's own revision. Attribute names are the lowercase field
+  -- keys a projection record type declares.
+  begin
+    select authorized.* into strict scope_row
+    from vortex_access.organization_runtime_settings_administration_read_scope() as authorized;
+  exception
+    when insufficient_privilege then
+      return;
+  end;
   select result.* into settings_row
   from vortex_identity.read_current_organization_runtime_settings_internal(
     scope_row.organization_id
   ) as result;
-  if settings_row.organization_id is null then
+  if settings_row.organization_id is null
+    or settings_row.organization_id is distinct from scope_row.organization_id then
     return;
   end if;
   if p_record_id is not null and p_record_id <> settings_row.organization_id then
@@ -152,10 +182,10 @@ begin
     settings_row.revision,
     pg_catalog.jsonb_build_object(
       'language', settings_row.language,
-      'timeZone', settings_row.time_zone,
+      'time_zone', settings_row.time_zone,
       'currency', settings_row.currency,
-      'dateFormat', settings_row.date_format,
-      'numberFormat', settings_row.number_format
+      'date_format', settings_row.date_format,
+      'number_format', settings_row.number_format
     );
 end
 $function$;
@@ -169,7 +199,7 @@ grant execute on function vortex_access.list_organization_runtime_settings_proje
 ) to vortex_record_owner, vortex_record_adapter;
 
 comment on function vortex_access.list_organization_runtime_settings_projection(uuid, integer) is
-  'Registered organisation runtime-settings projection: returns the one settings row the current viewer may read under the fixed runtime-settings decision, with the organisation, the record identity, the settings revision and the safe projected attribute values, or no row.';
+  'Registered organisation runtime-settings projection: returns the one settings row the current viewer may read under the fixed runtime-settings decision, with the organisation, the record identity, the settings revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer or no settings exist.';
 
 create or replace function vortex_record.provision_exact_module_storage(
   p_module_root_id uuid,
@@ -337,13 +367,19 @@ begin
     -- registered function. The view exposes exactly the record type's declared
     -- fields as record-data columns, plus the protected row identity and
     -- revision, and is read-only: the projection has no ordinary write path.
+    -- Every projection value is reset per record type, so a generated record
+    -- type provisioned after a projection never inherits its protected key.
     is_projection := record_type ? 'systemProjection';
+    protected_view_key := null;
+    reader_schema_value := null;
+    reader_function_value := null;
+    projection_view_sql := null;
     if is_projection then
       protected_view_key := record_type #>> '{systemProjection,protectedView}';
-      select view.reader_schema, view.reader_function
+      select registered.reader_schema, registered.reader_function
       into reader_schema_value, reader_function_value
-      from vortex_record.protected_read_model_views as view
-      where view.protected_read_model_key = protected_view_key;
+      from vortex_record.protected_read_model_views as registered
+      where registered.protected_read_model_key = protected_view_key;
       if not found then
         raise exception using errcode = '42501',
           message = 'Protected projection view is unavailable';
@@ -378,16 +414,16 @@ begin
             || pg_catalog.format('projection.organization_id::text as %I, ', column_token);
         elsif field_value ->> 'fieldId' = record_type #>> '{systemProjection,revisionFieldId}' then
           field_columns_sql := field_columns_sql
-            || pg_catalog.format('projection.revision as %I, ', column_token);
+            || pg_catalog.format('projection.revision::%s as %I, ', sql_type, column_token);
         elsif database_type = 'json' then
           field_columns_sql := field_columns_sql
             || pg_catalog.format(
-              '(projection.values -> %L) as %I, ', field_value ->> 'key', column_token
+              '(projection.attribute_values -> %L) as %I, ', field_value ->> 'key', column_token
             );
         else
           field_columns_sql := field_columns_sql
             || pg_catalog.format(
-              '(projection.values ->> %L)::%s as %I, ',
+              '(projection.attribute_values ->> %L)::%s as %I, ',
               field_value ->> 'key', sql_type, column_token
             );
         end if;
@@ -400,7 +436,7 @@ begin
       );
       projection_view_sql := pg_catalog.format(
         'create view record_data.%I as select
-           projection.organization_id,
+           projection.organization_id as organisation_id,
            %L::uuid as module_root_id,
            %L::uuid as record_type_id,
            %L::uuid as storage_contract_id,
@@ -558,15 +594,21 @@ begin
           and attribute.attnum > 0
           and not attribute.attisdropped
           and attribute.attname like 'f\_%';
-        -- A release that changes the projected field set changes the view's
-        -- columns, so the view is recreated exactly; an unchanged set is left
-        -- alone. The projection has no indexes or dependent objects.
-        if existing_columns is distinct from expected_columns then
+        -- The view always carries the newest compatible release's shape, as a
+        -- generated table keeps every column a newer release added. A newer
+        -- release, or the newest one with a different field set, recreates it
+        -- exactly; an older release, which the field checks below prove is a
+        -- compatible subset, leaves the newer view alone. The projection has no
+        -- indexes or dependent objects.
+        if p_module_release_revision > stored_catalogue.last_compatible_release_revision
+          or (p_module_release_revision = stored_catalogue.last_compatible_release_revision
+            and existing_columns is distinct from expected_columns) then
           execute pg_catalog.format('drop view record_data.%I', table_token);
           execute projection_view_sql;
           execute pg_catalog.format(
             'grant select on record_data.%I to vortex_record_adapter', table_token
           );
+          any_change := true;
         end if;
       else
         if stored_catalogue.module_root_id <> p_module_root_id
@@ -797,7 +839,7 @@ revoke all on function vortex_record.provision_exact_module_storage(uuid, bigint
 grant execute on function vortex_record.provision_exact_module_storage(uuid, bigint)
   to vortex_module_owner;
 comment on function vortex_record.provision_exact_module_storage(uuid, bigint) is
-  'Private exact-release Module storage provisioner: creates or evolves the generated record_data storage for one published Module release and records its immutable provision evidence.';
+  'Private exact-release Module storage provisioner: creates or evolves the generated record_data storage, or the read-only record_data view over one registered protected projection reader for a system projection record type, for one published Module release and records its immutable provision evidence.';
 
 create or replace function vortex_record.resolve_installation_access_plan_internal(
   p_installation jsonb
@@ -956,6 +998,16 @@ begin
         or catalogue_row.record_type_id <> record_type_id_value
         or catalogue_row.storage_scope is distinct from (record_type_item ->> 'storageScope')
         or catalogue_row.physical_schema_token not in ('record_data', 'system_projection')
+        -- A system projection is read only through the protected reader
+        -- registered for exactly the key its installed definition declares (the
+        -- catalogue key references the closed registry); a generated record
+        -- type is never read through a projection, and a disagreeing key
+        -- refuses.
+        or (catalogue_row.physical_schema_token = 'system_projection')
+          is distinct from (record_type_item ? 'systemProjection')
+        or (catalogue_row.physical_schema_token = 'system_projection'
+          and catalogue_row.protected_read_model_key
+            is distinct from (record_type_item #>> '{systemProjection,protectedView}'))
         or not exists (
           select 1
           from vortex_record.release_provisions as provision
@@ -1517,7 +1569,12 @@ begin
     or catalogue_row.module_root_id <> (resolved ->> 'recordTypeModuleRootId')::uuid
     or catalogue_row.record_type_id <> record_type_id_value
     or catalogue_row.storage_scope is distinct from (record_type_item ->> 'storageScope')
-    or catalogue_row.physical_schema_token not in ('record_data', 'system_projection') then
+    or catalogue_row.physical_schema_token not in ('record_data', 'system_projection')
+    or (catalogue_row.physical_schema_token = 'system_projection')
+      is distinct from (record_type_item ? 'systemProjection')
+    or (catalogue_row.physical_schema_token = 'system_projection'
+      and catalogue_row.protected_read_model_key
+        is distinct from (record_type_item #>> '{systemProjection,protectedView}')) then
     raise exception using errcode = '55000',
       message = 'Record storage disagrees with the installed definition';
   end if;
@@ -2167,3 +2224,9 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
 
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb) is
   'One bounded keyset page of rows readable through read_record for one installed Module query, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows the scan to the caller''s owner, owner-group and direct-share records where those routes have an exact table form, and still decides every returned row through read_record; works out read-time fields, such as a deadline-passed calculation, inside the query at one statement timestamp in the organisation time zone, so no query is refused for freshness.';
+
+set local role vortex_record_owner;
+revoke create on schema vortex_record from postgres;
+reset role;
+
+commit;

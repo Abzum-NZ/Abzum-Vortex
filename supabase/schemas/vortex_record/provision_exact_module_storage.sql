@@ -164,13 +164,19 @@ begin
     -- registered function. The view exposes exactly the record type's declared
     -- fields as record-data columns, plus the protected row identity and
     -- revision, and is read-only: the projection has no ordinary write path.
+    -- Every projection value is reset per record type, so a generated record
+    -- type provisioned after a projection never inherits its protected key.
     is_projection := record_type ? 'systemProjection';
+    protected_view_key := null;
+    reader_schema_value := null;
+    reader_function_value := null;
+    projection_view_sql := null;
     if is_projection then
       protected_view_key := record_type #>> '{systemProjection,protectedView}';
-      select view.reader_schema, view.reader_function
+      select registered.reader_schema, registered.reader_function
       into reader_schema_value, reader_function_value
-      from vortex_record.protected_read_model_views as view
-      where view.protected_read_model_key = protected_view_key;
+      from vortex_record.protected_read_model_views as registered
+      where registered.protected_read_model_key = protected_view_key;
       if not found then
         raise exception using errcode = '42501',
           message = 'Protected projection view is unavailable';
@@ -205,16 +211,16 @@ begin
             || pg_catalog.format('projection.organization_id::text as %I, ', column_token);
         elsif field_value ->> 'fieldId' = record_type #>> '{systemProjection,revisionFieldId}' then
           field_columns_sql := field_columns_sql
-            || pg_catalog.format('projection.revision as %I, ', column_token);
+            || pg_catalog.format('projection.revision::%s as %I, ', sql_type, column_token);
         elsif database_type = 'json' then
           field_columns_sql := field_columns_sql
             || pg_catalog.format(
-              '(projection.values -> %L) as %I, ', field_value ->> 'key', column_token
+              '(projection.attribute_values -> %L) as %I, ', field_value ->> 'key', column_token
             );
         else
           field_columns_sql := field_columns_sql
             || pg_catalog.format(
-              '(projection.values ->> %L)::%s as %I, ',
+              '(projection.attribute_values ->> %L)::%s as %I, ',
               field_value ->> 'key', sql_type, column_token
             );
         end if;
@@ -227,7 +233,7 @@ begin
       );
       projection_view_sql := pg_catalog.format(
         'create view record_data.%I as select
-           projection.organization_id,
+           projection.organization_id as organisation_id,
            %L::uuid as module_root_id,
            %L::uuid as record_type_id,
            %L::uuid as storage_contract_id,
@@ -385,15 +391,21 @@ begin
           and attribute.attnum > 0
           and not attribute.attisdropped
           and attribute.attname like 'f\_%';
-        -- A release that changes the projected field set changes the view's
-        -- columns, so the view is recreated exactly; an unchanged set is left
-        -- alone. The projection has no indexes or dependent objects.
-        if existing_columns is distinct from expected_columns then
+        -- The view always carries the newest compatible release's shape, as a
+        -- generated table keeps every column a newer release added. A newer
+        -- release, or the newest one with a different field set, recreates it
+        -- exactly; an older release, which the field checks below prove is a
+        -- compatible subset, leaves the newer view alone. The projection has no
+        -- indexes or dependent objects.
+        if p_module_release_revision > stored_catalogue.last_compatible_release_revision
+          or (p_module_release_revision = stored_catalogue.last_compatible_release_revision
+            and existing_columns is distinct from expected_columns) then
           execute pg_catalog.format('drop view record_data.%I', table_token);
           execute projection_view_sql;
           execute pg_catalog.format(
             'grant select on record_data.%I to vortex_record_adapter', table_token
           );
+          any_change := true;
         end if;
       else
         if stored_catalogue.module_root_id <> p_module_root_id
@@ -624,4 +636,4 @@ revoke all on function vortex_record.provision_exact_module_storage(uuid, bigint
 grant execute on function vortex_record.provision_exact_module_storage(uuid, bigint)
   to vortex_module_owner;
 comment on function vortex_record.provision_exact_module_storage(uuid, bigint) is
-  'Private exact-release Module storage provisioner: creates or evolves the generated record_data storage for one published Module release and records its immutable provision evidence.';
+  'Private exact-release Module storage provisioner: creates or evolves the generated record_data storage, or the read-only record_data view over one registered protected projection reader for a system projection record type, for one published Module release and records its immutable provision evidence.';
