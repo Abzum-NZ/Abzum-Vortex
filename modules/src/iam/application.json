@@ -268,15 +268,6 @@
         "name": "My profile",
         "type": "dashboard",
         "permission": "application.iam.open",
-        "states": [
-          "normal",
-          "loading",
-          "validation",
-          "refused",
-          "conflict",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "default",
           "main": {
@@ -572,14 +563,6 @@
         "name": "IAM overview",
         "type": "dashboard",
         "permission": "platform.organization.permissions.read",
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "default",
           "main": {
@@ -628,14 +611,6 @@
         "name": "People",
         "type": "dashboard",
         "permission": "platform.organization.accounts.read",
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "default",
           "main": {
@@ -711,14 +686,6 @@
         "name": "Roles and Groups",
         "type": "dashboard",
         "permission": "platform.organization.roles.read",
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "default",
           "main": {
@@ -821,15 +788,6 @@
         "name": "Assignments",
         "type": "dashboard",
         "permission": "platform.organization.assignments.read",
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "access_ended",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "default",
           "main": {
@@ -905,15 +863,6 @@
         "name": "Manage roles and Groups",
         "type": "dashboard",
         "permission": "platform.organization.roles.manage",
-        "states": [
-          "normal",
-          "loading",
-          "validation",
-          "refused",
-          "conflict",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "default",
           "main": {
@@ -2671,15 +2620,6 @@
         "name": "Manage assignments",
         "type": "dashboard",
         "permission": "platform.organization.assignments.manage",
-        "states": [
-          "normal",
-          "loading",
-          "validation",
-          "refused",
-          "conflict",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "default",
           "main": {
@@ -3574,14 +3514,6 @@
         "name": "Eligible roles",
         "type": "dashboard",
         "permission": "platform.organization.roles.read",
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "default",
           "main": {
@@ -3630,14 +3562,6 @@
         "name": "Active roles",
         "type": "dashboard",
         "permission": "platform.organization.roles.read",
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "default",
           "main": {
@@ -3688,17 +3612,6 @@
         "record_type": "vortex.iam.core:access_request",
         "permission": "application.iam.open",
         "query": "iam_access_requests",
-        "arrangements": [
-          "table"
-        ],
-        "states": [
-          "normal",
-          "loading",
-          "empty",
-          "refused",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "default",
           "main": {
@@ -3828,14 +3741,6 @@
         "type": "detail",
         "record_type": "vortex.iam.core:access_request",
         "permission": "application.iam.open",
-        "states": [
-          "normal",
-          "loading",
-          "not_found",
-          "refused",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "default",
           "main": {
@@ -3852,92 +3757,170 @@
                       {
                         "kind": "group",
                         "properties": {
-                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.request_number"},
-                          "label": {"kind":"text","value":"Request number"}
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.request_number"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Request number"
+                          }
                         }
                       },
                       {
                         "kind": "group",
                         "properties": {
-                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.title"},
-                          "label": {"kind":"text","value":"Title"}
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.title"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Title"
+                          }
                         }
                       },
                       {
                         "kind": "group",
                         "properties": {
-                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.request_type"},
-                          "label": {"kind":"text","value":"Request type"}
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.request_type"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Request type"
+                          }
                         }
                       },
                       {
                         "kind": "group",
                         "properties": {
-                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.state"},
-                          "label": {"kind":"text","value":"State"}
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.state"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "State"
+                          }
                         }
                       },
                       {
                         "kind": "group",
                         "properties": {
-                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.beneficiary"},
-                          "label": {"kind":"text","value":"Beneficiary"}
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.beneficiary"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Beneficiary"
+                          }
                         }
                       },
                       {
                         "kind": "group",
                         "properties": {
-                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.target_role_key"},
-                          "label": {"kind":"text","value":"Target role"}
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.target_role_key"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Target role"
+                          }
                         }
                       },
                       {
                         "kind": "group",
                         "properties": {
-                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.target_group_key"},
-                          "label": {"kind":"text","value":"Target group"}
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.target_group_key"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Target group"
+                          }
                         }
                       },
                       {
                         "kind": "group",
                         "properties": {
-                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.application_context"},
-                          "label": {"kind":"text","value":"Application context"}
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.application_context"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Application context"
+                          }
                         }
                       },
                       {
                         "kind": "group",
                         "properties": {
-                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.reason"},
-                          "label": {"kind":"text","value":"Reason"}
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.reason"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Reason"
+                          }
                         }
                       },
                       {
                         "kind": "group",
                         "properties": {
-                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.starts_on"},
-                          "label": {"kind":"text","value":"Starts on"}
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.starts_on"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Starts on"
+                          }
                         }
                       },
                       {
                         "kind": "group",
                         "properties": {
-                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.expires_on"},
-                          "label": {"kind":"text","value":"Expires on"}
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.expires_on"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Expires on"
+                          }
                         }
                       },
                       {
                         "kind": "group",
                         "properties": {
-                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.submitted_at"},
-                          "label": {"kind":"text","value":"Submitted at"}
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.submitted_at"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Submitted at"
+                          }
                         }
                       },
                       {
                         "kind": "group",
                         "properties": {
-                          "field": {"kind":"field_reference","field":"vortex.iam.core:access_request.decided_at"},
-                          "label": {"kind":"text","value":"Decided at"}
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.decided_at"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Decided at"
+                          }
                         }
                       }
                     ]
@@ -3977,15 +3960,6 @@
         "type": "form",
         "record_type": "vortex.iam.core:access_request",
         "permission": "application.iam.request",
-        "states": [
-          "normal",
-          "loading",
-          "validation",
-          "refused",
-          "conflict",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "default",
           "main": {
@@ -4427,15 +4401,6 @@
         "type": "form",
         "record_type": "vortex.iam.core:access_request",
         "permission": "application.iam.request",
-        "states": [
-          "normal",
-          "loading",
-          "validation",
-          "refused",
-          "conflict",
-          "failure",
-          "recovery"
-        ],
         "composition": {
           "shell_kind": "default",
           "main": {

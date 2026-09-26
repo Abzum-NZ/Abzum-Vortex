@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "next dev -H 127.0.0.1",
     "build": "next build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "setup:local": "node --conditions=react-server --import tsx scripts/development-setup/setup.ts"
   },
   "dependencies": {
     "@supabase/ssr": "catalog:",
@@ -23,6 +24,7 @@
     "@vortex/access": "workspace:*",
     "@vortex/app": "workspace:*",
     "@vortex/connection": "workspace:*",
+    "@vortex/db": "workspace:*",
     "@vortex/definition": "workspace:*",
     "@vortex/event": "workspace:*",
     "@vortex/file": "workspace:*",
@@ -44,6 +46,7 @@
     "@types/react-dom": "19.3.0",
     "postcss": "8.5.28",
     "tailwindcss": "catalog:",
+    "tsx": "catalog:",
     "vitest": "catalog:"
   },
   "vortex": {

@@ -76,6 +76,17 @@ const bindingsIncomplete = (): ApplicationInstallationLifecycleError =>
   new ApplicationInstallationLifecycleError("APPLICATION_INSTALLATION_BINDINGS_INCOMPLETE");
 
 /**
+ * The readiness gates run after the activation flipped the binding set, which advances every
+ * binding revision, so they name the activated bindings, not the pre-activation revisions the
+ * command expected.
+ */
+const activatedBindings = (activated: ApplicationInstallationLifecycleResult) =>
+  activated.moduleBindings.map((binding) => ({
+    moduleRootId: binding.moduleRootId,
+    bindingRevision: binding.bindingRevision,
+  }));
+
+/**
  * Refuses the activation unless every record type the installation owns has a
  * current, executable stored lifecycle policy.
  *
@@ -112,7 +123,7 @@ const requireExecutableLifecyclePolicies = async (
       ${activated.organizationId}::uuid,
       ${command.applicationRootId}::uuid,
       ${command.applicationReleaseRevision}::bigint,
-      ${JSON.stringify(command.expectedModuleBindings)}::jsonb
+      ${JSON.stringify(activatedBindings(activated))}::text::jsonb
     ) as lifecycle_readiness
   `;
   if (rows.length !== 1 || rows[0] === undefined) throw bindingsIncomplete();
@@ -188,7 +199,7 @@ const requireReadyUniquenessIndexes = async (
       ${activated.organizationId}::uuid,
       ${command.applicationRootId}::uuid,
       ${command.applicationReleaseRevision}::bigint,
-      ${JSON.stringify(command.expectedModuleBindings)}::jsonb
+      ${JSON.stringify(activatedBindings(activated))}::text::jsonb
     ) as index_readiness
   `;
   if (rows.length !== 1 || rows[0] === undefined) throw bindingsIncomplete();
@@ -236,7 +247,7 @@ export const createApplicationInstallationLifecycleRepository = (
             select vortex_module.activate_application_installation(
               ${command.data.applicationRootId}::uuid,
               ${command.data.applicationReleaseRevision}::bigint,
-              ${JSON.stringify(command.data.expectedModuleBindings)}::jsonb
+              ${JSON.stringify(command.data.expectedModuleBindings)}::text::jsonb
             ) as lifecycle_result
           `,
         );
@@ -260,7 +271,7 @@ export const createApplicationInstallationLifecycleRepository = (
             select vortex_module.detach_application_installation(
               ${command.data.applicationRootId}::uuid,
               ${command.data.applicationReleaseRevision}::bigint,
-              ${JSON.stringify(command.data.expectedModuleBindings)}::jsonb
+              ${JSON.stringify(command.data.expectedModuleBindings)}::text::jsonb
             ) as lifecycle_result
           `,
         );
