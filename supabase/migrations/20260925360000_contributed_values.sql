@@ -13,12 +13,16 @@
 --    a column or overwrites a value.
 -- 2. vortex_record.detach_exact_module_contributions retires the mapping only;
 --    the column and every stored value stay, so a reinstall reactivates the same
---    lineage.
+--    lineage. The caller keeps the mapping active while another installation
+--    of the contributor still uses the shared storage.
 -- 3. vortex_module.provision_module_contribution_storage is the sole
 --    request-visible coordinator. It is gated by the same platform installation
 --    authority and exact Application Module binding as the installation storage
---    provisioner; p_contribution_mode selects attach or detach and the stored
---    binding revision must match the caller's expectation.
+--    provisioner, requires every target to be the exact dependency release the
+--    Application release pins (installed here for an attach), serialises each
+--    contributor's attach and detach, and requires the stored binding revision
+--    to match the caller's expectation; p_contribution_mode selects attach or
+--    detach.
 -- 4. The Module provisioner's own-field removal refusal now names only fields
 --    that Module introduced, so a retained contribution never refuses the target
 --    Module's own compatible storage.
@@ -502,7 +506,6 @@ grant execute on function vortex_record.provision_exact_module_storage(uuid, big
 comment on function vortex_record.provision_exact_module_storage(uuid, bigint) is
   'Private exact-release Module storage provisioner: creates or evolves the generated record_data storage for one published Module release and records its immutable provision evidence.';
 
-
 create or replace function vortex_record.provision_exact_module_contributions(
   p_module_root_id uuid,
   p_module_release_revision bigint,
@@ -603,7 +606,8 @@ begin
     if not vortex_context.is_non_nil_uuid(contributor_root_id::text)
       or not vortex_context.is_non_nil_uuid(target_module_root_id::text)
       or not vortex_context.is_non_nil_uuid(target_record_type_id::text)
-      or contributor_root_id <> p_module_root_id then
+      or contributor_root_id <> p_module_root_id
+      or target_module_root_id = p_module_root_id then
       raise exception using errcode = '22023', message = 'Module contribution binding is invalid';
     end if;
     select catalogue.storage_contract_id into storage_id
@@ -702,6 +706,9 @@ begin
           = pg_catalog.lower(target_module_root_id::text)
         and pg_catalog.lower(item.value ->> 'targetExtensionPointId')
           = pg_catalog.lower(target_extension_point_id::text)
+        and (contribution_kind <> 'field'
+          or pg_catalog.lower(item.value ->> 'recordTypeId')
+            = pg_catalog.lower(contribution ->> 'recordTypeId'))
     ) then
       raise exception using errcode = '23514',
         message = 'Module contribution declaration is unavailable';
@@ -829,7 +836,9 @@ begin
         raise exception using errcode = '55000',
           message = 'A new contributed field must be optional on shared storage';
       end if;
-      if not exists (
+      -- A column without a mapping has unknown meaning and values, so it is
+      -- never adopted.
+      if exists (
         select 1
         from pg_catalog.pg_attribute as attribute
         where attribute.attrelid = pg_catalog.to_regclass(
@@ -839,11 +848,13 @@ begin
           and attribute.attnum > 0
           and not attribute.attisdropped
       ) then
-        execute pg_catalog.format(
-          'alter table record_data.%I add column %I %s',
-          table_token, column_token, sql_type
-        );
+        raise exception using errcode = '55000',
+          message = 'Existing contributed field storage is incompatible';
       end if;
+      execute pg_catalog.format(
+        'alter table record_data.%I add column %I %s',
+        table_token, column_token, sql_type
+      );
       insert into vortex_record.field_storage_mappings (
         storage_contract_id, field_id, physical_column_token, database_value_type,
         field_definition, introduced_by_module_root_id, introduced_at_release_revision, state
@@ -886,11 +897,11 @@ grant execute on function vortex_record.provision_exact_module_contributions(uui
 comment on function vortex_record.provision_exact_module_contributions(uuid, bigint, jsonb) is
   'Private exact-release contributor storage provisioner: adds the contributed columns to each target record type''s existing generated table and records their retained lineage. It never drops a column or overwrites a value.';
 
-
 create or replace function vortex_record.detach_exact_module_contributions(
   p_module_root_id uuid,
   p_module_release_revision bigint,
-  p_contributions jsonb
+  p_contributions jsonb,
+  p_retire boolean
 )
 returns table (
   module_root_id uuid,
@@ -923,7 +934,8 @@ begin
     or p_module_release_revision not between 1 and 9007199254740991
     or pg_catalog.jsonb_typeof(p_contributions) is distinct from 'array'
     or pg_catalog.jsonb_array_length(p_contributions) < 1
-    or pg_catalog.jsonb_array_length(p_contributions) > 100 then
+    or pg_catalog.jsonb_array_length(p_contributions) > 100
+    or p_retire is null then
     raise exception using errcode = '22023',
       message = 'Module contribution storage command is invalid';
   end if;
@@ -970,7 +982,8 @@ begin
     if not vortex_context.is_non_nil_uuid(contributor_root_id::text)
       or not vortex_context.is_non_nil_uuid(target_module_root_id::text)
       or not vortex_context.is_non_nil_uuid(target_record_type_id::text)
-      or contributor_root_id <> p_module_root_id then
+      or contributor_root_id <> p_module_root_id
+      or target_module_root_id = p_module_root_id then
       raise exception using errcode = '22023', message = 'Module contribution binding is invalid';
     end if;
     select catalogue.storage_contract_id into storage_id
@@ -1047,9 +1060,11 @@ begin
         raise exception using errcode = '55000',
           message = 'Contributed field storage belongs to another Module';
       end if;
-      if stored_field.state = 'active' then
+      if stored_field.state = 'active' and p_retire then
         -- Detachment retires the mapping only. The physical column and every
-        -- stored value stay, so a reinstall reactivates the same lineage.
+        -- stored value stay, so a reinstall reactivates the same lineage. The
+        -- caller keeps the mapping active while another installation of the
+        -- contributor still uses this shared storage.
         update vortex_record.field_storage_mappings as mapping
         set state = 'retired',
             retired_by_module_root_id = p_module_root_id,
@@ -1072,12 +1087,12 @@ exception
 end
 $function$;
 
-revoke all on function vortex_record.detach_exact_module_contributions(uuid, bigint, jsonb)
+revoke all on function vortex_record.detach_exact_module_contributions(uuid, bigint, jsonb, boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_adapter, vortex_module_owner;
-grant execute on function vortex_record.detach_exact_module_contributions(uuid, bigint, jsonb)
+grant execute on function vortex_record.detach_exact_module_contributions(uuid, bigint, jsonb, boolean)
   to vortex_module_owner;
-comment on function vortex_record.detach_exact_module_contributions(uuid, bigint, jsonb) is
+comment on function vortex_record.detach_exact_module_contributions(uuid, bigint, jsonb, boolean) is
   'Private exact-release contributor storage teardown: retires each contributed field mapping without dropping its column or overwriting retained values, so a reinstall can reactivate the same lineage.';
 
 reset role;
@@ -1115,6 +1130,7 @@ declare
   application_release vortex_definition.releases%rowtype;
   stored_binding vortex_module.installation_bindings%rowtype;
   provision record;
+  retire_contributions boolean;
 begin
   if p_application_root_id is null
     or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -1236,10 +1252,56 @@ begin
     or stored_binding.application_release_revision <> p_application_release_revision
     or stored_binding.module_release_revision <> p_module_release_revision
     or (p_expected_binding_revision is not null
-      and stored_binding.binding_revision <> p_expected_binding_revision) then
+      and stored_binding.binding_revision <> p_expected_binding_revision)
+    or (p_contribution_mode = 'attach' and stored_binding.state = 'detached') then
     raise exception using errcode = '40001',
       message = 'Module installation binding changed';
   end if;
+
+  -- Every target is the exact dependency release this Application release
+  -- pins; an attach also needs the target's own storage installed here.
+  if exists (
+    with edges as (
+      select edge.target_root_id, edge.target_release_revision
+      from vortex_definition.reachable_module_dependency_edges(
+        p_application_root_id, p_application_release_revision
+      ) as edge
+    )
+    select 1
+    from pg_catalog.jsonb_array_elements(p_contributions) as item(value)
+    where not exists (
+      select 1
+      from edges
+      join vortex_definition.releases as release
+        on release.root_id = edges.target_root_id
+        and release.release_revision = edges.target_release_revision
+      where edges.target_root_id::text = pg_catalog.lower(item.value ->> 'targetModuleRootId')
+        and edges.target_root_id <> p_module_root_id
+        and release.release_version = item.value ->> 'targetModuleReleaseVersion'
+        and (
+          p_contribution_mode = 'detach'
+          or exists (
+            select 1
+            from vortex_module.installation_bindings as target_binding
+            where target_binding.organization_id = permission_decision.organization_id
+              and target_binding.application_root_id = p_application_root_id
+              and target_binding.module_root_id = edges.target_root_id
+              and target_binding.module_release_revision = edges.target_release_revision
+              and target_binding.state <> 'detached'
+          )
+        )
+    )
+  ) then
+    raise exception using errcode = '23514',
+      message = 'Exact application target Module binding is unavailable';
+  end if;
+
+  -- Contributed field mappings live on shared target storage. One lock per
+  -- contributor serialises attach and detach across organisations, so a
+  -- detach sees every committed installation that still uses the mappings.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('vortex_module.contribution:' || p_module_root_id::text, 0)
+  );
 
   if p_contribution_mode = 'attach' then
     select storage.* into strict provision
@@ -1253,9 +1315,19 @@ begin
     return;
   end if;
 
+  -- Another live installation of the contributor keeps its mappings active;
+  -- the last one retires them. Columns and values are retained either way.
+  retire_contributions := not exists (
+    select 1
+    from vortex_module.installation_bindings as other_binding
+    where other_binding.module_root_id = p_module_root_id
+      and other_binding.state <> 'detached'
+      and (other_binding.organization_id, other_binding.application_root_id)
+        <> (permission_decision.organization_id, p_application_root_id)
+  );
   select storage.* into strict provision
   from vortex_record.detach_exact_module_contributions(
-    p_module_root_id, p_module_release_revision, p_contributions
+    p_module_root_id, p_module_release_revision, p_contributions, retire_contributions
   ) as storage;
   return query select 'detached'::text, provision.changed,
     stored_binding.binding_revision, stored_binding.application_root_id,

@@ -1,7 +1,8 @@
 create or replace function vortex_record.detach_exact_module_contributions(
   p_module_root_id uuid,
   p_module_release_revision bigint,
-  p_contributions jsonb
+  p_contributions jsonb,
+  p_retire boolean
 )
 returns table (
   module_root_id uuid,
@@ -34,7 +35,8 @@ begin
     or p_module_release_revision not between 1 and 9007199254740991
     or pg_catalog.jsonb_typeof(p_contributions) is distinct from 'array'
     or pg_catalog.jsonb_array_length(p_contributions) < 1
-    or pg_catalog.jsonb_array_length(p_contributions) > 100 then
+    or pg_catalog.jsonb_array_length(p_contributions) > 100
+    or p_retire is null then
     raise exception using errcode = '22023',
       message = 'Module contribution storage command is invalid';
   end if;
@@ -81,7 +83,8 @@ begin
     if not vortex_context.is_non_nil_uuid(contributor_root_id::text)
       or not vortex_context.is_non_nil_uuid(target_module_root_id::text)
       or not vortex_context.is_non_nil_uuid(target_record_type_id::text)
-      or contributor_root_id <> p_module_root_id then
+      or contributor_root_id <> p_module_root_id
+      or target_module_root_id = p_module_root_id then
       raise exception using errcode = '22023', message = 'Module contribution binding is invalid';
     end if;
     select catalogue.storage_contract_id into storage_id
@@ -158,9 +161,11 @@ begin
         raise exception using errcode = '55000',
           message = 'Contributed field storage belongs to another Module';
       end if;
-      if stored_field.state = 'active' then
+      if stored_field.state = 'active' and p_retire then
         -- Detachment retires the mapping only. The physical column and every
-        -- stored value stay, so a reinstall reactivates the same lineage.
+        -- stored value stay, so a reinstall reactivates the same lineage. The
+        -- caller keeps the mapping active while another installation of the
+        -- contributor still uses this shared storage.
         update vortex_record.field_storage_mappings as mapping
         set state = 'retired',
             retired_by_module_root_id = p_module_root_id,
@@ -183,10 +188,10 @@ exception
 end
 $function$;
 
-revoke all on function vortex_record.detach_exact_module_contributions(uuid, bigint, jsonb)
+revoke all on function vortex_record.detach_exact_module_contributions(uuid, bigint, jsonb, boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_adapter, vortex_module_owner;
-grant execute on function vortex_record.detach_exact_module_contributions(uuid, bigint, jsonb)
+grant execute on function vortex_record.detach_exact_module_contributions(uuid, bigint, jsonb, boolean)
   to vortex_module_owner;
-comment on function vortex_record.detach_exact_module_contributions(uuid, bigint, jsonb) is
+comment on function vortex_record.detach_exact_module_contributions(uuid, bigint, jsonb, boolean) is
   'Private exact-release contributor storage teardown: retires each contributed field mapping without dropping its column or overwriting retained values, so a reinstall can reactivate the same lineage.';

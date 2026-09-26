@@ -98,7 +98,8 @@ begin
     if not vortex_context.is_non_nil_uuid(contributor_root_id::text)
       or not vortex_context.is_non_nil_uuid(target_module_root_id::text)
       or not vortex_context.is_non_nil_uuid(target_record_type_id::text)
-      or contributor_root_id <> p_module_root_id then
+      or contributor_root_id <> p_module_root_id
+      or target_module_root_id = p_module_root_id then
       raise exception using errcode = '22023', message = 'Module contribution binding is invalid';
     end if;
     select catalogue.storage_contract_id into storage_id
@@ -197,6 +198,9 @@ begin
           = pg_catalog.lower(target_module_root_id::text)
         and pg_catalog.lower(item.value ->> 'targetExtensionPointId')
           = pg_catalog.lower(target_extension_point_id::text)
+        and (contribution_kind <> 'field'
+          or pg_catalog.lower(item.value ->> 'recordTypeId')
+            = pg_catalog.lower(contribution ->> 'recordTypeId'))
     ) then
       raise exception using errcode = '23514',
         message = 'Module contribution declaration is unavailable';
@@ -324,7 +328,9 @@ begin
         raise exception using errcode = '55000',
           message = 'A new contributed field must be optional on shared storage';
       end if;
-      if not exists (
+      -- A column without a mapping has unknown meaning and values, so it is
+      -- never adopted.
+      if exists (
         select 1
         from pg_catalog.pg_attribute as attribute
         where attribute.attrelid = pg_catalog.to_regclass(
@@ -334,11 +340,13 @@ begin
           and attribute.attnum > 0
           and not attribute.attisdropped
       ) then
-        execute pg_catalog.format(
-          'alter table record_data.%I add column %I %s',
-          table_token, column_token, sql_type
-        );
+        raise exception using errcode = '55000',
+          message = 'Existing contributed field storage is incompatible';
       end if;
+      execute pg_catalog.format(
+        'alter table record_data.%I add column %I %s',
+        table_token, column_token, sql_type
+      );
       insert into vortex_record.field_storage_mappings (
         storage_contract_id, field_id, physical_column_token, database_value_type,
         field_definition, introduced_by_module_root_id, introduced_at_release_revision, state

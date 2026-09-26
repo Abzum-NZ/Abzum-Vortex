@@ -227,7 +227,8 @@ const parseContributionCommand = (
     const identity = binding.contributionId.toLowerCase();
     if (
       identities.has(identity) ||
-      binding.contributorModuleRootId.toLowerCase() !== command.moduleRootId.toLowerCase()
+      binding.contributorModuleRootId.toLowerCase() !== command.moduleRootId.toLowerCase() ||
+      binding.targetModuleRootId.toLowerCase() === command.moduleRootId.toLowerCase()
     )
       return undefined;
     identities.add(identity);
