@@ -113,8 +113,17 @@ begin
   -- Delete and restore reach here only after their protected preflight has
   -- already run and claimed the record_lifecycle receipt; this operation owns
   -- the one terminal write and completes it. The request role reaches these
-  -- branches only through apply_lifecycle_record_changes.
+  -- branches only through apply_lifecycle_record_changes: a lifecycle command
+  -- carries no submitted values, selected group or action, so the named-action
+  -- entry can never reach a lifecycle write under an action identity.
   if p_operation in ('delete', 'restore', 'transfer_ownership') then
+    if p_action is not null
+      or p_selected_group_id is not null
+      or p_submitted_values is distinct from '{}'::jsonb then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'command_invalid'
+      );
+    end if;
     return vortex_record.apply_lifecycle_record_changes_internal(
       p_operation, p_command_id, p_record_type_id, p_record_id,
       p_expected_concurrency_number, p_mutations, p_activity_id, p_occurrence_id
@@ -1428,4 +1437,4 @@ grant execute on function vortex_record.apply_record_changes(
 comment on function vortex_record.apply_record_changes(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, jsonb, uuid, uuid, jsonb
 ) is
-  'The one protected Record-change operation: claims one receipt, applies an ordered mutation list under one canonical lock order and one access decision per touched record, and writes one Activity and one Event in the same transaction. The ordinary save is a batch of one; a named action is one call with an action identity and its subject, creation, relationship copy, derived-total and declared-Event mutations, keeping the named_action receipt, fingerprint, field rules, Activity and Events.';
+  'The one protected Record-change operation: claims one receipt, applies an ordered mutation list under one canonical lock order and one access decision per touched record, and writes one Activity and one Event in the same transaction. The ordinary save is a batch of one; a named action is one call with an action identity and its subject, creation, relationship copy, derived-total and declared-Event mutations, keeping the named_action receipt, fingerprint, field rules, Activity and Events; the protected delete, restore and ownership transfer are its terminal lifecycle writes, keeping their own receipts, fingerprints, Activity and Events.';

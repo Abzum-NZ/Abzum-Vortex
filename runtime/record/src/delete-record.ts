@@ -499,8 +499,8 @@ export const performProtectedRecordDelete = async (
           ${command.recordId}::uuid,
           ${command.expectedConcurrencyNumber}::bigint,
           ${JSON.stringify(parentMutations)}::text::jsonb,
-          ${command.activityId}::uuid,
-          ${command.occurrenceId}::uuid
+          ${activityId}::uuid,
+          ${occurrenceId}::uuid
         ) as result
       `,
     ).result,
