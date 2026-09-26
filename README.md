@@ -70,7 +70,7 @@ The development server binds to `127.0.0.1`. Authentication and protected data o
 
 ### Local development setup
 
-A fresh local database has no organisation, so a signed-in developer sees "No organisations available". The development-only setup command provisions one organisation, publishes and installs the shipped administration applications and gives one nominated first owner their access. It runs only on your machine against the Supabase CLI database on loopback: it refuses `NODE_ENV=production`, any other database host or port, and a run without the explicit `--local-development` flag.
+A fresh local database has no organisation, so a signed-in developer sees "No organisations available". The development-only setup command provisions one organisation, publishes and installs every shipped application and gives one nominated first owner their access. It runs only on your machine against the Supabase CLI database on loopback: it refuses `NODE_ENV=production`, any other database host or port, and a run without the explicit `--local-development` flag.
 
 1. Start the local stack and build a fresh database (this deletes local data, including local sign-ups):
 
@@ -90,20 +90,20 @@ A fresh local database has no organisation, so a signed-in developer sees "No or
 
    `--first-owner-identity-id <uuid>` nominates by Supabase user id instead of email. Exactly one account is accepted, and it comes only from this command line; nothing is read from a browser. The account must already exist locally (step 2).
 
-4. Sign in at `http://127.0.0.1:3000` with the nominated account and select the organisation "Abzum Development". It has three installed applications: IAM, Organisation Administration and Tenant Administration.
+4. Sign in at `http://127.0.0.1:3000` with the nominated account and select the organisation "Abzum Development". It has six installed applications: IAM, Organisation Administration, Tenant Administration, CRM, Service Desk and Operations.
 
 What the setup does, in order, through the protected entry points only (no table is written directly):
 
 | Step | Result |
 | --- | --- |
 | Provision | The tenant and organisation "Abzum Development" with the nominated account as its steward (`provision_tenant` with a fixed development duplicate key, recorded as the provisioning receipt). |
-| Publish | The IAM, Organisation Administration and Tenant Administration modules and applications from `modules/` are published as 1.0.0 through the Definition store and publication service. |
+| Publish | The IAM, Organisation Administration, Tenant Administration, CRM, Service Desk and Operations modules and applications from `modules/` are published as 1.0.0 through the Definition store and publication service. |
 | Installer access | The steward, through the ordinary Access administration operations, creates the custom role "Application installer" (`platform.organization.applications.manage` only) and assigns it to themselves. A provisioned steward holds no installation permission. |
-| Install | Organisation Administration and Tenant Administration, then IAM, are prepared and activated through the App installation coordinator, with an explicit initial record lifecycle policy (delete, 30-day recovery window) for each record type. |
+| Install | Organisation Administration, Tenant Administration, CRM, Service Desk and Operations, then IAM, are prepared and activated through the App installation coordinator, with an explicit initial record lifecycle policy (delete, 30-day recovery window) for each record type. |
 | Grant | The App first-owner composition installs IAM and calls the Access-owned initial operating-role grant once with the provisioning receipt: the nominated account receives the IAM reviewer role (`iam_reviewer`) as a standing assignment. |
-| Administration roles | The steward accepts and assigns to themselves `iam_administrator`, `organisation_administrator` and `tenant_administrator` through the ordinary Access administration operations, so the owner can administer the organisation from IAM. |
+| Administration and application roles | The steward accepts and assigns to themselves `iam_administrator`, `organisation_administrator` and `tenant_administrator` through the ordinary Access administration operations, so the owner can administer the organisation from IAM, plus `crm_manager`, `service_manager` and `operations_operator` so the owner can open CRM, Service Desk and Operations. |
 
-The configured manifest is `apps/web/scripts/development-setup/manifest.ts`. Management status or a first sign-in never implies application permission: the account can use only what these roles and later IAM assignments give it. The command is not a general grant tool: further access is granted in the IAM application. CRM, Service Desk and Operations are shipped but this setup does not install them.
+The configured manifest is `apps/web/scripts/development-setup/manifest.ts`. Management status or a first sign-in never implies application permission: the account can use only what these roles and later IAM assignments give it. The command is not a general grant tool: further access is granted in the IAM application.
 
 An interrupted run resumes: provisioning replays by its fixed key and the steps recorded in `supabase/.temp/development-setup-state.json` are skipped. Once every step has completed, the command is disabled: running it again only calls the initial operating-role grant with the original receipt and the same manifest, which replays the stored result. A different nominated account is refused. `pnpm db:reset` starts over.
 
