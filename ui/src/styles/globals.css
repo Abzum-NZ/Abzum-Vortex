@@ -36,6 +36,26 @@
   }
 }
 
+/*
+ * The exact negation of the dark variant above, which the catalogue's luma and rhea style assets
+ * apply as `not-dark:`. An element is not dark when it is outside every dark-mode container and
+ * either the browser prefers light or it sits inside a light-mode themed container, so the two
+ * preference branches are nested inside the one container test: a `@slot` in either of them
+ * matches only outside a dark container.
+ */
+@custom-variant not-dark {
+  &:where(:not(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *)) {
+    @media (prefers-color-scheme: light) {
+      @slot;
+    }
+    @media (prefers-color-scheme: dark) {
+      &:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *) {
+        @slot;
+      }
+    }
+  }
+}
+
 /* A .dark ancestor resolves the bridge's light-dark() variables to their dark values too. */
 :where(.dark) {
   color-scheme: dark;
