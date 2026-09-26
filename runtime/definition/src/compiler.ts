@@ -1317,6 +1317,7 @@ const moduleSourceTransformPatterns = [
   /^body\/actions\/#\/protected_operation$/,
   /^body\/actions\/#\/tasks\/#\/properties\/(?:record_type|event)$/,
   /^body\/actions\/#\/tasks\/#\/properties\/changes\/#\/(?:relationships\/#|target_input)$/,
+  /^body\/actions\/#\/tasks\/#\/properties\/values\/[^/]+\/literal\/value(?:\/.*)?$/,
   /^body\/queries\/#\/(?:id|record_type|select\/#|group_by\/#)$/,
   /^body\/queries\/#\/inputs\/#\/(?:type|record_types\/#)$/,
   /^body\/queries\/#\/inputs\/#\/validation\/(?:minimum|maximum)$/,
@@ -1364,6 +1365,7 @@ const applicationSourceTransformPatterns = [
   /^body\/actions\/#\/inputs\/#\/(?:type|record_types\/#)$/,
   /^body\/actions\/#\/tasks\/#\/properties\/(?:record_type|event)$/,
   /^body\/actions\/#\/tasks\/#\/properties\/changes\/#\/(?:relationships\/#|target_input)$/,
+  /^body\/actions\/#\/tasks\/#\/properties\/values\/[^/]+\/literal\/value(?:\/.*)?$/,
   /^body\/rules\/#\/effect\/(?:field|message|component|workflow|reason_code)$/,
   /^body\/rules\/#\/effect\/value(?:\/.*)?$/,
   /^body\/pipelines\/#\/stages\/#\/(?:entry_actions|exit_actions)\/#$/,
@@ -2192,6 +2194,30 @@ function qualifiedField(resolution: Resolution, reference: string): string {
   const separator = reference.lastIndexOf(".");
   if (separator < 1) fail("vortex.definition.qualified_field_required", "unresolved_reference");
   return resolution.field(reference.slice(0, separator), reference.slice(separator + 1));
+}
+
+/**
+ * One action task value in canonical form. References pass through unchanged; a `json` literal is
+ * normalised to its target field's canonical value, as a field default is, so a link literal's
+ * record type alias resolves to its identity and exact numbers and money take one form.
+ */
+function actionTaskValue(
+  value: unknown,
+  targetField: JsonObject | undefined,
+  valueContext: ModuleValueContext | undefined,
+): unknown {
+  if (valueContext === undefined) return value;
+  const entry = asObject(value);
+  if (entry.kind !== "literal") return value;
+  const literal = asObject(entry.literal);
+  if (literal.type !== "json") return value;
+  return {
+    ...entry,
+    literal: {
+      ...literal,
+      value: normaliseModuleFieldValueV2(targetField, literal.value, valueContext),
+    },
+  };
 }
 
 function actionInput(input: JsonObject, resolution: Resolution, moduleV2 = false): unknown {
@@ -3347,10 +3373,13 @@ function compileModule(
               type: "record.set_fields",
               properties: {
                 values: objectFromUniqueEntries(
-                  Object.entries(asObject(properties.values)).map(([key, value]) => [
-                    localField(key),
-                    value,
-                  ]),
+                  Object.entries(asObject(properties.values)).map(([key, value]) => {
+                    const fieldId = localField(key);
+                    return [
+                      fieldId,
+                      actionTaskValue(value, fieldsById.get(fieldId), valueContext),
+                    ];
+                  }),
                 ),
               },
             };
@@ -3362,10 +3391,13 @@ function compileModule(
               properties: {
                 recordType: resolution.recordType(target),
                 values: objectFromUniqueEntries(
-                  Object.entries(asObject(properties.values)).map(([key, value]) => [
-                    resolution.field(target, key),
-                    value,
-                  ]),
+                  Object.entries(asObject(properties.values)).map(([key, value]) => {
+                    const fieldId = resolution.field(target, key);
+                    return [
+                      fieldId,
+                      actionTaskValue(value, fieldsById.get(fieldId), valueContext),
+                    ];
+                  }),
                 ),
               },
             };
@@ -4042,25 +4074,43 @@ function compileApplication(
                   type: "record.set_fields",
                   properties: {
                     values: objectFromUniqueEntries(
-                      Object.entries(asObject(properties.values)).map(([key, value]) => [
-                        localField(key),
-                        value,
-                      ]),
+                      Object.entries(asObject(properties.values)).map(([key, value]) => {
+                        const fieldId = localField(key);
+                        const pair = valueIndex.fieldById(fieldId);
+                        return [
+                          fieldId,
+                          actionTaskValue(
+                            value,
+                            pair?.field,
+                            pair?.moduleV2 ? subjectContext : undefined,
+                          ),
+                        ];
+                      }),
                     ),
                   },
                 };
               case "record.create": {
                 const target = String(properties.record_type);
+                const targetContext = valueIndex.record(target)?.moduleV2
+                  ? valueIndex.context(target)
+                  : undefined;
                 return {
                   id,
                   type: "record.create",
                   properties: {
                     recordType: resolution.recordType(target),
                     values: objectFromUniqueEntries(
-                      Object.entries(asObject(properties.values)).map(([key, value]) => [
-                        resolution.field(target, key),
-                        value,
-                      ]),
+                      Object.entries(asObject(properties.values)).map(([key, value]) => {
+                        const fieldId = resolution.field(target, key);
+                        return [
+                          fieldId,
+                          actionTaskValue(
+                            value,
+                            valueIndex.fieldById(fieldId)?.field,
+                            targetContext,
+                          ),
+                        ];
+                      }),
                     ),
                   },
                 };
