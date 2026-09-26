@@ -1,4 +1,4 @@
-﻿.style-nova {
+.style-nova {
   /* MARK: Accordion */
   .cn-accordion-item {
     @apply not-last:border-b;

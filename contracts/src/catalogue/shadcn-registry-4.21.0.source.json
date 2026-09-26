@@ -36,7 +36,7 @@
       "description": "Reduced padding and margins",
       "base": "base",
       "cssPath": "styles/nova.css",
-      "cssSha256": "sha256:e612f44a402502f5323a1e4b64ac57e89d16f1f2227d768a6736953274d4fdba"
+      "cssSha256": "sha256:1ff9d64bd0a057b833a1e20d9d295ef2ed31dae4fcd2cf0a12a02ab6a3cdfa7a"
     },
     {
       "id": "vega",
@@ -45,7 +45,7 @@
       "description": "Clean, neutral, and familiar",
       "base": "base",
       "cssPath": "styles/vega.css",
-      "cssSha256": "sha256:21fcc3c38159551b3c65bc97298c1e9912cce47bba1dbcf2ca2a46db169ff87f"
+      "cssSha256": "sha256:5dfa439f81132cd208d26624430b81f5a228e57d83bb3b38551e9e28d12ff36b"
     },
     {
       "id": "maia",
@@ -54,7 +54,7 @@
       "description": "Rounded, with generous spacing.",
       "base": "base",
       "cssPath": "styles/maia.css",
-      "cssSha256": "sha256:3b31da3fceb008ee5c74a4fc092da4da2cc57ca59e3e959e7e1fe172c91ca442"
+      "cssSha256": "sha256:d15d4a37e8f0219f3e4ee3820a6b91b3a0375ebf4efb187f0c2f04b83cb88b4e"
     },
     {
       "id": "lyra",
@@ -63,7 +63,7 @@
       "description": "Boxy and sharp. For mono fonts.",
       "base": "base",
       "cssPath": "styles/lyra.css",
-      "cssSha256": "sha256:a1790091cd6858dcdebbfde8ef50268c71dd50b588c7e31145f9fe872457a974"
+      "cssSha256": "sha256:4e34b26f771d6d828c653c70ea9e3f66d7feb2339a51884c81051eef288db72b"
     },
     {
       "id": "mira",
@@ -72,7 +72,7 @@
       "description": "Made for compact interfaces.",
       "base": "base",
       "cssPath": "styles/mira.css",
-      "cssSha256": "sha256:ead3eec5048011b8a8f4d7312bc7fdf3e08aa722a6ecf91645d8622558143988"
+      "cssSha256": "sha256:405bc4bd0c7db5e723b6ec44f6fca9d42dcac3bfc19b834590b0bc054ebde69c"
     },
     {
       "id": "luma",
@@ -81,7 +81,7 @@
       "description": "Fluid, luminous, and soft.",
       "base": "base",
       "cssPath": "styles/luma.css",
-      "cssSha256": "sha256:64f4143173c02fe25f2b521a4b23bea4acbb6a8f3f12eb256d6d4720753834cb"
+      "cssSha256": "sha256:1d370585e17222e0dcb9893f278c494046ef2669b2aaa09e4b3d7c259a3dcdf7"
     },
     {
       "id": "sera",
@@ -90,7 +90,7 @@
       "description": "Editorial and typographic.",
       "base": "base",
       "cssPath": "styles/sera.css",
-      "cssSha256": "sha256:9e00ed3acbd67f70cdf09be17e7226219c1610eaab0c9691376d3c5cd4796d9a"
+      "cssSha256": "sha256:28625bd40bd49d3aeb3ac734d90ac87c6fe93df0e4e3ca7e5308591d862af988"
     },
     {
       "id": "rhea",
@@ -99,7 +99,7 @@
       "description": "Like Luma but compact.",
       "base": "base",
       "cssPath": "styles/rhea.css",
-      "cssSha256": "sha256:19c0032a050e23607388b38342aa7eb79b8635f7240da236db1cc03b776e2eb6"
+      "cssSha256": "sha256:1d37a2cabea84101dc8e5fe0b7b677f28808973680669edd5d6a90f14f05295a"
     }
   ],
   "baseColors": [

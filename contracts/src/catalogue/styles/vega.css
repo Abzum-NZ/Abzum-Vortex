@@ -1,4 +1,4 @@
-﻿.style-vega {
+.style-vega {
   /* MARK: Accordion */
   .cn-accordion-item {
     @apply not-last:border-b;

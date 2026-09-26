@@ -1,4 +1,4 @@
-﻿.style-maia {
+.style-maia {
   /* MARK: Accordion */
   .cn-accordion {
     @apply overflow-hidden rounded-2xl border;

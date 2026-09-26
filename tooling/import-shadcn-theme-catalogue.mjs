@@ -5,50 +5,70 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * Imports the full shadcn/create theme catalogue at the pinned shadcn version into the platform
- * theme catalogue.
+ * Imports the full shadcn/create theme catalogue at the pinned shadcn version as platform theme
+ * releases.
  *
  * It reads only the committed registry snapshot contracts/src/catalogue/shadcn-registry-4.21.0.
- * source.json and the style CSS assets that snapshot names under contracts/src/catalogue/styles/.
- * It never touches the network, so re-running it on the same pinned version produces an identical
- * catalogue. It appends one versioned platform theme release per option to
- * contracts/src/catalogue/platform-theme-catalogue.source.json, writes the release index
- * contracts/src/catalogue/shadcn-create-theme-catalogue.generated.json, lists every option refused
- * by the shared contrast rule, and regenerates catalogue fingerprints. The existing 2.0.0 and
- * 3.0.0 releases are left byte-unchanged.
+ * source.json, the style CSS assets that snapshot names under contracts/src/catalogue/styles/ and
+ * the registered 3.0.0 release in contracts/src/catalogue/platform-theme-catalogue.source.json. It
+ * never touches the network, so re-running it on the same pinned version produces an identical
+ * catalogue. It writes:
+ *
+ * - contracts/src/catalogue/shadcn-create-theme-releases.generated.json: one complete, versioned
+ *   platform theme release per base colour, theme colour, chart colour and radius option. Each
+ *   option is its own catalogue theme (a stable UUIDv5 identity) released at the shadcn version,
+ *   and each release is the registered 3.0.0 release with that option's tokens applied, so it maps
+ *   every role of the shared token vocabulary. The file is separate from
+ *   platform-theme-catalogue.source.json because the contracts entry point, which client code
+ *   imports, bundles that source; the imported releases are for server-side resolution only.
+ * - contracts/src/catalogue/shadcn-create-theme-catalogue.generated.json: the release index, one
+ *   entry per option of every dimension with its release identity (or its refusal), the tokens it
+ *   sets, style CSS assets, and menu colour and accent variant descriptors.
+ *
+ * Every option whose release fails the platform's theme contrast gate (the same rules as
+ * runtime/theme/src/contrast.ts validateThemeContrast) is refused: it gets no release, and it is
+ * listed in the importer output and in the index's `refused` list rather than silently dropped.
+ * The existing 2.0.0 and 3.0.0 releases are never written.
  *
  *   node tooling/import-shadcn-theme-catalogue.mjs            import and regenerate fingerprints
- *   node tooling/import-shadcn-theme-catalogue.mjs --check    fail when the generated files are stale
+ *   node tooling/import-shadcn-theme-catalogue.mjs --check    fail when a generated file is stale
  */
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const catalogueDirectory = path.join(root, "contracts", "src", "catalogue");
 const snapshotFile = path.join(catalogueDirectory, "shadcn-registry-4.21.0.source.json");
-const themeFile = path.join(catalogueDirectory, "platform-theme-catalogue.source.json");
+const platformThemeFile = path.join(catalogueDirectory, "platform-theme-catalogue.source.json");
+const releasesFile = path.join(catalogueDirectory, "shadcn-create-theme-releases.generated.json");
 const indexFile = path.join(catalogueDirectory, "shadcn-create-theme-catalogue.generated.json");
 const fingerprintsScript = path.join(root, "tooling", "generate-catalogue-fingerprints.mjs");
 
+/** The registered release every imported option is applied to. */
+const BASE_RELEASE_KEY = "PLATFORM_THEME_RELEASE_3_0_0";
+
 /**
- * The platform theme token vocabulary the shadcn CSS variables map onto (contracts/src/
- * application-composition-v2.ts platformThemeTokenRolesV2), in the order a release lists tokens.
- * Every entry names the shadcn CSS variable, the shared token-role key and the foreground or
- * background role the vocabulary declares for that key.
+ * How the shadcn CSS variables map onto the shared token vocabulary (contracts/src/
+ * application-composition-v2.ts platformThemeTokenRolesV2). Every entry names the shadcn CSS
+ * variable and the token-role key it sets. The colour role each token carries is taken from the
+ * base release, which declares the vocabulary's role for every key. `surface` and `danger_text`
+ * follow the base release's own derivation from shadcn's `sidebar` and `destructive` values.
  */
 const TOKEN_MAPPING = [
-  { shadcn: "background", key: "background", role: "background" },
-  { shadcn: "foreground", key: "text", role: "foreground" },
-  { shadcn: "card", key: "card", role: "background" },
-  { shadcn: "card-foreground", key: "card_foreground", role: "foreground" },
-  { shadcn: "popover", key: "popover", role: "background" },
-  { shadcn: "popover-foreground", key: "popover_foreground", role: "foreground" },
+  { shadcn: "background", key: "background" },
+  { shadcn: "sidebar", key: "surface" },
+  { shadcn: "foreground", key: "text" },
+  { shadcn: "card", key: "card" },
+  { shadcn: "card-foreground", key: "card_foreground" },
+  { shadcn: "popover", key: "popover" },
+  { shadcn: "popover-foreground", key: "popover_foreground" },
   { shadcn: "primary", key: "primary" },
-  { shadcn: "primary-foreground", key: "primary_foreground", role: "foreground" },
+  { shadcn: "primary-foreground", key: "primary_foreground" },
   { shadcn: "secondary", key: "secondary" },
-  { shadcn: "secondary-foreground", key: "secondary_foreground", role: "foreground" },
-  { shadcn: "muted", key: "muted", role: "background" },
-  { shadcn: "muted-foreground", key: "muted_text", role: "foreground" },
-  { shadcn: "accent", key: "accent", role: "background" },
-  { shadcn: "accent-foreground", key: "accent_foreground", role: "foreground" },
+  { shadcn: "secondary-foreground", key: "secondary_foreground" },
+  { shadcn: "muted", key: "muted" },
+  { shadcn: "muted-foreground", key: "muted_text" },
+  { shadcn: "accent", key: "accent" },
+  { shadcn: "accent-foreground", key: "accent_foreground" },
   { shadcn: "destructive", key: "danger" },
+  { shadcn: "destructive", key: "danger_text" },
   { shadcn: "border", key: "border_color" },
   { shadcn: "input", key: "input" },
   { shadcn: "ring", key: "ring" },
@@ -57,40 +77,44 @@ const TOKEN_MAPPING = [
   { shadcn: "chart-3", key: "chart_3" },
   { shadcn: "chart-4", key: "chart_4" },
   { shadcn: "chart-5", key: "chart_5" },
-  { shadcn: "sidebar", key: "sidebar", role: "background" },
-  { shadcn: "sidebar-foreground", key: "sidebar_foreground", role: "foreground" },
+  { shadcn: "sidebar", key: "sidebar" },
+  { shadcn: "sidebar-foreground", key: "sidebar_foreground" },
   { shadcn: "sidebar-primary", key: "sidebar_primary" },
-  { shadcn: "sidebar-primary-foreground", key: "sidebar_primary_foreground", role: "foreground" },
+  { shadcn: "sidebar-primary-foreground", key: "sidebar_primary_foreground" },
   { shadcn: "sidebar-accent", key: "sidebar_accent" },
-  { shadcn: "sidebar-accent-foreground", key: "sidebar_accent_foreground", role: "foreground" },
+  { shadcn: "sidebar-accent-foreground", key: "sidebar_accent_foreground" },
   { shadcn: "sidebar-border", key: "sidebar_border" },
   { shadcn: "sidebar-ring", key: "sidebar_ring" },
 ];
 
 /**
- * The tokens each dimension option sets. A base colour carries the complete neutral palette. An
- * accent theme sets only the accent variables shadcn ships for it, and a chart colour sets only the
- * five chart variables. The sidebar-primary pair is deliberately not imported from an accent theme:
- * shadcn's accent sidebar-primary is a fill very close to its own foreground, so importing it would
- * fail the platform's normal-text contrast rule and refuse every accent theme; the base colour
- * dimension already maps the sidebar pair.
+ * The tokens each dimension option sets on the base release. A base colour sets the complete
+ * neutral palette. An accent theme sets only the accent variables shadcn ships for it, and a chart
+ * colour only the five chart variables. The sidebar-primary pair is deliberately not taken from an
+ * accent theme: shadcn's accent sidebar-primary is a fill very close to its own foreground, so it
+ * would fail the normal-text contrast rule and refuse every accent theme; the base colour
+ * dimension sets the sidebar pair. A radius sets only `radius_base`.
  */
 const DIMENSION_TOKENS = {
-  baseColor: TOKEN_MAPPING.map((entry) => entry.key),
+  baseColor: [...new Set(TOKEN_MAPPING.map((entry) => entry.key))],
   theme: ["primary", "primary_foreground", "secondary", "secondary_foreground", "chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
   chartColor: ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
+  radius: ["radius_base"],
 };
 
 const WCAG_AA_NORMAL_TEXT_MIN_CONTRAST = 4.5;
+const WCAG_AA_NON_TEXT_MIN_CONTRAST = 3.0;
 const DEFAULT_LIGHT_SURFACE = "#FFFFFF";
 const DEFAULT_DARK_SURFACE = "#000000";
+/** The vocabulary's brand fill, which the renderer also paints on the surface as the accent. */
+const ACCENT_TOKEN_KEY = "primary";
 
 const readJson = async (file) => JSON.parse(await readFile(file, "utf8"));
 
 /** The deterministic namespace every generated catalogue identity is derived from. */
 const CATALOGUE_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 
-/** RFC 4122 UUIDv5 over SHA-1: stable catalogue identities for a dimension, reproducible offline. */
+/** RFC 4122 UUIDv5 over SHA-1: stable catalogue identities, reproducible offline. */
 const uuidV5 = (namespace, name) => {
   const namespaceBytes = Uint8Array.from(namespace.replace(/-/g, "").match(/../g), (pair) => parseInt(pair, 16));
   const digest = Uint8Array.from(createHash("sha1").update(namespaceBytes).update(name, "utf8").digest());
@@ -101,40 +125,22 @@ const uuidV5 = (namespace, name) => {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
 
-const colourToken = (value, role) => ({
-  kind: "color_pair",
-  light: value.light,
-  dark: value.dark,
-  ...(role === undefined ? {} : { role }),
-});
-
-/** Maps one shadcn CSS-variable set onto the platform token values of a dimension option. */
-const mapTokens = (rawTokens, dimension) => {
-  const keys = DIMENSION_TOKENS[dimension];
-  if (keys === undefined) throw new Error(`Unknown release dimension: ${dimension}`);
-  const tokens = {};
-  for (const entry of TOKEN_MAPPING) {
-    if (!keys.includes(entry.key)) continue;
-    const shadcn = entry.shadcn;
-    if (rawTokens.light?.[shadcn] === undefined || rawTokens.dark?.[shadcn] === undefined) continue;
-    tokens[entry.key] = colourToken({ light: rawTokens.light[shadcn], dark: rawTokens.dark[shadcn] }, entry.role);
-  }
-  return tokens;
-};
-
-/* The contrast helpers below mirror runtime/theme/src/contrast.ts so the importer refuses exactly
+/* The colour helpers below mirror runtime/theme/src/contrast.ts so the importer refuses exactly
  * what publication refuses: the WCAG AA ratio is computed on the colour a browser paints, with the
  * CSS Color 4 OKLCH gamut mapping. */
 const COLOR_COMPONENT = "(?:\\d+(?:\\.\\d+)?|\\.\\d+)";
 const OKLCH_COLOR = new RegExp(
   `^oklch\\(\\s*(${COLOR_COMPONENT})(%?)\\s+(${COLOR_COMPONENT})\\s+(${COLOR_COMPONENT})(?:deg)?\\s*(?:\\/\\s*(${COLOR_COMPONENT})(%?))?\\s*\\)$`,
 );
+/** The release contract's colour forms: a six-digit hex value or an oklch() function. */
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const GAMUT_MAPPING_JND = 0.02;
 const GAMUT_MAPPING_EPSILON = 0.0001;
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
 
 const parseHex = (hex) => {
   const clean = hex.startsWith("#") ? hex.slice(1) : hex;
+  if (!/^(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(clean)) throw new Error(`Invalid hex color: "${hex}"`);
   const expanded = clean.length <= 4 ? [...clean].map((character) => character + character).join("") : clean;
   return {
     r: parseInt(expanded.slice(0, 2), 16),
@@ -220,6 +226,7 @@ const parseOklch = (value) => {
 };
 
 const parseColor = (value) => (value.startsWith("oklch(") ? parseOklch(value) : parseHex(value));
+const isOpaqueColor = (value) => parseColor(value).a === 1;
 const composite = (foreground, background) => {
   const alpha = foreground.a + background.a * (1 - foreground.a);
   if (alpha === 0) return { r: 0, g: 0, b: 0, a: 0 };
@@ -237,7 +244,9 @@ const channelLuminance = (channel) => {
 const colorLuminance = ({ r, g, b }) =>
   0.2126 * channelLuminance(r) + 0.7152 * channelLuminance(g) + 0.0722 * channelLuminance(b);
 const contrastRatio = (foreground, background, canvas) => {
-  const effectiveBackground = composite(parseColor(background), parseColor(canvas));
+  const opaqueCanvas = parseColor(canvas);
+  if (opaqueCanvas.a !== 1) throw new Error("Contrast canvas must resolve to an opaque color");
+  const effectiveBackground = composite(parseColor(background), opaqueCanvas);
   const effectiveForeground = composite(parseColor(foreground), effectiveBackground);
   const lumA = colorLuminance(effectiveForeground);
   const lumB = colorLuminance(effectiveBackground);
@@ -245,111 +254,178 @@ const contrastRatio = (foreground, background, canvas) => {
 };
 
 /**
- * The contrast failures one option's declared colour pairs produce, using the shared vocabulary to
- * pair each fill with `<fill>_foreground` and to judge every unpaired foreground against the
- * option's surface. Returns one message per failing pair.
+ * The surface a theme paints text and brand colours on, chosen as runtime/theme/src/contrast.ts
+ * findThemeSurface chooses it: a colour pair declared with the background role, by priority.
  */
-const contrastFailures = (tokens) => {
+const findThemeSurface = (tokens) => {
+  const backgrounds = Object.keys(tokens)
+    .sort()
+    .filter((key) => tokens[key]?.kind === "color_pair" && tokens[key].role === "background");
+  const exactPriority = ["background", "canvas", "surface", "bg", "page_background", "app_background"];
+  const key =
+    exactPriority.flatMap((candidate) => backgrounds.filter((entry) => entry.toLowerCase() === candidate))[0] ??
+    backgrounds[0];
+  return key === undefined ? undefined : { key, light: tokens[key].light, dark: tokens[key].dark };
+};
+
+/**
+ * The failures the platform's theme gate reports for one complete release, mirroring
+ * runtime/theme/src/contrast.ts validateThemeContrast: every vocabulary colour carries exactly the
+ * role the vocabulary declares, the release declares an opaque background surface, every unpaired
+ * foreground reads on that surface at 4.5:1, the brand fill is visible on it at 3:1, and every
+ * `<fill>_foreground` reads on its fill at 4.5:1, in light and in dark mode. Returns one message
+ * per failure.
+ */
+const themeGateFailures = (tokens, vocabularyRoles) => {
   const failures = [];
-  const isColour = (key) => tokens[key]?.kind === "color_pair";
+  for (const [key, declared] of vocabularyRoles) {
+    const token = tokens[key];
+    if (token?.kind === "color_pair" && token.role !== declared)
+      failures.push(`${key} role=${token.role ?? "none"} expected=${declared ?? "none"}`);
+  }
+
+  const surface = findThemeSurface(tokens);
+  if (surface === undefined) return [...failures, "no colour declares the background role"];
+  if (!(isOpaqueColor(surface.light) && isOpaqueColor(surface.dark)))
+    return [...failures, `${surface.key} is translucent`];
+
+  const modes = [
+    ["light", surface.light, DEFAULT_LIGHT_SURFACE],
+    ["dark", surface.dark, DEFAULT_DARK_SURFACE],
+  ];
   const pairedForegrounds = new Set(
-    Object.keys(tokens).flatMap((key) => (isColour(key) && isColour(`${key}_foreground`) ? [`${key}_foreground`] : [])),
+    Object.keys(tokens).flatMap((key) =>
+      tokens[key]?.kind === "color_pair" && tokens[`${key}_foreground`]?.kind === "color_pair" ? [`${key}_foreground`] : [],
+    ),
   );
-  const surfaceLight = isColour("background") ? tokens.background.light : DEFAULT_LIGHT_SURFACE;
-  const surfaceDark = isColour("background") ? tokens.background.dark : DEFAULT_DARK_SURFACE;
 
   for (const key of Object.keys(tokens).sort()) {
     const token = tokens[key];
-    if (token.kind !== "color_pair") continue;
+    if (token.kind !== "color_pair" || key === surface.key) continue;
 
-    if (token.role === "foreground" && !pairedForegrounds.has(key)) {
-      for (const [mode, surface, canvas] of [
-        ["light", surfaceLight, DEFAULT_LIGHT_SURFACE],
-        ["dark", surfaceDark, DEFAULT_DARK_SURFACE],
-      ]) {
-        const ratio = contrastRatio(token[mode], surface, canvas);
-        if (ratio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST)
-          failures.push(`${key}/${"background"} ${mode}=${ratio.toFixed(2)}`);
+    if (token.role === "foreground" && !pairedForegrounds.has(key))
+      for (const [mode, surfaceColour, canvas] of modes) {
+        const ratio = contrastRatio(token[mode], surfaceColour, canvas);
+        if (ratio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST) failures.push(`${key}/${surface.key} ${mode}=${ratio.toFixed(2)}`);
       }
-    }
+
+    if (key === ACCENT_TOKEN_KEY)
+      for (const [mode, surfaceColour, canvas] of modes) {
+        const ratio = contrastRatio(token[mode], surfaceColour, canvas);
+        if (ratio < WCAG_AA_NON_TEXT_MIN_CONTRAST) failures.push(`${key}/${surface.key} ${mode}=${ratio.toFixed(2)}`);
+      }
 
     const foreground = tokens[`${key}_foreground`];
-    if (foreground?.kind === "color_pair") {
-      for (const [mode, surface, canvas] of [
-        ["light", surfaceLight, DEFAULT_LIGHT_SURFACE],
-        ["dark", surfaceDark, DEFAULT_DARK_SURFACE],
-      ]) {
-        const ratio = contrastRatio(foreground[mode], token[mode], canvas);
-        if (ratio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST)
-          failures.push(`${key}_foreground/${key} ${mode}=${ratio.toFixed(2)}`);
+    if (foreground?.kind === "color_pair")
+      for (const [mode, surfaceColour] of modes) {
+        const ratio = contrastRatio(foreground[mode], token[mode], surfaceColour);
+        if (ratio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST) failures.push(`${key}_foreground/${key} ${mode}=${ratio.toFixed(2)}`);
       }
-    }
   }
   return failures;
+};
+
+/** Fails the import when a token the importer writes would not parse against the release contract. */
+const assertContractValue = (key, token, context) => {
+  if (!/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(key) || key.length > 40) throw new Error(`${context}: invalid token key ${key}`);
+  if (token.kind === "color_pair") {
+    for (const mode of ["light", "dark"]) {
+      const value = token[mode];
+      if (typeof value !== "string" || !(HEX_COLOR.test(value) || OKLCH_COLOR.test(value)))
+        throw new Error(`${context}: ${key} ${mode} "${value}" is not a six-digit hex or oklch() colour`);
+    }
+  } else if (token.kind === "corners") {
+    if (!Number.isFinite(token.rem) || token.rem < 0) throw new Error(`${context}: ${key} must be a non-negative rem value`);
+  }
+};
+
+/** The option's own token values, keyed by vocabulary key, with the base release's colour roles. */
+const optionTokens = (dimension, option, baseTokens) => {
+  const keys = DIMENSION_TOKENS[dimension];
+  if (dimension === "radius") return { radius_base: { kind: "corners", rem: option.rem } };
+  const tokens = {};
+  for (const entry of TOKEN_MAPPING) {
+    if (!keys.includes(entry.key)) continue;
+    const light = option.tokens.light?.[entry.shadcn];
+    const dark = option.tokens.dark?.[entry.shadcn];
+    if (light === undefined || dark === undefined) continue;
+    const role = baseTokens[entry.key]?.role;
+    tokens[entry.key] = { kind: "color_pair", light, dark, ...(role === undefined ? {} : { role }) };
+  }
+  return tokens;
 };
 
 const releaseKey = (dimension, optionId) =>
   `SHADCN_CREATE_${dimension.replace(/([a-z])([A-Z])/g, "$1_$2").toUpperCase()}_${optionId.replace(/[^a-z0-9]/gi, "_").toUpperCase()}`;
 
-const dimensionThemeId = (dimension) =>
-  uuidV5(CATALOGUE_NAMESPACE, `vortex.shadcn-create.theme.${dimension}`);
+/** Each option is its own catalogue theme; a later shadcn version releases a new version of it. */
+const optionThemeId = (dimension, optionId) =>
+  uuidV5(CATALOGUE_NAMESPACE, `vortex.shadcn-create.${dimension}.${optionId}`);
 
 /**
- * Builds one platform theme release per colour, chart and radius option, refusing any option whose
- * declared colour pairs fail contrast. Returns the releases by source key plus the refusal list.
+ * Builds one complete release per colour, chart and radius option: the base release with the
+ * option's tokens applied, refused when it fails the theme gate. Returns the releases by key, the
+ * token keys each option sets and the refusal list.
  */
-const buildReleases = (snapshot) => {
+const buildReleases = (snapshot, base) => {
   const releases = {};
+  const optionKeys = {};
   const refused = [];
+  const vocabularyRoles = Object.entries(base.tokens)
+    .filter(([, token]) => token.kind === "color_pair")
+    .map(([key, token]) => [key, token.role]);
   const dimensions = [
     { id: "baseColor", options: snapshot.baseColors },
     { id: "theme", options: snapshot.themes },
     { id: "chartColor", options: snapshot.chartColors },
+    { id: "radius", options: snapshot.radii },
   ];
 
   for (const dimension of dimensions) {
-    const catalogueThemeId = dimensionThemeId(dimension.id);
     for (const option of dimension.options) {
-      const tokens = mapTokens(option.tokens, dimension.id);
-      const failures = contrastFailures(tokens);
+      const key = releaseKey(dimension.id, option.id);
+      const own = optionTokens(dimension.id, option, base.tokens);
+      if (Object.keys(own).length === 0) throw new Error(`${dimension.id}/${option.id} sets no token`);
+      const tokens = { ...base.tokens };
+      for (const [tokenKey, token] of Object.entries(own)) {
+        if (base.tokens[tokenKey]?.kind !== token.kind)
+          throw new Error(`${dimension.id}/${option.id}: ${tokenKey} is not a ${token.kind} role of the base release`);
+        tokens[tokenKey] = token;
+      }
+      for (const [tokenKey, token] of Object.entries(tokens)) assertContractValue(tokenKey, token, key);
+      optionKeys[key] = Object.keys(own);
+      const failures = themeGateFailures(tokens, vocabularyRoles);
       if (failures.length > 0) {
         refused.push({ dimension: dimension.id, option: option.id, failures });
         continue;
       }
-      releases[releaseKey(dimension.id, option.id)] = {
-        catalogueThemeId,
-        releaseVersion: `${snapshot.registry.packageVersion}-${option.id}`,
+      releases[key] = {
+        catalogueThemeId: optionThemeId(dimension.id, option.id),
+        releaseVersion: snapshot.registry.packageVersion,
         tokens,
       };
     }
   }
-
-  const radiusThemeId = dimensionThemeId("radius");
-  for (const option of snapshot.radii) {
-    const tokens = { radius_base: { kind: "corners", rem: option.rem } };
-    releases[releaseKey("radius", option.id)] = {
-      catalogueThemeId: radiusThemeId,
-      releaseVersion: `${snapshot.registry.packageVersion}-${option.id}`,
-      tokens,
-    };
-  }
-
-  return { releases, refused };
+  return { releases, optionKeys, refused };
 };
 
-/** The release index the application-selection work will read: one entry per dimension option. */
-const buildIndex = (snapshot, releases, refused) => {
-  const releaseOf = (dimension, optionId) => {
-    const release = releases[releaseKey(dimension, optionId)];
-    if (release === undefined) return undefined;
-    return { catalogueThemeId: release.catalogueThemeId, releaseVersion: release.releaseVersion };
+/** The release index the application-selection work reads: one entry per dimension option. */
+const buildIndex = (snapshot, base, releases, optionKeys) => (refused) => {
+  const option = (dimension, entry, extra) => {
+    const key = releaseKey(dimension, entry.id);
+    const release = releases[key];
+    return {
+      id: entry.id,
+      label: entry.label,
+      ...extra,
+      releaseKey: key,
+      tokenKeys: optionKeys[key],
+      release:
+        release === undefined
+          ? { refused: true }
+          : { catalogueThemeId: release.catalogueThemeId, releaseVersion: release.releaseVersion },
+    };
   };
-  const option = (dimension, entry, extra) => ({
-    id: entry.id,
-    label: entry.label,
-    ...extra,
-    release: releaseOf(dimension, entry.id),
-  });
 
   return {
     schemaVersion: "1.0.0",
@@ -358,9 +434,15 @@ const buildIndex = (snapshot, releases, refused) => {
       packageVersion: snapshot.registry.packageVersion,
       tag: snapshot.registry.tag,
       registryUrl: snapshot.registry.registryUrl,
+      repository: snapshot.registry.repository,
       fetchedAt: snapshot.registry.fetchedAt,
+      sources: snapshot.registry.sources,
       licence: snapshot.registry.licence,
     },
+    // Every option release is this release with the option's `tokenKeys` applied, so combining
+    // options of different dimensions takes each option's `tokenKeys` from its own release.
+    baseRelease: { catalogueThemeId: base.catalogueThemeId, releaseVersion: base.releaseVersion },
+    releasesFile: "shadcn-create-theme-releases.generated.json",
     dimensions: {
       style: {
         label: "Visual style",
@@ -372,22 +454,13 @@ const buildIndex = (snapshot, releases, refused) => {
           asset: { path: entry.cssPath, contentFingerprint: entry.cssSha256 },
         })),
       },
-      baseColor: {
-        label: "Base colour",
-        options: snapshot.baseColors.map((entry) => option("baseColor", entry, {})),
-      },
-      theme: {
-        label: "Theme colour",
-        options: snapshot.themes.map((entry) => option("theme", entry, {})),
-      },
-      chartColor: {
-        label: "Chart colour",
-        options: snapshot.chartColors.map((entry) => option("chartColor", entry, {})),
-      },
-      radius: {
-        label: "Radius",
-        options: snapshot.radii.map((entry) => option("radius", entry, { rem: entry.rem })),
-      },
+      baseColor: { label: "Base colour", options: snapshot.baseColors.map((entry) => option("baseColor", entry, {})) },
+      theme: { label: "Theme colour", options: snapshot.themes.map((entry) => option("theme", entry, {})) },
+      chartColor: { label: "Chart colour", options: snapshot.chartColors.map((entry) => option("chartColor", entry, {})) },
+      radius: { label: "Radius", options: snapshot.radii.map((entry) => option("radius", entry, { rem: entry.rem })) },
+      // Menu colour and accent are component class variants in shadcn 4.21.0
+      // (packages/shadcn/src/utils/transformers/transform-menu.ts), not colour tokens, so they are
+      // variant descriptors applied by the run-time style loading rather than theme releases.
       menuColor: {
         label: "Menu colour",
         options: snapshot.menuColors.map((entry) => ({
@@ -410,51 +483,53 @@ const buildIndex = (snapshot, releases, refused) => {
 const main = async () => {
   const check = process.argv.includes("--check");
   const snapshot = await readJson(snapshotFile);
+  const base = (await readJson(platformThemeFile))[BASE_RELEASE_KEY];
+  if (base === undefined) throw new Error(`${BASE_RELEASE_KEY} is missing from platform-theme-catalogue.source.json`);
 
   for (const style of snapshot.styles) {
     const css = (await readFile(path.join(catalogueDirectory, style.cssPath), "utf8")).replace(/\r\n/g, "\n");
     const digest = `sha256:${createHash("sha256").update(css, "utf8").digest("hex")}`;
     if (digest !== style.cssSha256)
       throw new Error(`Style asset ${style.cssPath} does not match its pinned sha256 in the registry snapshot`);
+    // A style asset is served as-is by the application, so it may never load anything remotely.
+    if (/@import\b|url\s*\(|https?:\/\//i.test(css) || css.charCodeAt(0) === 0xfeff)
+      throw new Error(`Style asset ${style.cssPath} contains an import, a URL or a byte-order mark`);
   }
 
-  const { releases, refused } = buildReleases(snapshot);
-  const index = buildIndex(snapshot, releases, refused);
+  const { releases, optionKeys, refused } = buildReleases(snapshot, base);
+  const index = buildIndex(snapshot, base, releases, optionKeys)(refused);
 
-  const themeCatalogue = await readJson(themeFile);
-  for (const key of Object.keys(themeCatalogue)) if (key.startsWith("SHADCN_CREATE_")) delete themeCatalogue[key];
-  const releaseKeys = new Set(Object.keys(releases));
-  for (const [key, release] of Object.entries(releases)) themeCatalogue[key] = release;
-
-  const themeOutput = `${JSON.stringify(themeCatalogue, null, 2)}\n`;
+  const releasesOutput = `${JSON.stringify(releases, null, 2)}\n`;
   const indexOutput = `${JSON.stringify(index, null, 2)}\n`;
-  const currentTheme = await readFile(themeFile, "utf8");
+  const currentReleases = await readFile(releasesFile, "utf8").catch(() => "");
   const currentIndex = await readFile(indexFile, "utf8").catch(() => "");
+  const stale = currentReleases !== releasesOutput || currentIndex !== indexOutput;
 
-  // --check only compares; it never rewrites the files it is judging.
-  if (!check && currentTheme !== themeOutput) await writeFile(themeFile, themeOutput, "utf8");
-  if (!check && currentIndex !== indexOutput) await writeFile(indexFile, indexOutput, "utf8");
-  console.log(`Imported ${releaseKeys.size} platform theme releases from shadcn ${snapshot.registry.packageVersion}.`);
+  console.log(`Imported ${Object.keys(releases).length} platform theme releases from shadcn ${snapshot.registry.packageVersion}.`);
   console.log(
     `Covered every option shown on shadcn/create: ${snapshot.styles.length} styles, ${snapshot.baseColors.length} base colours, ` +
       `${snapshot.themes.length} themes, ${snapshot.chartColors.length} chart colours, ${snapshot.radii.length} radii, ` +
       `${snapshot.menuColors.length} menu colours, ${snapshot.menuAccents.length} menu accents.`,
   );
-  if (refused.length === 0) console.log("No option was refused: every colour pair meets WCAG AA contrast.");
+  if (refused.length === 0) console.log("No option was refused: every release passes the theme contrast gate.");
   else {
-    console.log(`Refused ${refused.length} option(s) whose colour pairs fail WCAG AA contrast:`);
+    console.log(`Refused ${refused.length} option(s) whose release fails the theme contrast gate:`);
     for (const entry of refused) console.log(`  - ${entry.dimension}/${entry.option}: ${entry.failures.join(", ")}`);
   }
 
-  const generatedFilesChanged = currentTheme !== themeOutput || currentIndex !== indexOutput;
   if (check) {
-    if (generatedFilesChanged) {
+    // --check only compares; it never rewrites the files it is judging.
+    if (stale) {
       console.error("The shadcn catalogue is stale; run node tooling/import-shadcn-theme-catalogue.mjs");
       process.exitCode = 1;
     }
+    const fingerprints = spawnSync(process.execPath, [fingerprintsScript, "--check"], { stdio: "inherit" });
+    if (fingerprints.status !== 0) process.exitCode = 1;
     return;
   }
 
+  if (currentReleases !== releasesOutput) await writeFile(releasesFile, releasesOutput, "utf8");
+  if (currentIndex !== indexOutput) await writeFile(indexFile, indexOutput, "utf8");
   const result = spawnSync(process.execPath, [fingerprintsScript], { stdio: "inherit" });
   if (result.status !== 0) throw new Error("Regenerating catalogue fingerprints failed");
 };

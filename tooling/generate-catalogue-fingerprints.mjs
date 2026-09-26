@@ -71,9 +71,15 @@ const platformServiceOperations = byIdentity(
   (entry) => platformServiceOperationReleaseFingerprints(entry.release, entry.descriptor),
 );
 
+// The imported shadcn/create releases live in their own importer-generated file so the contracts
+// entry point, which client code imports, never bundles them; they are fingerprinted here with the
+// hand-written releases so every platform theme identity stays unique across both files.
 const platformThemes = byIdentity(
   "platform theme",
-  Object.values(await readSource("platform-theme-catalogue.source.json")),
+  [
+    ...Object.values(await readSource("platform-theme-catalogue.source.json")),
+    ...Object.values(await readSource("shadcn-create-theme-releases.generated.json")),
+  ],
   (release) => `${release.catalogueThemeId}:${release.releaseVersion}`,
   platformThemeReleaseFingerprints,
 );

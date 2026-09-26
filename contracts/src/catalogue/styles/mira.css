@@ -1,4 +1,4 @@
-﻿.style-mira {
+.style-mira {
   /* MARK: Accordion */
   .cn-accordion {
     @apply overflow-hidden rounded-md border;
