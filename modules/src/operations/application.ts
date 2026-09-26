@@ -163,20 +163,6 @@ const form = (title: string, inputs: Record<string, unknown>) =>
     content: slot(inputs),
   });
 
-const dashboardStates = ["normal", "loading", "empty", "refused", "failure", "recovery"];
-const listStates = ["normal", "loading", "empty", "refused", "access_ended", "failure", "recovery"];
-const formStates = ["normal", "loading", "validation", "refused", "conflict", "failure", "recovery"];
-const detailStates = [
-  "normal",
-  "loading",
-  "not_found",
-  "validation",
-  "refused",
-  "conflict",
-  "failure",
-  "recovery",
-];
-
 const createForm = "form_operations_new_incident";
 const attachForm = "form_operations_incident_attach";
 
@@ -194,7 +180,6 @@ const runbookPages = operationsRunbooks.map((runbook) => {
     name: runbook.title,
     type: "dashboard",
     permission: "application.operations.open",
-    states: dashboardStates,
     composition: {
       shell_kind: "default",
       main: slot({
@@ -212,7 +197,6 @@ const pages = [
     name: "Open signals",
     type: "dashboard",
     permission: "application.operations.open",
-    states: dashboardStates,
     composition: {
       shell_kind: "default",
       main: slot({
@@ -232,7 +216,6 @@ const pages = [
     permission: "vortex.operations.incidents.incident.read",
     query: "operations_open_incidents",
     arrangements: ["table"],
-    states: listStates,
     composition: {
       shell_kind: "default",
       main: slot({
@@ -242,7 +225,6 @@ const pages = [
         },
       }),
     },
-    standard_page_replacement: { standard_page: "list", record_type: incidentRecordType },
   },
   {
     id: "page_operations_incident_detail",
@@ -251,7 +233,6 @@ const pages = [
     type: "detail",
     record_type: incidentRecordType,
     permission: "vortex.operations.incidents.incident.read",
-    states: detailStates,
     composition: {
       shell_kind: "default",
       main: slot({
@@ -287,7 +268,6 @@ const pages = [
         ),
       }),
     },
-    standard_page_replacement: { standard_page: "detail", record_type: incidentRecordType },
   },
   {
     id: "page_operations_new_incident",
@@ -296,7 +276,6 @@ const pages = [
     type: "form",
     record_type: incidentRecordType,
     permission: createAction,
-    states: formStates,
     composition: {
       shell_kind: "default",
       main: slot({
@@ -318,29 +297,33 @@ const pages = [
         }),
       }),
     },
-    standard_page_replacement: { standard_page: "create_form", record_type: incidentRecordType },
   },
 ];
 
-const collectBlockIds = (value: unknown, result = new Set<string>()): Set<string> => {
+/** Every placed block release as `block_id@release_version`: one block can have several releases. */
+const collectBlockReleases = (value: unknown, result = new Set<string>()): Set<string> => {
   if (Array.isArray(value)) {
-    for (const item of value) collectBlockIds(item, result);
+    for (const item of value) collectBlockReleases(item, result);
   } else if (value !== null && typeof value === "object") {
     const item = value as JsonObject;
     const block = item.block as JsonObject | undefined;
-    if (block && typeof block.block_id === "string") result.add(block.block_id);
-    for (const child of Object.values(item)) collectBlockIds(child, result);
+    if (block && typeof block.block_id === "string" && typeof block.release_version === "string")
+      result.add(`${block.block_id}@${block.release_version}`);
+    for (const child of Object.values(item)) collectBlockReleases(child, result);
   }
   return result;
 };
 
-const releasesById = new Map<string, PlatformBlockReleaseV2>(
-  PLATFORM_BLOCK_RELEASES.map((release) => [String(release.blockId), release]),
+const releasesByKey = new Map<string, PlatformBlockReleaseV2>(
+  PLATFORM_BLOCK_RELEASES.map((release) => [
+    `${String(release.blockId)}@${release.releaseVersion}`,
+    release,
+  ]),
 );
 /** Exactly the registered block releases the pages place, in permanent-identity order. */
-const platformBlockDependencies = [...collectBlockIds(pages)].sort().map((blockId) => {
-  const release = releasesById.get(blockId);
-  if (!release) throw new TypeError(`Unregistered platform block release: ${blockId}`);
+const platformBlockDependencies = [...collectBlockReleases(pages)].sort().map((releaseKey) => {
+  const release = releasesByKey.get(releaseKey);
+  if (!release) throw new TypeError(`Unregistered platform block release: ${releaseKey}`);
   return {
     kind: "platform_block" as const,
     block_id: String(release.blockId),

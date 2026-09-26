@@ -120,6 +120,15 @@ export {
   type PrivateFormContinuationResult,
 } from "./form-continuation";
 export {
+  createPageFormRequestAdapter,
+  createPrivateFormSubmitAdapter,
+  readPrivateFormSubmission,
+  type PageFormRequestAdapter,
+  type PageFormRequestDependencies,
+  type PrivateFormSubmission,
+  type PrivateFormSubmitAdapter,
+} from "./form-request";
+export {
   buildConnectionAdministrationCommand,
   connectionAdministrationInputKeys,
   connectionAdministrationInputKeysAreCommandProperties,
