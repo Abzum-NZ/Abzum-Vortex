@@ -136,13 +136,18 @@ export {
 export {
   decideQueryCache,
   queryCacheBypassReasons,
+  queryCacheFieldEligibilityFor,
   queryCacheInputSchema,
   queryCacheKeyVersion,
+  queryCacheMaxEvaluatedFields,
+  queryCacheMaxPublishedFields,
   queryCacheMaxRecordDependencies,
   queryCacheMaxTtlSeconds,
+  queryCachePublishedFieldSchema,
   type QueryCacheBypassReason,
   type QueryCacheDecision,
   type QueryCacheInput,
+  type QueryCachePublishedField,
 } from "./cache-policy";
 
 export {
