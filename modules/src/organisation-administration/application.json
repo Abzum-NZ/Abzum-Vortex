@@ -137,53 +137,7 @@
         ]
       }
     ],
-    "queries": [
-      {
-        "id": "qry_organisation_notices",
-        "key": "organisation_notices",
-        "record_type": "vortex.organisation_administration:organisation_notice",
-        "select": [
-          "title",
-          "body",
-          "state",
-          "published_at"
-        ],
-        "filter": null,
-        "group_by": [],
-        "aggregates": [],
-        "sort": [
-          {
-            "field": "title",
-            "direction": "ascending"
-          }
-        ],
-        "page_size": 50,
-        "relationship_hops": 0
-      },
-      {
-        "id": "qry_privacy_request_cases",
-        "key": "privacy_request_cases",
-        "record_type": "vortex.organisation_administration:privacy_request_case",
-        "select": [
-          "subject",
-          "request_kind",
-          "state",
-          "received_at",
-          "closed_at"
-        ],
-        "filter": null,
-        "group_by": [],
-        "aggregates": [],
-        "sort": [
-          {
-            "field": "received_at",
-            "direction": "descending"
-          }
-        ],
-        "page_size": 50,
-        "relationship_hops": 0
-      }
-    ],
+    "queries":  [],
     "workflows": [],
     "pipelines": [],
     "connection_bindings": [],
@@ -1946,7 +1900,7 @@
         "type": "list",
         "record_type": "vortex.organisation_administration:organisation_notice",
         "permission": "vortex.organisation_administration.organisation_notice.read",
-        "query": "organisation_notices",
+        "query": "vortex.organisation_administration:organisation_notices",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_organisation_administration",
@@ -2034,7 +1988,7 @@
                     }
                   },
                   "slots": {},
-                  "query": "organisation_notices"
+                  "query": "vortex.organisation_administration:organisation_notices"
                 }
               },
               "order": {
@@ -2208,7 +2162,7 @@
         "type": "list",
         "record_type": "vortex.organisation_administration:privacy_request_case",
         "permission": "vortex.organisation_administration.privacy_request_case.read",
-        "query": "privacy_request_cases",
+        "query": "vortex.organisation_administration:privacy_request_cases",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_organisation_administration",
@@ -2309,7 +2263,7 @@
                     }
                   },
                   "slots": {},
-                  "query": "privacy_request_cases"
+                  "query": "vortex.organisation_administration:privacy_request_cases"
                 }
               },
               "order": {

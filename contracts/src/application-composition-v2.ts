@@ -9,6 +9,7 @@ import {
   sourceAliasSchema,
   sourceQualifiedConditionSchema,
   sourceQualifiedFieldSchema,
+  sourceQualifiedQueryReferenceSchema,
   sourceQualifiedRecordTypeSchema,
   sourceQualifiedRelationshipSchema,
 } from "./definition-source-common";
@@ -143,7 +144,7 @@ export type SourceBlockPropertyValueV2Contract =
     }
   | { kind: "action_reference"; action: z.infer<typeof namespacedKeySchema> }
   | { kind: "page_reference"; page: z.infer<typeof builderKeySchema> }
-  | { kind: "query_reference"; query: z.infer<typeof builderKeySchema> }
+  | { kind: "query_reference"; query: z.infer<typeof sourceQualifiedQueryReferenceSchema> }
   | { kind: "pipeline_reference"; pipeline: z.infer<typeof builderKeySchema> }
   | {
       kind: "record_type_reference";
@@ -175,7 +176,9 @@ export const sourceBlockPropertyValueV2Schema: z.ZodType<SourceBlockPropertyValu
         .strict(),
       z.object({ kind: z.literal("action_reference"), action: namespacedKeySchema }).strict(),
       z.object({ kind: z.literal("page_reference"), page: builderKeySchema }).strict(),
-      z.object({ kind: z.literal("query_reference"), query: builderKeySchema }).strict(),
+      z
+        .object({ kind: z.literal("query_reference"), query: sourceQualifiedQueryReferenceSchema })
+        .strict(),
       z.object({ kind: z.literal("pipeline_reference"), pipeline: builderKeySchema }).strict(),
       z
         .object({
@@ -2168,7 +2171,7 @@ export const sourceBlockPlacementV2Schema: z.ZodType<SourceBlockPlacementV2> = z
       view_permission: namespacedKeySchema.optional(),
       use_permission: namespacedKeySchema.optional(),
       visibility_condition: sourceQualifiedConditionSchema.optional(),
-      query: builderKeySchema.optional(),
+      query: sourceQualifiedQueryReferenceSchema.optional(),
       read_model: protectedReadModelKeySchema.optional(),
       settings: z.record(builderKeySchema, sourceBlockPropertyValueV2Schema),
       theme_overrides: z.record(builderKeySchema, sourceThemeTokenValueV2Schema),

@@ -131,14 +131,9 @@ export function validateApplicationSourceCatalogue(
   }
 
   // The data source of a Records table or Record detail is its placement's bound query. A
-  // placement names the query by its builder key, while the compiler resolves either the builder
-  // key or the authored id as the query's alias, so both are looked up here.
-  const queriesById = new Map(
-    source.body.queries.flatMap((query) => [
-      [query.id, query] as const,
-      [query.key, query] as const,
-    ]),
-  );
+  // placement names a query a bound Module exposes; that query lives in the Module's own release,
+  // so this source-only check cannot read its fields. The compiler resolves the reference against
+  // the exact bound Module release and refuses an unknown one.
   let pageRecordType: string | undefined;
 
   // Flow bindings are matched by the placement alias and the event identity the setting declares,
@@ -170,25 +165,15 @@ export function validateApplicationSourceCatalogue(
     const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
     if (table === undefined && detail === undefined) return;
     const at = (key: string): Segment[] => [...location, ...keySegment("setting", key)];
-    const query = placement.query === undefined ? undefined : queriesById.get(placement.query);
-    if (placement.query !== undefined && query === undefined) return; // refused by the source contract
-    if (table !== undefined && query === undefined)
+    if (table !== undefined && placement.query === undefined)
       report("vortex.definition.application_block_references", "required_value", location);
 
-    let readable: ReadonlySet<string> | undefined;
-    let orderable: ReadonlySet<string> | undefined;
-    if (query !== undefined) {
-      const qualified = (alias: string): string => `${query.record_type}.${alias}`;
-      readable = new Set(query.select.map(qualified));
-      orderable =
-        query.group_by.length > 0 || query.aggregates.length > 0
-          ? new Set(query.group_by.map(qualified))
-          : readable;
-    }
+    // With a bound Module query the mapped fields are the query's own record's, which this
+    // source-only check cannot read and the Query engine enforces; without one they must belong
+    // to the page's record type.
     const mapped = (field: string): boolean =>
-      readable !== undefined
-        ? readable.has(field)
-        : pageRecordType !== undefined && field.startsWith(`${pageRecordType}.`);
+      placement.query !== undefined ||
+      (pageRecordType !== undefined && field.startsWith(`${pageRecordType}.`));
 
     const checkFields = (
       key: string,
@@ -206,22 +191,12 @@ export function validateApplicationSourceCatalogue(
           report("vortex.definition.application_block_settings", unallowedFamily, at(key));
       }
     };
-    const orders = (field: string): boolean => orderable?.has(field) ?? true;
+    const orders = (): boolean => true;
 
     if (table !== undefined) {
       checkFields("columns", table.columns.map((column) => column.field), () => true, "invalid_value");
       if (table.defaultSort !== undefined) {
         checkFields("default_sort", [table.defaultSort.field], orders, "unsupported_choice");
-        // The Query engine applies the bound query's declared sort and takes no sort input, so a
-        // default sort other than the query's leading sort would be declared yet never applied.
-        const leading = query?.sort[0];
-        if (
-          query !== undefined &&
-          leading !== undefined &&
-          (`${query.record_type}.${leading.field}` !== table.defaultSort.field ||
-            leading.direction !== table.defaultSort.direction)
-        )
-          report("vortex.definition.application_block_settings", "unsupported_choice", at("default_sort"));
       }
       checkFields("sortable_fields", table.sortableFields, orders, "unsupported_choice");
       checkFields("filterable_fields", table.filterableFields, orders, "unsupported_choice");

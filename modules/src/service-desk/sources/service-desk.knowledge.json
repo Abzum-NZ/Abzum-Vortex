@@ -756,6 +756,33 @@
         ]
       }
     ],
-    "sharing_conditions": []
+    "sharing_conditions": [],
+    "queries": [
+      {
+        "id": "qry_sd_knowledge",
+        "key": "service_desk_knowledge",
+        "record_type": "article",
+        "inputs": [],
+        "select": [
+          "article_number",
+          "title",
+          "status",
+          "public",
+          "review_date",
+          "author"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "review_date",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      }
+    ]
   }
 }

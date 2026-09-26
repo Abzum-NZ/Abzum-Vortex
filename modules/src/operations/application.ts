@@ -26,6 +26,8 @@ import {
 type JsonObject = Record<string, unknown>;
 
 const incidentRecordType = "vortex.operations.incidents:incident";
+/** The open-incidents query the Incidents module exposes, by module key and query key. */
+const openIncidentsQuery = "vortex.operations.incidents:operations_open_incidents";
 const createAction = "vortex.operations.incidents.incident.create";
 const attachAction = "vortex.operations.incidents.incident.attach";
 const incidentActionEventId = "event_operations_incident_action";
@@ -215,13 +217,13 @@ const pages = [
     type: "list",
     record_type: incidentRecordType,
     permission: "vortex.operations.incidents.incident.read",
-    query: "operations_open_incidents",
+    query: openIncidentsQuery,
     composition: {
       shell_kind: "default",
       main: slot({
         operations_incidents_table: {
           ...placement(TABLE_BLOCK_RELEASE, { title: { kind: "text", value: "Open incidents" } }),
-          query: "operations_open_incidents",
+          query: openIncidentsQuery,
         },
       }),
     },
@@ -449,29 +451,7 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
           })),
         },
       ],
-      queries: [
-        {
-          id: "qry_operations_open_incidents",
-          key: "operations_open_incidents",
-          record_type: incidentRecordType,
-          select: [
-            "incident_number",
-            "code",
-            "severity",
-            "affected_service",
-            "owning_role",
-            "runbook_reference",
-            "state",
-            "attached_at",
-          ],
-          filter: { field: "state", operator: "not_in", value: ["resolved", "closed"] },
-          group_by: [],
-          aggregates: [],
-          sort: [{ field: "incident_number", direction: "descending" }],
-          page_size: 50,
-          relationship_hops: 0,
-        },
-      ],
+      queries: [],
       workflows: [],
       pipelines: [],
       connection_bindings: [],

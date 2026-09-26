@@ -1297,6 +1297,72 @@
           }
         ]
       }
+    ],
+    "queries": [
+      {
+        "id": "qry_crm_shared_cases",
+        "key": "crm_shared_cases",
+        "record_type": "case",
+        "inputs": [],
+        "select": [
+          "case_number",
+          "subject",
+          "status",
+          "priority",
+          "customer_company",
+          "resolved_at"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "case_number",
+            "direction": "descending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_sd_open_cases",
+        "key": "service_desk_open_cases",
+        "record_type": "case",
+        "inputs": [],
+        "select": [
+          "case_number",
+          "subject",
+          "customer_company",
+          "requester",
+          "owner",
+          "status",
+          "priority",
+          "resolution_due_at",
+          "breached"
+        ],
+        "filter": {
+          "field": "status",
+          "operator": "not_in",
+          "value": [
+            "resolved",
+            "closed"
+          ]
+        },
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "priority",
+            "direction": "descending"
+          },
+          {
+            "field": "resolution_due_at",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      }
     ]
   }
 }

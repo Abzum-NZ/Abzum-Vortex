@@ -854,8 +854,11 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
       const connections = new Set(
         array(body.connection_bindings).map((binding) => String(binding.id)),
       );
-      for (const page of array(body.pages))
-        if (page.query && !queries.has(String(page.query))) valid = false;
+      for (const page of array(body.pages)) {
+        // A page binds a Module query by "module_key:query_key"; the Module must be bound here.
+        if (page.query && !moduleBindings.has(String(page.query).slice(0, String(page.query).lastIndexOf(":"))))
+          valid = false;
+      }
       const visitNavigation = (items: JsonObject[]) => {
         for (const item of items) {
           if (item.type === "page" && !pages.has(String(item.page))) valid = false;
@@ -3362,6 +3365,14 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       return collectPlacementEntriesV2(shells.get(String(composition.shellId))?.layout);
     };
     const queries = new Map(array(content.queries).map((query) => [String(query.queryId), query]));
+    // The queries a page or placement binds are the ones a bound Module exposes, by exact identity.
+    const moduleQueries = new Map(
+      boundModules.flatMap((module) =>
+        array(object(object(module.canonical).content).queries).map(
+          (query) => [String(query.queryId), query] as const,
+        ),
+      ),
+    );
     const pipelines = new Map(
       array(content.pipelines).map((pipeline) => [String(pipeline.pipelineId), pipeline]),
     );
@@ -3711,7 +3722,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       const pageRecordId = page.recordType
         ? String(object(page.recordType).recordTypeId)
         : undefined;
-      const pageQuery = page.queryId ? queries.get(String(page.queryId)) : undefined;
+      const pageQuery = page.queryId ? moduleQueries.get(String(page.queryId)) : undefined;
       const pageQueryRecordId = pageQuery
         ? String(object(pageQuery.recordType).recordTypeId)
         : undefined;
@@ -3794,7 +3805,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
               publicBlockReferencesSafe = false;
             if (setting.kind === "pipeline_reference") publicBlockReferencesSafe = false;
             if (setting.kind === "query_reference") {
-              const query = queries.get(String(setting.queryId));
+              const query = moduleQueries.get(String(setting.queryId));
               if (!publicQuerySafe(query, pageRecordId, pagePublicFields))
                 publicBlockReferencesSafe = false;
             }
@@ -3802,7 +3813,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           walkValues(placement.settings, inspectPublicSetting);
           if (placement.readModel !== undefined) publicBlockReferencesSafe = false;
           if (placement.queryId) {
-            const query = queries.get(String(placement.queryId));
+            const query = moduleQueries.get(String(placement.queryId));
             if (!publicQuerySafe(query, pageRecordId, pagePublicFields))
               publicBlockReferencesSafe = false;
           }
@@ -3811,7 +3822,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           (page.publicFieldIds as string[]).some((id) => !publicFields.has(id)) ||
           !publicPermissionSafe(page.accessPermissionKey) ||
           (page.queryId &&
-            !publicQuerySafe(queries.get(String(page.queryId)), pageRecordId, pagePublicFields)) ||
+            !publicQuerySafe(moduleQueries.get(String(page.queryId)), pageRecordId, pagePublicFields)) ||
           (page.publicActionKey &&
             !publicActionSafe(page.publicActionKey, pageRecordId, pagePublicFields)) ||
           !publicBlockReferencesSafe

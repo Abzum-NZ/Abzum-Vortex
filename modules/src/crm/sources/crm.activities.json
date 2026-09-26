@@ -479,6 +479,37 @@
     ],
     "flows": [],
     "extension_points": [],
-    "sharing_conditions": []
+    "sharing_conditions": [],
+    "queries": [
+      {
+        "id": "qry_crm_activities",
+        "key": "crm_activities",
+        "record_type": "activity",
+        "inputs": [],
+        "select": [
+          "subject",
+          "activity_type",
+          "due_at",
+          "completed",
+          "regarding",
+          "owner"
+        ],
+        "filter": {
+          "field": "completed",
+          "operator": "equals",
+          "value": false
+        },
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "due_at",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      }
+    ]
   }
 }

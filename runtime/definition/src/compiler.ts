@@ -2284,6 +2284,8 @@ type ApplicationModuleValueIndex = Readonly<{
   fieldId: (recordTypeId: string, alias: string) => string | undefined;
   fieldById: (fieldId: string) => Readonly<{ field: JsonObject; moduleV2: boolean }> | undefined;
   action: (key: string) => ApplicationActionValuePair | undefined;
+  /** The identity of a bound Module's query, from "module_key:query_key"; refused when unknown. */
+  query: (reference: string) => string;
   context: (defaultRecordReference?: string) => ModuleValueContext;
   contextForRecordId: (recordTypeId: string) => ModuleValueContext;
 }>;
@@ -2297,6 +2299,7 @@ function applicationModuleValueIndex(
   const recordsById = new Map<string, ApplicationRecordValuePair>();
   const fieldsById = new Map<string, { field: JsonObject; moduleV2: boolean }>();
   const actionsByKey = new Map<string, ApplicationActionValuePair>();
+  const queryIdsByReference = new Map<string, string>();
   for (const binding of body.module_bindings as JsonObject[]) {
     const moduleKey = String(binding.module);
     const expected = resolution.definition(moduleKey, "module");
@@ -2341,6 +2344,9 @@ function applicationModuleValueIndex(
         fail("vortex.definition.application_dependency_manifest", "broken_reference");
       actionsByKey.set(key, { action, moduleV2 });
     }
+    // Only the current Module contract exposes queries; an older release exposes none.
+    for (const query of (content.queries ?? []) as JsonObject[])
+      queryIdsByReference.set(`${moduleKey}:${String(query.key)}`, String(query.queryId));
   }
   const record = (reference: string) => {
     const recordTypeId = String(resolution.recordType(reference).recordTypeId);
@@ -2380,6 +2386,16 @@ function applicationModuleValueIndex(
     fieldId: fieldIdForRecord,
     fieldById: (fieldId) => fieldsById.get(fieldId),
     action: (key) => actionsByKey.get(key),
+    query: (reference) => {
+      const queryId = queryIdsByReference.get(reference);
+      if (queryId === undefined)
+        fail(
+          "vortex.definition.application_page_query",
+          "unresolved_reference",
+          resolution.location("query", reference),
+        );
+      return queryId;
+    },
     context: (defaultRecordReference) => valueContext(defaultRecordReference),
     contextForRecordId: (recordTypeId) => valueContext(undefined, recordTypeId),
   };
@@ -3753,11 +3769,11 @@ function compileApplicationPagesV2(
   source: JsonObject,
   resolution: Resolution,
   composition: MaterialisedApplicationCompositionV2,
+  moduleQueryId: (reference: string) => string,
 ) {
   const body = asObject(source.body);
   const definitionKey = String(source.key);
   const pageId = (alias: string) => resolution.id(definitionKey, "page", alias, "content");
-  const queryId = (alias: string) => resolution.id(definitionKey, "query", alias, "content");
   const allowedPermissionOwners = permissionScopeSourceOwners(source);
   return (body.pages as JsonObject[]).map((page, index) => {
     const compiledComposition = composition.pages[index];
@@ -3785,7 +3801,7 @@ function compileApplicationPagesV2(
         ...base,
         type: "list",
         recordType: resolution.recordType(record),
-        queryId: queryId(String(page.query)),
+        queryId: moduleQueryId(String(page.query)),
       };
     }
     if (page.type === "dashboard") return { ...base, type: "dashboard" };
@@ -3885,34 +3901,17 @@ function compileApplication(
     };
   });
   const pageId = (alias: string) => resolution.id(definitionKey, "page", alias, "content");
-  const pages = compileApplicationPagesV2(source, resolution, compositionV2);
-  const queries = (body.queries as JsonObject[]).map((query) => {
-    const record = String(query.record_type);
-    const valueContext = valueIndex.record(record)?.moduleV2
-      ? valueIndex.context(record)
-      : undefined;
-    return {
-      queryId: resolution.id(definitionKey, "query", String(query.id), "content"),
-      key: query.key,
-      recordType: resolution.recordType(record),
-      selectedFieldIds: (query.select as string[]).map((alias) => resolution.field(record, alias)),
-      filter: query.filter
-        ? condition(query.filter, (alias) => resolution.field(record, alias), valueContext)
-        : null,
-      groupByFieldIds: (query.group_by as string[]).map((alias) => resolution.field(record, alias)),
-      aggregates: (query.aggregates as JsonObject[]).map((aggregate) => ({
-        operation: aggregate.operation,
-        ...(aggregate.field ? { fieldId: resolution.field(record, String(aggregate.field)) } : {}),
-        alias: aggregate.alias,
-      })),
-      sort: (query.sort as JsonObject[]).map((sort) => ({
-        fieldId: resolution.field(record, String(sort.field)),
-        direction: sort.direction,
-      })),
-      pageSize: query.page_size,
-      relationshipHops: query.relationship_hops,
-    };
-  });
+  const pages = compileApplicationPagesV2(source, resolution, compositionV2, valueIndex.query);
+  // An application never owns a query: the Query engine runs only the queries a Module exposes, so
+  // every page and placement binds a dependency-qualified Module query instead.
+  const ownedQuery = (body.queries as JsonObject[])[0];
+  if (ownedQuery !== undefined)
+    fail(
+      "vortex.definition.application_query_references",
+      "broken_reference",
+      resolution.location("query", String(ownedQuery.key)),
+    );
+  const queries: never[] = [];
   const wildcardPermissions = permissions
     .filter((permission) => permission.administrative === false)
     .sort((left, right) => compareCanonicalStrings(String(left.key), String(right.key)));
@@ -4515,6 +4514,7 @@ const applicationCompositionResolutionV2 = (
   };
   return {
     identity: (kind, alias, scope = "content") => resolution.id(definitionKey, kind, alias, scope),
+    moduleQuery: valueIndex.query,
     field: (reference) => qualifiedField(resolution, reference),
     fieldInput: (fieldId) => {
       const pair = valueIndex.fieldById(fieldId);

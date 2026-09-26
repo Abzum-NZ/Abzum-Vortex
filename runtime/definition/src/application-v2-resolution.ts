@@ -15,7 +15,6 @@ export type ApplicationCompositionResolutionV2 = Readonly<{
       | "block_placement"
       | "guided_step"
       | "page"
-      | "query"
       | "pipeline"
       | "flow"
       | "flow_node"
@@ -24,6 +23,11 @@ export type ApplicationCompositionResolutionV2 = Readonly<{
     alias: string,
     scope?: string,
   ): string;
+  /**
+   * The identity of a query a bound Module exposes, from its dependency-qualified reference (the
+   * Module's key and the query's key). An unbound Module or an unknown query is refused.
+   */
+  moduleQuery(reference: string): string;
   field(reference: string): string;
   /**
    * The module field an automatic field input binds, read by permanent field identity. Undefined
