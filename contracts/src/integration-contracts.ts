@@ -191,6 +191,29 @@ export const connectionInstanceSchema = z
     administratorActivityId: activityIdSchema,
   })
   .strict();
+/**
+ * The page read model of one connection instance, deliberately separate from
+ * `connectionInstanceSchema`. It carries only what an administration page may render: the state, the
+ * last health outcome, the credential expiry, the authority revision the revision-checking
+ * administration commands must send unchanged, and both scope lists. It never carries a secret
+ * reference, an organisation identity or an administrator activity identity, and it permits an
+ * instance with no authorised application and no granted scope, so a grant-less instance is shown as
+ * such instead of being refused. A reader that returns a value outside this closed shape fails
+ * closed before the page projects it.
+ */
+export const connectionInstanceStatusSchema = z
+  .object({
+    connectionInstanceId: connectionInstanceIdSchema,
+    connectionTypeId: connectionTypeIdSchema,
+    connectionTypeVersion: semanticVersionSchema,
+    state: z.enum(["pending", "active", "unhealthy", "revoked"]),
+    lastHealthOutcome: z.enum(["healthy", "unhealthy", "unknown"]),
+    revision: revisionSchema.max(Number.MAX_SAFE_INTEGER),
+    tokenExpiresAt: timestampSchema.optional(),
+    authorizedApplicationIds: z.array(applicationRootIdSchema),
+    grantedScopes: z.array(z.string().min(1).max(200)),
+  })
+  .strict();
 export const incomingMessageSchema = z
   .object({
     organizationId: organizationIdSchema,
@@ -894,6 +917,7 @@ export type ConnectionAuthentication = z.infer<typeof connectionAuthenticationSc
 export type ConnectionOperation = z.infer<typeof connectionOperationSchema>;
 export type IncomingMessageType = z.infer<typeof incomingMessageTypeSchema>;
 export type ConnectionInstance = z.infer<typeof connectionInstanceSchema>;
+export type ConnectionInstanceStatus = z.infer<typeof connectionInstanceStatusSchema>;
 export type IncomingMessage = z.infer<typeof incomingMessageSchema>;
 export type InterfaceValueType = z.infer<typeof interfaceValueTypeSchema>;
 export type InterfaceInputField = z.infer<typeof interfaceInputFieldSchema>;

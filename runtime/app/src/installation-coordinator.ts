@@ -43,7 +43,7 @@ import { z } from "zod";
 
 /**
  * The App-owned protected Application lifecycle: prepare, install or deliberately upgrade to one
- * exact published release, or withdraw it.
+ * exact published release, begin the uninstall by draining it, or withdraw it.
  *
  * Publication never reaches this module; an installation changes only when an authenticated
  * installer invokes it. Every write runs in that installer's own human request transaction, so the
@@ -141,6 +141,15 @@ export const applicationInstallationWithdrawalRequestSchema = z
   })
   .strict();
 
+/** Begin the uninstall of exactly the named active installation by draining it. */
+export const applicationInstallationDrainRequestSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: safeRevisionSchema,
+  })
+  .strict();
+
 export type ApplicationInstallationPreparationRequest = z.infer<
   typeof applicationInstallationPreparationRequestSchema
 >;
@@ -149,6 +158,9 @@ export type ApplicationInstallationActivationRequest = z.infer<
 >;
 export type ApplicationInstallationWithdrawalRequest = z.infer<
   typeof applicationInstallationWithdrawalRequestSchema
+>;
+export type ApplicationInstallationDrainRequest = z.infer<
+  typeof applicationInstallationDrainRequestSchema
 >;
 
 /** An optional reader the deployment may not supply; absence is reported, never assumed. */
@@ -181,6 +193,14 @@ export type ApplicationInstallationActivationResult<InstalledEvents> = Readonly<
 
 export type ApplicationInstallationWithdrawalResult = Readonly<{
   outcome: "withdrawn" | "unchanged";
+  organizationId: OrganizationId;
+  applicationRootId: ApplicationRootId;
+  applicationReleaseRevision: number;
+  moduleBindings: readonly ModuleInstallationBindingEvidence[];
+}>;
+
+export type ApplicationInstallationDrainResult = Readonly<{
+  outcome: "draining" | "unchanged";
   organizationId: OrganizationId;
   applicationRootId: ApplicationRootId;
   applicationReleaseRevision: number;
@@ -241,6 +261,17 @@ const accessChangeSchema = z
     applicationRootId: applicationRootIdSchema,
     registrationState: z.enum(["active", "withdrawn"]),
     registrationRevision: safeRevisionSchema,
+  })
+  .strict();
+
+const installationDrainResultSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: safeRevisionSchema,
+    state: z.literal("draining"),
+    changed: z.boolean(),
+    moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).max(10_000),
   })
   .strict();
 
@@ -374,6 +405,16 @@ const activeRelease = (
   return { releaseRevision, bindings: active };
 };
 
+/**
+ * A draining installation is being uninstalled: it is never prepared, activated, upgraded or
+ * withdrawn until the uninstall completes, so no step returns it to service or removes the access
+ * that work still running relies on.
+ */
+const requireNotDraining = (state: InstallationBindings): void => {
+  if (state.moduleBindings.some((binding) => binding.state === "draining"))
+    throw fail("APPLICATION_INSTALLATION_STALE");
+};
+
 const expectedBindings = (
   bindings: readonly Pick<ModuleInstallationBindingEvidence, "moduleRootId" | "bindingRevision">[],
 ): ExpectedModuleBinding[] =>
@@ -435,6 +476,44 @@ const recordOutcome = async (
       ${state}::text
     )
   `;
+};
+
+type DrainRow = Readonly<{ drain_result: unknown }>;
+
+/** Moves one exact active installation to draining through the fixed protected operation. */
+const drainInstallation = async (
+  transaction: InstallerTransaction,
+  activityId: string,
+  applicationRootId: ApplicationRootId,
+  applicationReleaseRevision: number,
+  expectedModuleBindings: readonly ExpectedModuleBinding[],
+): Promise<z.infer<typeof installationDrainResultSchema>> => {
+  const rows = await transaction.query<DrainRow>`
+    select vortex_module.drain_installation(
+      ${activityId}::uuid,
+      ${applicationRootId}::uuid,
+      ${applicationReleaseRevision}::bigint,
+      ${JSON.stringify(expectedModuleBindings)}::jsonb
+    ) as drain_result
+  `;
+  const parsed =
+    rows.length === 1 ? installationDrainResultSchema.safeParse(rows[0]?.drain_result) : null;
+  if (
+    parsed === null ||
+    !parsed.success ||
+    !sameId(parsed.data.applicationRootId, applicationRootId) ||
+    parsed.data.applicationReleaseRevision !== applicationReleaseRevision ||
+    parsed.data.moduleBindings.length !== expectedModuleBindings.length ||
+    parsed.data.moduleBindings.some(
+      (binding) =>
+        binding.state !== "draining" ||
+        !sameId(binding.organizationId, parsed.data.organizationId) ||
+        !sameId(binding.applicationRootId, applicationRootId) ||
+        binding.applicationReleaseRevision !== applicationReleaseRevision,
+    )
+  )
+    throw fail("APPLICATION_INSTALLATION_FAILED");
+  return parsed.data;
 };
 
 /** Storage for every pinned Module release; commits only inactive, idempotent bindings. */
@@ -796,6 +875,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             request.organizationId,
             request.applicationRootId,
           );
+          requireNotDraining(state);
           if (activeRelease(state) !== null) throw fail("APPLICATION_INSTALLATION_STALE");
           return alignAccess(
             transaction,
@@ -820,6 +900,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             request.organizationId,
             request.applicationRootId,
           );
+          requireNotDraining(state);
           if (activeRelease(state) !== null) throw fail("APPLICATION_INSTALLATION_STALE");
           // A still-provisioned binding outside this pin set would block its activation, and the
           // fixed operations cannot detach an inactive binding.
@@ -890,6 +971,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             request.organizationId,
             request.applicationRootId,
           );
+          requireNotDraining(state);
           const mode = requireExpectedActive(request, activeRelease(state));
           await alignAccess(
             transaction,
@@ -927,6 +1009,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
               request.organizationId,
               request.applicationRootId,
             );
+            requireNotDraining(state);
             const active = activeRelease(state);
             if (requireExpectedActive(request, active) === "already_active")
               return {
@@ -997,7 +1080,8 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     /**
      * Withdraws exactly the named release. Bindings are detached, never deleted, so stored
      * records remain; a prepared release that never became active keeps its inactive storage. The
-     * Access coordinator preserves final-steward, supplier and continuity safeguards.
+     * Access coordinator preserves final-steward, supplier and continuity safeguards. A draining
+     * installation is refused: its uninstall owns what happens to it next.
      */
     async withdraw(
       session: IdentitySession,
@@ -1026,6 +1110,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             request.organizationId,
             request.applicationRootId,
           );
+          requireNotDraining(state);
           const active = activeRelease(state);
           if (
             active !== null
@@ -1088,6 +1173,82 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             applicationReleaseRevision: request.applicationReleaseRevision,
             moduleBindings: detached?.moduleBindings ?? releaseBindings,
           } satisfies ApplicationInstallationWithdrawalResult;
+        },
+      );
+    },
+
+    /**
+     * Drains exactly the named active installation: the uninstall command's first step. No new
+     * flow, tool call or navigation load resolves a draining installation, while callbacks for
+     * work already running keep the exact revision they were started against. A system
+     * application is refused by builder authority; the Access-management application and a
+     * Module an installed application depends on are refused by the protected operation.
+     */
+    async drain(
+      session: IdentitySession,
+      requestCandidate: ApplicationInstallationDrainRequest,
+    ): Promise<ApplicationInstallationDrainResult> {
+      const verifiedSession = identitySessionSchema.safeParse(session);
+      const parsed = applicationInstallationDrainRequestSchema.safeParse(requestCandidate);
+      if (!verifiedSession.success || !parsed.success)
+        throw fail("INVALID_APPLICATION_INSTALLATION_COMMAND");
+      const request = parsed.data;
+      const packageFacts = await readReleaseSet(request);
+
+      return inInstallerTransaction(
+        verifiedSession.data,
+        request.organizationId,
+        {
+          kind: "installation",
+          applicationRootId: request.applicationRootId,
+          change: "uninstall",
+          containsCustomComponents: dependencies.containsCustomComponents(packageFacts),
+          acceptedPermissions: [],
+        },
+        async (transaction) => {
+          const state = await readInstallationBindings(
+            transaction,
+            request.organizationId,
+            request.applicationRootId,
+          );
+          const active = activeRelease(state);
+          if (
+            active !== null
+              ? active.releaseRevision !== request.applicationReleaseRevision
+              : state.registeredReleaseRevision !== null &&
+                state.registeredReleaseRevision !== request.applicationReleaseRevision
+          )
+            throw fail("APPLICATION_INSTALLATION_STALE");
+          const releaseBindings = byModuleRoot(
+            state.moduleBindings.filter(
+              (binding) =>
+                binding.applicationReleaseRevision === request.applicationReleaseRevision,
+            ),
+          );
+          // The active set, or a retried drain's already draining set. Only an active release can
+          // drain; a detached one is unavailable.
+          const drainable =
+            active?.bindings ?? releaseBindings.filter((binding) => binding.state === "draining");
+          if (drainable.length === 0)
+            throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
+
+          const drained = await drainInstallation(
+            transaction,
+            newActivityId(),
+            request.applicationRootId,
+            request.applicationReleaseRevision,
+            expectedBindings(drainable),
+          );
+          if (!sameId(drained.organizationId, state.organizationId))
+            throw fail("APPLICATION_INSTALLATION_FAILED");
+
+          return {
+            outcome: drained.changed ? "draining" : "unchanged",
+            organizationId: state.organizationId,
+            applicationRootId: request.applicationRootId,
+            applicationReleaseRevision: request.applicationReleaseRevision,
+            moduleBindings: drained.moduleBindings,
+          } satisfies ApplicationInstallationDrainResult;
         },
       );
     },

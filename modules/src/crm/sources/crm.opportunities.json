@@ -165,9 +165,38 @@
               "result_type": "money",
               "decimal_places": 2,
               "expression": {
-                "operation": "subtract_percentage",
-                "amount_field": "value",
-                "percentage_field": "discount_percent"
+                "operation": "numeric",
+                "numeric_operation": "multiply",
+                "operands": [
+                  {
+                    "source": "field",
+                    "field": "value"
+                  },
+                  {
+                    "source": "numeric",
+                    "numeric_operation": "subtract",
+                    "operands": [
+                      {
+                        "source": "literal",
+                        "value": "1"
+                      },
+                      {
+                        "source": "numeric",
+                        "numeric_operation": "divide",
+                        "operands": [
+                          {
+                            "source": "field",
+                            "field": "discount_percent"
+                          },
+                          {
+                            "source": "literal",
+                            "value": "100"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },

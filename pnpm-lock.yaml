@@ -237,6 +237,9 @@ importers:
       '@vortex/module':
         specifier: workspace:*
         version: link:../module
+      '@vortex/query':
+        specifier: workspace:*
+        version: link:../query
       '@vortex/rule':
         specifier: workspace:*
         version: link:../rule

@@ -963,7 +963,6 @@
                                    "type":  "form",
                                    "record_type":  "vortex.service_desk.cases:case",
                                    "permission":  "vortex.service_desk.cases.case.create",
-                                   "commit_action":  "vortex.service_desk.cases.case.create",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_service_desk",
@@ -1531,7 +1530,6 @@
                                    "type":  "form",
                                    "record_type":  "vortex.service_desk.cases:case",
                                    "permission":  "vortex.service_desk.cases.case.update",
-                                   "commit_action":  "vortex.service_desk.cases.case.update",
                                    "composition":  {
                                                        "shell_kind":  "application",
                                                        "shell":  "shell_service_desk",
