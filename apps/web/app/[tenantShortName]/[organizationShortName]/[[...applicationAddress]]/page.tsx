@@ -10,9 +10,11 @@ import {
   type DisplaySemanticEvent,
 } from "@vortex/ui";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
+import { ApplicationPageView } from "./_components/application-page-view";
 import { AuthShell } from "../../../auth/_components/auth-shell";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
+import { loadApplicationPage } from "../../../_lib/application-page";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +38,7 @@ type ApplicationAddressPageProps = Readonly<{
     organizationShortName: string;
     applicationAddress?: string[];
   }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }>;
 
 const addressPath = (
@@ -49,7 +52,10 @@ const addressPath = (
 const launcherPath = (tenantShortName: string, organizationShortName: string) =>
   `/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}`;
 
-export default async function ApplicationAddressPage({ params }: ApplicationAddressPageProps) {
+export default async function ApplicationAddressPage({
+  params,
+  searchParams,
+}: ApplicationAddressPageProps) {
   const identity = await resolveIdentitySession();
   if (identity.kind === "invalid_session_state" || identity.kind === "expired_or_revoked")
     redirect("/auth/session-ended");
@@ -194,23 +200,29 @@ export default async function ApplicationAddressPage({ params }: ApplicationAddr
       ),
     );
 
-  return (
-    <AuthShell
-      eyebrow={resolved.read.organizationShortName}
-      title={resolved.application.name}
-      description="This application page is available to your current organisation account."
-    >
-      <Link
-        href={addressPath(
-          tenantShortName,
-          organizationShortName,
-          resolved.application.key,
-          resolved.application.homePageKey,
-        )}
-      >
-        Open application start page
-      </Link>
-      <Link href={launcherPath(tenantShortName, organizationShortName)}>Application launcher</Link>
-    </AuthShell>
+  // The addressed page: the permission-filtered page, the viewer's menu, the theme and the
+  // persisted data are all composed on the server from this person's own request.
+  const page = await loadApplicationPage(
+    identity.session,
+    {
+      tenantShortName,
+      organizationShortName,
+      read: resolved.read,
+      application: resolved.application,
+      pageKey: resolved.pageKey,
+    },
+    await searchParams,
   );
+  if (page.kind === "temporarily_unavailable")
+    return (
+      <AuthShell
+        eyebrow="Application access"
+        title="This address is temporarily unavailable"
+        description="Your sign-in is still active. Try loading this address again."
+      >
+        <Link href={launcherPath(tenantShortName, organizationShortName)}>Try again</Link>
+      </AuthShell>
+    );
+  if (page.kind === "unavailable") return unavailableFallback;
+  return <ApplicationPageView model={page.model} />;
 }
