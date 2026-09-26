@@ -191,7 +191,7 @@ const requireExactKeys = (
 ): void => {
   for (const key of Object.keys(value))
     if (!allowed.includes(key))
-      fail(`Unexpected connection administration field '${key}'`, location);
+      fail("Unexpected connection administration field", location);
   for (const key of allowed)
     if (!Object.hasOwn(value, key))
       fail(`Missing connection administration field '${key}'`, location);
@@ -205,7 +205,7 @@ const requireOptionalExactKeys = (
 ): void => {
   for (const key of Object.keys(value))
     if (!required.includes(key) && !optional.includes(key))
-      fail(`Unexpected connection administration field '${key}'`, location);
+      fail("Unexpected connection administration field", location);
   for (const key of required)
     if (!Object.hasOwn(value, key))
       fail(`Missing connection administration field '${key}'`, location);
@@ -450,18 +450,19 @@ const parseForm = (
     parseFormField(entry, { ...location, propertyPath: [`fields[${index}]`] }),
   );
   const seen = new Set<string>();
-  const writeOnlyInputs = new Set<string>();
   for (const field of fields) {
     if (seen.has(field.key))
       fail(`Duplicate connection administration field '${field.key}'`, location);
     seen.add(field.key);
-    if (field.writeOnly) writeOnlyInputs.add(field.input);
+    // The declared secret fields of a connection type are collected together into the one credential
+    // the write commands carry. A write-only field feeding any other input, or a readable field
+    // feeding the credential, would let a secret be shown, drafted or read back, so either fails.
+    if (field.writeOnly !== (field.input === "secret"))
+      fail(
+        `Connection administration field '${field.key}' must be write-only exactly when it feeds the credential`,
+        location,
+      );
   }
-  // The declared secret fields of a connection type are collected together into the one credential
-  // the write commands carry, so every write-only field feeds one command input. Two write-only
-  // inputs would mean a form collecting a second credential no command accepts.
-  if (writeOnlyInputs.size > 1)
-    fail("Connection administration write-only fields must feed one command input", location);
   return Object.freeze({
     connectionTypeId: requireConnectionTypeId(
       form.connectionTypeId,
@@ -637,10 +638,7 @@ export function parseConnectionAdministrationRecovery(
     });
   }
   if (recovery.status !== "recovery")
-    return fail(
-      `Unknown connection administration recovery status '${String(recovery.status)}'`,
-      location,
-    );
+    return fail("Unknown connection administration recovery status", location);
   requireExactKeys(recovery, ["status", "state", "reasonCode", "retryable"], location);
   return Object.freeze({
     status: "recovery",
@@ -699,10 +697,7 @@ export function parseConnectionAdministrationPage(
     return Object.freeze({ kind: "unavailable" });
   }
   if (resolution.kind !== "available")
-    return fail(
-      `Unknown connection administration page status '${String(resolution.kind)}'`,
-      location,
-    );
+    return fail("Unknown connection administration page status", location);
   requireExactKeys(resolution, ["kind", "page"], location);
   const page = requireRecord(resolution.page, "A connection administration page must be present", {
     ...location,
@@ -710,7 +705,7 @@ export function parseConnectionAdministrationPage(
   });
   requireExactKeys(page, ["kind", "connectionType", "form", "status", "recovery"], location);
   if (page.kind !== "ready")
-    return fail(`Unknown connection administration page status '${String(page.kind)}'`, location);
+    return fail("Unknown connection administration page status", location);
   const connectionType = parseType(page.connectionType, {
     ...location,
     propertyPath: ["page.connectionType"],

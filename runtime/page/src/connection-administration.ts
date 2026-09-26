@@ -185,7 +185,7 @@ type AssertStepDeclaresOnlyCommandInputs<Step> = Exclude<
   : never;
 
 /** Fails to compile when a declared page input is not a property some #692 command declares. */
-type AssertInputIsACommandProperty<Input> = Exclude<
+type AssertInputIsACommandProperty<Input extends Readonly<{ input: string }>> = Exclude<
   Input["input"],
   AllCommandInputKeys
 > extends never
@@ -454,13 +454,16 @@ export type ConnectionAdministrationRecoveryState =
  * step again can succeed while the person changes nothing.
  */
 export const connectionAdministrationRecoveryStates = Object.freeze({
-  invalid_parameters: { state: "correct_the_form", retryable: false },
-  not_authorized: { state: "authority_unavailable", retryable: false },
-  connection_unavailable: { state: "reload_the_connection", retryable: true },
-  secret_store_unavailable: { state: "retry_the_credential", retryable: true },
-  administration_unavailable: { state: "retry_later", retryable: true },
+  invalid_parameters: Object.freeze({ state: "correct_the_form", retryable: false }),
+  not_authorized: Object.freeze({ state: "authority_unavailable", retryable: false }),
+  connection_unavailable: Object.freeze({ state: "reload_the_connection", retryable: true }),
+  secret_store_unavailable: Object.freeze({ state: "retry_the_credential", retryable: true }),
+  administration_unavailable: Object.freeze({ state: "retry_later", retryable: true }),
 } as const satisfies Readonly<
-  Record<ConnectionAdministrationRefusalCode, ConnectionAdministrationRecoveryState>
+  Record<
+    ConnectionAdministrationRefusalCode,
+    Readonly<{ state: ConnectionAdministrationRecoveryState; retryable: boolean }>
+  >
 >);
 
 /** How one administration page reports the last command it submitted. */
