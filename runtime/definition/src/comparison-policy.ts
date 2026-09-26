@@ -2645,7 +2645,6 @@ const comparePageV2 = (
     "accessPermissionKey",
     "recordType",
     "queryId",
-    "commitActionKey",
     "publicFieldIds",
     "publicActionKey",
     "rateLimitPerMinute",

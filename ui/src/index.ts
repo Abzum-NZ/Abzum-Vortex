@@ -429,3 +429,24 @@ export {
   type NavigateTaskIntent,
   type UnsavedWorkGuard,
 } from "./launcher";
+
+// Sandboxed custom component host (#1143)
+export {
+  COMPONENT_BOOTSTRAP_QUERY_PARAMETERS,
+  COMPONENT_BOOTSTRAP_SERVING_PATH,
+  CustomComponentHost,
+  componentBundleContentAddressFromIntegrity,
+  createCustomComponentPayloadParser,
+  createCustomComponentRegistration,
+  createCustomComponentRegistrations,
+  createCustomComponentRegistry,
+  customComponentBootstrapUrl,
+  validateCustomComponentEventPayload,
+  type CustomComponentBootstrapTarget,
+  type CustomComponentEvent,
+  type CustomComponentEventBinding,
+  type CustomComponentEventBindings,
+  type CustomComponentEventDeclaration,
+  type CustomComponentEventPayload,
+  type CustomComponentHostProps,
+} from "./custom-component";
