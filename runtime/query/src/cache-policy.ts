@@ -4,10 +4,12 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   applicationRootIdSchema,
+  fieldIdSchema,
   fingerprintSchema,
   moduleRootIdSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
+  personalDataClassSchema,
   recordTypeIdSchema,
   revisionSchema,
   stableDefinitionReleaseVersionSchema,
@@ -39,6 +41,8 @@ import { protectedQueryCommandSchema } from "./protected-query-contracts";
 export const queryCacheKeyVersion = "v2";
 export const queryCacheMaxTtlSeconds = 3_600;
 export const queryCacheMaxRecordDependencies = 50;
+export const queryCacheMaxPublishedFields = 500;
+export const queryCacheMaxEvaluatedFields = 500;
 
 export const queryCacheBypassReasons = [
   "policy_invalid",
@@ -51,6 +55,117 @@ export const queryCacheBypassReasons = [
   "authority_expired",
 ] as const;
 export type QueryCacheBypassReason = (typeof queryCacheBypassReasons)[number];
+
+/**
+ * The published facts cache eligibility reads from one field: its data class
+ * and, for a derived field, the published settings that name its inputs. Unknown
+ * keys are stripped, so a caller forwards each published field unchanged.
+ */
+export const queryCachePublishedFieldSchema = z.object({
+  fieldId: fieldIdSchema,
+  type: z.string().min(1),
+  personalData: z.string().min(1),
+  settings: z.unknown().optional(),
+});
+export type QueryCachePublishedField = z.infer<typeof queryCachePublishedFieldSchema>;
+
+const isPublishedSettings = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * Every field identifier a derived field's published settings read, direct or
+ * nested. It is deliberately broad and mirrors the search-index policy's own
+ * walk: an extra input only makes the closure stricter, which is the fail-closed
+ * direction. It recognises the published reference names `fieldId`, `*FieldId`
+ * and `*FieldIds`.
+ */
+const derivedFieldInputIds = (settings: unknown): readonly string[] => {
+  const found = new Set<string>();
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (!isPublishedSettings(value)) return;
+    for (const [key, entry] of Object.entries(value)) {
+      if ((key === "fieldId" || key.endsWith("FieldId")) && typeof entry === "string") {
+        found.add(entry);
+        continue;
+      }
+      if (key.endsWith("FieldIds") && Array.isArray(entry)) {
+        for (const item of entry) if (typeof item === "string") found.add(item);
+        continue;
+      }
+      visit(entry);
+    }
+  };
+  visit(settings);
+  return [...found];
+};
+
+/** Whether a calculation is worked out at read time from its own published shape. */
+const isReadTimeCalculation = (field: QueryCachePublishedField): boolean => {
+  if (field.type !== "calculation") return false;
+  // A calculation whose settings or expression cannot be read is treated as
+  // read-time, so an unrecognised shape can never enter a data-result cache.
+  if (!isPublishedSettings(field.settings)) return true;
+  if (field.settings.evaluation === "read_time") return true;
+  const expression = field.settings.expression;
+  if (!isPublishedSettings(expression) || typeof expression.kind !== "string") return true;
+  return expression.kind === "deadline_passed";
+};
+
+/**
+ * Cache eligibility of the exact fields a request reads, derived from published
+ * field sensitivity and the recursive input closure of every derived field. A
+ * field is sensitive when its own data class is not `none` or its class is
+ * unknown, and a derived field is sensitive when any recursive input is. A
+ * calculation is read-time when its expression uses the current time or it
+ * depends on one. A missing field is treated as sensitive, so unknown metadata
+ * always bypasses rather than caching a possibly hidden value.
+ */
+export const queryCacheFieldEligibilityFor = (
+  fields: readonly QueryCachePublishedField[],
+  fieldIds: readonly string[],
+): Readonly<{ sensitiveFieldsPresent: boolean; readTimeFieldsPresent: boolean }> => {
+  const byId = new Map<string, QueryCachePublishedField>();
+  for (const field of fields) byId.set(field.fieldId.toLowerCase(), field);
+
+  const visiting = new Set<string>();
+  const decided = new Map<string, Readonly<{ sensitive: boolean; readTime: boolean }>>();
+  const classify = (fieldId: string): Readonly<{ sensitive: boolean; readTime: boolean }> => {
+    const key = fieldId.toLowerCase();
+    const cached = decided.get(key);
+    if (cached !== undefined) return cached;
+    if (visiting.has(key)) return Object.freeze({ sensitive: true, readTime: false });
+    const field = byId.get(key);
+    if (field === undefined) return Object.freeze({ sensitive: true, readTime: false });
+    const classification = personalDataClassSchema.safeParse(field.personalData);
+    let sensitive = !classification.success || classification.data !== "none";
+    let readTime = isReadTimeCalculation(field);
+    if (field.type === "calculation" || field.type === "total") {
+      visiting.add(key);
+      for (const input of derivedFieldInputIds(field.settings)) {
+        const state = classify(input);
+        if (state.sensitive) sensitive = true;
+        if (state.readTime) readTime = true;
+      }
+      visiting.delete(key);
+    }
+    const state = Object.freeze({ sensitive, readTime });
+    decided.set(key, state);
+    return state;
+  };
+
+  let sensitiveFieldsPresent = false;
+  let readTimeFieldsPresent = false;
+  for (const fieldId of fieldIds) {
+    const state = classify(fieldId);
+    if (state.sensitive) sensitiveFieldsPresent = true;
+    if (state.readTime) readTimeFieldsPresent = true;
+  }
+  return Object.freeze({ sensitiveFieldsPresent, readTimeFieldsPresent });
+};
 
 /**
  * The Record types a query reads. Only the identity is part of the key: with no
@@ -109,6 +224,25 @@ export const queryCacheInputSchema = z
         sharedSourceOwnership: z.enum(["none", "shared"]),
       })
       .strict(),
+    /**
+     * The exact published-field evidence for the fields this request reads.
+     * When supplied, sensitivity and read-time eligibility are re-derived from
+     * each derived field's recursive input closure, so a calculation or total
+     * labelled `none` cannot hide a sensitive or read-time input behind its own
+     * field. The evaluator can only make the decision stricter than the
+     * eligibility facts above, never looser; a field in `evaluatedFieldIds`
+     * that `publishedFields` does not classify counts as sensitive. When absent,
+     * the caller's own eligibility facts stand. A classification change is a new
+     * Module release fingerprint, which already changes the key, so no separate
+     * invalidation counter is needed; an access change changes `accessVersion`.
+     */
+    fieldEvidence: z
+      .object({
+        publishedFields: z.array(queryCachePublishedFieldSchema).max(queryCacheMaxPublishedFields),
+        evaluatedFieldIds: z.array(fieldIdSchema).max(queryCacheMaxEvaluatedFields),
+      })
+      .strict()
+      .optional(),
     lifetime: z
       .object({
         now: timestampSchema,
@@ -155,11 +289,20 @@ const canonicalJson = (value: unknown): string => {
 export const decideQueryCache = (input: unknown): QueryCacheDecision => {
   const parsed = queryCacheInputSchema.safeParse(input);
   if (!parsed.success) return bypass("policy_invalid");
-  const { request, scope, definition, recordDependencies, eligibility, lifetime } = parsed.data;
+  const { request, scope, definition, recordDependencies, eligibility, lifetime, fieldEvidence } =
+    parsed.data;
 
-  if (eligibility.readTimeFieldsPresent) return bypass("read_time_fields");
+  // Published-field evidence is the exact rule when supplied; it can only widen
+  // the bypass, never narrow it. Without evidence the caller's own eligibility
+  // facts stand, which an unknown field classification already bypasses.
+  const derived = fieldEvidence === undefined
+    ? undefined
+    : queryCacheFieldEligibilityFor(fieldEvidence.publishedFields, fieldEvidence.evaluatedFieldIds);
+  if (eligibility.readTimeFieldsPresent || derived?.readTimeFieldsPresent === true)
+    return bypass("read_time_fields");
   if (!eligibility.cachingAllowed) return bypass("cache_not_allowed");
-  if (eligibility.sensitiveFieldsPresent) return bypass("sensitive_fields");
+  if (eligibility.sensitiveFieldsPresent || derived?.sensitiveFieldsPresent === true)
+    return bypass("sensitive_fields");
   if (eligibility.sharedSourceOwnership !== "none") return bypass("shared_source");
   if (lower(request.moduleRootId) !== lower(definition.moduleRootId)) return bypass("policy_invalid");
 
