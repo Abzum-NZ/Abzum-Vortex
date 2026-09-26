@@ -1,0 +1,2324 @@
+{
+  "schemaVersion": "1.0.0",
+  "registry": {
+    "package": "shadcn",
+    "packageVersion": "4.21.0",
+    "registryUrl": "https://ui.shadcn.com/r",
+    "repository": "https://github.com/shadcn-ui/ui",
+    "tag": "shadcn@4.21.0",
+    "fetchedAt": "2026-09-26T10:38:32.079Z",
+    "licence": {
+      "spdx": "MIT",
+      "copyright": "Copyright (c) 2023 shadcn",
+      "notice": "shadcn/ui is distributed under the MIT licence. The theme and style values in this snapshot are copied from the pinned shadcn 4.21.0 registry and repository."
+    },
+    "sources": [
+      "https://ui.shadcn.com/r/colors/<baseColor>.json (cssVarsV4)",
+      "https://raw.githubusercontent.com/shadcn-ui/ui/shadcn@4.21.0/apps/v4/registry/themes.ts",
+      "https://raw.githubusercontent.com/shadcn-ui/ui/shadcn@4.21.0/apps/v4/registry/styles.tsx",
+      "https://raw.githubusercontent.com/shadcn-ui/ui/shadcn@4.21.0/apps/v4/registry/styles/style-<style>.css",
+      "https://raw.githubusercontent.com/shadcn-ui/ui/shadcn@4.21.0/apps/v4/registry/config.ts",
+      "https://raw.githubusercontent.com/shadcn-ui/ui/shadcn@4.21.0/packages/shadcn/src/utils/transformers/transform-menu.ts",
+      "https://raw.githubusercontent.com/shadcn-ui/ui/shadcn@4.21.0/LICENSE.md",
+      "shadcn@4.21.0 npm package dist/preset (PRESET_STYLES, PRESET_BASE_COLORS, PRESET_THEMES, PRESET_CHART_COLORS, PRESET_RADII, PRESET_MENU_ACCENTS, PRESET_MENU_COLORS)"
+    ]
+  },
+  "bases": [
+    "base",
+    "radix",
+    "aria"
+  ],
+  "styles": [
+    {
+      "id": "nova",
+      "label": "Nova",
+      "title": "Nova",
+      "description": "Reduced padding and margins",
+      "base": "base",
+      "cssPath": "styles/nova.css",
+      "cssSha256": "sha256:1ff9d64bd0a057b833a1e20d9d295ef2ed31dae4fcd2cf0a12a02ab6a3cdfa7a"
+    },
+    {
+      "id": "vega",
+      "label": "Vega",
+      "title": "Vega",
+      "description": "Clean, neutral, and familiar",
+      "base": "base",
+      "cssPath": "styles/vega.css",
+      "cssSha256": "sha256:5dfa439f81132cd208d26624430b81f5a228e57d83bb3b38551e9e28d12ff36b"
+    },
+    {
+      "id": "maia",
+      "label": "Maia",
+      "title": "Maia",
+      "description": "Rounded, with generous spacing.",
+      "base": "base",
+      "cssPath": "styles/maia.css",
+      "cssSha256": "sha256:d15d4a37e8f0219f3e4ee3820a6b91b3a0375ebf4efb187f0c2f04b83cb88b4e"
+    },
+    {
+      "id": "lyra",
+      "label": "Lyra",
+      "title": "Lyra",
+      "description": "Boxy and sharp. For mono fonts.",
+      "base": "base",
+      "cssPath": "styles/lyra.css",
+      "cssSha256": "sha256:4e34b26f771d6d828c653c70ea9e3f66d7feb2339a51884c81051eef288db72b"
+    },
+    {
+      "id": "mira",
+      "label": "Mira",
+      "title": "Mira",
+      "description": "Made for compact interfaces.",
+      "base": "base",
+      "cssPath": "styles/mira.css",
+      "cssSha256": "sha256:405bc4bd0c7db5e723b6ec44f6fca9d42dcac3bfc19b834590b0bc054ebde69c"
+    },
+    {
+      "id": "luma",
+      "label": "Luma",
+      "title": "Luma",
+      "description": "Fluid, luminous, and soft.",
+      "base": "base",
+      "cssPath": "styles/luma.css",
+      "cssSha256": "sha256:1d370585e17222e0dcb9893f278c494046ef2669b2aaa09e4b3d7c259a3dcdf7"
+    },
+    {
+      "id": "sera",
+      "label": "Sera",
+      "title": "Sera",
+      "description": "Editorial and typographic.",
+      "base": "base",
+      "cssPath": "styles/sera.css",
+      "cssSha256": "sha256:28625bd40bd49d3aeb3ac734d90ac87c6fe93df0e4e3ca7e5308591d862af988"
+    },
+    {
+      "id": "rhea",
+      "label": "Rhea",
+      "title": "Rhea",
+      "description": "Like Luma but compact.",
+      "base": "base",
+      "cssPath": "styles/rhea.css",
+      "cssSha256": "sha256:1d37a2cabea84101dc8e5fe0b7b677f28808973680669edd5d6a90f14f05295a"
+    }
+  ],
+  "baseColors": [
+    {
+      "id": "neutral",
+      "label": "Neutral",
+      "tokens": {
+        "light": {
+          "background": "oklch(1 0 0)",
+          "foreground": "oklch(0.145 0 0)",
+          "card": "oklch(1 0 0)",
+          "card-foreground": "oklch(0.145 0 0)",
+          "popover": "oklch(1 0 0)",
+          "popover-foreground": "oklch(0.145 0 0)",
+          "primary": "oklch(0.205 0 0)",
+          "primary-foreground": "oklch(0.985 0 0)",
+          "secondary": "oklch(0.97 0 0)",
+          "secondary-foreground": "oklch(0.205 0 0)",
+          "muted": "oklch(0.97 0 0)",
+          "muted-foreground": "oklch(0.556 0 0)",
+          "accent": "oklch(0.97 0 0)",
+          "accent-foreground": "oklch(0.205 0 0)",
+          "destructive": "oklch(0.577 0.245 27.325)",
+          "border": "oklch(0.922 0 0)",
+          "input": "oklch(0.922 0 0)",
+          "ring": "oklch(0.708 0 0)",
+          "chart-1": "oklch(0.87 0 0)",
+          "chart-2": "oklch(0.556 0 0)",
+          "chart-3": "oklch(0.439 0 0)",
+          "chart-4": "oklch(0.371 0 0)",
+          "chart-5": "oklch(0.269 0 0)",
+          "radius": "0.625rem",
+          "sidebar": "oklch(0.985 0 0)",
+          "sidebar-foreground": "oklch(0.145 0 0)",
+          "sidebar-primary": "oklch(0.205 0 0)",
+          "sidebar-primary-foreground": "oklch(0.985 0 0)",
+          "sidebar-accent": "oklch(0.97 0 0)",
+          "sidebar-accent-foreground": "oklch(0.205 0 0)",
+          "sidebar-border": "oklch(0.922 0 0)",
+          "sidebar-ring": "oklch(0.708 0 0)"
+        },
+        "dark": {
+          "background": "oklch(0.145 0 0)",
+          "foreground": "oklch(0.985 0 0)",
+          "card": "oklch(0.205 0 0)",
+          "card-foreground": "oklch(0.985 0 0)",
+          "popover": "oklch(0.205 0 0)",
+          "popover-foreground": "oklch(0.985 0 0)",
+          "primary": "oklch(0.922 0 0)",
+          "primary-foreground": "oklch(0.205 0 0)",
+          "secondary": "oklch(0.269 0 0)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "muted": "oklch(0.269 0 0)",
+          "muted-foreground": "oklch(0.708 0 0)",
+          "accent": "oklch(0.269 0 0)",
+          "accent-foreground": "oklch(0.985 0 0)",
+          "destructive": "oklch(0.704 0.191 22.216)",
+          "border": "oklch(1 0 0 / 10%)",
+          "input": "oklch(1 0 0 / 15%)",
+          "ring": "oklch(0.556 0 0)",
+          "chart-1": "oklch(0.87 0 0)",
+          "chart-2": "oklch(0.556 0 0)",
+          "chart-3": "oklch(0.439 0 0)",
+          "chart-4": "oklch(0.371 0 0)",
+          "chart-5": "oklch(0.269 0 0)",
+          "sidebar": "oklch(0.205 0 0)",
+          "sidebar-foreground": "oklch(0.985 0 0)",
+          "sidebar-primary": "oklch(0.488 0.243 264.376)",
+          "sidebar-primary-foreground": "oklch(0.985 0 0)",
+          "sidebar-accent": "oklch(0.269 0 0)",
+          "sidebar-accent-foreground": "oklch(0.985 0 0)",
+          "sidebar-border": "oklch(1 0 0 / 10%)",
+          "sidebar-ring": "oklch(0.556 0 0)"
+        }
+      }
+    },
+    {
+      "id": "stone",
+      "label": "Stone",
+      "tokens": {
+        "light": {
+          "background": "oklch(1 0 0)",
+          "foreground": "oklch(0.147 0.004 49.25)",
+          "card": "oklch(1 0 0)",
+          "card-foreground": "oklch(0.147 0.004 49.25)",
+          "popover": "oklch(1 0 0)",
+          "popover-foreground": "oklch(0.147 0.004 49.25)",
+          "primary": "oklch(0.216 0.006 56.043)",
+          "primary-foreground": "oklch(0.985 0.001 106.423)",
+          "secondary": "oklch(0.97 0.001 106.424)",
+          "secondary-foreground": "oklch(0.216 0.006 56.043)",
+          "muted": "oklch(0.97 0.001 106.424)",
+          "muted-foreground": "oklch(0.553 0.013 58.071)",
+          "accent": "oklch(0.97 0.001 106.424)",
+          "accent-foreground": "oklch(0.216 0.006 56.043)",
+          "destructive": "oklch(0.577 0.245 27.325)",
+          "border": "oklch(0.923 0.003 48.717)",
+          "input": "oklch(0.923 0.003 48.717)",
+          "ring": "oklch(0.709 0.01 56.259)",
+          "chart-1": "oklch(0.869 0.005 56.366)",
+          "chart-2": "oklch(0.553 0.013 58.071)",
+          "chart-3": "oklch(0.444 0.011 73.639)",
+          "chart-4": "oklch(0.374 0.01 67.558)",
+          "chart-5": "oklch(0.268 0.007 34.298)",
+          "radius": "0.625rem",
+          "sidebar": "oklch(0.985 0.001 106.423)",
+          "sidebar-foreground": "oklch(0.147 0.004 49.25)",
+          "sidebar-primary": "oklch(0.216 0.006 56.043)",
+          "sidebar-primary-foreground": "oklch(0.985 0.001 106.423)",
+          "sidebar-accent": "oklch(0.97 0.001 106.424)",
+          "sidebar-accent-foreground": "oklch(0.216 0.006 56.043)",
+          "sidebar-border": "oklch(0.923 0.003 48.717)",
+          "sidebar-ring": "oklch(0.709 0.01 56.259)"
+        },
+        "dark": {
+          "background": "oklch(0.147 0.004 49.25)",
+          "foreground": "oklch(0.985 0.001 106.423)",
+          "card": "oklch(0.216 0.006 56.043)",
+          "card-foreground": "oklch(0.985 0.001 106.423)",
+          "popover": "oklch(0.216 0.006 56.043)",
+          "popover-foreground": "oklch(0.985 0.001 106.423)",
+          "primary": "oklch(0.923 0.003 48.717)",
+          "primary-foreground": "oklch(0.216 0.006 56.043)",
+          "secondary": "oklch(0.268 0.007 34.298)",
+          "secondary-foreground": "oklch(0.985 0.001 106.423)",
+          "muted": "oklch(0.268 0.007 34.298)",
+          "muted-foreground": "oklch(0.709 0.01 56.259)",
+          "accent": "oklch(0.268 0.007 34.298)",
+          "accent-foreground": "oklch(0.985 0.001 106.423)",
+          "destructive": "oklch(0.704 0.191 22.216)",
+          "border": "oklch(1 0 0 / 10%)",
+          "input": "oklch(1 0 0 / 15%)",
+          "ring": "oklch(0.553 0.013 58.071)",
+          "chart-1": "oklch(0.869 0.005 56.366)",
+          "chart-2": "oklch(0.553 0.013 58.071)",
+          "chart-3": "oklch(0.444 0.011 73.639)",
+          "chart-4": "oklch(0.374 0.01 67.558)",
+          "chart-5": "oklch(0.268 0.007 34.298)",
+          "sidebar": "oklch(0.216 0.006 56.043)",
+          "sidebar-foreground": "oklch(0.985 0.001 106.423)",
+          "sidebar-primary": "oklch(0.488 0.243 264.376)",
+          "sidebar-primary-foreground": "oklch(0.985 0.001 106.423)",
+          "sidebar-accent": "oklch(0.268 0.007 34.298)",
+          "sidebar-accent-foreground": "oklch(0.985 0.001 106.423)",
+          "sidebar-border": "oklch(1 0 0 / 10%)",
+          "sidebar-ring": "oklch(0.553 0.013 58.071)"
+        }
+      }
+    },
+    {
+      "id": "zinc",
+      "label": "Zinc",
+      "tokens": {
+        "light": {
+          "background": "oklch(1 0 0)",
+          "foreground": "oklch(0.141 0.005 285.823)",
+          "card": "oklch(1 0 0)",
+          "card-foreground": "oklch(0.141 0.005 285.823)",
+          "popover": "oklch(1 0 0)",
+          "popover-foreground": "oklch(0.141 0.005 285.823)",
+          "primary": "oklch(0.21 0.006 285.885)",
+          "primary-foreground": "oklch(0.985 0 0)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "muted": "oklch(0.967 0.001 286.375)",
+          "muted-foreground": "oklch(0.552 0.016 285.938)",
+          "accent": "oklch(0.967 0.001 286.375)",
+          "accent-foreground": "oklch(0.21 0.006 285.885)",
+          "destructive": "oklch(0.577 0.245 27.325)",
+          "border": "oklch(0.92 0.004 286.32)",
+          "input": "oklch(0.92 0.004 286.32)",
+          "ring": "oklch(0.705 0.015 286.067)",
+          "chart-1": "oklch(0.871 0.006 286.286)",
+          "chart-2": "oklch(0.552 0.016 285.938)",
+          "chart-3": "oklch(0.442 0.017 285.786)",
+          "chart-4": "oklch(0.37 0.013 285.805)",
+          "chart-5": "oklch(0.274 0.006 286.033)",
+          "radius": "0.625rem",
+          "sidebar": "oklch(0.985 0 0)",
+          "sidebar-foreground": "oklch(0.141 0.005 285.823)",
+          "sidebar-primary": "oklch(0.21 0.006 285.885)",
+          "sidebar-primary-foreground": "oklch(0.985 0 0)",
+          "sidebar-accent": "oklch(0.967 0.001 286.375)",
+          "sidebar-accent-foreground": "oklch(0.21 0.006 285.885)",
+          "sidebar-border": "oklch(0.92 0.004 286.32)",
+          "sidebar-ring": "oklch(0.705 0.015 286.067)"
+        },
+        "dark": {
+          "background": "oklch(0.141 0.005 285.823)",
+          "foreground": "oklch(0.985 0 0)",
+          "card": "oklch(0.21 0.006 285.885)",
+          "card-foreground": "oklch(0.985 0 0)",
+          "popover": "oklch(0.21 0.006 285.885)",
+          "popover-foreground": "oklch(0.985 0 0)",
+          "primary": "oklch(0.92 0.004 286.32)",
+          "primary-foreground": "oklch(0.21 0.006 285.885)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "muted": "oklch(0.274 0.006 286.033)",
+          "muted-foreground": "oklch(0.705 0.015 286.067)",
+          "accent": "oklch(0.274 0.006 286.033)",
+          "accent-foreground": "oklch(0.985 0 0)",
+          "destructive": "oklch(0.704 0.191 22.216)",
+          "border": "oklch(1 0 0 / 10%)",
+          "input": "oklch(1 0 0 / 15%)",
+          "ring": "oklch(0.552 0.016 285.938)",
+          "chart-1": "oklch(0.871 0.006 286.286)",
+          "chart-2": "oklch(0.552 0.016 285.938)",
+          "chart-3": "oklch(0.442 0.017 285.786)",
+          "chart-4": "oklch(0.37 0.013 285.805)",
+          "chart-5": "oklch(0.274 0.006 286.033)",
+          "sidebar": "oklch(0.21 0.006 285.885)",
+          "sidebar-foreground": "oklch(0.985 0 0)",
+          "sidebar-primary": "oklch(0.488 0.243 264.376)",
+          "sidebar-primary-foreground": "oklch(0.985 0 0)",
+          "sidebar-accent": "oklch(0.274 0.006 286.033)",
+          "sidebar-accent-foreground": "oklch(0.985 0 0)",
+          "sidebar-border": "oklch(1 0 0 / 10%)",
+          "sidebar-ring": "oklch(0.552 0.016 285.938)"
+        }
+      }
+    },
+    {
+      "id": "gray",
+      "label": "Gray",
+      "tokens": {
+        "light": {
+          "background": "oklch(1 0 0)",
+          "foreground": "oklch(0.13 0.028 261.692)",
+          "card": "oklch(1 0 0)",
+          "card-foreground": "oklch(0.13 0.028 261.692)",
+          "popover": "oklch(1 0 0)",
+          "popover-foreground": "oklch(0.13 0.028 261.692)",
+          "primary": "oklch(0.21 0.034 264.665)",
+          "primary-foreground": "oklch(0.985 0.002 247.839)",
+          "secondary": "oklch(0.967 0.003 264.542)",
+          "secondary-foreground": "oklch(0.21 0.034 264.665)",
+          "muted": "oklch(0.967 0.003 264.542)",
+          "muted-foreground": "oklch(0.551 0.027 264.364)",
+          "accent": "oklch(0.967 0.003 264.542)",
+          "accent-foreground": "oklch(0.21 0.034 264.665)",
+          "destructive": "oklch(0.577 0.245 27.325)",
+          "border": "oklch(0.928 0.006 264.531)",
+          "input": "oklch(0.928 0.006 264.531)",
+          "ring": "oklch(0.707 0.022 261.325)",
+          "chart-1": "oklch(0.646 0.222 41.116)",
+          "chart-2": "oklch(0.6 0.118 184.704)",
+          "chart-3": "oklch(0.398 0.07 227.392)",
+          "chart-4": "oklch(0.828 0.189 84.429)",
+          "chart-5": "oklch(0.769 0.188 70.08)",
+          "radius": "0.625rem",
+          "sidebar": "oklch(0.985 0.002 247.839)",
+          "sidebar-foreground": "oklch(0.13 0.028 261.692)",
+          "sidebar-primary": "oklch(0.21 0.034 264.665)",
+          "sidebar-primary-foreground": "oklch(0.985 0.002 247.839)",
+          "sidebar-accent": "oklch(0.967 0.003 264.542)",
+          "sidebar-accent-foreground": "oklch(0.21 0.034 264.665)",
+          "sidebar-border": "oklch(0.928 0.006 264.531)",
+          "sidebar-ring": "oklch(0.707 0.022 261.325)"
+        },
+        "dark": {
+          "background": "oklch(0.13 0.028 261.692)",
+          "foreground": "oklch(0.985 0.002 247.839)",
+          "card": "oklch(0.21 0.034 264.665)",
+          "card-foreground": "oklch(0.985 0.002 247.839)",
+          "popover": "oklch(0.21 0.034 264.665)",
+          "popover-foreground": "oklch(0.985 0.002 247.839)",
+          "primary": "oklch(0.928 0.006 264.531)",
+          "primary-foreground": "oklch(0.21 0.034 264.665)",
+          "secondary": "oklch(0.278 0.033 256.848)",
+          "secondary-foreground": "oklch(0.985 0.002 247.839)",
+          "muted": "oklch(0.278 0.033 256.848)",
+          "muted-foreground": "oklch(0.707 0.022 261.325)",
+          "accent": "oklch(0.278 0.033 256.848)",
+          "accent-foreground": "oklch(0.985 0.002 247.839)",
+          "destructive": "oklch(0.704 0.191 22.216)",
+          "border": "oklch(1 0 0 / 10%)",
+          "input": "oklch(1 0 0 / 15%)",
+          "ring": "oklch(0.551 0.027 264.364)",
+          "chart-1": "oklch(0.488 0.243 264.376)",
+          "chart-2": "oklch(0.696 0.17 162.48)",
+          "chart-3": "oklch(0.769 0.188 70.08)",
+          "chart-4": "oklch(0.627 0.265 303.9)",
+          "chart-5": "oklch(0.645 0.246 16.439)",
+          "sidebar": "oklch(0.21 0.034 264.665)",
+          "sidebar-foreground": "oklch(0.985 0.002 247.839)",
+          "sidebar-primary": "oklch(0.488 0.243 264.376)",
+          "sidebar-primary-foreground": "oklch(0.985 0.002 247.839)",
+          "sidebar-accent": "oklch(0.278 0.033 256.848)",
+          "sidebar-accent-foreground": "oklch(0.985 0.002 247.839)",
+          "sidebar-border": "oklch(1 0 0 / 10%)",
+          "sidebar-ring": "oklch(0.551 0.027 264.364)"
+        }
+      }
+    },
+    {
+      "id": "mauve",
+      "label": "Mauve",
+      "tokens": {
+        "light": {
+          "background": "oklch(1 0 0)",
+          "foreground": "oklch(0.145 0.008 326)",
+          "card": "oklch(1 0 0)",
+          "card-foreground": "oklch(0.145 0.008 326)",
+          "popover": "oklch(1 0 0)",
+          "popover-foreground": "oklch(0.145 0.008 326)",
+          "primary": "oklch(0.212 0.019 322.12)",
+          "primary-foreground": "oklch(0.985 0 0)",
+          "secondary": "oklch(0.96 0.003 325.6)",
+          "secondary-foreground": "oklch(0.212 0.019 322.12)",
+          "muted": "oklch(0.96 0.003 325.6)",
+          "muted-foreground": "oklch(0.542 0.034 322.5)",
+          "accent": "oklch(0.96 0.003 325.6)",
+          "accent-foreground": "oklch(0.212 0.019 322.12)",
+          "destructive": "oklch(0.577 0.245 27.325)",
+          "border": "oklch(0.922 0.005 325.62)",
+          "input": "oklch(0.922 0.005 325.62)",
+          "ring": "oklch(0.711 0.019 323.02)",
+          "chart-1": "oklch(0.865 0.012 325.68)",
+          "chart-2": "oklch(0.542 0.034 322.5)",
+          "chart-3": "oklch(0.435 0.029 321.78)",
+          "chart-4": "oklch(0.364 0.029 323.89)",
+          "chart-5": "oklch(0.263 0.024 320.12)",
+          "radius": "0.625rem",
+          "sidebar": "oklch(0.985 0 0)",
+          "sidebar-foreground": "oklch(0.145 0.008 326)",
+          "sidebar-primary": "oklch(0.212 0.019 322.12)",
+          "sidebar-primary-foreground": "oklch(0.985 0 0)",
+          "sidebar-accent": "oklch(0.96 0.003 325.6)",
+          "sidebar-accent-foreground": "oklch(0.212 0.019 322.12)",
+          "sidebar-border": "oklch(0.922 0.005 325.62)",
+          "sidebar-ring": "oklch(0.711 0.019 323.02)"
+        },
+        "dark": {
+          "background": "oklch(0.145 0.008 326)",
+          "foreground": "oklch(0.985 0 0)",
+          "card": "oklch(0.212 0.019 322.12)",
+          "card-foreground": "oklch(0.985 0 0)",
+          "popover": "oklch(0.212 0.019 322.12)",
+          "popover-foreground": "oklch(0.985 0 0)",
+          "primary": "oklch(0.922 0.005 325.62)",
+          "primary-foreground": "oklch(0.212 0.019 322.12)",
+          "secondary": "oklch(0.263 0.024 320.12)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "muted": "oklch(0.263 0.024 320.12)",
+          "muted-foreground": "oklch(0.711 0.019 323.02)",
+          "accent": "oklch(0.263 0.024 320.12)",
+          "accent-foreground": "oklch(0.985 0 0)",
+          "destructive": "oklch(0.704 0.191 22.216)",
+          "border": "oklch(1 0 0 / 10%)",
+          "input": "oklch(1 0 0 / 15%)",
+          "ring": "oklch(0.542 0.034 322.5)",
+          "chart-1": "oklch(0.865 0.012 325.68)",
+          "chart-2": "oklch(0.542 0.034 322.5)",
+          "chart-3": "oklch(0.435 0.029 321.78)",
+          "chart-4": "oklch(0.364 0.029 323.89)",
+          "chart-5": "oklch(0.263 0.024 320.12)",
+          "sidebar": "oklch(0.212 0.019 322.12)",
+          "sidebar-foreground": "oklch(0.985 0 0)",
+          "sidebar-primary": "oklch(0.488 0.243 264.376)",
+          "sidebar-primary-foreground": "oklch(0.985 0 0)",
+          "sidebar-accent": "oklch(0.263 0.024 320.12)",
+          "sidebar-accent-foreground": "oklch(0.985 0 0)",
+          "sidebar-border": "oklch(1 0 0 / 10%)",
+          "sidebar-ring": "oklch(0.542 0.034 322.5)"
+        }
+      }
+    },
+    {
+      "id": "olive",
+      "label": "Olive",
+      "tokens": {
+        "light": {
+          "background": "oklch(1 0 0)",
+          "foreground": "oklch(0.153 0.006 107.1)",
+          "card": "oklch(1 0 0)",
+          "card-foreground": "oklch(0.153 0.006 107.1)",
+          "popover": "oklch(1 0 0)",
+          "popover-foreground": "oklch(0.153 0.006 107.1)",
+          "primary": "oklch(0.228 0.013 107.4)",
+          "primary-foreground": "oklch(0.988 0.003 106.5)",
+          "secondary": "oklch(0.966 0.005 106.5)",
+          "secondary-foreground": "oklch(0.228 0.013 107.4)",
+          "muted": "oklch(0.966 0.005 106.5)",
+          "muted-foreground": "oklch(0.58 0.031 107.3)",
+          "accent": "oklch(0.966 0.005 106.5)",
+          "accent-foreground": "oklch(0.228 0.013 107.4)",
+          "destructive": "oklch(0.577 0.245 27.325)",
+          "border": "oklch(0.93 0.007 106.5)",
+          "input": "oklch(0.93 0.007 106.5)",
+          "ring": "oklch(0.737 0.021 106.9)",
+          "chart-1": "oklch(0.88 0.011 106.6)",
+          "chart-2": "oklch(0.58 0.031 107.3)",
+          "chart-3": "oklch(0.466 0.025 107.3)",
+          "chart-4": "oklch(0.394 0.023 107.4)",
+          "chart-5": "oklch(0.286 0.016 107.4)",
+          "radius": "0.625rem",
+          "sidebar": "oklch(0.988 0.003 106.5)",
+          "sidebar-foreground": "oklch(0.153 0.006 107.1)",
+          "sidebar-primary": "oklch(0.228 0.013 107.4)",
+          "sidebar-primary-foreground": "oklch(0.988 0.003 106.5)",
+          "sidebar-accent": "oklch(0.966 0.005 106.5)",
+          "sidebar-accent-foreground": "oklch(0.228 0.013 107.4)",
+          "sidebar-border": "oklch(0.93 0.007 106.5)",
+          "sidebar-ring": "oklch(0.737 0.021 106.9)"
+        },
+        "dark": {
+          "background": "oklch(0.153 0.006 107.1)",
+          "foreground": "oklch(0.988 0.003 106.5)",
+          "card": "oklch(0.228 0.013 107.4)",
+          "card-foreground": "oklch(0.988 0.003 106.5)",
+          "popover": "oklch(0.228 0.013 107.4)",
+          "popover-foreground": "oklch(0.988 0.003 106.5)",
+          "primary": "oklch(0.93 0.007 106.5)",
+          "primary-foreground": "oklch(0.228 0.013 107.4)",
+          "secondary": "oklch(0.286 0.016 107.4)",
+          "secondary-foreground": "oklch(0.988 0.003 106.5)",
+          "muted": "oklch(0.286 0.016 107.4)",
+          "muted-foreground": "oklch(0.737 0.021 106.9)",
+          "accent": "oklch(0.286 0.016 107.4)",
+          "accent-foreground": "oklch(0.988 0.003 106.5)",
+          "destructive": "oklch(0.704 0.191 22.216)",
+          "border": "oklch(1 0 0 / 10%)",
+          "input": "oklch(1 0 0 / 15%)",
+          "ring": "oklch(0.58 0.031 107.3)",
+          "chart-1": "oklch(0.88 0.011 106.6)",
+          "chart-2": "oklch(0.58 0.031 107.3)",
+          "chart-3": "oklch(0.466 0.025 107.3)",
+          "chart-4": "oklch(0.394 0.023 107.4)",
+          "chart-5": "oklch(0.286 0.016 107.4)",
+          "sidebar": "oklch(0.228 0.013 107.4)",
+          "sidebar-foreground": "oklch(0.988 0.003 106.5)",
+          "sidebar-primary": "oklch(0.488 0.243 264.376)",
+          "sidebar-primary-foreground": "oklch(0.988 0.003 106.5)",
+          "sidebar-accent": "oklch(0.286 0.016 107.4)",
+          "sidebar-accent-foreground": "oklch(0.988 0.003 106.5)",
+          "sidebar-border": "oklch(1 0 0 / 10%)",
+          "sidebar-ring": "oklch(0.58 0.031 107.3)"
+        }
+      }
+    },
+    {
+      "id": "mist",
+      "label": "Mist",
+      "tokens": {
+        "light": {
+          "background": "oklch(1 0 0)",
+          "foreground": "oklch(0.148 0.004 228.8)",
+          "card": "oklch(1 0 0)",
+          "card-foreground": "oklch(0.148 0.004 228.8)",
+          "popover": "oklch(1 0 0)",
+          "popover-foreground": "oklch(0.148 0.004 228.8)",
+          "primary": "oklch(0.218 0.008 223.9)",
+          "primary-foreground": "oklch(0.987 0.002 197.1)",
+          "secondary": "oklch(0.963 0.002 197.1)",
+          "secondary-foreground": "oklch(0.218 0.008 223.9)",
+          "muted": "oklch(0.963 0.002 197.1)",
+          "muted-foreground": "oklch(0.56 0.021 213.5)",
+          "accent": "oklch(0.963 0.002 197.1)",
+          "accent-foreground": "oklch(0.218 0.008 223.9)",
+          "destructive": "oklch(0.577 0.245 27.325)",
+          "border": "oklch(0.925 0.005 214.3)",
+          "input": "oklch(0.925 0.005 214.3)",
+          "ring": "oklch(0.723 0.014 214.4)",
+          "chart-1": "oklch(0.872 0.007 219.6)",
+          "chart-2": "oklch(0.56 0.021 213.5)",
+          "chart-3": "oklch(0.45 0.017 213.2)",
+          "chart-4": "oklch(0.378 0.015 216)",
+          "chart-5": "oklch(0.275 0.011 216.9)",
+          "radius": "0.625rem",
+          "sidebar": "oklch(0.987 0.002 197.1)",
+          "sidebar-foreground": "oklch(0.148 0.004 228.8)",
+          "sidebar-primary": "oklch(0.218 0.008 223.9)",
+          "sidebar-primary-foreground": "oklch(0.987 0.002 197.1)",
+          "sidebar-accent": "oklch(0.963 0.002 197.1)",
+          "sidebar-accent-foreground": "oklch(0.218 0.008 223.9)",
+          "sidebar-border": "oklch(0.925 0.005 214.3)",
+          "sidebar-ring": "oklch(0.723 0.014 214.4)"
+        },
+        "dark": {
+          "background": "oklch(0.148 0.004 228.8)",
+          "foreground": "oklch(0.987 0.002 197.1)",
+          "card": "oklch(0.218 0.008 223.9)",
+          "card-foreground": "oklch(0.987 0.002 197.1)",
+          "popover": "oklch(0.218 0.008 223.9)",
+          "popover-foreground": "oklch(0.987 0.002 197.1)",
+          "primary": "oklch(0.925 0.005 214.3)",
+          "primary-foreground": "oklch(0.218 0.008 223.9)",
+          "secondary": "oklch(0.275 0.011 216.9)",
+          "secondary-foreground": "oklch(0.987 0.002 197.1)",
+          "muted": "oklch(0.275 0.011 216.9)",
+          "muted-foreground": "oklch(0.723 0.014 214.4)",
+          "accent": "oklch(0.275 0.011 216.9)",
+          "accent-foreground": "oklch(0.987 0.002 197.1)",
+          "destructive": "oklch(0.704 0.191 22.216)",
+          "border": "oklch(1 0 0 / 10%)",
+          "input": "oklch(1 0 0 / 15%)",
+          "ring": "oklch(0.56 0.021 213.5)",
+          "chart-1": "oklch(0.872 0.007 219.6)",
+          "chart-2": "oklch(0.56 0.021 213.5)",
+          "chart-3": "oklch(0.45 0.017 213.2)",
+          "chart-4": "oklch(0.378 0.015 216)",
+          "chart-5": "oklch(0.275 0.011 216.9)",
+          "sidebar": "oklch(0.218 0.008 223.9)",
+          "sidebar-foreground": "oklch(0.987 0.002 197.1)",
+          "sidebar-primary": "oklch(0.488 0.243 264.376)",
+          "sidebar-primary-foreground": "oklch(0.987 0.002 197.1)",
+          "sidebar-accent": "oklch(0.275 0.011 216.9)",
+          "sidebar-accent-foreground": "oklch(0.987 0.002 197.1)",
+          "sidebar-border": "oklch(1 0 0 / 10%)",
+          "sidebar-ring": "oklch(0.56 0.021 213.5)"
+        }
+      }
+    },
+    {
+      "id": "taupe",
+      "label": "Taupe",
+      "tokens": {
+        "light": {
+          "background": "oklch(1 0 0)",
+          "foreground": "oklch(0.147 0.004 49.3)",
+          "card": "oklch(1 0 0)",
+          "card-foreground": "oklch(0.147 0.004 49.3)",
+          "popover": "oklch(1 0 0)",
+          "popover-foreground": "oklch(0.147 0.004 49.3)",
+          "primary": "oklch(0.214 0.009 43.1)",
+          "primary-foreground": "oklch(0.986 0.002 67.8)",
+          "secondary": "oklch(0.96 0.002 17.2)",
+          "secondary-foreground": "oklch(0.214 0.009 43.1)",
+          "muted": "oklch(0.96 0.002 17.2)",
+          "muted-foreground": "oklch(0.547 0.021 43.1)",
+          "accent": "oklch(0.96 0.002 17.2)",
+          "accent-foreground": "oklch(0.214 0.009 43.1)",
+          "destructive": "oklch(0.577 0.245 27.325)",
+          "border": "oklch(0.922 0.005 34.3)",
+          "input": "oklch(0.922 0.005 34.3)",
+          "ring": "oklch(0.714 0.014 41.2)",
+          "chart-1": "oklch(0.868 0.007 39.5)",
+          "chart-2": "oklch(0.547 0.021 43.1)",
+          "chart-3": "oklch(0.438 0.017 39.3)",
+          "chart-4": "oklch(0.367 0.016 35.7)",
+          "chart-5": "oklch(0.268 0.011 36.5)",
+          "radius": "0.625rem",
+          "sidebar": "oklch(0.986 0.002 67.8)",
+          "sidebar-foreground": "oklch(0.147 0.004 49.3)",
+          "sidebar-primary": "oklch(0.214 0.009 43.1)",
+          "sidebar-primary-foreground": "oklch(0.986 0.002 67.8)",
+          "sidebar-accent": "oklch(0.96 0.002 17.2)",
+          "sidebar-accent-foreground": "oklch(0.214 0.009 43.1)",
+          "sidebar-border": "oklch(0.922 0.005 34.3)",
+          "sidebar-ring": "oklch(0.714 0.014 41.2)"
+        },
+        "dark": {
+          "background": "oklch(0.147 0.004 49.3)",
+          "foreground": "oklch(0.986 0.002 67.8)",
+          "card": "oklch(0.214 0.009 43.1)",
+          "card-foreground": "oklch(0.986 0.002 67.8)",
+          "popover": "oklch(0.214 0.009 43.1)",
+          "popover-foreground": "oklch(0.986 0.002 67.8)",
+          "primary": "oklch(0.922 0.005 34.3)",
+          "primary-foreground": "oklch(0.214 0.009 43.1)",
+          "secondary": "oklch(0.268 0.011 36.5)",
+          "secondary-foreground": "oklch(0.986 0.002 67.8)",
+          "muted": "oklch(0.268 0.011 36.5)",
+          "muted-foreground": "oklch(0.714 0.014 41.2)",
+          "accent": "oklch(0.268 0.011 36.5)",
+          "accent-foreground": "oklch(0.986 0.002 67.8)",
+          "destructive": "oklch(0.704 0.191 22.216)",
+          "border": "oklch(1 0 0 / 10%)",
+          "input": "oklch(1 0 0 / 15%)",
+          "ring": "oklch(0.547 0.021 43.1)",
+          "chart-1": "oklch(0.868 0.007 39.5)",
+          "chart-2": "oklch(0.547 0.021 43.1)",
+          "chart-3": "oklch(0.438 0.017 39.3)",
+          "chart-4": "oklch(0.367 0.016 35.7)",
+          "chart-5": "oklch(0.268 0.011 36.5)",
+          "sidebar": "oklch(0.214 0.009 43.1)",
+          "sidebar-foreground": "oklch(0.986 0.002 67.8)",
+          "sidebar-primary": "oklch(0.488 0.243 264.376)",
+          "sidebar-primary-foreground": "oklch(0.986 0.002 67.8)",
+          "sidebar-accent": "oklch(0.268 0.011 36.5)",
+          "sidebar-accent-foreground": "oklch(0.986 0.002 67.8)",
+          "sidebar-border": "oklch(1 0 0 / 10%)",
+          "sidebar-ring": "oklch(0.547 0.021 43.1)"
+        }
+      }
+    }
+  ],
+  "themes": [
+    {
+      "id": "neutral",
+      "label": "Neutral",
+      "tokens": {
+        "light": {
+          "background": "oklch(1 0 0)",
+          "foreground": "oklch(0.145 0 0)",
+          "card": "oklch(1 0 0)",
+          "card-foreground": "oklch(0.145 0 0)",
+          "popover": "oklch(1 0 0)",
+          "popover-foreground": "oklch(0.145 0 0)",
+          "primary": "oklch(0.205 0 0)",
+          "primary-foreground": "oklch(0.985 0 0)",
+          "secondary": "oklch(0.97 0 0)",
+          "secondary-foreground": "oklch(0.205 0 0)",
+          "muted": "oklch(0.97 0 0)",
+          "muted-foreground": "oklch(0.556 0 0)",
+          "accent": "oklch(0.97 0 0)",
+          "accent-foreground": "oklch(0.205 0 0)",
+          "destructive": "oklch(0.577 0.245 27.325)",
+          "border": "oklch(0.922 0 0)",
+          "input": "oklch(0.922 0 0)",
+          "ring": "oklch(0.708 0 0)",
+          "chart-1": "oklch(0.87 0 0)",
+          "chart-2": "oklch(0.556 0 0)",
+          "chart-3": "oklch(0.439 0 0)",
+          "chart-4": "oklch(0.371 0 0)",
+          "chart-5": "oklch(0.269 0 0)",
+          "radius": "0.625rem",
+          "sidebar": "oklch(0.985 0 0)",
+          "sidebar-foreground": "oklch(0.145 0 0)",
+          "sidebar-primary": "oklch(0.205 0 0)",
+          "sidebar-primary-foreground": "oklch(0.985 0 0)",
+          "sidebar-accent": "oklch(0.97 0 0)",
+          "sidebar-accent-foreground": "oklch(0.205 0 0)",
+          "sidebar-border": "oklch(0.922 0 0)",
+          "sidebar-ring": "oklch(0.708 0 0)"
+        },
+        "dark": {
+          "background": "oklch(0.145 0 0)",
+          "foreground": "oklch(0.985 0 0)",
+          "card": "oklch(0.205 0 0)",
+          "card-foreground": "oklch(0.985 0 0)",
+          "popover": "oklch(0.205 0 0)",
+          "popover-foreground": "oklch(0.985 0 0)",
+          "primary": "oklch(0.922 0 0)",
+          "primary-foreground": "oklch(0.205 0 0)",
+          "secondary": "oklch(0.269 0 0)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "muted": "oklch(0.269 0 0)",
+          "muted-foreground": "oklch(0.708 0 0)",
+          "accent": "oklch(0.269 0 0)",
+          "accent-foreground": "oklch(0.985 0 0)",
+          "destructive": "oklch(0.704 0.191 22.216)",
+          "border": "oklch(1 0 0 / 10%)",
+          "input": "oklch(1 0 0 / 15%)",
+          "ring": "oklch(0.556 0 0)",
+          "chart-1": "oklch(0.87 0 0)",
+          "chart-2": "oklch(0.556 0 0)",
+          "chart-3": "oklch(0.439 0 0)",
+          "chart-4": "oklch(0.371 0 0)",
+          "chart-5": "oklch(0.269 0 0)",
+          "sidebar": "oklch(0.205 0 0)",
+          "sidebar-foreground": "oklch(0.985 0 0)",
+          "sidebar-primary": "oklch(0.488 0.243 264.376)",
+          "sidebar-primary-foreground": "oklch(0.985 0 0)",
+          "sidebar-accent": "oklch(0.269 0 0)",
+          "sidebar-accent-foreground": "oklch(0.985 0 0)",
+          "sidebar-border": "oklch(1 0 0 / 10%)",
+          "sidebar-ring": "oklch(0.556 0 0)"
+        }
+      }
+    },
+    {
+      "id": "stone",
+      "label": "Stone",
+      "tokens": {
+        "light": {
+          "background": "oklch(1 0 0)",
+          "foreground": "oklch(0.147 0.004 49.25)",
+          "card": "oklch(1 0 0)",
+          "card-foreground": "oklch(0.147 0.004 49.25)",
+          "popover": "oklch(1 0 0)",
+          "popover-foreground": "oklch(0.147 0.004 49.25)",
+          "primary": "oklch(0.216 0.006 56.043)",
+          "primary-foreground": "oklch(0.985 0.001 106.423)",
+          "secondary": "oklch(0.97 0.001 106.424)",
+          "secondary-foreground": "oklch(0.216 0.006 56.043)",
+          "muted": "oklch(0.97 0.001 106.424)",
+          "muted-foreground": "oklch(0.553 0.013 58.071)",
+          "accent": "oklch(0.97 0.001 106.424)",
+          "accent-foreground": "oklch(0.216 0.006 56.043)",
+          "destructive": "oklch(0.577 0.245 27.325)",
+          "border": "oklch(0.923 0.003 48.717)",
+          "input": "oklch(0.923 0.003 48.717)",
+          "ring": "oklch(0.709 0.01 56.259)",
+          "chart-1": "oklch(0.869 0.005 56.366)",
+          "chart-2": "oklch(0.553 0.013 58.071)",
+          "chart-3": "oklch(0.444 0.011 73.639)",
+          "chart-4": "oklch(0.374 0.01 67.558)",
+          "chart-5": "oklch(0.268 0.007 34.298)",
+          "radius": "0.625rem",
+          "sidebar": "oklch(0.985 0.001 106.423)",
+          "sidebar-foreground": "oklch(0.147 0.004 49.25)",
+          "sidebar-primary": "oklch(0.216 0.006 56.043)",
+          "sidebar-primary-foreground": "oklch(0.985 0.001 106.423)",
+          "sidebar-accent": "oklch(0.97 0.001 106.424)",
+          "sidebar-accent-foreground": "oklch(0.216 0.006 56.043)",
+          "sidebar-border": "oklch(0.923 0.003 48.717)",
+          "sidebar-ring": "oklch(0.709 0.01 56.259)"
+        },
+        "dark": {
+          "background": "oklch(0.147 0.004 49.25)",
+          "foreground": "oklch(0.985 0.001 106.423)",
+          "card": "oklch(0.216 0.006 56.043)",
+          "card-foreground": "oklch(0.985 0.001 106.423)",
+          "popover": "oklch(0.216 0.006 56.043)",
+          "popover-foreground": "oklch(0.985 0.001 106.423)",
+          "primary": "oklch(0.923 0.003 48.717)",
+          "primary-foreground": "oklch(0.216 0.006 56.043)",
+          "secondary": "oklch(0.268 0.007 34.298)",
+          "secondary-foreground": "oklch(0.985 0.001 106.423)",
+          "muted": "oklch(0.268 0.007 34.298)",
+          "muted-foreground": "oklch(0.709 0.01 56.259)",
+          "accent": "oklch(0.268 0.007 34.298)",
+          "accent-foreground": "oklch(0.985 0.001 106.423)",
+          "destructive": "oklch(0.704 0.191 22.216)",
+          "border": "oklch(1 0 0 / 10%)",
+          "input": "oklch(1 0 0 / 15%)",
+          "ring": "oklch(0.553 0.013 58.071)",
+          "chart-1": "oklch(0.869 0.005 56.366)",
+          "chart-2": "oklch(0.553 0.013 58.071)",
+          "chart-3": "oklch(0.444 0.011 73.639)",
+          "chart-4": "oklch(0.374 0.01 67.558)",
+          "chart-5": "oklch(0.268 0.007 34.298)",
+          "sidebar": "oklch(0.216 0.006 56.043)",
+          "sidebar-foreground": "oklch(0.985 0.001 106.423)",
+          "sidebar-primary": "oklch(0.488 0.243 264.376)",
+          "sidebar-primary-foreground": "oklch(0.985 0.001 106.423)",
+          "sidebar-accent": "oklch(0.268 0.007 34.298)",
+          "sidebar-accent-foreground": "oklch(0.985 0.001 106.423)",
+          "sidebar-border": "oklch(1 0 0 / 10%)",
+          "sidebar-ring": "oklch(0.553 0.013 58.071)"
+        }
+      }
+    },
+    {
+      "id": "zinc",
+      "label": "Zinc",
+      "tokens": {
+        "light": {
+          "background": "oklch(1 0 0)",
+          "foreground": "oklch(0.141 0.005 285.823)",
+          "card": "oklch(1 0 0)",
+          "card-foreground": "oklch(0.141 0.005 285.823)",
+          "popover": "oklch(1 0 0)",
+          "popover-foreground": "oklch(0.141 0.005 285.823)",
+          "primary": "oklch(0.21 0.006 285.885)",
+          "primary-foreground": "oklch(0.985 0 0)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "muted": "oklch(0.967 0.001 286.375)",
+          "muted-foreground": "oklch(0.552 0.016 285.938)",
+          "accent": "oklch(0.967 0.001 286.375)",
+          "accent-foreground": "oklch(0.21 0.006 285.885)",
+          "destructive": "oklch(0.577 0.245 27.325)",
+          "border": "oklch(0.92 0.004 286.32)",
+          "input": "oklch(0.92 0.004 286.32)",
+          "ring": "oklch(0.705 0.015 286.067)",
+          "chart-1": "oklch(0.871 0.006 286.286)",
+          "chart-2": "oklch(0.552 0.016 285.938)",
+          "chart-3": "oklch(0.442 0.017 285.786)",
+          "chart-4": "oklch(0.37 0.013 285.805)",
+          "chart-5": "oklch(0.274 0.006 286.033)",
+          "radius": "0.625rem",
+          "sidebar": "oklch(0.985 0 0)",
+          "sidebar-foreground": "oklch(0.141 0.005 285.823)",
+          "sidebar-primary": "oklch(0.21 0.006 285.885)",
+          "sidebar-primary-foreground": "oklch(0.985 0 0)",
+          "sidebar-accent": "oklch(0.967 0.001 286.375)",
+          "sidebar-accent-foreground": "oklch(0.21 0.006 285.885)",
+          "sidebar-border": "oklch(0.92 0.004 286.32)",
+          "sidebar-ring": "oklch(0.705 0.015 286.067)"
+        },
+        "dark": {
+          "background": "oklch(0.141 0.005 285.823)",
+          "foreground": "oklch(0.985 0 0)",
+          "card": "oklch(0.21 0.006 285.885)",
+          "card-foreground": "oklch(0.985 0 0)",
+          "popover": "oklch(0.21 0.006 285.885)",
+          "popover-foreground": "oklch(0.985 0 0)",
+          "primary": "oklch(0.92 0.004 286.32)",
+          "primary-foreground": "oklch(0.21 0.006 285.885)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "muted": "oklch(0.274 0.006 286.033)",
+          "muted-foreground": "oklch(0.705 0.015 286.067)",
+          "accent": "oklch(0.274 0.006 286.033)",
+          "accent-foreground": "oklch(0.985 0 0)",
+          "destructive": "oklch(0.704 0.191 22.216)",
+          "border": "oklch(1 0 0 / 10%)",
+          "input": "oklch(1 0 0 / 15%)",
+          "ring": "oklch(0.552 0.016 285.938)",
+          "chart-1": "oklch(0.871 0.006 286.286)",
+          "chart-2": "oklch(0.552 0.016 285.938)",
+          "chart-3": "oklch(0.442 0.017 285.786)",
+          "chart-4": "oklch(0.37 0.013 285.805)",
+          "chart-5": "oklch(0.274 0.006 286.033)",
+          "sidebar": "oklch(0.21 0.006 285.885)",
+          "sidebar-foreground": "oklch(0.985 0 0)",
+          "sidebar-primary": "oklch(0.488 0.243 264.376)",
+          "sidebar-primary-foreground": "oklch(0.985 0 0)",
+          "sidebar-accent": "oklch(0.274 0.006 286.033)",
+          "sidebar-accent-foreground": "oklch(0.985 0 0)",
+          "sidebar-border": "oklch(1 0 0 / 10%)",
+          "sidebar-ring": "oklch(0.552 0.016 285.938)"
+        }
+      }
+    },
+    {
+      "id": "gray",
+      "label": "Gray",
+      "tokens": {
+        "light": {
+          "background": "oklch(1 0 0)",
+          "foreground": "oklch(0.13 0.028 261.692)",
+          "card": "oklch(1 0 0)",
+          "card-foreground": "oklch(0.13 0.028 261.692)",
+          "popover": "oklch(1 0 0)",
+          "popover-foreground": "oklch(0.13 0.028 261.692)",
+          "primary": "oklch(0.21 0.034 264.665)",
+          "primary-foreground": "oklch(0.985 0.002 247.839)",
+          "secondary": "oklch(0.967 0.003 264.542)",
+          "secondary-foreground": "oklch(0.21 0.034 264.665)",
+          "muted": "oklch(0.967 0.003 264.542)",
+          "muted-foreground": "oklch(0.551 0.027 264.364)",
+          "accent": "oklch(0.967 0.003 264.542)",
+          "accent-foreground": "oklch(0.21 0.034 264.665)",
+          "destructive": "oklch(0.577 0.245 27.325)",
+          "border": "oklch(0.928 0.006 264.531)",
+          "input": "oklch(0.928 0.006 264.531)",
+          "ring": "oklch(0.707 0.022 261.325)",
+          "chart-1": "oklch(0.646 0.222 41.116)",
+          "chart-2": "oklch(0.6 0.118 184.704)",
+          "chart-3": "oklch(0.398 0.07 227.392)",
+          "chart-4": "oklch(0.828 0.189 84.429)",
+          "chart-5": "oklch(0.769 0.188 70.08)",
+          "radius": "0.625rem",
+          "sidebar": "oklch(0.985 0.002 247.839)",
+          "sidebar-foreground": "oklch(0.13 0.028 261.692)",
+          "sidebar-primary": "oklch(0.21 0.034 264.665)",
+          "sidebar-primary-foreground": "oklch(0.985 0.002 247.839)",
+          "sidebar-accent": "oklch(0.967 0.003 264.542)",
+          "sidebar-accent-foreground": "oklch(0.21 0.034 264.665)",
+          "sidebar-border": "oklch(0.928 0.006 264.531)",
+          "sidebar-ring": "oklch(0.707 0.022 261.325)"
+        },
+        "dark": {
+          "background": "oklch(0.13 0.028 261.692)",
+          "foreground": "oklch(0.985 0.002 247.839)",
+          "card": "oklch(0.21 0.034 264.665)",
+          "card-foreground": "oklch(0.985 0.002 247.839)",
+          "popover": "oklch(0.21 0.034 264.665)",
+          "popover-foreground": "oklch(0.985 0.002 247.839)",
+          "primary": "oklch(0.928 0.006 264.531)",
+          "primary-foreground": "oklch(0.21 0.034 264.665)",
+          "secondary": "oklch(0.278 0.033 256.848)",
+          "secondary-foreground": "oklch(0.985 0.002 247.839)",
+          "muted": "oklch(0.278 0.033 256.848)",
+          "muted-foreground": "oklch(0.707 0.022 261.325)",
+          "accent": "oklch(0.278 0.033 256.848)",
+          "accent-foreground": "oklch(0.985 0.002 247.839)",
+          "destructive": "oklch(0.704 0.191 22.216)",
+          "border": "oklch(1 0 0 / 10%)",
+          "input": "oklch(1 0 0 / 15%)",
+          "ring": "oklch(0.551 0.027 264.364)",
+          "chart-1": "oklch(0.488 0.243 264.376)",
+          "chart-2": "oklch(0.696 0.17 162.48)",
+          "chart-3": "oklch(0.769 0.188 70.08)",
+          "chart-4": "oklch(0.627 0.265 303.9)",
+          "chart-5": "oklch(0.645 0.246 16.439)",
+          "sidebar": "oklch(0.21 0.034 264.665)",
+          "sidebar-foreground": "oklch(0.985 0.002 247.839)",
+          "sidebar-primary": "oklch(0.488 0.243 264.376)",
+          "sidebar-primary-foreground": "oklch(0.985 0.002 247.839)",
+          "sidebar-accent": "oklch(0.278 0.033 256.848)",
+          "sidebar-accent-foreground": "oklch(0.985 0.002 247.839)",
+          "sidebar-border": "oklch(1 0 0 / 10%)",
+          "sidebar-ring": "oklch(0.551 0.027 264.364)"
+        }
+      }
+    },
+    {
+      "id": "amber",
+      "label": "Amber",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.555 0.163 48.998)",
+          "primary-foreground": "oklch(0.987 0.022 95.277)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.879 0.169 91.605)",
+          "chart-2": "oklch(0.769 0.188 70.08)",
+          "chart-3": "oklch(0.666 0.179 58.318)",
+          "chart-4": "oklch(0.555 0.163 48.998)",
+          "chart-5": "oklch(0.473 0.137 46.201)"
+        },
+        "dark": {
+          "primary": "oklch(0.473 0.137 46.201)",
+          "primary-foreground": "oklch(0.987 0.022 95.277)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.879 0.169 91.605)",
+          "chart-2": "oklch(0.769 0.188 70.08)",
+          "chart-3": "oklch(0.666 0.179 58.318)",
+          "chart-4": "oklch(0.555 0.163 48.998)",
+          "chart-5": "oklch(0.473 0.137 46.201)"
+        }
+      }
+    },
+    {
+      "id": "blue",
+      "label": "Blue",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.488 0.243 264.376)",
+          "primary-foreground": "oklch(0.97 0.014 254.604)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.809 0.105 251.813)",
+          "chart-2": "oklch(0.623 0.214 259.815)",
+          "chart-3": "oklch(0.546 0.245 262.881)",
+          "chart-4": "oklch(0.488 0.243 264.376)",
+          "chart-5": "oklch(0.424 0.199 265.638)"
+        },
+        "dark": {
+          "primary": "oklch(0.424 0.199 265.638)",
+          "primary-foreground": "oklch(0.97 0.014 254.604)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.809 0.105 251.813)",
+          "chart-2": "oklch(0.623 0.214 259.815)",
+          "chart-3": "oklch(0.546 0.245 262.881)",
+          "chart-4": "oklch(0.488 0.243 264.376)",
+          "chart-5": "oklch(0.424 0.199 265.638)"
+        }
+      }
+    },
+    {
+      "id": "cyan",
+      "label": "Cyan",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.52 0.105 223.128)",
+          "primary-foreground": "oklch(0.984 0.019 200.873)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.865 0.127 207.078)",
+          "chart-2": "oklch(0.715 0.143 215.221)",
+          "chart-3": "oklch(0.609 0.126 221.723)",
+          "chart-4": "oklch(0.52 0.105 223.128)",
+          "chart-5": "oklch(0.45 0.085 224.283)"
+        },
+        "dark": {
+          "primary": "oklch(0.45 0.085 224.283)",
+          "primary-foreground": "oklch(0.984 0.019 200.873)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.865 0.127 207.078)",
+          "chart-2": "oklch(0.715 0.143 215.221)",
+          "chart-3": "oklch(0.609 0.126 221.723)",
+          "chart-4": "oklch(0.52 0.105 223.128)",
+          "chart-5": "oklch(0.45 0.085 224.283)"
+        }
+      }
+    },
+    {
+      "id": "emerald",
+      "label": "Emerald",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.508 0.118 165.612)",
+          "primary-foreground": "oklch(0.979 0.021 166.113)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.845 0.143 164.978)",
+          "chart-2": "oklch(0.696 0.17 162.48)",
+          "chart-3": "oklch(0.596 0.145 163.225)",
+          "chart-4": "oklch(0.508 0.118 165.612)",
+          "chart-5": "oklch(0.432 0.095 166.913)"
+        },
+        "dark": {
+          "primary": "oklch(0.432 0.095 166.913)",
+          "primary-foreground": "oklch(0.979 0.021 166.113)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.845 0.143 164.978)",
+          "chart-2": "oklch(0.696 0.17 162.48)",
+          "chart-3": "oklch(0.596 0.145 163.225)",
+          "chart-4": "oklch(0.508 0.118 165.612)",
+          "chart-5": "oklch(0.432 0.095 166.913)"
+        }
+      }
+    },
+    {
+      "id": "fuchsia",
+      "label": "Fuchsia",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.518 0.253 323.949)",
+          "primary-foreground": "oklch(0.977 0.017 320.058)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.833 0.145 321.434)",
+          "chart-2": "oklch(0.667 0.295 322.15)",
+          "chart-3": "oklch(0.591 0.293 322.896)",
+          "chart-4": "oklch(0.518 0.253 323.949)",
+          "chart-5": "oklch(0.452 0.211 324.591)"
+        },
+        "dark": {
+          "primary": "oklch(0.452 0.211 324.591)",
+          "primary-foreground": "oklch(0.977 0.017 320.058)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.833 0.145 321.434)",
+          "chart-2": "oklch(0.667 0.295 322.15)",
+          "chart-3": "oklch(0.591 0.293 322.896)",
+          "chart-4": "oklch(0.518 0.253 323.949)",
+          "chart-5": "oklch(0.452 0.211 324.591)"
+        }
+      }
+    },
+    {
+      "id": "green",
+      "label": "Green",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.527 0.154 150.069)",
+          "primary-foreground": "oklch(0.982 0.018 155.826)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.871 0.15 154.449)",
+          "chart-2": "oklch(0.723 0.219 149.579)",
+          "chart-3": "oklch(0.627 0.194 149.214)",
+          "chart-4": "oklch(0.527 0.154 150.069)",
+          "chart-5": "oklch(0.448 0.119 151.328)"
+        },
+        "dark": {
+          "primary": "oklch(0.448 0.119 151.328)",
+          "primary-foreground": "oklch(0.982 0.018 155.826)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.871 0.15 154.449)",
+          "chart-2": "oklch(0.723 0.219 149.579)",
+          "chart-3": "oklch(0.627 0.194 149.214)",
+          "chart-4": "oklch(0.527 0.154 150.069)",
+          "chart-5": "oklch(0.448 0.119 151.328)"
+        }
+      }
+    },
+    {
+      "id": "indigo",
+      "label": "Indigo",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.457 0.24 277.023)",
+          "primary-foreground": "oklch(0.962 0.018 272.314)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.785 0.115 274.713)",
+          "chart-2": "oklch(0.585 0.233 277.117)",
+          "chart-3": "oklch(0.511 0.262 276.966)",
+          "chart-4": "oklch(0.457 0.24 277.023)",
+          "chart-5": "oklch(0.398 0.195 277.366)"
+        },
+        "dark": {
+          "primary": "oklch(0.398 0.195 277.366)",
+          "primary-foreground": "oklch(0.962 0.018 272.314)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.785 0.115 274.713)",
+          "chart-2": "oklch(0.585 0.233 277.117)",
+          "chart-3": "oklch(0.511 0.262 276.966)",
+          "chart-4": "oklch(0.457 0.24 277.023)",
+          "chart-5": "oklch(0.398 0.195 277.366)"
+        }
+      }
+    },
+    {
+      "id": "lime",
+      "label": "Lime",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.841 0.238 128.85)",
+          "primary-foreground": "oklch(0.405 0.101 131.063)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.897 0.196 126.665)",
+          "chart-2": "oklch(0.768 0.233 130.85)",
+          "chart-3": "oklch(0.648 0.2 131.684)",
+          "chart-4": "oklch(0.532 0.157 131.589)",
+          "chart-5": "oklch(0.453 0.124 130.933)"
+        },
+        "dark": {
+          "primary": "oklch(0.768 0.233 130.85)",
+          "primary-foreground": "oklch(0.405 0.101 131.063)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.897 0.196 126.665)",
+          "chart-2": "oklch(0.768 0.233 130.85)",
+          "chart-3": "oklch(0.648 0.2 131.684)",
+          "chart-4": "oklch(0.532 0.157 131.589)",
+          "chart-5": "oklch(0.453 0.124 130.933)"
+        }
+      }
+    },
+    {
+      "id": "orange",
+      "label": "Orange",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.553 0.195 38.402)",
+          "primary-foreground": "oklch(0.98 0.016 73.684)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.837 0.128 66.29)",
+          "chart-2": "oklch(0.705 0.213 47.604)",
+          "chart-3": "oklch(0.646 0.222 41.116)",
+          "chart-4": "oklch(0.553 0.195 38.402)",
+          "chart-5": "oklch(0.47 0.157 37.304)"
+        },
+        "dark": {
+          "primary": "oklch(0.47 0.157 37.304)",
+          "primary-foreground": "oklch(0.98 0.016 73.684)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.837 0.128 66.29)",
+          "chart-2": "oklch(0.705 0.213 47.604)",
+          "chart-3": "oklch(0.646 0.222 41.116)",
+          "chart-4": "oklch(0.553 0.195 38.402)",
+          "chart-5": "oklch(0.47 0.157 37.304)"
+        }
+      }
+    },
+    {
+      "id": "pink",
+      "label": "Pink",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.525 0.223 3.958)",
+          "primary-foreground": "oklch(0.971 0.014 343.198)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.823 0.12 346.018)",
+          "chart-2": "oklch(0.656 0.241 354.308)",
+          "chart-3": "oklch(0.592 0.249 0.584)",
+          "chart-4": "oklch(0.525 0.223 3.958)",
+          "chart-5": "oklch(0.459 0.187 3.815)"
+        },
+        "dark": {
+          "primary": "oklch(0.459 0.187 3.815)",
+          "primary-foreground": "oklch(0.971 0.014 343.198)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.823 0.12 346.018)",
+          "chart-2": "oklch(0.656 0.241 354.308)",
+          "chart-3": "oklch(0.592 0.249 0.584)",
+          "chart-4": "oklch(0.525 0.223 3.958)",
+          "chart-5": "oklch(0.459 0.187 3.815)"
+        }
+      }
+    },
+    {
+      "id": "purple",
+      "label": "Purple",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.496 0.265 301.924)",
+          "primary-foreground": "oklch(0.977 0.014 308.299)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.827 0.119 306.383)",
+          "chart-2": "oklch(0.627 0.265 303.9)",
+          "chart-3": "oklch(0.558 0.288 302.321)",
+          "chart-4": "oklch(0.496 0.265 301.924)",
+          "chart-5": "oklch(0.438 0.218 303.724)"
+        },
+        "dark": {
+          "primary": "oklch(0.438 0.218 303.724)",
+          "primary-foreground": "oklch(0.977 0.014 308.299)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.827 0.119 306.383)",
+          "chart-2": "oklch(0.627 0.265 303.9)",
+          "chart-3": "oklch(0.558 0.288 302.321)",
+          "chart-4": "oklch(0.496 0.265 301.924)",
+          "chart-5": "oklch(0.438 0.218 303.724)"
+        }
+      }
+    },
+    {
+      "id": "red",
+      "label": "Red",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.505 0.213 27.518)",
+          "primary-foreground": "oklch(0.971 0.013 17.38)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.808 0.114 19.571)",
+          "chart-2": "oklch(0.637 0.237 25.331)",
+          "chart-3": "oklch(0.577 0.245 27.325)",
+          "chart-4": "oklch(0.505 0.213 27.518)",
+          "chart-5": "oklch(0.444 0.177 26.899)"
+        },
+        "dark": {
+          "primary": "oklch(0.444 0.177 26.899)",
+          "primary-foreground": "oklch(0.971 0.013 17.38)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.808 0.114 19.571)",
+          "chart-2": "oklch(0.637 0.237 25.331)",
+          "chart-3": "oklch(0.577 0.245 27.325)",
+          "chart-4": "oklch(0.505 0.213 27.518)",
+          "chart-5": "oklch(0.444 0.177 26.899)"
+        }
+      }
+    },
+    {
+      "id": "rose",
+      "label": "Rose",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.514 0.222 16.935)",
+          "primary-foreground": "oklch(0.969 0.015 12.422)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.81 0.117 11.638)",
+          "chart-2": "oklch(0.645 0.246 16.439)",
+          "chart-3": "oklch(0.586 0.253 17.585)",
+          "chart-4": "oklch(0.514 0.222 16.935)",
+          "chart-5": "oklch(0.455 0.188 13.697)"
+        },
+        "dark": {
+          "primary": "oklch(0.455 0.188 13.697)",
+          "primary-foreground": "oklch(0.969 0.015 12.422)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.81 0.117 11.638)",
+          "chart-2": "oklch(0.645 0.246 16.439)",
+          "chart-3": "oklch(0.586 0.253 17.585)",
+          "chart-4": "oklch(0.514 0.222 16.935)",
+          "chart-5": "oklch(0.455 0.188 13.697)"
+        }
+      }
+    },
+    {
+      "id": "sky",
+      "label": "Sky",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.5 0.134 242.749)",
+          "primary-foreground": "oklch(0.977 0.013 236.62)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.828 0.111 230.318)",
+          "chart-2": "oklch(0.685 0.169 237.323)",
+          "chart-3": "oklch(0.588 0.158 241.966)",
+          "chart-4": "oklch(0.5 0.134 242.749)",
+          "chart-5": "oklch(0.443 0.11 240.79)"
+        },
+        "dark": {
+          "primary": "oklch(0.443 0.11 240.79)",
+          "primary-foreground": "oklch(0.977 0.013 236.62)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.828 0.111 230.318)",
+          "chart-2": "oklch(0.685 0.169 237.323)",
+          "chart-3": "oklch(0.588 0.158 241.966)",
+          "chart-4": "oklch(0.5 0.134 242.749)",
+          "chart-5": "oklch(0.443 0.11 240.79)"
+        }
+      }
+    },
+    {
+      "id": "teal",
+      "label": "Teal",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.511 0.096 186.391)",
+          "primary-foreground": "oklch(0.984 0.014 180.72)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.855 0.138 181.071)",
+          "chart-2": "oklch(0.704 0.14 182.503)",
+          "chart-3": "oklch(0.6 0.118 184.704)",
+          "chart-4": "oklch(0.511 0.096 186.391)",
+          "chart-5": "oklch(0.437 0.078 188.216)"
+        },
+        "dark": {
+          "primary": "oklch(0.437 0.078 188.216)",
+          "primary-foreground": "oklch(0.984 0.014 180.72)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.855 0.138 181.071)",
+          "chart-2": "oklch(0.704 0.14 182.503)",
+          "chart-3": "oklch(0.6 0.118 184.704)",
+          "chart-4": "oklch(0.511 0.096 186.391)",
+          "chart-5": "oklch(0.437 0.078 188.216)"
+        }
+      }
+    },
+    {
+      "id": "violet",
+      "label": "Violet",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.491 0.27 292.581)",
+          "primary-foreground": "oklch(0.969 0.016 293.756)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.811 0.111 293.571)",
+          "chart-2": "oklch(0.606 0.25 292.717)",
+          "chart-3": "oklch(0.541 0.281 293.009)",
+          "chart-4": "oklch(0.491 0.27 292.581)",
+          "chart-5": "oklch(0.432 0.232 292.759)"
+        },
+        "dark": {
+          "primary": "oklch(0.432 0.232 292.759)",
+          "primary-foreground": "oklch(0.969 0.016 293.756)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.811 0.111 293.571)",
+          "chart-2": "oklch(0.606 0.25 292.717)",
+          "chart-3": "oklch(0.541 0.281 293.009)",
+          "chart-4": "oklch(0.491 0.27 292.581)",
+          "chart-5": "oklch(0.432 0.232 292.759)"
+        }
+      }
+    },
+    {
+      "id": "yellow",
+      "label": "Yellow",
+      "tokens": {
+        "light": {
+          "primary": "oklch(0.852 0.199 91.936)",
+          "primary-foreground": "oklch(0.421 0.095 57.708)",
+          "secondary": "oklch(0.967 0.001 286.375)",
+          "secondary-foreground": "oklch(0.21 0.006 285.885)",
+          "chart-1": "oklch(0.905 0.182 98.111)",
+          "chart-2": "oklch(0.795 0.184 86.047)",
+          "chart-3": "oklch(0.681 0.162 75.834)",
+          "chart-4": "oklch(0.554 0.135 66.442)",
+          "chart-5": "oklch(0.476 0.114 61.907)"
+        },
+        "dark": {
+          "primary": "oklch(0.795 0.184 86.047)",
+          "primary-foreground": "oklch(0.421 0.095 57.708)",
+          "secondary": "oklch(0.274 0.006 286.033)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "chart-1": "oklch(0.905 0.182 98.111)",
+          "chart-2": "oklch(0.795 0.184 86.047)",
+          "chart-3": "oklch(0.681 0.162 75.834)",
+          "chart-4": "oklch(0.554 0.135 66.442)",
+          "chart-5": "oklch(0.476 0.114 61.907)"
+        }
+      }
+    },
+    {
+      "id": "mauve",
+      "label": "Mauve",
+      "tokens": {
+        "light": {
+          "background": "oklch(1 0 0)",
+          "foreground": "oklch(0.145 0.008 326)",
+          "card": "oklch(1 0 0)",
+          "card-foreground": "oklch(0.145 0.008 326)",
+          "popover": "oklch(1 0 0)",
+          "popover-foreground": "oklch(0.145 0.008 326)",
+          "primary": "oklch(0.212 0.019 322.12)",
+          "primary-foreground": "oklch(0.985 0 0)",
+          "secondary": "oklch(0.96 0.003 325.6)",
+          "secondary-foreground": "oklch(0.212 0.019 322.12)",
+          "muted": "oklch(0.96 0.003 325.6)",
+          "muted-foreground": "oklch(0.542 0.034 322.5)",
+          "accent": "oklch(0.96 0.003 325.6)",
+          "accent-foreground": "oklch(0.212 0.019 322.12)",
+          "destructive": "oklch(0.577 0.245 27.325)",
+          "border": "oklch(0.922 0.005 325.62)",
+          "input": "oklch(0.922 0.005 325.62)",
+          "ring": "oklch(0.711 0.019 323.02)",
+          "chart-1": "oklch(0.865 0.012 325.68)",
+          "chart-2": "oklch(0.542 0.034 322.5)",
+          "chart-3": "oklch(0.435 0.029 321.78)",
+          "chart-4": "oklch(0.364 0.029 323.89)",
+          "chart-5": "oklch(0.263 0.024 320.12)",
+          "radius": "0.625rem",
+          "sidebar": "oklch(0.985 0 0)",
+          "sidebar-foreground": "oklch(0.145 0.008 326)",
+          "sidebar-primary": "oklch(0.212 0.019 322.12)",
+          "sidebar-primary-foreground": "oklch(0.985 0 0)",
+          "sidebar-accent": "oklch(0.96 0.003 325.6)",
+          "sidebar-accent-foreground": "oklch(0.212 0.019 322.12)",
+          "sidebar-border": "oklch(0.922 0.005 325.62)",
+          "sidebar-ring": "oklch(0.711 0.019 323.02)"
+        },
+        "dark": {
+          "background": "oklch(0.145 0.008 326)",
+          "foreground": "oklch(0.985 0 0)",
+          "card": "oklch(0.212 0.019 322.12)",
+          "card-foreground": "oklch(0.985 0 0)",
+          "popover": "oklch(0.212 0.019 322.12)",
+          "popover-foreground": "oklch(0.985 0 0)",
+          "primary": "oklch(0.922 0.005 325.62)",
+          "primary-foreground": "oklch(0.212 0.019 322.12)",
+          "secondary": "oklch(0.263 0.024 320.12)",
+          "secondary-foreground": "oklch(0.985 0 0)",
+          "muted": "oklch(0.263 0.024 320.12)",
+          "muted-foreground": "oklch(0.711 0.019 323.02)",
+          "accent": "oklch(0.263 0.024 320.12)",
+          "accent-foreground": "oklch(0.985 0 0)",
+          "destructive": "oklch(0.704 0.191 22.216)",
+          "border": "oklch(1 0 0 / 10%)",
+          "input": "oklch(1 0 0 / 15%)",
+          "ring": "oklch(0.542 0.034 322.5)",
+          "chart-1": "oklch(0.865 0.012 325.68)",
+          "chart-2": "oklch(0.542 0.034 322.5)",
+          "chart-3": "oklch(0.435 0.029 321.78)",
+          "chart-4": "oklch(0.364 0.029 323.89)",
+          "chart-5": "oklch(0.263 0.024 320.12)",
+          "sidebar": "oklch(0.212 0.019 322.12)",
+          "sidebar-foreground": "oklch(0.985 0 0)",
+          "sidebar-primary": "oklch(0.488 0.243 264.376)",
+          "sidebar-primary-foreground": "oklch(0.985 0 0)",
+          "sidebar-accent": "oklch(0.263 0.024 320.12)",
+          "sidebar-accent-foreground": "oklch(0.985 0 0)",
+          "sidebar-border": "oklch(1 0 0 / 10%)",
+          "sidebar-ring": "oklch(0.542 0.034 322.5)"
+        }
+      }
+    },
+    {
+      "id": "olive",
+      "label": "Olive",
+      "tokens": {
+        "light": {
+          "background": "oklch(1 0 0)",
+          "foreground": "oklch(0.153 0.006 107.1)",
+          "card": "oklch(1 0 0)",
+          "card-foreground": "oklch(0.153 0.006 107.1)",
+          "popover": "oklch(1 0 0)",
+          "popover-foreground": "oklch(0.153 0.006 107.1)",
+          "primary": "oklch(0.228 0.013 107.4)",
+          "primary-foreground": "oklch(0.988 0.003 106.5)",
+          "secondary": "oklch(0.966 0.005 106.5)",
+          "secondary-foreground": "oklch(0.228 0.013 107.4)",
+          "muted": "oklch(0.966 0.005 106.5)",
+          "muted-foreground": "oklch(0.58 0.031 107.3)",
+          "accent": "oklch(0.966 0.005 106.5)",
+          "accent-foreground": "oklch(0.228 0.013 107.4)",
+          "destructive": "oklch(0.577 0.245 27.325)",
+          "border": "oklch(0.93 0.007 106.5)",
+          "input": "oklch(0.93 0.007 106.5)",
+          "ring": "oklch(0.737 0.021 106.9)",
+          "chart-1": "oklch(0.88 0.011 106.6)",
+          "chart-2": "oklch(0.58 0.031 107.3)",
+          "chart-3": "oklch(0.466 0.025 107.3)",
+          "chart-4": "oklch(0.394 0.023 107.4)",
+          "chart-5": "oklch(0.286 0.016 107.4)",
+          "radius": "0.625rem",
+          "sidebar": "oklch(0.988 0.003 106.5)",
+          "sidebar-foreground": "oklch(0.153 0.006 107.1)",
+          "sidebar-primary": "oklch(0.228 0.013 107.4)",
+          "sidebar-primary-foreground": "oklch(0.988 0.003 106.5)",
+          "sidebar-accent": "oklch(0.966 0.005 106.5)",
+          "sidebar-accent-foreground": "oklch(0.228 0.013 107.4)",
+          "sidebar-border": "oklch(0.93 0.007 106.5)",
+          "sidebar-ring": "oklch(0.737 0.021 106.9)"
+        },
+        "dark": {
+          "background": "oklch(0.153 0.006 107.1)",
+          "foreground": "oklch(0.988 0.003 106.5)",
+          "card": "oklch(0.228 0.013 107.4)",
+          "card-foreground": "oklch(0.988 0.003 106.5)",
+          "popover": "oklch(0.228 0.013 107.4)",
+          "popover-foreground": "oklch(0.988 0.003 106.5)",
+          "primary": "oklch(0.93 0.007 106.5)",
+          "primary-foreground": "oklch(0.228 0.013 107.4)",
+          "secondary": "oklch(0.286 0.016 107.4)",
+          "secondary-foreground": "oklch(0.988 0.003 106.5)",
+          "muted": "oklch(0.286 0.016 107.4)",
+          "muted-foreground": "oklch(0.737 0.021 106.9)",
+          "accent": "oklch(0.286 0.016 107.4)",
+          "accent-foreground": "oklch(0.988 0.003 106.5)",
+          "destructive": "oklch(0.704 0.191 22.216)",
+          "border": "oklch(1 0 0 / 10%)",
+          "input": "oklch(1 0 0 / 15%)",
+          "ring": "oklch(0.58 0.031 107.3)",
+          "chart-1": "oklch(0.88 0.011 106.6)",
+          "chart-2": "oklch(0.58 0.031 107.3)",
+          "chart-3": "oklch(0.466 0.025 107.3)",
+          "chart-4": "oklch(0.394 0.023 107.4)",
+          "chart-5": "oklch(0.286 0.016 107.4)",
+          "sidebar": "oklch(0.228 0.013 107.4)",
+          "sidebar-foreground": "oklch(0.988 0.003 106.5)",
+          "sidebar-primary": "oklch(0.488 0.243 264.376)",
+          "sidebar-primary-foreground": "oklch(0.988 0.003 106.5)",
+          "sidebar-accent": "oklch(0.286 0.016 107.4)",
+          "sidebar-accent-foreground": "oklch(0.988 0.003 106.5)",
+          "sidebar-border": "oklch(1 0 0 / 10%)",
+          "sidebar-ring": "oklch(0.58 0.031 107.3)"
+        }
+      }
+    },
+    {
+      "id": "mist",
+      "label": "Mist",
+      "tokens": {
+        "light": {
+          "background": "oklch(1 0 0)",
+          "foreground": "oklch(0.148 0.004 228.8)",
+          "card": "oklch(1 0 0)",
+          "card-foreground": "oklch(0.148 0.004 228.8)",
+          "popover": "oklch(1 0 0)",
+          "popover-foreground": "oklch(0.148 0.004 228.8)",
+          "primary": "oklch(0.218 0.008 223.9)",
+          "primary-foreground": "oklch(0.987 0.002 197.1)",
+          "secondary": "oklch(0.963 0.002 197.1)",
+          "secondary-foreground": "oklch(0.218 0.008 223.9)",
+          "muted": "oklch(0.963 0.002 197.1)",
+          "muted-foreground": "oklch(0.56 0.021 213.5)",
+          "accent": "oklch(0.963 0.002 197.1)",
+          "accent-foreground": "oklch(0.218 0.008 223.9)",
+          "destructive": "oklch(0.577 0.245 27.325)",
+          "border": "oklch(0.925 0.005 214.3)",
+          "input": "oklch(0.925 0.005 214.3)",
+          "ring": "oklch(0.723 0.014 214.4)",
+          "chart-1": "oklch(0.872 0.007 219.6)",
+          "chart-2": "oklch(0.56 0.021 213.5)",
+          "chart-3": "oklch(0.45 0.017 213.2)",
+          "chart-4": "oklch(0.378 0.015 216)",
+          "chart-5": "oklch(0.275 0.011 216.9)",
+          "radius": "0.625rem",
+          "sidebar": "oklch(0.987 0.002 197.1)",
+          "sidebar-foreground": "oklch(0.148 0.004 228.8)",
+          "sidebar-primary": "oklch(0.218 0.008 223.9)",
+          "sidebar-primary-foreground": "oklch(0.987 0.002 197.1)",
+          "sidebar-accent": "oklch(0.963 0.002 197.1)",
+          "sidebar-accent-foreground": "oklch(0.218 0.008 223.9)",
+          "sidebar-border": "oklch(0.925 0.005 214.3)",
+          "sidebar-ring": "oklch(0.723 0.014 214.4)"
+        },
+        "dark": {
+          "background": "oklch(0.148 0.004 228.8)",
+          "foreground": "oklch(0.987 0.002 197.1)",
+          "card": "oklch(0.218 0.008 223.9)",
+          "card-foreground": "oklch(0.987 0.002 197.1)",
+          "popover": "oklch(0.218 0.008 223.9)",
+          "popover-foreground": "oklch(0.987 0.002 197.1)",
+          "primary": "oklch(0.925 0.005 214.3)",
+          "primary-foreground": "oklch(0.218 0.008 223.9)",
+          "secondary": "oklch(0.275 0.011 216.9)",
+          "secondary-foreground": "oklch(0.987 0.002 197.1)",
+          "muted": "oklch(0.275 0.011 216.9)",
+          "muted-foreground": "oklch(0.723 0.014 214.4)",
+          "accent": "oklch(0.275 0.011 216.9)",
+          "accent-foreground": "oklch(0.987 0.002 197.1)",
+          "destructive": "oklch(0.704 0.191 22.216)",
+          "border": "oklch(1 0 0 / 10%)",
+          "input": "oklch(1 0 0 / 15%)",
+          "ring": "oklch(0.56 0.021 213.5)",
+          "chart-1": "oklch(0.872 0.007 219.6)",
+          "chart-2": "oklch(0.56 0.021 213.5)",
+          "chart-3": "oklch(0.45 0.017 213.2)",
+          "chart-4": "oklch(0.378 0.015 216)",
+          "chart-5": "oklch(0.275 0.011 216.9)",
+          "sidebar": "oklch(0.218 0.008 223.9)",
+          "sidebar-foreground": "oklch(0.987 0.002 197.1)",
+          "sidebar-primary": "oklch(0.488 0.243 264.376)",
+          "sidebar-primary-foreground": "oklch(0.987 0.002 197.1)",
+          "sidebar-accent": "oklch(0.275 0.011 216.9)",
+          "sidebar-accent-foreground": "oklch(0.987 0.002 197.1)",
+          "sidebar-border": "oklch(1 0 0 / 10%)",
+          "sidebar-ring": "oklch(0.56 0.021 213.5)"
+        }
+      }
+    },
+    {
+      "id": "taupe",
+      "label": "Taupe",
+      "tokens": {
+        "light": {
+          "background": "oklch(1 0 0)",
+          "foreground": "oklch(0.147 0.004 49.3)",
+          "card": "oklch(1 0 0)",
+          "card-foreground": "oklch(0.147 0.004 49.3)",
+          "popover": "oklch(1 0 0)",
+          "popover-foreground": "oklch(0.147 0.004 49.3)",
+          "primary": "oklch(0.214 0.009 43.1)",
+          "primary-foreground": "oklch(0.986 0.002 67.8)",
+          "secondary": "oklch(0.96 0.002 17.2)",
+          "secondary-foreground": "oklch(0.214 0.009 43.1)",
+          "muted": "oklch(0.96 0.002 17.2)",
+          "muted-foreground": "oklch(0.547 0.021 43.1)",
+          "accent": "oklch(0.96 0.002 17.2)",
+          "accent-foreground": "oklch(0.214 0.009 43.1)",
+          "destructive": "oklch(0.577 0.245 27.325)",
+          "border": "oklch(0.922 0.005 34.3)",
+          "input": "oklch(0.922 0.005 34.3)",
+          "ring": "oklch(0.714 0.014 41.2)",
+          "chart-1": "oklch(0.868 0.007 39.5)",
+          "chart-2": "oklch(0.547 0.021 43.1)",
+          "chart-3": "oklch(0.438 0.017 39.3)",
+          "chart-4": "oklch(0.367 0.016 35.7)",
+          "chart-5": "oklch(0.268 0.011 36.5)",
+          "radius": "0.625rem",
+          "sidebar": "oklch(0.986 0.002 67.8)",
+          "sidebar-foreground": "oklch(0.147 0.004 49.3)",
+          "sidebar-primary": "oklch(0.214 0.009 43.1)",
+          "sidebar-primary-foreground": "oklch(0.986 0.002 67.8)",
+          "sidebar-accent": "oklch(0.96 0.002 17.2)",
+          "sidebar-accent-foreground": "oklch(0.214 0.009 43.1)",
+          "sidebar-border": "oklch(0.922 0.005 34.3)",
+          "sidebar-ring": "oklch(0.714 0.014 41.2)"
+        },
+        "dark": {
+          "background": "oklch(0.147 0.004 49.3)",
+          "foreground": "oklch(0.986 0.002 67.8)",
+          "card": "oklch(0.214 0.009 43.1)",
+          "card-foreground": "oklch(0.986 0.002 67.8)",
+          "popover": "oklch(0.214 0.009 43.1)",
+          "popover-foreground": "oklch(0.986 0.002 67.8)",
+          "primary": "oklch(0.922 0.005 34.3)",
+          "primary-foreground": "oklch(0.214 0.009 43.1)",
+          "secondary": "oklch(0.268 0.011 36.5)",
+          "secondary-foreground": "oklch(0.986 0.002 67.8)",
+          "muted": "oklch(0.268 0.011 36.5)",
+          "muted-foreground": "oklch(0.714 0.014 41.2)",
+          "accent": "oklch(0.268 0.011 36.5)",
+          "accent-foreground": "oklch(0.986 0.002 67.8)",
+          "destructive": "oklch(0.704 0.191 22.216)",
+          "border": "oklch(1 0 0 / 10%)",
+          "input": "oklch(1 0 0 / 15%)",
+          "ring": "oklch(0.547 0.021 43.1)",
+          "chart-1": "oklch(0.868 0.007 39.5)",
+          "chart-2": "oklch(0.547 0.021 43.1)",
+          "chart-3": "oklch(0.438 0.017 39.3)",
+          "chart-4": "oklch(0.367 0.016 35.7)",
+          "chart-5": "oklch(0.268 0.011 36.5)",
+          "sidebar": "oklch(0.214 0.009 43.1)",
+          "sidebar-foreground": "oklch(0.986 0.002 67.8)",
+          "sidebar-primary": "oklch(0.488 0.243 264.376)",
+          "sidebar-primary-foreground": "oklch(0.986 0.002 67.8)",
+          "sidebar-accent": "oklch(0.268 0.011 36.5)",
+          "sidebar-accent-foreground": "oklch(0.986 0.002 67.8)",
+          "sidebar-border": "oklch(1 0 0 / 10%)",
+          "sidebar-ring": "oklch(0.547 0.021 43.1)"
+        }
+      }
+    }
+  ],
+  "chartColors": [
+    {
+      "id": "neutral",
+      "label": "Neutral",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.87 0 0)",
+          "chart-2": "oklch(0.556 0 0)",
+          "chart-3": "oklch(0.439 0 0)",
+          "chart-4": "oklch(0.371 0 0)",
+          "chart-5": "oklch(0.269 0 0)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.87 0 0)",
+          "chart-2": "oklch(0.556 0 0)",
+          "chart-3": "oklch(0.439 0 0)",
+          "chart-4": "oklch(0.371 0 0)",
+          "chart-5": "oklch(0.269 0 0)"
+        }
+      }
+    },
+    {
+      "id": "stone",
+      "label": "Stone",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.869 0.005 56.366)",
+          "chart-2": "oklch(0.553 0.013 58.071)",
+          "chart-3": "oklch(0.444 0.011 73.639)",
+          "chart-4": "oklch(0.374 0.01 67.558)",
+          "chart-5": "oklch(0.268 0.007 34.298)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.869 0.005 56.366)",
+          "chart-2": "oklch(0.553 0.013 58.071)",
+          "chart-3": "oklch(0.444 0.011 73.639)",
+          "chart-4": "oklch(0.374 0.01 67.558)",
+          "chart-5": "oklch(0.268 0.007 34.298)"
+        }
+      }
+    },
+    {
+      "id": "zinc",
+      "label": "Zinc",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.871 0.006 286.286)",
+          "chart-2": "oklch(0.552 0.016 285.938)",
+          "chart-3": "oklch(0.442 0.017 285.786)",
+          "chart-4": "oklch(0.37 0.013 285.805)",
+          "chart-5": "oklch(0.274 0.006 286.033)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.871 0.006 286.286)",
+          "chart-2": "oklch(0.552 0.016 285.938)",
+          "chart-3": "oklch(0.442 0.017 285.786)",
+          "chart-4": "oklch(0.37 0.013 285.805)",
+          "chart-5": "oklch(0.274 0.006 286.033)"
+        }
+      }
+    },
+    {
+      "id": "gray",
+      "label": "Gray",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.646 0.222 41.116)",
+          "chart-2": "oklch(0.6 0.118 184.704)",
+          "chart-3": "oklch(0.398 0.07 227.392)",
+          "chart-4": "oklch(0.828 0.189 84.429)",
+          "chart-5": "oklch(0.769 0.188 70.08)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.488 0.243 264.376)",
+          "chart-2": "oklch(0.696 0.17 162.48)",
+          "chart-3": "oklch(0.769 0.188 70.08)",
+          "chart-4": "oklch(0.627 0.265 303.9)",
+          "chart-5": "oklch(0.645 0.246 16.439)"
+        }
+      }
+    },
+    {
+      "id": "amber",
+      "label": "Amber",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.879 0.169 91.605)",
+          "chart-2": "oklch(0.769 0.188 70.08)",
+          "chart-3": "oklch(0.666 0.179 58.318)",
+          "chart-4": "oklch(0.555 0.163 48.998)",
+          "chart-5": "oklch(0.473 0.137 46.201)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.879 0.169 91.605)",
+          "chart-2": "oklch(0.769 0.188 70.08)",
+          "chart-3": "oklch(0.666 0.179 58.318)",
+          "chart-4": "oklch(0.555 0.163 48.998)",
+          "chart-5": "oklch(0.473 0.137 46.201)"
+        }
+      }
+    },
+    {
+      "id": "blue",
+      "label": "Blue",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.809 0.105 251.813)",
+          "chart-2": "oklch(0.623 0.214 259.815)",
+          "chart-3": "oklch(0.546 0.245 262.881)",
+          "chart-4": "oklch(0.488 0.243 264.376)",
+          "chart-5": "oklch(0.424 0.199 265.638)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.809 0.105 251.813)",
+          "chart-2": "oklch(0.623 0.214 259.815)",
+          "chart-3": "oklch(0.546 0.245 262.881)",
+          "chart-4": "oklch(0.488 0.243 264.376)",
+          "chart-5": "oklch(0.424 0.199 265.638)"
+        }
+      }
+    },
+    {
+      "id": "cyan",
+      "label": "Cyan",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.865 0.127 207.078)",
+          "chart-2": "oklch(0.715 0.143 215.221)",
+          "chart-3": "oklch(0.609 0.126 221.723)",
+          "chart-4": "oklch(0.52 0.105 223.128)",
+          "chart-5": "oklch(0.45 0.085 224.283)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.865 0.127 207.078)",
+          "chart-2": "oklch(0.715 0.143 215.221)",
+          "chart-3": "oklch(0.609 0.126 221.723)",
+          "chart-4": "oklch(0.52 0.105 223.128)",
+          "chart-5": "oklch(0.45 0.085 224.283)"
+        }
+      }
+    },
+    {
+      "id": "emerald",
+      "label": "Emerald",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.845 0.143 164.978)",
+          "chart-2": "oklch(0.696 0.17 162.48)",
+          "chart-3": "oklch(0.596 0.145 163.225)",
+          "chart-4": "oklch(0.508 0.118 165.612)",
+          "chart-5": "oklch(0.432 0.095 166.913)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.845 0.143 164.978)",
+          "chart-2": "oklch(0.696 0.17 162.48)",
+          "chart-3": "oklch(0.596 0.145 163.225)",
+          "chart-4": "oklch(0.508 0.118 165.612)",
+          "chart-5": "oklch(0.432 0.095 166.913)"
+        }
+      }
+    },
+    {
+      "id": "fuchsia",
+      "label": "Fuchsia",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.833 0.145 321.434)",
+          "chart-2": "oklch(0.667 0.295 322.15)",
+          "chart-3": "oklch(0.591 0.293 322.896)",
+          "chart-4": "oklch(0.518 0.253 323.949)",
+          "chart-5": "oklch(0.452 0.211 324.591)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.833 0.145 321.434)",
+          "chart-2": "oklch(0.667 0.295 322.15)",
+          "chart-3": "oklch(0.591 0.293 322.896)",
+          "chart-4": "oklch(0.518 0.253 323.949)",
+          "chart-5": "oklch(0.452 0.211 324.591)"
+        }
+      }
+    },
+    {
+      "id": "green",
+      "label": "Green",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.871 0.15 154.449)",
+          "chart-2": "oklch(0.723 0.219 149.579)",
+          "chart-3": "oklch(0.627 0.194 149.214)",
+          "chart-4": "oklch(0.527 0.154 150.069)",
+          "chart-5": "oklch(0.448 0.119 151.328)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.871 0.15 154.449)",
+          "chart-2": "oklch(0.723 0.219 149.579)",
+          "chart-3": "oklch(0.627 0.194 149.214)",
+          "chart-4": "oklch(0.527 0.154 150.069)",
+          "chart-5": "oklch(0.448 0.119 151.328)"
+        }
+      }
+    },
+    {
+      "id": "indigo",
+      "label": "Indigo",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.785 0.115 274.713)",
+          "chart-2": "oklch(0.585 0.233 277.117)",
+          "chart-3": "oklch(0.511 0.262 276.966)",
+          "chart-4": "oklch(0.457 0.24 277.023)",
+          "chart-5": "oklch(0.398 0.195 277.366)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.785 0.115 274.713)",
+          "chart-2": "oklch(0.585 0.233 277.117)",
+          "chart-3": "oklch(0.511 0.262 276.966)",
+          "chart-4": "oklch(0.457 0.24 277.023)",
+          "chart-5": "oklch(0.398 0.195 277.366)"
+        }
+      }
+    },
+    {
+      "id": "lime",
+      "label": "Lime",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.897 0.196 126.665)",
+          "chart-2": "oklch(0.768 0.233 130.85)",
+          "chart-3": "oklch(0.648 0.2 131.684)",
+          "chart-4": "oklch(0.532 0.157 131.589)",
+          "chart-5": "oklch(0.453 0.124 130.933)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.897 0.196 126.665)",
+          "chart-2": "oklch(0.768 0.233 130.85)",
+          "chart-3": "oklch(0.648 0.2 131.684)",
+          "chart-4": "oklch(0.532 0.157 131.589)",
+          "chart-5": "oklch(0.453 0.124 130.933)"
+        }
+      }
+    },
+    {
+      "id": "orange",
+      "label": "Orange",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.837 0.128 66.29)",
+          "chart-2": "oklch(0.705 0.213 47.604)",
+          "chart-3": "oklch(0.646 0.222 41.116)",
+          "chart-4": "oklch(0.553 0.195 38.402)",
+          "chart-5": "oklch(0.47 0.157 37.304)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.837 0.128 66.29)",
+          "chart-2": "oklch(0.705 0.213 47.604)",
+          "chart-3": "oklch(0.646 0.222 41.116)",
+          "chart-4": "oklch(0.553 0.195 38.402)",
+          "chart-5": "oklch(0.47 0.157 37.304)"
+        }
+      }
+    },
+    {
+      "id": "pink",
+      "label": "Pink",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.823 0.12 346.018)",
+          "chart-2": "oklch(0.656 0.241 354.308)",
+          "chart-3": "oklch(0.592 0.249 0.584)",
+          "chart-4": "oklch(0.525 0.223 3.958)",
+          "chart-5": "oklch(0.459 0.187 3.815)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.823 0.12 346.018)",
+          "chart-2": "oklch(0.656 0.241 354.308)",
+          "chart-3": "oklch(0.592 0.249 0.584)",
+          "chart-4": "oklch(0.525 0.223 3.958)",
+          "chart-5": "oklch(0.459 0.187 3.815)"
+        }
+      }
+    },
+    {
+      "id": "purple",
+      "label": "Purple",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.827 0.119 306.383)",
+          "chart-2": "oklch(0.627 0.265 303.9)",
+          "chart-3": "oklch(0.558 0.288 302.321)",
+          "chart-4": "oklch(0.496 0.265 301.924)",
+          "chart-5": "oklch(0.438 0.218 303.724)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.827 0.119 306.383)",
+          "chart-2": "oklch(0.627 0.265 303.9)",
+          "chart-3": "oklch(0.558 0.288 302.321)",
+          "chart-4": "oklch(0.496 0.265 301.924)",
+          "chart-5": "oklch(0.438 0.218 303.724)"
+        }
+      }
+    },
+    {
+      "id": "red",
+      "label": "Red",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.808 0.114 19.571)",
+          "chart-2": "oklch(0.637 0.237 25.331)",
+          "chart-3": "oklch(0.577 0.245 27.325)",
+          "chart-4": "oklch(0.505 0.213 27.518)",
+          "chart-5": "oklch(0.444 0.177 26.899)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.808 0.114 19.571)",
+          "chart-2": "oklch(0.637 0.237 25.331)",
+          "chart-3": "oklch(0.577 0.245 27.325)",
+          "chart-4": "oklch(0.505 0.213 27.518)",
+          "chart-5": "oklch(0.444 0.177 26.899)"
+        }
+      }
+    },
+    {
+      "id": "rose",
+      "label": "Rose",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.81 0.117 11.638)",
+          "chart-2": "oklch(0.645 0.246 16.439)",
+          "chart-3": "oklch(0.586 0.253 17.585)",
+          "chart-4": "oklch(0.514 0.222 16.935)",
+          "chart-5": "oklch(0.455 0.188 13.697)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.81 0.117 11.638)",
+          "chart-2": "oklch(0.645 0.246 16.439)",
+          "chart-3": "oklch(0.586 0.253 17.585)",
+          "chart-4": "oklch(0.514 0.222 16.935)",
+          "chart-5": "oklch(0.455 0.188 13.697)"
+        }
+      }
+    },
+    {
+      "id": "sky",
+      "label": "Sky",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.828 0.111 230.318)",
+          "chart-2": "oklch(0.685 0.169 237.323)",
+          "chart-3": "oklch(0.588 0.158 241.966)",
+          "chart-4": "oklch(0.5 0.134 242.749)",
+          "chart-5": "oklch(0.443 0.11 240.79)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.828 0.111 230.318)",
+          "chart-2": "oklch(0.685 0.169 237.323)",
+          "chart-3": "oklch(0.588 0.158 241.966)",
+          "chart-4": "oklch(0.5 0.134 242.749)",
+          "chart-5": "oklch(0.443 0.11 240.79)"
+        }
+      }
+    },
+    {
+      "id": "teal",
+      "label": "Teal",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.855 0.138 181.071)",
+          "chart-2": "oklch(0.704 0.14 182.503)",
+          "chart-3": "oklch(0.6 0.118 184.704)",
+          "chart-4": "oklch(0.511 0.096 186.391)",
+          "chart-5": "oklch(0.437 0.078 188.216)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.855 0.138 181.071)",
+          "chart-2": "oklch(0.704 0.14 182.503)",
+          "chart-3": "oklch(0.6 0.118 184.704)",
+          "chart-4": "oklch(0.511 0.096 186.391)",
+          "chart-5": "oklch(0.437 0.078 188.216)"
+        }
+      }
+    },
+    {
+      "id": "violet",
+      "label": "Violet",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.811 0.111 293.571)",
+          "chart-2": "oklch(0.606 0.25 292.717)",
+          "chart-3": "oklch(0.541 0.281 293.009)",
+          "chart-4": "oklch(0.491 0.27 292.581)",
+          "chart-5": "oklch(0.432 0.232 292.759)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.811 0.111 293.571)",
+          "chart-2": "oklch(0.606 0.25 292.717)",
+          "chart-3": "oklch(0.541 0.281 293.009)",
+          "chart-4": "oklch(0.491 0.27 292.581)",
+          "chart-5": "oklch(0.432 0.232 292.759)"
+        }
+      }
+    },
+    {
+      "id": "yellow",
+      "label": "Yellow",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.905 0.182 98.111)",
+          "chart-2": "oklch(0.795 0.184 86.047)",
+          "chart-3": "oklch(0.681 0.162 75.834)",
+          "chart-4": "oklch(0.554 0.135 66.442)",
+          "chart-5": "oklch(0.476 0.114 61.907)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.905 0.182 98.111)",
+          "chart-2": "oklch(0.795 0.184 86.047)",
+          "chart-3": "oklch(0.681 0.162 75.834)",
+          "chart-4": "oklch(0.554 0.135 66.442)",
+          "chart-5": "oklch(0.476 0.114 61.907)"
+        }
+      }
+    },
+    {
+      "id": "mauve",
+      "label": "Mauve",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.865 0.012 325.68)",
+          "chart-2": "oklch(0.542 0.034 322.5)",
+          "chart-3": "oklch(0.435 0.029 321.78)",
+          "chart-4": "oklch(0.364 0.029 323.89)",
+          "chart-5": "oklch(0.263 0.024 320.12)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.865 0.012 325.68)",
+          "chart-2": "oklch(0.542 0.034 322.5)",
+          "chart-3": "oklch(0.435 0.029 321.78)",
+          "chart-4": "oklch(0.364 0.029 323.89)",
+          "chart-5": "oklch(0.263 0.024 320.12)"
+        }
+      }
+    },
+    {
+      "id": "olive",
+      "label": "Olive",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.88 0.011 106.6)",
+          "chart-2": "oklch(0.58 0.031 107.3)",
+          "chart-3": "oklch(0.466 0.025 107.3)",
+          "chart-4": "oklch(0.394 0.023 107.4)",
+          "chart-5": "oklch(0.286 0.016 107.4)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.88 0.011 106.6)",
+          "chart-2": "oklch(0.58 0.031 107.3)",
+          "chart-3": "oklch(0.466 0.025 107.3)",
+          "chart-4": "oklch(0.394 0.023 107.4)",
+          "chart-5": "oklch(0.286 0.016 107.4)"
+        }
+      }
+    },
+    {
+      "id": "mist",
+      "label": "Mist",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.872 0.007 219.6)",
+          "chart-2": "oklch(0.56 0.021 213.5)",
+          "chart-3": "oklch(0.45 0.017 213.2)",
+          "chart-4": "oklch(0.378 0.015 216)",
+          "chart-5": "oklch(0.275 0.011 216.9)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.872 0.007 219.6)",
+          "chart-2": "oklch(0.56 0.021 213.5)",
+          "chart-3": "oklch(0.45 0.017 213.2)",
+          "chart-4": "oklch(0.378 0.015 216)",
+          "chart-5": "oklch(0.275 0.011 216.9)"
+        }
+      }
+    },
+    {
+      "id": "taupe",
+      "label": "Taupe",
+      "tokens": {
+        "light": {
+          "chart-1": "oklch(0.868 0.007 39.5)",
+          "chart-2": "oklch(0.547 0.021 43.1)",
+          "chart-3": "oklch(0.438 0.017 39.3)",
+          "chart-4": "oklch(0.367 0.016 35.7)",
+          "chart-5": "oklch(0.268 0.011 36.5)"
+        },
+        "dark": {
+          "chart-1": "oklch(0.868 0.007 39.5)",
+          "chart-2": "oklch(0.547 0.021 43.1)",
+          "chart-3": "oklch(0.438 0.017 39.3)",
+          "chart-4": "oklch(0.367 0.016 35.7)",
+          "chart-5": "oklch(0.268 0.011 36.5)"
+        }
+      }
+    }
+  ],
+  "radii": [
+    {
+      "id": "default",
+      "label": "Default",
+      "rem": 0.625
+    },
+    {
+      "id": "none",
+      "label": "None",
+      "rem": 0
+    },
+    {
+      "id": "small",
+      "label": "Small",
+      "rem": 0.45
+    },
+    {
+      "id": "medium",
+      "label": "Medium",
+      "rem": 0.625
+    },
+    {
+      "id": "large",
+      "label": "Large",
+      "rem": 0.875
+    }
+  ],
+  "menuColors": [
+    {
+      "id": "default",
+      "label": "Default",
+      "color": "default",
+      "surface": "solid",
+      "classes": ""
+    },
+    {
+      "id": "inverted",
+      "label": "Inverted",
+      "color": "inverted",
+      "surface": "solid",
+      "classes": "dark"
+    },
+    {
+      "id": "default-translucent",
+      "label": "Default Translucent",
+      "color": "default",
+      "surface": "translucent",
+      "classes": "animate-none! relative bg-popover/70 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground!"
+    },
+    {
+      "id": "inverted-translucent",
+      "label": "Inverted Translucent",
+      "color": "inverted",
+      "surface": "translucent",
+      "classes": "dark animate-none! relative bg-popover/70 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground!"
+    }
+  ],
+  "menuAccents": [
+    {
+      "id": "subtle",
+      "label": "Subtle",
+      "effect": "none"
+    },
+    {
+      "id": "bold",
+      "label": "Bold",
+      "effect": "accent_from_primary"
+    }
+  ]
+}
