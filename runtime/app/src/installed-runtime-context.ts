@@ -12,6 +12,7 @@ import {
   type SystemApplicationBoundReleaseSetResult,
 } from "@vortex/contracts";
 import {
+  prepareApplicationPermissionRegistrationForHumanRequest,
   prepareApplicationPermissionRegistrationFromReleaseSet,
   type PermissionRegistryDefinitionSetReader,
 } from "@vortex/access";
@@ -185,70 +186,161 @@ export const createInstalledRuntimeContextLoader = (
       } catch (error) {
         throw definitionFailure(error);
       }
-      // Parsed into a fresh value so the context never aliases the reader's own result.
-      const parsedReleaseSet =
-        systemApplicationBoundReleaseSetResultSchema.safeParse(releaseSetCandidate);
-      if (!parsedReleaseSet.success)
-        throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
-      const releaseSet = parsedReleaseSet.data;
-
-      const application = releaseSet.application;
-      if (
-        !sameId(application.organizationId, systemContext.organizationId) ||
-        !sameId(application.organizationId, installation.data.organizationId) ||
-        !sameId(application.rootId, installation.data.applicationRootId) ||
-        application.releaseRevision !== installation.data.applicationReleaseRevision ||
-        !sameId(application.correlationId, systemContext.correlationId) ||
-        releaseSet.modules.length === 0
-      )
-        throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
-
-      // The bound release set must carry exactly one release per active installation binding.
-      const releasesByRoot = new Map<string, number>();
-      for (const module of releaseSet.modules) {
-        const root = module.rootId.toLowerCase();
-        if (
-          releasesByRoot.has(root) ||
-          !sameId(module.organizationId, application.organizationId) ||
-          !sameId(module.correlationId, application.correlationId)
-        )
-          throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
-        releasesByRoot.set(root, module.releaseRevision);
-      }
-      if (releasesByRoot.size !== installation.data.moduleBindings.length)
-        throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
-      for (const binding of installation.data.moduleBindings) {
-        const releaseRevision = releasesByRoot.get(binding.moduleRootId.toLowerCase());
-        if (releaseRevision === undefined || releaseRevision !== binding.moduleReleaseRevision)
-          throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
-      }
-
-      let permissionRegistration: PreparedApplicationPermissionRegistration;
-      try {
-        permissionRegistration = prepareApplicationPermissionRegistrationFromReleaseSet(
-          systemContext,
-          {
-            applicationRootId: installation.data.applicationRootId,
-            releaseRevision: installation.data.applicationReleaseRevision,
-          },
-          releaseSet,
-        );
-      } catch (error) {
-        throw failure("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED", error);
-      }
-
-      const context: InstalledRuntimeContext = Object.freeze({
-        organizationId: application.organizationId,
-        applicationRootId: application.rootId,
-        applicationReleaseRevision: application.releaseRevision,
-        correlationId: application.correlationId,
-        releaseSet,
-        permissionRegistration,
-        installation: installation.data,
-      });
-      assembledContexts.add(context);
-      return context;
+      return assembleContext(
+        installation.data,
+        releaseSetCandidate,
+        systemContext.organizationId,
+        systemContext.correlationId,
+        (releaseSet) =>
+          prepareApplicationPermissionRegistrationFromReleaseSet(
+            systemContext,
+            {
+              applicationRootId: installation.data.applicationRootId,
+              releaseRevision: installation.data.applicationReleaseRevision,
+            },
+            releaseSet,
+          ),
+      );
     },
   });
+
+/**
+ * The human-request variant of the loader. The installation comes from the protected
+ * active-installation read and the release set from the protected human Application-bound reader,
+ * both under one already-resolved human request transaction whose organisation and application
+ * scope Access verified for the signed-in person. It mints no system context or actor and widens no
+ * grant: the assembled context only names the exact installed release, and every page, navigation
+ * and data decision still runs through Access for that person.
+ */
+export type HumanInstalledRuntimeContextDependencies = Readonly<{
+  activeInstallationReader: InstalledRuntimeActiveInstallationReader;
+  /** The protected human Application-bound release reader, such as the Definition database service. */
+  releaseSetReader: Readonly<{
+    read(command: { applicationReleaseRevision: number }): Promise<unknown>;
+  }>;
+  /** The organisation and application the human request scope resolved for this person. */
+  scope: Readonly<{ organizationId: string; applicationRootId: string }>;
+}>;
+
+export const createHumanInstalledRuntimeContextLoader = (
+  dependencies: HumanInstalledRuntimeContextDependencies,
+) =>
+  Object.freeze({
+    async load(): Promise<InstalledRuntimeContext> {
+      let installationCandidate: unknown;
+      try {
+        installationCandidate = await dependencies.activeInstallationReader.readCurrent();
+      } catch (error) {
+        throw installationFailure(error);
+      }
+      const installation = activeApplicationInstallationEvidenceSchema.safeParse(
+        installationCandidate,
+      );
+      if (!installation.success)
+        throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
+      if (
+        !sameId(installation.data.organizationId, dependencies.scope.organizationId) ||
+        !sameId(installation.data.applicationRootId, dependencies.scope.applicationRootId)
+      )
+        throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
+
+      let releaseSetCandidate: unknown;
+      try {
+        releaseSetCandidate = await dependencies.releaseSetReader.read({
+          applicationReleaseRevision: installation.data.applicationReleaseRevision,
+        });
+      } catch (error) {
+        throw definitionFailure(error);
+      }
+      return assembleContext(
+        installation.data,
+        releaseSetCandidate,
+        dependencies.scope.organizationId,
+        undefined,
+        (releaseSet) =>
+          prepareApplicationPermissionRegistrationForHumanRequest(
+            dependencies.scope.organizationId,
+            {
+              applicationRootId: installation.data.applicationRootId,
+              releaseRevision: installation.data.applicationReleaseRevision,
+            },
+            releaseSet,
+          ),
+      );
+    },
+  });
+
+/**
+ * Verifies that the release set matches the installation and assembles the one trusted context.
+ * `expectedCorrelationId` is the system correlation when one exists; a human request has none and
+ * relies on the release set's own single correlation being shared by every release in it.
+ */
+const assembleContext = (
+  installation: ActiveApplicationInstallationEvidence,
+  releaseSetCandidate: unknown,
+  organizationId: string,
+  expectedCorrelationId: string | undefined,
+  prepareRegistration: (
+    releaseSet: SystemApplicationBoundReleaseSetResult,
+  ) => PreparedApplicationPermissionRegistration,
+): InstalledRuntimeContext => {
+  // Parsed into a fresh value so the context never aliases the reader's own result.
+  const parsedReleaseSet =
+    systemApplicationBoundReleaseSetResultSchema.safeParse(releaseSetCandidate);
+  if (!parsedReleaseSet.success)
+    throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
+  const releaseSet = parsedReleaseSet.data;
+
+  const application = releaseSet.application;
+  if (
+    !sameId(application.organizationId, organizationId) ||
+    !sameId(application.organizationId, installation.organizationId) ||
+    !sameId(application.rootId, installation.applicationRootId) ||
+    application.releaseRevision !== installation.applicationReleaseRevision ||
+    (expectedCorrelationId !== undefined &&
+      !sameId(application.correlationId, expectedCorrelationId)) ||
+    releaseSet.modules.length === 0
+  )
+    throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
+
+  // The bound release set must carry exactly one release per active installation binding.
+  const releasesByRoot = new Map<string, number>();
+  for (const module of releaseSet.modules) {
+    const root = module.rootId.toLowerCase();
+    if (
+      releasesByRoot.has(root) ||
+      !sameId(module.organizationId, application.organizationId) ||
+      !sameId(module.correlationId, application.correlationId)
+    )
+      throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
+    releasesByRoot.set(root, module.releaseRevision);
+  }
+  if (releasesByRoot.size !== installation.moduleBindings.length)
+    throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
+  for (const binding of installation.moduleBindings) {
+    const releaseRevision = releasesByRoot.get(binding.moduleRootId.toLowerCase());
+    if (releaseRevision === undefined || releaseRevision !== binding.moduleReleaseRevision)
+      throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
+  }
+
+  let permissionRegistration: PreparedApplicationPermissionRegistration;
+  try {
+    permissionRegistration = prepareRegistration(releaseSet);
+  } catch (error) {
+    throw failure("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED", error);
+  }
+
+  const context: InstalledRuntimeContext = Object.freeze({
+    organizationId: application.organizationId,
+    applicationRootId: application.rootId,
+    applicationReleaseRevision: application.releaseRevision,
+    correlationId: application.correlationId,
+    releaseSet,
+    permissionRegistration,
+    installation,
+  });
+  assembledContexts.add(context);
+  return context;
+};
 
 export type InstalledRuntimeContextLoader = ReturnType<typeof createInstalledRuntimeContextLoader>;
