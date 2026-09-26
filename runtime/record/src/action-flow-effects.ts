@@ -282,8 +282,8 @@ type FlowValueJson = Readonly<
 
 /**
  * Only a single typed value is written to a field here, so a map value is not one and is refused
- * rather than flattened or guessed. The composed flow resolves a map for the same field; this path
- * never widens a field's written value to a map of values.
+ * rather than flattened or guessed, exactly as a formula is. Action validation already refuses a
+ * map as a field value, so this is the fail-closed backstop, never a path a published action takes.
  */
 const isFlowValue = (candidate: unknown): candidate is FlowValueJson => {
   if (!isPlainObject(candidate)) return false;
