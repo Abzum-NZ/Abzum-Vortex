@@ -3247,8 +3247,7 @@ function compileModule(
       (recordType.standard_actions as string[]).some(
         (action) =>
           action === "create" ||
-          (action === "update" &&
-            !registeredWritableUpdate) ||
+          (action === "update" && !registeredWritableUpdate) ||
           action === "soft_delete" ||
           action === "restore",
       )
