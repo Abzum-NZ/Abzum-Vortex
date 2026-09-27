@@ -45,5 +45,5 @@ export const continueSessionOrEnd = async (
   result: IdentitySessionResolution,
 ): Promise<ContinuingIdentitySession> => {
   if (result.kind === "active" || result.kind === "temporarily_unavailable") return result;
-  await redirectToSessionEnd();
+  return redirectToSessionEnd();
 };

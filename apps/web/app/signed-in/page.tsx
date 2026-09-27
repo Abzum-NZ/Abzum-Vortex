@@ -116,7 +116,7 @@ export default async function SignedInPage() {
         </Link>
       </AuthShell>
     );
-  if (launcher.kind !== "available") await redirectToSessionEnd();
+  if (launcher.kind !== "available") return redirectToSessionEnd();
   const onlyEntry = launcher.entries[0];
   if (launcher.entries.length === 1 && onlyEntry)
     redirect(organizationAddressPath(onlyEntry.tenantShortName, onlyEntry.organizationShortName));
