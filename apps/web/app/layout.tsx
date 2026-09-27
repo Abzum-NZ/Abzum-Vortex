@@ -32,8 +32,8 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html lang="en" style={PLATFORM_THEME_STYLE} {...PLATFORM_VORTEX_STYLE}>
       <body>
-        {/* The platform default fonts the root's variables name, served from this origin. */}
-        <VortexFontStylesheets />
+        {/* Declare the platform face without forcing its download on differently themed pages. */}
+        <VortexFontStylesheets preload={false} />
         {children}
       </body>
     </html>

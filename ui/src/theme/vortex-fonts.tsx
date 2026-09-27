@@ -21,7 +21,8 @@ export function vortexFontPreloadHref(font: ShadcnFont): string {
 
 /**
  * Links the stylesheets of exactly the catalogue fonts a resolved theme paints with, its body and
- * heading fonts, and preloads each one's Latin face so the first paint does not wait for it.
+ * heading fonts. By default it also preloads each one's Latin face for the first paint. The root
+ * layout can declare the platform face without preloading it on a differently themed application.
  *
  * The links are rendered on the server with hrefs from the fixed catalogue, never from the request.
  * React hoists them into the document head and de-duplicates them by href, so several application
@@ -30,20 +31,27 @@ export function vortexFontPreloadHref(font: ShadcnFont): string {
  * that family and for the subsets that text uses, so a linked font that nothing paints costs one
  * small stylesheet and no font file.
  */
-export function VortexFontStylesheets({ tokens }: Readonly<{ tokens?: ThemeTokens | undefined }>) {
-  return resolveThemeFonts(tokens).map((font) => <FontLinks key={font.id} font={font} />);
+export function VortexFontStylesheets({
+  tokens,
+  preload = true,
+}: Readonly<{ tokens?: ThemeTokens | undefined; preload?: boolean | undefined }>) {
+  return resolveThemeFonts(tokens).map((font) => (
+    <FontLinks key={font.id} font={font} preload={preload} />
+  ));
 }
 
-function FontLinks({ font }: Readonly<{ font: ShadcnFont }>) {
+function FontLinks({ font, preload }: Readonly<{ font: ShadcnFont; preload: boolean }>) {
   return (
     <>
-      <link
-        rel="preload"
-        href={vortexFontPreloadHref(font)}
-        as="font"
-        type="font/woff2"
-        crossOrigin="anonymous"
-      />
+      {preload ? (
+        <link
+          rel="preload"
+          href={vortexFontPreloadHref(font)}
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+      ) : null}
       <link
         rel="stylesheet"
         href={vortexFontStylesheetHref(font)}
