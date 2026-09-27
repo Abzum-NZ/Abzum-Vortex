@@ -33,6 +33,8 @@ import {
   flowTaskChildLists,
   flowTaskRegistry,
   type DefinitionCompilationOutput,
+  type ApplicationCompilationOutputV2,
+  type ModuleCompilationOutputV3,
   type DefinitionCompilationRequest,
   type ApplicationCompilationRequestV2,
   type ModuleCompilationRequestV3,
@@ -91,12 +93,11 @@ const registeredBlockReleases: ReadonlyMap<string, PlatformBlockReleaseV2> = new
   ]),
 );
 
-const isV2ApplicationSource = (source: unknown): boolean =>
+const isApplicationSource = (source: unknown): boolean =>
   source !== null &&
   typeof source === "object" &&
   !Array.isArray(source) &&
-  (source as JsonObject).kind === "application" &&
-  (source as JsonObject).source_contract_version === "2.0.0";
+  (source as JsonObject).kind === "application";
 
 const isModuleSource = (source: unknown): boolean =>
   source !== null &&
@@ -113,7 +114,7 @@ const parseEditSaveSource = (
       schema: z.core.$ZodType;
     }>
   | Readonly<{ success: false; error: z.ZodError }> => {
-  const schema = isV2ApplicationSource(source)
+  const schema = isApplicationSource(source)
     ? applicationSourceDocumentV2Schema
     : isModuleSource(source)
       ? moduleSourceDocumentSchema
@@ -2763,12 +2764,9 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
             location,
           ),
         );
-      // V1 releases remain readable through their historical contract. New authoring uses V2/V3
-      // publication, where the module specification permits only additive fields and actions.
-      if (
-        "validationContractVersion" in output &&
-        (point.accepts as string[]).some((kind) => kind !== "field" && kind !== "action")
-      )
+      // The module specification permits extension points to accept only additive fields and
+      // actions.
+      if ((point.accepts as string[]).some((kind) => kind !== "field" && kind !== "action"))
         failures.push(
           failure(
             output,
@@ -4503,7 +4501,8 @@ function publicationCompatibilityRule(
 ): DefinitionRuleFailure[] {
   const failures: DefinitionRuleFailure[] = [];
   for (const output of context.outputs.filter(
-    (candidate) => candidate.kind === "module" || candidate.kind === "application",
+    (candidate): candidate is ModuleCompilationOutputV3 | ApplicationCompilationOutputV2 =>
+      candidate.kind === "module" || candidate.kind === "application",
   )) {
     const key = outputKey(output);
     const history = context.publishedHistories?.find(
@@ -4521,28 +4520,22 @@ function publicationCompatibilityRule(
     try {
       const result = historyEvidence
         ? compareDefinitionVersionImpactWithEvidence({
-            kind: output.kind as "module" | "application",
-            ...("validationContractVersion" in output
-              ? { validationContractVersion: output.validationContractVersion }
-              : {}),
+            kind: output.kind,
+            validationContractVersion: output.validationContractVersion,
             historyEvidence,
             candidate: output.canonical,
           })
         : output.kind === "module" && history?.kind === "module"
           ? compareDefinitionVersionImpact({
               kind: "module",
-              ...("validationContractVersion" in output
-                ? { validationContractVersion: output.validationContractVersion }
-                : {}),
+              validationContractVersion: output.validationContractVersion,
               history: history.history,
               candidate: output.canonical,
             })
           : output.kind === "application" && history?.kind === "application"
             ? compareDefinitionVersionImpact({
                 kind: "application",
-                ...("validationContractVersion" in output
-                  ? { validationContractVersion: "2.0.0" as const }
-                  : {}),
+                validationContractVersion: output.validationContractVersion,
                 history: history.history,
                 candidate: output.canonical,
               })
@@ -4621,12 +4614,7 @@ function semanticAggregateRule(
 function moduleRuleGraphRule(context: DefinitionSetValidationContext): DefinitionRuleFailure[] {
   const failures: DefinitionRuleFailure[] = [];
   for (const output of context.outputs) {
-    if (
-      output.kind !== "module" ||
-      !("validationContractVersion" in output) ||
-      output.validationContractVersion !== "3.0.0"
-    )
-      continue;
+    if (output.kind !== "module") continue;
     const content = output.canonical.content;
     const allowedRoots = new Set([
       output.canonical.envelope.rootId,
@@ -4664,7 +4652,7 @@ function moduleRuleGraphRule(context: DefinitionSetValidationContext): Definitio
 function applicationCatalogueRule(context: PreparedValidationContext): DefinitionRuleFailure[] {
   return editSaveSources(context).flatMap((source, index) => {
     const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(source);
-    return parsed.success && isV2ApplicationSource(parsed.data)
+    return parsed.success && isApplicationSource(parsed.data)
       ? validateApplicationSourceCatalogue(parsed.data as ApplicationSourceDocumentV2)
       : [];
   });
@@ -4714,7 +4702,7 @@ function applicationFlowBindingEventRule(
 ): DefinitionRuleFailure[] {
   return editSaveSources(context).flatMap((raw, index): DefinitionRuleFailure[] => {
     const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(raw);
-    if (!parsed.success || !isV2ApplicationSource(parsed.data)) return [];
+    if (!parsed.success || !isApplicationSource(parsed.data)) return [];
     const source = parsed.data as ApplicationSourceDocumentV2;
     const body = object(source.body);
     const placedBlocks = placedApplicationBlocks(body);
@@ -4803,7 +4791,7 @@ function applicationControlBindingRule(
 ): DefinitionRuleFailure[] {
   return editSaveSources(context).flatMap((raw, index): DefinitionRuleFailure[] => {
     const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(raw);
-    if (!parsed.success || !isV2ApplicationSource(parsed.data)) return [];
+    if (!parsed.success || !isApplicationSource(parsed.data)) return [];
     const source = parsed.data as ApplicationSourceDocumentV2;
     const body = object(source.body);
     const boundEvents = new Map<string, Set<string>>();
@@ -5132,7 +5120,7 @@ export function compileDefinitionSet(
   const parsedInputs = inputs.map((input) => {
     const source = object(input).source;
     if (isModuleSource(source)) return moduleCompilationRequestV3Schema.safeParse(input);
-    if (isV2ApplicationSource(source))
+    if (isApplicationSource(source))
       return applicationCompilationRequestV2Schema.safeParse(input);
     return definitionCompilationRequestSchema.safeParse(input);
   });

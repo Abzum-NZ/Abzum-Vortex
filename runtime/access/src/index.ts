@@ -105,12 +105,8 @@ export {
 } from "./builder-authority";
 export {
   platformPermissionCatalogue,
-  platformPermissionCatalogueV1,
-  platformPermissionCatalogueV1_0_1,
   platformPermissionCatalogueOwnerId,
   platformPermissionCatalogueVersion,
-  platformPermissionCatalogueVersionV1,
-  platformPermissionCatalogueVersionV1_0_1,
 } from "./platform-permission-catalogue";
 export {
   createPermissionRegistryPrivateRepository,
