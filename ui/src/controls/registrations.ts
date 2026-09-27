@@ -72,7 +72,7 @@ import { Button } from "./button";
 import { Tabs } from "./tabs";
 import { Dialog } from "./dialog";
 import { Drawer } from "./drawer";
-import { FormContainer } from "./form-container";
+import { FormContainer, type FormFlowFeedback } from "./form-container";
 
 /**
  * Release metadata is owned by the server-side platform block catalogue in @vortex/contracts;
@@ -309,6 +309,16 @@ const FORM_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser(
   data: (value, location) => parseControlData<FormPayload>(value, parseFormPayload, location),
   events: (value, location) => parseControlEventHandlers(value, location),
   draftFeedback: (value, location) => parseDraftFeedbackSupply(value, location),
+  flowFeedback: (value, location): FormFlowFeedback => {
+    const feedback = requireRecord(value, "Flow feedback must be an object", location);
+    requireExactKeys(feedback, ["tone", "text"], location);
+    if (feedback.tone !== "success" && feedback.tone !== "problem")
+      fail("Flow feedback tone must be success or problem", location);
+    return Object.freeze({
+      tone: feedback.tone,
+      text: requireNonEmptyString(feedback.text, "Flow feedback requires a message", location),
+    });
+  },
 });
 
 /** Exact registrations pairing each control block release with its React renderer. */

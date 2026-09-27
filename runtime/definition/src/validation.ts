@@ -287,8 +287,6 @@ const sourceCollectionLocationKind = {
   pages: "page",
   blocks: "block",
   block_registrations: "block",
-  workflows: "workflow",
-  nodes: "workflow_node",
   pipelines: "pipeline",
   queries: "query",
   roles: "role",
@@ -850,7 +848,6 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
       }
       const pages = new Set(array(body.pages).map((page) => String(page.key)));
       const queries = new Set(array(body.queries).map((query) => String(query.key)));
-      const workflows = new Set(array(body.workflows).map((workflow) => String(workflow.key)));
       const flows = new Set(
         array(body.flows).flatMap((flow) => [String(flow.id), String(flow.key)]),
       );
@@ -873,14 +870,6 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
       for (const role of array(body.roles)) if (!pages.has(String(role.home_page))) valid = false;
       for (const pipeline of array(body.pipelines)) {
         const stages = new Set(array(pipeline.stages).map((stage) => String(stage.key)));
-        for (const stage of array(pipeline.stages))
-          if (
-            [
-              ...((stage.entry_workflows as string[]) ?? []),
-              ...((stage.exit_workflows as string[]) ?? []),
-            ].some((workflow) => !workflows.has(workflow))
-          )
-            valid = false;
         for (const transition of array(pipeline.transitions))
           if (!stages.has(String(transition.from)) || !stages.has(String(transition.to)))
             valid = false;
@@ -896,16 +885,6 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
         }
       for (const address of array(body.public_addresses))
         if (!pages.has(String(address.page))) valid = false;
-      for (const workflow of array(body.workflows))
-        for (const node of array(workflow.nodes)) {
-          const config = object(node.config);
-          if (node.type === "request_form" && !pages.has(String(config.page))) valid = false;
-          if (node.type === "query_records" && !queries.has(String(config.query))) valid = false;
-          if (node.type === "start_workflow" && !workflows.has(String(config.workflow)))
-            valid = false;
-          if (node.type === "call_connection" && !connections.has(String(config.connection)))
-            valid = false;
-        }
     } else {
       const shapeKeys = new Set(array(body.shapes).map((shape) => String(shape.key)));
       const operationKeys = new Set(
@@ -3799,11 +3778,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         if (
           [...(stage.entryActionKeys as string[]), ...(stage.exitActionKeys as string[])].some(
             (key) => !executableActionKeys.has(key),
-          ) ||
-          // Application content no longer carries node-and-edge workflows (#1086), so a stage
-          // workflow cannot resolve until stage hooks start durable flows.
-          (stage.entryWorkflowIds as string[]).length > 0 ||
-          (stage.exitWorkflowIds as string[]).length > 0
+          )
         )
           failures.push(
             failure(

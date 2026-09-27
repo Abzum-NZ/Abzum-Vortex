@@ -8,6 +8,7 @@ import {
   createFormBlockRuntime,
   createFullPlatformComponentRegistry,
   equalFormValue,
+  FORM_CONTAINER_BLOCK_RELEASE,
   PageLayoutRenderer,
   useFlowIntentHost,
   type ControlSemanticEvent,
@@ -55,6 +56,7 @@ const platformComponentRegistry = createFullPlatformComponentRegistry();
  */
 type EventHandlers = Record<string, (event: never) => void>;
 type Notice = Readonly<{ tone: "info" | "problem"; text: string }>;
+type FormNotice = Readonly<{ tone: "success" | "problem"; text: string }>;
 
 /**
  * The fixed sentence for each safe flow outcome. The endpoint returns only the outcome, never a
@@ -63,9 +65,15 @@ type Notice = Readonly<{ tone: "info" | "problem"; text: string }>;
 const outcomeNotices: Readonly<Record<string, Notice>> = {
   completed: { tone: "info", text: "Done." },
   committed: { tone: "info", text: "Saved." },
-  refused: { tone: "problem", text: "You do not have permission to do that." },
+  refused: {
+    tone: "problem",
+    text: "The operation was refused by current access rules or operation policy. Review your access and the submitted values.",
+  },
   conflict: { tone: "problem", text: "This changed since you opened it. Refresh and review it." },
-  validation: { tone: "problem", text: "Check the values and try again." },
+  validation: {
+    tone: "problem",
+    text: "One or more submitted values do not match the operation's required format or rules. Review each field and its allowed values.",
+  },
   partial: {
     tone: "problem",
     text: "Only part of this was saved. Refresh and review what changed.",
@@ -160,6 +168,38 @@ const bindingOfEvent = (
 const eventIdOf = (event: DisplaySemanticEvent): string | undefined =>
   "eventId" in event ? event.eventId : undefined;
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** Finds the form ancestor that owns each placement in the rendered page tree. */
+const formOwnersByPlacement = (
+  page: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, string>> => {
+  const owners: Record<string, string> = {};
+  const visit = (slot: unknown, formOwner?: string): void => {
+    if (!isRecord(slot) || !isRecord(slot.placements)) return;
+    for (const [placementId, candidate] of Object.entries(slot.placements)) {
+      if (!isRecord(candidate)) continue;
+      const block = candidate.block;
+      const owner =
+        isRecord(block) &&
+        typeof block.blockId === "string" &&
+        block.blockId.toLowerCase() === FORM_CONTAINER_BLOCK_RELEASE.blockId.toLowerCase()
+          ? placementId
+          : formOwner;
+      if (owner !== undefined) owners[placementId] = owner;
+      if (isRecord(candidate.slots))
+        for (const child of Object.values(candidate.slots)) visit(child, owner);
+    }
+  };
+  const composition = page.composition;
+  if (!isRecord(composition)) return owners;
+  if ("main" in composition) visit(composition.main);
+  else if (isRecord(composition.stepContent))
+    for (const child of Object.values(composition.stepContent)) visit(child);
+  return owners;
+};
+
 /**
  * Finds the binding an event identity names. A legacy row action that names no control matches only
  * when the placement declares exactly one row-action binding, so it never guesses between several.
@@ -188,10 +228,12 @@ export function ApplicationPageView({
   const searchParams = useSearchParams();
   const [selection, setSelection] = useState<Readonly<Record<string, readonly string[]>>>({});
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
+  const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormNotice>>>({});
   const [busy, setBusy] = useState(false);
 
   const application = model.invocation;
   const subject = model.subject;
+  const formOwners = useMemo(() => formOwnersByPlacement(model.page), [model.page]);
   const basePath = `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(application.applicationKey)}`;
   const pageKeyOf = useMemo(
     () => new Map(model.pages.map((page) => [page.pageId.toLowerCase(), page.key])),
@@ -250,7 +292,7 @@ export function ApplicationPageView({
     (
       form: FlowFormIntent,
       controls: Readonly<{
-        submit: (values: FlowFormAnswer["values"]) => void;
+        submit: (values: Extract<FlowFormAnswer, { kind: "submit" }>["values"]) => void;
         cancel: () => void;
       }>,
     ) => (
@@ -320,9 +362,30 @@ export function ApplicationPageView({
    * that run set it.
    */
   const applyDispatch = useCallback(
-    async (dispatch: Promise<FlowDispatchResult | undefined>) => {
+    async (
+      dispatch: Promise<FlowDispatchResult | undefined>,
+      formPlacementId?: string,
+    ) => {
       setBusy(true);
       setNotice(undefined);
+      if (formPlacementId !== undefined)
+        setFormFeedback((current) => {
+          if (!Object.hasOwn(current, formPlacementId)) return current;
+          const next = { ...current };
+          delete next[formPlacementId];
+          return next;
+        });
+      const showResult = (resultNotice: Notice): void => {
+        setNotice(resultNotice);
+        if (formPlacementId !== undefined)
+          setFormFeedback((current) => ({
+            ...current,
+            [formPlacementId]: {
+              tone: resultNotice.tone === "problem" ? "problem" : "success",
+              text: resultNotice.text,
+            },
+          }));
+      };
       let settles = true;
       try {
         const result = await dispatch;
@@ -331,7 +394,7 @@ export function ApplicationPageView({
           return;
         }
         if (result.ranIn === "browser") {
-          setNotice(unavailableNotice);
+          showResult(unavailableNotice);
           return;
         }
         const server = result.result;
@@ -341,21 +404,21 @@ export function ApplicationPageView({
         }
         if (server.kind === "finished") {
           setSelection({});
-          setNotice(finishedNotice(server.descriptor.outcome, server.failure?.code));
+          showResult(finishedNotice(server.descriptor.outcome, server.failure?.code));
           return router.refresh();
         }
         if (server.kind === "refused") {
-          setNotice(outcomeNotices.refused ?? unavailableNotice);
+          showResult(unavailableNotice);
           return;
         }
         if (server.kind === "abandoned") {
           // The run may have committed a step before the answer was lost: never report nothing.
-          setNotice(outcomeNotices.uncertain ?? unavailableNotice);
+          showResult(outcomeNotices.uncertain ?? unavailableNotice);
           return router.refresh();
         }
-        setNotice(unavailableNotice);
+        showResult(unavailableNotice);
       } catch {
-        setNotice(unavailableNotice);
+        showResult(unavailableNotice);
       } finally {
         if (settles) setBusy(false);
       }
@@ -377,19 +440,26 @@ export function ApplicationPageView({
             Object.entries(supplied).filter(([name]) => binding.callerInputs.includes(name)),
           ),
         ),
+        formOwners[placementId],
       ),
-    [applyDispatch, flowRuntime],
+    [applyDispatch, formOwners, flowRuntime],
   );
 
   const runtimeInputs = useMemo(() => {
     const inputs: Record<string, unknown> = {};
     // A placement may hold bindings (a form submits) without holding projected data, so both key
     // sets are wired: every placement with data or with a flow binding receives its callbacks.
-    const placementIds = new Set([...Object.keys(model.data), ...Object.keys(model.bindings)]);
+    const placementIds = new Set([
+      ...Object.keys(model.data),
+      ...Object.keys(model.bindings),
+      ...Object.keys(formFeedback),
+    ]);
     for (const placementId of placementIds) {
       const data = model.data[placementId];
       const bindings = model.bindings[placementId] ?? [];
       const events: EventHandlers = {};
+      const flowFeedback =
+        formOwners[placementId] === placementId ? formFeedback[placementId] : undefined;
       // Display callbacks belong only to a placement with projected data; a control placement's
       // own parser refuses an event name it does not declare, so they are never added to a form.
       if (data !== undefined) {
@@ -462,10 +532,15 @@ export function ApplicationPageView({
                 );
           if (baseline !== undefined && Object.keys(values).length === 0) {
             setNotice({ tone: "info", text: "No changes to save." });
+            setFormFeedback((current) => ({
+              ...current,
+              [placementId]: { tone: "success", text: "No changes to save." },
+            }));
             return;
           }
           void applyDispatch(
             formBlock.submit(asComponentBinding(placementId, submitBinding), values),
+            placementId,
           );
         };
       const readyBinding = bindings.find((binding) => binding.event === "form_ready");
@@ -478,10 +553,20 @@ export function ApplicationPageView({
       if (resetBinding !== undefined)
         events.form_reset = (event: ControlSemanticEvent) => {
           if (event.event !== "form_reset" || busy) return;
+          setFormFeedback((current) => {
+            if (!Object.hasOwn(current, placementId)) return current;
+            const next = { ...current };
+            delete next[placementId];
+            return next;
+          });
           void applyDispatch(formBlock.reset(asComponentBinding(placementId, resetBinding)));
         };
       if (data === undefined) {
-        if (Object.keys(events).length > 0) inputs[placementId] = { events };
+        if (Object.keys(events).length > 0 || flowFeedback !== undefined)
+          inputs[placementId] = {
+            ...(Object.keys(events).length === 0 ? {} : { events }),
+            ...(flowFeedback === undefined ? {} : { flowFeedback }),
+          };
         continue;
       }
       const held = selection[placementId];
@@ -492,6 +577,7 @@ export function ApplicationPageView({
             ? { ...ready, values: { ...ready.values, selectedRecordIds: held } }
             : data,
         events,
+        ...(flowFeedback === undefined ? {} : { flowFeedback }),
       };
     }
     return inputs;
@@ -499,6 +585,8 @@ export function ApplicationPageView({
     applyDispatch,
     busy,
     formBlock,
+    formFeedback,
+    formOwners,
     model.bindings,
     model.data,
     model.editFormBaselines,

@@ -16,15 +16,45 @@ function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
   return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />;
 }
 
+/** Flow surfaces render immediately after the page root, outside its React style context. */
+function findStyleRoot(anchor: HTMLElement | null): HTMLElement | null {
+  if (anchor === null) return null;
+
+  const containingRoot = anchor.closest("[data-vortex-style-root]");
+  if (containingRoot instanceof HTMLElement) return containingRoot;
+
+  let sibling = anchor.previousElementSibling;
+  while (sibling !== null) {
+    if (sibling instanceof HTMLElement && sibling.matches("[data-vortex-style-root]"))
+      return sibling;
+    sibling = sibling.previousElementSibling;
+  }
+
+  const focusedRoot = document.activeElement?.closest("[data-vortex-style-root]");
+  if (focusedRoot instanceof HTMLElement) return focusedRoot;
+
+  const roots = document.querySelectorAll("[data-vortex-style-root]");
+  const onlyRoot = roots.length === 1 ? roots.item(0) : null;
+  return onlyRoot instanceof HTMLElement ? onlyRoot : null;
+}
+
 function DialogPortal({ container, ...props }: DialogPrimitive.Portal.Props) {
   const styleRoot = useVortexStylePortalRoot();
+  const [anchor, setAnchor] = React.useState<HTMLSpanElement | null>(null);
   if (styleRoot !== null && styleRoot.element === null && container === undefined) return null;
+  const needsAnchor = styleRoot === null && container === undefined;
+  const fallbackRoot = needsAnchor ? findStyleRoot(anchor) : null;
   return (
-    <DialogPrimitive.Portal
-      data-slot="dialog-portal"
-      container={container ?? styleRoot?.element ?? undefined}
-      {...props}
-    />
+    <>
+      {needsAnchor && <span ref={setAnchor} hidden aria-hidden="true" />}
+      {(!needsAnchor || anchor !== null) && (
+        <DialogPrimitive.Portal
+          data-slot="dialog-portal"
+          container={container ?? styleRoot?.element ?? fallbackRoot ?? undefined}
+          {...props}
+        />
+      )}
+    </>
   );
 }
 

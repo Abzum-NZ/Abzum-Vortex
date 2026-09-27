@@ -137,7 +137,11 @@ function NavigationList({
               data-vortex-navigation-item-type="external"
             >
               {renderLink(
-                <a href={item.address} rel="noopener noreferrer" />,
+                <a
+                  href={item.address}
+                  rel="noopener noreferrer"
+                  aria-label={`${item.label} (external)`}
+                />,
                 <>
                   <span className="min-w-0 truncate underline underline-offset-4">{item.label}</span>
                   <span className="ms-auto shrink-0 text-xs text-muted-foreground">External</span>
@@ -157,6 +161,7 @@ function NavigationList({
             {renderLink(
               <a
                 href={resolvePageHref(item.pageId)}
+                aria-label={item.label}
                 {...(current ? { "aria-current": "page" as const } : {})}
                 onClick={(event) => onNavigate?.(item.pageId, event)}
               />,

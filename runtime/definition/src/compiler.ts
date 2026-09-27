@@ -27,6 +27,7 @@ import {
   recordTypeIdSchema,
   fieldIdSchema,
   isPlatformPermissionKey,
+  isRegisteredWritableSystemProjection,
   PLATFORM_SERVICE_OPERATIONS,
   flowContractVersion,
   normalizeExactDecimal,
@@ -128,18 +129,6 @@ const SYSTEM_RULE = "vortex.definition.system_metadata";
 const RESOLUTION_RULE = "vortex.definition.immutable_resolution";
 const TRANSFORM_RULE = "vortex.definition.semantic_transform";
 
-export const workflowExecutionDefaults = Object.freeze({
-  contractVersion: "1.0.0",
-  timeoutSeconds: 300,
-  retry: Object.freeze({
-    maximumAttempts: 3,
-    initialDelaySeconds: 1,
-    maximumDelaySeconds: 30,
-    backoff: "exponential" as const,
-  }),
-  redaction: "no_payload" as const,
-});
-
 function fail(
   ruleCode: DefinitionCompilerRefusalCode,
   family: ConstructorParameters<typeof DefinitionCompilationError>[1],
@@ -211,7 +200,6 @@ const sourceCollectionIdKeys: Readonly<Record<string, string>> = Object.freeze({
   placements: "placementId",
   pages: "pageId",
   steps: "id",
-  workflows: "workflowId",
   nodes: "nodeId",
   edges: "edgeId",
   pipelines: "pipelineId",
@@ -950,8 +938,6 @@ function explicitSourceTargets(
       const targetCollection: Readonly<Record<string, string>> = {
         entry_actions: "entryActionKeys",
         exit_actions: "exitActionKeys",
-        entry_workflows: "entryWorkflowIds",
-        exit_workflows: "exitWorkflowIds",
       };
       const target = targetCollection[sourcePath[5]];
       if (target) return [[...pipelineBase, "stages", sourcePath[4], target, sourcePath[6]]];
@@ -1458,27 +1444,12 @@ function isCalculationEvaluationDefaultPath(source: JsonObject, path: Path): boo
   );
 }
 
-function isFixedWorkflowDefaultPath(path: Path): boolean {
-  const joined = path.join(".");
-  return (
-    /\.nodes\.\d+\.(?:timeoutSeconds|duplicateProtection|activityKey|redaction)$/.test(joined) ||
-    /\.nodes\.\d+\.retry\./.test(joined)
-  );
-}
-
 type SourceProvenanceMapping = {
   canonicalPath: Path;
   origin: "source" | "resolved";
   sourcePath: Path;
   ruleCode?: typeof RESOLUTION_RULE | typeof TRANSFORM_RULE;
 };
-
-// Application content no longer carries node-and-edge workflows (#1086). A source document may
-// still author them until they become durable flows (#1088, #1092); they are validated as source
-// but compile to nothing, so they have no canonical provenance.
-function isLegacySourceWorkflowPath(source: JsonObject, path: Path): boolean {
-  return source.kind === "application" && path[0] === "body" && path[1] === "workflows";
-}
 
 function provenanceFor(
   source: unknown,
@@ -1489,8 +1460,7 @@ function provenanceFor(
   const positions = sourceContractPositions(sourceObject);
   const sourceLeafPaths = leafPaths(source).filter(
     (path) =>
-      !(path.length === 1 && (path[0] === "source_contract_version" || path[0] === "kind")) &&
-      !isLegacySourceWorkflowPath(sourceObject, path),
+      !(path.length === 1 && (path[0] === "source_contract_version" || path[0] === "kind")),
   );
   const canonicalLeafPaths = leafPaths(canonical);
   const canonicalLeafSet = new Set(canonicalLeafPaths.map(pathKey));
@@ -1587,9 +1557,7 @@ function provenanceFor(
     const isPublicationMetadata =
       canonicalPath.at(-1) === "publishedRevision" ||
       canonicalPath.at(-1) === "contractFingerprint";
-    const isFixedDefault =
-      isFixedWorkflowDefaultPath(canonicalPath) ||
-      isCalculationEvaluationDefaultPath(sourceObject, canonicalPath);
+    const isFixedDefault = isCalculationEvaluationDefaultPath(sourceObject, canonicalPath);
     if (isSystem || isPublicationMetadata || isFixedDefault) {
       entries.push({
         canonicalPath,
@@ -1768,8 +1736,6 @@ class Resolution {
       event: "event",
       page: "page",
       block: "block",
-      workflow: "workflow",
-      workflow_node: "workflow_node",
       pipeline: "pipeline",
       query: "query",
       role: "role",
@@ -1781,8 +1747,6 @@ class Resolution {
     const segments = [...this.sourceLocation.segments];
     if (scope?.startsWith("record:"))
       segments.push({ kind: "record_type", key: scope.slice("record:".length) });
-    else if (scope?.startsWith("workflow:"))
-      segments.push({ kind: "workflow", key: scope.slice("workflow:".length) });
     else if (scope?.startsWith("flow:"))
       segments.push({ kind: "flow", key: scope.slice("flow:".length) });
     const componentKind = componentKinds[kind];
@@ -3175,16 +3139,22 @@ function compileModule(
     const recordKey = String(recordType.key);
     const qualified = `${definitionKey}:${recordKey}`;
     const projection = recordType.system_projection as JsonObject | undefined;
-    // A system projection record type has no ordinary write path: its changes go only through the
-    // registered protected operation its actions target, so a standard write action refuses here at
-    // publication with its own registered code. The source contract deliberately admits the
-    // declaration so this stable refusal, not a generic shape failure, is what the author sees.
+    const registeredWritableUpdate =
+      projection !== undefined &&
+      isRegisteredWritableSystemProjection(
+        recordKey,
+        String(projection.protected_view),
+        definitionKey,
+      );
+    // A system projection remains read-only except for update on the exact registered Module,
+    // record type and protected view. Create, delete, restore and every other standard update
+    // still refuse at publication with the stable system-record code.
     if (
       projection !== undefined &&
       (recordType.standard_actions as string[]).some(
         (action) =>
           action === "create" ||
-          action === "update" ||
+          (action === "update" && !registeredWritableUpdate) ||
           action === "soft_delete" ||
           action === "restore",
       )
@@ -3947,12 +3917,6 @@ function compileApplication(
             label: stage.label,
             entryActionKeys: stage.entry_actions,
             exitActionKeys: stage.exit_actions,
-            entryWorkflowIds: (stage.entry_workflows as string[]).map((alias) =>
-              resolution.id(definitionKey, "workflow", alias, "content"),
-            ),
-            exitWorkflowIds: (stage.exit_workflows as string[]).map((alias) =>
-              resolution.id(definitionKey, "workflow", alias, "content"),
-            ),
           })),
           transitions: (pipeline.transitions as JsonObject[]).map((transition) => ({
             from: transition.from,
@@ -4979,10 +4943,6 @@ function applicationProvenanceV2(
     if (represented.has(pathKey(canonicalPath))) continue;
     if (isSystemCanonicalPath(canonicalPath)) {
       entries.push({ canonicalPath, origin: "system_metadata", ruleCode: SYSTEM_RULE });
-      continue;
-    }
-    if (isFixedWorkflowDefaultPath(canonicalPath)) {
-      entries.push({ canonicalPath, origin: "fixed_default", ruleCode: DEFAULT_RULE });
       continue;
     }
     if (canonicalPath[0] === "content" && canonicalPath[1] === "theme") {

@@ -222,12 +222,7 @@ export const createFormContinuationService = (
             selection,
             flowId: target.flowId,
             continuation: request.continuation,
-            answer:
-              answer.kind === "confirm"
-                ? { kind: "confirmed", confirmed: answer.confirmed }
-                : answer.kind === "cancel"
-                  ? { kind: "form_answered", submitted: false, values: null }
-                  : { kind: "form_answered", submitted: true, values: answer.values },
+            answer,
           },
           {
             releaseKey: installed.releaseKey,
