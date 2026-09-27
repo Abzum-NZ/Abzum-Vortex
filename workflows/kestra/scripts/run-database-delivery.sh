@@ -823,7 +823,7 @@ if [ -n "${VORTEX_REUSE_CANDIDATE_PATH:-}" ]; then
     die "database verification reuse candidate file is missing"
   reuse_candidate_json="$(<"$VORTEX_REUSE_CANDIDATE_PATH")"
 else
-  reuse_candidate_json="${VORTEX_REUSE_CANDIDATE:-null}"
+  reuse_candidate_json='null'
 fi
 baseline_commit=""
 baseline_execution_id=""
@@ -858,10 +858,6 @@ if [ "$VORTEX_DELIVERY_ENVIRONMENT" = "production" ]; then
   require_variable VORTEX_APPROVED
   require_variable VORTEX_APPROVING_ACTOR
   require_variable VORTEX_TESTING_COMMIT
-  for retired_evidence_variable in VORTEX_TESTING_EVIDENCE VORTEX_TESTING_FULL_SOURCE_EVIDENCE; do
-    [ -z "${!retired_evidence_variable+x}" ] ||
-      die "${retired_evidence_variable} is no longer accepted; use ${retired_evidence_variable}_PATH"
-  done
   require_variable VORTEX_TESTING_EVIDENCE_PATH
   require_variable VORTEX_TESTING_FULL_SOURCE_EVIDENCE_PATH
   [ "$VORTEX_APPROVED" = "true" ] || die "production approval was not granted"
