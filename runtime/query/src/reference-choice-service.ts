@@ -194,6 +194,8 @@ const recordChoices = async (
     queryId: source.query.queryId,
     inputValues: {},
     requestedFieldIds: [command.labelFieldId],
+    searchableFieldIds: [command.labelFieldId],
+    ...(command.search === undefined ? {} : { search: command.search }),
     pageSize: Math.min(command.pageSize, source.query.pageSize),
     ...(command.continuationToken === undefined
       ? {}

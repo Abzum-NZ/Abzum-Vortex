@@ -50,7 +50,10 @@ const SEARCHABLE_OPTION_THRESHOLD = 7;
  * searchable combobox; shorter lists keep the authored radio or select presentation.
  */
 export function ChoiceInput(props: ChoiceInputProps): ReactElement {
-  const context = resolveControlContext<ChoiceInputPayload>(props, ["field_changed"]);
+  const context = resolveControlContext<ChoiceInputPayload>(props, [
+    "field_changed",
+    ...(props.metadata.releaseVersion === "1.1.0" ? ["choices_requested" as const] : []),
+  ]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();

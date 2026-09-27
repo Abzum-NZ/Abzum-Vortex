@@ -411,6 +411,9 @@ function ApplicationPageViewContent({
   const [dialogChoicePages, setDialogChoicePages] = useState<
     Readonly<Record<string, ChoiceInputPayload>>
   >({});
+  const [choicePagesOwner, setChoicePagesOwner] = useState(model);
+  const activeChoicePages = choicePagesOwner === model ? choicePages : {};
+  const activeDialogChoicePages = choicePagesOwner === model ? dialogChoicePages : {};
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
   const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormNotice>>>({});
   const [busy, setBusy] = useState(false);
@@ -478,16 +481,17 @@ function ApplicationPageViewContent({
   );
 
   useEffect(() => {
+    setChoicePagesOwner(model);
     setChoicePages({});
     setDialogChoicePages({});
     for (const placementId of Object.keys(choiceRequestIdsRef.current))
       choiceRequestIdsRef.current[placementId] = (choiceRequestIdsRef.current[placementId] ?? 0) + 1;
-  }, [application.installationRevision, application.releaseKey]);
+  }, [model]);
 
   const choicePayloadFor = useCallback(
     (placementId: string, formId?: string): ChoiceInputPayload | undefined => {
       const key = choiceScopeKey(placementId, formId);
-      const loaded = formId === undefined ? choicePages[key] : dialogChoicePages[key];
+      const loaded = formId === undefined ? activeChoicePages[key] : activeDialogChoicePages[key];
       if (loaded !== undefined) return loaded;
       const data = model.data[placementId];
       if (!isRecord(data) || data.status !== "ready") return undefined;
@@ -497,7 +501,7 @@ function ApplicationPageViewContent({
         return undefined;
       }
     },
-    [choicePages, dialogChoicePages, model.data, model.pageId],
+    [activeChoicePages, activeDialogChoicePages, model.data, model.pageId],
   );
 
   const choiceEvidenceFor = useCallback(
@@ -818,21 +822,21 @@ function ApplicationPageViewContent({
         if (Object.keys(events).length > 0) modalInput.events = events;
         if (Object.keys(modalInput).length > 0) scopedInputs[placementId] = modalInput;
       }
-        return (
-          <div className="flex flex-col gap-4">
-            <UnsavedWorkProvider>
-              <PageLayoutRenderer
-                composition={surface.composition}
-                registry={platformComponentRegistry}
-                pageId={model.pageId}
-                theme={model.theme}
-                projectedNavigation={model.navigation}
-                resolvePageHref={resolvePageHref}
-                currentPageId={model.pageId}
-                runtimeInputs={scopedInputs}
-              />
-            </UnsavedWorkProvider>
-            <DialogFooter>
+      return (
+        <div className="flex flex-col gap-4">
+          <UnsavedWorkProvider>
+            <PageLayoutRenderer
+              composition={surface.composition}
+              registry={platformComponentRegistry}
+              pageId={model.pageId}
+              theme={model.theme}
+              projectedNavigation={model.navigation}
+              resolvePageHref={resolvePageHref}
+              currentPageId={model.pageId}
+              runtimeInputs={scopedInputs}
+            />
+          </UnsavedWorkProvider>
+          <DialogFooter>
             <Button type="button" variant="secondary" onClick={controls.cancel}>
               Cancel
             </Button>
@@ -841,7 +845,8 @@ function ApplicationPageViewContent({
       );
     },
     [choiceEvidenceFor, choicePayloadFor, model, resolvePageHref],
-  );  const { host, element: intentHostElement } = useFlowIntentHost({
+  );
+  const { host, element: intentHostElement } = useFlowIntentHost({
     renderForm,
     navigation: navigationEnvironment,
   });
@@ -1093,8 +1098,8 @@ function ApplicationPageViewContent({
       const ready = data as { status?: string; values?: Record<string, unknown> };
       inputs[placementId] = {
         data:
-          choicePages[placementId] !== undefined
-            ? { status: "ready", values: choicePages[placementId] }
+          activeChoicePages[placementId] !== undefined
+            ? { status: "ready", values: activeChoicePages[placementId] }
             : ready.status === "ready" && ready.values?.kind === "table" && held !== undefined
               ? { ...ready, values: { ...ready.values, selectedRecordIds: held } }
               : data,
@@ -1110,7 +1115,7 @@ function ApplicationPageViewContent({
     formFeedback,
     formOwners,
     choiceEvidenceFor,
-    choicePages,
+    activeChoicePages,
     model.bindings,
     model.data,
     model.editFormBaselines,

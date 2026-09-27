@@ -191,6 +191,7 @@ export const applicationHasAuthoredForm = (
     if (isRecord(composition.stepContent))
       for (const slot of Object.values(composition.stepContent)) visitSlot(slot);
   }
+  for (const shell of application.shells) visitSlot(shell.layout);
   return matches === 1;
 };
 
@@ -203,6 +204,11 @@ export const referenceChoiceFieldsForForm = (
   const fields: ReferenceChoiceFormField[] = [];
   for (const page of application.pages) {
     const result = formPlacementsOnPage(page, formId, modules);
+    if (result.invalid) return undefined;
+    fields.push(...result.fields);
+  }
+  for (const shell of application.shells) {
+    const result = formPlacementsOnPage({ composition: { main: shell.layout } }, formId, modules);
     if (result.invalid) return undefined;
     fields.push(...result.fields);
   }
