@@ -206,6 +206,9 @@ begin
   );
 end
 $function$;
+
+alter function vortex_module.read_current_detached_installation_for_transfer_internal() owner to vortex_module_owner;
+
 revoke all on function vortex_module.read_current_detached_installation_for_transfer_internal()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_record_adapter;

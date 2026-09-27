@@ -41,6 +41,8 @@ begin
 end
 $function$;
 
+alter function vortex_module.assert_preview_installation_authority_internal() owner to vortex_module_owner;
+
 revoke all on function vortex_module.assert_preview_installation_authority_internal()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_module.assert_preview_installation_authority_internal()

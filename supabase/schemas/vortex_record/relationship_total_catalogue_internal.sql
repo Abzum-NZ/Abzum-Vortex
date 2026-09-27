@@ -58,6 +58,8 @@ begin
 end
 $function$;
 
+alter function vortex_record.relationship_total_catalogue_internal() owner to vortex_record_adapter;
+
 revoke all on function vortex_record.relationship_total_catalogue_internal()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_module_owner;

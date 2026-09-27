@@ -122,6 +122,8 @@ begin
 end
 $function$;
 
+alter function vortex_record.prepare_protected_record_delete(uuid,uuid,uuid,bigint,uuid,uuid) owner to vortex_record_adapter;
+
 revoke all on function vortex_record.prepare_protected_record_delete(
   uuid, uuid, uuid, bigint, uuid, uuid
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
