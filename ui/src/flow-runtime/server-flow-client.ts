@@ -1,4 +1,13 @@
-import type { JsonValue } from "@vortex/contracts";
+import {
+  flowBindingInvocationSchema,
+  formContinuationReceiptSchema,
+  formContinuationTargetSchema,
+  type FlowBindingInvocation,
+  type FormContinuationAnswer,
+  type FormContinuationReceipt,
+  type FormContinuationTarget,
+  type JsonValue,
+} from "@vortex/contracts";
 import { isFlowIntent, type FlowIntent } from "./intents";
 
 /** The address the signed-in person is using; the server resolves everything else from it. */
@@ -14,10 +23,6 @@ export type FlowInstallationContext = Readonly<{
   releaseKey: string;
 }>;
 
-export type FlowAnswer =
-  | Readonly<{ kind: "form_answered"; submitted: boolean; values: JsonValue }>
-  | Readonly<{ kind: "confirmed"; confirmed: boolean }>;
-
 /**
  * The exact evidence the server issued with a paused run, returned with the continuation so the
  * server can compare it with trusted state. The page never invents it: it stores what the previous
@@ -25,9 +30,9 @@ export type FlowAnswer =
  */
 export type FlowResumeEvidence = Readonly<{
   /** The exact paused target (#544): installation, release, flow, node, awaiting form and receipt. */
-  target?: unknown;
+  target?: FormContinuationTarget;
   /** The run receipt: which run and how many protected effects it has committed. */
-  receipt?: unknown;
+  receipt?: FormContinuationReceipt;
 }>;
 
 export type ServerFlowResponse =
@@ -47,8 +52,8 @@ export type ServerFlowResponse =
       intents: readonly FlowIntent[];
       continuation: string;
       expiresAt: string;
-      target?: unknown;
-      receipt?: unknown;
+      target?: FormContinuationTarget;
+      receipt?: FormContinuationReceipt;
     }>
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "unavailable" }>;
@@ -62,7 +67,7 @@ export type FlowInvokeClient = Readonly<{
   resume: (
     flowId: string,
     continuation: string,
-    answer: FlowAnswer,
+    answer: FormContinuationAnswer,
     evidence?: FlowResumeEvidence,
   ) => Promise<ServerFlowResponse>;
 }>;
@@ -104,8 +109,16 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         : unavailable;
     case "intent": {
       const intents = parseIntents(candidate.intents);
+      const target = candidate.target === undefined
+        ? undefined
+        : formContinuationTargetSchema.safeParse(candidate.target);
+      const receipt = candidate.receipt === undefined
+        ? undefined
+        : formContinuationReceiptSchema.safeParse(candidate.receipt);
       if (
         intents === undefined ||
+        target?.success === false ||
+        receipt?.success === false ||
         typeof candidate.runId !== "string" ||
         (candidate.awaiting !== "form" && candidate.awaiting !== "confirm") ||
         typeof candidate.continuation !== "string" ||
@@ -119,8 +132,8 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         intents,
         continuation: candidate.continuation,
         expiresAt: candidate.expiresAt,
-        ...(isRecord(candidate.target) ? { target: candidate.target } : {}),
-        ...(isRecord(candidate.receipt) ? { receipt: candidate.receipt } : {}),
+        ...(target?.success ? { target: target.data } : {}),
+        ...(receipt?.success ? { receipt: receipt.data } : {}),
       };
     }
     case "result": {
@@ -172,8 +185,10 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
  */
 export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowInvokeClient {
   const endpoint = options.endpoint ?? "/api/flows/invoke";
-  const send = async (invocation: Record<string, unknown>): Promise<ServerFlowResponse> => {
+  const send = async (invocation: FlowBindingInvocation): Promise<ServerFlowResponse> => {
     try {
+      const parsedInvocation = flowBindingInvocationSchema.safeParse(invocation);
+      if (!parsedInvocation.success) return refused;
       const response = await (options.fetchImplementation ?? fetch)(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -184,7 +199,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           tenantShortName: options.address.tenantShortName,
           organizationShortName: options.address.organizationShortName,
           applicationKey: options.address.applicationKey,
-          invocation,
+          invocation: parsedInvocation.data,
         }),
       });
       if (response.status === 401 || response.status === 403 || response.status === 413)
