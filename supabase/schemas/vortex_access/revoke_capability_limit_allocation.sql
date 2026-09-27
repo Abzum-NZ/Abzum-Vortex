@@ -45,7 +45,7 @@ begin
   end if;
   evaluated_at := pg_catalog.clock_timestamp();
   perform vortex_identity.require_current_tenant_capability(
-    actor_identity_id, p_tenant_id, 'platform.tenant.administrators.manage', evaluated_at
+    actor_identity_id, p_tenant_id, 'platform.tenant.capability_limits.allocate', evaluated_at
   );
   command_fingerprint := 'sha256:' || pg_catalog.encode(extensions.digest(
     pg_catalog.convert_to(pg_catalog.concat_ws(E'\x1f', 'revoke_capability_limit_allocation',
@@ -135,4 +135,4 @@ grant execute on function vortex_access.revoke_capability_limit_allocation(
 comment on function vortex_access.revoke_capability_limit_allocation(
   uuid, uuid, uuid, uuid, bigint, uuid
 ) is
-  'Tenant-administrator command that revokes a tenant-wide or organisation allocation, leaving the platform ceiling as the bound; it writes an accepted receipt, append-only change evidence and, for an organisation, content-free Activity.';
+  'Tenant capability-limits allocation permission command that revokes a tenant-wide or organisation allocation, leaving the platform ceiling as the bound; it writes an accepted receipt, append-only change evidence and, for an organisation, content-free Activity.';

@@ -1,6 +1,7 @@
 import "server-only";
 
 export * from "./storage-provisioning";
+export * from "./preview-installation-repository";
 export * from "./storage-conversion";
 export * from "./extension-upgrade";
 export * from "./installation-binding-reader";
