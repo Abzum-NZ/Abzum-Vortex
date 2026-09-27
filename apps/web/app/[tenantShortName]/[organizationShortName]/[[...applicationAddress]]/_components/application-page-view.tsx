@@ -352,8 +352,9 @@ function ApplicationPageViewContent({
       } catch {
         return;
       }
-      if (address.origin !== window.location.origin || !unsavedWork.hasUnsavedWork()) return;
+      if (!["http:", "https:"].includes(address.protocol) || !unsavedWork.hasUnsavedWork()) return;
       if (
+        address.origin === window.location.origin &&
         address.pathname === window.location.pathname &&
         address.search === window.location.search
       )
@@ -362,7 +363,9 @@ function ApplicationPageViewContent({
       event.stopPropagation();
       void (async () => {
         if (!(await unsavedWork.confirmDiscardUnsavedWork())) return;
-        router.push(`${address.pathname}${address.search}${address.hash}`);
+        if (address.origin === window.location.origin)
+          router.push(`${address.pathname}${address.search}${address.hash}`);
+        else window.location.assign(address.href);
       })();
     };
     document.addEventListener("click", onDocumentClick, true);
