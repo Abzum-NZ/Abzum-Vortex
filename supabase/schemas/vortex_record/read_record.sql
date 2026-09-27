@@ -19,6 +19,8 @@ declare
   read_time_clock jsonb;
   read_time_expression jsonb;
   read_time_value jsonb;
+  preview_meta jsonb;
+  preview_bounds jsonb;
   due_key text;
   status_key text;
   due_value jsonb;
@@ -34,13 +36,27 @@ begin
     or pg_catalog.jsonb_typeof(loaded -> 'declaration') <> 'object' then
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
-  decision := vortex_access.evaluate_organization_record_access_internal(
-    loaded -> 'declaration', p_record_id, loaded -> 'facts'
-  );
-  if decision ->> 'outcome' <> 'allowed' then
-    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  if loaded ? 'previewInstallationId' then
+    preview_meta := vortex_record.resolve_record_action_context_internal(
+      p_record_type_id, 'read'
+    );
+    preview_bounds := vortex_record.preview_record_field_bounds_internal(
+      p_record_type_id, (preview_meta ->> 'storageContractId')::uuid,
+      preview_meta -> 'recordType'
+    );
+    if preview_bounds is null then
+      return pg_catalog.jsonb_build_object('outcome', 'refused');
+    end if;
+    bounds := preview_bounds;
+  else
+    decision := vortex_access.evaluate_organization_record_access_internal(
+      loaded -> 'declaration', p_record_id, loaded -> 'facts'
+    );
+    if decision ->> 'outcome' <> 'allowed' then
+      return pg_catalog.jsonb_build_object('outcome', 'refused');
+    end if;
+    bounds := vortex_access.resolve_record_field_bounds_internal(decision);
   end if;
-  bounds := vortex_access.resolve_record_field_bounds_internal(decision);
   bounds := bounds || pg_catalog.jsonb_build_object('readableFieldIds',
     vortex_record.project_derived_readable_field_ids_internal(
       loaded, p_record_type_id, p_record_id, bounds -> 'readableFieldIds',
@@ -120,4 +136,4 @@ revoke all on function vortex_record.read_record(uuid, uuid)
 grant execute on function vortex_record.read_record(uuid, uuid) to vortex_request;
 
 comment on function vortex_record.read_record(uuid, uuid) is
-  'Fixed record read adapter: returns the readable field projection of one record under the caller''s own current authority, or an identical refusal for a missing, foreign or unreachable record.';
+  'Fixed record read adapter: returns the readable field projection of one live record under the caller''s current authority or one preview record for its validated preview owner, or an identical refusal for a missing, foreign or unreachable record.';

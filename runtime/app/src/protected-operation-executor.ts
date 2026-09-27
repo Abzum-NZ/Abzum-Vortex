@@ -201,6 +201,7 @@ type ProtectedOperationServices = Readonly<{
     | "suspendOrganizationAccount"
     | "reactivateOrganizationAccount"
     | "closeOrganizationAccount"
+    | "readOwnProfile"
     | "updateOwnProfile"
     | "createOrganizationInvitation"
     | "revokeOrganizationInvitation"
@@ -824,6 +825,21 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         }),
       ),
   }),
+  read_own_profile: operation({
+    schema: z.object({}).strict(),
+    command: () => ({}),
+    run: async (services, caller) =>
+      mapAvailable(
+        await services.accessAdministration.readOwnProfile(caller.session, caller.selection),
+        (value) => ({
+          organization_account_id: value.organizationAccountId,
+          revision: value.revision,
+          display_name: value.displayName ?? "",
+          language: value.language ?? "",
+          time_zone: value.timeZone ?? "",
+        }),
+      ),
+  }),
   update_own_profile: operation({
     schema: updateOwnProfileCommandSchema,
     command: (inputs) => ({
@@ -844,6 +860,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         command,
       );
       if (result.kind !== "available") return result;
+      if (result.value === "conflict") return "conflict";
       if (result.value.outcome === "refused") return { kind: "unavailable" };
       return {
         kind: "available",

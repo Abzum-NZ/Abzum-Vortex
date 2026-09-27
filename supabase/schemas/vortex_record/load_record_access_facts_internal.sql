@@ -15,6 +15,7 @@ declare
   context_value jsonb;
   context_application_root_id uuid;
   installation jsonb;
+  preview_installation jsonb;
 begin
   if p_record_type_id is null or p_record_type_id = nil_uuid
     or p_record_id is null or p_record_id = nil_uuid
@@ -39,9 +40,17 @@ begin
       message = 'Record adapter requires an application context';
   end if;
 
-  -- Step 2: the exact active installation. Its reader owns the pin-set and
-  -- active-binding rules; the shared loader consumes them and adds none.
-  installation := vortex_module.read_current_active_installation();
+  -- Step 2: resolve only the explicitly addressed preview for its owner, or
+  -- preserve the active installation reader for an ordinary live request.
+  preview_installation :=
+    vortex_record.read_current_preview_installation_internal();
+  if preview_installation is not null
+    and preview_installation ->> 'outcome' = 'refused' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
+  installation := case when preview_installation is null
+    then vortex_module.read_current_active_installation()
+    else preview_installation end;
 
   return vortex_record.load_record_access_facts_from_installation_internal(
     p_record_type_id, p_action_kind, p_record_id, p_expected_concurrency_number, installation
@@ -66,4 +75,4 @@ revoke all on function vortex_record.load_record_access_facts_internal(
 comment on function vortex_record.load_record_access_facts_internal(
   uuid, text, uuid, bigint
 ) is
-  'Private adapter fact loader over the exact active installation, including each pinned Module validation contract version.';
+  'Private adapter fact loader over the exact active installation or the current owner-validated preview, including each pinned Module validation contract version.';
