@@ -6,14 +6,7 @@ import {
   type IdentityAuthority,
 } from "@vortex/contracts";
 import type { IdentityJourneyConfiguration } from "@vortex/identity";
-
-const requiredEnvironmentValue = (name: string): string => {
-  const value = process.env[name];
-  if (!value || value.trim().length === 0) {
-    throw new Error(`Missing required server configuration: ${name}`);
-  }
-  return value;
-};
+import { requiredEnvironmentValue } from "../../_lib/server-configuration";
 
 export const getIdentityJourneyConfiguration = (): IdentityJourneyConfiguration => ({
   supabaseUrl: requiredEnvironmentValue("VORTEX_SUPABASE_URL"),

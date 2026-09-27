@@ -6,8 +6,6 @@ import {
   type FileId,
   type IdentitySession,
 } from "@vortex/contracts";
-import { createHumanOrganizationRequestService } from "@vortex/access";
-import { createAppTelemetryCollector, createOperationsAlertSink } from "@vortex/app";
 import {
   composeStorageAuthorityResolvers,
   createDefaultUpstreamStorageReader,
@@ -30,6 +28,8 @@ import {
   getIdentityAuthorityConfiguration,
   getIdentityJourneyConfiguration,
 } from "../../../auth/_lib/authority-configuration";
+import { hostedStorageSigningConfiguration } from "../../../_lib/server-configuration";
+import { humanOrganizationRequests } from "../../../_lib/server-composition";
 
 /** How long one protected read decision may be relied on before its grant is recorded. */
 const READ_DECISION_SECONDS = 30;
@@ -43,14 +43,6 @@ type StorageSigningConfiguration = Readonly<{
 
 let signingConfiguration: StorageSigningConfiguration | undefined;
 
-const requiredEnvironmentValue = (name: string): string => {
-  const value = process.env[name];
-  if (!value || value.trim().length === 0) {
-    throw new Error(`Missing required server configuration: ${name}`);
-  }
-  return value;
-};
-
 /**
  * The destination project's File Storage signing key, held only in the server
  * secret store. The destination is the configured Supabase project; a local
@@ -58,34 +50,20 @@ const requiredEnvironmentValue = (name: string): string => {
  */
 const storageSigningConfiguration = (): StorageSigningConfiguration => {
   if (signingConfiguration !== undefined) return signingConfiguration;
-  const hostname = new URL(getIdentityJourneyConfiguration().supabaseUrl).hostname;
-  const match = /^([a-z0-9](?:[a-z0-9-]{0,118}[a-z0-9])?)\.supabase\.co$/.exec(hostname);
-  if (match === null || match[1] === undefined) {
-    throw new Error("File Storage requires a hosted Supabase destination project");
-  }
-  const destinationProject = match[1];
-  const privateKey = requiredEnvironmentValue("VORTEX_FILE_STORAGE_SIGNING_KEY").replace(
-    /\\n/g,
-    "\n",
+  const signing = hostedStorageSigningConfiguration(
+    getIdentityJourneyConfiguration().supabaseUrl,
+    "File Storage",
   );
   signingConfiguration = Object.freeze({
-    destinationProject,
-    issuer: `https://${destinationProject}.supabase.co/auth/v1`,
-    keyId: requiredEnvironmentValue("VORTEX_FILE_STORAGE_SIGNING_KEY_ID"),
-    signer: createStorageSignerFromPrivateKey(privateKey),
+    destinationProject: signing.destinationProject,
+    issuer: signing.issuer,
+    keyId: signing.keyId,
+    signer: createStorageSignerFromPrivateKey(signing.privateKey),
   });
   return signingConfiguration;
 };
 
 const upstreamStorageReader = createDefaultUpstreamStorageReader();
-
-/**
- * The collector is stateless and frozen, so one instance is shared and then
- * injected explicitly into the Access dependencies.
- */
-const requestTelemetry = createAppTelemetryCollector({
-  downstream: createOperationsAlertSink(),
-});
 
 const refusalResponse = (
   reason: FileReadRefusalReason | "unauthenticated",
@@ -147,10 +125,7 @@ export const handleFileReadRequest = async (
   } catch {
     return refusalResponse("storage_unavailable");
   }
-  const protectedRequests = createHumanOrganizationRequestService({
-    identityAuthorityId,
-    telemetry: requestTelemetry,
-  });
+  const protectedRequests = humanOrganizationRequests(identityAuthorityId);
 
   const located = await protectedRequests.run(
     session,

@@ -1,13 +1,8 @@
 import "server-only";
 
+import type { HumanOrganizationRequestDependencies } from "@vortex/access";
 import {
-  createHumanOrganizationRequestService,
-  type HumanOrganizationRequestDependencies,
-} from "@vortex/access";
-import {
-  createAppTelemetryCollector,
   createHumanInstalledRuntimeContextLoader,
-  createOperationsAlertSink,
   type InstalledRuntimeContext,
   type PermittedApplication,
   type PermittedApplicationsRead,
@@ -38,10 +33,10 @@ import {
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
-import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";
 import { getQueryContinuationKey } from "./query-continuation-key";
+import { humanOrganizationRequestDependencies, humanOrganizationRequests } from "./server-composition";
 
 /**
  * Composes the one server model of an installed application page: the permission-filtered page,
@@ -50,8 +45,6 @@ import { getQueryContinuationKey } from "./query-continuation-key";
  * address and the page's own query string. Nothing here decides permission: the stored page and
  * navigation services, the Query engine and the flow endpoint each keep their own Access decision.
  */
-
-const telemetry = createAppTelemetryCollector({ downstream: createOperationsAlertSink() });
 
 export type PageDataState = Readonly<Record<string, unknown>>;
 
@@ -233,10 +226,8 @@ const requestState = (
   return { sort, filters, search: first(parameters[`search.${placementId}`]) ?? null };
 };
 
-const requestDependencies = (): HumanOrganizationRequestDependencies => ({
-  identityAuthorityId: getIdentityAuthorityConfiguration().authorityId,
-  telemetry,
-});
+const requestDependencies = (): HumanOrganizationRequestDependencies =>
+  humanOrganizationRequestDependencies();
 
 /** The exact installed runtime context, read once under the person's own verified request scope. */
 const loadInstalledContext = (
@@ -244,7 +235,7 @@ const loadInstalledContext = (
   dependencies: HumanOrganizationRequestDependencies,
   selection: OrganizationSelectionCandidate,
 ) =>
-  createHumanOrganizationRequestService(dependencies).run(
+  humanOrganizationRequests(dependencies.identityAuthorityId).run(
     session,
     selection,
     async (transaction, scope) => {

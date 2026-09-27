@@ -6,6 +6,7 @@ import {
 } from "../_lib/session-cookie";
 import { requestMatchesConfiguredSite } from "../_lib/session-request-state";
 import { revokeIdentitySession } from "../_lib/session-server";
+import { privateResponse } from "../../_lib/private-response";
 
 const destinationPath = "/auth/sign-in?status=session-ended";
 
@@ -25,10 +26,7 @@ export function GET(request: NextRequest): NextResponse {
     destination = new URL(destinationPath, request.url);
   }
 
-  const response = NextResponse.redirect(destination, 303);
-  response.headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate, max-age=0");
-  response.headers.set("Expires", "0");
-  response.headers.set("Pragma", "no-cache");
+  const response = privateResponse(NextResponse.redirect(destination, 303));
 
   // A fixed safe redirect remains available when configuration is unavailable.
   if (siteUrl === undefined) return response;
