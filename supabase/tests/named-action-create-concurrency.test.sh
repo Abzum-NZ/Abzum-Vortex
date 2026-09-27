@@ -235,8 +235,6 @@ cleanup_fixture() {
     drop table if exists record_data.$physical_table;
     delete from vortex_record.record_reference_counters
       where organization_id = '$organization_id';
-    delete from vortex_record.record_data_versions
-      where organization_id = '$organization_id';
     delete from vortex_record.relationship_edges
       where from_storage_contract_id = '$storage_contract_id'
          or to_storage_contract_id = '$storage_contract_id';
@@ -249,7 +247,7 @@ cleanup_fixture() {
     delete from vortex_record.release_provisions where module_root_id = '$module_root_id';
     reset role;
     set local role vortex_record_adapter;
-    delete from vortex_record.save_command_receipts
+    delete from vortex_record.command_receipts
       where organization_id = '$organization_id';
     reset role;
     delete from pgmq.q_vortex_event_occurrences
