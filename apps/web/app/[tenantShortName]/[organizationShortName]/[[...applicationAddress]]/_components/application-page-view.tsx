@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useMemo, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   createFlowInvokeClient,
@@ -10,18 +10,30 @@ import {
   equalFormValue,
   FORM_CONTAINER_BLOCK_RELEASE,
   PageLayoutRenderer,
+  UnsavedWorkProvider,
   useFlowIntentHost,
+  useUnsavedWorkGuard,
+  useUnsavedWorkRegistry,
   type ControlSemanticEvent,
   type DisplaySemanticEvent,
   type FlowDispatchResult,
   type FlowFormAnswer,
   type FlowFormIntent,
+  type FlowInvokeClient,
   type FormBlockRuntime,
   type LinkNavigationEnvironment,
   type ProjectedPageCapability,
+  type ServerFlowResponse,
 } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
-import { DialogFooter } from "@vortex/ui/components/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@vortex/ui/components/dialog";
 import { Field, FieldGroup } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
@@ -57,6 +69,10 @@ const platformComponentRegistry = createFullPlatformComponentRegistry();
 type EventHandlers = Record<string, (event: never) => void>;
 type Notice = Readonly<{ tone: "info" | "problem"; text: string }>;
 type FormNotice = Readonly<{ tone: "success" | "problem"; text: string }>;
+type SubmittedForm = Readonly<{
+  formId: string;
+  values: Readonly<Record<string, unknown>>;
+}>;
 
 /**
  * The fixed sentence for each safe flow outcome. The endpoint returns only the outcome, never a
@@ -223,6 +239,16 @@ const bindingFor = (
 export function ApplicationPageView({
   model,
 }: Readonly<{ model: ApplicationPageModel }>): ReactElement {
+  return (
+    <UnsavedWorkProvider>
+      <ApplicationPageViewContent model={model} />
+    </UnsavedWorkProvider>
+  );
+}
+
+function ApplicationPageViewContent({
+  model,
+}: Readonly<{ model: ApplicationPageModel }>): ReactElement {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -230,6 +256,43 @@ export function ApplicationPageView({
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
   const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormNotice>>>({});
   const [busy, setBusy] = useState(false);
+  const [leavePromptOpen, setLeavePromptOpen] = useState(false);
+  const unsavedWorkRegistry = useUnsavedWorkRegistry();
+  const submittedFormsRef = useRef(new Map<string, SubmittedForm>());
+  const continuingFormsRef = useRef(new Map<string, SubmittedForm>());
+  const confirmationResolveRef = useRef<((leave: boolean) => void) | undefined>(undefined);
+  const confirmationPromiseRef = useRef<Promise<boolean> | undefined>(undefined);
+  const confirmDiscardUnsavedWork = useCallback((): Promise<boolean> => {
+    if (confirmationPromiseRef.current !== undefined) return Promise.resolve(false);
+    const confirmation = new Promise<boolean>((resolve) => {
+      confirmationResolveRef.current = resolve;
+    });
+    confirmationPromiseRef.current = confirmation;
+    setLeavePromptOpen(true);
+    return confirmation;
+  }, []);
+  const settleDiscardConfirmation = useCallback(
+    (leave: boolean) => {
+      const resolve = confirmationResolveRef.current;
+      if (resolve === undefined) return;
+      confirmationResolveRef.current = undefined;
+      confirmationPromiseRef.current = undefined;
+      setLeavePromptOpen(false);
+      if (leave) unsavedWorkRegistry?.clearAll();
+      resolve(leave);
+    },
+    [unsavedWorkRegistry],
+  );
+  useEffect(
+    () => () => {
+      const resolve = confirmationResolveRef.current;
+      confirmationResolveRef.current = undefined;
+      confirmationPromiseRef.current = undefined;
+      resolve?.(false);
+    },
+    [],
+  );
+  const { hasUnsavedWork, guard: unsavedWork } = useUnsavedWorkGuard(confirmDiscardUnsavedWork);
 
   const application = model.invocation;
   const subject = model.subject;
@@ -247,29 +310,122 @@ export function ApplicationPageView({
     [basePath, pageKeyOf],
   );
 
+  useEffect(() => {
+    if (!hasUnsavedWork) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent): void => {
+      if (!unsavedWork.hasUnsavedWork()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [hasUnsavedWork, unsavedWork]);
+
+  useEffect(() => {
+    if (!hasUnsavedWork) return;
+    const onDocumentClick = (event: MouseEvent): void => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
+      const target =
+        event.target instanceof Element
+          ? event.target
+          : event.target instanceof Node
+            ? event.target.parentElement
+            : null;
+      const anchor = target?.closest<HTMLAnchorElement>("a[href]");
+      if (
+        !(anchor instanceof HTMLAnchorElement) ||
+        (anchor.target !== "" && anchor.target.toLowerCase() !== "_self") ||
+        anchor.hasAttribute("download")
+      )
+        return;
+      let address: URL;
+      try {
+        address = new URL(anchor.href, window.location.href);
+      } catch {
+        return;
+      }
+      if (!["http:", "https:"].includes(address.protocol) || !unsavedWork.hasUnsavedWork()) return;
+      if (
+        address.origin === window.location.origin &&
+        address.pathname === window.location.pathname &&
+        address.search === window.location.search
+      )
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      void (async () => {
+        if (!(await unsavedWork.confirmDiscardUnsavedWork())) return;
+        if (address.origin === window.location.origin)
+          router.push(`${address.pathname}${address.search}${address.hash}`);
+        else window.location.assign(address.href);
+      })();
+    };
+    document.addEventListener("click", onDocumentClick, true);
+    return () => document.removeEventListener("click", onDocumentClick, true);
+  }, [hasUnsavedWork, router, unsavedWork]);
+
   /**
    * The one browser flow client and host (#1013): a form submit starts the bound flow on the server
    * and the runtime carries out every pause (another form or a confirmation) through a continuation,
    * which is returned exactly as the server issued it.
    */
-  const flowClient = useMemo(
-    () =>
-      createFlowInvokeClient({
-        address: {
-          tenantShortName: application.tenantShortName,
-          organizationShortName: application.organizationShortName,
-          applicationKey: application.applicationKey,
-        },
-        installation: {
-          installationRevision: application.installationRevision,
-          releaseKey: application.releaseKey,
-        },
-        ...(subject === undefined ? {} : { subject }),
-      }),
-    [application, subject],
-  );
+  const flowClient = useMemo<FlowInvokeClient>(() => {
+    const client = createFlowInvokeClient({
+      address: {
+        tenantShortName: application.tenantShortName,
+        organizationShortName: application.organizationShortName,
+        applicationKey: application.applicationKey,
+      },
+      installation: {
+        installationRevision: application.installationRevision,
+        releaseKey: application.releaseKey,
+      },
+      ...(subject === undefined ? {} : { subject }),
+    });
+    const recordResponse = (
+      response: ServerFlowResponse,
+      submission: SubmittedForm | undefined,
+    ) => {
+      if (submission === undefined) return;
+      if (response.kind === "intent") {
+        continuingFormsRef.current.set(response.continuation, submission);
+      } else if (
+        response.kind === "result" &&
+        response.failure === undefined &&
+        response.descriptor.commit === "confirmed"
+      ) {
+        // The server has confirmed the submitted values before its Navigate intent is presented.
+        unsavedWorkRegistry?.markSaved(submission.formId, submission.values);
+      }
+    };
+    return {
+      startBinding: async (binding, callerInputs, clickId) => {
+        const submission = submittedFormsRef.current.get(binding.bindingId);
+        submittedFormsRef.current.delete(binding.bindingId);
+        const response = await client.startBinding(binding, callerInputs, clickId);
+        recordResponse(response, submission);
+        return response;
+      },
+      resume: async (flowId, continuation, answer, evidence) => {
+        const submission = continuingFormsRef.current.get(continuation);
+        continuingFormsRef.current.delete(continuation);
+        const response = await client.resume(flowId, continuation, answer, evidence);
+        recordResponse(response, submission);
+        return response;
+      },
+    };
+  }, [application, subject, unsavedWorkRegistry]);
   const navigationEnvironment = useMemo<LinkNavigationEnvironment>(
     () => ({
+      unsavedWork,
       recheckInternalTarget: async (target) => target.kind !== "external",
       navigateInternal: (target) => {
         if (target.kind !== "page") return;
@@ -283,7 +439,7 @@ export function ApplicationPageView({
       resolveInternalAddress: (target) =>
         target.kind === "page" ? resolvePageHref(target.pageId) : basePath,
     }),
-    [basePath, resolvePageHref, router],
+    [basePath, resolvePageHref, router, unsavedWork],
   );
   const formFieldId = useId();
   // The body of a Show form surface. The flow intent host presents it inside its shadcn Dialog, so
@@ -362,10 +518,7 @@ export function ApplicationPageView({
    * that run set it.
    */
   const applyDispatch = useCallback(
-    async (
-      dispatch: Promise<FlowDispatchResult | undefined>,
-      formPlacementId?: string,
-    ) => {
+    async (dispatch: Promise<FlowDispatchResult | undefined>, formPlacementId?: string) => {
       setBusy(true);
       setNotice(undefined);
       if (formPlacementId !== undefined)
@@ -404,7 +557,8 @@ export function ApplicationPageView({
         }
         if (server.kind === "finished") {
           setSelection({});
-          showResult(finishedNotice(server.descriptor.outcome, server.failure?.code));
+          const resultNotice = finishedNotice(server.descriptor.outcome, server.failure?.code);
+          showResult(resultNotice);
           return router.refresh();
         }
         if (server.kind === "refused") {
@@ -538,6 +692,10 @@ export function ApplicationPageView({
             }));
             return;
           }
+          submittedFormsRef.current.set(submitBinding.bindingId, {
+            formId: placementId,
+            values: event.values,
+          });
           void applyDispatch(
             formBlock.submit(asComponentBinding(placementId, submitBinding), values),
             placementId,
@@ -616,6 +774,33 @@ export function ApplicationPageView({
         runtimeInputs={runtimeInputs}
       />
       {intentHostElement}
+      <Dialog
+        open={leavePromptOpen}
+        disablePointerDismissal
+        onOpenChange={(open) => {
+          if (!open) settleDiscardConfirmation(false);
+        }}
+      >
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Leave this page?</DialogTitle>
+            <DialogDescription>Your unsaved changes will be lost.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row">
+            <Button
+              type="button"
+              variant="secondary"
+              autoFocus
+              onClick={() => settleDiscardConfirmation(false)}
+            >
+              Stay
+            </Button>
+            <Button type="button" onClick={() => settleDiscardConfirmation(true)}>
+              Leave
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
