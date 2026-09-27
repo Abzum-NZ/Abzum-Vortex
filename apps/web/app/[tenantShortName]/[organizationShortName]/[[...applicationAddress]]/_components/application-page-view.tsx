@@ -67,7 +67,7 @@ const outcomeNotices: Readonly<Record<string, Notice>> = {
   committed: { tone: "info", text: "Saved." },
   refused: {
     tone: "problem",
-    text: "The protected change was refused by current access checks or assignment rules. Confirm that you can manage this role and that its target and dates are allowed.",
+    text: "The operation was refused by current access rules or operation policy. Review your access and the submitted values.",
   },
   conflict: { tone: "problem", text: "This changed since you opened it. Refresh and review it." },
   validation: {

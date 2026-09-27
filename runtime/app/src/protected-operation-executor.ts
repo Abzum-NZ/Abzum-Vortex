@@ -124,6 +124,13 @@ export type ProtectedOperationExecution =
     }>
   | Readonly<{ outcome: "refused" | "conflict" | "validation" | "failed" }>;
 
+type DurableProtectedOperationExecution =
+  | Readonly<{
+      outcome: "committed";
+      outputs: Readonly<Record<string, ProtectedOperationValue>>;
+    }>
+  | Readonly<{ outcome: "refused" | "conflict" | "validation" | "failed" }>;
+
 const durableActorOperationPurposeSchema = z
   .object({
     runId: workflowRunIdSchema,
@@ -1016,7 +1023,7 @@ export const createProtectedOperationExecutor = (
       request: DurableProtectedOperationExecutionRequest & Readonly<{
         effect: (
           transaction: RequestDatabaseTransaction,
-          executeOperation: () => Promise<ProtectedOperationExecution>,
+          executeOperation: () => Promise<DurableProtectedOperationExecution>,
         ) => Promise<Result>;
       }>,
     ): Promise<Readonly<{ kind: "available"; value: Result }> | Readonly<{ kind: "refused" | "failed" }>> {
@@ -1067,10 +1074,10 @@ export const createProtectedOperationExecutor = (
               applicationRootId: scope.applicationRootId,
             });
             let called = false;
-            return request.effect(transaction, () => {
+            return request.effect(transaction, async (): Promise<DurableProtectedOperationExecution> => {
               if (called) throw new Error("DURABLE_OPERATION_REPEATED");
               called = true;
-              return executeWith(durableOperations(transaction, scope), {
+              const result = await executeWith(durableOperations(transaction, scope), {
                 operation: identity.data,
                 session,
                 selection,
@@ -1081,6 +1088,9 @@ export const createProtectedOperationExecutor = (
                   iteration: context.data.purpose.duplicateProtectionKey,
                 },
               });
+              // The durable workflow effect ledger records successful reads as completed steps.
+              if ("outputs" in result) return { outcome: "committed", outputs: result.outputs };
+              return result;
             });
           },
         );
