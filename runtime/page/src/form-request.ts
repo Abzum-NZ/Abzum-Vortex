@@ -33,9 +33,6 @@ import type {
 
 const maximumFormValues = 500;
 
-const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
-  typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
-
 /** The answers a surface submits for a `form_submit` binding. */
 export type PrivateFormSubmission = Readonly<{
   values: Readonly<Record<string, unknown>>;
