@@ -176,6 +176,7 @@ const projectEditField = (
   const block = placement.block;
   if (!isRecord(settings) || !isRecord(block) || typeof block.blockId !== "string")
     return undefined;
+  const blockId = block.blockId;
   const fieldSetting = settings.field;
   const nameSetting = settings.name;
   const field = recordType.fields.find((candidate) =>
@@ -193,12 +194,12 @@ const projectEditField = (
   const valueKey = Object.keys(values).find((key) => sameId(key, fieldId));
   if (valueKey === undefined) return undefined;
   const stored = values[valueKey]!;
-  const control = sameId(block.blockId, FIELD_INPUT_BLOCK_RELEASE.blockId)
+  const control = sameId(blockId, FIELD_INPUT_BLOCK_RELEASE.blockId)
     ? isRecord(settings.control) && settings.control.kind === "choice"
       ? settings.control.value
       : undefined
     : Object.entries(FIELD_INPUT_CONTROL_RELEASES).find(([, release]) =>
-        sameId(release.blockId, block.blockId),
+        sameId(release.blockId, blockId),
       )?.[0];
   let kind: string;
   let displayed: JsonValue = stored;
