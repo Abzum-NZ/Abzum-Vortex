@@ -38,6 +38,9 @@ declare
   filter_ids text[] := array[]::text[];
   filter_predicate text := 'true';
   filter_parameters jsonb := '[]'::jsonb;
+  filter_expression_pairs text[] := array[]::text[];
+  filter_values_sql text := '''{}''::jsonb';
+  filter_values jsonb;
   group_ids text[] := array[]::text[];
   aggregate_items jsonb := '[]'::jsonb;
   aggregate_item jsonb;
@@ -53,6 +56,7 @@ declare
   fast_path_fields_valid boolean := true;
   scan_sql text;
   candidate_sql text;
+  selected_sql text;
   summary_sql text;
   summary_values jsonb := '[]'::jsonb;
   row_values jsonb;
@@ -241,6 +245,24 @@ begin
   parameter_values := coalesce(prepared_plan #> '{filter,residualInputs}', '{}'::jsonb);
   filter_predicate := coalesce(prepared_plan #>> '{filter,pushedPredicate}', 'true');
   filter_parameters := coalesce(prepared_plan #> '{filter,pushedParameters}', '[]'::jsonb);
+  select coalesce(pg_catalog.array_agg(item.value order by item.position), array[]::text[])
+  into filter_expression_pairs
+  from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{filter,expressions}')
+    with ordinality as item(value, position);
+  if pg_catalog.cardinality(filter_expression_pairs) > 0 then
+    select pg_catalog.string_agg(
+      'pg_catalog.jsonb_build_object(' || chunk.pairs_text || ')', ' || '
+      order by chunk.chunk_index
+    )
+    into filter_values_sql
+    from (
+      select (pair.position - 1) / 50 as chunk_index,
+        pg_catalog.string_agg(pair.value, ', ' order by pair.position) as pairs_text
+      from pg_catalog.unnest(filter_expression_pairs)
+        with ordinality as pair(value, position)
+      group by (pair.position - 1) / 50
+    ) as chunk;
+  end if;
   select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
   into filter_ids
   from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'filterFieldIds') as item(value);
@@ -248,7 +270,6 @@ begin
   -- The plan is exact only when every candidate is readable and every field
   -- used by grouping, aggregates or filtering is readable on every candidate.
   fast_path := pg_catalog.cardinality(readable_field_ids) > 0
-    and filter_condition is null
     and not exists (
       select 1 from pg_catalog.unnest(group_ids || filter_ids) as required(id)
       where required.id <> all (readable_field_ids)
@@ -501,7 +522,8 @@ begin
 
   if fast_path then
     candidate_sql := pg_catalog.format(
-      'select pg_catalog.jsonb_build_object(%s) as projected_values
+      'select pg_catalog.jsonb_build_object(%s) as projected_values,
+         %s as filter_values
        from record_data.%I as stored
        where stored.organisation_id = $1
          and stored.lifecycle_state = ''active''
@@ -510,6 +532,7 @@ begin
          and (%s)
        limit $5',
       pg_catalog.array_to_string(expression_pairs, ', '),
+      filter_values_sql,
       physical_table_token,
       case when storage_scope = 'application_contained'
         then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
@@ -527,11 +550,13 @@ begin
          and stored.lifecycle_state = ''active''
          and %s
          and (%s)
+         and (%s)
        limit $5',
       physical_table_token,
       case when storage_scope = 'application_contained'
         then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
-      access_sql
+      access_sql,
+      filter_predicate
     );
     for scan_record in execute scan_sql
       using context_organization_id, context_application_root_id, null::text[], null::uuid,
@@ -554,9 +579,19 @@ begin
         continue;
       end if;
       if filter_condition is not null then
+        select coalesce(pg_catalog.jsonb_object_agg(referenced.id,
+          case filter_types ->> referenced.id
+            when 'record_reference' then pg_catalog.to_jsonb(
+              pg_catalog.lower(readable_values -> referenced.id ->> 'recordId'))
+            when 'organization_account_reference' then pg_catalog.to_jsonb(
+              pg_catalog.lower(readable_values -> referenced.id ->> 'organizationAccountId'))
+            else readable_values -> referenced.id
+          end), '{}'::jsonb)
+        into filter_values
+        from pg_catalog.unnest(filter_ids) as referenced(id);
         begin
           passes := vortex_access.evaluate_query_condition_internal(
-            filter_condition, filter_types, readable_values,
+            filter_condition, filter_types, filter_values,
             parameter_types, parameter_values, false
           );
         exception when invalid_parameter_value then
@@ -580,6 +615,13 @@ begin
     candidate_sql := 'select item.value -> ''values'' as projected_values from pg_catalog.jsonb_array_elements($11) as item(value)';
   end if;
 
+  selected_sql := case when fast_path and filter_condition is not null then
+    'select candidate.projected_values from candidate where
+       vortex_access.evaluate_query_condition_internal(
+         $12, $13, candidate.filter_values, $14, $15, false
+       )'
+    else 'select candidate.projected_values from candidate' end;
+
   -- Omitted grouping fields are withheld on that row, so they form no group;
   -- a readable JSON null remains a legitimate null group.
   if pg_catalog.cardinality(group_ids) > 0 then
@@ -596,12 +638,14 @@ begin
     summary_sql := pg_catalog.format(
       'with candidate as materialized (%s),
        candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
-       totals as (select pg_catalog.jsonb_build_object(%s) as aggregate_values from candidate),
+       selected as materialized (%s),
+       selected_count as (select pg_catalog.count(*)::integer as value from selected),
+       totals as (select pg_catalog.jsonb_build_object(%s) as aggregate_values from selected as candidate),
        grouped as (
          select %s as group_values,
            pg_catalog.count(*)::integer as row_count,
            pg_catalog.jsonb_build_object(%s) as aggregates
-         from candidate
+         from selected as candidate
          where %s
          group by %s
        )
@@ -613,12 +657,13 @@ begin
            ''moduleReleaseVersion'', %L,
            ''queryId'', %L,
            ''groupByFieldIds'', %s::jsonb,
-           ''totalRowCount'', candidate_count.value,
+           ''totalRowCount'', selected_count.value,
            ''groups'', %s,
            ''aggregates'', totals.aggregate_values
          ) end
-       from candidate_count cross join totals',
+       from candidate_count cross join selected_count cross join totals',
       candidate_sql,
+      selected_sql,
       aggregate_object_sql,
       group_values_sql,
       aggregate_object_sql,
@@ -635,7 +680,9 @@ begin
     summary_sql := pg_catalog.format(
       'with candidate as materialized (%s),
        candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
-       totals as (select pg_catalog.jsonb_build_object(%s) as aggregate_values from candidate)
+       selected as materialized (%s),
+       selected_count as (select pg_catalog.count(*)::integer as value from selected),
+       totals as (select pg_catalog.jsonb_build_object(%s) as aggregate_values from selected as candidate)
        select case when candidate_count.value > %s
          then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
          else pg_catalog.jsonb_build_object(
@@ -644,12 +691,13 @@ begin
            ''moduleReleaseVersion'', %L,
            ''queryId'', %L,
            ''groupByFieldIds'', %s::jsonb,
-           ''totalRowCount'', candidate_count.value,
+           ''totalRowCount'', selected_count.value,
            ''groups'', ''[]''::jsonb,
            ''aggregates'', totals.aggregate_values
          ) end
-       from candidate_count cross join totals',
+       from candidate_count cross join selected_count cross join totals',
       candidate_sql,
+      selected_sql,
       aggregate_object_sql,
       summary_candidate_limit,
       p_module_root_id::text,
@@ -662,7 +710,8 @@ begin
   execute summary_sql into result_value
     using context_organization_id, context_application_root_id, null::text[], null::uuid,
       summary_candidate_limit + 1, access_owner_account_id, access_owner_group_ids,
-      access_shared_record_ids, filter_parameters, access_parameters, summary_values;
+      access_shared_record_ids, filter_parameters, access_parameters, summary_values,
+      filter_condition, filter_types, parameter_types, parameter_values;
   if result_value ->> 'outcome' = 'refused' then
     return result_value;
   end if;
