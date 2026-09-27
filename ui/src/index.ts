@@ -430,6 +430,7 @@ export {
   type FlowFormAnswer,
   type FlowFormIntent,
   type FlowInstallationContext,
+  type FlowSubjectContext,
   type FlowIntent,
   type FlowIntentHost,
   type FlowIntentHostOptions,

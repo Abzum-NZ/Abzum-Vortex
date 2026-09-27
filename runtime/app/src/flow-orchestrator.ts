@@ -11,12 +11,20 @@ import {
   identitySessionSchema,
   organizationSelectionCandidateSchema,
   platformOperationKey,
+  recordIdSchema,
+  recordTypeIdSchema,
+  revisionSchema,
+  saveRecordCommandV2Schema,
+  type ExecuteNamedActionCommandV2,
   type FlowDefinition,
   type ExecuteNamedActionResultV2,
   type FlowTask,
   type IdentitySession,
+  type InstalledNamedActionReferenceV2,
   type JsonValue,
   type OrganizationSelectionCandidate,
+  type SaveRecordCommandV2,
+  type SaveRecordResultV2,
 } from "@vortex/contracts";
 import type { HumanOrganizationRequestResult } from "@vortex/access";
 import {
@@ -59,13 +67,19 @@ import type { ProtectedOperationExecutor } from "./protected-operation-executor"
  *   token that is unknown, expired, used, foreign or for another release is one neutral result.
  * - The run limits are enforced here and in the interpreter: 100 For each items, 25 protected
  *   operations, 10 seconds of server time (across every resume) and a Run flow depth of 3.
- * - A task the platform cannot run yet is refused with a located `not_yet_available` notice. It is
- *   never run inline and never guessed.
- * - A named action is a `transaction` flow started through its binding (`executeAction`). The same
- *   interpreter runs it for the action's subject record inside the transaction the record port
- *   owns, and the record changes it asks for are applied by that port in one apply record changes
- *   call, so a web button and an agent tool reach one entry point. Its actor is the verified
- *   session's organisation account, never anything the command carries.
+ * - A task the platform cannot run yet fails with a located `not_yet_available` notice and the
+ *   `task_not_available` failure code, never as a refusal, so a person is not told they lack a
+ *   permission for something that does not exist yet. It is never run inline and never guessed.
+ * - A Save record task runs through the record save port (`records`): the ordinary-human protected
+ *   save, in its own transaction under the initiator's verified request. Its values are named by the
+ *   exact release's field keys or field identities, and a change to an existing record is bound to
+ *   the revision the surface was rendered at, never to one read at save time.
+ * - A named action is a `transaction` flow started through its binding (`executeAction`), or by a
+ *   Call protected operation task that names the action's key for the surface's subject record.
+ *   The same interpreter runs it for that record inside the transaction the record port owns, and
+ *   the record changes it asks for are applied by that port in one apply record changes call, so a
+ *   web button and an agent tool reach one entry point. Its actor is the verified session's
+ *   organisation account, never anything the command carries.
  *
  * Every failure is a safe outcome; the orchestrator never throws to its caller.
  */
@@ -83,6 +97,44 @@ const serverMilliseconds = flowMaximumServerSeconds * 1_000;
 export type FlowRelease = Readonly<{
   releaseKey: string;
   flows: ReadonlyMap<string, unknown>;
+  /** The release's record types by lower-case record type id, for the values of a Save record task. */
+  recordTypes?: ReadonlyMap<string, FlowRecordType>;
+  /** The release's named actions by action key, for a Call protected operation task naming one. */
+  namedActions?: ReadonlyMap<string, FlowNamedAction>;
+}>;
+
+/** One record type of a release: each field's identity by its key and by its own identity. */
+export type FlowRecordType = Readonly<{
+  /** Lower-case field key or field id, to the field id. */
+  fieldIds: ReadonlyMap<string, string>;
+}>;
+
+/** A named action of a release: the one installed action a task names by its key. */
+export type FlowNamedAction = Readonly<{
+  action: InstalledNamedActionReferenceV2;
+  /** The record type the action runs on. */
+  subjectRecordTypeId: string;
+}>;
+
+/**
+ * The record a surface was rendered for: the page's own subject and the revision the person saw.
+ * It is evidence, never authority. A Save record task or named action that uses it still passes
+ * the protected path's own access, record type and revision checks, so a forged or stale subject
+ * is refused or reported as a conflict.
+ */
+export type FlowSubject = Readonly<{ recordId: string; revision: number }>;
+
+/**
+ * The protected save a Save record task runs through (#1369): the ordinary-human base save of the
+ * record service (`createRecordSaveService`), in its own transaction under the initiator's verified
+ * request. It owns every access, field, rule, calculation and revision decision.
+ */
+export type RecordSaveTaskPort = Readonly<{
+  save(
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    command: SaveRecordCommandV2,
+  ): Promise<HumanOrganizationRequestResult<SaveRecordResultV2>>;
 }>;
 
 /**
@@ -109,6 +161,8 @@ export type FlowOrchestratorDependencies = Readonly<{
   executor: Pick<ProtectedOperationExecutor, "execute">;
   /** Runs named-action flows; without it an action is unavailable. */
   actionRecords?: NamedActionRecordPort;
+  /** Runs Save record tasks; without it a Save record task is unavailable. */
+  records?: RecordSaveTaskPort;
   continuations: FlowContinuationStore;
   ledger: FlowEffectLedger;
   /**
@@ -141,6 +195,13 @@ export type FlowOrchestratorDependencies = Readonly<{
   newToken?: () => string;
 }>;
 
+const subjectSchema = z
+  .object({
+    recordId: recordIdSchema,
+    revision: revisionSchema.max(Number.MAX_SAFE_INTEGER - 1),
+  })
+  .strict();
+
 const startRequestSchema = z
   .object({
     session: identitySessionSchema,
@@ -151,6 +212,8 @@ const startRequestSchema = z
         inputs: z.record(z.string(), z.unknown()).default({}),
       })
       .strict(),
+    /** The surface's subject record, for the tasks of this segment only (see `FlowSubject`). */
+    subject: subjectSchema.optional(),
   })
   .strict();
 
@@ -238,10 +301,37 @@ const refused: FlowOrchestratorResponse = Object.freeze({ kind: "refused" });
 
 const sha256 = (value: string): string => createHash("sha256").update(value).digest("hex");
 
+/**
+ * The command identity of one protected task's record change: stable for the run, task path and
+ * iteration, so a replayed run reaches the same record receipt instead of writing again. Version
+ * and variant bits are set so it is a strictly valid UUID.
+ */
+const effectCommandId = (runId: string, taskPath: string, iteration: string): string => {
+  const bytes = createHash("sha256")
+    .update(["flow-task-command", runId.toLowerCase(), taskPath, iteration].join("|"))
+    .digest()
+    .subarray(0, 16);
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
+/** The task outcome of a protected record path's safe refusal code. */
+const refusalOutcome = (code: string): FlowTaskOutcome =>
+  code === "conflict" ? "conflict" : code === "invalid_request" ? "validation" : "refused";
+
+/**
+ * The task outcome of a protected record path that returned no result: a request the person's own
+ * access refused, or whose refusal was recorded, is refused; one that could not run is failed.
+ */
+const requestOutcome = (kind: "unavailable" | "temporarily_unavailable"): FlowTaskOutcome =>
+  kind === "unavailable" ? "refused" : "failed";
+
 /** Tasks the platform cannot run on the server yet, and what each waits for. */
 const notYetAvailable: Readonly<Record<string, string>> = Object.freeze({
   // A named action's record tasks run in its transaction flow through the record port; an
-  // interactive flow has no record task port yet.
+  // interactive flow runs only Save record, through the record save port.
   "record.save": "the interactive record task port",
   "record.create": "the interactive record task port",
   "record.set_fields": "the interactive record task port",
@@ -369,6 +459,11 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
      * nothing that carries one is stored or handed to another protected operation.
      */
     sensitive: string[];
+    /**
+     * The surface's subject record for this segment. It is never stored with a suspended run, so a
+     * resumed segment has none and a task that needs it is not available there.
+     */
+    subject?: FlowSubject;
   }>;
 
   const elapsedMilliseconds = (run: Run): number =>
@@ -379,20 +474,25 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     step: Extract<FlowRunStep, { kind: "finished" }>,
   ): FlowOrchestratorResponse => {
     const intents = step.intents.map(safeIntent);
-    if (step.result.status === "failed")
+    if (step.result.status === "failed") {
+      const failedTaskId = step.result.failure.taskId;
+      // A task the platform could not run ends the run as not available, never as a refusal.
+      const notAvailable =
+        failedTaskId !== undefined && run.unavailable.some((notice) => notice.taskId === failedTaskId);
       return {
         kind: "finished",
         runId: step.state.runId,
         outcome: step.result.failure.outcome,
         committedEffects: step.state.committedEffects,
         failure: {
-          code: step.result.failure.code,
-          ...(step.result.failure.taskId === undefined ? {} : { taskId: step.result.failure.taskId }),
+          code: notAvailable ? "task_not_available" : step.result.failure.code,
+          ...(failedTaskId === undefined ? {} : { taskId: failedTaskId }),
         },
         outputs: {},
         intents,
         unavailable: run.unavailable,
       };
+    }
     return {
       kind: "finished",
       runId: step.state.runId,
@@ -418,50 +518,212 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     unavailable: run.unavailable,
   });
 
+  type PlatformOperation =
+    (typeof PLATFORM_SERVICE_OPERATIONS)[keyof typeof PLATFORM_SERVICE_OPERATIONS];
+
+  /** What one protected task will run, decided before its effect is claimed. */
+  type TaskPlan =
+    | Readonly<{ kind: "operation"; entry: PlatformOperation; inputs: Record<string, unknown> }>
+    | Readonly<{ kind: "save"; command: SaveRecordCommandV2 }>
+    | Readonly<{ kind: "action"; command: ExecuteNamedActionCommandV2 }>;
+
+  type TaskResult = { outcome: FlowTaskOutcome; outputs?: Record<string, JsonValue> };
+
+  /** Records a task the platform cannot run here: it fails as not available, never as refused. */
+  const notAvailable = (run: Run, call: FlowProtectedTaskCall, requires: string): TaskResult => {
+    run.unavailable.push({
+      taskId: call.taskId,
+      taskType: call.taskType,
+      code: "not_yet_available",
+      requires,
+    });
+    return { outcome: "failed" };
+  };
+
+  /** A Call protected operation task's inputs: its own input map, or the flow's inputs by name. */
+  const operationInputs = (call: FlowProtectedTaskCall): Record<string, unknown> | undefined => {
+    const suppliedInputs = call.properties.inputs?.value;
+    if (suppliedInputs !== undefined && !isRecord(suppliedInputs)) return undefined;
+    return isRecord(suppliedInputs)
+      ? suppliedInputs
+      : Object.fromEntries(
+          Object.entries(call.flowInputs).map(([name, value]) => [name, value.value]),
+        );
+  };
+
+  /**
+   * Decides what one protected task runs, from the task, the exact release and the segment's
+   * subject only. Nothing runs here, so a task that cannot run is settled before any claim.
+   */
+  const planTask = (
+    run: Run,
+    state: FlowRunState,
+    call: FlowProtectedTaskCall,
+  ): Readonly<{ plan: TaskPlan }> | TaskResult => {
+    const commandId = effectCommandId(state.runId, call.taskPath, call.iteration);
+
+    if (call.taskType === "record.save") {
+      if (dependencies.records === undefined)
+        return notAvailable(run, call, "the interactive record task port");
+      const recordTypeId = recordTypeIdSchema.safeParse(call.properties.record_type?.value);
+      const recordType = recordTypeId.success
+        ? run.release.recordTypes?.get(recordTypeId.data.toLowerCase())
+        : undefined;
+      if (!recordTypeId.success || recordType === undefined)
+        return notAvailable(run, call, "a record type of this release");
+      // The values are named by the release's field keys or field identities; any other name is
+      // refused as invalid, never dropped.
+      const values = call.properties.values?.value;
+      if (!isRecord(values) || carriesSensitive(values, run.sensitive))
+        return { outcome: "validation" };
+      const submittedValues: Record<string, JsonValue> = {};
+      for (const [name, value] of Object.entries(values)) {
+        const fieldId = recordType.fieldIds.get(name.toLowerCase());
+        if (fieldId === undefined || Object.hasOwn(submittedValues, fieldId))
+          return { outcome: "validation" };
+        submittedValues[fieldId] = value as JsonValue;
+      }
+      // A task that names a record changes it; one that names none creates a record.
+      if (!Object.hasOwn(call.properties, "record")) {
+        const command = saveRecordCommandV2Schema.safeParse({
+          contractVersion: "2.0.0",
+          commandId,
+          operation: "create",
+          recordTypeId: recordTypeId.data,
+          submittedValues,
+        });
+        return command.success
+          ? { plan: { kind: "save", command: command.data } }
+          : { outcome: "validation" };
+      }
+      const recordId = recordIdSchema.safeParse(call.properties.record?.value);
+      if (!recordId.success) return { outcome: "validation" };
+      // A change is bound to the revision the person saw: the surface's subject. Without it the
+      // change cannot be checked against what the person was shown, so it does not run.
+      const subject = run.subject;
+      if (subject === undefined || subject.recordId.toLowerCase() !== recordId.data.toLowerCase())
+        return notAvailable(run, call, "the revision of the record the page shows");
+      const command = saveRecordCommandV2Schema.safeParse({
+        contractVersion: "2.0.0",
+        commandId,
+        operation: "update",
+        recordTypeId: recordTypeId.data,
+        recordId: recordId.data,
+        expectedConcurrencyNumber: subject.revision,
+        submittedValues,
+      });
+      return command.success
+        ? { plan: { kind: "save", command: command.data } }
+        : { outcome: "validation" };
+    }
+
+    if (call.taskType !== "operation.call")
+      return notAvailable(run, call, notYetAvailable[call.taskType] ?? "a server task runner");
+
+    const operationKey = call.properties.operation?.value;
+    const inputs = operationInputs(call);
+    // A sensitive value is shown to the person once; it is never passed on to another effect.
+    if (inputs === undefined || carriesSensitive(inputs, run.sensitive))
+      return { outcome: "validation" };
+    const entry = Object.values(PLATFORM_SERVICE_OPERATIONS).find(
+      (candidate) => platformOperationKey(candidate.key) === operationKey,
+    );
+    if (entry !== undefined) return { plan: { kind: "operation", entry, inputs } };
+
+    // Otherwise the key may name one named action of the exact release, run for the surface's
+    // subject record through the same path as its binding (`executeAction`).
+    const named =
+      typeof operationKey === "string" ? run.release.namedActions?.get(operationKey) : undefined;
+    if (named === undefined || dependencies.actionRecords === undefined)
+      return notAvailable(run, call, "a registered protected operation");
+    if (run.subject === undefined)
+      return notAvailable(run, call, "the record the action runs on");
+    const command = executeNamedActionCommandV2Schema.safeParse({
+      contractVersion: "2.0.0",
+      commandId,
+      action: named.action,
+      recordTypeId: named.subjectRecordTypeId,
+      recordId: run.subject.recordId,
+      expectedConcurrencyNumber: run.subject.revision,
+      inputs,
+    });
+    return command.success
+      ? { plan: { kind: "action", command: command.data } }
+      : { outcome: "validation" };
+  };
+
+  /** Runs a planned task's effect, holding the claim. Every failure is a safe outcome. */
+  const runPlan = async (
+    run: Run,
+    state: FlowRunState,
+    call: FlowProtectedTaskCall,
+    plan: TaskPlan,
+  ): Promise<{ result: TaskResult; stored: Record<string, JsonValue> }> => {
+    if (plan.kind === "save") {
+      const saved = await dependencies.records!.save(run.session, run.selection, plan.command);
+      if (saved.kind !== "available")
+        return { result: { outcome: requestOutcome(saved.kind) }, stored: {} };
+      const value = saved.value;
+      if (value.outcome === "saved") {
+        const outputs = { record: value.recordId };
+        return { result: { outcome: "committed", outputs }, stored: outputs };
+      }
+      const outcome =
+        value.outcome === "correction_required" ? "validation" : refusalOutcome(value.error.code);
+      return { result: { outcome }, stored: {} };
+    }
+
+    if (plan.kind === "action") {
+      const executed = await runNamedAction(run.session, run.selection, plan.command);
+      if (executed.kind !== "available")
+        return { result: { outcome: requestOutcome(executed.kind) }, stored: {} };
+      const value = executed.value;
+      if (value.outcome === "completed") {
+        // Only the record's identity and revision are kept: its readable values stay with the port.
+        const outputs = {
+          result: { recordId: value.recordId, concurrencyNumber: value.concurrencyNumber },
+        };
+        return { result: { outcome: "committed", outputs }, stored: outputs };
+      }
+      return { result: { outcome: refusalOutcome(value.error.code) }, stored: {} };
+    }
+
+    const executed = await dependencies.executor.execute({
+      operation: {
+        serviceId: plan.entry.release.serviceId,
+        operationId: plan.entry.release.operationId,
+        releaseVersion: plan.entry.release.releaseVersion,
+      },
+      session: run.session,
+      selection: run.selection,
+      inputs: plan.inputs,
+      effectKey: { runId: state.runId, taskPath: call.taskPath, iteration: call.iteration },
+    });
+    const outcome: FlowTaskOutcome = executed.outcome;
+    const outputs: Record<string, JsonValue> =
+      executed.outcome === "committed" ? { result: { ...executed.outputs } } : {};
+    const sensitive = plan.entry.descriptor.sensitiveOutputs ?? [];
+    if (executed.outcome === "committed")
+      run.sensitive.push(...sensitiveValues(executed.outputs, sensitive));
+    const stored: Record<string, JsonValue> =
+      executed.outcome === "committed"
+        ? { result: redactSensitiveOutputs(executed.outputs, sensitive) }
+        : {};
+    return { result: { outcome, outputs }, stored };
+  };
+
   /**
    * Runs one protected task of the interpreter. The effect ledger claims the duplicate key first,
-   * the executor runs only when this call holds the claim, and the safe outcome is recorded so any
-   * repeat replays it.
+   * the task's protected path runs only when this call holds the claim, and the safe outcome is
+   * recorded so any repeat replays it.
    */
   const runProtectedTask = async (
     run: Run,
     state: FlowRunState,
     call: FlowProtectedTaskCall,
-  ): Promise<{ outcome: FlowTaskOutcome; outputs?: Record<string, JsonValue> }> => {
-    if (call.taskType !== "operation.call") {
-      run.unavailable.push({
-        taskId: call.taskId,
-        taskType: call.taskType,
-        code: "not_yet_available",
-        requires: notYetAvailable[call.taskType] ?? "a server task runner",
-      });
-      return { outcome: "refused" };
-    }
-
-    const operationKey = call.properties.operation?.value;
-    const entry = Object.values(PLATFORM_SERVICE_OPERATIONS).find(
-      (candidate) => platformOperationKey(candidate.key) === operationKey,
-    );
-    if (entry === undefined) {
-      // A named action starts through its binding (`executeAction`), never through this task, and
-      // nothing else is registered.
-      run.unavailable.push({
-        taskId: call.taskId,
-        taskType: call.taskType,
-        code: "not_yet_available",
-        requires: "a registered protected operation",
-      });
-      return { outcome: "refused" };
-    }
-    const suppliedInputs = call.properties.inputs?.value;
-    if (suppliedInputs !== undefined && !isRecord(suppliedInputs)) return { outcome: "validation" };
-    const inputs: Record<string, unknown> = isRecord(suppliedInputs)
-      ? suppliedInputs
-      : Object.fromEntries(
-          Object.entries(call.flowInputs).map(([name, value]) => [name, value.value]),
-        );
-    // A sensitive value is shown to the person once; it is never passed on to another effect.
-    if (carriesSensitive(inputs, run.sensitive)) return { outcome: "validation" };
+  ): Promise<TaskResult> => {
+    const planned = planTask(run, state, call);
+    if (!("plan" in planned)) return planned;
 
     const key = {
       runId: state.runId,
@@ -485,33 +747,19 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     if (claim.kind === "in_progress") return { outcome: "uncertain" };
     if (claim.kind !== "claimed") return { outcome: "refused" };
 
-    const executed = await dependencies.executor.execute({
-      operation: {
-        serviceId: entry.release.serviceId,
-        operationId: entry.release.operationId,
-        releaseVersion: entry.release.releaseVersion,
-      },
-      session: run.session,
-      selection: run.selection,
-      inputs,
-      effectKey: { runId: key.runId, taskPath: key.taskPath, iteration: key.iteration },
-    });
-    const outcome: FlowTaskOutcome = executed.outcome;
-    const outputs: Record<string, JsonValue> =
-      executed.outcome === "committed" ? { result: { ...executed.outputs } } : {};
-    const sensitive = entry.descriptor.sensitiveOutputs ?? [];
-    if (executed.outcome === "committed")
-      run.sensitive.push(...sensitiveValues(executed.outputs, sensitive));
-    const storedOutputs: Record<string, JsonValue> =
-      executed.outcome === "committed"
-        ? { result: redactSensitiveOutputs(executed.outputs, sensitive) }
-        : {};
+    let ran: Awaited<ReturnType<typeof runPlan>>;
     try {
-      await dependencies.ledger.complete(key, outcome, storedOutputs);
+      ran = await runPlan(run, state, call, planned.plan);
+    } catch {
+      // Whether the effect committed is unknown; the open claim reports any repeat as uncertain.
+      return { outcome: "uncertain" };
+    }
+    try {
+      await dependencies.ledger.complete(key, ran.result.outcome, ran.stored);
     } catch {
       // The effect ran. Leaving the claim open makes any repeat report it uncertain, never re-run it.
     }
-    return { outcome, outputs };
+    return ran.result;
   };
 
   /** Suspends at a form or confirmation: stores the run and returns the intent and continuation. */
@@ -613,7 +861,10 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           flow.triggers.length > 0)
     )
       return undefined;
-    if (!(await permitted(flow))) return undefined;
+    // A named action's invocation permission is its own action permission, which the record port
+    // decides for the exact subject record inside its transaction, recording a refusal, just as it
+    // decides an action with permission alternatives. Every other flow is checked here.
+    if (kind === "interactive" && !(await permitted(flow))) return undefined;
 
     // Run flow never starts a flow the initiator may not invoke: every flow the run can reach is
     // checked now, and one that is refused is unavailable to the run, so its Run flow task fails.
@@ -634,12 +885,32 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     return { session, selection, flowId, release, library };
   };
 
+  /**
+   * The one path of a named action, from its binding or from a Call protected operation task:
+   * resolves the exact release's action flow and hands the record port a run of that flow to call
+   * inside its transaction, where the action's permission, subject and revision are decided.
+   */
+  const runNamedAction = async (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    command: ExecuteNamedActionCommandV2,
+  ): Promise<NamedActionExecutionResult> => {
+    if (dependencies.actionRecords === undefined) return { kind: "unavailable" };
+    const flowId = command.action.actionId;
+    const prepared = await prepare(session, selection, flowId, "action");
+    if (prepared === undefined) return { kind: "unavailable" };
+    const runId = newRunId();
+    return dependencies.actionRecords.execute(session, selection, command, (seed) =>
+      collectActionFlowTasks(prepared.library, flowId, runId, seed),
+    );
+  };
+
   return Object.freeze({
     /**
-     * Runs one named action for the verified person: resolves the exact release's action flow,
-     * checks its invocation permission, and hands the record port a run of that flow to call inside
-     * its transaction. The port applies every record change the flow asks for in one apply record
-     * changes call. Nothing about the actor or the organisation is read from the command.
+     * Runs one named action for the verified person: resolves the exact release's action flow and
+     * hands the record port a run of that flow to call inside its transaction, where the action's
+     * permission is decided. The port applies every record change the flow asks for in one apply
+     * record changes call. Nothing about the actor or the organisation is read from the command.
      */
     async executeAction(
       session: IdentitySession,
@@ -651,18 +922,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           .object({ session: identitySessionSchema, selection: organizationSelectionCandidateSchema })
           .safeParse({ session, selection });
         const command = executeNamedActionCommandV2Schema.safeParse(commandCandidate);
-        if (!parsed.success || !command.success || dependencies.actionRecords === undefined)
-          return { kind: "unavailable" };
-        const flowId = command.data.action.actionId;
-        const prepared = await prepare(parsed.data.session, parsed.data.selection, flowId, "action");
-        if (prepared === undefined) return { kind: "unavailable" };
-        const runId = newRunId();
-        return await dependencies.actionRecords.execute(
-          parsed.data.session,
-          parsed.data.selection,
-          command.data,
-          (seed) => collectActionFlowTasks(prepared.library, flowId, runId, seed),
-        );
+        if (!parsed.success || !command.success) return { kind: "unavailable" };
+        return await runNamedAction(parsed.data.session, parsed.data.selection, command.data);
       } catch {
         return { kind: "unavailable" };
       }
@@ -670,8 +931,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
 
     /**
      * Starts a run from a binding (flow id and typed inputs) for the verified initiator. The run id
-     * is issued here. The inputs are values only: authority, organisation and actor never come
-     * from them.
+     * is issued here. The inputs and the surface's subject are values only: authority,
+     * organisation and actor never come from them.
      */
     async start(
       request: FlowStartRequest,
@@ -680,7 +941,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       try {
         const parsed = startRequestSchema.safeParse(request);
         if (!parsed.success || !withinPayload(parsed.data.binding.inputs)) return refused;
-        const { session, selection, binding } = parsed.data;
+        const { session, selection, binding, subject } = parsed.data;
         const prepared = await prepare(session, selection, binding.flowId);
         if (prepared === undefined) return refused;
         if (expectation !== undefined && expectation.releaseKey !== prepared.release.releaseKey)
@@ -692,6 +953,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           segmentStart: clock(),
           unavailable: [],
           sensitive: [],
+          ...(subject === undefined ? {} : { subject }),
         };
         const first = startFlowRun(
           {

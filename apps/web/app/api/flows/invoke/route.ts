@@ -11,9 +11,13 @@ import {
   createFormContinuationService,
   createOperationsAlertSink,
   createProtectedOperationExecutor,
+  type FlowNamedAction,
+  type FlowRecordType,
+  type FlowRelease,
 } from "@vortex/app";
 import {
   flowTaskChildLists,
+  installedNamedActionReferenceV2Schema,
   type FlowDefinition,
   type FlowTask,
   type FormContinuationOutcome,
@@ -25,6 +29,7 @@ import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definit
 import { createTenantGovernanceService } from "@vortex/identity";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { createPageFormRequestAdapter, createPrivateFormSubmitAdapter } from "@vortex/page";
+import { createNamedActionRecordPort, createRecordSaveService } from "@vortex/record";
 import type { RuntimeDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
@@ -179,6 +184,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
     const stores = createDatabaseFlowStores();
+    // #1369, #1370: Save record tasks and named actions run through the record service's own
+    // protected paths, under the initiator's verified request and in their own transactions.
+    const records = createRecordSaveService({ identityAuthorityId: authorityId, telemetry });
+    const actionRecords = createNamedActionRecordPort({
+      identityAuthorityId: authorityId,
+      telemetry,
+    });
+    const orchestratorFor = (release: FlowRelease, runId?: string) =>
+      createFlowOrchestrator({
+        executor,
+        records,
+        actionRecords,
+        continuations: stores.continuations,
+        ledger: stores.ledger,
+        // The release was read from the trusted installation for this exact request.
+        resolveRelease: async () => release,
+        ...(runId === undefined ? {} : { newRunId: () => runId }),
+      });
 
     /** The trusted active installation for the initiator's own selection; never from the request. */
     const readInstalled = async (
@@ -203,6 +226,67 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           if (flows.has(String(flow.id))) throw new Error("FLOW_IDENTITY_AMBIGUOUS");
           flows.set(String(flow.id), flow);
         }
+        // Each record type's fields by key and by identity, for the values of a Save record task.
+        const recordTypes = new Map<string, FlowRecordType>();
+        for (const recordType of releaseSet.modules.flatMap((module) => module.content.recordTypes)) {
+          const fieldIds = new Map<string, string>();
+          for (const field of recordType.fields) {
+            fieldIds.set(String(field.key).toLowerCase(), String(field.fieldId));
+            fieldIds.set(String(field.fieldId).toLowerCase(), String(field.fieldId));
+          }
+          recordTypes.set(String(recordType.recordTypeId).toLowerCase(), { fieldIds });
+        }
+        // Each installed named action by its key, as the exact action a Call protected operation
+        // task names. An ambiguous key names no action rather than a guessed one.
+        const namedActions = new Map<string, FlowNamedAction>();
+        const ambiguousActionKeys = new Set<string>();
+        const addActions = (
+          owner: Readonly<{
+            ownerKind: "application" | "module";
+            ownerId: string;
+            releaseRevision: number;
+          }>,
+          actions: readonly Readonly<{
+            actionId: string;
+            key: string;
+            subjectRecordTypeId: string;
+          }>[],
+        ) => {
+          for (const action of actions) {
+            const key = String(action.key);
+            const reference = installedNamedActionReferenceV2Schema.safeParse({
+              ...owner,
+              actionId: action.actionId,
+            });
+            if (!reference.success) continue;
+            if (namedActions.has(key) || ambiguousActionKeys.has(key)) {
+              namedActions.delete(key);
+              ambiguousActionKeys.add(key);
+              continue;
+            }
+            namedActions.set(key, {
+              action: reference.data,
+              subjectRecordTypeId: String(action.subjectRecordTypeId),
+            });
+          }
+        };
+        addActions(
+          {
+            ownerKind: "application",
+            ownerId: application.rootId,
+            releaseRevision: application.releaseRevision,
+          },
+          application.content.actions,
+        );
+        for (const module of releaseSet.modules)
+          addActions(
+            {
+              ownerKind: "module",
+              ownerId: module.rootId,
+              releaseRevision: module.releaseRevision,
+            },
+            module.content.actions,
+          );
         const installed: InstalledFlowBindings = {
           organizationId: installation.organizationId,
           applicationRootId: address.application.applicationRootId,
@@ -214,6 +298,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           ].join(":"),
           bindings: application.content.flowBindings,
           flows,
+          recordTypes,
+          namedActions,
         };
         return installed;
       });
@@ -232,17 +318,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     ): Promise<FormContinuationOutcome> => {
       const installed = await readInstalled(session, selection);
       if (installed === undefined) return { kind: "refused", reason: "unavailable" } as const;
-      const release = { releaseKey: installed.releaseKey, flows: installed.flows };
+      const release: FlowRelease = {
+        releaseKey: installed.releaseKey,
+        flows: installed.flows,
+        ...(installed.recordTypes === undefined ? {} : { recordTypes: installed.recordTypes }),
+        ...(installed.namedActions === undefined ? {} : { namedActions: installed.namedActions }),
+      };
       // The Page request adapter forwards the exact evidence unchanged; the #544 interface is the
       // only place that compares it with trusted state and consumes the single-use continuation.
       const pageFormRequests = createPageFormRequestAdapter({
         continuation: createFormContinuationService({
-          orchestrator: createFlowOrchestrator({
-            executor,
-            continuations: stores.continuations,
-            ledger: stores.ledger,
-            resolveRelease: async () => release,
-          }),
+          orchestrator: orchestratorFor(release),
           resolveInstallation: async ({ installation, flowId, node }) => {
             // Another application is foreign, not stale: it gets the neutral refusal.
             if (
@@ -265,17 +351,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const adaptFormSubmit = createPrivateFormSubmitAdapter();
     const endpoint = createFlowBindingEndpoint({
       readInstallation: readInstalled,
-      adaptFormSubmit: async (binding, callerInputs) => adaptFormSubmit(binding, callerInputs),
+      adaptFormSubmit: async (binding, callerInputs, subject) =>
+        adaptFormSubmit(binding, callerInputs, subject),
       continueForm,
-      orchestratorFor: (release, runId) =>
-        createFlowOrchestrator({
-          executor,
-          continuations: stores.continuations,
-          ledger: stores.ledger,
-          // The release was read from the trusted installation for this exact request.
-          resolveRelease: async () => release,
-          ...(runId === undefined ? {} : { newRunId: () => runId }),
-        }),
+      orchestratorFor,
     });
 
     const result = await endpoint.invoke(identity.session, {
