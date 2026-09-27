@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { QueryContinuationKey } from "@vortex/query";
+import { requiredEnvironmentValue } from "./server-configuration";
 
 const environmentName = "VORTEX_QUERY_CONTINUATION_KEY";
 const keyByteLength = 32;
@@ -12,8 +13,7 @@ const keyByteLength = 32;
  * so no page can read data with a guessable token key.
  */
 export const getQueryContinuationKey = (): QueryContinuationKey => {
-  const encoded = process.env[environmentName]?.trim();
-  if (!encoded) throw new Error(`Missing required server configuration: ${environmentName}`);
+  const encoded = requiredEnvironmentValue(environmentName).trim();
   // 32 bytes encode to exactly 43 base64 characters plus one padding character.
   const key = Buffer.from(encoded, "base64");
   if (!/^[A-Za-z0-9+/]{43}=$/.test(encoded) || key.length !== keyByteLength)

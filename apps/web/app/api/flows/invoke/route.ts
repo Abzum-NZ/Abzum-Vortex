@@ -1,15 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
-  createHumanOrganizationRequestService,
   createOrganizationAccessAdministrationService,
   createOrganizationRuntimeSettingsAdministrationService,
 } from "@vortex/access";
 import {
-  createAppTelemetryCollector,
   createDatabaseFlowStores,
   createFlowOrchestrator,
   createFormContinuationService,
-  createOperationsAlertSink,
   createProtectedOperationExecutor,
   type FlowNamedAction,
   type FlowRecordType,
@@ -49,6 +46,8 @@ import {
   getIdentityJourneyConfiguration,
 } from "../../../auth/_lib/authority-configuration";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
+import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
+import { appTelemetry as telemetry, humanOrganizationRequests } from "../../../_lib/server-composition";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,19 +67,9 @@ const requestSchema = z
   })
   .strict();
 
-const privateResponse = (body: unknown, status: number): NextResponse => {
-  const response = NextResponse.json(body, { status });
-  response.headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate, max-age=0");
-  response.headers.set("Expires", "0");
-  response.headers.set("Pragma", "no-cache");
-  return response;
-};
-
 // One neutral answer for everything that is not a run or a reload: an unknown, foreign or
 // withdrawn binding, an unresolved address and a request that does not parse look the same.
 const refusedResponse = (): NextResponse => privateResponse({ kind: "refused" }, 404);
-
-const telemetry = createAppTelemetryCollector({ downstream: createOperationsAlertSink() });
 
 /**
  * The session is a cookie, so a run is accepted only from this site's own pages: a browser always
@@ -159,10 +148,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (address.kind !== "application_page") return refusedResponse();
 
     const { authorityId } = getIdentityAuthorityConfiguration();
-    const requests = createHumanOrganizationRequestService({
-      identityAuthorityId: authorityId,
-      telemetry,
-    });
+    const requests = humanOrganizationRequests(authorityId);
     const executor = createProtectedOperationExecutor({
       accessAdministration: createOrganizationAccessAdministrationService({
         identityAuthorityId: authorityId,
