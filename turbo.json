@@ -34,7 +34,26 @@
     },
     "@vortex/web#build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**"],
+      "passThroughEnv": [
+        "VORTEX_APPLICATION_KESTRA_URL",
+        "VORTEX_CLUSTER_ID",
+        "VORTEX_COMPONENT_BUNDLE_ORIGIN",
+        "VORTEX_ENVIRONMENT",
+        "VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256",
+        "VORTEX_FILE_STORAGE_SIGNING_KEY",
+        "VORTEX_FILE_STORAGE_SIGNING_KEY_ID",
+        "VORTEX_IDENTITY_AUTHORITY_ID",
+        "VORTEX_QUERY_CONTINUATION_KEY",
+        "VORTEX_RUNTIME_DATABASE_POOL_SIZE",
+        "VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT",
+        "VORTEX_RUNTIME_DATABASE_URL",
+        "VORTEX_SITE_URL",
+        "VORTEX_SUPABASE_PUBLISHABLE_KEY",
+        "VORTEX_SUPABASE_URL",
+        "VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID",
+        "VORTEX_WORKFLOW_CALLBACK_KEY"
+      ]
     }
   }
 }
