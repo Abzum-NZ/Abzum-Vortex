@@ -13,7 +13,7 @@ import {
 import { signOut } from "../auth/actions";
 import { AuthShell } from "../auth/_components/auth-shell";
 import { SubmitButton } from "../auth/_components/submit-button";
-import { continueSessionOrEnd, SESSION_ENDED_PATH } from "../auth/_lib/session-redirect";
+import { continueSessionOrEnd, redirectToSessionEnd } from "../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { organizationAddressPath } from "../_lib/address-paths";
 import { loadOrganizationLauncher } from "../_lib/organization-context";
@@ -74,7 +74,7 @@ const organizationTileValues = (
 async function openOrganization(event: DisplaySemanticEvent): Promise<void> {
   "use server";
   if (event?.event !== "row_action" || typeof event.recordId !== "string") return;
-  const identity = continueSessionOrEnd(await resolveIdentitySession());
+  const identity = await continueSessionOrEnd(await resolveIdentitySession());
   if (identity.kind === "temporarily_unavailable") redirect("/signed-in");
 
   const current = await loadOrganizationLauncher(identity.session);
@@ -85,7 +85,7 @@ async function openOrganization(event: DisplaySemanticEvent): Promise<void> {
 }
 
 export default async function SignedInPage() {
-  const result = continueSessionOrEnd(
+  const result = await continueSessionOrEnd(
     await retryOnceWhenTemporarilyUnavailable("session", resolveIdentitySession),
   );
   if (result.kind === "temporarily_unavailable")
@@ -116,7 +116,7 @@ export default async function SignedInPage() {
         </Link>
       </AuthShell>
     );
-  if (launcher.kind !== "available") redirect(SESSION_ENDED_PATH);
+  if (launcher.kind !== "available") await redirectToSessionEnd();
   const onlyEntry = launcher.entries[0];
   if (launcher.entries.length === 1 && onlyEntry)
     redirect(organizationAddressPath(onlyEntry.tenantShortName, onlyEntry.organizationShortName));

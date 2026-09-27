@@ -1,5 +1,6 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { getIdentityJourneyConfiguration } from "../_lib/authority-configuration";
+import { verifiesSessionCleanupProof } from "../_lib/session-cleanup-proof";
 import {
   identitySessionCookieDeletions,
   identitySessionCookieProfile,
@@ -38,13 +39,18 @@ export function GET(request: NextRequest): NextResponse {
   response.headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate, max-age=0");
   response.headers.set("Expires", "0");
   response.headers.set("Pragma", "no-cache");
+  response.headers.set("Referrer-Policy", "no-referrer");
 
   // A fixed safe redirect remains available when configuration is unavailable.
   if (siteUrl === undefined) return response;
   try {
-    // Browser cross-site navigations and form submissions cannot clear this browser's session.
-    // Session-expiry redirects started on this origin are same-origin navigations; direct visits use "none".
-    if (!allowsSessionEnd(request, siteUrl))
+    // A redirect from a protected page carries proof bound to this browser's current cookies.
+    // Fetch Metadata stays cross-site through redirects, so that proof is required for that case.
+    const sessionCookies = request.cookies.getAll().map(({ name, value }) => ({ name, value }));
+    if (
+      !allowsSessionEnd(request, siteUrl) &&
+      !verifiesSessionCleanupProof(request.nextUrl.searchParams.get("proof"), sessionCookies, siteUrl)
+    )
       return new NextResponse(null, { status: 403, headers: { "Cache-Control": "no-store" } });
     if (!requestMatchesConfiguredSite(request.headers, request.nextUrl, siteUrl)) return response;
     const profile = identitySessionCookieProfile(siteUrl);
