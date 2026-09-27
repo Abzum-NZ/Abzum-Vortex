@@ -282,20 +282,6 @@ export function extractApplicationSourceIdentityRequirementsV2(
     }
   }
 
-  for (const workflow of collection("workflows")) {
-    addIdentified("workflow", "content", "content", workflow);
-    const workflowKey = stringValue(workflow.key);
-    const workflowOwner = stringValue(workflow.id);
-    if (workflowKey === undefined || workflowOwner === undefined) continue;
-    for (const node of objects(workflow.nodes))
-      addIdentified(
-        "workflow_node",
-        `workflow_owner:${workflowOwner}`,
-        `workflow:${workflowKey}`,
-        node,
-      );
-  }
-
   for (const definition of collection("interfaces")) {
     addIdentified("interface", "content", "content", definition);
     const interfaceKey = stringValue(definition.key);

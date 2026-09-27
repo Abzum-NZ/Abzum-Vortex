@@ -181,7 +181,6 @@
       }
     ],
     "queries":  [],
-    "workflows": [],
     "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
