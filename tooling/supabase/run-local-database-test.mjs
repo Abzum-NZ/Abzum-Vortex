@@ -7,8 +7,8 @@ import { resolve } from "node:path";
 // container-local 127.0.0.1 refuses the connection (it is the pg_prove
 // container's own loopback, not the host's). Running the pinned pg_prove
 // image ourselves, on the same Docker network as the verify container, lets
-// it reach that container by its container name instead. See docs/build-plan
-// issue #384 Step 1.3.
+// it reach that container by its container name instead. See issue #384, Step 1.3:
+// https://github.com/Abzum-NZ/Abzum-Vortex/issues/384
 export const pgProveImage = "public.ecr.aws/supabase/pg_prove:3.36";
 
 const workspaceRoot = resolve(import.meta.dirname, "../..");
