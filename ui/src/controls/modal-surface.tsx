@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactElement } from "react";
-import { XIcon } from "lucide-react";
+import { Icon } from "../icons/icon";
 import { Button } from "../components/button";
 import {
   Dialog,
@@ -137,7 +137,7 @@ export function ModalSurface<Values extends ModalSurfacePayload>({
               />
             }
           >
-            <XIcon />
+            <Icon name="close" />
           </SheetClose>
           <div className="min-h-0 flex-1 overflow-y-auto px-4">{props.slots.content ?? null}</div>
           {props.slots.actions === undefined || props.slots.actions === null ? null : (
@@ -169,7 +169,7 @@ export function ModalSurface<Values extends ModalSurfacePayload>({
             />
           }
         >
-          <XIcon />
+          <Icon name="close" />
         </DialogClose>
         <div>{props.slots.content ?? null}</div>
         {props.slots.actions === undefined || props.slots.actions === null ? null : (
