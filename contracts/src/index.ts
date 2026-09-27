@@ -62,7 +62,6 @@ export * from "./rule-graph-contracts";
 export * from "./rule-graph-source-contracts";
 export * from "./shared-result-groups";
 export * from "./storage";
-export * from "./super-administrator-governance";
 export * from "./telemetry";
 export * from "./tenant-provisioning";
 export * from "./tenant-governance";

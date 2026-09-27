@@ -100,17 +100,6 @@ Only these structural capabilities are permitted:
 - `platform.tenant.organizations.create`
 - `platform.tenant.organizations.rename`
 - `platform.tenant.organizations.reparent`
-
-### Named Vortex super-administrator assignment
-
-A global Identity assignment has a permanent assignment identifier, verified
-identity, positive revision, grant and change timestamps, trusted actor kind and
-identifier, correlation evidence, and complete revocation evidence when revoked.
-Only one active assignment exists per identity. The configured system operator
-may bootstrap the first active assignment; active named super administrators
-grant and revoke assignments through the same Identity authority. No permissions
-or roles are copied into this ledger. An idempotency receipt binds each mutation
-to its operation and result.
 - `platform.tenant.organizations.lifecycle`
 - `platform.tenant.administrators.read`
 - `platform.tenant.administrators.manage`
@@ -161,10 +150,6 @@ The browser has no Supabase Auth client. Proxy constructs a request-specific SSR
 ### Organisation account
 
 `organisation_account_id`, `organisation_id`, `identity_id`, optional organisation-specific display name, state (`active`, `suspended`, or `closed`), optional language and time-zone preferences, optional originating invitation, activation/suspension/closure times, last-change time, state-change time, state-changing actor, correlation identifier, and positive revision. The pair `organisation_id` and `identity_id` is unique, so one identity cannot have two accounts in the same organisation. There is no `invited` account state: an unaccepted invitation is a separate record and creates no account. Access version is deliberately absent because the Access service owns one counter for the whole organisation. An organisation may add its own extension fields to this People projection; their values are ordinary organisation data keyed to the account and never part of the protected account contract.
-
-A super-administrator-provisioned account also records its provisioning kind,
-authorizing assignment and provisioning identity as immutable provenance. This
-evidence does not change the account's ordinary authorization path.
 
 ### Group and membership
 
@@ -226,11 +211,6 @@ one consistent ordering rule, not a new context, counter or retry mechanism.
 ### Organisation launcher and selection contracts
 
 An **organisation launcher entry** contains only `organizationId`, `tenantDisplayName`, `organizationDisplayName`, and an optional organisation-account `accountDisplayName`. It is ordered by display names with permanent identifiers as deterministic tie-breakers. It contains no tenant identifier, organisation-account identifier, hierarchy, lifecycle state, application, logo, role, Group, permission, email, provider fact, access version or commercial value.
-
-A named super administrator receives entries for all active organisations in
-active tenants, including those without an account. Selecting one provisions the
-ordinary local account and records assignment provenance before context
-establishment. A suspended local account is refused rather than reactivated.
 
 An **organisation launcher resolution** is exactly one of `available` with ordered entries, `temporarily_unavailable`, or `invalid_session_state`. Empty `available` entries means the verified identity currently has no active organisation account; a temporary data failure is never converted into that empty result.
 
@@ -921,7 +901,7 @@ The server may page resources with opaque cursors and announce that resource or 
 
 ## Activity and retention contracts
 
-An activity entry has organisation, activity identifier, time, actor kind and identifier, action, subject identifiers, safe changed-field identifiers, source, correlation and outcome. Actor kinds are `identity`, `organization_account`, `system` and `public_session`; anonymous session attribution is not identity verification. Federation is a source, not a separate principal kind. Named super-administrator authority may be attached as a separate `{kind, assignmentId}` attribution, and a first-entry account-provisioning Activity record identifies the authorizing assignment. Identifier lists are unique and canonically ordered. The activity identifier is the duplicate identity within the organisation: exact retries return the existing entry, and conflicting reuse refuses. The content-free append contract has no arbitrary payload or retained-detail reference. Separately governed value history is outside this foundation; see the [Activity plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252).
+An activity entry has organisation, activity identifier, time, actor kind and identifier, action, subject identifiers, safe changed-field identifiers, source, correlation and outcome. Actor kinds are `identity`, `organization_account`, `system` and `public_session`; anonymous session attribution is not identity verification. Federation is a source, not a separate principal kind. Identifier lists are unique and canonically ordered. The activity identifier is the duplicate identity within the organisation: exact retries return the existing entry, and conflicting reuse refuses. The content-free append contract has no arbitrary payload or retained-detail reference. Separately governed value history is outside this foundation; see the [Activity plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252).
 
 For a flow task using specified-account or system execution, the owning operation records its ordinary activity under the effective actor. When an initiating organisation account exists, the separate execution-delegation use records an initiator-account entry under the same correlation identifier. A system-started flow instead records its actual verified system actor and cause without inventing a human initiator. These entries use this existing append contract; no flow-specific activity store, envelope or copied authority evidence is introduced.
 
