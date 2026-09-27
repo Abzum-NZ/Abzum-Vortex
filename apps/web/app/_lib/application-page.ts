@@ -543,6 +543,8 @@ const calendarDateIsValid = (candidate: string | undefined): candidate is string
   date.setUTCFullYear(year, month - 1, day);
   date.setUTCHours(0, 0, 0, 0);
   return (
+    year >= 1 &&
+    year <= 9999 &&
     date.getUTCFullYear() === year &&
     date.getUTCMonth() === month - 1 &&
     date.getUTCDate() === day
@@ -1140,7 +1142,13 @@ export const loadApplicationPage = async (
           ? rawView
           : calendarContract.defaultView;
       const rawDate = first(parameters[`date.${placementId}`]);
-      const date = calendarDateIsValid(rawDate) ? rawDate : calendarToday(timeZone);
+      const candidateDate = calendarDateIsValid(rawDate) ? rawDate : calendarToday(timeZone);
+      const candidateWindow = calendarPeriod(view, candidateDate);
+      const date =
+        calendarDateIsValid(candidateWindow.startDate) &&
+        calendarDateIsValid(candidateWindow.endDate)
+          ? candidateDate
+          : calendarToday(timeZone);
       const window = calendarPeriod(view, date);
       const filterableFieldIds =
         mapping.kind === "start_end"
