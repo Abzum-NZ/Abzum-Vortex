@@ -42,11 +42,6 @@ begin
     return null;
   end if;
   read_bounds := vortex_access.resolve_record_field_bounds_internal(read_decision);
-  read_bounds := read_bounds || pg_catalog.jsonb_build_object(
-    'readableFieldIds', vortex_record.organization_settings_readable_field_ids_internal(
-      p_record_type_id, read_decision, read_bounds -> 'readableFieldIds'
-    )
-  );
   readable_field_ids := vortex_record.project_derived_readable_field_ids_internal(
     read_loaded, p_record_type_id, p_record_id,
     read_bounds -> 'readableFieldIds', read_bounds -> 'readableFieldIds', '[]'::jsonb

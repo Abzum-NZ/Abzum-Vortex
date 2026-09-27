@@ -110,11 +110,6 @@ begin
     );
   end if;
   read_bounds := vortex_access.resolve_record_field_bounds_internal(read_decision);
-  read_bounds := read_bounds || pg_catalog.jsonb_build_object(
-    'readableFieldIds', vortex_record.organization_settings_readable_field_ids_internal(
-      p_record_type_id, read_decision, read_bounds -> 'readableFieldIds'
-    )
-  );
   if exists (
     select 1
     from (

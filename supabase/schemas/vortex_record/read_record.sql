@@ -41,11 +41,6 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
   bounds := vortex_access.resolve_record_field_bounds_internal(decision);
-  bounds := bounds || pg_catalog.jsonb_build_object(
-    'readableFieldIds', vortex_record.organization_settings_readable_field_ids_internal(
-      p_record_type_id, decision, bounds -> 'readableFieldIds'
-    )
-  );
   bounds := bounds || pg_catalog.jsonb_build_object('readableFieldIds',
     vortex_record.project_derived_readable_field_ids_internal(
       loaded, p_record_type_id, p_record_id, bounds -> 'readableFieldIds',
