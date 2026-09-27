@@ -39,6 +39,8 @@ A platform-catalogue **connection type** defines:
 - Allowed destination hosts and redirect policy.
 - Health-check and revocation behaviour.
 
+Each connection-type release fixes one provider. If the platform adds another provider later, it publishes that provider as its own connection type. Microsoft Graph is the first provider for email and calendar. Webhook destinations may use only platform hosts allowlisted by the catalogue; customer-chosen hosts are out of scope.
+
 An organisation-owned **connection instance** selects a connection type and stores its encrypted credentials, granted applications, status, last successful check, and authorised administrator. Secrets never appear in definitions, exports, activity content, workflow inputs, logs, or browser responses.
 
 An application connection binding records the permanent connection-type identifier, an accepted version requirement, the exact resolved catalogue version, and the operation keys the application requires. Publication requires the exact compiled connection artifact from the caller's immutable resolution snapshot, checks that the declared requirement accepts the resolved version, and compares the snapshot and compiled operation catalogues in both directions before resolving every required operation against both. Missing, foreign-snapshot, altered, or partial connection artifacts are refused. This makes the application reproducible without embedding a connection instance or secret in its definition.
