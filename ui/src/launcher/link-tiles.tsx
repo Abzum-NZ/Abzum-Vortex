@@ -1,6 +1,14 @@
 "use client";
 
 import type { ReactElement } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "../components/card";
 import { cellValueToText } from "../display/cell";
 import { DisplayHeader, RowActionControl } from "../display/controls";
 import { DisplayStateContainer } from "../display/display-state-container";
@@ -19,9 +27,9 @@ const cellText = (cells: Readonly<Record<string, DisplayCellValue>>, key: string
 };
 
 /**
- * Browser-safe link-tile surface for already-returned query rows (see `linkTilesToListValues`). It
- * renders only the declared label, safe HTTPS address and description cells of a closed `list`
- * projection; it never executes the bound query (#584). Each address is re-validated against the
+ * Browser-safe link-tile surface, one shadcn Card per link, for already-returned query rows (see
+ * `linkTilesToListValues`). It renders only the declared label, safe HTTPS address and
+ * description cells of a closed `list` projection; it never executes the bound query (#584). Each address is re-validated against the
  * bounded HTTPS contract and opened in a new browsing context without opener access or referrer
  * (#619); internal application and page destinations are re-checked on the server by the page
  * capability service, never here. A non-link address cell is ignored rather than promoted, so a
@@ -38,9 +46,11 @@ export function LinkTiles(props: LauncherRenderProps): ReactElement {
   const values = context.values;
   const rows = values === undefined ? [] : filterLauncherRows(values.rows, filter, labelKey);
   const actions = props.slots.actions ?? null;
+  // A tile shows its open control only when the declared row action is bound and invocable.
+  const openable = context.events?.row_action !== undefined;
 
   return (
-    <div className="vortex-link-tiles-layout">
+    <div className="flex w-full min-w-0 flex-col gap-4">
       <DisplayStateContainer
         accessibleName={context.accessibleName}
         availability={props.availability}
@@ -51,7 +61,7 @@ export function LinkTiles(props: LauncherRenderProps): ReactElement {
           <section
             data-vortex-display="link-tiles"
             data-vortex-placement-id={props.placementId}
-            className="vortex-link-tiles"
+            className="flex flex-col"
             aria-label={context.accessibleName}
           >
             <DisplayHeader
@@ -60,41 +70,46 @@ export function LinkTiles(props: LauncherRenderProps): ReactElement {
               events={context.events}
             />
             {rows.length === 0 ? (
-              <p className="vortex-link-tiles-empty" role="status">
+              <p className="text-sm text-muted-foreground" role="status">
                 {filter?.emptyMessage ?? "No links to show"}
               </p>
             ) : (
-              <ul className="vortex-link-tile-list">
+              <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">
                 {rows.map((row) => {
                   const label = cellText(row.cells, labelKey) || "untitled link";
                   const description = cellText(row.cells, descriptionKey);
                   const address = row.cells[addressKey];
                   return (
-                    <li
-                      key={row.recordId}
-                      data-vortex-record-id={row.recordId}
-                      className="vortex-link-tile"
-                    >
-                      <span className="vortex-link-tile-label">{label}</span>
-                      {address === undefined || address.kind !== "link" ? null : (
-                        <span className="vortex-link-tile-address">
-                          <a
-                            className="vortex-cell-link"
-                            {...externalLinkActivation(address.address)}
-                          >
-                            {address.label}
-                            <span aria-hidden="true"> ↗</span>
-                            <span className="vortex-sr-only">
-                              {" "}
-                              (external link, opens in a new page)
-                            </span>
-                          </a>
-                        </span>
-                      )}
-                      {description === "" ? null : (
-                        <span className="vortex-link-tile-description">{description}</span>
-                      )}
-                      <RowActionControl recordId={row.recordId} name={label} events={context.events} />
+                    <li key={row.recordId} data-vortex-record-id={row.recordId} className="flex">
+                      <Card size="sm" className="w-full">
+                        <CardHeader>
+                          <CardTitle>{label}</CardTitle>
+                          {description === "" ? null : (
+                            <CardDescription>{description}</CardDescription>
+                          )}
+                        </CardHeader>
+                        {address === undefined || address.kind !== "link" ? null : (
+                          <CardContent>
+                            <a
+                              className="text-sm text-foreground underline underline-offset-4 hover:decoration-2"
+                              {...externalLinkActivation(address.address)}
+                            >
+                              {address.label}
+                              <span aria-hidden="true"> ↗</span>
+                              <span className="sr-only"> (external link, opens in a new page)</span>
+                            </a>
+                          </CardContent>
+                        )}
+                        {openable ? (
+                          <CardFooter className="mt-auto">
+                            <RowActionControl
+                              recordId={row.recordId}
+                              name={label}
+                              events={context.events}
+                            />
+                          </CardFooter>
+                        ) : null}
+                      </Card>
                     </li>
                   );
                 })}
@@ -103,7 +118,7 @@ export function LinkTiles(props: LauncherRenderProps): ReactElement {
           </section>
         )}
       </DisplayStateContainer>
-      {actions === null ? null : <div className="vortex-link-tiles-actions">{actions}</div>}
+      {actions === null ? null : <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>
   );
 }
