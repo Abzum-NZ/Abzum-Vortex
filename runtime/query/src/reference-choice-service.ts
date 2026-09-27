@@ -14,6 +14,7 @@ import {
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
+  type ReferenceChoiceSelectionEvidence,
   type RecordTypeId,
   type RecordTypeReference,
   type SelectedOrganizationScope,
@@ -43,6 +44,8 @@ export type ReferenceChoiceInputValues = Readonly<{
   kind: "choice_input";
   value?: string | null;
   options: readonly Readonly<{ key: string; label: string }>[];
+  optionEvidence: Readonly<Record<string, ReferenceChoiceSelectionEvidence>>;
+  nextContinuationToken?: string;
   error?: string;
 }>;
 
@@ -78,9 +81,32 @@ export function projectReferenceChoiceInputValues(
   choices: readonly ReferenceChoiceOption[],
   selectedKey?: string | null,
   error?: string,
+  page: Readonly<{
+    search?: string;
+    continuationToken?: string;
+    nextContinuationToken?: string;
+    optionEvidenceOverrides?: Readonly<Record<string, ReferenceChoiceSelectionEvidence>>;
+  }> = {},
 ): ReferenceChoiceInputValues {
   const options = Object.freeze(
     choices.map((choice) => Object.freeze({ key: choice.key, label: choice.label })),
+  );
+  const optionEvidence = Object.freeze(
+    Object.fromEntries(
+      choices.map((choice) => [
+        choice.key,
+        Object.freeze(
+          page.optionEvidenceOverrides?.[choice.key] ?? {
+            ...(page.search === undefined || page.search.trim() === ""
+              ? {}
+              : { search: page.search.trim() }),
+            ...(page.continuationToken === undefined
+              ? {}
+              : { continuationToken: page.continuationToken }),
+          },
+        ),
+      ]),
+    ),
   );
   const selected =
     selectedKey === undefined || selectedKey === null
@@ -91,6 +117,10 @@ export function projectReferenceChoiceInputValues(
   return Object.freeze({
     kind: "choice_input",
     options,
+    optionEvidence,
+    ...(page.nextContinuationToken === undefined
+      ? {}
+      : { nextContinuationToken: page.nextContinuationToken }),
     ...(selected === undefined ? {} : { value: selected }),
     ...(error === undefined ? {} : { error }),
   });

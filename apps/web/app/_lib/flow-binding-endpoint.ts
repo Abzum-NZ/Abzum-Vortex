@@ -13,6 +13,8 @@ import {
   type FormContinuationReceipt,
   type FormContinuationRequest,
   type FormContinuationTarget,
+  type ApplicationContentV2,
+  type ModuleDefinitionConsumerReadResultV3,
   type FlowBindingInvocation,
   type IdentitySession,
   type JsonValue,
@@ -81,6 +83,9 @@ export type InstalledFlowBindings = Readonly<{
   recordTypes?: ReadonlyMap<string, FlowRecordType>;
   /** The release's named actions by key, for a Call protected operation task that names one. */
   namedActions?: ReadonlyMap<string, FlowNamedAction>;
+  /** The exact active Application and Module definitions used to verify authored form values. */
+  applicationContent?: ApplicationContentV2;
+  modules?: readonly ModuleDefinitionConsumerReadResultV3[];
 }>;
 
 export type FlowBindingEndpointDependencies = Readonly<{
@@ -107,6 +112,7 @@ export type FlowBindingEndpointDependencies = Readonly<{
     binding: ComponentFlowBinding,
     callerInputs: Readonly<Record<string, unknown>>,
     subject: FlowSubject | undefined,
+    installation: InstalledFlowBindings,
   ) => Promise<Readonly<Record<string, unknown>> | undefined>;
   /**
    * THE SEAM for #588's continuation adapter: forwards an exact paused target and its run receipt to
@@ -451,6 +457,7 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
             binding,
             callerInputs,
             request.subject,
+            installation,
           );
           if (adapted === undefined || !isRecord(adapted)) return refused;
           callerInputs = adapted;

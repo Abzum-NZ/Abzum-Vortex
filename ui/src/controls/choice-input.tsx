@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   Combobox,
   ComboboxClear,
@@ -97,6 +97,49 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   };
 
   const referenceChoices = context.values?.options !== undefined;
+  const choicesRequested = useRef(context.events?.choices_requested);
+  const lastRequestedSearch = useRef<string | undefined>(undefined);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  choicesRequested.current = context.events?.choices_requested;
+  const requestChoices = useRef(
+    (search: string, continuationToken?: string): void => undefined,
+  );
+  requestChoices.current = (search, continuationToken) => {
+    const handler = choicesRequested.current;
+    if (handler === undefined) return;
+    const boundedSearch = search.trim().slice(0, 100);
+    const selectedEvidence =
+      permittedSelected === null
+        ? undefined
+        : context.values?.optionEvidence?.[permittedSelected];
+    const event = {
+      event: "choices_requested" as const,
+      ...(boundedSearch === "" ? {} : { search: boundedSearch }),
+      ...(continuationToken === undefined ? {} : { continuationToken }),
+      ...(permittedSelected === null
+        ? {}
+        : {
+            selectedKey: permittedSelected,
+            ...(selectedEvidence === undefined ? {} : { selectedEvidence }),
+          }),
+    };
+    setRemoteLoading(true);
+    void Promise.resolve(handler(event)).finally(() => setRemoteLoading(false));
+  };
+  useEffect(() => {
+    if (!referenceChoices || !comboboxOpen || choicesRequested.current === undefined) return;
+    const search = searchTerm.trim();
+    if (search === "" && lastRequestedSearch.current === undefined) return;
+    if (search === lastRequestedSearch.current) return;
+    lastRequestedSearch.current = search;
+    const timeout = setTimeout(() => requestChoices.current(search), 200);
+    return () => clearTimeout(timeout);
+  }, [comboboxOpen, referenceChoices, searchTerm]);
+  const loadMoreChoices = (): void => {
+    const continuationToken = context.values?.nextContinuationToken;
+    if (continuationToken !== undefined && !remoteLoading)
+      requestChoices.current(searchTerm.trim(), continuationToken);
+  };
   const searchable = referenceChoices || options.length > SEARCHABLE_OPTION_THRESHOLD;
   const radio = variant === "radio" && !searchable;
   const described = describedBy(ids, help, error, note, draftFeedback);
@@ -201,7 +244,20 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
                   </ComboboxItem>
                 )}
               </ComboboxList>
-              <ComboboxEmpty role="status">No matching options</ComboboxEmpty>
+              <ComboboxEmpty role="status">
+                {remoteLoading ? "Searching choices…" : "No matching options"}
+              </ComboboxEmpty>
+              {referenceChoices && context.values?.nextContinuationToken !== undefined ? (
+                <button
+                  type="button"
+                  disabled={remoteLoading}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={loadMoreChoices}
+                  className="w-full px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent disabled:opacity-50"
+                >
+                  {remoteLoading ? "Loading choices…" : "Load more choices"}
+                </button>
+              ) : null}
             </ComboboxContent>
           </Combobox>
         </>

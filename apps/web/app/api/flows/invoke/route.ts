@@ -23,6 +23,7 @@ import {
   type IdentitySession,
   type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
+import { createReferenceChoiceService } from "@vortex/query";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createTenantGovernanceService } from "@vortex/identity";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
@@ -47,7 +48,13 @@ import {
 } from "../../../auth/_lib/authority-configuration";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
-import { appTelemetry as telemetry, humanOrganizationRequests } from "../../../_lib/server-composition";
+import {
+  appTelemetry as telemetry,
+  humanOrganizationRequestDependencies,
+  humanOrganizationRequests,
+} from "../../../_lib/server-composition";
+import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
+import { resolveReferenceChoiceFormValues } from "../../../_lib/reference-choices";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -117,6 +124,28 @@ const declaresPausedNode = (
   return String(form.literal?.value).toLowerCase() === node.formId.toLowerCase();
 };
 
+/** Returns a Show form id only when the installed task fixes it as a literal. */
+const literalPausedFormId = (flow: unknown, nodeId: string): string | undefined => {
+  const definition = flow as Partial<Pick<FlowDefinition, "tasks" | "errors" | "finally">>;
+  const find = (tasks: readonly FlowTask[] | undefined): FlowTask | undefined => {
+    for (const task of tasks ?? []) {
+      if (task.id === nodeId) return task;
+      for (const child of flowTaskChildLists(task)) {
+        const found = find(child.tasks);
+        if (found !== undefined) return found;
+      }
+    }
+    return undefined;
+  };
+  const task = find(definition.tasks) ?? find(definition.errors) ?? find(definition.finally);
+  if (task?.type !== "interface.show_form") return undefined;
+  const form = (task as { properties?: Record<string, unknown> }).properties?.form as
+    Readonly<{ kind?: unknown; literal?: Readonly<{ value?: unknown }> }> | undefined;
+  return form?.kind === "literal" && typeof form.literal?.value === "string"
+    ? form.literal.value
+    : undefined;
+};
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     if (!fromOwnSite(request)) return privateResponse({ kind: "refused" }, 403);
@@ -149,6 +178,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const { authorityId } = getIdentityAuthorityConfiguration();
     const requests = humanOrganizationRequests(authorityId);
+    const referenceChoices = createReferenceChoiceService({
+      ...humanOrganizationRequestDependencies(authorityId),
+      continuationKey: getQueryContinuationKey(),
+    });
     const executor = createProtectedOperationExecutor({
       accessAdministration: createOrganizationAccessAdministrationService({
         identityAuthorityId: authorityId,
@@ -294,6 +327,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           flows,
           recordTypes,
           namedActions,
+          applicationContent: application.content,
+          modules: releaseSet.modules,
         };
         return installed;
       });
@@ -340,14 +375,71 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           },
         }),
       });
-      return pageFormRequests.resume(session, selection, request);
+      const answer = request.answer;
+      if (answer.kind !== "submit") return pageFormRequests.resume(session, selection, request);
+
+      const trustedFormId = literalPausedFormId(
+        installed.flows.get(request.target.flowId),
+        request.target.nodeId,
+      );
+      if (
+        trustedFormId === undefined ||
+        request.target.formId === undefined ||
+        trustedFormId.toLowerCase() !== request.target.formId.toLowerCase()
+      ) {
+        if (answer.choiceEvidence !== undefined)
+          return { kind: "refused", reason: "unavailable" };
+        return pageFormRequests.resume(session, selection, request);
+      }
+      if (installed.applicationContent === undefined || installed.modules === undefined)
+        return { kind: "refused", reason: "unavailable" };
+      const values = await resolveReferenceChoiceFormValues({
+        service: referenceChoices,
+        session,
+        selection,
+        application: installed.applicationContent,
+        modules: installed.modules,
+        formId: trustedFormId,
+        values: answer.values,
+        ...(answer.choiceEvidence === undefined ? {} : { evidence: answer.choiceEvidence }),
+      });
+      if (values === undefined) return { kind: "refused", reason: "unavailable" };
+      return pageFormRequests.resume(session, selection, {
+        ...request,
+        answer: { kind: "submit", values },
+      });
     };
 
     const adaptFormSubmit = createPrivateFormSubmitAdapter();
     const endpoint = createFlowBindingEndpoint({
       readInstallation: readInstalled,
-      adaptFormSubmit: async (binding, callerInputs, subject) =>
-        adaptFormSubmit(binding, callerInputs, subject),
+      adaptFormSubmit: async (binding, callerInputs, subject, installation) => {
+        if (installation.applicationContent === undefined || installation.modules === undefined)
+          return undefined;
+        const resolvedValues = await resolveReferenceChoiceFormValues({
+          service: referenceChoices,
+          session: identity.session,
+          selection: {
+            organizationId: address.read.organizationId,
+            applicationRootId: address.application.applicationRootId,
+          },
+          application: installation.applicationContent,
+          modules: installation.modules,
+          formId: binding.controlId,
+          values: callerInputs.values,
+          ...(callerInputs.choiceEvidence === undefined
+            ? {}
+            : { evidence: callerInputs.choiceEvidence }),
+        });
+        if (resolvedValues === undefined) return undefined;
+        const adapterInputs: Record<string, unknown> = { ...callerInputs };
+        delete adapterInputs.choiceEvidence;
+        return adaptFormSubmit(
+          binding,
+          { ...adapterInputs, values: resolvedValues },
+          subject,
+        );
+      },
       continueForm,
       orchestratorFor,
     });

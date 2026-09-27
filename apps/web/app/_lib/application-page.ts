@@ -10,7 +10,10 @@ import {
 import {
   protectedQueryCommandSchema,
   createProtectedQueryService,
+  createReferenceChoiceService,
+  projectReferenceChoiceInputValues,
   type ProtectedQueryRow,
+  type ReferenceChoiceInputValues,
 } from "@vortex/query";
 import {
   createPageSubjectReader,
@@ -34,6 +37,7 @@ import {
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
+  type ReferenceChoiceSelectionEvidence,
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
@@ -41,6 +45,12 @@ import { installedReleaseCatalogue } from "./definition-catalogue";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";
 import { getQueryContinuationKey } from "./query-continuation-key";
 import { humanOrganizationRequestDependencies, humanOrganizationRequests } from "./server-composition";
+import {
+  hasReferenceChoiceSource,
+  referenceChoiceFieldForPlacement,
+  resolveReferenceChoiceOption,
+  type ReferenceChoiceFormField,
+} from "./reference-choices";
 
 /**
  * Composes the one server model of an installed application page: the permission-filtered page,
@@ -74,6 +84,12 @@ export type ApplicationPageModel = Readonly<{
   bindings: Readonly<Record<string, readonly PlacementFlowBinding[]>>;
   /** Displayed values of readable edit fields, used only to omit unchanged fields on submit. */
   editFormBaselines: Readonly<Record<string, Readonly<Record<string, JsonValue>>>>;
+  /** Dynamic reference-choice placements within the viewer's projected page. */
+  referenceChoiceInputs: readonly Readonly<{
+    placementId: string;
+    formId: string;
+    fieldKey: string;
+  }>[];
   /** Permitted pages of this application, so a menu or navigate intent can be turned into an address. */
   pages: readonly Readonly<{ pageId: string; key: string }>[];
   /**
@@ -96,6 +112,7 @@ export type ApplicationPageModel = Readonly<{
     tenantShortName: string;
     organizationShortName: string;
     applicationKey: string;
+    pageKey: string;
     installationRevision: number;
     releaseKey: string;
   }>;
@@ -158,6 +175,12 @@ const collectPlacements = (
     for (const root of Object.values(composition.stepContent)) visit(root);
   return found;
 };
+
+export type ReferenceChoicePageResult =
+  | Readonly<{ kind: "completed"; values: ReferenceChoiceInputValues }>
+  | Readonly<{ kind: "reload" }>
+  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "temporarily_unavailable" }>;
 
 /** A form field may show only a value the page subject read returned for its own record type. */
 const projectEditField = (
@@ -287,6 +310,135 @@ const projectEditField = (
     value: displayed,
     data: { status: "ready", values: { kind, value: displayed } },
   };
+};
+
+/** Rechecks one dynamic choice request against the viewer's current installed page and authority. */
+export const loadReferenceChoicePage = async (
+  session: IdentitySession,
+  address: Readonly<{
+    read: Extract<PermittedApplicationsRead, { kind: "available" }>;
+    application: PermittedApplication;
+    pageKey: string;
+  }>,
+  request: Readonly<{
+    placementId: string;
+    installationRevision: number;
+    releaseKey: string;
+    search?: string;
+    continuationToken?: string;
+    selectedKey?: string;
+    selectedEvidence?: ReferenceChoiceSelectionEvidence;
+  }>,
+): Promise<ReferenceChoicePageResult> => {
+  try {
+    const dependencies = requestDependencies();
+    const continuationKey = getQueryContinuationKey();
+    const selection: OrganizationSelectionCandidate = {
+      organizationId: address.read.organizationId,
+      applicationRootId: address.application.applicationRootId,
+    };
+    const loaded = await loadInstalledContext(session, dependencies, selection);
+    if (loaded.kind !== "available")
+      return loaded.kind === "temporarily_unavailable"
+        ? { kind: "temporarily_unavailable" }
+        : { kind: "refused" };
+    const context = loaded.value;
+    const application = context.releaseSet.application;
+    if (!sameId(context.applicationRootId, address.application.applicationRootId))
+      return { kind: "refused" };
+    if (
+      request.installationRevision !== context.applicationReleaseRevision ||
+      request.releaseKey !==
+        [
+          application.releaseVersion,
+          application.contentFingerprint,
+          application.resolutionFingerprint,
+        ].join(":")
+    )
+      return { kind: "reload" };
+
+    const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
+    if (pageDefinition === undefined) return { kind: "refused" };
+    const projectedPage = await createStoredPageCapabilityService({
+      ...dependencies,
+      context,
+      selection: { pageId: pageDefinition.pageId },
+    }).project(session, selection);
+    if (projectedPage.kind === "temporarily_unavailable")
+      return { kind: "temporarily_unavailable" };
+    if (projectedPage.kind !== "available" || projectedPage.value === undefined)
+      return { kind: "refused" };
+    const placement = collectPlacements(projectedPage.value).find(
+      (entry) => entry.placementId === request.placementId && entry.formId !== undefined,
+    );
+    if (placement === undefined || !hasReferenceChoiceSource(placement.placement))
+      return { kind: "refused" };
+    const field = referenceChoiceFieldForPlacement(placement.placement, context.releaseSet.modules);
+    if (field === undefined) return { kind: "refused" };
+
+    const service = createReferenceChoiceService({ ...dependencies, continuationKey });
+    const result = await service.run(session, selection, {
+      ...field.command,
+      ...(request.search === undefined || request.search.trim() === ""
+        ? {}
+        : { search: request.search }),
+      ...(request.continuationToken === undefined
+        ? {}
+        : { continuationToken: request.continuationToken }),
+    });
+    if (result.kind === "temporarily_unavailable")
+      return { kind: "temporarily_unavailable" };
+    if (result.kind !== "available" || result.value.outcome !== "completed")
+      return { kind: "refused" };
+
+    const pageChoices = result.value.choices;
+    let selectedChoice = request.selectedKey === undefined
+      ? undefined
+      : pageChoices.find((choice) => choice.key === request.selectedKey);
+    let selectedEvidenceOverride: Readonly<Record<string, ReferenceChoiceSelectionEvidence>> = {};
+    if (
+      selectedChoice === undefined &&
+      request.selectedKey !== undefined &&
+      request.selectedEvidence !== undefined
+    ) {
+      selectedChoice = await resolveReferenceChoiceOption({
+        service,
+        session,
+        selection,
+        field,
+        key: request.selectedKey,
+        evidence: request.selectedEvidence,
+      });
+      if (selectedChoice !== undefined)
+        selectedEvidenceOverride = { [selectedChoice.key]: request.selectedEvidence };
+    }
+    const choices =
+      selectedChoice === undefined || pageChoices.some((choice) => choice.key === selectedChoice?.key)
+        ? pageChoices
+        : [selectedChoice, ...pageChoices];
+    return {
+      kind: "completed",
+      values: projectReferenceChoiceInputValues(
+        choices,
+        selectedChoice?.key ?? null,
+        undefined,
+        {
+          ...(request.search === undefined ? {} : { search: request.search }),
+          ...(request.continuationToken === undefined
+            ? {}
+            : { continuationToken: request.continuationToken }),
+          ...(result.value.nextContinuationToken === undefined
+            ? {}
+            : { nextContinuationToken: result.value.nextContinuationToken }),
+          ...(Object.keys(selectedEvidenceOverride).length === 0
+            ? {}
+            : { optionEvidenceOverrides: selectedEvidenceOverride }),
+        },
+      ),
+    };
+  } catch {
+    return { kind: "temporarily_unavailable" };
+  }
 };
 
 /**
@@ -480,6 +632,7 @@ export const loadApplicationPage = async (
   if (navigation.kind !== "available") return navigation;
 
   const queries = createProtectedQueryService({ ...dependencies, continuationKey });
+  const referenceChoices = createReferenceChoiceService({ ...dependencies, continuationKey });
   const tables = createRecordsTableQueryResolver(queries);
   const subjects = createPageSubjectReader(dependencies);
 
@@ -501,7 +654,8 @@ export const loadApplicationPage = async (
   const placements = collectPlacements(page);
   const data: Record<string, PageDataState> = {};
   const bindings: Record<string, PlacementFlowBinding[]> = {};
-  for (const { placementId, placement } of placements) {
+  const referenceChoiceInputs: Array<{ placementId: string; formId: string; fieldKey: string }> = [];
+  for (const { placementId, placement, formId } of placements) {
     const held = application.content.flowBindings.filter((binding) =>
       sameId(binding.controlId, placementId),
     );
@@ -522,6 +676,29 @@ export const loadApplicationPage = async (
     const tableContract = readRecordsTableContract(settings);
     const detailContract =
       tableContract === undefined ? readRecordDetailContract(settings) : undefined;
+    if (hasReferenceChoiceSource(placement)) {
+      const field = referenceChoiceFieldForPlacement(placement, context.releaseSet.modules);
+      if (field === undefined || formId === undefined) {
+        data[placementId] = { status: "disabled", reason: "Choices unavailable" };
+        continue;
+      }
+      referenceChoiceInputs.push({ placementId, formId, fieldKey: field.fieldKey });
+      const result = await referenceChoices.run(session, selection, field.command);
+      if (result.kind !== "available" || result.value.outcome !== "completed") {
+        data[placementId] = { status: "disabled", reason: "Choices unavailable" };
+        continue;
+      }
+      data[placementId] = {
+        status: "ready",
+        values: projectReferenceChoiceInputValues(
+          result.value.choices,
+          undefined,
+          undefined,
+          { nextContinuationToken: result.value.nextContinuationToken },
+        ),
+      };
+      continue;
+    }
     // A placement still bound to a legacy read model has no reader on this page: system record
     // types are read through the query path. It must never fall through to an empty display.
     if (placement.readModel !== undefined) {
@@ -765,6 +942,7 @@ export const loadApplicationPage = async (
       data,
       bindings,
       editFormBaselines,
+      referenceChoiceInputs,
       pages: application.content.pages
         .filter((candidate) => permittedKeys.has(candidate.key))
         .map((candidate) => ({ pageId: candidate.pageId, key: candidate.key })),
@@ -783,6 +961,7 @@ export const loadApplicationPage = async (
         tenantShortName: address.tenantShortName,
         organizationShortName: address.organizationShortName,
         applicationKey: address.application.key,
+        pageKey: address.pageKey,
         installationRevision: context.applicationReleaseRevision,
         releaseKey: [
           application.releaseVersion,

@@ -25,9 +25,30 @@ import {
  * never authority: the actor, organisation, permissions and the run itself come from the verified
  * session and the server-stored continuation, never from these values.
  */
-export const formContinuationContractVersion = "1.0.0" as const;
+export const formContinuationContractVersion = "1.1.0" as const;
 
 const maximumAnswerValues = 500;
+
+/** Opaque evidence for the permitted Query page that issued one reference-choice option key. */
+export const referenceChoiceSelectionEvidenceSchema = z
+  .object({
+    search: z.string().trim().min(1).max(100).optional(),
+    continuationToken: z.string().min(1).max(65_536).optional(),
+  })
+  .strict();
+export type ReferenceChoiceSelectionEvidence = z.infer<
+  typeof referenceChoiceSelectionEvidenceSchema
+>;
+
+/** Evidence keyed by the authored field name; a server rechecks every submitted key. */
+export const referenceChoiceSelectionEvidenceMapSchema = z
+  .record(builderKeySchema, referenceChoiceSelectionEvidenceSchema)
+  .refine((values) => Object.keys(values).length <= maximumAnswerValues, {
+    message: "Choice evidence is bounded by the form answer limit",
+  });
+export type ReferenceChoiceSelectionEvidenceMap = z.infer<
+  typeof referenceChoiceSelectionEvidenceMapSchema
+>;
 
 /** The exact installed application release an answer was prepared against. */
 export const formContinuationInstallationSchema = z
@@ -88,6 +109,7 @@ export const formContinuationAnswerSchema = z.discriminatedUnion("kind", [
         .refine((values) => Object.keys(values).length <= maximumAnswerValues, {
           message: "A form answer carries a bounded number of values",
         }),
+      choiceEvidence: referenceChoiceSelectionEvidenceMapSchema.optional(),
     })
     .strict(),
   /** Cancel the form; the flow follows its declared not-submitted path. */
