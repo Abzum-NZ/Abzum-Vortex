@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import {
+  sameId,
   entitlementCheckRequestSchema,
   platformIdSchema,
   type CorrelationId,
@@ -62,11 +63,8 @@ export type UploadCapabilityAdmissionResult<Result> =
   | Readonly<{ outcome: "completed"; value: Result; consumption: ConsumedCapability }>
   | UploadCapabilityAdmissionRefusal;
 
-const sameUuid = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
-
 const sameOptionalUuid = (left: string | undefined, right: string | undefined): boolean =>
-  left === undefined || right === undefined ? left === right : sameUuid(left, right);
+  left === undefined || right === undefined ? left === right : sameId(left, right);
 
 const refused = (
   reasonCode: UploadCapabilityAdmissionRefusal["reasonCode"],
@@ -79,11 +77,11 @@ const isOwnedBy = (
   reservation: ReservedCapability,
   entitlement: EntitlementCheckRequest,
 ): boolean =>
-  sameUuid(reservation.tenantId, entitlement.tenantId) &&
+  sameId(reservation.tenantId, entitlement.tenantId) &&
   sameOptionalUuid(reservation.organizationId, entitlement.organizationId) &&
   reservation.capabilityKey === entitlement.capabilityKey &&
   reservation.unit === entitlement.unit &&
-  sameUuid(reservation.correlationId, entitlement.correlationId);
+  sameId(reservation.correlationId, entitlement.correlationId);
 
 const matchesPolicy = (
   reservation: ReservedCapability,
@@ -94,9 +92,9 @@ const matchesPolicy = (
   policy.capabilityKey === entitlement.capabilityKey &&
   policy.unit === entitlement.unit &&
   policy.appliedScope === reservation.appliedScope &&
-  sameUuid(policy.policyId, reservation.policyId) &&
+  sameId(policy.policyId, reservation.policyId) &&
   policy.policyRevision === reservation.policyRevision &&
-  sameUuid(policy.assignmentId, reservation.assignmentId) &&
+  sameId(policy.assignmentId, reservation.assignmentId) &&
   policy.assignmentRevision === reservation.assignmentRevision;
 
 /**
@@ -175,18 +173,18 @@ const isConsumptionOf = (
   reservation: ReservedCapability,
 ): consumption is ConsumedCapability =>
   consumption.outcome === "consumed" &&
-  sameUuid(consumption.reservationId, reservation.reservationId) &&
-  sameUuid(consumption.tenantId, reservation.tenantId) &&
+  sameId(consumption.reservationId, reservation.reservationId) &&
+  sameId(consumption.tenantId, reservation.tenantId) &&
   sameOptionalUuid(consumption.organizationId, reservation.organizationId) &&
   consumption.capabilityKey === reservation.capabilityKey &&
   consumption.unit === reservation.unit &&
-  sameUuid(consumption.policyId, reservation.policyId) &&
+  sameId(consumption.policyId, reservation.policyId) &&
   consumption.policyRevision === reservation.policyRevision &&
-  sameUuid(consumption.assignmentId, reservation.assignmentId) &&
+  sameId(consumption.assignmentId, reservation.assignmentId) &&
   consumption.assignmentRevision === reservation.assignmentRevision &&
   consumption.consumedAmount === reservation.reservedQuantity &&
   consumption.reservationState === "consumed" &&
-  sameUuid(consumption.correlationId, reservation.correlationId);
+  sameId(consumption.correlationId, reservation.correlationId);
 
 /**
  * Admits one upload against its exact #650 reservation, runs the upload only

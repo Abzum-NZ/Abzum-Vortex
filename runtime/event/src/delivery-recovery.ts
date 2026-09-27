@@ -1,7 +1,12 @@
 import "server-only";
 
-import { actorIdSchema, eventOccurrenceIdSchema, timestampSchema } from "@vortex/contracts";
-import type { DatabaseRow, RuntimeDatabaseTransaction } from "@vortex/db";
+import {
+  actorIdSchema,
+  eventOccurrenceIdSchema,
+  isNonNilUuidText,
+  timestampSchema,
+} from "@vortex/contracts";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 
 export const eventDeliveryRecoveryLimits = Object.freeze({
   maximumConsumerKeyLength: 128,
@@ -142,11 +147,6 @@ const consumerKeyMatches = (value: unknown): value is string =>
   value.length <= eventDeliveryRecoveryLimits.maximumConsumerKeyLength &&
   /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
 
-const uuidMatches = (value: unknown): value is string =>
-  typeof value === "string" &&
-  value !== "00000000-0000-0000-0000-000000000000" &&
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-
 const timestampMatches = (value: unknown): value is string =>
   timestampSchema.safeParse(value).success;
 
@@ -198,7 +198,7 @@ const validateFailureReportInput = (
   if (
     !consumerKeyMatches(input.consumerKey) ||
     !eventOccurrenceIdSchema.safeParse(input.occurrenceId).success ||
-    !uuidMatches(input.claimCursor) ||
+    !isNonNilUuidText(input.claimCursor) ||
     !failureClassificationMatches(input.failureCode) ||
     !Number.isInteger(input.maxAttempts) ||
     input.maxAttempts < eventDeliveryRecoveryLimits.minimumRetryAttempts ||
@@ -391,7 +391,7 @@ export interface EventDeliveryRecoveryRepository {
  * never claims fresh work or mutates an event_outbox row.
  */
 export const createEventDeliveryRecoveryRepository = (
-  transaction: RuntimeDatabaseTransaction,
+  transaction: RequestDatabaseTransaction,
 ): EventDeliveryRecoveryRepository =>
   Object.freeze<EventDeliveryRecoveryRepository>({
     async reportFailure(inputCandidate) {

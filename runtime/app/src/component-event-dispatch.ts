@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  sameId,
   builderKeySchema,
   componentSemanticEventKindSchema,
   conditionNodeSchema,
@@ -91,8 +92,7 @@ export const componentEventDispatchRefusalCodes = [
   "local_filter_without_page",
 ] as const;
 export type ComponentEventDispatchRefusalCode =
-  | ComponentContextMismatchCode
-  | (typeof componentEventDispatchRefusalCodes)[number];
+  ComponentContextMismatchCode | (typeof componentEventDispatchRefusalCodes)[number];
 
 /**
  * One display-only filter over the page the Query engine already returned. It is never sent to the
@@ -246,8 +246,6 @@ type DeclaredDataContract = Readonly<{
   search: boolean;
 }>;
 
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
-
 const lowerUnique = (values: readonly string[]): string[] => [
   ...new Set(values.map((value) => value.toLowerCase())),
 ];
@@ -320,18 +318,13 @@ const buildQueryCommand = (
     // set tells the engine to search every field the record type marks searchable.
     searchableFieldIds: [],
     pageSize: contract.pageSize,
-    ...(view.continuationToken === undefined
-      ? {}
-      : { continuationToken: view.continuationToken }),
+    ...(view.continuationToken === undefined ? {} : { continuationToken: view.continuationToken }),
   });
   return parsed.success ? parsed.data : undefined;
 };
 
 /** The row's stored value for a declared field, matched without regard to case. */
-const rowValueOf = (
-  row: ProtectedQueryPageRow,
-  fieldId: string,
-): JsonValue | undefined => {
+const rowValueOf = (row: ProtectedQueryPageRow, fieldId: string): JsonValue | undefined => {
   const entry = Object.entries(row.values).find(([candidate]) => sameId(candidate, fieldId));
   return entry === undefined ? undefined : entry[1];
 };
@@ -422,7 +415,9 @@ const refused = (
 
 /** Whether a component context is one a dataset view event declares: never a row or selection. */
 const datasetViewContext = (context: ComponentContext): boolean =>
-  context.kind === "page_subject" || context.kind === "related_record" || context.kind === "no_record";
+  context.kind === "page_subject" ||
+  context.kind === "related_record" ||
+  context.kind === "no_record";
 
 /**
  * Binds one already-verified installed context, so a page dispatches many component events without
@@ -464,8 +459,16 @@ export const createComponentEventDispatcher = (dependencies: ComponentEventDispa
       )
         return refused("invalid_context");
 
-      const { controlId, eventId, event, context, suppliedValues, pageParameters, view, localFilter } =
-        request.data;
+      const {
+        controlId,
+        eventId,
+        event,
+        context,
+        suppliedValues,
+        pageParameters,
+        view,
+        localFilter,
+      } = request.data;
 
       // Resolve the event's bound flow first. A binding this event cannot fill is refused; no
       // binding at all leaves the event with no flow, which is normal for a data placement.
