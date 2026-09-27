@@ -96,7 +96,7 @@ begin
 end
 $function$;
 
-comment on function vortex_connection.grant_connection_application_internal(uuid, uuid, uuid) is 'Private writer that grants one Application access to a Connection instance under the verified administration context.';
+comment on function vortex_connection.grant_connection_application_internal(uuid, uuid, uuid) is null;
 
 revoke all on function
   vortex_connection.grant_connection_application_internal(uuid, uuid, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

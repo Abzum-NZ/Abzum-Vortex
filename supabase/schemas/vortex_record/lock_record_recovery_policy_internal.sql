@@ -39,4 +39,4 @@ revoke all on function vortex_record.lock_record_recovery_policy_internal(uuid, 
 
 grant execute on function vortex_record.lock_record_recovery_policy_internal(uuid, uuid, uuid) to vortex_record_adapter;
 
-comment on function vortex_record.lock_record_recovery_policy_internal(uuid, uuid, uuid) is 'Private locked resolver for the recovery policy that governs one record.';
+comment on function vortex_record.lock_record_recovery_policy_internal(uuid, uuid, uuid) is null;

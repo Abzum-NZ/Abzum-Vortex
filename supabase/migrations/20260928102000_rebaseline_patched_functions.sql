@@ -1307,7 +1307,7 @@ begin
 end
 $function$;
 
-comment on function vortex_connection.register_connection_instance_internal(uuid, uuid, uuid, text, text, text, uuid, timestamp with time zone) is 'Private writer that registers one pending Connection instance and appends its administrator Activity.';
+comment on function vortex_connection.register_connection_instance_internal(uuid, uuid, uuid, text, text, text, uuid, timestamp with time zone) is null;
 revoke all on function
   vortex_connection.register_connection_instance_internal(uuid, uuid, uuid, text, text, text, uuid, timestamptz) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function
@@ -1411,7 +1411,7 @@ begin
 end
 $function$;
 
-comment on function vortex_connection.grant_connection_application_internal(uuid, uuid, uuid) is 'Private writer that grants one Application access to a Connection instance under the verified administration context.';
+comment on function vortex_connection.grant_connection_application_internal(uuid, uuid, uuid) is null;
 revoke all on function
   vortex_connection.grant_connection_application_internal(uuid, uuid, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function
@@ -1485,7 +1485,7 @@ begin
 end
 $function$;
 
-comment on function vortex_connection.revoke_connection_application_internal(uuid, uuid, uuid) is 'Private writer that revokes one Application grant from a Connection instance under the verified administration context.';
+comment on function vortex_connection.revoke_connection_application_internal(uuid, uuid, uuid) is null;
 revoke all on function
   vortex_connection.revoke_connection_application_internal(uuid, uuid, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function
@@ -1583,7 +1583,7 @@ begin
 end
 $function$;
 
-comment on function vortex_connection.record_connection_health_check_internal(uuid, bigint, text, uuid) is 'Private writer that records a Connection health outcome and advances its revision under the verified administration context.';
+comment on function vortex_connection.record_connection_health_check_internal(uuid, bigint, text, uuid) is null;
 revoke all on function
   vortex_connection.record_connection_health_check_internal(uuid, bigint, text, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function
@@ -1663,7 +1663,7 @@ begin
 end
 $function$;
 
-comment on function vortex_connection.revoke_connection_instance_internal(uuid, bigint, uuid) is 'Private writer that revokes a Connection instance and records its administrator Activity.';
+comment on function vortex_connection.revoke_connection_instance_internal(uuid, bigint, uuid) is null;
 revoke all on function
   vortex_connection.revoke_connection_instance_internal(uuid, bigint, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function
@@ -1754,7 +1754,7 @@ begin
 end
 $function$;
 
-comment on function vortex_connection.reauthorize_connection_instance_internal(uuid, bigint, uuid, text, timestamp with time zone) is 'Private writer that reauthorizes a revoked Connection instance under the verified administration context.';
+comment on function vortex_connection.reauthorize_connection_instance_internal(uuid, bigint, uuid, text, timestamp with time zone) is null;
 revoke all on function
   vortex_connection.reauthorize_connection_instance_internal(uuid, bigint, uuid, text, timestamptz) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function
@@ -1807,7 +1807,7 @@ begin
 end
 $function$;
 
-comment on function vortex_access.capability_reservation_request_context(uuid, uuid) is 'Private capability reservation request-scope resolver that locks the tenant reservation boundary.';
+comment on function vortex_access.capability_reservation_request_context(uuid, uuid) is null;
 revoke execute on function
   vortex_access.capability_reservation_request_context(uuid, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
@@ -3538,7 +3538,7 @@ begin
 end
 $function$;
 
-comment on function vortex_record.total_inputs_readable_internal(jsonb, uuid, uuid, jsonb, jsonb) is 'Private check that each related-total source is readable under the current installed scope.';
+comment on function vortex_record.total_inputs_readable_internal(jsonb, uuid, uuid, jsonb, jsonb) is null;
 revoke all on function vortex_record.total_inputs_readable_internal(jsonb, uuid, uuid, jsonb, jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_module_owner;
 grant execute on function vortex_record.total_inputs_readable_internal(jsonb, uuid, uuid, jsonb, jsonb) to vortex_record_adapter;
@@ -5010,7 +5010,7 @@ begin
 end
 $function$;
 
-comment on function vortex_record.lock_record_recovery_policy_internal(uuid, uuid, uuid) is 'Private locked resolver for the recovery policy that governs one record.';
+comment on function vortex_record.lock_record_recovery_policy_internal(uuid, uuid, uuid) is null;
 revoke all on function vortex_record.lock_record_recovery_policy_internal(uuid, uuid, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_module_owner, vortex_record_adapter;
 grant execute on function vortex_record.lock_record_recovery_policy_internal(uuid, uuid, uuid) to vortex_record_adapter;

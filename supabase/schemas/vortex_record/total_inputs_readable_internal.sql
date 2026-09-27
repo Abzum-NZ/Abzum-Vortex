@@ -82,4 +82,4 @@ revoke all on function vortex_record.total_inputs_readable_internal(jsonb, uuid,
 
 grant execute on function vortex_record.total_inputs_readable_internal(jsonb, uuid, uuid, jsonb, jsonb) to vortex_record_adapter;
 
-comment on function vortex_record.total_inputs_readable_internal(jsonb, uuid, uuid, jsonb, jsonb) is 'Private check that each related-total source is readable under the current installed scope.';
+comment on function vortex_record.total_inputs_readable_internal(jsonb, uuid, uuid, jsonb, jsonb) is null;

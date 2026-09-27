@@ -45,7 +45,7 @@ begin
 end
 $function$;
 
-comment on function vortex_access.capability_reservation_request_context(uuid, uuid) is 'Private capability reservation request-scope resolver that locks the tenant reservation boundary.';
+comment on function vortex_access.capability_reservation_request_context(uuid, uuid) is null;
 
 revoke execute on function
   vortex_access.capability_reservation_request_context(uuid, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,

@@ -90,7 +90,7 @@ begin
 end
 $function$;
 
-comment on function vortex_connection.record_connection_health_check_internal(uuid, bigint, text, uuid) is 'Private writer that records a Connection health outcome and advances its revision under the verified administration context.';
+comment on function vortex_connection.record_connection_health_check_internal(uuid, bigint, text, uuid) is null;
 
 revoke all on function
   vortex_connection.record_connection_health_check_internal(uuid, bigint, text, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

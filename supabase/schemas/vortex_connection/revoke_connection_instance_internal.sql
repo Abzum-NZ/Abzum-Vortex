@@ -72,7 +72,7 @@ begin
 end
 $function$;
 
-comment on function vortex_connection.revoke_connection_instance_internal(uuid, bigint, uuid) is 'Private writer that revokes a Connection instance and records its administrator Activity.';
+comment on function vortex_connection.revoke_connection_instance_internal(uuid, bigint, uuid) is null;
 
 revoke all on function
   vortex_connection.revoke_connection_instance_internal(uuid, bigint, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

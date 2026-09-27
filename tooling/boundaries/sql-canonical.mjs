@@ -282,7 +282,9 @@ function renameDefinitionBlock(block, schema, name, newName) {
   ) {
     return null;
   }
-  const nameStart = header[0].toLowerCase().lastIndexOf(`.${name}`) + 1;
+  // Use the final identifier in the matched header. Whitespace around the dot is valid SQL.
+  const nameSuffix = /[a-z_][a-z0-9_]*\s*\($/i.exec(header[0]);
+  const nameStart = header[0].length - nameSuffix[0].length;
   return (block.slice(0, nameStart) + newName + block.slice(nameStart + name.length))
     .replace(/^create\s+function\b/i, "create or replace function");
 }
@@ -521,9 +523,11 @@ export async function validateSqlCanonical(root) {
           continue;
         }
         const renamedSignatures = signatures.get(renamedKey) ?? new Set();
-        if (renamedSignatures.has(functionRename.signature)) {
+        // Owner and canonical state are keyed by function name, so a rename cannot merge
+        // two names even when PostgreSQL would allow distinct overload signatures.
+        if (renamedSignatures.size > 0) {
           errors.push(
-            `${relative} renames ${previousKey}(${functionRename.signature}) to an existing ${renamedKey} signature`,
+            `${relative} renames ${previousKey}(${functionRename.signature}) to an existing ${renamedKey} function name`,
           );
           continue;
         }

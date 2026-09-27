@@ -83,7 +83,7 @@ begin
 end
 $function$;
 
-comment on function vortex_connection.reauthorize_connection_instance_internal(uuid, bigint, uuid, text, timestamp with time zone) is 'Private writer that reauthorizes a revoked Connection instance under the verified administration context.';
+comment on function vortex_connection.reauthorize_connection_instance_internal(uuid, bigint, uuid, text, timestamp with time zone) is null;
 
 revoke all on function
   vortex_connection.reauthorize_connection_instance_internal(uuid, bigint, uuid, text, timestamptz) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

@@ -68,7 +68,7 @@ begin
 end
 $function$;
 
-comment on function vortex_connection.register_connection_instance_internal(uuid, uuid, uuid, text, text, text, uuid, timestamp with time zone) is 'Private writer that registers one pending Connection instance and appends its administrator Activity.';
+comment on function vortex_connection.register_connection_instance_internal(uuid, uuid, uuid, text, text, text, uuid, timestamp with time zone) is null;
 
 revoke all on function
   vortex_connection.register_connection_instance_internal(uuid, uuid, uuid, text, text, text, uuid, timestamptz) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
