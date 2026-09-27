@@ -2,7 +2,7 @@ import { cn } from "../lib/utils";
 import { Icon } from "../icons/icon";
 import type { VortexIconProps } from "../icons/icon-names";
 
-function Spinner({ className, ...props }: VortexIconProps) {
+function Spinner({ className, ...props }: Omit<VortexIconProps, "name">) {
   return (
     <Icon
       name="loader"
