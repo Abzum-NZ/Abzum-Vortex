@@ -8,7 +8,11 @@ stable
 security invoker
 set search_path = ''
 as $function$
-  with current_platform_registration as (
+  with stewardship_requirement as (
+    select 1
+    from vortex_access.organization_stewardship_requirements as requirement
+    where requirement.organization_id = p_organization_id
+  ), current_platform_registration as (
     select registration.revision
     from vortex_access.permission_registrations as registration
     where registration.organization_id = p_organization_id
@@ -112,7 +116,9 @@ as $function$
   )
   select (select pg_catalog.count(*) from required_platform_permission) = 13
     and exists (
-      select 1 from candidate_steward
+      select 1
+      from candidate_steward as steward
+      cross join stewardship_requirement as requirement
     )
 $function$;
 
