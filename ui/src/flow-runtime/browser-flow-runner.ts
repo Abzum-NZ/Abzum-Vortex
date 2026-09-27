@@ -92,11 +92,7 @@ export async function runBrowserFlow(
         const answer = await host.showForm(form);
         step = resumeFlowRun(
           step.state,
-          {
-            kind: "form_answered",
-            submitted: answer.submitted,
-            values: answer.submitted ? answer.values : null,
-          },
+          answer,
           library,
         );
       } else {
@@ -105,7 +101,7 @@ export async function runBrowserFlow(
           return { kind: "failed", failure: { outcome: "failed", code: "value_unresolved" } };
         step = resumeFlowRun(
           step.state,
-          { kind: "confirmed", confirmed: await host.confirm(confirmation) },
+          { kind: "confirm", confirmed: await host.confirm(confirmation) },
           library,
         );
       }
