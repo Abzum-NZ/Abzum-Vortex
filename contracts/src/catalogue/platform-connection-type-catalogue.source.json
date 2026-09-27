@@ -182,6 +182,287 @@
       }
     }
   },
+  "email_2_0_0": {
+    "rootId": "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d16",
+    "releaseVersion": "2.0.0",
+    "source": {
+      "source_contract_version": "1.0.0",
+      "kind": "connection_type",
+      "root_alias": "connection_email",
+      "key": "vortex.connection.email",
+      "body": {
+        "name": "Email",
+        "purpose": "Microsoft Graph email connection for sending messages through the Microsoft Graph API.",
+        "provider": "Microsoft Graph",
+        "authentication": {
+          "kind": "oauth2",
+          "secret_fields": [
+            "client_id",
+            "client_secret",
+            "refresh_token"
+          ],
+          "scopes": [
+            "offline_access",
+            "User.Read",
+            "Mail.Send"
+          ]
+        },
+        "allowed_hosts": [
+          "graph.microsoft.com",
+          "login.microsoftonline.com"
+        ],
+        "allow_redirects": false,
+        "shapes": [
+          {
+            "key": "email_message",
+            "fields": [
+              {
+                "key": "recipient",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "subject",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "body",
+                "type": "text",
+                "required": true
+              }
+            ]
+          },
+          {
+            "key": "template_message",
+            "fields": [
+              {
+                "key": "recipient",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "template_key",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "variables",
+                "type": "json",
+                "required": true
+              }
+            ]
+          },
+          {
+            "key": "delivery_receipt",
+            "fields": [
+              {
+                "key": "provider_message_id",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "accepted",
+                "type": "boolean",
+                "required": true
+              }
+            ]
+          },
+          {
+            "key": "delivery_status",
+            "fields": [
+              {
+                "key": "provider_message_id",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "status",
+                "type": "text",
+                "required": true
+              }
+            ]
+          },
+          {
+            "key": "health_check_request",
+            "fields": []
+          },
+          {
+            "key": "health_check_result",
+            "fields": [
+              {
+                "key": "healthy",
+                "type": "boolean",
+                "required": true
+              }
+            ]
+          }
+        ],
+        "operations": [
+          {
+            "key": "send_message",
+            "method": "POST",
+            "path": "/v1.0/me/sendMail",
+            "input": "email_message",
+            "output": "delivery_receipt",
+            "timeout_seconds": 20,
+            "max_attempts": 3,
+            "maximum_response_bytes": 1000000
+          },
+          {
+            "key": "send_template",
+            "method": "POST",
+            "path": "/v1.0/me/sendMail",
+            "input": "template_message",
+            "output": "delivery_receipt",
+            "timeout_seconds": 20,
+            "max_attempts": 3,
+            "maximum_response_bytes": 1000000
+          },
+          {
+            "key": "check_health",
+            "method": "GET",
+            "path": "/v1.0/me",
+            "input": "health_check_request",
+            "output": "health_check_result",
+            "timeout_seconds": 10,
+            "max_attempts": 1,
+            "maximum_response_bytes": 4096
+          }
+        ],
+        "incoming_messages": [],
+        "health_operation": "check_health"
+      }
+    }
+  },
+  "calendar_2_0_0": {
+    "rootId": "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d17",
+    "releaseVersion": "2.0.0",
+    "source": {
+      "source_contract_version": "1.0.0",
+      "kind": "connection_type",
+      "root_alias": "connection_calendar",
+      "key": "vortex.connection.calendar",
+      "body": {
+        "name": "Calendar",
+        "purpose": "Microsoft Graph calendar connection for creating and cancelling calendar events.",
+        "provider": "Microsoft Graph",
+        "authentication": {
+          "kind": "oauth2",
+          "secret_fields": [
+            "client_id",
+            "client_secret",
+            "refresh_token"
+          ],
+          "scopes": [
+            "offline_access",
+            "User.Read",
+            "Calendars.ReadWrite"
+          ]
+        },
+        "allowed_hosts": [
+          "graph.microsoft.com",
+          "login.microsoftonline.com"
+        ],
+        "allow_redirects": false,
+        "shapes": [
+          {
+            "key": "calendar_event",
+            "fields": [
+              {
+                "key": "title",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "starts_at",
+                "type": "date_time",
+                "required": true
+              },
+              {
+                "key": "ends_at",
+                "type": "date_time",
+                "required": true
+              }
+            ]
+          },
+          {
+            "key": "calendar_event_reference",
+            "fields": [
+              {
+                "key": "event_id",
+                "type": "text",
+                "required": true
+              }
+            ]
+          },
+          {
+            "key": "calendar_event_receipt",
+            "fields": [
+              {
+                "key": "event_id",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "accepted",
+                "type": "boolean",
+                "required": true
+              }
+            ]
+          },
+          {
+            "key": "health_check_request",
+            "fields": []
+          },
+          {
+            "key": "health_check_result",
+            "fields": [
+              {
+                "key": "healthy",
+                "type": "boolean",
+                "required": true
+              }
+            ]
+          }
+        ],
+        "operations": [
+          {
+            "key": "create_event",
+            "method": "POST",
+            "path": "/v1.0/me/events",
+            "input": "calendar_event",
+            "output": "calendar_event_receipt",
+            "timeout_seconds": 20,
+            "max_attempts": 3,
+            "maximum_response_bytes": 1000000
+          },
+          {
+            "key": "cancel_event",
+            "method": "POST",
+            "path": "/v1.0/me/events/{event_id}/cancel",
+            "input": "calendar_event_reference",
+            "output": "calendar_event_receipt",
+            "timeout_seconds": 20,
+            "max_attempts": 3,
+            "maximum_response_bytes": 1000000
+          },
+          {
+            "key": "check_health",
+            "method": "GET",
+            "path": "/v1.0/me",
+            "input": "health_check_request",
+            "output": "health_check_result",
+            "timeout_seconds": 10,
+            "max_attempts": 1,
+            "maximum_response_bytes": 4096
+          }
+        ],
+        "incoming_messages": [],
+        "health_operation": "check_health"
+      }
+    }
+  },
   "webhook_1_0_0": {
     "rootId": "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d18",
     "releaseVersion": "1.0.0",
