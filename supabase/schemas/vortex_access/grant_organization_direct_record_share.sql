@@ -73,9 +73,9 @@ begin
     ))
     or p_readable_field_ids is null
     or pg_catalog.cardinality(p_readable_field_ids) = 0
-    or not vortex_context.uuid_array_is_canonical(p_readable_field_ids)
+    or not vortex_access.direct_share_field_ids_are_canonical(p_readable_field_ids)
     or p_changeable_field_ids is null
-    or not vortex_context.uuid_array_is_canonical(p_changeable_field_ids)
+    or not vortex_access.direct_share_field_ids_are_canonical(p_changeable_field_ids)
     or not (p_changeable_field_ids <@ p_readable_field_ids)
     or p_starts_at is null
     or p_starts_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)

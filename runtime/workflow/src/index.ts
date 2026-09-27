@@ -1,6 +1,13 @@
 import "server-only";
 
 export {
+  acceptFlowStartIntent,
+  startIntentCommandSchema,
+  type AcceptedStartIntent,
+  type StartIntentCommand,
+} from "./start-intent";
+
+export {
   registerKestraFlowCandidate,
   kestraFlowRegistrationErrorCodes,
   kestraFlowRegistrationRefusalReasons,
@@ -81,6 +88,24 @@ export {
   type RetainedRunAuthority,
   type VerifiedDurableActorContext,
 } from "./durable-actor-context";
+
+export {
+  createProtectedNodeExecution,
+  protectedNodeRunRecordSchema,
+  type ProtectedNodeCallbackResponse,
+  type ProtectedNodeEffectClaim,
+  type ProtectedNodeEffectKey,
+  type ProtectedNodeEffectLedger,
+  type ProtectedNodeExecutionDependencies,
+  type ProtectedNodeOperationExecutor,
+  type ProtectedNodeOperationIdentity,
+  type ProtectedNodeOperationResult,
+  type ProtectedNodeRunRecord,
+  type ProtectedNodeRunStatus,
+  type ProtectedNodeRunStore,
+} from "./protected-node-execution";
+
+export { createDatabaseProtectedNodeRunStore, createDatabaseProtectedNodeEffectLedger } from "./protected-node-store";
 
 export const WorkflowService = Object.freeze({
   key: "workflow",

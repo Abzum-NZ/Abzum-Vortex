@@ -1,15 +1,8 @@
 import "server-only";
 
-import {
-  revisionSchema,
-  type NavigationItem,
-  type ProjectedNavigation,
-} from "@vortex/contracts";
+import { revisionSchema, type NavigationItem, type ProjectedNavigation } from "@vortex/contracts";
 import type { ResolvedPageComposition } from "./page-composition-resolution";
-import {
-  projectNavigation,
-  type NavigationPermissionDecisions,
-} from "./navigation-projection";
+import { projectNavigation, type NavigationPermissionDecisions } from "./navigation-projection";
 import {
   projectPageCapability,
   type PageCapabilityState,
@@ -38,8 +31,6 @@ export type PageContentRevisions = Readonly<{
  */
 export type PageContentRevisionRelation = "stale" | "current" | "advanced" | "conflicting";
 
-const safeRevision = revisionSchema.max(Number.MAX_SAFE_INTEGER);
-
 /**
  * Reads the revisions a projected page or read-model value declares. Anything missing, malformed,
  * non-integer or out of range is `undefined`, so a caller refuses it as unusable instead of trusting
@@ -48,8 +39,8 @@ const safeRevision = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 export const readPageContentRevisions = (payload: unknown): PageContentRevisions | undefined => {
   if (typeof payload !== "object" || payload === null) return undefined;
   const candidate = payload as Readonly<Record<string, unknown>>;
-  const accessVersion = safeRevision.safeParse(candidate.accessVersion);
-  const applicationReleaseRevision = safeRevision.safeParse(candidate.applicationReleaseRevision);
+  const accessVersion = revisionSchema.safeParse(candidate.accessVersion);
+  const applicationReleaseRevision = revisionSchema.safeParse(candidate.applicationReleaseRevision);
   return accessVersion.success && applicationReleaseRevision.success
     ? {
         accessVersion: accessVersion.data,

@@ -2,14 +2,16 @@ import "server-only";
 
 import { z } from "zod";
 import {
-  activeApplicationInstallationEvidenceSchema,
+  sameId,
   fieldIdSchema,
   jsonValueSchema,
   recordIdSchema,
   recordTypeIdSchema,
+  revisionSchema,
   stableDefinitionReleaseVersionSchema,
   type IdentitySession,
   type JsonValue,
+  type ActiveApplicationInstallationEvidence,
   type OrganizationSelectionCandidate,
   type SelectedOrganizationScope,
 } from "@vortex/contracts";
@@ -19,6 +21,10 @@ import {
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+import {
+  ActiveApplicationInstallationError,
+  createActiveApplicationInstallationRepository,
+} from "@vortex/module";
 import {
   decodeQueryContinuationToken,
   encodeQueryContinuationToken,
@@ -141,7 +147,6 @@ type CachePlan = Readonly<{
 type ResolvedInputs = Extract<z.infer<typeof inputsReadSchema>, { outcome: "resolved" }>;
 
 type ResultRow = DatabaseRow & { readonly result: unknown };
-type InstallationRow = DatabaseRow & { readonly active_installation: unknown };
 type RecheckRow = ResultRow & { readonly capabilities: unknown };
 
 const refusal = (reasonCode: ProtectedQueryRefusalReasonCode): ProtectedQueryResult => ({
@@ -154,7 +159,6 @@ const one = (rows: readonly ResultRow[]): unknown => {
   return rows[0].result;
 };
 
-const revisionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const refusedSchema = z
   .object({ outcome: z.literal("refused"), reasonCode: z.enum(protectedQueryRefusalReasonCodes) })
   .strict();
@@ -201,8 +205,6 @@ const pageReadSchema = z.discriminatedUnion("outcome", [
     .strict(),
   refusedSchema,
 ]);
-
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 /**
  * The user-facing sort, filter and search a request carries, plus the component-declared
@@ -252,7 +254,10 @@ const userInputRefusal = (
   return undefined;
 };
 
-const readInputs = async (transaction: RequestDatabaseTransaction, command: ProtectedQueryCommand) => {
+const readInputs = async (
+  transaction: RequestDatabaseTransaction,
+  command: ProtectedQueryCommand,
+) => {
   const rows = await transaction.query<ResultRow>`
     select vortex_record.read_module_query_inputs(
       ${command.moduleRootId}::uuid,
@@ -339,7 +344,8 @@ const runCommand = async (
     inputValues,
     user: userQueryInputs(command),
   });
-  if (after !== undefined && after.inputFingerprint !== inputFingerprint) return refusal("cursor_stale");
+  if (after !== undefined && after.inputFingerprint !== inputFingerprint)
+    return refusal("cursor_stale");
 
   const load = async (): Promise<ProtectedQueryResult> => {
     const page = await readPage(
@@ -357,7 +363,7 @@ const runCommand = async (
       const disclosed = Object.keys(row.systemValues ?? {});
       if (
         disclosed.some((key) => !declaredSystemKeys.has(key)) ||
-        (declaredSystemKeys.size > 0) !== (row.systemValues !== undefined) ||
+        declaredSystemKeys.size > 0 !== (row.systemValues !== undefined) ||
         declaredSystemKeys.size !== disclosed.length
       )
         throw new Error("PROTECTED_QUERY_RESULT_INVALID");
@@ -457,17 +463,23 @@ const planCache = async (
     if (resolved === undefined) return undefined;
     // The Application pin must be the release this installation runs now, so
     // a page can never cross an Application upgrade.
-    const rows = await transaction.query<InstallationRow>`
-      select vortex_module.read_current_active_installation() as active_installation
-    `;
-    const installation = activeApplicationInstallationEvidenceSchema.safeParse(
-      rows.length === 1 ? rows[0]?.active_installation : undefined,
-    );
+    let installation: ActiveApplicationInstallationEvidence;
+    try {
+      installation = await createActiveApplicationInstallationRepository(transaction).readCurrent();
+    } catch (error) {
+      if (
+        error instanceof ActiveApplicationInstallationError &&
+        error.databaseCode === undefined &&
+        (error.code === "ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE" ||
+          error.code === "ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE")
+      )
+        return undefined;
+      throw error;
+    }
     if (
-      !installation.success ||
-      !sameId(installation.data.organizationId, scope.organizationId) ||
-      !sameId(installation.data.applicationRootId, applicationRootId) ||
-      installation.data.applicationReleaseRevision !== resolved.application.releaseRevision
+      !sameId(installation.organizationId, scope.organizationId) ||
+      !sameId(installation.applicationRootId, applicationRootId) ||
+      installation.applicationReleaseRevision !== resolved.application.releaseRevision
     )
       return undefined;
     return resolved;
@@ -480,7 +492,9 @@ const planCache = async (
     if (
       !recordTypeId.success ||
       !referencedFieldIds.success ||
-      !context.recordDependencies.some((dependency) => sameId(dependency.recordTypeId, recordTypeId.data))
+      !context.recordDependencies.some((dependency) =>
+        sameId(dependency.recordTypeId, recordTypeId.data),
+      )
     )
       return undefined;
     // A hit is reusable only while every field that drove it stays readable, so the reader's own
@@ -567,13 +581,15 @@ const sameAdmittedResult = (
     stored.rows.length > command.pageSize
   )
     return false;
-  const requestedFields = new Set(command.requestedFieldIds.map((fieldId) => fieldId.toLowerCase()));
+  const requestedFields = new Set(
+    command.requestedFieldIds.map((fieldId) => fieldId.toLowerCase()),
+  );
   const requestedSystem = new Set<string>(command.requestedSystemFieldKeys);
   return stored.rows.every(
     (row) =>
       Object.keys(row.values).every((fieldId) => requestedFields.has(fieldId.toLowerCase())) &&
       Object.keys(row.systemValues ?? {}).every((key) => requestedSystem.has(key)) &&
-      (requestedSystem.size > 0) === (row.systemValues !== undefined),
+      requestedSystem.size > 0 === (row.systemValues !== undefined),
   );
 };
 
@@ -640,7 +656,9 @@ const recheckHit = async (
   const requestedFieldIds = command.requestedFieldIds.map((fieldId) => fieldId.toLowerCase());
   return stored.rows.every((row, index) => {
     const current = readableRecordSchema.safeParse(checked[index]?.result);
-    const capabilities = protectedQueryRowCapabilitiesSchema.safeParse(checked[index]?.capabilities);
+    const capabilities = protectedQueryRowCapabilitiesSchema.safeParse(
+      checked[index]?.capabilities,
+    );
     if (
       !current.success ||
       !capabilities.success ||

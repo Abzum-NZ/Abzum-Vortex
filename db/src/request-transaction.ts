@@ -43,7 +43,7 @@ interface RuntimeDatabaseConfiguration {
     | Readonly<{ kind: "hosted_tls"; rootCertificate: string }>;
 }
 
-type RuntimeOperation<Result> = (transaction: RuntimeDatabaseTransaction) => Promise<Result>;
+type RuntimeOperation<Result> = (transaction: RequestDatabaseTransaction) => Promise<Result>;
 export type ResolvedRequestContext<Scope> = Readonly<{
   context: SessionContext;
   /**
@@ -55,7 +55,7 @@ export type ResolvedRequestContext<Scope> = Readonly<{
   scope: Scope;
 }>;
 type RequestContextResolver<Scope> = (
-  transaction: RuntimeDatabaseTransaction,
+  transaction: RequestDatabaseTransaction,
 ) => Promise<ResolvedRequestContext<Scope>>;
 type ResolvedRequestOperation<Scope, Result> = (
   transaction: RequestDatabaseTransaction,

@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  sameId,
   applicationBoundReleaseSetCommandSchema,
   applicationBoundReleaseSetResultSchema,
   applicationRootIdSchema,
@@ -95,9 +96,6 @@ type BoundProjectionExpectation = Readonly<{
   allowEmptyModules: boolean;
 }>;
 
-const sameUuid = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
-
 const projectBoundReleaseSet = async (
   candidate: unknown,
   expectation: BoundProjectionExpectation,
@@ -129,9 +127,9 @@ const projectBoundReleaseSet = async (
   )) as ApplicationRead;
   if (
     (expectation.correlationId !== undefined &&
-      !sameUuid(storedSet.data.correlationId, expectation.correlationId)) ||
+      !sameId(storedSet.data.correlationId, expectation.correlationId)) ||
     (expectation.applicationRootId !== undefined &&
-      !sameUuid(application.rootId, expectation.applicationRootId))
+      !sameId(application.rootId, expectation.applicationRootId))
   )
     throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
@@ -206,7 +204,7 @@ export const createSystemApplicationBoundReleaseSetService = (
       throw new DefinitionConsumerReadError("DEFINITION_CONTEXT_REFUSED");
     if (
       context.data.applicationRootId !== undefined &&
-      !sameUuid(context.data.applicationRootId, command.data.applicationRootId)
+      !sameId(context.data.applicationRootId, command.data.applicationRootId)
     )
       throw new DefinitionConsumerReadError("DEFINITION_CONTEXT_REFUSED");
 
@@ -255,7 +253,7 @@ export const createDatabaseSystemApplicationBoundReleaseSetService = (
 const applicationReleaseAdoptionReleaseSetCommandSchema = z
   .object({
     applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: revisionSchema.max(Number.MAX_SAFE_INTEGER),
+    applicationReleaseRevision: revisionSchema,
   })
   .strict();
 

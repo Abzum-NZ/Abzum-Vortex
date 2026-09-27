@@ -63,8 +63,6 @@ export const retentionPolicyIdSchema = stableId<"RetentionPolicyId">();
 export const removalReceiptIdSchema = stableId<"RemovalReceiptId">();
 /** Permanent current-fact identity for one tenant structural-administrator assignment. */
 export const tenantAdministratorAssignmentIdSchema = stableId<"TenantAdministratorAssignmentId">();
-export const vortexSuperAdministratorAssignmentIdSchema =
-  stableId<"VortexSuperAdministratorAssignmentId">();
 export const administrationDuplicateKeySchema = stableId<"AdministrationDuplicateKey">();
 export const administrationReceiptIdSchema = stableId<"AdministrationReceiptId">();
 export const meteringEventIdSchema = stableId<"MeteringEventId">();
@@ -98,7 +96,7 @@ export const stableDefinitionReleaseVersionSchema = semanticVersionSchema.refine
   "Published definition versions must be stable major.minor.patch versions",
 );
 
-export const revisionSchema = z.number().int().positive();
+export const revisionSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 export const fingerprintSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 export const timestampSchema = z.iso.datetime({ offset: true });
 
@@ -155,9 +153,6 @@ export type ActivityId = z.infer<typeof activityIdSchema>;
 export type RetentionPolicyId = z.infer<typeof retentionPolicyIdSchema>;
 export type RemovalReceiptId = z.infer<typeof removalReceiptIdSchema>;
 export type TenantAdministratorAssignmentId = z.infer<typeof tenantAdministratorAssignmentIdSchema>;
-export type VortexSuperAdministratorAssignmentId = z.infer<
-  typeof vortexSuperAdministratorAssignmentIdSchema
->;
 export type AdministrationDuplicateKey = z.infer<typeof administrationDuplicateKeySchema>;
 export type AdministrationReceiptId = z.infer<typeof administrationReceiptIdSchema>;
 export type MeteringEventId = z.infer<typeof meteringEventIdSchema>;

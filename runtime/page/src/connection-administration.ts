@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  isRecord,
   activityIdSchema,
   applicationRootIdSchema,
   archiveDestinationReferenceSchema,
@@ -177,20 +178,17 @@ type StepOptionalInputsOf<Step> = Step extends {
  * Fails to compile when a flow step requires or accepts an input the #692 command it submits does not
  * declare. The conditional is distributive, so every step of the flow is checked on its own.
  */
-type AssertStepDeclaresOnlyCommandInputs<Step> = Exclude<
-  StepRequiredInputsOf<Step> | StepOptionalInputsOf<Step>,
-  CommandKeysOf<StepCommandOf<Step>>
-> extends never
-  ? Step
-  : never;
+type AssertStepDeclaresOnlyCommandInputs<Step> =
+  Exclude<
+    StepRequiredInputsOf<Step> | StepOptionalInputsOf<Step>,
+    CommandKeysOf<StepCommandOf<Step>>
+  > extends never
+    ? Step
+    : never;
 
 /** Fails to compile when a declared page input is not a property some #692 command declares. */
-type AssertInputIsACommandProperty<Input extends Readonly<{ input: string }>> = Exclude<
-  Input["input"],
-  AllCommandInputKeys
-> extends never
-  ? Input
-  : never;
+type AssertInputIsACommandProperty<Input extends Readonly<{ input: string }>> =
+  Exclude<Input["input"], AllCommandInputKeys> extends never ? Input : never;
 
 /** Whether a type collapsed to `never`, so an assertion can fail the build instead of vanishing. */
 type IsNever<Value> = [Value] extends [never] ? true : false;
@@ -636,9 +634,6 @@ const INVALID_PARAMETERS: ConnectionAdministrationCommandReadiness = Object.free
   reasonCode: "invalid_parameters",
 });
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 /** A closed shape check: `valid` carries the parsed value and `invalid` carries no value at all. */
 type Check<Value> = Readonly<{ valid: true; value: Value }> | Readonly<{ valid: false }>;
 const invalid: Check<never> = Object.freeze({ valid: false });
@@ -649,8 +644,7 @@ const valid = <Value>(value: Value): Check<Value> => Object.freeze({ valid: true
  * "nothing here": no value at all, and an empty control a form submits as its unset value.
  */
 type OptionalCheck<Value> =
-  | Readonly<{ valid: true; value: Value | undefined }>
-  | Readonly<{ valid: false }>;
+  Readonly<{ valid: true; value: Value | undefined }> | Readonly<{ valid: false }>;
 
 const absent: OptionalCheck<never> = Object.freeze({ valid: true, value: undefined });
 

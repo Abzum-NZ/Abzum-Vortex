@@ -45,7 +45,6 @@ export const recordScopeSchema = z.discriminatedUnion("storageScope", [
 ]);
 
 const saveRecordContractVersionSchema = z.literal("2.0.0");
-const saveRecordRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 const submittedRecordValuesSchema = z.record(fieldIdSchema, jsonValueSchema);
 
 const saveRecordCommandFields = {
@@ -68,7 +67,7 @@ export const saveRecordCommandV2Schema = z.discriminatedUnion("operation", [
       ...saveRecordCommandFields,
       operation: z.literal("update"),
       recordId: recordIdSchema,
-      expectedConcurrencyNumber: saveRecordRevisionSchema,
+      expectedConcurrencyNumber: revisionSchema,
     })
     .strict(),
 ]);
@@ -78,7 +77,7 @@ const transferRecordOwnershipCommandFields = {
   commandId: platformIdSchema,
   recordTypeId: recordTypeIdSchema,
   recordId: recordIdSchema,
-  expectedConcurrencyNumber: saveRecordRevisionSchema,
+  expectedConcurrencyNumber: revisionSchema,
 };
 
 /**
@@ -121,7 +120,7 @@ export const transferRecordOwnershipResultV2Schema = z.discriminatedUnion("outco
       contractVersion: saveRecordContractVersionSchema,
       outcome: z.literal("transferred"),
       recordId: recordIdSchema,
-      concurrencyNumber: saveRecordRevisionSchema,
+      concurrencyNumber: revisionSchema,
       correlationId: correlationIdSchema,
       replayed: z.boolean(),
     })
@@ -149,7 +148,7 @@ export const recordSaveFieldCorrectionSchema = z
 const readableRecordSaveProjectionSchema = z
   .object({
     recordId: recordIdSchema,
-    concurrencyNumber: saveRecordRevisionSchema,
+    concurrencyNumber: revisionSchema,
     readableValues: z.record(fieldIdSchema, jsonValueSchema),
   })
   .strict();
@@ -177,7 +176,7 @@ export const saveRecordResultV2Schema = z.discriminatedUnion("outcome", [
       contractVersion: saveRecordContractVersionSchema,
       outcome: z.literal("saved"),
       recordId: recordIdSchema,
-      concurrencyNumber: saveRecordRevisionSchema,
+      concurrencyNumber: revisionSchema,
       readableValues: z.record(fieldIdSchema, jsonValueSchema),
       correlationId: correlationIdSchema,
       backgroundDelivery: z.enum(["none", "pending"]),
@@ -298,7 +297,7 @@ export const recordChangeCommandV2Schema = z
     commandId: platformIdSchema,
     recordTypeId: recordTypeIdSchema,
     recordId: recordIdSchema.optional(),
-    expectedConcurrencyNumber: saveRecordRevisionSchema.optional(),
+    expectedConcurrencyNumber: revisionSchema.optional(),
     mutations: z.array(recordChangeMutationV2Schema).min(1),
     announcedEventKeys: z.array(namespacedKeySchema),
   })
@@ -417,7 +416,7 @@ export const recordChangeReceiptSchema = z
     commandId: platformIdSchema,
     correlationId: correlationIdSchema,
     recordId: recordIdSchema,
-    concurrencyNumber: saveRecordRevisionSchema,
+    concurrencyNumber: revisionSchema,
     committedMutationKinds: z.array(recordChangeMutationKindSchema).min(1),
     announcedEventKeys: z.array(namespacedKeySchema),
   })
@@ -429,7 +428,7 @@ export const recordChangeResultV2Schema = z.discriminatedUnion("outcome", [
       contractVersion: saveRecordContractVersionSchema,
       outcome: z.literal("changed"),
       recordId: recordIdSchema,
-      concurrencyNumber: saveRecordRevisionSchema,
+      concurrencyNumber: revisionSchema,
       readableValues: z.record(fieldIdSchema, jsonValueSchema),
       receipt: recordChangeReceiptSchema,
       backgroundDelivery: z.enum(["none", "pending"]),

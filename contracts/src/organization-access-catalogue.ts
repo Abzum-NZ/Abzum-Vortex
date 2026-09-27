@@ -27,7 +27,6 @@ import {
   preparedApplicationPermissionRegistrationSchema,
 } from "./permission-registry";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 const javascriptSafeDurationSecondsSchema = z
   .number()
   .finite()
@@ -71,9 +70,9 @@ export const rolePermissionEntrySchema = z
   .object({
     kind: z.literal("exact"),
     ...exactPermissionScopeFields,
-    acceptedRegistrationRevision: javascriptSafeRevisionSchema,
+    acceptedRegistrationRevision: revisionSchema,
     catalogueFingerprint: fingerprintSchema,
-    continuityRevision: javascriptSafeRevisionSchema,
+    continuityRevision: revisionSchema,
     meaningFingerprint: fingerprintSchema,
   })
   .strict()
@@ -136,7 +135,7 @@ export const roleRecentAuthenticationRequirementSchema = z.discriminatedUnion("k
 export const roleActivationPolicyReferenceSchema = z
   .object({
     activationPolicyId: roleActivationPolicyIdSchema,
-    revision: javascriptSafeRevisionSchema,
+    revision: revisionSchema,
     fingerprint: fingerprintSchema,
   })
   .strict();
@@ -157,7 +156,7 @@ export const roleActivationPolicyRevisionSchema = z
     organizationId: organizationIdSchema,
     roleId: roleIdSchema,
     activationPolicyId: roleActivationPolicyIdSchema,
-    revision: javascriptSafeRevisionSchema,
+    revision: revisionSchema,
     fingerprint: fingerprintSchema,
     maximumActivationDurationSeconds: javascriptSafeDurationSecondsSchema,
     reasonRequired: z.boolean(),
@@ -177,8 +176,8 @@ export const applicationRoleSourceReferenceSchema = z
     sourceRelease: applicationReleaseEvidenceSchema,
     sourceTemplateFingerprint: fingerprintSchema,
     sourceCatalogueFingerprint: fingerprintSchema,
-    acceptedRegistrationRevision: javascriptSafeRevisionSchema,
-    templateContinuityRevision: javascriptSafeRevisionSchema,
+    acceptedRegistrationRevision: revisionSchema,
+    templateContinuityRevision: revisionSchema,
     acceptedGrantFingerprint: fingerprintSchema,
   })
   .strict()
@@ -214,11 +213,11 @@ const liveRoleFields = {
   key: builderKeySchema,
   label: labelSchema,
   description: descriptionSchema,
-  liveRevision: javascriptSafeRevisionSchema,
+  liveRevision: revisionSchema,
   privilegeClassification: rolePrivilegeClassificationSchema,
   assignmentPolicy: roleAssignmentPolicySchema,
-  policyContinuityRevision: javascriptSafeRevisionSchema,
-  authorityContinuityRevision: javascriptSafeRevisionSchema,
+  policyContinuityRevision: revisionSchema,
+  authorityContinuityRevision: revisionSchema,
   permissions: rolePermissionSetSchema,
   ...creationAndChangeEvidenceFields,
 };
@@ -286,7 +285,7 @@ export const groupSchema = z
     key: builderKeySchema,
     label: labelSchema,
     state: z.enum(["active", "retired"]),
-    revision: javascriptSafeRevisionSchema,
+    revision: revisionSchema,
     ...creationAndChangeEvidenceFields,
   })
   .strict()
@@ -380,7 +379,7 @@ export const groupMembershipSchema = z
     organizationId: organizationIdSchema,
     groupId: groupIdSchema,
     organizationAccountId: organizationAccountIdSchema,
-    revision: javascriptSafeRevisionSchema,
+    revision: revisionSchema,
     ...temporalGrantFields,
   })
   .strict()
@@ -409,7 +408,7 @@ export const roleAssignmentSchema = z
     roleId: roleIdSchema,
     assignee: accessAssigneeSchema,
     assignmentKind: roleAssignmentKindSchema,
-    revision: javascriptSafeRevisionSchema,
+    revision: revisionSchema,
     ...temporalGrantFields,
   })
   .strict()
@@ -433,14 +432,14 @@ export const roleAssignmentEffectiveStateSchema = z
 const exactEligibilityAssignmentReferenceSchema = z
   .object({
     roleAssignmentId: roleAssignmentIdSchema,
-    revision: javascriptSafeRevisionSchema,
+    revision: revisionSchema,
   })
   .strict();
 
 const exactOriginatingMembershipReferenceSchema = z
   .object({
     membershipId: membershipIdSchema,
-    revision: javascriptSafeRevisionSchema,
+    revision: revisionSchema,
   })
   .strict();
 
@@ -523,10 +522,10 @@ export const roleActivationSchema = z
     organizationId: organizationIdSchema,
     organizationAccountId: organizationAccountIdSchema,
     roleId: roleIdSchema,
-    revision: javascriptSafeRevisionSchema,
-    historicalRoleRevision: javascriptSafeRevisionSchema,
-    authorityContinuityRevision: javascriptSafeRevisionSchema,
-    policyContinuityRevision: javascriptSafeRevisionSchema,
+    revision: revisionSchema,
+    historicalRoleRevision: revisionSchema,
+    authorityContinuityRevision: revisionSchema,
+    policyContinuityRevision: revisionSchema,
     activationPolicy: roleActivationPolicyReferenceSchema,
     eligibilitySource: roleActivationEligibilitySourceSchema,
     state: z.enum(["live", "revoked"]),
@@ -576,7 +575,7 @@ export const delegationAuthoritySchema = z
     organizationId: organizationIdSchema,
     holder: accessAssigneeSchema,
     scope: delegationScopeSchema,
-    revision: javascriptSafeRevisionSchema,
+    revision: revisionSchema,
     ...temporalGrantFields,
   })
   .strict()
@@ -602,9 +601,9 @@ export const permissionContinuitySchema = z
     organizationId: organizationIdSchema,
     ...exactPermissionScopeFields,
     state: z.enum(["available", "unavailable"]),
-    continuityRevision: javascriptSafeRevisionSchema,
+    continuityRevision: revisionSchema,
     meaningFingerprint: fingerprintSchema,
-    lastProcessedRegistrationRevision: javascriptSafeRevisionSchema,
+    lastProcessedRegistrationRevision: revisionSchema,
     changedAt: timestampSchema,
   })
   .strict()
@@ -616,9 +615,9 @@ export const applicationRoleTemplateContinuitySchema = z
     applicationRootId: applicationRootIdSchema,
     sourceRoleId: roleIdSchema,
     state: z.enum(["available", "unavailable"]),
-    continuityRevision: javascriptSafeRevisionSchema,
+    continuityRevision: revisionSchema,
     sourceTemplateFingerprint: fingerprintSchema,
-    lastProcessedRegistrationRevision: javascriptSafeRevisionSchema,
+    lastProcessedRegistrationRevision: revisionSchema,
     changedAt: timestampSchema,
   })
   .strict();
@@ -626,7 +625,7 @@ export const applicationRoleTemplateContinuitySchema = z
 export const affectedRoleAssignmentSchema = z
   .object({
     roleAssignmentId: roleAssignmentIdSchema,
-    expectedRevision: javascriptSafeRevisionSchema,
+    expectedRevision: revisionSchema,
     assignee: accessAssigneeSchema,
   })
   .strict();
@@ -670,7 +669,7 @@ export const applicationRoleTemplatePreparationBasisSchema = z.discriminatedUnio
   z
     .object({
       kind: z.literal("current_active_registration"),
-      registrationRevision: javascriptSafeRevisionSchema,
+      registrationRevision: revisionSchema,
     })
     .strict(),
 ]);

@@ -10,8 +10,6 @@ import {
 } from "./identifiers";
 import { invitationSchema, organizationRuntimeSettingsSchema } from "./identity-access";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
-
 export const organizationAdministrationAccountSummarySchema = z
   .object({
     organizationAccountId: organizationAccountIdSchema,
@@ -19,7 +17,7 @@ export const organizationAdministrationAccountSummarySchema = z
     state: z.enum(["active", "suspended", "closed", "closing", "deleted"]),
     language: z.string().min(2).max(35).optional(),
     timeZone: z.string().min(1).max(100).optional(),
-    revision: javascriptSafeRevisionSchema,
+    revision: revisionSchema,
   })
   .strict();
 
@@ -34,7 +32,7 @@ export const listOrganizationAccountsResultSchema = z
   .object({
     accounts: z.array(organizationAdministrationAccountSummarySchema).max(100),
     nextAfterOrganizationAccountId: organizationAccountIdSchema.optional(),
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
@@ -47,13 +45,13 @@ export const readOrganizationAccountResultSchema = z.discriminatedUnion("outcome
     .object({
       outcome: z.literal("available"),
       account: organizationAdministrationAccountSummarySchema,
-      accessVersion: javascriptSafeRevisionSchema,
+      accessVersion: revisionSchema,
     })
     .strict(),
   z
     .object({
       outcome: z.literal("unavailable"),
-      accessVersion: javascriptSafeRevisionSchema,
+      accessVersion: revisionSchema,
     })
     .strict(),
 ]);
@@ -69,7 +67,7 @@ export const listOrganizationInvitationsResultSchema = z
   .object({
     invitations: z.array(invitationSchema).max(100),
     nextAfterInvitationId: invitationIdSchema.optional(),
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
@@ -82,13 +80,13 @@ export const readOrganizationInvitationResultSchema = z.discriminatedUnion("outc
     .object({
       outcome: z.literal("available"),
       invitation: invitationSchema,
-      accessVersion: javascriptSafeRevisionSchema,
+      accessVersion: revisionSchema,
     })
     .strict(),
   z
     .object({
       outcome: z.literal("unavailable"),
-      accessVersion: javascriptSafeRevisionSchema,
+      accessVersion: revisionSchema,
     })
     .strict(),
 ]);
@@ -100,13 +98,13 @@ export const readOrganizationRuntimeSettingsResultSchema = z.discriminatedUnion(
     .object({
       outcome: z.literal("available"),
       settings: organizationRuntimeSettingsSchema,
-      accessVersion: javascriptSafeRevisionSchema,
+      accessVersion: revisionSchema,
     })
     .strict(),
   z
     .object({
       outcome: z.literal("unavailable"),
-      accessVersion: javascriptSafeRevisionSchema,
+      accessVersion: revisionSchema,
     })
     .strict(),
 ]);
@@ -114,7 +112,7 @@ export const readOrganizationRuntimeSettingsResultSchema = z.discriminatedUnion(
 const organizationAccountLifecycleCommandFields = {
   duplicateKey: administrationDuplicateKeySchema,
   organizationAccountId: organizationAccountIdSchema,
-  expectedRevision: javascriptSafeRevisionSchema,
+  expectedRevision: revisionSchema,
 };
 
 export const suspendOrganizationAccountCommandSchema = z
@@ -139,7 +137,7 @@ export const revokeOrganizationInvitationForAdministrationCommandSchema = z
   .object({
     duplicateKey: administrationDuplicateKeySchema,
     invitationId: invitationIdSchema,
-    expectedRevision: javascriptSafeRevisionSchema,
+    expectedRevision: revisionSchema,
   })
   .strict();
 
@@ -147,10 +145,10 @@ const acceptedOrganizationAccountLifecycleFields = {
   outcome: z.enum(["accepted", "replayed"]),
   organizationId: organizationIdSchema,
   organizationAccountId: organizationAccountIdSchema,
-  revision: javascriptSafeRevisionSchema,
+  revision: revisionSchema,
   correlationId: correlationIdSchema,
   acceptedAt: timestampSchema,
-  accessVersion: javascriptSafeRevisionSchema,
+  accessVersion: revisionSchema,
 };
 
 const organizationAccountLifecycleResult = <
@@ -181,7 +179,7 @@ export const closeOrganizationAccountResultSchema = organizationAccountLifecycle
 export const updateOwnProfileCommandSchema = z
   .object({
     organizationAccountId: organizationAccountIdSchema,
-    expectedRevision: javascriptSafeRevisionSchema,
+    expectedRevision: revisionSchema,
     displayName: z.string().trim().min(1).max(120),
     // The same canonical BCP-47 tag and supported IANA zone rules as the organisation settings,
     // within the account columns' length bounds.
@@ -196,7 +194,7 @@ const updateOwnProfileChangeFields = {
   organizationAccountId: organizationAccountIdSchema,
   correlationId: correlationIdSchema,
   acceptedAt: timestampSchema,
-  accessVersion: javascriptSafeRevisionSchema,
+  accessVersion: revisionSchema,
 };
 
 export const updateOwnProfileResultSchema = z.discriminatedUnion("outcome", [
@@ -213,10 +211,10 @@ export const updateOwnProfileResultSchema = z.discriminatedUnion("outcome", [
 const organizationInvitationChangeFields = {
   organizationId: organizationIdSchema,
   invitationId: invitationIdSchema,
-  revision: javascriptSafeRevisionSchema,
+  revision: revisionSchema,
   correlationId: correlationIdSchema,
   acceptedAt: timestampSchema,
-  accessVersion: javascriptSafeRevisionSchema,
+  accessVersion: revisionSchema,
 };
 
 export const createOrganizationInvitationForAdministrationResultSchema = z.discriminatedUnion(
