@@ -101,6 +101,13 @@ revoke vortex_access_owner, vortex_activity_owner, vortex_connection_owner,
   vortex_identity_owner, vortex_invalidation_owner, vortex_operations_owner,
   vortex_page_owner, vortex_search_owner, vortex_workflow_owner
   from anon, authenticated, service_role, vortex_runtime, vortex_request;
+-- CREATE ROLE can leave the creator with an admin-only membership. Clear it
+-- before installing the single membership that may set each owner role.
+revoke vortex_access_owner, vortex_activity_owner, vortex_connection_owner,
+  vortex_context_owner, vortex_definition_owner, vortex_event_owner, vortex_file_owner,
+  vortex_identity_owner, vortex_invalidation_owner, vortex_operations_owner,
+  vortex_page_owner, vortex_search_owner, vortex_workflow_owner
+  from postgres;
 grant vortex_access_owner, vortex_activity_owner, vortex_connection_owner,
   vortex_context_owner, vortex_definition_owner, vortex_event_owner, vortex_file_owner,
   vortex_identity_owner, vortex_invalidation_owner, vortex_operations_owner,
