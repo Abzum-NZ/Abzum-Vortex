@@ -83,9 +83,7 @@ begin
   return pg_catalog.jsonb_build_object(
     'outcome', 'recovered',
     'recoveredBy', p_system_actor_id,
-    'leaseExpiresAt', pg_catalog.to_char(
-      pg_catalog.timezone('UTC', recovery_time), 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
-    )
+    'leaseExpiresAt', vortex_context.format_timestamp_utc(recovery_time)
   );
 end
 $function$;
