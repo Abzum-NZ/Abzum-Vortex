@@ -1,7 +1,10 @@
 import "server-only";
 
 import {
+  SHADCN_HEADING_FONT_INHERIT,
+  findShadcnFont,
   findShadcnThemeCatalogueOption,
+  isShadcnIconLibrary,
   shadcnThemeCatalogueDimensionKeys,
   sourceApplicationThemeSelectionV2Schema,
   type ShadcnThemeCatalogueDimensionKey,
@@ -13,7 +16,6 @@ import {
   encodePreset,
   isPresetCode,
   V1_CHART_COLOR_MAP,
-  type PresetConfig,
 } from "shadcn/preset";
 
 type PresetSourceKind = "code" | "url";
@@ -48,7 +50,7 @@ export type ShadcnPresetImportFailure = Readonly<{
     | "MISSING_THEME_RELEASE"
     | "MISSING_STYLE_ASSET"
     | "INVALID_THEME_SELECTION";
-  dimension?: ShadcnThemeCatalogueDimensionKey | undefined;
+  dimension?: ShadcnThemeCatalogueDimensionKey | "iconLibrary" | "bodyFont" | "headingFont" | undefined;
   value?: string | undefined;
   message: string;
 }>;
@@ -143,30 +145,6 @@ const parsePresetInput = (input: unknown): ParsedPresetInput | PresetInputFailur
   return { kind: "url", code };
 };
 
-const notYetImportableDimensions = (
-  decoded: PresetConfig,
-): readonly ShadcnPresetDimensionNotYetImportable[] =>
-  Object.freeze([
-    Object.freeze({
-      dimension: "font" as const,
-      value: decoded.font,
-      status: "not_yet_importable" as const,
-      message: `The font value "${decoded.font}" has no application theme selection dimension yet.`,
-    }),
-    Object.freeze({
-      dimension: "fontHeading" as const,
-      value: decoded.fontHeading,
-      status: "not_yet_importable" as const,
-      message: `The fontHeading value "${decoded.fontHeading}" has no application theme selection dimension yet.`,
-    }),
-    Object.freeze({
-      dimension: "iconLibrary" as const,
-      value: decoded.iconLibrary,
-      status: "not_yet_importable" as const,
-      message: `The iconLibrary value "${decoded.iconLibrary}" has no application theme selection dimension yet.`,
-    }),
-  ]);
-
 const unavailableOptionFailure = (
   dimension: ShadcnThemeCatalogueDimensionKey,
   value: string,
@@ -228,7 +206,7 @@ export const draftShadcnPresetImport = (input: unknown): ShadcnPresetImportDraft
     };
   }
 
-  const unsupportedDimensions = notYetImportableDimensions(decoded);
+  const unsupportedDimensions: readonly ShadcnPresetDimensionNotYetImportable[] = [];
   const values = presetSelectionValues(decoded);
   const selectedOptions: Partial<Record<ShadcnThemeCatalogueDimensionKey, string>> = {};
   const failures: ShadcnPresetImportFailure[] = [];
@@ -276,6 +254,30 @@ export const draftShadcnPresetImport = (input: unknown): ShadcnPresetImportDraft
     selectedOptions[dimension] = option.id;
   }
 
+  if (!isShadcnIconLibrary(decoded.iconLibrary))
+    failures.push({
+      code: "UNKNOWN_THEME_OPTION",
+      dimension: "iconLibrary",
+      value: decoded.iconLibrary,
+      message: `The preset iconLibrary value "${decoded.iconLibrary}" is not available in the pinned icon catalogue.`,
+    });
+  // The preset's `font` is the body font and its `fontHeading` the heading font, which may be
+  // `inherit`; both are offered by the font catalogue rather than the colour and style index.
+  if (findShadcnFont(decoded.font) === undefined)
+    failures.push({
+      code: "UNKNOWN_THEME_OPTION",
+      dimension: "bodyFont",
+      value: decoded.font,
+      message: `The preset font value "${decoded.font}" is not available in the pinned font catalogue.`,
+    });
+  if (decoded.fontHeading !== SHADCN_HEADING_FONT_INHERIT && findShadcnFont(decoded.fontHeading) === undefined)
+    failures.push({
+      code: "UNKNOWN_THEME_OPTION",
+      dimension: "headingFont",
+      value: decoded.fontHeading,
+      message: `The preset fontHeading value "${decoded.fontHeading}" is not available in the pinned font catalogue.`,
+    });
+
   if (failures.length > 0) {
     return {
       status: "refused",
@@ -296,6 +298,9 @@ export const draftShadcnPresetImport = (input: unknown): ShadcnPresetImportDraft
     radius: selectedOptions.radius,
     menu_color: selectedOptions.menuColor,
     menu_accent: selectedOptions.menuAccent,
+    icon_library: decoded.iconLibrary,
+    body_font: decoded.font,
+    heading_font: decoded.fontHeading,
   });
   if (!parsedSelection.success) {
     return {

@@ -310,6 +310,8 @@ const writtenValue = (
   if (candidate.kind === "literal") value = candidate.literal.value;
   else {
     const reference = candidate.reference;
+    // This collector cannot pause for a form answer or read intermediate task results.
+    if (reference.source === "task_output") return undefined;
     if (reference.source === "input" && typeof reference.name === "string") {
       if (reference.name === subjectInput)
         value = { recordTypeId: prepared.recordType.recordTypeId, recordId: prepared.recordId };

@@ -148,7 +148,21 @@
         "record_type": "vortex.tenant_administration:organization",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
-      }
+      },
+      {
+        "id": "event_rename_organization",
+        "key": "vortex.app.tenant_administration.organization_rename",
+        "record_type": "vortex.tenant_administration:organization",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+    {
+      "id": "event_new_lifecycle_request",
+      "key": "vortex.app.events.vortex_app_tenant_administration_new_lifecycle_request",
+      "record_type": "vortex.tenant_administration:organization_lifecycle_request",
+      "carries": [],
+      "personal_or_sensitive_values_allowed": false
+    }
     ],
     "public_addresses": [],
     "platform_block_dependencies": [],
@@ -506,6 +520,19 @@
                               "value": "Restore organisation"
                             }
                           }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "event_id": {
+                              "kind": "text",
+                              "value": "event_rename_organization"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Rename organisation"
+                            }
+                          }
                         }
                       ]
                     }
@@ -524,11 +551,80 @@
                   },
                   "slots": {},
                   "query": "vortex.tenant_administration:organizations"
+                },
+                "form_rename_organization": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Rename organisation"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": false,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "input_rename_organization_display_name": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "display_name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Organisation name"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "input_rename_organization_display_name"
+                        ]
+                      }
+                    }
+                  }
                 }
               },
               "order": {
                 "desktop": [
-                  "structure_region"
+                  "structure_region",
+                  "form_rename_organization"
                 ]
               }
             }
@@ -779,11 +875,13 @@
                   },
                   "slots": {},
                   "query": "vortex.tenant_administration:organization_lifecycle_requests"
-                }
+                },
+        "button_new_lifecycle_request": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.tenant_administration.organization_lifecycle_request.submit", "settings": {"label": {"kind": "text", "value": "New lifecycle request"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
               },
               "order": {
                 "desktop": [
-                  "requests_table"
+                  "requests_table",
+            "button_new_lifecycle_request"
                 ]
               }
             }
@@ -1063,7 +1161,149 @@
         },
         "errors": [],
         "finally": []
-      }
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_rename_tenant_organization",
+        "key": "rename_tenant_organization",
+        "labels": {
+          "name": "Rename organisation"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "organization_id": {
+            "type": "text",
+            "required": true
+          },
+          "expected_revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "form",
+            "type": "interface.show_form",
+            "version": "1.0.0",
+            "properties": {
+              "form": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "form_rename_organization"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "display_name": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.rename_tenant_organization"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "organization_id": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "organization_id"
+                    }
+                  },
+                  "expected_revision": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "expected_revision"
+                    }
+                  },
+                  "display_name": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": [
+                        "display_name"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
+      },
+    {
+      "contractVersion": "1.0.0",
+      "id": "navigate_new_lifecycle_request",
+      "key": "navigate_new_lifecycle_request",
+      "description": "Opens the organisation lifecycle request form.",
+      "labels": {
+        "name": "New lifecycle request"
+      },
+      "execution": "interactive",
+      "runAs": {
+        "kind": "initiator"
+      },
+      "inputs": {},
+      "tasks": [
+        {
+          "id": "open_page",
+          "type": "interface.navigate",
+          "version": "1.0.0",
+          "properties": {
+            "page": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "record_lifecycle_request"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {}
+    }
     ],
     "flow_bindings": [
       {
@@ -1112,7 +1352,32 @@
             "name": "revision"
           }
         }
-      }
+      },
+      {
+        "id": "binding_rename_organization",
+        "control": "structure_region",
+        "event_id": "event_rename_organization",
+        "event": "row_action",
+        "flow": "flow_rename_tenant_organization",
+        "inputs": {
+          "organization_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_revision": {
+            "kind": "caller",
+            "name": "revision"
+          }
+        }
+      },
+    {
+      "id": "binding_new_lifecycle_request",
+      "control": "button_new_lifecycle_request",
+      "event_id": "event_new_lifecycle_request",
+      "event": "action",
+      "flow": "navigate_new_lifecycle_request",
+      "inputs": {}
+    }
     ]
   }
 }

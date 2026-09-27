@@ -152,18 +152,6 @@ export {
 } from "./installation-coordinator";
 
 export {
-  createFirstOwnerApplicationEntryComposition,
-  FirstOwnerApplicationEntryError,
-  firstOwnerApplicationEntryErrorCodes,
-  firstOwnerApplicationEntryRequestSchema,
-  type FirstOwnerApplicationEntryComposition,
-  type FirstOwnerApplicationEntryCompositionDependencies,
-  type FirstOwnerApplicationEntryErrorCode,
-  type FirstOwnerApplicationEntryRequest,
-  type FirstOwnerApplicationEntryResult,
-} from "./first-owner-entry";
-
-export {
   createIdentityDisablementCoordinator,
   identityDisablementRefusalCodes,
   identityDisablementRequestSchema,
