@@ -124,15 +124,12 @@ const delegationAllFields = [
   "state",
   "temporal_state",
 ];
-// The organisation settings system record type is the read-only projection of the
-// one protected settings document the organisation already has, so it declares
-// only the safe projected fields and no ordinary write path. Its two changes go
-// through the registered protected operations that re-check the document's exact
-// current revision, so each carries the settings row's identity and revision
-// automatically. Extending the settings themselves is a later task. The
-// installed-application system record type is the read-only projection of the
-// applications installed in the organisation, and the permitted-applications feed
-// still serves installed applications to pages until a follow-up replaces it.
+// The organisation settings system record type projects the one protected settings
+// document. It is the sole system projection registered for standard update; its
+// protected writer checks the current revision and settings-manage permission.
+// An organisation can add fields in its customised Module release. The installed-
+// application system record type remains read-only, and the permitted-applications
+// feed serves installed applications to pages until a follow-up replaces it.
 const settingsAllFields = [
   "organization_id",
   "revision",
