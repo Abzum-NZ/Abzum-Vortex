@@ -282,6 +282,11 @@ revoke execute on function
 from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_module_owner, vortex_record_owner, vortex_record_adapter;
 
+grant execute on function
+  vortex_access.evaluate_permission_role_path_internal(
+    jsonb, timestamptz, jsonb, jsonb, uuid
+  ) to vortex_access_owner;
+
 comment on function
   vortex_access.evaluate_permission_role_path_internal(
     jsonb, timestamptz, jsonb, jsonb, uuid
