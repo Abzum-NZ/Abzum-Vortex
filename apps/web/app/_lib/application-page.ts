@@ -194,8 +194,6 @@ const logPlacementFailure = (
   reason:
     | "read_model_not_served"
     | "query_not_bound"
-    | "query_unavailable"
-    | "query_refused"
     | "subject_not_addressed"
     | "subject_unavailable"
     | "subject_refused"
@@ -435,13 +433,14 @@ export const loadApplicationPage = async (
         search: state.search,
       });
       if (resolved.kind === "unavailable") {
-        logPlacementFailure(address, placementId, "query_unavailable");
+        console.error("[page] data placement unavailable: class=protected_query code=query_unavailable");
         data[placementId] = { status: "error" };
       } else if (resolved.kind === "refused") {
-        logPlacementFailure(address, placementId, "query_refused");
+        console.error(
+          `[page] data placement refused: class=${resolved.reasonCode === undefined ? "records_table" : "protected_query"} code=${resolved.reasonCode ?? "query_refused"}`,
+        );
         data[placementId] = { status: "refused", reason: "not_permitted" };
-      }
-      else if (resolved.display.status === "empty") data[placementId] = { status: "empty" };
+      } else if (resolved.display.status === "empty") data[placementId] = { status: "empty" };
       else
         data[placementId] = {
           status: "ready",

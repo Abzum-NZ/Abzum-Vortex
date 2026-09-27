@@ -40,6 +40,7 @@ registerHooks({
 });
 const {
   platformBlockReleaseFingerprints,
+  platformConnectionTypeReleaseFingerprints,
   platformServiceOperationReleaseFingerprints,
   platformThemeReleaseFingerprints,
 } = await import("../runtime/definition/src/catalogue-release-fingerprints.ts");
@@ -69,6 +70,13 @@ const platformServiceOperations = byIdentity(
   Object.values(await readSource("platform-service-operation-catalogue.source.json")),
   (entry) => `${entry.release.serviceId}:${entry.release.operationId}:${entry.release.releaseVersion}`,
   (entry) => platformServiceOperationReleaseFingerprints(entry.release, entry.descriptor),
+);
+
+const platformConnectionTypes = byIdentity(
+  "platform connection type",
+  Object.values(await readSource("platform-connection-type-catalogue.source.json")),
+  (release) => `${release.rootId}:${release.releaseVersion}`,
+  platformConnectionTypeReleaseFingerprints,
 );
 
 // The imported shadcn/create releases live in their own importer-generated file so the contracts
@@ -110,7 +118,13 @@ for (const file of styleFiles) {
 }
 
 const output = `${JSON.stringify(
-  { platformBlocks, platformServiceOperations, platformThemes, platformThemeStyleAssets },
+  {
+    platformBlocks,
+    platformServiceOperations,
+    platformConnectionTypes,
+    platformThemes,
+    platformThemeStyleAssets,
+  },
   null,
   2,
 )}\n`;
@@ -126,6 +140,6 @@ if (process.argv.includes("--check")) {
 } else {
   await writeFile(generatedFile, output, "utf8");
   console.log(
-    `Wrote ${Object.keys(platformBlocks).length} block, ${Object.keys(platformServiceOperations).length} operation and ${Object.keys(platformThemes).length} theme fingerprints.`,
+    `Wrote ${Object.keys(platformBlocks).length} block, ${Object.keys(platformServiceOperations).length} operation, ${Object.keys(platformConnectionTypes).length} connection type and ${Object.keys(platformThemes).length} theme fingerprints.`,
   );
 }

@@ -309,7 +309,6 @@ export {
 export {
   ApplicationNavigation,
   ApplicationNavigationBlock,
-  NAVIGATION_STYLES_CSS,
   type ApplicationNavigationProps,
   type ProjectedNavigation,
   type ProjectedNavigationItem,
