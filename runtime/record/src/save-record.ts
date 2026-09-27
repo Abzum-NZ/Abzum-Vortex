@@ -3,12 +3,15 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import {
   activityIdSchema,
+  applicationRootIdSchema,
   databaseRevision,
   eventOccurrenceIdSchema,
   fieldIdSchema,
+  organizationRuntimeSettingsSchema,
   recordTypeDefinitionV3Schema,
   saveRecordCommandV2Schema,
   saveRecordResultV2Schema,
+  writableSystemProjectionRegistrations,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -102,6 +105,19 @@ type StoredResult =
 const recordedRefusal = Symbol("recordedRecordSaveRefusal");
 const restartRelationshipTotalSave = Symbol("restartRelationshipTotalSave");
 
+const writableSystemProjection = (
+  recordType: ReturnType<typeof recordTypeDefinitionV3Schema.parse>,
+) => {
+  const registration =
+    writableSystemProjectionRegistrations[
+      recordType.key as keyof typeof writableSystemProjectionRegistrations
+    ];
+  return registration !== undefined &&
+    recordType.systemProjection?.protectedView === registration.protectedView
+    ? registration
+    : undefined;
+};
+
 /** @internal Shared only by the fixed named-action save composition. */
 export const revision = (candidate: unknown): number | undefined => {
   const value = databaseRevision(candidate);
@@ -141,11 +157,12 @@ const parsePreparation = (candidate: unknown): PreparationOutcome => {
   if (value.outcome !== "prepared")
     return { outcome: "unavailable", ...(correlationId ? { correlationId } : {}) };
   const recordType = recordTypeDefinitionV3Schema.safeParse(value.recordType);
-  // A system projection record type has no ordinary write path: it changes only through its
-  // registered protected operations, so a generated-table save never accepts one.
+  // A system projection has no ordinary write path. Only an exact entry in the closed protected
+  // writer registration can reach its matching protected SQL writer.
   if (
     !recordType.success ||
-    recordType.data.systemProjection !== undefined ||
+    (recordType.data.systemProjection !== undefined &&
+      writableSystemProjection(recordType.data) === undefined) ||
     typeof value.existingValues !== "object" ||
     value.existingValues === null ||
     Array.isArray(value.existingValues)
@@ -534,11 +551,40 @@ const prepareRelationshipTotals = async (
 const persist = async (
   transaction: RequestDatabaseTransaction,
   command: SaveRecordCommandV2,
+  recordType: ReturnType<typeof recordTypeDefinitionV3Schema.parse>,
   finalValues: Readonly<Record<string, unknown>>,
   activityId: string,
   occurrenceId: string,
   parentMutations: readonly RelationshipTotalParentMutation[] = [],
 ): Promise<StoredResult> => {
+  if (recordType.systemProjection !== undefined) {
+    const registration = writableSystemProjection(recordType);
+    if (
+      command.operation !== "update" ||
+      registration === undefined ||
+      registration.writer !== "save_organization_settings_record" ||
+      command.recordId === undefined ||
+      command.expectedConcurrencyNumber === undefined
+    )
+      return { outcome: "refused", reasonCode: "field_refused" };
+    const rows = await transaction.query<SaveRow>`
+      select vortex_record.save_organization_settings_record(
+        ${command.commandId}::uuid,
+        ${command.recordTypeId}::uuid,
+        ${command.recordId}::uuid,
+        ${command.expectedConcurrencyNumber}::bigint,
+        ${JSON.stringify(command.submittedValues)}::text::jsonb,
+        ${JSON.stringify(finalValues)}::text::jsonb,
+        ${activityId}::uuid,
+        ${occurrenceId}::uuid
+      ) as result
+    `;
+    const candidate = one(rows).result;
+    if (typeof candidate !== "object" || candidate === null)
+      throw new Error("RECORD_SAVE_RESULT_INVALID");
+    return candidate as StoredResult;
+  }
+
   const rows = await transaction.query<SaveRow>`
     select vortex_record.save_base_record_with_relationship_totals(
       ${command.commandId}::uuid,
@@ -558,6 +604,77 @@ const persist = async (
   if (typeof candidate !== "object" || candidate === null)
     throw new Error("RECORD_SAVE_RESULT_INVALID");
   return candidate as StoredResult;
+};
+
+const settingsFieldId = (
+  recordType: ReturnType<typeof recordTypeDefinitionV3Schema.parse>,
+  key: string,
+): string | undefined => recordType.fields.find((field) => field.key === key)?.fieldId;
+
+const invalidSettingsCorrections = (
+  prepared: PreparedSave,
+  command: SaveRecordCommandV2,
+  finalValues: Readonly<Record<string, unknown>>,
+): readonly RecordSaveFieldCorrection[] | undefined => {
+  if (
+    command.operation !== "update" ||
+    command.expectedConcurrencyNumber === undefined ||
+    writableSystemProjection(prepared.recordType) === undefined
+  )
+    return undefined;
+
+  const values = { ...prepared.existingValues, ...finalValues };
+  const valueFor = (key: string): unknown => {
+    const fieldId = settingsFieldId(prepared.recordType, key);
+    return fieldId === undefined ? undefined : values[fieldId];
+  };
+  const currentRevision = revision(valueFor("revision"));
+  if (currentRevision !== command.expectedConcurrencyNumber) return undefined;
+
+  const settings = organizationRuntimeSettingsSchema.safeParse({
+    organizationId: valueFor("organization_id"),
+    language: valueFor("language"),
+    timeZone: valueFor("time_zone"),
+    currency: valueFor("currency"),
+    dateFormat: valueFor("date_format"),
+    numberFormat: valueFor("number_format"),
+    revision: currentRevision,
+  });
+  const corrections = new Map<string, RecordSaveFieldCorrection>();
+  if (!settings.success) {
+    const fieldBySchemaKey: Readonly<Record<string, string>> = {
+      language: "language",
+      timeZone: "time_zone",
+      currency: "currency",
+      dateFormat: "date_format",
+      numberFormat: "number_format",
+    };
+    for (const issue of settings.error.issues) {
+      const schemaKey = issue.path[0];
+      const recordFieldKey =
+        typeof schemaKey === "string" ? fieldBySchemaKey[schemaKey] : undefined;
+      const fieldId =
+        recordFieldKey === undefined ? undefined : settingsFieldId(prepared.recordType, recordFieldKey);
+      if (fieldId === undefined || !prepared.readableFieldIds.has(fieldId)) return undefined;
+      corrections.set(fieldId, {
+        code: "invalid_value",
+        fieldId: fieldId as RecordSaveFieldCorrection["fieldId"],
+      });
+    }
+  }
+
+  const defaultApplication = applicationRootIdSchema
+    .nullable()
+    .safeParse(valueFor("default_application_root_id"));
+  if (!defaultApplication.success) {
+    const fieldId = settingsFieldId(prepared.recordType, "default_application_root_id");
+    if (fieldId === undefined || !prepared.readableFieldIds.has(fieldId)) return undefined;
+    corrections.set(fieldId, {
+      code: "invalid_value",
+      fieldId: fieldId as RecordSaveFieldCorrection["fieldId"],
+    });
+  }
+  return [...corrections.values()];
 };
 
 /**
@@ -759,10 +876,34 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                 : { ...values.setValues };
             if ("clearFieldIds" in values)
               for (const fieldId of values.clearFieldIds) finalValues[fieldId] = null;
+            if (prepared.recordType.systemProjection !== undefined) {
+              // The shipped text input submits an empty string for an unset optional default.
+              // Store that as the nullable application reference the settings writer accepts.
+              const defaultApplicationFieldId = settingsFieldId(
+                prepared.recordType,
+                "default_application_root_id",
+              );
+              if (
+                defaultApplicationFieldId !== undefined &&
+                finalValues[defaultApplicationFieldId] === ""
+              )
+                finalValues[defaultApplicationFieldId] = null;
+              const corrections = invalidSettingsCorrections(prepared, command.data, finalValues);
+              if (corrections === undefined)
+                return safeRefusal(prepared.correlationId, "operation_refused");
+              if (corrections.length > 0)
+                return saveRecordResultV2Schema.parse({
+                  contractVersion: "2.0.0",
+                  outcome: "correction_required",
+                  correlationId: prepared.correlationId,
+                  corrections,
+                });
+            }
             occurrenceId ??= eventOccurrenceIdSchema.parse(newOccurrenceId());
             const stored = await persist(
               transaction,
               command.data,
+              prepared.recordType,
               finalValues,
               activityId,
               occurrenceId,

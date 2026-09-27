@@ -27,6 +27,7 @@ import {
   recordTypeIdSchema,
   fieldIdSchema,
   isPlatformPermissionKey,
+  isRegisteredWritableSystemProjection,
   PLATFORM_SERVICE_OPERATIONS,
   flowContractVersion,
   normalizeExactDecimal,
@@ -3138,16 +3139,22 @@ function compileModule(
     const recordKey = String(recordType.key);
     const qualified = `${definitionKey}:${recordKey}`;
     const projection = recordType.system_projection as JsonObject | undefined;
-    // A system projection record type has no ordinary write path: its changes go only through the
-    // registered protected operation its actions target, so a standard write action refuses here at
-    // publication with its own registered code. The source contract deliberately admits the
-    // declaration so this stable refusal, not a generic shape failure, is what the author sees.
+    const registeredWritableUpdate =
+      projection !== undefined &&
+      isRegisteredWritableSystemProjection(
+        recordKey,
+        String(projection.protected_view),
+        definitionKey,
+      );
+    // A system projection remains read-only except for update on the exact registered Module,
+    // record type and protected view. Create, delete, restore and every other standard update
+    // still refuse at publication with the stable system-record code.
     if (
       projection !== undefined &&
       (recordType.standard_actions as string[]).some(
         (action) =>
           action === "create" ||
-          action === "update" ||
+          (action === "update" && !registeredWritableUpdate) ||
           action === "soft_delete" ||
           action === "restore",
       )
