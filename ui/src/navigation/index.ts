@@ -5,7 +5,6 @@ export {
   type ProjectedNavigation,
   type ProjectedNavigationItem,
 } from "./navigation";
-export { NAVIGATION_STYLES_CSS } from "./navigation-styles";
 export {
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
   NAVIGATION_BLOCK_RELEASES,

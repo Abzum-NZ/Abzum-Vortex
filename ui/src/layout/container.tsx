@@ -1,7 +1,8 @@
 "use client";
 
-import type { CSSProperties, ReactElement, ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
+import { cn } from "../lib/utils";
 import type { PlatformBlockRenderProps } from "../registry";
 import { readControlSettings } from "../controls/control-context";
 
@@ -10,29 +11,25 @@ export type ContainerProps = PlatformBlockRenderProps;
 type ContainerDirection = "column" | "row";
 type ContainerGap = "none" | "small" | "medium" | "large";
 
-/** Declared child slots in deterministic render order, each with its region class. */
-const CONTAINER_REGIONS = [
-  { key: "header", className: "vortex-container-header" },
-  { key: "menu", className: "vortex-container-menu" },
-  { key: "content", className: "vortex-container-content" },
-] as const;
+/** Declared child slots in deterministic render order. */
+const CONTAINER_REGIONS = ["header", "menu", "content"] as const;
 
-type ContainerRegionKey = (typeof CONTAINER_REGIONS)[number]["key"];
+type ContainerRegionKey = (typeof CONTAINER_REGIONS)[number];
 
-/** Named gaps resolve to the shared spacing tokens, so a container follows the active theme. */
+/** Named gaps resolve to the shadcn spacing scale, so a container follows the active style. */
 const CONTAINER_GAPS: Readonly<Record<ContainerGap, string>> = Object.freeze({
-  none: "0",
-  small: "var(--vortex-space-sm)",
-  medium: "var(--vortex-space-md)",
-  large: "var(--vortex-space-lg)",
+  none: "gap-0",
+  small: "gap-2",
+  medium: "gap-4",
+  large: "gap-6",
 });
 
 /**
  * General layout container: arranges its declared header, menu and content slots in a row or a
- * column with a token-driven gap. It carries no data and emits no events; it only lays out the
- * placements an author supplies or a shell binds as page content. A shell can therefore expose
- * header, menu and content slots without borrowing the tabs block. Its registration refuses every
- * supplied runtime input.
+ * column with a gap from the shadcn spacing scale. It carries no data and emits no events; it only
+ * lays out the placements an author supplies or a shell binds as page content. A shell can
+ * therefore expose header, menu and content slots without borrowing the tabs block. Its
+ * registration refuses every supplied runtime input.
  */
 export function Container(props: ContainerProps): ReactElement {
   const location: DefinitionRenderErrorLocation = {
@@ -47,22 +44,17 @@ export function Container(props: ContainerProps): ReactElement {
 
   // In a row, header and menu keep their content width and content fills the remaining space, so
   // a menu beside page content reads as a sidebar rather than an equal third.
-  const regionStyle = (key: ContainerRegionKey): CSSProperties =>
+  const regionClassName = (key: ContainerRegionKey): string =>
     direction === "row"
-      ? { flex: key === "content" ? "1 1 0" : "0 0 auto", minWidth: 0 }
-      : { minWidth: 0 };
+      ? cn("min-w-0", key === "content" ? "flex-1 basis-0" : "flex-none")
+      : "min-w-0";
 
   const regions: ReactNode[] = [];
   for (const region of CONTAINER_REGIONS) {
-    const child = props.slots[region.key];
+    const child = props.slots[region];
     if (child === undefined || child === null) continue;
     regions.push(
-      <div
-        key={region.key}
-        data-vortex-container-region={region.key}
-        className={region.className}
-        style={regionStyle(region.key)}
-      >
+      <div key={region} data-vortex-container-region={region} className={regionClassName(region)}>
         {child}
       </div>,
     );
@@ -74,14 +66,11 @@ export function Container(props: ContainerProps): ReactElement {
       data-vortex-placement-id={props.placementId}
       data-vortex-direction={direction}
       data-vortex-gap={gap}
-      className="vortex-container"
-      style={{
-        display: "flex",
-        flexDirection: direction,
-        gap: CONTAINER_GAPS[gap],
-        width: "100%",
-        boxSizing: "border-box",
-      }}
+      className={cn(
+        "box-border flex w-full",
+        direction === "row" ? "flex-row" : "flex-col",
+        CONTAINER_GAPS[gap],
+      )}
     >
       {regions}
     </div>
