@@ -5,6 +5,7 @@ import { isLoopbackHostname } from "@vortex/contracts";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 const MINIMUM_PASSWORD_LENGTH = 8;
+const EMAIL_OTP_PATTERN = /^\d{6}$/u;
 
 export type IdentityJourneyConfiguration = Readonly<{
   supabaseUrl: string;
@@ -177,16 +178,19 @@ export const requestPasswordRecovery = async (
 
 export const confirmEmail = async (
   configuration: IdentityJourneyConfiguration,
-  accessToken: string,
+  email: string,
+  token: string,
 ): Promise<IdentityJourneyResult> => {
-  if (!validAccessToken(accessToken)) {
+  if (!validEmail(email) || !EMAIL_OTP_PATTERN.test(token)) {
     return { ok: false, code: "vortex.identity.invalid_or_expired_link" };
   }
 
   try {
     const authority = createAuthorityClient(configuration);
-    const { error } = await authority.auth.getUser(accessToken);
-    return error ? { ok: false, code: "vortex.identity.invalid_or_expired_link" } : { ok: true };
+    const { data, error } = await authority.auth.verifyOtp({ email, token, type: "email" });
+    return error || !data.user
+      ? { ok: false, code: "vortex.identity.invalid_or_expired_link" }
+      : { ok: true };
   } catch {
     return { ok: false, code: "vortex.identity.authority_unavailable" };
   }
@@ -194,11 +198,11 @@ export const confirmEmail = async (
 
 export const completePasswordRecovery = async (
   configuration: IdentityJourneyConfiguration,
-  accessToken: string,
-  refreshToken: string,
+  email: string,
+  token: string,
   password: string,
 ): Promise<IdentityJourneyResult> => {
-  if (!validAccessToken(accessToken) || !validRefreshToken(refreshToken)) {
+  if (!validEmail(email) || !EMAIL_OTP_PATTERN.test(token)) {
     return { ok: false, code: "vortex.identity.invalid_or_expired_link" };
   }
   if (!validNewPassword(password)) {
@@ -207,12 +211,13 @@ export const completePasswordRecovery = async (
 
   try {
     const authority = createAuthorityClient(configuration);
-    const { error: sessionError } = await authority.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken,
+    const { data, error: verificationError } = await authority.auth.verifyOtp({
+      email,
+      token,
+      type: "recovery",
     });
 
-    if (sessionError) {
+    if (verificationError || !data.session) {
       return { ok: false, code: "vortex.identity.invalid_or_expired_link" };
     }
 
