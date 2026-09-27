@@ -18,9 +18,7 @@ begin
     (context_value ->> 'organizationId')::uuid
   );
   return pg_catalog.jsonb_build_object(
-    'instant', pg_catalog.to_char(
-      pg_catalog.timezone('UTC', instant_value), 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
-    ),
+    'instant', vortex_context.format_timestamp_utc(instant_value),
     'organizationLocalDate', case when zone_value is null then null else pg_catalog.to_char(
       pg_catalog.timezone(zone_value, instant_value), 'YYYY-MM-DD'
     ) end,
