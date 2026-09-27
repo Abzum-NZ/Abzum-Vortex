@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  sameId,
   applicationExperienceStateSchema,
   applicationRootIdSchema,
   applicationShellV2Schema,
@@ -31,87 +32,137 @@ import { withRuntimeTransaction } from "@vortex/db";
 import { z } from "zod";
 
 const reservedTenantSegments = new Set([
-  "auth", "health", "organizations", "signed-in", "signin", "api",
+  "auth",
+  "health",
+  "organizations",
+  "signed-in",
+  "signin",
+  "api",
 ]);
 
 export const isReservedTenantSegment = (candidate: string): boolean =>
   reservedTenantSegments.has(candidate.toLowerCase());
 
-const applicationPermissionSchema = z.object({
-  key: namespacedKeySchema,
-  applicationRootId: applicationRootIdSchema,
-  ownerKind: z.enum(["application", "module"]),
-  ownerId: z.uuid(),
-  permissionId: permissionIdSchema,
-  actionKind: z.enum(["create", "read", "update", "delete", "restore", "export", "share", "manage", "named"]),
-  namedAction: z.string().nullable(),
-}).strict();
+const applicationPermissionSchema = z
+  .object({
+    key: namespacedKeySchema,
+    applicationRootId: applicationRootIdSchema,
+    ownerKind: z.enum(["application", "module"]),
+    ownerId: z.uuid(),
+    permissionId: permissionIdSchema,
+    actionKind: z.enum([
+      "create",
+      "read",
+      "update",
+      "delete",
+      "restore",
+      "export",
+      "share",
+      "manage",
+      "named",
+    ]),
+    namedAction: z.string().nullable(),
+  })
+  .strict();
 
-const applicationCandidateSchema = z.object({
-  applicationRootId: applicationRootIdSchema,
-  releaseRevision: revisionSchema.max(Number.MAX_SAFE_INTEGER),
-  key: namespacedKeySchema,
-  name: z.string().trim().min(1).max(120),
-  icon: z.string().trim().min(1).max(120),
-  homePageKey: builderKeySchema,
-  pages: z.array(z.object({
-    pageId: pageIdSchema,
-    key: builderKeySchema,
-    accessPermissionKey: namespacedKeySchema,
-  }).strict()).min(1).max(10_000),
-  experiences: z.array(z.object({
-    state: applicationExperienceStateSchema,
-    page: pageDefinitionV2Schema,
-  }).strict()).max(3).optional(),
-  shells: z.array(applicationShellV2Schema).max(100).optional(),
-  roles: z.array(z.object({
-    roleId: roleIdSchema,
-    key: builderKeySchema,
-    homePageId: pageIdSchema,
-  }).strict()).min(1).max(10_000),
-  permissions: z.array(applicationPermissionSchema).max(10_000),
-}).strict();
+const applicationCandidateSchema = z
+  .object({
+    applicationRootId: applicationRootIdSchema,
+    releaseRevision: revisionSchema,
+    key: namespacedKeySchema,
+    name: z.string().trim().min(1).max(120),
+    icon: z.string().trim().min(1).max(120),
+    homePageKey: builderKeySchema,
+    pages: z
+      .array(
+        z
+          .object({
+            pageId: pageIdSchema,
+            key: builderKeySchema,
+            accessPermissionKey: namespacedKeySchema,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(10_000),
+    experiences: z
+      .array(
+        z
+          .object({
+            state: applicationExperienceStateSchema,
+            page: pageDefinitionV2Schema,
+          })
+          .strict(),
+      )
+      .max(3)
+      .optional(),
+    shells: z.array(applicationShellV2Schema).max(100).optional(),
+    roles: z
+      .array(
+        z
+          .object({
+            roleId: roleIdSchema,
+            key: builderKeySchema,
+            homePageId: pageIdSchema,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(10_000),
+    permissions: z.array(applicationPermissionSchema).max(10_000),
+  })
+  .strict();
 
 const addressCandidateReadSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("available"),
-    organizationId: organizationIdSchema,
-    tenantShortName: builderKeySchema,
-    organizationShortName: builderKeySchema,
-    applications: z.array(applicationCandidateSchema).max(10_000),
-  }).strict(),
+  z
+    .object({
+      kind: z.literal("available"),
+      organizationId: organizationIdSchema,
+      tenantShortName: builderKeySchema,
+      organizationShortName: builderKeySchema,
+      applications: z.array(applicationCandidateSchema).max(10_000),
+    })
+    .strict(),
+  z.object({ kind: z.literal("suspended_super_administrator_account") }).strict(),
   z.object({ kind: z.literal("unavailable") }).strict(),
 ]);
 
-export const permittedApplicationSchema = z.object({
-  applicationRootId: applicationRootIdSchema,
-  key: namespacedKeySchema,
-  name: z.string().trim().min(1).max(120),
-  icon: z.string().trim().min(1).max(120),
-  homePageKey: builderKeySchema,
-  pageKeys: z.array(builderKeySchema).min(1).max(10_000),
-}).strict();
+export const permittedApplicationSchema = z
+  .object({
+    applicationRootId: applicationRootIdSchema,
+    key: namespacedKeySchema,
+    name: z.string().trim().min(1).max(120),
+    icon: z.string().trim().min(1).max(120),
+    homePageKey: builderKeySchema,
+    pageKeys: z.array(builderKeySchema).min(1).max(10_000),
+  })
+  .strict();
 
 /**
  * One application experience page the viewer may be shown in place of a page they cannot open:
  * the viewer may open that page itself, it is presentation-only, and it carries only the shell it
  * renders in.
  */
-export const applicationExperienceSchema = z.object({
-  state: applicationExperienceStateSchema,
-  page: pageDefinitionV2Schema,
-  shells: z.array(applicationShellV2Schema).max(1),
-}).strict();
+export const applicationExperienceSchema = z
+  .object({
+    state: applicationExperienceStateSchema,
+    page: pageDefinitionV2Schema,
+    shells: z.array(applicationShellV2Schema).max(1),
+  })
+  .strict();
 
 export const permittedApplicationsReadSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("available"),
-    organizationId: organizationIdSchema,
-    tenantShortName: builderKeySchema,
-    organizationShortName: builderKeySchema,
-    defaultApplicationRootId: applicationRootIdSchema.nullable(),
-    applications: z.array(permittedApplicationSchema).max(10_000),
-  }).strict(),
+  z
+    .object({
+      kind: z.literal("available"),
+      organizationId: organizationIdSchema,
+      tenantShortName: builderKeySchema,
+      organizationShortName: builderKeySchema,
+      defaultApplicationRootId: applicationRootIdSchema.nullable(),
+      applications: z.array(permittedApplicationSchema).max(10_000),
+    })
+    .strict(),
+  z.object({ kind: z.literal("suspended_super_administrator_account") }).strict(),
   z.object({ kind: z.literal("unavailable") }).strict(),
   z.object({ kind: z.literal("temporarily_unavailable") }).strict(),
 ]);
@@ -135,9 +186,6 @@ type SourceRoleRow = Readonly<{ source_role_id: unknown }>;
 type CurrentReleaseRow = Readonly<{ current_release: unknown }>;
 type ApplicationCandidate = z.infer<typeof applicationCandidateSchema>;
 
-const sameUuid = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
-
 const permittedApplication = async (
   requests: ReturnType<typeof createHumanOrganizationRequestService>,
   session: IdentitySession,
@@ -157,8 +205,11 @@ const permittedApplication = async (
           ${candidate.releaseRevision}::bigint
         ) as current_release
       `;
-      if (releaseRows.length !== 1 || releaseRows[0] === undefined ||
-          typeof releaseRows[0].current_release !== "boolean")
+      if (
+        releaseRows.length !== 1 ||
+        releaseRows[0] === undefined ||
+        typeof releaseRows[0].current_release !== "boolean"
+      )
         throw new Error("APPLICATION_ADDRESS_RELEASE_UNAVAILABLE");
       if (!releaseRows[0].current_release) return null;
 
@@ -221,7 +272,10 @@ const permittedApplication = async (
           });
         }
         const decision = await runOrganizationAccessOperation(
-          transaction, scope, declaration, async () => true,
+          transaction,
+          scope,
+          declaration,
+          async () => true,
         );
         if (decision.outcome === "completed") allowedPageKeys.add(page.key);
       }
@@ -229,9 +283,9 @@ const permittedApplication = async (
       // The release home wins if authorised. Otherwise use the lowest source
       // role key among current application roles with an open home.
       const roleHome = [...candidate.roles]
-        .sort((left, right) => left.key < right.key ? -1 : left.key > right.key ? 1 : 0)
+        .sort((left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : 0))
         .filter((role) => activeRoleIds.has(role.roleId.toLowerCase()))
-        .map((role) => candidate.pages.find((page) => sameUuid(page.pageId, role.homePageId)))
+        .map((role) => candidate.pages.find((page) => sameId(page.pageId, role.homePageId)))
         .find((page) => page !== undefined && allowedPageKeys.has(page.key));
       const homePageKey = allowedPageKeys.has(candidate.homePageKey)
         ? candidate.homePageKey
@@ -242,18 +296,19 @@ const permittedApplication = async (
       // presentation-only, so it can never show gated, conditional or data-bound content.
       const shells = candidate.shells ?? [];
       const experiences = (candidate.experiences ?? [])
-        .filter((experience) =>
-          allowedPageKeys.has(experience.page.key) &&
-          isPresentationOnlyApplicationExperience(experience.page, shells))
+        .filter(
+          (experience) =>
+            allowedPageKeys.has(experience.page.key) &&
+            isPresentationOnlyApplicationExperience(experience.page, shells),
+        )
         .map((experience) => {
           const composition = experience.page.composition;
           const shellId = composition.shellKind === "application" ? composition.shellId : undefined;
           return applicationExperienceSchema.parse({
             state: experience.state,
             page: experience.page,
-            shells: shellId === undefined
-              ? []
-              : shells.filter((shell) => sameUuid(shell.shellId, shellId)),
+            shells:
+              shellId === undefined ? [] : shells.filter((shell) => sameId(shell.shellId, shellId)),
           });
         });
 
@@ -289,13 +344,15 @@ export const readPermittedApplicationsAtAddress = async (
   identityAuthorityIdCandidate: IdentityAuthorityId,
   applicationKeyCandidate?: string,
 ): Promise<PermittedApplicationsRead> =>
-  (await readAtAddress(
-    session,
-    tenantShortNameCandidate,
-    organizationShortNameCandidate,
-    identityAuthorityIdCandidate,
-    applicationKeyCandidate,
-  )).read;
+  (
+    await readAtAddress(
+      session,
+      tenantShortNameCandidate,
+      organizationShortNameCandidate,
+      identityAuthorityIdCandidate,
+      applicationKeyCandidate,
+    )
+  ).read;
 
 /**
  * The addressed page read with the addressed application's experience pages. They are returned
@@ -350,8 +407,12 @@ const readPermittedApplications = async (
   const tenantShortName = builderKeySchema.safeParse(tenantShortNameCandidate);
   const organizationShortName = builderKeySchema.safeParse(organizationShortNameCandidate);
   const authorityId = identityAuthorityIdSchema.safeParse(identityAuthorityIdCandidate);
-  if (!parsedSession.success || !tenantShortName.success || !organizationShortName.success ||
-      isReservedTenantSegment(tenantShortNameCandidate))
+  if (
+    !parsedSession.success ||
+    !tenantShortName.success ||
+    !organizationShortName.success ||
+    isReservedTenantSegment(tenantShortNameCandidate)
+  )
     return { kind: "unavailable" };
   if (!authorityId.success) return { kind: "temporarily_unavailable" };
   if (Date.parse(parsedSession.data.accessTokenExpiresAt) <= Date.now())
@@ -386,12 +447,13 @@ const readPermittedApplications = async (
     // request transaction and page access decisions cover that application's
     // pages alone. The launcher still builds the full permitted list below.
     if (addressedApplicationKey !== undefined) {
-      const candidate = read.applications.find(
-        (entry) => entry.key === addressedApplicationKey,
-      );
+      const candidate = read.applications.find((entry) => entry.key === addressedApplicationKey);
       if (candidate === undefined) return { kind: "unavailable" };
       const permitted = await permittedApplication(
-        requests, parsedSession.data, read.organizationId, candidate,
+        requests,
+        parsedSession.data,
+        read.organizationId,
+        candidate,
       );
       if (permitted === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
       if (permitted !== null) receiveExperiences(permitted.experiences);
@@ -415,15 +477,20 @@ const readPermittedApplications = async (
     const applications: PermittedApplication[] = [];
     for (const candidate of read.applications) {
       const permitted = await permittedApplication(
-        requests, parsedSession.data, read.organizationId, candidate,
+        requests,
+        parsedSession.data,
+        read.organizationId,
+        candidate,
       );
       if (permitted === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
       if (permitted !== null) applications.push(permitted.application);
     }
     const configuredDefault = defaultRead.value;
-    const defaultApplicationRootId = configuredDefault !== null && applications.some((entry) =>
-      sameUuid(entry.applicationRootId, configuredDefault)
-    ) ? configuredDefault : null;
+    const defaultApplicationRootId =
+      configuredDefault !== null &&
+      applications.some((entry) => sameId(entry.applicationRootId, configuredDefault))
+        ? configuredDefault
+        : null;
     return permittedApplicationsReadSchema.parse({
       kind: "available",
       organizationId: read.organizationId,
@@ -452,11 +519,12 @@ export const resolvePermittedApplicationAddress = (
   const application = read.applications.find((entry) => entry.key === applicationKey.data);
   if (!application) return { kind: "unavailable" as const };
 
-  const pageKey = pageKeyCandidate === undefined
-    ? application.homePageKey
-    : builderKeySchema.safeParse(pageKeyCandidate).success
-      ? pageKeyCandidate
-      : null;
+  const pageKey =
+    pageKeyCandidate === undefined
+      ? application.homePageKey
+      : builderKeySchema.safeParse(pageKeyCandidate).success
+        ? pageKeyCandidate
+        : null;
   if (pageKey === null || !application.pageKeys.includes(pageKey))
     return { kind: "unavailable" as const };
 

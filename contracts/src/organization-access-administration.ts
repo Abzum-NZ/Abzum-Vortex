@@ -27,15 +27,13 @@ import {
 } from "./organization-access-decision";
 import { preparedOrganizationRoleChangeSchema } from "./organization-role-changes";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
-
 export const organizationAdministrationGroupSchema = z
   .object({
     groupId: groupIdSchema,
     key: builderKeySchema,
     label: labelSchema,
     state: z.enum(["active", "retired"]),
-    revision: javascriptSafeRevisionSchema,
+    revision: revisionSchema,
   })
   .strict();
 
@@ -50,7 +48,7 @@ export const listOrganizationAdministrationGroupsResultSchema = z
   .object({
     groups: z.array(organizationAdministrationGroupSchema).max(100),
     nextAfterGroupId: groupIdSchema.optional(),
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
@@ -63,13 +61,13 @@ export const readOrganizationAdministrationGroupResultSchema = z.discriminatedUn
     .object({
       outcome: z.literal("available"),
       group: organizationAdministrationGroupSchema,
-      accessVersion: javascriptSafeRevisionSchema,
+      accessVersion: revisionSchema,
     })
     .strict(),
   z
     .object({
       outcome: z.literal("unavailable"),
-      accessVersion: javascriptSafeRevisionSchema,
+      accessVersion: revisionSchema,
     })
     .strict(),
 ]);
@@ -84,7 +82,7 @@ export const createOrganizationAdministrationGroupCommandSchema = z
 export const renameOrganizationAdministrationGroupCommandSchema = z
   .object({
     groupId: groupIdSchema,
-    expectedGroupRevision: javascriptSafeRevisionSchema,
+    expectedGroupRevision: revisionSchema,
     label: labelSchema,
   })
   .strict();
@@ -92,14 +90,14 @@ export const renameOrganizationAdministrationGroupCommandSchema = z
 export const retireOrganizationAdministrationGroupCommandSchema = z
   .object({
     groupId: groupIdSchema,
-    expectedGroupRevision: javascriptSafeRevisionSchema,
+    expectedGroupRevision: revisionSchema,
   })
   .strict();
 
 export const changeOrganizationAdministrationGroupResultSchema = z
   .object({
     group: organizationAdministrationGroupSchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
@@ -116,7 +114,7 @@ export const organizationAdministrationMembershipSchema = z
     groupId: groupIdSchema,
     organizationAccountId: organizationAccountIdSchema,
     accountDisplayName: z.string().trim().min(1).max(120),
-    revision: javascriptSafeRevisionSchema,
+    revision: revisionSchema,
     startsAt: timestampSchema,
     expiresAt: timestampSchema.optional(),
     state: z.enum(["live", "revoked"]),
@@ -151,7 +149,7 @@ export const listOrganizationAdministrationMembershipsResultSchema = z
     groupId: groupIdSchema,
     memberships: z.array(organizationAdministrationMembershipSchema).max(100),
     nextAfterMembershipId: membershipIdSchema.optional(),
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
@@ -166,13 +164,13 @@ export const readOrganizationAdministrationMembershipResultSchema = z.discrimina
       .object({
         outcome: z.literal("available"),
         membership: organizationAdministrationMembershipSchema,
-        accessVersion: javascriptSafeRevisionSchema,
+        accessVersion: revisionSchema,
       })
       .strict(),
     z
       .object({
         outcome: z.literal("unavailable"),
-        accessVersion: javascriptSafeRevisionSchema,
+        accessVersion: revisionSchema,
       })
       .strict(),
   ],
@@ -181,14 +179,14 @@ export const readOrganizationAdministrationMembershipResultSchema = z.discrimina
 export const removeOrganizationAdministrationMembershipCommandSchema = z
   .object({
     membershipId: membershipIdSchema,
-    expectedMembershipRevision: javascriptSafeRevisionSchema,
+    expectedMembershipRevision: revisionSchema,
   })
   .strict();
 
 export const changeOrganizationAdministrationMembershipResultSchema = z
   .object({
     membership: organizationAdministrationMembershipSchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
@@ -232,7 +230,7 @@ export const listOrganizationAdministrationPermissionsResultSchema = z
   .object({
     permissions: z.array(organizationAdministrationPermissionSchema).max(100),
     nextAfter: organizationAccessExactPermissionSchema.optional(),
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
@@ -247,13 +245,13 @@ export const readOrganizationAdministrationPermissionResultSchema = z.discrimina
       .object({
         outcome: z.literal("available"),
         permission: organizationAdministrationPermissionSchema,
-        accessVersion: javascriptSafeRevisionSchema,
+        accessVersion: revisionSchema,
       })
       .strict(),
     z
       .object({
         outcome: z.literal("unavailable"),
-        accessVersion: javascriptSafeRevisionSchema,
+        accessVersion: revisionSchema,
       })
       .strict(),
   ],
@@ -275,7 +273,7 @@ export const organizationAdministrationRoleAssignmentPolicySchema = z.discrimina
   z
     .object({
       kind: z.literal("activation_required"),
-      maximumActivationDurationSeconds: javascriptSafeRevisionSchema,
+      maximumActivationDurationSeconds: revisionSchema,
       reasonRequired: z.boolean(),
       recentAuthentication: roleRecentAuthenticationRequirementSchema,
       requiredCallerExecutionBindingId: containedComponentIdSchema.optional(),
@@ -289,7 +287,7 @@ const organizationAdministrationRoleFields = {
   label: labelSchema,
   roleKind: z.enum(["application", "custom"]),
   lifecycle: z.enum(["active", "acceptance_required", "unavailable", "retired"]),
-  liveRevision: javascriptSafeRevisionSchema,
+  liveRevision: revisionSchema,
   privilegeClassification: rolePrivilegeClassificationSchema,
   assignmentPolicy: organizationAdministrationRoleAssignmentPolicySchema,
   source: organizationAdministrationRoleSourceSchema,
@@ -352,7 +350,7 @@ export const listOrganizationAdministrationRolesResultSchema = z
   .object({
     roles: z.array(organizationAdministrationRoleSummarySchema).max(100),
     nextAfterRoleId: roleIdSchema.optional(),
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
@@ -365,13 +363,13 @@ export const readOrganizationAdministrationRoleResultSchema = z.discriminatedUni
     .object({
       outcome: z.literal("available"),
       role: organizationAdministrationRoleDetailSchema,
-      accessVersion: javascriptSafeRevisionSchema,
+      accessVersion: revisionSchema,
     })
     .strict(),
   z
     .object({
       outcome: z.literal("unavailable"),
-      accessVersion: javascriptSafeRevisionSchema,
+      accessVersion: revisionSchema,
     })
     .strict(),
 ]);
@@ -379,7 +377,7 @@ export const readOrganizationAdministrationRoleResultSchema = z.discriminatedUni
 export const reviseOrganizationAdministrationRoleMetadataCommandSchema = z
   .object({
     roleId: roleIdSchema,
-    expectedRoleRevision: javascriptSafeRevisionSchema,
+    expectedRoleRevision: revisionSchema,
     label: labelSchema,
     description: descriptionSchema,
   })
@@ -388,7 +386,7 @@ export const reviseOrganizationAdministrationRoleMetadataCommandSchema = z
 export const retireOrganizationAdministrationRoleCommandSchema = z
   .object({
     roleId: roleIdSchema,
-    expectedRoleRevision: javascriptSafeRevisionSchema,
+    expectedRoleRevision: revisionSchema,
   })
   .strict();
 
@@ -417,7 +415,11 @@ export const prepareOrganizationAdministrationRoleChangeCommandSchema = z
     label: labelSchema,
     description: descriptionSchema,
     privilegeClassification: rolePrivilegeClassificationSchema,
-    permissionReferences: z.array(organizationAccessExactPermissionSchema).min(1).max(500).optional(),
+    permissionReferences: z
+      .array(organizationAccessExactPermissionSchema)
+      .min(1)
+      .max(500)
+      .optional(),
     templateApplicationRootId: applicationRootIdSchema.optional(),
     sourceRoleId: roleIdSchema.optional(),
     acceptBroadenedAuthority: z.enum(["accept", "decline"]),
@@ -449,7 +451,7 @@ export const prepareOrganizationAdministrationRoleChangeCommandSchema = z
 export const changeOrganizationAdministrationRoleResultSchema = z
   .object({
     role: organizationAdministrationRoleSummarySchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
@@ -490,7 +492,7 @@ export const listOrganizationAdministrationApplicationRoleTemplatesResultSchema 
   .object({
     templates: z.array(organizationAdministrationApplicationRoleTemplateSchema).max(100),
     nextAfter: organizationAdministrationApplicationRoleTemplateReferenceSchema.optional(),
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
@@ -504,13 +506,13 @@ export const readOrganizationAdministrationApplicationRoleTemplateResultSchema =
       .object({
         outcome: z.literal("available"),
         template: organizationAdministrationApplicationRoleTemplateSchema,
-        accessVersion: javascriptSafeRevisionSchema,
+        accessVersion: revisionSchema,
       })
       .strict(),
     z
       .object({
         outcome: z.literal("unavailable"),
-        accessVersion: javascriptSafeRevisionSchema,
+        accessVersion: revisionSchema,
       })
       .strict(),
   ]);
@@ -551,7 +553,7 @@ export const organizationAdministrationAssignedRoleSchema = z
   .strict();
 
 const organizationAdministrationTemporalFactFields = {
-  revision: javascriptSafeRevisionSchema,
+  revision: revisionSchema,
   startsAt: timestampSchema,
   expiresAt: timestampSchema.optional(),
   state: z.enum(["live", "revoked"]),
@@ -603,7 +605,7 @@ export const listOrganizationAdministrationRoleAssignmentsResultSchema = z
   .object({
     assignments: z.array(organizationAdministrationRoleAssignmentSchema).max(100),
     nextAfterRoleAssignmentId: roleAssignmentIdSchema.optional(),
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
@@ -618,13 +620,13 @@ export const readOrganizationAdministrationRoleAssignmentResultSchema = z.discri
       .object({
         outcome: z.literal("available"),
         assignment: organizationAdministrationRoleAssignmentSchema,
-        accessVersion: javascriptSafeRevisionSchema,
+        accessVersion: revisionSchema,
       })
       .strict(),
     z
       .object({
         outcome: z.literal("unavailable"),
-        accessVersion: javascriptSafeRevisionSchema,
+        accessVersion: revisionSchema,
       })
       .strict(),
   ],
@@ -633,21 +635,21 @@ export const readOrganizationAdministrationRoleAssignmentResultSchema = z.discri
 export const revokeOrganizationAdministrationRoleAssignmentCommandSchema = z
   .object({
     roleAssignmentId: roleAssignmentIdSchema,
-    expectedAssignmentRevision: javascriptSafeRevisionSchema,
+    expectedAssignmentRevision: revisionSchema,
   })
   .strict();
 
 export const changeOrganizationAdministrationRoleAssignmentResultSchema = z
   .object({
     assignment: organizationAdministrationRoleAssignmentSchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
 export const assignOrganizationAdministrationRoleAssignmentCommandSchema = z
   .object({
     roleId: roleIdSchema,
-    expectedRoleRevision: javascriptSafeRevisionSchema,
+    expectedRoleRevision: revisionSchema,
     assigneeKind: z.enum(["organization_account", "group"]),
     organizationAccountId: organizationAccountIdSchema.optional(),
     groupId: groupIdSchema.optional(),
@@ -721,7 +723,7 @@ export const listOrganizationAdministrationDelegationAuthoritiesResultSchema = z
   .object({
     delegations: z.array(organizationAdministrationDelegationAuthoritySchema).max(100),
     nextAfterDelegationAuthorityId: delegationAuthorityIdSchema.optional(),
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
@@ -736,13 +738,13 @@ export const readOrganizationAdministrationDelegationAuthorityResultSchema = z.d
       .object({
         outcome: z.literal("available"),
         delegation: organizationAdministrationDelegationAuthoritySchema,
-        accessVersion: javascriptSafeRevisionSchema,
+        accessVersion: revisionSchema,
       })
       .strict(),
     z
       .object({
         outcome: z.literal("unavailable"),
-        accessVersion: javascriptSafeRevisionSchema,
+        accessVersion: revisionSchema,
       })
       .strict(),
   ],
@@ -751,14 +753,14 @@ export const readOrganizationAdministrationDelegationAuthorityResultSchema = z.d
 export const revokeOrganizationAdministrationDelegationAuthorityCommandSchema = z
   .object({
     delegationAuthorityId: delegationAuthorityIdSchema,
-    expectedDelegationRevision: javascriptSafeRevisionSchema,
+    expectedDelegationRevision: revisionSchema,
   })
   .strict();
 
 export const changeOrganizationAdministrationDelegationAuthorityResultSchema = z
   .object({
     delegation: organizationAdministrationDelegationAuthoritySchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
@@ -777,8 +779,8 @@ const organizationAdministrationRoleActivationFields = {
     })
     .strict(),
   role: organizationAdministrationAssignedRoleSchema,
-  revision: javascriptSafeRevisionSchema,
-  historicalRoleRevision: javascriptSafeRevisionSchema,
+  revision: revisionSchema,
+  historicalRoleRevision: revisionSchema,
   activatedAt: timestampSchema,
   expiresAt: timestampSchema,
   state: z.enum(["live", "revoked"]),
@@ -818,7 +820,7 @@ export const organizationAdministrationRoleActivationSummarySchema = z
 
 export const organizationAdministrationRoleActivationPolicySchema = z
   .object({
-    maximumActivationDurationSeconds: javascriptSafeRevisionSchema,
+    maximumActivationDurationSeconds: revisionSchema,
     reasonRequired: z.boolean(),
     recentAuthentication: roleRecentAuthenticationRequirementSchema,
     requiredCallerExecutionBindingId: containedComponentIdSchema.optional(),
@@ -845,7 +847,7 @@ export const listOrganizationAdministrationRoleActivationsResultSchema = z
   .object({
     activations: z.array(organizationAdministrationRoleActivationSummarySchema).max(100),
     nextAfterRoleActivationId: roleActivationIdSchema.optional(),
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
@@ -860,13 +862,13 @@ export const readOrganizationAdministrationRoleActivationResultSchema = z.discri
       .object({
         outcome: z.literal("available"),
         activation: organizationAdministrationRoleActivationDetailSchema,
-        accessVersion: javascriptSafeRevisionSchema,
+        accessVersion: revisionSchema,
       })
       .strict(),
     z
       .object({
         outcome: z.literal("unavailable"),
-        accessVersion: javascriptSafeRevisionSchema,
+        accessVersion: revisionSchema,
       })
       .strict(),
   ],
@@ -875,14 +877,14 @@ export const readOrganizationAdministrationRoleActivationResultSchema = z.discri
 export const deactivateOrganizationAdministrationRoleActivationCommandSchema = z
   .object({
     roleActivationId: roleActivationIdSchema,
-    expectedActivationRevision: javascriptSafeRevisionSchema,
+    expectedActivationRevision: revisionSchema,
   })
   .strict();
 
 export const changeOrganizationAdministrationRoleActivationResultSchema = z
   .object({
     activation: organizationAdministrationRoleActivationSummarySchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 

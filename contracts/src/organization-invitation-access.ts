@@ -18,7 +18,6 @@ import {
 } from "./identity-access";
 import { roleAssignmentKindSchema } from "./organization-access-catalogue";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 const fixedWindowFields = {
   startsAt: timestampSchema,
   expiresAt: timestampSchema.optional(),
@@ -43,7 +42,7 @@ export const organizationInvitationRoleAssignmentIntentSchema = z
   .object({
     roleAssignmentId: roleAssignmentIdSchema,
     roleId: roleIdSchema,
-    expectedRoleRevision: javascriptSafeRevisionSchema,
+    expectedRoleRevision: revisionSchema,
     assignmentKind: roleAssignmentKindSchema,
     ...fixedWindowFields,
   })
@@ -143,7 +142,7 @@ const acceptedAccessFields = {
   invitationId: invitationIdSchema,
   membershipIds: z.array(membershipIdSchema),
   roleAssignmentIds: z.array(roleAssignmentIdSchema),
-  accessVersion: javascriptSafeRevisionSchema,
+  accessVersion: revisionSchema,
   correlationId: correlationIdSchema,
 };
 

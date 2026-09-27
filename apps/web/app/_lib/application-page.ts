@@ -27,9 +27,13 @@ import {
   type ProjectedNavigation,
 } from "@vortex/page";
 import {
+  FIELD_INPUT_BLOCK_RELEASE,
+  FIELD_INPUT_CONTROL_RELEASES,
+  FORM_CONTAINER_BLOCK_RELEASE,
   readRecordDetailContract,
   recordIdSchema,
   readRecordsTableContract,
+  richTextDocumentV2Schema,
   type ApplicationShellV2,
   type BlockPropertyValueV2Contract,
   type IdentitySession,
@@ -75,6 +79,8 @@ export type ApplicationPageModel = Readonly<{
   data: Readonly<Record<string, PageDataState>>;
   /** Each placement's flow bindings, by stable placement identity. */
   bindings: Readonly<Record<string, readonly PlacementFlowBinding[]>>;
+  /** Displayed values of readable edit fields, used only to omit unchanged fields on submit. */
+  editFormBaselines: Readonly<Record<string, Readonly<Record<string, JsonValue>>>>;
   /** Permitted pages of this application, so a menu or navigate intent can be turned into an address. */
   pages: readonly Readonly<{ pageId: string; key: string }>[];
   /**
@@ -127,14 +133,29 @@ const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
 /** Every placement of the projected page with its stable identity, in document order. */
 const collectPlacements = (
   projected: Readonly<Record<string, unknown>>,
-): Array<Readonly<{ placementId: string; placement: Record<string, unknown> }>> => {
-  const found: Array<{ placementId: string; placement: Record<string, unknown> }> = [];
-  const visit = (slot: unknown): void => {
+): Array<
+  Readonly<{ placementId: string; placement: Record<string, unknown>; formId?: string }>
+> => {
+  const found: Array<{ placementId: string; placement: Record<string, unknown>; formId?: string }> =
+    [];
+  const visit = (slot: unknown, formId?: string): void => {
     if (!isRecord(slot) || !isRecord(slot.placements)) return;
     for (const [placementId, candidate] of Object.entries(slot.placements)) {
       if (!isRecord(candidate)) continue;
-      found.push({ placementId, placement: candidate });
-      if (isRecord(candidate.slots)) for (const child of Object.values(candidate.slots)) visit(child);
+      const block = candidate.block;
+      const owner =
+        isRecord(block) &&
+        typeof block.blockId === "string" &&
+        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
+          ? placementId
+          : formId;
+      found.push({
+        placementId,
+        placement: candidate,
+        ...(owner === undefined ? {} : { formId: owner }),
+      });
+      if (isRecord(candidate.slots))
+        for (const child of Object.values(candidate.slots)) visit(child, owner);
     }
   };
   const composition = projected.composition;
@@ -143,6 +164,136 @@ const collectPlacements = (
   else if (isRecord(composition.stepContent))
     for (const root of Object.values(composition.stepContent)) visit(root);
   return found;
+};
+
+/** A form field may show only a value the page subject read returned for its own record type. */
+const projectEditField = (
+  placement: Readonly<Record<string, unknown>>,
+  recordType: InstalledRuntimeContext["releaseSet"]["modules"][number]["content"]["recordTypes"][number],
+  values: Readonly<Record<string, JsonValue>>,
+): Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined => {
+  const settings = placement.settings;
+  const block = placement.block;
+  if (!isRecord(settings) || !isRecord(block) || typeof block.blockId !== "string")
+    return undefined;
+  const blockId = block.blockId;
+  const fieldSetting = settings.field;
+  const nameSetting = settings.name;
+  const field = recordType.fields.find((candidate) =>
+    isRecord(fieldSetting) &&
+    fieldSetting.kind === "field_reference" &&
+    typeof fieldSetting.fieldId === "string"
+      ? sameId(String(candidate.fieldId), fieldSetting.fieldId)
+      : isRecord(nameSetting) &&
+        nameSetting.kind === "text" &&
+        typeof nameSetting.value === "string" &&
+        candidate.key === nameSetting.value,
+  );
+  if (field === undefined) return undefined;
+  const fieldId = String(field.fieldId);
+  const valueKey = Object.keys(values).find((key) => sameId(key, fieldId));
+  if (valueKey === undefined) return undefined;
+  const stored = values[valueKey]!;
+  const control = sameId(blockId, FIELD_INPUT_BLOCK_RELEASE.blockId)
+    ? isRecord(settings.control) && settings.control.kind === "choice"
+      ? settings.control.value
+      : undefined
+    : Object.entries(FIELD_INPUT_CONTROL_RELEASES).find(([, release]) =>
+        sameId(release.blockId, blockId),
+      )?.[0];
+  let kind: string;
+  let displayed: JsonValue = stored;
+  switch (control) {
+    case "text":
+      if (stored !== null && typeof stored !== "string") return undefined;
+      kind = "text_input";
+      displayed = stored ?? "";
+      break;
+    case "number":
+      if (stored !== null && (typeof stored !== "number" || !Number.isFinite(stored)))
+        return undefined;
+      if (
+        stored !== null &&
+        isRecord(settings.integer) &&
+        settings.integer.kind === "boolean" &&
+        settings.integer.value === true &&
+        !Number.isInteger(stored)
+      )
+        return undefined;
+      kind = "number_input";
+      break;
+    case "boolean":
+      if (typeof stored !== "boolean") return undefined;
+      kind = "boolean_input";
+      break;
+    case "date":
+      if (stored !== null) {
+        if (typeof stored !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(stored)) return undefined;
+        const date = new Date(`${stored}T00:00:00Z`);
+        if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== stored)
+          return undefined;
+      }
+      kind = "date_input";
+      break;
+    case "choice":
+      if (stored !== null && typeof stored !== "string") return undefined;
+      if (stored !== null) {
+        const options = settings.options;
+        if (
+          !isRecord(options) ||
+          options.kind !== "list" ||
+          !Array.isArray(options.items) ||
+          !options.items.some(
+            (item) =>
+              isRecord(item) &&
+              isRecord(item.properties) &&
+              isRecord(item.properties.key) &&
+              item.properties.key.value === stored,
+          )
+        )
+          return undefined;
+      }
+      kind = "choice_input";
+      break;
+    case "link":
+      if (
+        stored !== null &&
+        (!isRecord(stored) ||
+          typeof stored.recordTypeId !== "string" ||
+          typeof stored.recordId !== "string")
+      )
+        return undefined;
+      if (stored !== null && isRecord(stored)) {
+        const targets = settings.record_types;
+        if (
+          !isRecord(targets) ||
+          targets.kind !== "list" ||
+          !Array.isArray(targets.items) ||
+          !targets.items.some(
+            (item) =>
+              isRecord(item) &&
+              item.kind === "record_type_reference" &&
+              isRecord(item.recordType) &&
+              item.recordType.state === "resolved" &&
+              item.recordType.recordTypeId === stored.recordTypeId,
+          )
+        )
+          return undefined;
+      }
+      kind = "link_input";
+      break;
+    case "rich_text":
+      if (stored !== null && !richTextDocumentV2Schema.safeParse(stored).success) return undefined;
+      kind = "rich_text_input";
+      break;
+    default:
+      return undefined;
+  }
+  return {
+    key: field.key,
+    value: displayed,
+    data: { status: "ready", values: { kind, value: displayed } },
+  };
 };
 
 /**
@@ -353,15 +504,13 @@ export const loadApplicationPage = async (
       : undefined;
   const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
   let subjectRead: Promise<PageSubjectReadResult> | undefined;
-  const readSubject = (
-    recordTypeId: string,
-    recordId: string,
-  ): Promise<PageSubjectReadResult> =>
+  const readSubject = (recordTypeId: string, recordId: string): Promise<PageSubjectReadResult> =>
     (subjectRead ??= subjects.read(session, selection, { recordTypeId, recordId }));
 
+  const placements = collectPlacements(page);
   const data: Record<string, PageDataState> = {};
   const bindings: Record<string, PlacementFlowBinding[]> = {};
-  for (const { placementId, placement } of collectPlacements(page)) {
+  for (const { placementId, placement } of placements) {
     const held = application.content.flowBindings.filter((binding) =>
       sameId(binding.controlId, placementId),
     );
@@ -380,7 +529,8 @@ export const loadApplicationPage = async (
 
     const settings = placement.settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
     const tableContract = readRecordsTableContract(settings);
-    const detailContract = tableContract === undefined ? readRecordDetailContract(settings) : undefined;
+    const detailContract =
+      tableContract === undefined ? readRecordDetailContract(settings) : undefined;
     // A placement still bound to a legacy read model has no reader on this page: system record
     // types are read through the query path. It must never fall through to an empty display.
     if (placement.readModel !== undefined) {
@@ -453,7 +603,10 @@ export const loadApplicationPage = async (
     if (tableContract !== undefined) {
       const pageParameters: Record<string, JsonValue> = {};
       for (const parameter of tableContract.parameters) {
-        const raw = parameter.pageParameter === undefined ? undefined : first(parameters[parameter.pageParameter]);
+        const raw =
+          parameter.pageParameter === undefined
+            ? undefined
+            : first(parameters[parameter.pageParameter]);
         const type = inputType(parameter.input);
         const value = raw === undefined || type === undefined ? undefined : coerceInput(raw, type);
         if (parameter.pageParameter !== undefined && value !== undefined)
@@ -471,7 +624,9 @@ export const loadApplicationPage = async (
         search: state.search,
       });
       if (resolved.kind === "unavailable") {
-        console.error("[page] data placement unavailable: class=protected_query code=query_unavailable");
+        console.error(
+          "[page] data placement unavailable: class=protected_query code=query_unavailable",
+        );
         data[placementId] = { status: "error" };
       } else if (resolved.kind === "refused") {
         console.error(
@@ -547,6 +702,66 @@ export const loadApplicationPage = async (
       ? { recordId: String(subjectRow.row.recordId), revision: subjectRow.row.revision }
       : undefined;
 
+  // An edit form is the form whose installed submit binding takes a page record. Its fields are
+  // projected from the same authorized subject read used for the page revision, and only from the
+  // form's visible, declared fields on that record type. An incomplete read disables the form.
+  const editFormBaselines: Record<string, Record<string, JsonValue>> = {};
+  const subjectRecordType = context.releaseSet.modules
+    .flatMap((module) => module.content.recordTypes)
+    .find(
+      (recordType) =>
+        subjectType !== undefined &&
+        sameId(String(recordType.recordTypeId), String(subjectType.recordTypeId)),
+    );
+  for (const { placementId, placement } of placements) {
+    const block = placement.block;
+    if (
+      !isRecord(block) ||
+      typeof block.blockId !== "string" ||
+      !sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
+    )
+      continue;
+    const editBinding = bindings[placementId]?.some(
+      (binding) => binding.event === "form_submit" && binding.callerInputs.includes("record"),
+    );
+    if (!editBinding) continue;
+    if (subjectRow?.kind !== "read" || subject === undefined || subjectRecordType === undefined) {
+      data[placementId] = { status: "disabled", reason: "Record unavailable" };
+      continue;
+    }
+    const fields = placements.filter((entry) => {
+      if (entry.formId !== placementId || entry.placementId === placementId) return false;
+      const fieldBlock = entry.placement.block;
+      if (!isRecord(fieldBlock) || typeof fieldBlock.blockId !== "string") return false;
+      const blockId = fieldBlock.blockId;
+      return (
+        sameId(blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) ||
+        Object.values(FIELD_INPUT_CONTROL_RELEASES).some((release) =>
+          sameId(release.blockId, blockId),
+        )
+      );
+    });
+    const baseline: Record<string, JsonValue> = {};
+    const projected: Record<string, PageDataState> = {};
+    let complete = true;
+    for (const entry of fields) {
+      const field = projectEditField(entry.placement, subjectRecordType, subjectRow.row.values);
+      if (field === undefined || Object.hasOwn(baseline, field.key)) {
+        complete = false;
+        break;
+      }
+      baseline[field.key] = field.value;
+      projected[entry.placementId] = field.data;
+    }
+    if (!complete) {
+      data[placementId] = { status: "disabled", reason: "Record unavailable" };
+      continue;
+    }
+    Object.assign(data, projected);
+    data[placementId] = { status: "ready", values: { kind: "form" } };
+    editFormBaselines[placementId] = baseline;
+  }
+
   const permittedKeys = new Set(address.application.pageKeys);
   return {
     kind: "available",
@@ -558,6 +773,7 @@ export const loadApplicationPage = async (
       navigation: navigation.value,
       data,
       bindings,
+      editFormBaselines,
       pages: application.content.pages
         .filter((candidate) => permittedKeys.has(candidate.key))
         .map((candidate) => ({ pageId: candidate.pageId, key: candidate.key })),

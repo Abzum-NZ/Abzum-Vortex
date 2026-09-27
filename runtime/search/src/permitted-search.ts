@@ -1,6 +1,8 @@
 import "server-only";
 
 import {
+  isRecord,
+  sameId,
   applicationRootIdSchema,
   fieldIdSchema,
   fingerprintSchema,
@@ -69,12 +71,8 @@ export const permittedSearchLimits = Object.freeze({
 });
 
 const lower = (value: string): string => value.toLowerCase();
-const sameId = (left: string, right: string): boolean => lower(left) === lower(right);
 
 type UnknownRecord = Readonly<Record<string, unknown>>;
-
-const isRecord = (value: unknown): value is UnknownRecord =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const hasOnlyKeys = (value: UnknownRecord, keys: readonly string[]): boolean =>
   Object.keys(value).every((key) => keys.includes(key));

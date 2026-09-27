@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import {
   activityIdSchema,
+  databaseRevision,
   eventOccurrenceIdSchema,
   fieldIdSchema,
   recordTypeDefinitionV3Schema,
@@ -103,19 +104,10 @@ const restartRelationshipTotalSave = Symbol("restartRelationshipTotalSave");
 
 /** @internal Shared only by the fixed named-action save composition. */
 export const revision = (candidate: unknown): number | undefined => {
-  if (typeof candidate === "number" && Number.isSafeInteger(candidate) && candidate > 0)
-    return candidate;
-  if (
-    typeof candidate === "bigint" &&
-    candidate > 0n &&
-    candidate <= BigInt(Number.MAX_SAFE_INTEGER)
-  )
-    return Number(candidate);
-  if (typeof candidate === "string" && /^[1-9][0-9]*$/.test(candidate)) {
-    const parsed = Number(candidate);
-    if (Number.isSafeInteger(parsed)) return parsed;
-  }
-  return undefined;
+  const value = databaseRevision(candidate);
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0
+    ? value
+    : undefined;
 };
 
 const one = <Row>(rows: readonly Row[]): Row => {

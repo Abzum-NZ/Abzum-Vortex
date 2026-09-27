@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
 import {
+  sameId,
   MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
   PRIVATE_FILE_BUCKET,
   fileIdSchema,
@@ -47,10 +48,7 @@ import {
   sanitizeFileDisplayName,
   transitionFileLifecycleState,
 } from "./file-metadata";
-import {
-  resolveVerifiedFileActor,
-  verifyAttachmentFieldAuthority,
-} from "./attachment-authority";
+import { resolveVerifiedFileActor, verifyAttachmentFieldAuthority } from "./attachment-authority";
 import type {
   BrowserUploadGrant,
   ResolveCurrentStorageAuthority,
@@ -193,7 +191,10 @@ export type FileUploadRepository = Readonly<{
     | Readonly<{ outcome: "recorded"; fileRecord: FileRecord }>
     | Readonly<{
         outcome: "refused";
-        reason: Exclude<FileUploadCompletionRefusalReason, "field_not_writable" | "upload_incomplete">;
+        reason: Exclude<
+          FileUploadCompletionRefusalReason,
+          "field_not_writable" | "upload_incomplete"
+        >;
       }>
   >;
   /**
@@ -368,11 +369,6 @@ const isSameActor = (left: VerifiedFileActor, right: VerifiedFileActor): boolean
       right.kind === "system" &&
       left.systemActorId === right.systemActorId;
 
-const sameId = (left: string | undefined, right: string | undefined): boolean =>
-  left === undefined || right === undefined
-    ? left === right
-    : left.toLowerCase() === right.toLowerCase();
-
 const maximumFileBytes = (settings: UploadAttachmentSettings): number =>
   Math.floor(settings.maxFileSizeMb * 1024 * 1024);
 
@@ -483,10 +479,7 @@ const authorizeUploader = (
 ):
   | Readonly<{ authorized: true }>
   | Readonly<{ authorized: false; reason: "caller_not_authorized" | "field_not_writable" }> => {
-  const actor = resolveVerifiedFileActor(
-    authority.sessionContext,
-    state.fileRecord.organizationId,
-  );
+  const actor = resolveVerifiedFileActor(authority.sessionContext, state.fileRecord.organizationId);
   if (
     !actor.authorized ||
     !isSameActor(actor.actor, state.uploader) ||
@@ -665,9 +658,7 @@ export const reservePendingUpload = async (
         correlationId: input.sessionContext.correlationId,
         uploadExpiresAt,
         capabilityReservationId: reservation.reservationId,
-        ...(input.replacingFileId === undefined
-          ? {}
-          : { replacingFileId: input.replacingFileId }),
+        ...(input.replacingFileId === undefined ? {} : { replacingFileId: input.replacingFileId }),
         existingAttachmentCount: input.existingAttachmentCount,
         maxFiles: maximumFiles(settings),
       });
@@ -778,8 +769,7 @@ export const renewPendingUpload = async (
 };
 
 type ContentDecision =
-  | Readonly<{ outcome: "clean" }>
-  | Readonly<{ outcome: "quarantined" | "refused" }>;
+  Readonly<{ outcome: "clean" }> | Readonly<{ outcome: "quarantined" | "refused" }>;
 
 /**
  * Applies the field's canonical settings to what inspection found in the stored

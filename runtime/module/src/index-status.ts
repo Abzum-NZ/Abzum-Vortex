@@ -1,10 +1,11 @@
 import "server-only";
 
-import {
-  activeApplicationInstallationEvidenceSchema,
-  type ActiveApplicationInstallationEvidence,
-} from "@vortex/contracts";
+import { uuidText, isRecord, type ActiveApplicationInstallationEvidence } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+import {
+  ActiveApplicationInstallationError,
+  createActiveApplicationInstallationRepository,
+} from "./installation-binding-reader";
 
 /**
  * Protected read of the live index status of the current active Application
@@ -20,7 +21,6 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
  * unreadable conflict is one indistinguishable refusal.
  */
 
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fingerprintPattern = /^sha256:[a-f0-9]{64}$/;
 
 export const indexStatusStates = [
@@ -113,11 +113,7 @@ export type ApplicationIndexStatus = Readonly<{
   performanceAdvisory: true;
 }>;
 
-type ActiveInstallationRow = DatabaseRow & { readonly active_installation: unknown };
 type IndexStatusRow = DatabaseRow & { readonly index_status: unknown };
-
-const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const hasExactKeys = (
   value: Readonly<Record<string, unknown>>,
@@ -129,9 +125,6 @@ const hasExactKeys = (
     keys.length === required.length
   );
 };
-
-const uuidText = (value: unknown): string | undefined =>
-  typeof value === "string" && uuidPattern.test(value) ? value : undefined;
 
 const safeRevision = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 1 ? value : undefined;
@@ -167,7 +160,7 @@ const undefinedOnInvalidArray = <Value>(
 
 const parseConflict = (candidate: unknown): IndexConflict | null | undefined => {
   if (candidate === null) return null;
-  if (!isObject(candidate)) return undefined;
+  if (!isRecord(candidate)) return undefined;
   if (candidate.state === "unreadable") {
     return hasExactKeys(candidate, ["state"]) ? { state: "unreadable" } : undefined;
   }
@@ -176,8 +169,7 @@ const parseConflict = (candidate: unknown): IndexConflict | null | undefined => 
   const records = undefinedOnInvalidArray(
     candidate.records,
     (value): IndexConflictReference | undefined => {
-      if (!isObject(value) || !hasExactKeys(value, ["recordTypeId", "recordId"]))
-        return undefined;
+      if (!isRecord(value) || !hasExactKeys(value, ["recordTypeId", "recordId"])) return undefined;
       const recordTypeId = uuidText(value.recordTypeId);
       const recordId = uuidText(value.recordId);
       if (recordTypeId === undefined || recordId === undefined) return undefined;
@@ -190,7 +182,7 @@ const parseConflict = (candidate: unknown): IndexConflict | null | undefined => 
 
 const parseEntry = (candidate: unknown): IndexStatusEntry | undefined => {
   if (
-    !isObject(candidate) ||
+    !isRecord(candidate) ||
     !hasExactKeys(candidate, [
       "indexContractId",
       "storageContractId",
@@ -226,8 +218,7 @@ const parseEntry = (candidate: unknown): IndexStatusEntry | undefined => {
       : isObservedState(recordedObservedState)
         ? recordedObservedState
         : undefined;
-  const parsedObservedRevision =
-    observedRevision === null ? null : safeRevision(observedRevision);
+  const parsedObservedRevision = observedRevision === null ? null : safeRevision(observedRevision);
   const parsedFailureCode =
     failureCode === null ? null : isFailureCode(failureCode) ? failureCode : undefined;
   if (
@@ -276,15 +267,8 @@ const parseEntry = (candidate: unknown): IndexStatusEntry | undefined => {
 
 const parseProgress = (candidate: unknown, entryCount: number): IndexStatusProgress | undefined => {
   if (
-    !isObject(candidate) ||
-    !hasExactKeys(candidate, [
-      "total",
-      "ready",
-      "pending",
-      "running",
-      "interrupted",
-      "conflicting",
-    ])
+    !isRecord(candidate) ||
+    !hasExactKeys(candidate, ["total", "ready", "pending", "running", "interrupted", "conflicting"])
   )
     return undefined;
   // An installation whose fields declare no unique, filterable or sortable
@@ -314,7 +298,7 @@ const parseStatus = (
   installation: ActiveApplicationInstallationEvidence,
 ): ApplicationIndexStatus | undefined => {
   if (
-    !isObject(candidate) ||
+    !isRecord(candidate) ||
     !hasExactKeys(candidate, [
       "organizationId",
       "applicationRootId",
@@ -374,6 +358,22 @@ const databaseCode = (error: unknown): string | undefined =>
 
 const mapFailure = (error: unknown): IndexStatusError => {
   if (error instanceof IndexStatusError) return error;
+  if (error instanceof ActiveApplicationInstallationError) {
+    switch (error.code) {
+      case "ACTIVE_APPLICATION_CONTEXT_REFUSED":
+        return new IndexStatusError(
+          error.databaseCode === "22023"
+            ? "INDEX_STATUS_INCOMPLETE"
+            : "INDEX_STATUS_AUTHORITY_REFUSED",
+        );
+      case "ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE":
+        return new IndexStatusError("INDEX_STATUS_INSTALLATION_UNAVAILABLE");
+      case "ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE":
+        return new IndexStatusError("INDEX_STATUS_INCOMPLETE");
+      default:
+        return new IndexStatusError("INDEX_STATUS_READ_FAILED");
+    }
+  }
   switch (databaseCode(error)) {
     case "42501":
       return new IndexStatusError("INDEX_STATUS_AUTHORITY_REFUSED");
@@ -399,37 +399,26 @@ export const createApplicationIndexStatusRepository = (
   Object.freeze({
     async readCurrent() {
       try {
-        const installationRows = await transaction.query<ActiveInstallationRow>`
-          select vortex_module.read_current_active_installation() as active_installation
-        `;
-        if (
-          installationRows.length !== 1 ||
-          installationRows[0] === undefined ||
-          installationRows[0].active_installation === null
-        )
-          throw new IndexStatusError("INDEX_STATUS_INSTALLATION_UNAVAILABLE");
-        const installation = activeApplicationInstallationEvidenceSchema.safeParse(
-          installationRows[0].active_installation,
-        );
-        if (!installation.success) throw new IndexStatusError("INDEX_STATUS_INCOMPLETE");
+        const installation =
+          await createActiveApplicationInstallationRepository(transaction).readCurrent();
 
-        const expectedModuleBindings = installation.data.moduleBindings.map((binding) => ({
+        const expectedModuleBindings = installation.moduleBindings.map((binding) => ({
           moduleRootId: binding.moduleRootId,
           bindingRevision: binding.bindingRevision,
         }));
 
         const statusRows = await transaction.query<IndexStatusRow>`
           select vortex_record.read_application_index_status(
-            ${installation.data.organizationId}::uuid,
-            ${installation.data.applicationRootId}::uuid,
-            ${installation.data.applicationReleaseRevision}::bigint,
+            ${installation.organizationId}::uuid,
+            ${installation.applicationRootId}::uuid,
+            ${installation.applicationReleaseRevision}::bigint,
             ${JSON.stringify(expectedModuleBindings)}::text::jsonb
           ) as index_status
         `;
         if (statusRows.length !== 1 || statusRows[0] === undefined)
           throw new IndexStatusError("INDEX_STATUS_READ_FAILED");
 
-        const status = parseStatus(statusRows[0].index_status, installation.data);
+        const status = parseStatus(statusRows[0].index_status, installation);
         if (status === undefined) throw new IndexStatusError("INDEX_STATUS_INCOMPLETE");
         return status;
       } catch (error) {

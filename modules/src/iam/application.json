@@ -4525,8 +4525,11 @@
         },
         "inputs": {
           "role_id": {
-            "type": "text",
-            "required": true
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.organisation_administration:role"
+            ]
           },
           "expected_role_revision": {
             "type": "whole_number",
@@ -4755,8 +4758,11 @@
         },
         "inputs": {
           "group_id": {
-            "type": "text",
-            "required": true
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.organisation_administration:group"
+            ]
           },
           "expected_group_revision": {
             "type": "whole_number",
@@ -5365,6 +5371,26 @@
                 "reference": {
                   "source": "input",
                   "name": "values"
+                }
+              }
+            }
+          },
+          {
+            "id": "return_to_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "iam_access_request_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record }}"
                 }
               }
             }

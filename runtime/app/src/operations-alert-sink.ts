@@ -15,12 +15,12 @@ import {
 import {
   withRuntimeTransaction,
   type DatabaseRow,
-  type RuntimeDatabaseTransaction,
+  type RequestDatabaseTransaction,
 } from "@vortex/db";
 import { z } from "zod";
 
 type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 
 export interface OperationsAlertSinkDependencies {
@@ -180,8 +180,9 @@ export const readOpenOperationsAlertSignals = async (
   const runtimeTransaction = dependencies.runtimeTransaction ?? withRuntimeTransaction;
 
   try {
-    const rows = await runtimeTransaction(async (transaction) =>
-      transaction.query<AlertSignalRow>`
+    const rows = await runtimeTransaction(
+      async (transaction) =>
+        transaction.query<AlertSignalRow>`
         select signal_id, code, severity, affected_service, deduplication_key,
           owning_role, runbook_reference, occurrence_count, first_seen_at,
           last_seen_at, state

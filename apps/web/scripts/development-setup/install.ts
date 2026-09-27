@@ -31,7 +31,8 @@ import type { PublishedRelease, SetupState } from "./state";
 
 /**
  * Installs the exact published application releases for the nominated steward through the
- * protected App installation coordinator. Application roles are granted separately through IAM.
+ * protected App installation coordinator. Local setup accepts and assigns the installed
+ * application roles afterward through the same protected Access operations IAM uses.
  */
 
 export type InstallFacts = Readonly<{

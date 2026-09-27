@@ -238,14 +238,14 @@
       },
     {
       "id": "event_new_notice",
-      "key": "vortex.app.events.vortex_app_organisation_administration_new_notice",
+      "key": "vortex.app.organisation_administration.new_notice",
       "record_type": "vortex.organisation_administration:organisation_notice",
       "carries": [],
       "personal_or_sensitive_values_allowed": false
     },
     {
       "id": "event_new_privacy_request",
-      "key": "vortex.app.events.vortex_app_organisation_administration_new_privacy_request",
+      "key": "vortex.app.organisation_administration.new_privacy_request",
       "record_type": "vortex.organisation_administration:privacy_request_case",
       "carries": [],
       "personal_or_sensitive_values_allowed": false

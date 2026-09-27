@@ -3,18 +3,25 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import {
+  isRecord,
   applicationRootIdSchema,
+  canonicalJson,
+  flowTaskChildLists,
   flowControlTaskTypeKeys,
   flowSchema,
   flowTaskRegistry,
   isFlowControlTask,
+  isUuidText,
   organizationIdSchema,
+  platformOperationKey,
+  PLATFORM_SERVICE_OPERATIONS,
   revisionSchema,
   stableDefinitionReleaseVersionSchema,
   type ApplicationRootId,
   type FlowDefinition,
   type FlowFormula,
   type FlowLiteral,
+  type FlowReference,
   type FlowTask,
   type FlowTaskTypeKey,
   type FlowTrigger,
@@ -127,6 +134,8 @@ export type KestraFlowNodeBinding = Readonly<{
   taskId: string;
   nodeId: string;
   operationKey: string;
+  taskType: string;
+  operation?: Readonly<{ serviceId: string; operationId: string; releaseVersion: string }>;
 }>;
 
 /**
@@ -184,6 +193,7 @@ export const kestraFlowCompilerRefusalReasons = [
   "not_durable",
   "unsupported_trigger",
   "unsupported_task",
+  "unsupported_task_output_path",
   "unresolved_child_flow_revision",
   "duplicate_switch_case",
   "template_text",
@@ -203,13 +213,10 @@ const maximumFlowIdLength = 100;
 const templateDelimiterPattern = /\{\{|\{%/;
 const hasTemplateDelimiter = (value: string): boolean => templateDelimiterPattern.test(value);
 
-const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 /** Durable callbacks do not receive the interpreter's prior task-output scope. */
 const hasTaskOutputFieldPath = (value: unknown): boolean => {
   if (Array.isArray(value)) return value.some(hasTaskOutputFieldPath);
-  if (!isObject(value) || value.kind === "literal") return false;
+  if (!isRecord(value) || value.kind === "literal") return false;
   if (value.source === "task_output" && Array.isArray(value.path)) return true;
   return Object.values(value).some(hasTaskOutputFieldPath);
 };
@@ -235,7 +242,7 @@ const isEnvironment = (value: unknown): value is KestraFlowCompilerEnvironment =
  */
 const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
   if (
-    !isObject(candidate) ||
+    !isRecord(candidate) ||
     !hasOnlyKeys(candidate, [
       "environment",
       "organizationId",
@@ -275,18 +282,6 @@ const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
 };
 
 // ─── Determinism ─────────────────────────────────────────────────────────────────────────────
-
-/** Canonical JSON with sorted keys and omitted undefined, so equal data always hashes equally. */
-const canonicalJson = (value: JsonValue): string => {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  const entries = Object.entries(value)
-    .filter(([, member]) => member !== undefined)
-    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
-  return `{${entries
-    .map(([key, member]) => `${JSON.stringify(key)}:${canonicalJson(member as JsonValue)}`)
-    .join(",")}}`;
-};
 
 /** The fixed UUID namespace one callback node id is derived under. */
 const callbackNodeIdNamespace = "8f7d4f2a-6c31-4b0e-9f5a-2d1c3b4a5e60";
@@ -376,10 +371,16 @@ const rawJson = (value: JsonValue): string => `{% raw %}${canonicalJson(value)}{
 /** The part of a compile context every generic callback needs, shared by both input shapes. */
 type CallbackContext = {
   readonly identity: KestraFlowIdentity;
+  readonly flow?: FlowDefinition;
   readonly allowedTemplateTokens: Set<string>;
   readonly nodes: KestraFlowNodeBinding[];
   readonly insideLoop: boolean;
 };
+
+type CallbackRuntimeValues = Readonly<{
+  inputs?: JsonValue;
+  runtimeScope?: JsonValue;
+}>;
 
 /** The compiler-generated reference to the current loop item, sent with every callback in a loop. */
 const loopItemReference = "{{ taskrun.value }}";
@@ -413,9 +414,9 @@ const callbackBinding = (
 
 /**
  * One generic protected callback carrying the signed envelope binding and the
- * typed JSON inputs Vortex evaluates. The task references only the fixed
- * callback key, and its envelope JSON is raw-wrapped so no builder value is
- * ever evaluated as template text.
+ * fixed JSON binding. The #1442 callback plugin will place the typed `inputs`
+ * and `runtimeScope` values into the signed request. The static binding stays
+ * raw-wrapped so builder text is never evaluated as template text.
  */
 const protectedCallbackTask = (
   ctx: CallbackContext,
@@ -423,6 +424,9 @@ const protectedCallbackTask = (
   nodeId: string,
   operationKey: string,
   inputs: Record<string, JsonValue>,
+  taskType = operationKey,
+  operation?: KestraFlowNodeBinding["operation"],
+  runtimeValues: CallbackRuntimeValues = {},
 ): KestraCompiledTask => {
   const binding = callbackBinding(ctx, nodeId, operationKey, inputs);
   ctx.allowedTemplateTokens.add(kestraCallbackKeyReference);
@@ -430,6 +434,8 @@ const protectedCallbackTask = (
     taskId,
     nodeId: binding.nodeId as string,
     operationKey: binding.operationKey,
+    taskType,
+    ...(operation === undefined ? {} : { operation }),
   });
   if (ctx.insideLoop) ctx.allowedTemplateTokens.add(loopItemReference);
   return {
@@ -437,6 +443,12 @@ const protectedCallbackTask = (
     type: kestraProtectedCallbackTaskType,
     envelope: rawJson(binding as unknown as JsonValue),
     callbackKey: kestraCallbackKeyReference,
+    ...(runtimeValues.inputs === undefined
+      ? {}
+      : { inputs: runtimeValues.inputs }),
+    ...(runtimeValues.runtimeScope === undefined
+      ? {}
+      : { runtimeScope: runtimeValues.runtimeScope }),
     ...(ctx.insideLoop ? { loopItem: loopItemReference } : {}),
   };
 };
@@ -451,6 +463,93 @@ type EvaluatedValue = Readonly<{ tasks: KestraCompiledTask[]; reference: string 
 
 type ValueExpression = Readonly<{ tasks: KestraCompiledTask[]; expression: JsonValue }>;
 
+const referencesInFormula = (formula: FlowFormula, into: FlowReference[] = []): FlowReference[] => {
+  if (formula.op === "reference") into.push(formula.reference);
+  else if (formula.op === "literal" || formula.op === "now") return into;
+  else
+    for (const member of Object.values(formula)) {
+      if (Array.isArray(member)) {
+        for (const item of member)
+          if (typeof item === "object" && item !== null && "op" in item)
+            referencesInFormula(item as FlowFormula, into);
+      } else if (typeof member === "object" && member !== null && "op" in member) {
+        referencesInFormula(member as FlowFormula, into);
+      }
+    }
+  return into;
+};
+
+const referencesInValue = (value: FlowValue, into: FlowReference[] = []): FlowReference[] => {
+  if (value.kind === "reference") into.push(value.reference);
+  else if (value.kind === "formula") referencesInFormula(value.formula, into);
+  else if (value.kind === "map")
+    for (const child of Object.values(value.entries)) referencesInValue(child, into);
+  return into;
+};
+
+const sourceTask = (flow: FlowDefinition, taskId: string): FlowTask | undefined => {
+  const find = (tasks: readonly FlowTask[]): FlowTask | undefined => {
+    for (const task of tasks) {
+      if (task.id === taskId) return task;
+      for (const child of flowTaskChildLists(task)) {
+        const found = find(child.tasks);
+        if (found !== undefined) return found;
+      }
+    }
+    return undefined;
+  };
+  return find(flow.tasks) ?? find(flow.errors) ?? find(flow.finally);
+};
+
+/**
+ * Carries only values referenced by this evaluator callback. Flow values and
+ * formulas stay inside Vortex; Kestra substitutes the compiler-generated
+ * typed input/output references into this closed runtime scope.
+ */
+const evaluatorRuntimeScope = (ctx: CallbackContext, value: FlowValue): JsonValue => {
+  const flow = ctx.flow;
+  if (flow === undefined) return {};
+  const scope: {
+    inputs: Record<string, JsonValue>;
+    variables: Record<string, JsonValue>;
+    outputs: Record<string, JsonValue>;
+  } = { inputs: {}, variables: {}, outputs: {} };
+  const addReference = (reference: FlowReference): void => {
+    if (reference.source === "input") {
+      const declaration = flow.inputs[reference.name];
+      if (declaration === undefined) return;
+      const token = `{{ inputs.${reference.name} }}`;
+      ctx.allowedTemplateTokens.add(token);
+      scope.inputs[reference.name] = { type: declaration.type, value: token };
+    } else if (reference.source === "variable") {
+      const declaration = flow.variables[reference.name];
+      if (declaration === undefined) return;
+      scope.variables[reference.name] = {
+        type: declaration.type,
+        value: declaration.default ?? null,
+      };
+    } else if (reference.source === "task_output") {
+      const task = sourceTask(flow, reference.task);
+      const definition =
+        task !== undefined && Object.hasOwn(flowTaskRegistry, task.type)
+          ? flowTaskRegistry[task.type as FlowTaskTypeKey]
+          : undefined;
+      const output = definition?.outputs.find((candidate) => candidate.key === reference.key);
+      if (task === undefined || output === undefined) return;
+      const taskId = kestraTaskId("t", task.id);
+      const token = ctx.insideLoop
+        ? `{{ currentEachOutput(outputs.${taskId}).${reference.key} }}`
+        : `{{ outputs.${taskId}.${reference.key} }}`;
+      ctx.allowedTemplateTokens.add(token);
+      const taskOutputs = (scope.outputs[reference.task] ?? {}) as Record<string, JsonValue>;
+      taskOutputs[reference.key] = { type: output.type, value: token };
+      scope.outputs[reference.task] = taskOutputs;
+    }
+  };
+  for (const reference of referencesInValue(value)) addReference(reference);
+  return scope as unknown as JsonValue;
+};
+
 /**
  * Compiles one condition, formula or value to an evaluator callback and the
  * Kestra reference to its result. Kestra's native control tasks branch only on
@@ -463,10 +562,11 @@ const evaluateValue = (
   limits: Record<string, JsonValue> = {},
 ): EvaluatedValue => {
   const taskId = kestraTaskId("e", seed);
+  const runtimeScope = evaluatorRuntimeScope(ctx, value);
   const task = protectedCallbackTask(ctx, taskId, derivedNodeId(ctx, taskId), kestraEvaluatorOperationKey, {
     expression: jsonOf(value),
     ...limits,
-  });
+  }, "workflow.evaluate", undefined, { runtimeScope });
   return { tasks: [task], reference: resultReference(ctx, taskId) };
 };
 
@@ -844,7 +944,75 @@ const compileRegisteredTask = (
   if (definition === undefined || task.version !== definition.version) return stop("unsupported_task");
   if (definition.kestra.mode === "not_compiled") return stop("unsupported_task");
 
+  if (task.type === "data.calculate") {
+    const expression = task.properties.formula;
+    if (expression?.kind !== "formula") return stop("unsupported_task");
+    const taskId = kestraTaskId("t", task.id);
+    return ok([
+      protectedCallbackTask(
+        ctx,
+        taskId,
+        derivedNodeId(ctx, task.id),
+        kestraEvaluatorOperationKey,
+        { expression: jsonOf(expression) },
+        "workflow.evaluate",
+        undefined,
+        { runtimeScope: evaluatorRuntimeScope(ctx, expression) },
+      ),
+    ]);
+  }
+
   const operationKey = definition.protectedOperationKey ?? `workflow.task.${task.type}`;
+  if (task.type === "operation.call") {
+    const operationValue = task.properties.operation;
+    if (operationValue?.kind !== "literal" || typeof operationValue.literal.value !== "string")
+      return stop("unsupported_task");
+    const requestedOperationKey = operationValue.literal.value;
+    const registered = Object.values(PLATFORM_SERVICE_OPERATIONS).find(
+      (candidate) => platformOperationKey(candidate.key) === requestedOperationKey,
+    );
+    if (registered === undefined) return stop("unsupported_task");
+
+    const authoredInputs = task.properties.inputs;
+    const runtimeMap: FlowValue =
+      authoredInputs === undefined
+        ? {
+            kind: "map",
+            entries: Object.fromEntries(
+              Object.keys(ctx.flow.inputs).map((name) => [
+                name,
+                { kind: "reference", reference: { source: "input", name } },
+              ]),
+            ),
+          }
+        : authoredInputs;
+    if (runtimeMap.kind !== "map") return stop("unsupported_task");
+
+    const evaluatedInputs =
+      Object.keys(runtimeMap.entries).length === 0
+        ? undefined
+        : evaluateValue(ctx, `${task.id}__operation_inputs`, runtimeMap);
+    const callbackInputs: Record<string, JsonValue> = {
+      properties: { operation: requestedOperationKey },
+    };
+    if (task.allowRefusal === true) callbackInputs.allow_refusal = true;
+    const callback = protectedCallbackTask(
+      ctx,
+      kestraTaskId("t", task.id),
+      derivedNodeId(ctx, task.id),
+      operationKey,
+      callbackInputs,
+      task.type,
+      {
+        serviceId: registered.release.serviceId,
+        operationId: registered.release.operationId,
+        releaseVersion: registered.release.releaseVersion,
+      },
+      { inputs: evaluatedInputs?.reference ?? {} },
+    );
+    return ok([...(evaluatedInputs?.tasks ?? []), callback]);
+  }
+
   const inputs: Record<string, JsonValue> = {
     properties: jsonOf(task.properties),
   };
@@ -856,6 +1024,7 @@ const compileRegisteredTask = (
       derivedNodeId(ctx, task.id),
       operationKey,
       inputs,
+      task.type,
     ),
   ]);
 };
@@ -1002,9 +1171,9 @@ const LABEL_PLACEHOLDER = "inert_builder_label";
  * compiler neutralises instead of refusing.
  */
 const readBuilderLabels = (definition: unknown): Record<string, string> => {
-  if (!isObject(definition)) return {};
+  if (!isRecord(definition)) return {};
   const labels = definition.labels;
-  if (!isObject(labels)) return {};
+  if (!isRecord(labels)) return {};
   const read: Record<string, string> = {};
   for (const [key, value] of Object.entries(labels))
     if (typeof value === "string") read[key] = value;
@@ -1018,9 +1187,9 @@ const readBuilderLabels = (definition: unknown): Record<string, string> => {
  * inert instead of refusing the whole flow.
  */
 const neutralizeLabelDelimiters = (definition: unknown): unknown => {
-  if (!isObject(definition)) return definition;
+  if (!isRecord(definition)) return definition;
   const labels = definition.labels;
-  if (!isObject(labels)) return definition;
+  if (!isRecord(labels)) return definition;
   const neutralized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(labels))
     neutralized[key] =
@@ -1043,11 +1212,11 @@ const labelIsRenderable = (value: string): boolean => !rawBreakPattern.test(valu
 
 const parseChildFlowRevisions = (candidate: unknown): ReadonlyMap<string, number> | undefined => {
   if (candidate === undefined) return new Map();
-  if (!isObject(candidate)) return undefined;
+  if (!isRecord(candidate)) return undefined;
   const revisions = new Map<string, number>();
   for (const [key, value] of Object.entries(candidate)) {
     const revision = revisionSchema.safeParse(value);
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(key.toLowerCase()))
+    if (!isUuidText(key))
       return undefined;
     if (!revision.success) return undefined;
     revisions.set(key.toLowerCase(), revision.data);
@@ -1068,7 +1237,7 @@ const parseChildFlowRevisions = (candidate: unknown): ReadonlyMap<string, number
  */
 export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilation => {
   if (
-    !isObject(inputCandidate) ||
+    !isRecord(inputCandidate) ||
     !hasOnlyKeys(inputCandidate, ["definition", "identity", "childFlowRevisions"])
   )
     return refused("invalid_input");
@@ -1091,7 +1260,7 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
 
   // Only durable flows run on Kestra; every other execution kind runs in Vortex.
   if (definition.execution !== "durable") return refused("not_durable");
-  if (hasTaskOutputFieldPath(definition)) return refused("unsupported_node");
+  if (hasTaskOutputFieldPath(definition)) return refused("unsupported_task_output_path");
 
   const namespace = installationNamespace(identity);
   const id = generatedFlowId(identity, definition.id, identity.workflowRevision);

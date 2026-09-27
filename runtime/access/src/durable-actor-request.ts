@@ -1,6 +1,8 @@
 import "server-only";
 
 import {
+  databaseRevision,
+  sameId,
   actorIdSchema,
   applicationRootIdSchema,
   correlationIdSchema,
@@ -22,7 +24,6 @@ import {
   type DatabaseRow,
   type RequestDatabaseTransaction,
   type ResolvedRequestContext,
-  type RuntimeDatabaseTransaction,
 } from "@vortex/db";
 import { z } from "zod";
 
@@ -122,7 +123,7 @@ export type DurableActorRequestResult<Result> =
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 type ResolvedRequestTransactionRunner = <Scope, Result>(
-  resolve: (transaction: RuntimeDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,
+  resolve: (transaction: RequestDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,
   operation: (transaction: RequestDatabaseTransaction, scope: Scope) => Promise<Result>,
 ) => Promise<Result>;
 
@@ -151,14 +152,6 @@ type SystemScopeRow = DatabaseRow & {
   application_root_id: unknown;
   access_version: unknown;
 };
-
-const revision = (value: unknown): unknown => {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
-  return value;
-};
-
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 const databaseCode = (error: unknown): string | undefined =>
   typeof error === "object" && error !== null && "code" in error
@@ -241,7 +234,7 @@ export const createDurableActorRequestService = (dependencies: DurableActorReque
                 !sameId(applicationRootId, purpose.applicationRootId)
               )
                 throw new DurableActorRefusal();
-              const accessVersion = revisionSchema.parse(revision(row.access_version));
+              const accessVersion = revisionSchema.parse(databaseRevision(row.access_version));
               const context: SessionContext = sessionContextSchema.parse({
                 callerKind: "human",
                 identityAuthorityId: configuredAuthority,
@@ -286,7 +279,7 @@ export const createDurableActorRequestService = (dependencies: DurableActorReque
             )
               throw new DurableActorRefusal();
             const systemActorId = actorIdSchema.parse(row.system_actor_id);
-            const accessVersion = revisionSchema.parse(revision(row.access_version));
+            const accessVersion = revisionSchema.parse(databaseRevision(row.access_version));
             const context: SessionContext = sessionContextSchema.parse({
               callerKind: "system",
               tenantId: tenantIdSchema.parse(row.tenant_id),

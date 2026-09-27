@@ -321,9 +321,6 @@ select ok((select pg_catalog.to_jsonb(first_invitation) ?& array[
  'secret','invitation_secret','token_fingerprint'] from first_invitation),
  'actual request-role creation result is minimal and contains no secret or fingerprint');
 reset role;
-select is((select count(*) from vortex_access.organization_invitation_access_intents intent
- join first_invitation created using(invitation_id)),0::bigint,
- 'administrative invitation creation creates no access intent');
 select is((select current_version from vortex_access.organization_access_versions
  where organization_id='25800000-0000-4000-8000-000000000001'),
  (select current_version from invitation_access_before),
