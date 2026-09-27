@@ -46,6 +46,10 @@ begin
     delete from vortex_record.index_catalogue as index_row
     where index_row.storage_contract_id = storage_row.storage_contract_id;
 
+    delete from vortex_record.preview_storage_bindings as binding
+    where binding.preview_installation_id = p_preview_installation_id
+      and binding.storage_contract_id = storage_row.storage_contract_id;
+
     execute pg_catalog.format('drop table if exists record_data.%I', storage_row.physical_table_token);
     delete from vortex_record.field_storage_mappings as mapping
     where mapping.storage_contract_id = storage_row.storage_contract_id;
@@ -54,8 +58,6 @@ begin
     removed_count := removed_count + 1;
   end loop;
 
-  delete from vortex_record.preview_storage_bindings as binding
-  where binding.preview_installation_id = p_preview_installation_id;
   return removed_count;
 end
 $function$;

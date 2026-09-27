@@ -1026,6 +1026,10 @@ begin
     delete from vortex_record.index_catalogue as index_row
     where index_row.storage_contract_id = storage_row.storage_contract_id;
 
+    delete from vortex_record.preview_storage_bindings as binding
+    where binding.preview_installation_id = p_preview_installation_id
+      and binding.storage_contract_id = storage_row.storage_contract_id;
+
     execute pg_catalog.format('drop table if exists record_data.%I', storage_row.physical_table_token);
     delete from vortex_record.field_storage_mappings as mapping
     where mapping.storage_contract_id = storage_row.storage_contract_id;
@@ -1034,8 +1038,6 @@ begin
     removed_count := removed_count + 1;
   end loop;
 
-  delete from vortex_record.preview_storage_bindings as binding
-  where binding.preview_installation_id = p_preview_installation_id;
   return removed_count;
 end
 $function$;
@@ -1168,8 +1170,8 @@ declare
   module_release_revision bigint;
   module_root_id_value uuid;
   module_closure jsonb := '[]'::jsonb;
-  resolved_modules jsonb := '[]'::jsonb;
-  storage_identities jsonb := '[]'::jsonb;
+  resolved_modules_value jsonb := '[]'::jsonb;
+  storage_identities_value jsonb := '[]'::jsonb;
   binding_count bigint;
   resolution_count bigint;
 begin
@@ -1319,21 +1321,21 @@ begin
     where release.root_id = module_root_id_value
       and release.release_version = module_dependency ->> 'releaseVersion'
       and root.kind = 'module';
-    resolved_modules := resolved_modules || pg_catalog.jsonb_build_array(
+    resolved_modules_value := resolved_modules_value || pg_catalog.jsonb_build_array(
       pg_catalog.jsonb_build_object(
         'moduleRootId', module_root_id_value,
         'moduleReleaseRevision', module_release_revision,
         'releaseVersion', module_dependency ->> 'releaseVersion'
       )
     );
-    storage_identities := storage_identities || vortex_record.provision_preview_module_storage(
+    storage_identities_value := storage_identities_value || vortex_record.provision_preview_module_storage(
       preview_installation_id_value, module_root_id_value, module_release_revision
     );
   end loop;
 
   update vortex_module.preview_installations as preview
-  set resolved_modules = resolved_modules,
-      storage_identities = storage_identities
+  set resolved_modules = resolved_modules_value,
+      storage_identities = storage_identities_value
   where preview.preview_installation_id = preview_installation_id_value;
 
   return pg_catalog.jsonb_build_object(
@@ -1344,8 +1346,8 @@ begin
     'previewerIdentityId', identity_id_value,
     'previewerOrganizationAccountId', organization_account_id_value,
     'candidate', p_candidate,
-    'resolvedModules', resolved_modules,
-    'storageIdentities', storage_identities,
+    'resolvedModules', resolved_modules_value,
+    'storageIdentities', storage_identities_value,
     'createdAt', created_at_value,
     'expiresAt', expires_at_value
   );
