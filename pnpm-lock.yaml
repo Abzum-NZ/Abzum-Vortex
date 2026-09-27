@@ -292,6 +292,9 @@ importers:
       '@vortex/ui':
         specifier: workspace:*
         version: link:../../ui
+      '@vortex/workflow':
+        specifier: workspace:*
+        version: link:../../runtime/workflow
       next:
         specifier: 16.3.5
         version: 16.3.5(@types/node@24.13.6)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)

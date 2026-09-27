@@ -20,6 +20,7 @@ const nextConfig: NextConfig = {
     "@vortex/page",
     "@vortex/query",
     "@vortex/record",
+    "@vortex/workflow",
   ],
   // No other origin may frame a Vortex page or response (clickjacking); same-origin framing stays
   // allowed. The component host under /api/components/ is excluded: it answers on the dedicated
