@@ -39,7 +39,10 @@ import {
 } from "./identifiers";
 import { moduleVersionImpactHistoryEntryV3Schema } from "./version-impact";
 
-export { definitionProvenanceEntrySchema, type DefinitionProvenanceEntry } from "./definition-provenance";
+export {
+  definitionProvenanceEntrySchema,
+  type DefinitionProvenanceEntry,
+} from "./definition-provenance";
 
 export const sourceIdentityKindSchema = z.enum([
   "root",
@@ -310,9 +313,7 @@ export const applicationToolOperationReferenceSchema = z.discriminatedUnion("kin
       standardAction: z.enum(["create", "read", "update", "soft_delete", "restore", "export"]),
     })
     .strict(),
-  z
-    .object({ kind: z.literal("flow"), key: builderKeySchema, flowId: ruleIdSchema })
-    .strict(),
+  z.object({ kind: z.literal("flow"), key: builderKeySchema, flowId: ruleIdSchema }).strict(),
   z
     .object({
       kind: z.literal("query"),
@@ -321,9 +322,7 @@ export const applicationToolOperationReferenceSchema = z.discriminatedUnion("kin
       queryId: queryIdSchema,
     })
     .strict(),
-  z
-    .object({ kind: z.literal("navigation"), key: builderKeySchema, pageId: pageIdSchema })
-    .strict(),
+  z.object({ kind: z.literal("navigation"), key: builderKeySchema, pageId: pageIdSchema }).strict(),
 ]);
 
 /**
@@ -487,7 +486,7 @@ export const publishedDefinitionHistorySchema = z.discriminatedUnion("kind", [
 const historyEvidenceCommon = {
   definitionKey: namespacedKeySchema,
   releaseCount: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
-  anchorReleaseRevision: revisionSchema.max(Number.MAX_SAFE_INTEGER).nullable(),
+  anchorReleaseRevision: revisionSchema.nullable(),
   validationContractVersions: z.array(semanticVersionSchema).max(3),
 };
 

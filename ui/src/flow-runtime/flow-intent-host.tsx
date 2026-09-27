@@ -49,7 +49,10 @@ export type FlowIntentHostOptions = Readonly<{
    */
   renderForm: (
     form: FlowFormIntent,
-    controls: Readonly<{ submit: (values: FlowFormAnswer["values"]) => void; cancel: () => void }>,
+    controls: Readonly<{
+      submit: (values: Extract<FlowFormAnswer, { kind: "submit" }>["values"]) => void;
+      cancel: () => void;
+    }>,
   ) => ReactNode;
   navigation: LinkNavigationEnvironment;
   refresh?: FlowIntentHost["refresh"];
@@ -200,11 +203,11 @@ export function useFlowIntentHost(
       <FlowDialog
         key={current.id}
         title="Form"
-        onDismiss={() => settle({ submitted: false, values: null })}
+        onDismiss={() => settle({ kind: "cancel" })}
       >
         {options.renderForm(form, {
-          submit: (values) => settle({ submitted: true, values }),
-          cancel: () => settle({ submitted: false, values: null }),
+          submit: (values) => settle({ kind: "submit", values }),
+          cancel: () => settle({ kind: "cancel" }),
         })}
       </FlowDialog>
     );

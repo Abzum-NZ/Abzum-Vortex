@@ -5,7 +5,7 @@
   "kind": "application",
   "body": {
     "name": "Tenant Administration",
-    "description": "Tenant structure and organisation lifecycle for a tenant administrator, entirely definition-led.",
+    "description": "Tenant structure and direct protected actions for a tenant administrator.",
     "icon": "building-2",
     "home_page": "tenant_administrators",
     "module_bindings": [
@@ -35,24 +35,6 @@
         "description": "Allows managing Tenant Administration definition-level administration.",
         "action_kind": "manage",
         "administrative": true
-      },
-      {
-        "id": "app_permission_3",
-        "key": "application.tenant_administration.organization_lifecycle_request.read",
-        "label": "Open organisation lifecycle request pages",
-        "description": "Allows opening organisation lifecycle request pages.",
-        "action_kind": "named",
-        "named_action": "organization_lifecycle_request_read",
-        "administrative": false
-      },
-      {
-        "id": "app_permission_4",
-        "key": "application.tenant_administration.organization_lifecycle_request.submit",
-        "label": "Open organisation lifecycle request submission",
-        "description": "Allows opening the submit organisation lifecycle request page.",
-        "action_kind": "named",
-        "named_action": "organization_lifecycle_request_submit",
-        "administrative": false
       }
     ],
     "roles": [
@@ -63,15 +45,6 @@
         "home_page": "tenant_overview",
         "permissions": [
           "application.tenant_administration.open",
-          "vortex.tenant_administration.organization_lifecycle_request.create",
-          "vortex.tenant_administration.organization_lifecycle_request.read",
-          "application.tenant_administration.organization_lifecycle_request.read",
-          "vortex.tenant_administration.organization_lifecycle_request.update",
-          "vortex.tenant_administration.organization_lifecycle_request.soft_delete",
-          "vortex.tenant_administration.organization_lifecycle_request.restore",
-          "vortex.tenant_administration.organization_lifecycle_request.export",
-          "vortex.tenant_administration.organization_lifecycle_request.submit",
-          "application.tenant_administration.organization_lifecycle_request.submit",
           "vortex.tenant_administration.organization.read",
           "vortex.tenant_administration.tenant_administrator.read"
         ]
@@ -96,13 +69,6 @@
             "label": "Tenant structure",
             "page": "tenant_structure",
             "permission": "application.tenant_administration.open"
-          },
-          {
-            "id": "nav_requests",
-            "type": "page",
-            "label": "Lifecycle requests",
-            "page": "organization_lifecycle_requests",
-            "permission": "application.tenant_administration.organization_lifecycle_request.read"
           }
         ]
       },
@@ -128,13 +94,6 @@
     "actions": [],
     "events": [
       {
-        "id": "event_lifecycle_request_submit",
-        "key": "vortex.app.tenant_administration.lifecycle_request_submit",
-        "record_type": "vortex.tenant_administration:organization_lifecycle_request",
-        "carries": [],
-        "personal_or_sensitive_values_allowed": false
-      },
-      {
         "id": "event_suspend_organization",
         "key": "vortex.app.tenant_administration.organization_suspend",
         "record_type": "vortex.tenant_administration:organization",
@@ -154,14 +113,7 @@
         "record_type": "vortex.tenant_administration:organization",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
-      },
-    {
-      "id": "event_new_lifecycle_request",
-      "key": "vortex.app.events.vortex_app_tenant_administration_new_lifecycle_request",
-      "record_type": "vortex.tenant_administration:organization_lifecycle_request",
-      "carries": [],
-      "personal_or_sensitive_values_allowed": false
-    }
+      }
     ],
     "public_addresses": [],
     "platform_block_dependencies": [],
@@ -372,7 +324,7 @@
                     },
                     "text": {
                       "kind": "text",
-                      "value": "Review tenant structure and organisation lifecycle requests. Protected tenant structure and tenant administrators are read live on their own pages; nothing is copied into application records."
+                      "value": "Review tenant structure and its direct protected actions. Protected tenant structure and tenant administrators are read live on their own pages; protected facts are not copied into application records."
                     }
                   },
                   "theme_overrides": {},
@@ -414,7 +366,7 @@
                 "structure_region": {
                   "block": {
                     "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.2.0"
+                    "release_version": "1.4.0"
                   },
                   "settings": {
                     "title": {
@@ -764,287 +716,9 @@
             }
           }
         }
-      },
-      {
-        "id": "page_organization_lifecycle_requests",
-        "key": "organization_lifecycle_requests",
-        "name": "Organisation lifecycle requests",
-        "type": "list",
-        "record_type": "vortex.tenant_administration:organization_lifecycle_request",
-        "permission": "application.tenant_administration.organization_lifecycle_request.read",
-        "query": "vortex.tenant_administration:organization_lifecycle_requests",
-        "composition": {
-          "shell_kind": "application",
-          "shell": "shell_tenant_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "requests_table": {
-                  "block": {
-                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.2.0"
-                  },
-                  "settings": {
-                    "columns": {
-                      "kind": "list",
-                      "items": [
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.tenant_administration:organization_lifecycle_request.subject_display_name"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Organisation"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.tenant_administration:organization_lifecycle_request.change_kind"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Change"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.tenant_administration:organization_lifecycle_request.requested_display_name"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Requested name"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.tenant_administration:organization_lifecycle_request.requested_parent_reference"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Requested parent"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.tenant_administration:organization_lifecycle_request.state"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "State"
-                            }
-                          }
-                        }
-                      ]
-                    },
-                    "title": {
-                      "kind": "text",
-                      "value": "Organisation lifecycle requests"
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
-                      },
-                      "height": {
-                        "kind": "content"
-                      }
-                    }
-                  },
-                  "slots": {},
-                  "query": "vortex.tenant_administration:organization_lifecycle_requests"
-                },
-        "button_new_lifecycle_request": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.tenant_administration.organization_lifecycle_request.submit", "settings": {"label": {"kind": "text", "value": "New lifecycle request"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
-              },
-              "order": {
-                "desktop": [
-                  "requests_table",
-            "button_new_lifecycle_request"
-                ]
-              }
-            }
-          }
-        }
-      },
-      {
-        "id": "page_record_lifecycle_request",
-        "key": "record_lifecycle_request",
-        "name": "Submit organisation lifecycle request",
-        "type": "form",
-        "record_type": "vortex.tenant_administration:organization_lifecycle_request",
-        "permission": "application.tenant_administration.organization_lifecycle_request.submit",
-        "composition": {
-          "shell_kind": "application",
-          "shell": "shell_tenant_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "request_form": {
-                  "block": {
-                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                    "release_version": "1.0.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Submit organisation lifecycle request"
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
-                      },
-                      "height": {
-                        "kind": "content"
-                      }
-                    }
-                  },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "request_reason": {
-                          "block": {
-                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.tenant_administration:organization_lifecycle_request.reason"
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "request_submit": {
-                          "block": {
-                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "label": {
-                              "kind": "text",
-                              "value": "Submit request"
-                            },
-                            "action_kind": {
-                              "kind": "choice",
-                              "value": "submit"
-                            },
-                            "variant": {
-                              "kind": "choice",
-                              "value": "primary"
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        }
-                      },
-                      "order": {
-                        "desktop": [
-                          "request_reason",
-                          "request_submit"
-                        ]
-                      }
-                    }
-                  }
-                }
-              },
-              "order": {
-                "desktop": [
-                  "request_form"
-                ]
-              }
-            }
-          }
-        }
       }
     ],
     "flows": [
-      {
-        "contractVersion": "1.0.0",
-        "id": "flow_submit_organization_lifecycle_request",
-        "key": "submit_organization_lifecycle_request",
-        "labels": {
-          "name": "Submit organisation lifecycle request"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "reason": {
-            "type": "text",
-            "required": true
-          }
-        },
-        "variables": {},
-        "triggers": [],
-        "tasks": [
-          {
-            "id": "call",
-            "type": "operation.call",
-            "version": "1.0.0",
-            "properties": {
-              "operation": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "vortex.tenant_administration.organization_lifecycle_request.submit"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {},
-        "errors": [],
-        "finally": []
-      },
       {
         "contractVersion": "1.0.0",
         "id": "flow_suspend_tenant_organization",
@@ -1174,8 +848,11 @@
         },
         "inputs": {
           "organization_id": {
-            "type": "text",
-            "required": true
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.tenant_administration:organization"
+            ]
           },
           "expected_revision": {
             "type": "whole_number",
@@ -1271,53 +948,9 @@
         },
         "errors": [],
         "finally": []
-      },
-    {
-      "contractVersion": "1.0.0",
-      "id": "navigate_new_lifecycle_request",
-      "key": "navigate_new_lifecycle_request",
-      "description": "Opens the organisation lifecycle request form.",
-      "labels": {
-        "name": "New lifecycle request"
-      },
-      "execution": "interactive",
-      "runAs": {
-        "kind": "initiator"
-      },
-      "inputs": {},
-      "tasks": [
-        {
-          "id": "open_page",
-          "type": "interface.navigate",
-          "version": "1.0.0",
-          "properties": {
-            "page": {
-              "kind": "literal",
-              "literal": {
-                "type": "text",
-                "value": "record_lifecycle_request"
-              }
-            }
-          }
-        }
-      ],
-      "outputs": {}
-    }
+      }
     ],
     "flow_bindings": [
-      {
-        "id": "binding_lifecycle_request_submit",
-        "control": "request_form",
-        "event_id": "event_lifecycle_request_submit",
-        "event": "form_submit",
-        "flow": "flow_submit_organization_lifecycle_request",
-        "inputs": {
-          "reason": {
-            "kind": "caller",
-            "name": "reason"
-          }
-        }
-      },
       {
         "id": "binding_suspend_organization",
         "control": "structure_region",
@@ -1368,15 +1001,7 @@
             "name": "revision"
           }
         }
-      },
-    {
-      "id": "binding_new_lifecycle_request",
-      "control": "button_new_lifecycle_request",
-      "event_id": "event_new_lifecycle_request",
-      "event": "action",
-      "flow": "navigate_new_lifecycle_request",
-      "inputs": {}
-    }
+      }
     ]
   }
 }

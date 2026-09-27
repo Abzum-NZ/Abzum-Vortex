@@ -2,12 +2,14 @@ import "server-only";
 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
+  isRecord,
   PLATFORM_SERVICE_OPERATIONS,
   executeNamedActionCommandV2Schema,
   flowIdSchema,
   flowMaximumServerSeconds,
   flowSchema,
   flowTaskChildLists,
+  formContinuationAnswerSchema,
   identitySessionSchema,
   organizationSelectionCandidateSchema,
   platformOperationKey,
@@ -234,10 +236,7 @@ const resumeRequestSchema = z
     selection: organizationSelectionCandidateSchema,
     flowId: flowIdSchema,
     continuation: z.string().min(16).max(128),
-    answer: z.discriminatedUnion("kind", [
-      z.object({ kind: z.literal("form_answered"), submitted: z.boolean(), values: z.unknown() }),
-      z.object({ kind: z.literal("confirmed"), confirmed: z.boolean() }),
-    ]),
+    answer: formContinuationAnswerSchema,
   })
   .strict();
 
@@ -357,9 +356,6 @@ const notYetAvailable: Readonly<Record<string, string>> = Object.freeze({
   "file.export": "the server file export task",
   "connection.call": "the durable Kestra runner",
 });
-
-const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
-  typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
 
 const withinPayload = (candidate: unknown): boolean => {
   try {
@@ -1055,15 +1051,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           unavailable: [],
           sensitive: [],
         };
-        const resume: FlowRunResume =
-          answer.kind === "confirmed"
-            ? { kind: "confirmed", confirmed: answer.confirmed }
-            : {
-                kind: "form_answered",
-                submitted: answer.submitted,
-                values: (answer.values ?? null) as JsonValue,
-              };
-        return await drive(run, resumeFlowRun(state, resume, run.library));
+        return await drive(run, resumeFlowRun(state, answer, run.library));
       } catch {
         return refused;
       }

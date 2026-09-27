@@ -12,11 +12,9 @@ import {
 } from "./identifiers";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
-
 const definitionHistoryCommandCommon = {
   pageSize: z.number().int().min(1).max(100),
-  beforeReleaseRevision: javascriptSafeRevisionSchema.optional(),
+  beforeReleaseRevision: revisionSchema.optional(),
 };
 
 /**
@@ -46,14 +44,14 @@ export const definitionReleaseMetadataCommandSchema = z.discriminatedUnion("kind
     .object({
       kind: z.literal("module"),
       rootId: moduleRootIdSchema,
-      releaseRevision: javascriptSafeRevisionSchema,
+      releaseRevision: revisionSchema,
     })
     .strict(),
   z
     .object({
       kind: z.literal("application"),
       rootId: applicationRootIdSchema,
-      releaseRevision: javascriptSafeRevisionSchema,
+      releaseRevision: revisionSchema,
     })
     .strict(),
 ]);
@@ -67,16 +65,16 @@ export const restoreDefinitionDraftCommandSchema = z.discriminatedUnion("kind", 
     .object({
       kind: z.literal("module"),
       rootId: moduleRootIdSchema,
-      targetReleaseRevision: javascriptSafeRevisionSchema,
-      expectedDraftRevision: javascriptSafeRevisionSchema,
+      targetReleaseRevision: revisionSchema,
+      expectedDraftRevision: revisionSchema,
     })
     .strict(),
   z
     .object({
       kind: z.literal("application"),
       rootId: applicationRootIdSchema,
-      targetReleaseRevision: javascriptSafeRevisionSchema,
-      expectedDraftRevision: javascriptSafeRevisionSchema,
+      targetReleaseRevision: revisionSchema,
+      expectedDraftRevision: revisionSchema,
     })
     .strict(),
 ]);
@@ -84,7 +82,7 @@ export const restoreDefinitionDraftCommandSchema = z.discriminatedUnion("kind", 
 /** The only metadata exposed by history listing and exact-release inspection. */
 export const definitionReleaseMetadataSchema = z
   .object({
-    releaseRevision: javascriptSafeRevisionSchema,
+    releaseRevision: revisionSchema,
     releaseVersion: stableDefinitionReleaseVersionSchema,
     sourceFingerprint: fingerprintSchema,
     contentFingerprint: fingerprintSchema,
@@ -102,9 +100,9 @@ export const definitionReleaseMetadataSchema = z
 const definitionReleaseHistoryResultCommon = {
   organizationId: organizationIdSchema,
   definitionKey: namespacedKeySchema,
-  currentReleaseRevision: javascriptSafeRevisionSchema.optional(),
+  currentReleaseRevision: revisionSchema.optional(),
   entries: z.array(definitionReleaseMetadataSchema).max(100),
-  nextBeforeReleaseRevision: javascriptSafeRevisionSchema.optional(),
+  nextBeforeReleaseRevision: revisionSchema.optional(),
   correlationId: correlationIdSchema,
 };
 
@@ -174,7 +172,7 @@ export const definitionReleaseHistoryResultSchema = z
 const definitionReleaseMetadataResultCommon = {
   organizationId: organizationIdSchema,
   definitionKey: namespacedKeySchema,
-  currentReleaseRevision: javascriptSafeRevisionSchema.optional(),
+  currentReleaseRevision: revisionSchema.optional(),
   metadata: definitionReleaseMetadataSchema,
   correlationId: correlationIdSchema,
 };

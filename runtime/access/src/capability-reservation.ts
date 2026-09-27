@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import {
+  databaseRevision,
   builderKeySchema,
   correlationIdSchema,
   namespacedKeySchema,
@@ -301,15 +302,6 @@ const quantity = (value: unknown): unknown => {
   return canonicalDecimal(String(parsed)) === canonical ? parsed : value;
 };
 
-const revision = (value: unknown): unknown => {
-  if (typeof value === "number") return value;
-  if (typeof value === "bigint")
-    return value > 0n && value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : value;
-  if (typeof value !== "string" || !/^[1-9][0-9]*$/.test(value)) return value;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && String(parsed) === value ? parsed : value;
-};
-
 const storedQuantityKeys = new Set([
   "activeReservedQuantity",
   "consumedQuantity",
@@ -339,7 +331,7 @@ const normalizeStoredResult = (value: unknown): unknown => {
         : quantityKeys.has(key)
           ? quantity(entry)
           : revisionKeys.has(key)
-            ? revision(entry)
+            ? databaseRevision(entry)
             : normalizeStoredResult(entry),
     ]),
   );

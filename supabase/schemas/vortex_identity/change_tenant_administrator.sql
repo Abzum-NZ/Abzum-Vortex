@@ -65,8 +65,11 @@ begin
       where p.identity_id = target_identity_id and p.state = 'active'
     ) or exists (
       select 1 from pg_catalog.unnest(capabilities) c
-      where not exists (
-        select 1 from vortex_identity.tenant_administrator_assignments a
+      where vortex_identity.resolve_active_vortex_super_administrator_assignment_internal(
+          actor_identity_id, evaluated_at
+        ) is null
+        and not exists (
+          select 1 from vortex_identity.tenant_administrator_assignments a
         where a.tenant_id = p_tenant_id and a.identity_id = actor_identity_id
           and a.revoked_at is null and a.starts_at <= evaluated_at
           and (a.expires_at is null or a.expires_at > evaluated_at)
@@ -82,8 +85,8 @@ begin
     pg_catalog.convert_to(pg_catalog.concat_ws(E'\x1f', 'change_tenant_administrator',
       p_tenant_id::text, p_assignment_id::text, p_expected_revision::text,
       pg_catalog.array_to_string(capabilities, ','),
-      pg_catalog.to_char(pg_catalog.timezone('UTC', p_starts_at), 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
-      coalesce(pg_catalog.to_char(pg_catalog.timezone('UTC', p_expires_at), 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), '')),
+      vortex_context.format_timestamp_utc(p_starts_at),
+      coalesce(vortex_context.format_timestamp_utc(p_expires_at), '')),
       'UTF8'), 'sha256'), 'hex');
   select a.revision, a.revoked_at into current_revision, current_revoked_at
   from vortex_identity.tenant_administrator_assignments a
@@ -148,6 +151,7 @@ $function$;
 revoke execute on function vortex_identity.change_tenant_administrator(uuid, text, uuid, uuid, bigint, jsonb, timestamptz, timestamptz)
   from public, anon, authenticated, service_role, vortex_request,
     vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+
 grant execute on function vortex_identity.change_tenant_administrator(uuid, text, uuid, uuid, bigint, jsonb, timestamptz, timestamptz)
   to vortex_runtime;
 

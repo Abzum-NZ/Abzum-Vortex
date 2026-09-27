@@ -7,6 +7,8 @@ import {
   builderKeySchema,
   configuredTenantAdministrationOperatorContextSchema,
   correlationIdSchema,
+  databaseRevision,
+  databaseTimestamp,
   entitlementCheckRequestSchema,
   namespacedKeySchema,
   organizationIdSchema,
@@ -21,7 +23,6 @@ import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-  type RuntimeDatabaseTransaction,
 } from "@vortex/db";
 
 /*
@@ -380,19 +381,6 @@ type AllocationRevocationRow = DatabaseRow & {
   accepted_at: unknown;
 };
 
-/**
- * A revision is only converted when the exact whole number survives; anything
- * wider than a safe integer is returned unchanged so the contract parse
- * refuses it instead of accepting a rounded revision.
- */
-const revision = (value: unknown): unknown => {
-  if (typeof value === "bigint")
-    return value > 0n && value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : value;
-  if (typeof value !== "string" || !/^[1-9][0-9]*$/.test(value)) return value;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && String(parsed) === value ? parsed : value;
-};
-
 const decimalPattern = /^[+-]?\d+(?:\.\d*)?$/;
 
 /** Plain decimal text without its leading, trailing or negative-zero noise. */
@@ -422,9 +410,6 @@ const quantity = (value: unknown): unknown => {
   if (!Number.isFinite(parsed)) return value;
   return canonicalDecimal(String(parsed)) === canonical ? parsed : value;
 };
-
-const timestamp = (value: unknown): unknown =>
-  value instanceof Date && Number.isFinite(value.valueOf()) ? value.toISOString() : value;
 
 const parseOne = <Row>(rows: readonly Row[], error: string): Row => {
   if (rows.length !== 1 || rows[0] === undefined) throw new Error(error);
@@ -482,7 +467,7 @@ const run = async <Row>(operation: () => Promise<readonly Row[]>): Promise<reado
 };
 
 type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 
 export interface CapabilityPolicyPlatformOperatorDependencies {
@@ -548,9 +533,9 @@ export const createCapabilityPolicyPlatformOperatorService = (
         capabilityKey: row.capability_key,
         unit: row.unit,
         quantityLimit: quantity(row.quantity_limit),
-        revision: revision(row.revision),
+        revision: databaseRevision(row.revision),
         correlationId: row.correlation_id,
-        acceptedAt: timestamp(row.accepted_at),
+        acceptedAt: databaseTimestamp(row.accepted_at),
       });
       if (!parsed.success) throw new Error("CAPABILITY_POLICY_MUTATION_UNAVAILABLE");
       return parsed.data;
@@ -580,13 +565,13 @@ export const createCapabilityPolicyPlatformOperatorService = (
         ceilingId: row.assignment_id,
         tenantId: row.tenant_id,
         policyId: row.policy_id,
-        policyRevision: revision(row.policy_revision),
+        policyRevision: databaseRevision(row.policy_revision),
         capabilityKey: row.capability_key,
         unit: row.unit,
         quantityLimit: quantity(row.quantity_limit),
-        revision: revision(row.revision),
+        revision: databaseRevision(row.revision),
         correlationId: row.correlation_id,
-        acceptedAt: timestamp(row.accepted_at),
+        acceptedAt: databaseTimestamp(row.accepted_at),
       });
       if (!parsed.success) throw new Error("CAPABILITY_CEILING_UNAVAILABLE");
       return parsed.data;
@@ -615,9 +600,9 @@ export const createCapabilityPolicyPlatformOperatorService = (
         outcome: row.outcome,
         ceilingId: row.assignment_id,
         tenantId: row.tenant_id,
-        revision: revision(row.revision),
+        revision: databaseRevision(row.revision),
         correlationId: row.correlation_id,
-        acceptedAt: timestamp(row.accepted_at),
+        acceptedAt: databaseTimestamp(row.accepted_at),
       });
       if (!parsed.success) throw new Error("CAPABILITY_CEILING_UNAVAILABLE");
       return parsed.data;
@@ -663,10 +648,10 @@ export const setCapabilityLimitAllocation = async (
     unit: row.unit,
     quantityLimit: quantity(row.quantity_limit),
     ceilingPolicyId: row.ceiling_policy_id,
-    ceilingPolicyRevision: revision(row.ceiling_policy_revision),
-    revision: revision(row.revision),
+    ceilingPolicyRevision: databaseRevision(row.ceiling_policy_revision),
+    revision: databaseRevision(row.revision),
     correlationId: row.correlation_id,
-    acceptedAt: timestamp(row.accepted_at),
+    acceptedAt: databaseTimestamp(row.accepted_at),
   });
   if (!parsed.success) throw new Error("CAPABILITY_ALLOCATION_UNAVAILABLE");
   return parsed.data;
@@ -695,9 +680,9 @@ export const revokeCapabilityLimitAllocation = async (
     outcome: row.outcome,
     allocationId: row.assignment_id,
     subject: subjectOf(row.tenant_id, row.organization_id),
-    revision: revision(row.revision),
+    revision: databaseRevision(row.revision),
     correlationId: row.correlation_id,
-    acceptedAt: timestamp(row.accepted_at),
+    acceptedAt: databaseTimestamp(row.accepted_at),
   });
   if (!parsed.success) throw new Error("CAPABILITY_ALLOCATION_UNAVAILABLE");
   return parsed.data;
@@ -744,14 +729,14 @@ export const resolveEffectiveCapabilityPolicy = async (
           appliedScope: row.applied_scope,
           appliedLimit: row.applied_limit,
           policyId: row.policy_id,
-          policyRevision: revision(row.policy_revision),
+          policyRevision: databaseRevision(row.policy_revision),
           assignmentId: row.assignment_id,
-          assignmentRevision: revision(row.assignment_revision),
+          assignmentRevision: databaseRevision(row.assignment_revision),
           quantityLimit: quantity(row.quantity_limit),
           ceilingQuantityLimit: quantity(row.ceiling_quantity_limit),
         }
       : { reasonCode: row.reason_code }),
-    resolvedAt: timestamp(row.resolved_at),
+    resolvedAt: databaseTimestamp(row.resolved_at),
   };
   const parsed = effectiveCapabilityPolicySchema.safeParse(candidate);
   if (!parsed.success) throw new Error("CAPABILITY_POLICY_UNAVAILABLE");

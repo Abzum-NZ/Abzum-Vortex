@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  unavailableResult,
   readRecordsTableContract,
   type BlockPropertyValueV2Contract,
   type IdentitySession,
@@ -89,7 +90,6 @@ export type RecordsTableQueryResolution =
   | Readonly<{ kind: "unavailable" }>;
 
 const refused = Object.freeze({ kind: "refused" as const });
-const unavailable = Object.freeze({ kind: "unavailable" as const });
 
 const lowerUnique = (values: readonly string[]): string[] => [
   ...new Set(values.map((value) => value.toLowerCase())),
@@ -123,7 +123,11 @@ const utcDayBounds = (raw: string): readonly [string, string] | undefined => {
   const month = Number(match[2]) - 1;
   const day = Number(match[3]);
   const start = new Date(Date.UTC(year, month, day));
-  if (start.getUTCFullYear() !== year || start.getUTCMonth() !== month || start.getUTCDate() !== day)
+  if (
+    start.getUTCFullYear() !== year ||
+    start.getUTCMonth() !== month ||
+    start.getUTCDate() !== day
+  )
     return undefined;
   const end = new Date(Date.UTC(year, month, day + 1));
   return [start.toISOString(), end.toISOString()];
@@ -248,7 +252,10 @@ export const buildRecordsTableQueryCommand = (
         ? conditions[0]
         : { kind: "all", conditions };
   const search =
-    contract.search && request.search !== undefined && request.search !== null && request.search.trim() !== ""
+    contract.search &&
+    request.search !== undefined &&
+    request.search !== null &&
+    request.search.trim() !== ""
       ? request.search.trim()
       : undefined;
 
@@ -288,7 +295,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
     if (built === undefined) return refused;
     try {
       const result = await runner.run(session, selection, built.command);
-      if (result.kind === "temporarily_unavailable") return unavailable;
+      if (result.kind === "temporarily_unavailable") return unavailableResult;
       if (result.kind !== "available") return refused;
       if (result.value.outcome === "refused")
         return { kind: "refused", reasonCode: result.value.reasonCode };
@@ -311,7 +318,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
           : { nextContinuationToken: result.value.nextContinuationToken }),
       };
     } catch {
-      return unavailable;
+      return unavailableResult;
     }
   },
 });

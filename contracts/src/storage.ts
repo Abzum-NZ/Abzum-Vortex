@@ -98,15 +98,13 @@ export const fieldStorageMappingSchema = z
       });
   });
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
-
 export const moduleInstallationStorageCommandSchema = z
   .object({
     applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: javascriptSafeRevisionSchema,
+    applicationReleaseRevision: revisionSchema,
     moduleRootId: moduleRootIdSchema,
-    moduleReleaseRevision: javascriptSafeRevisionSchema,
-    expectedBindingRevision: javascriptSafeRevisionSchema.nullable(),
+    moduleReleaseRevision: revisionSchema,
+    expectedBindingRevision: revisionSchema.nullable(),
   })
   .strict();
 
@@ -128,11 +126,11 @@ export const moduleInstallationStorageResultSchema = z
   .object({
     state: z.literal("provisioned"),
     changed: z.boolean(),
-    bindingRevision: javascriptSafeRevisionSchema,
+    bindingRevision: revisionSchema,
     applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: javascriptSafeRevisionSchema,
+    applicationReleaseRevision: revisionSchema,
     moduleRootId: moduleRootIdSchema,
-    moduleReleaseRevision: javascriptSafeRevisionSchema,
+    moduleReleaseRevision: revisionSchema,
     storageContractIds: canonicalStorageContractIdsSchema,
   })
   .strict();
@@ -140,7 +138,7 @@ export const moduleInstallationStorageResultSchema = z
 const expectedModuleBindingRevisionSchema = z
   .object({
     moduleRootId: moduleRootIdSchema,
-    bindingRevision: javascriptSafeRevisionSchema,
+    bindingRevision: revisionSchema,
   })
   .strict();
 
@@ -161,7 +159,7 @@ const exactExpectedModuleBindingsSchema = z
 
 const applicationInstallationLifecycleCommandShape = {
   applicationRootId: applicationRootIdSchema,
-  applicationReleaseRevision: javascriptSafeRevisionSchema,
+  applicationReleaseRevision: revisionSchema,
   expectedModuleBindings: exactExpectedModuleBindingsSchema,
 } as const;
 
@@ -181,9 +179,9 @@ export const moduleInstallationBindingEvidenceSchema = z
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
     moduleRootId: moduleRootIdSchema,
-    bindingRevision: javascriptSafeRevisionSchema,
-    applicationReleaseRevision: javascriptSafeRevisionSchema,
-    moduleReleaseRevision: javascriptSafeRevisionSchema,
+    bindingRevision: revisionSchema,
+    applicationReleaseRevision: revisionSchema,
+    moduleReleaseRevision: revisionSchema,
     state: z.enum(["provisioned", "active", "draining", "detached"]),
   })
   .strict();
@@ -193,7 +191,7 @@ export const activeApplicationInstallationEvidenceSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: javascriptSafeRevisionSchema,
+    applicationReleaseRevision: revisionSchema,
     moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).min(1).max(10_000),
   })
   .strict()
@@ -223,7 +221,7 @@ export const applicationInstallationLifecycleResultSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: javascriptSafeRevisionSchema,
+    applicationReleaseRevision: revisionSchema,
     state: z.enum(["active", "detached"]),
     changed: z.boolean(),
     moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).min(1).max(10_000),
@@ -286,7 +284,7 @@ export const applicationInstallationLifecycleErrorCodeSchema = z.enum([
 export const recordStorageReleaseProvisionSchema = z
   .object({
     moduleRootId: moduleRootIdSchema,
-    releaseRevision: javascriptSafeRevisionSchema,
+    releaseRevision: revisionSchema,
     storageContractIds: canonicalStorageContractIdsSchema,
   })
   .strict();

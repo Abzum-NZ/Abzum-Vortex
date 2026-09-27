@@ -4,11 +4,13 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { z } from "zod";
 import {
   applicationRootIdSchema,
+  canonicalJson,
   moduleRootIdSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
   queryIdSchema,
   recordIdSchema,
+  revisionSchema,
 } from "@vortex/contracts";
 
 /**
@@ -29,7 +31,7 @@ export const queryContinuationSchema = z
     organizationAccountId: organizationAccountIdSchema,
     moduleRootId: moduleRootIdSchema,
     queryId: queryIdSchema,
-    moduleReleaseRevision: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
+    moduleReleaseRevision: revisionSchema,
     inputFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     /**
      * Exact typed values of the readable sort fields, as canonical database
@@ -60,17 +62,6 @@ const cipherKey = (key: QueryContinuationKey): Buffer => {
   if (!(key.key instanceof Uint8Array) || key.key.byteLength !== 32)
     throw new Error("QUERY_CONTINUATION_KEY_INVALID");
   return Buffer.from(key.key);
-};
-
-/** Deterministic, key-order-independent JSON used to bind a token to its exact inputs. */
-const canonicalJson = (value: unknown): string => {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (value !== null && typeof value === "object")
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`)
-      .join(",")}}`;
-  return JSON.stringify(value);
 };
 
 export const fingerprintQueryInputs = (inputValues: Readonly<Record<string, unknown>>): string =>

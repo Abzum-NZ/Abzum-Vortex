@@ -18,12 +18,7 @@ const nonNilUuidSchema = z
     message: "Identifier cannot be the nil UUID",
   });
 
-const jsonSafePositiveIntegerSchema = z
-  .number()
-  .int()
-  .positive()
-  .max(Number.MAX_SAFE_INTEGER);
-const jsonSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
+const jsonSafePositiveIntegerSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 
 export const recordLifecyclePolicyIdSchema = nonNilUuidSchema.brand<"RecordLifecyclePolicyId">();
 export type RecordLifecyclePolicyId = z.infer<typeof recordLifecyclePolicyIdSchema>;
@@ -61,7 +56,7 @@ export type ArchiveDestinationReference = z.infer<typeof archiveDestinationRefer
 export const organizationLifecycleLimitsSchema = z
   .object({
     organizationId: organizationIdSchema,
-    settingsRevision: jsonSafeRevisionSchema,
+    settingsRevision: revisionSchema,
     maxRetentionDays: jsonSafePositiveIntegerSchema.nullable().optional(),
     maxRecordCount: jsonSafePositiveIntegerSchema.nullable().optional(),
     allowUnlimitedRetentionDays: z.boolean(),
@@ -141,7 +136,7 @@ export type OrganizationLifecycleLimits = z.infer<typeof organizationLifecycleLi
 /**
  * Standard JSON-safe positive integer revision schema matching repository conventions.
  */
-export const policyRevisionSchema = jsonSafeRevisionSchema;
+export const policyRevisionSchema = revisionSchema;
 export type PolicyRevision = z.infer<typeof policyRevisionSchema>;
 
 const policyBaseFields = {
@@ -237,10 +232,10 @@ export const archiveWorkflowRecordLifecyclePolicySchema = z
     ...policyBaseFields,
     action: z.literal("archive_workflow"),
     archiveWorkflowId: workflowIdSchema,
-    expectedWorkflowRevision: jsonSafeRevisionSchema,
+    expectedWorkflowRevision: revisionSchema,
     archiveConnectionInstanceId: connectionInstanceIdSchema,
     archiveDestination: archiveDestinationReferenceSchema,
-    expectedConnectionRevision: jsonSafeRevisionSchema,
+    expectedConnectionRevision: revisionSchema,
     expectedDestinationFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     expectedConnectionHealthOutcome: z.literal("healthy"),
   })
@@ -268,7 +263,7 @@ export type RecordTypeLifecyclePolicy = z.infer<typeof recordTypeLifecyclePolicy
 export const registeredWorkflowEvidenceSchema = z
   .object({
     workflowId: workflowIdSchema,
-    workflowRevision: jsonSafeRevisionSchema,
+    workflowRevision: revisionSchema,
     organizationId: organizationIdSchema,
     authorizedApplicationIds: z.array(applicationRootIdSchema).default([]),
     state: z.literal("active"),
@@ -288,7 +283,7 @@ export const activeConnectionEvidenceSchema = z
     organizationId: organizationIdSchema,
     authorizedApplicationIds: z.array(applicationRootIdSchema).min(1),
     state: z.literal("active"),
-    revision: jsonSafeRevisionSchema,
+    revision: revisionSchema,
     lastHealthOutcome: z.literal("healthy"),
     verifiedAt: timestampSchema.optional(),
   })
@@ -331,9 +326,7 @@ export const recordRecoveryEligibilityReasonSchema = z.enum([
   "readiness_unavailable",
   "recovery_window_expired",
 ]);
-export type RecordRecoveryEligibilityReason = z.infer<
-  typeof recordRecoveryEligibilityReasonSchema
->;
+export type RecordRecoveryEligibilityReason = z.infer<typeof recordRecoveryEligibilityReasonSchema>;
 
 /**
  * Pure, state-free recovery decision input.  The caller supplies the current
@@ -352,7 +345,7 @@ export const recordRecoveryEligibilityInputSchema = z
     recordTypeId: recordTypeIdSchema,
     deletedAt: timestampSchema,
     decidedAt: timestampSchema,
-    expectedPolicyRevision: jsonSafeRevisionSchema,
+    expectedPolicyRevision: revisionSchema,
     readinessAvailable: z.boolean(),
     governingPolicy: recordRecoveryPolicySchema.nullable(),
   })
@@ -364,14 +357,14 @@ export const recordRecoveryEligibilityDecisionSchema = z.discriminatedUnion("all
     .object({
       allowed: z.literal(true),
       reason: z.null(),
-      governingPolicyRevision: jsonSafeRevisionSchema,
+      governingPolicyRevision: revisionSchema,
     })
     .strict(),
   z
     .object({
       allowed: z.literal(false),
       reason: recordRecoveryEligibilityReasonSchema,
-      governingPolicyRevision: jsonSafeRevisionSchema.nullable(),
+      governingPolicyRevision: revisionSchema.nullable(),
     })
     .strict(),
 ]);
@@ -414,9 +407,7 @@ const refusedRecovery = (
  * difference is not a scope mismatch.
  */
 const sameIdentifier = (left: string | null, right: string | null): boolean =>
-  left === null || right === null
-    ? left === right
-    : left.toLowerCase() === right.toLowerCase();
+  left === null || right === null ? left === right : left.toLowerCase() === right.toLowerCase();
 
 const millisecondsPerDay = 24 * 60 * 60 * 1000;
 
@@ -542,7 +533,7 @@ export const validateRecordTypeLifecyclePolicy = (
         "expectedSettingsRevision is mandatory for live policy validation to prevent stale or concurrent settings mutations",
     });
   } else {
-    const parsedExpectedRevision = jsonSafeRevisionSchema.safeParse(rawExpectedRevision);
+    const parsedExpectedRevision = revisionSchema.safeParse(rawExpectedRevision);
     if (!parsedExpectedRevision.success) {
       issues.push({
         code: "invalid_expected_settings_revision",
@@ -807,7 +798,7 @@ export const validateRecordTypeLifecyclePolicy = (
 export const lifecycleCandidateRecordSchema = z
   .object({
     recordId: recordIdSchema,
-    expectedRecordRevision: jsonSafeRevisionSchema,
+    expectedRecordRevision: revisionSchema,
     createdAt: timestampSchema,
     isHeld: z.boolean(),
     isProtected: z.boolean(),
@@ -865,7 +856,7 @@ const validateItemReasonsConsistency = (
 export const dueDeleteRecordHandoffItemSchema = z
   .object({
     recordId: recordIdSchema,
-    expectedRecordRevision: jsonSafeRevisionSchema,
+    expectedRecordRevision: revisionSchema,
     dueReasons: z.array(z.enum(["age", "count_excess"])).min(1),
     primaryReason: recordLifecycleDueReasonSchema,
     action: z.literal("delete"),
@@ -880,15 +871,15 @@ export const dueDeleteRecordHandoffItemSchema = z
 export const dueArchiveRecordHandoffItemSchema = z
   .object({
     recordId: recordIdSchema,
-    expectedRecordRevision: jsonSafeRevisionSchema,
+    expectedRecordRevision: revisionSchema,
     dueReasons: z.array(z.enum(["age", "count_excess"])).min(1),
     primaryReason: recordLifecycleDueReasonSchema,
     action: z.literal("archive_workflow"),
     archiveWorkflowId: workflowIdSchema,
-    expectedWorkflowRevision: jsonSafeRevisionSchema,
+    expectedWorkflowRevision: revisionSchema,
     archiveConnectionInstanceId: connectionInstanceIdSchema,
     archiveDestination: archiveDestinationReferenceSchema,
-    expectedConnectionRevision: jsonSafeRevisionSchema,
+    expectedConnectionRevision: revisionSchema,
     expectedDestinationFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     expectedConnectionHealthOutcome: z.literal("healthy"),
     createdAt: timestampSchema,
@@ -911,7 +902,7 @@ export type DueRecordHandoffItem = z.infer<typeof dueRecordHandoffItemSchema>;
 export const blockedRemovalRecordSchema = z
   .object({
     recordId: recordIdSchema,
-    expectedRecordRevision: jsonSafeRevisionSchema,
+    expectedRecordRevision: revisionSchema,
     dueReasons: z.array(z.enum(["age", "count_excess"])).min(1),
     primaryReason: recordLifecycleDueReasonSchema,
     blockReason: z.enum(["legal_hold", "recovery_protection", "held_and_protected"]),
@@ -957,7 +948,7 @@ export type LifecycleStatusReport = z.infer<typeof lifecycleStatusReportSchema>;
 export const recordLifecycleHandoffSchema = z
   .object({
     policyId: recordLifecyclePolicyIdSchema,
-    policyRevision: jsonSafeRevisionSchema,
+    policyRevision: revisionSchema,
     organizationId: organizationIdSchema,
     storageContractId: storageContractIdSchema,
     applicationRootId: applicationRootIdSchema.nullable(),
@@ -965,10 +956,10 @@ export const recordLifecycleHandoffSchema = z
     archiveMetadata: z
       .object({
         archiveWorkflowId: workflowIdSchema,
-        expectedWorkflowRevision: jsonSafeRevisionSchema,
+        expectedWorkflowRevision: revisionSchema,
         archiveConnectionInstanceId: connectionInstanceIdSchema,
         archiveDestination: archiveDestinationReferenceSchema,
-        expectedConnectionRevision: jsonSafeRevisionSchema,
+        expectedConnectionRevision: revisionSchema,
         expectedDestinationFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
         expectedConnectionHealthOutcome: z.literal("healthy"),
       })
@@ -1313,10 +1304,7 @@ const compareCanonicalUuids = (a: string, b: string): number => {
 export const selectDueRecordsForLifecycleHandoff = (
   input: EvaluateRecordLifecycleHandoffInput,
 ): RecordLifecycleHandoff => {
-  if (
-    (input.totalRetainedCount === undefined) !==
-    (input.recordOffset === undefined)
-  ) {
+  if ((input.totalRetainedCount === undefined) !== (input.recordOffset === undefined)) {
     throw new Error("Bounded lifecycle count and offset must be supplied together");
   }
   const policy = recordTypeLifecyclePolicySchema.parse(input.policy);
@@ -1467,9 +1455,7 @@ export const selectDueRecordsForLifecycleHandoff = (
   const hasBlocked = blockedRecords.length > 0;
   const hasDue = dueRecords.length > 0;
   const excessCount =
-    policy.maxCount !== null && !policy.allowUnlimitedCount
-      ? countDueSet.size
-      : 0;
+    policy.maxCount !== null && !policy.allowUnlimitedCount ? countDueSet.size : 0;
   const expiredAgeCount = ageDueSet.size;
 
   const evaluationStatus: LifecycleEvaluationStatus =

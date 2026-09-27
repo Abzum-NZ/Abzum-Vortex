@@ -9,8 +9,6 @@ import {
 } from "./identifiers";
 import { groupSchema } from "./organization-access-catalogue";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
-
 const trustedChangeFields = {
   changedBy: actorIdSchema,
   correlationId: correlationIdSchema,
@@ -32,7 +30,7 @@ export const organizationGroupChangeCommandSchema = z.discriminatedUnion("operat
       operation: z.literal("revise_group_label"),
       organizationId: organizationIdSchema,
       groupId: groupIdSchema,
-      expectedGroupRevision: javascriptSafeRevisionSchema,
+      expectedGroupRevision: revisionSchema,
       label: labelSchema,
       ...trustedChangeFields,
     })
@@ -42,7 +40,7 @@ export const organizationGroupChangeCommandSchema = z.discriminatedUnion("operat
       operation: z.literal("retire_group"),
       organizationId: organizationIdSchema,
       groupId: groupIdSchema,
-      expectedGroupRevision: javascriptSafeRevisionSchema,
+      expectedGroupRevision: revisionSchema,
       ...trustedChangeFields,
     })
     .strict(),
@@ -56,7 +54,7 @@ export const organizationGroupChangeResultSchema = z
     outcome: z.literal("changed"),
     operation: z.enum(["create_group", "revise_group_label", "retire_group"]),
     group: groupSchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
     correlationId: correlationIdSchema,
   })
   .strict()

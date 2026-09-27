@@ -434,7 +434,6 @@ export {
   useFlowIntentHost,
   type BrowserFlowRequest,
   type BrowserFlowResult,
-  type FlowAnswer,
   type FlowApplicationAddress,
   type FlowConfirmIntent,
   type FlowDispatchResult,

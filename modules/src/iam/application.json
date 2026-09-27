@@ -4524,8 +4524,11 @@
         },
         "inputs": {
           "role_id": {
-            "type": "text",
-            "required": true
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.organisation_administration:role"
+            ]
           },
           "expected_role_revision": {
             "type": "whole_number",
@@ -4754,8 +4757,11 @@
         },
         "inputs": {
           "group_id": {
-            "type": "text",
-            "required": true
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.organisation_administration:group"
+            ]
           },
           "expected_group_revision": {
             "type": "whole_number",
