@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  applicationExperienceStateSchema,
-  workflowValueTypeSchema,
-} from "./catalogues";
+import { applicationExperienceStateSchema } from "./catalogues";
 import { applicationSourceContractVersion } from "./application-contract-versions";
 import { builderKeySchema, namespacedKeySchema, semanticVersionSchema } from "./identifiers";
 import { jsonValueSchema, labelSchema } from "./common";
