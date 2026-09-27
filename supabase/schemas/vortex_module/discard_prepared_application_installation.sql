@@ -123,8 +123,10 @@ begin
       message = 'Application installation candidate evidence is ambiguous';
   end if;
 
+  -- Provisioning can commit individual pins before a candidate is abandoned.
+  -- Remove any matching subset; completeness is required only for activation.
   if staged_binding_count > 0 then
-    if staged_binding_count <> expected_pin_count or exists (
+    if exists (
       select 1
       from vortex_module.staged_installation_bindings as staged
       where staged.organization_id = initial_authority.organization_id
@@ -140,7 +142,7 @@ begin
         )
     ) then
       raise exception using errcode = '40001',
-        message = 'Staged Application installation bindings changed or are incomplete';
+        message = 'Staged Application installation bindings do not match the release';
     end if;
 
     select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
@@ -164,7 +166,7 @@ begin
       and staged.application_release_revision = p_application_release_revision;
     get diagnostics removed_count = row_count;
   elsif provisioned_binding_count > 0 then
-    if provisioned_binding_count <> expected_pin_count or exists (
+    if exists (
       select 1
       from vortex_module.installation_bindings as binding
       where binding.organization_id = initial_authority.organization_id
@@ -181,7 +183,7 @@ begin
         )
     ) then
       raise exception using errcode = '40001',
-        message = 'Prepared Application installation bindings changed or are incomplete';
+        message = 'Prepared Application installation bindings do not match the release';
     end if;
 
     select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(

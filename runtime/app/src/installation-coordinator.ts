@@ -994,12 +994,22 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             (active !== null && request.applicationReleaseRevision <= active.releaseRevision)
           )
             throw fail("APPLICATION_INSTALLATION_STALE");
-          if (
-            state.stagedModuleBindings.some(
-              (binding) => binding.applicationReleaseRevision !== request.applicationReleaseRevision,
-            )
-          )
+          const otherStagedRevisions = new Set(
+            state.stagedModuleBindings
+              .map((binding) => binding.applicationReleaseRevision)
+              .filter((releaseRevision) => releaseRevision !== request.applicationReleaseRevision),
+          );
+          if ([...otherStagedRevisions].some(
+            (releaseRevision) => releaseRevision >= request.applicationReleaseRevision,
+          ))
             throw fail("APPLICATION_INSTALLATION_STALE");
+          for (const releaseRevision of otherStagedRevisions)
+            await discardPreparedInstallation(
+              transaction,
+              request.organizationId,
+              request.applicationRootId,
+              releaseRevision,
+            );
           const accessChanged = active === null
             ? await alignAccess(
                 transaction,
