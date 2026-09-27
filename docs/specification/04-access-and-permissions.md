@@ -266,7 +266,7 @@ Unknown names are refused at publication and at runtime. An application role may
 
 Publishing an application role resolves `*` against that application's permission catalogue and records the catalogue fingerprint and expanded permission identifiers. A permission added later is not silently granted; the role must be reviewed and published again.
 
-The exact initial organisation-administration identities, keys and meanings are defined in the [platform permission catalogue](appendices/platform-permission-catalogue.md). Business permission declarations continue to come from their own modules and applications.
+The 22 permanent platform administration permission identities, owning declarations and organisation-creation registration path are defined in the [platform permission catalogue](appendices/platform-permission-catalogue.md#declaration-ownership-and-registration). Business permission declarations continue to come from their own modules and applications.
 
 ## Record visibility
 
