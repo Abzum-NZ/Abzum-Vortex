@@ -211,6 +211,14 @@ const projectEditField = (
     case "number":
       if (stored !== null && (typeof stored !== "number" || !Number.isFinite(stored)))
         return undefined;
+      if (
+        stored !== null &&
+        isRecord(settings.integer) &&
+        settings.integer.kind === "boolean" &&
+        settings.integer.value === true &&
+        !Number.isInteger(stored)
+      )
+        return undefined;
       kind = "number_input";
       break;
     case "boolean":
@@ -716,7 +724,7 @@ export const loadApplicationPage = async (
       (binding) => binding.event === "form_submit" && binding.callerInputs.includes("record"),
     );
     if (!editBinding) continue;
-    if (subjectRow?.kind !== "read" || subjectRecordType === undefined) {
+    if (subjectRow?.kind !== "read" || subject === undefined || subjectRecordType === undefined) {
       data[placementId] = { status: "disabled", reason: "Record unavailable" };
       continue;
     }

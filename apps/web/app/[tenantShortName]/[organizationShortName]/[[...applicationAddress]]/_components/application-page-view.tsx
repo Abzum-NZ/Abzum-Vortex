@@ -457,6 +457,10 @@ export function ApplicationPageView({
                       Object.hasOwn(baseline, name) && !equalFormValue(value, baseline[name]),
                   ),
                 );
+          if (baseline !== undefined && Object.keys(values).length === 0) {
+            setNotice({ tone: "info", text: "No changes to save." });
+            return;
+          }
           void applyDispatch(
             formBlock.submit(asComponentBinding(placementId, submitBinding), values),
           );
