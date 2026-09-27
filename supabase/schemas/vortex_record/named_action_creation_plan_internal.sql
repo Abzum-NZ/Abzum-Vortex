@@ -193,6 +193,8 @@ exception
 end
 $function$;
 
+alter function vortex_record.named_action_creation_plan_internal(text,uuid,bigint,uuid,uuid,jsonb) owner to vortex_record_adapter;
+
 revoke all on function vortex_record.named_action_creation_plan_internal(
   text, uuid, bigint, uuid, uuid, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,

@@ -16,6 +16,7 @@ import {
 import {
   createDatabaseSystemApplicationBoundReleaseSetService,
 } from "@vortex/definition";
+import { releaseSetContainsCustomComponents } from "../../app/_lib/definition-catalogue";
 import { developmentPublicationCatalogue } from "./definitions";
 import {
   developmentBuilderAuthority,
@@ -62,9 +63,7 @@ const coordinatorDependencies = (
   definitionSystemContext: () => mintSystemContext(facts.system),
   definitionReader: definitionReader(facts),
   builderAuthority: (_transaction, scope) => developmentBuilderAuthority(scope.organizationId),
-  // The setup's own publication catalogue carries no custom component releases, so a shipped
-  // release set can contain none.
-  containsCustomComponents: () => false,
+  containsCustomComponents: releaseSetContainsCustomComponents,
 });
 
 const release = (facts: InstallFacts, key: string): PublishedRelease => {

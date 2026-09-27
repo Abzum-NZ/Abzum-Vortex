@@ -38,7 +38,7 @@ export type LinkTarget =
  */
 export type UnsavedWorkGuard = Readonly<{
   hasUnsavedWork: () => boolean;
-  confirmDiscardUnsavedWork: () => boolean;
+  confirmDiscardUnsavedWork: () => Promise<boolean>;
 }>;
 
 /** Shell services a link activation needs; all browser and server effects stay with the shell. */
@@ -69,8 +69,10 @@ const refusedExternalAddress = (): DefinitionRenderError =>
   );
 
 /** True when leaving the current surface may proceed; absent guard means nothing to protect. */
-const mayDiscardUnsavedWork = (guard: UnsavedWorkGuard | undefined): boolean =>
-  guard === undefined || !guard.hasUnsavedWork() || guard.confirmDiscardUnsavedWork();
+const mayDiscardUnsavedWork = async (guard: UnsavedWorkGuard | undefined): Promise<boolean> =>
+  guard === undefined ||
+  !guard.hasUnsavedWork() ||
+  (await guard.confirmDiscardUnsavedWork());
 
 /** Opens a new browsing context with no opener access and no referrer; never a server fetch. */
 const openNewContext = (address: string): void => {
@@ -146,7 +148,7 @@ export async function performNavigateTask(
   const target = linkTargetForNavigateIntent(intent);
   if (target === undefined) return false;
   if (!(await environment.recheckInternalTarget(target))) return false;
-  if (!mayDiscardUnsavedWork(environment.unsavedWork)) return false;
+  if (!(await mayDiscardUnsavedWork(environment.unsavedWork))) return false;
   environment.navigateInternal(target);
   return true;
 }
@@ -173,7 +175,7 @@ export async function activateLinkTarget(
       openNewContext(address.data);
       return true;
     }
-    if (!mayDiscardUnsavedWork(environment.unsavedWork)) return false;
+    if (!(await mayDiscardUnsavedWork(environment.unsavedWork))) return false;
     window.location.assign(address.data);
     return true;
   }
@@ -187,7 +189,7 @@ export async function activateLinkTarget(
     openNewContext(address);
     return true;
   }
-  if (!mayDiscardUnsavedWork(environment.unsavedWork)) return false;
+  if (!(await mayDiscardUnsavedWork(environment.unsavedWork))) return false;
   environment.navigateInternal(target);
   return true;
 }
