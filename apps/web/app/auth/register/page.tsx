@@ -16,7 +16,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
     <AuthShell
       eyebrow="Create account"
       title="Start with your email"
-      description="Use an email address you can verify. You will receive a confirmation link before you can sign in."
+      description="Use an email address you can verify. You will receive a one-time confirmation code before you can sign in."
       footer={
         <p>
           Already have an account?{" "}

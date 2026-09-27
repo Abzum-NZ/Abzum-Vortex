@@ -1,8 +1,8 @@
 import {
-  moduleFieldV2Schema,
-  recordTypeDefinitionV2Schema,
-  type ModuleFieldV2,
-  type RecordTypeDefinitionV2,
+  moduleFieldV3Schema,
+  recordTypeDefinitionV3Schema,
+  type ModuleFieldV3,
+  type RecordTypeDefinitionV3,
 } from "@vortex/contracts";
 import { describe, expect, it } from "vitest";
 import { calculateLockedRelationshipTotalSave } from "../src/relationship-total-save";
@@ -41,11 +41,11 @@ const ids = {
 const field = (
   fieldId: string,
   key: string,
-  type: ModuleFieldV2["type"],
+  type: ModuleFieldV3["type"],
   settings: unknown,
   required = false,
-): ModuleFieldV2 =>
-  moduleFieldV2Schema.parse({
+): ModuleFieldV3 =>
+  moduleFieldV3Schema.parse({
     fieldId,
     key,
     label: key,
@@ -59,8 +59,8 @@ const field = (
     settings,
   });
 
-const recursiveType = (): RecordTypeDefinitionV2 =>
-  recordTypeDefinitionV2Schema.parse({
+const recursiveType = (): RecordTypeDefinitionV3 =>
+  recordTypeDefinitionV3Schema.parse({
     recordTypeId: ids.recordType,
     key: "recursive",
     singularLabel: "Recursive",
@@ -103,7 +103,7 @@ const recursiveType = (): RecordTypeDefinitionV2 =>
   });
 
 const source = (
-  type: RecordTypeDefinitionV2,
+  type: RecordTypeDefinitionV3,
   records: readonly Readonly<{
     recordKey?: string;
     fieldValues: Readonly<Record<string, unknown>>;
@@ -188,7 +188,7 @@ describe("locked relationship total save calculation", () => {
 
   it("preserves every creation pending check beside that creation's final values", () => {
     const rootType = recursiveType();
-    const creationType = recordTypeDefinitionV2Schema.parse({
+    const creationType = recordTypeDefinitionV3Schema.parse({
       recordTypeId: ids.creationRecordType,
       key: "created",
       singularLabel: "Created",
@@ -325,7 +325,7 @@ describe("locked relationship total save calculation", () => {
   });
 
   it("keeps mixed-currency detail internal while refusing the save safely", () => {
-    const moneySource = recordTypeDefinitionV2Schema.parse({
+    const moneySource = recordTypeDefinitionV3Schema.parse({
       recordTypeId: ids.moneyRecordType,
       key: "money_source",
       singularLabel: "Money source",
@@ -365,7 +365,7 @@ describe("locked relationship total save calculation", () => {
       standardActions: ["create", "read", "update"],
       customActionIds: [],
     });
-    const totalType = recordTypeDefinitionV2Schema.parse({
+    const totalType = recordTypeDefinitionV3Schema.parse({
       recordTypeId: ids.moneyTotalRecordType,
       key: "money_total",
       singularLabel: "Money total",

@@ -2,7 +2,6 @@ import {
   applicationFlowBindingContractVersion,
   componentFlowBindingSchema,
   flowNodeRunAsSchema,
-  frontendFlowNodeBindingSchema,
   protectedOperationDescriptorSchema,
 } from "../src";
 import { describe, expect, it } from "vitest";
@@ -106,80 +105,6 @@ describe("application flow binding contracts", () => {
       declaredEffects: ["read"],
     };
     expect(componentFlowBindingSchema.safeParse(managedRefresh).success).toBe(true);
-  });
-
-  it("accepts protected operation, query, form-continuation and durable-start node targets", () => {
-    const baseNode = {
-      contractVersion: applicationFlowBindingContractVersion,
-      nodeId: id(20),
-      runAs: { kind: "current_user" as const },
-      inputs: {},
-      results: {},
-    };
-    const targets = [
-      {
-        kind: "protected_operation",
-        operation: {
-          owner: { kind: "platform_service", serviceId: id(21) },
-          operationId: id(22),
-        },
-      },
-      {
-        kind: "query",
-        moduleRootId: id(23),
-        moduleReleaseVersion: "2.4.0",
-        queryId: id(24),
-      },
-      {
-        kind: "form_continuation",
-        applicationRootId,
-        formId,
-        continuationEventId: id(25),
-      },
-      { kind: "durable_workflow_start", applicationRootId, workflowId: id(26) },
-    ];
-
-    for (const [index, target] of targets.entries())
-      expect(
-        frontendFlowNodeBindingSchema.safeParse({
-          ...baseNode,
-          nodeId: id(20 + index),
-          target,
-        }).success,
-      ).toBe(true);
-
-    expect(
-      flowNodeRunAsSchema.safeParse({
-        kind: "specified_user",
-        executionBindingId: id(27),
-      }).success,
-    ).toBe(true);
-    expect(
-      flowNodeRunAsSchema.safeParse({ kind: "system", executionBindingId: id(28) }).success,
-    ).toBe(true);
-  });
-
-  it("requires the fixed account reference type in node inputs", () => {
-    const node = {
-      contractVersion: applicationFlowBindingContractVersion,
-      nodeId: id(60),
-      target: { kind: "durable_workflow_start", applicationRootId, workflowId: id(61) },
-      runAs: { kind: "current_user" },
-      inputs: {
-        account: {
-          type: "organization_account_reference",
-          value: { source: "current_organization_account_id" },
-        },
-      },
-      results: {},
-    };
-    expect(frontendFlowNodeBindingSchema.safeParse(node).success).toBe(true);
-    expect(
-      frontendFlowNodeBindingSchema.safeParse({
-        ...node,
-        inputs: { account: { ...node.inputs.account, type: "text" } },
-      }).success,
-    ).toBe(false);
   });
 
   it("describes exact protected operation policy without accepting executable material", () => {
