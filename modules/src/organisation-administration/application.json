@@ -16,6 +16,14 @@
           "version": "1.0.0"
         },
         "purpose": "primary"
+      },
+      {
+        "module": "vortex.system_directory",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        },
+        "purpose": "system_record_display"
       }
     ],
     "permissions": [
