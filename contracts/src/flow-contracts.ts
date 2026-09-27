@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { workflowValueTypeSchema } from "./catalogues";
 import {
+  correlationIdSchema,
   conditionMaximumNestingDepth,
   conditionMaximumOperandCount,
   descriptionSchema,
@@ -10,13 +11,18 @@ import {
 import type { JsonValue } from "./common";
 import { parseExactDecimal } from "./exact-decimal";
 import {
+  actorIdSchema,
+  applicationRootIdSchema,
   actionIdSchema,
   builderKeySchema,
   containedComponentIdSchema,
   namespacedKeySchema,
+  organizationAccountIdSchema,
+  organizationIdSchema,
   permissionIdSchema,
   recordTypeIdSchema,
   stableDefinitionReleaseVersionSchema,
+  timestampSchema,
 } from "./identifiers";
 
 /**
@@ -812,6 +818,43 @@ export const flowRunAsSchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 export type FlowRunAs = z.infer<typeof flowRunAsSchema>;
+
+/** The principal selected by one verified flow-level run-as binding. */
+const executionAuthorityActorSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("specified_account"),
+      organizationAccountId: organizationAccountIdSchema,
+    })
+    .strict(),
+  z.object({ kind: z.literal("system"), systemActorId: actorIdSchema }).strict(),
+]);
+
+/**
+ * The non-person authority a flow orchestrator establishes after resolving its run-as binding.
+ * This names the principal only; it carries no person session and grants no task permission.
+ * Access still resolves the exact grant for every protected task and operation, and callers must
+ * never construct this value from request input or treat parsing it as an authorization decision.
+ */
+export const executionAuthorityContextSchema = z
+  .object({
+    kind: z.literal("execution_authority"),
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    releaseVersion: stableDefinitionReleaseVersionSchema,
+    flowId: flowIdSchema,
+    executionBindingId: containedComponentIdSchema,
+    actor: executionAuthorityActorSchema,
+    correlationId: correlationIdSchema,
+    issuedAt: timestampSchema,
+    expiresAt: timestampSchema,
+  })
+  .strict()
+  .refine((value) => Date.parse(value.expiresAt) > Date.parse(value.issuedAt), {
+    path: ["expiresAt"],
+    message: "Execution-authority context must expire after it is issued",
+  });
+export type ExecutionAuthorityContext = z.infer<typeof executionAuthorityContextSchema>;
 
 // ─── Tasks: an ordered, nested list ──────────────────────────────────────────────────────────
 
