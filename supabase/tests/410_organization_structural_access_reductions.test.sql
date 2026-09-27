@@ -98,13 +98,8 @@ select has_function(
 );
 select has_function(
   'vortex_access', 'revise_organization_role_metadata_for_administration',
-  array['uuid', 'bigint', 'text', 'text', 'jsonb', 'uuid'],
+  array['uuid', 'bigint', 'text', 'text', 'uuid'],
   'Access exposes exact protected role metadata revision'
-);
-select has_function(
-  'vortex_access', 'prepare_organization_role_metadata_change_for_administration',
-  array['uuid', 'bigint', 'uuid'],
-  'Access exposes one authority-checked private role metadata preparation'
 );
 select has_function(
   'vortex_access', 'retire_organization_role_for_administration',
@@ -125,19 +120,13 @@ select is(
     join pg_catalog.pg_roles as owner_role
       on owner_role.oid = procedure_row.proowner
     where procedure_row.oid in (
-      'vortex_access.prepare_organization_role_metadata_change_for_administration(uuid,bigint,uuid)'::regprocedure,
       'vortex_access.retire_organization_group_for_administration(uuid,bigint,uuid)'::regprocedure,
       'vortex_access.remove_organization_group_membership_for_administration(uuid,bigint,uuid)'::regprocedure,
-      'vortex_access.revise_organization_role_metadata_for_administration(uuid,bigint,text,text,jsonb,uuid)'::regprocedure,
+      'vortex_access.revise_organization_role_metadata_for_administration(uuid,bigint,text,text,uuid)'::regprocedure,
       'vortex_access.retire_organization_role_for_administration(uuid,bigint,jsonb,uuid)'::regprocedure
     )
   ),
   pg_catalog.jsonb_build_array(
-    pg_catalog.jsonb_build_object(
-      'name', 'prepare_organization_role_metadata_change_for_administration',
-      'owner', 'postgres', 'securityDefiner', true, 'volatility', 'v',
-      'configuration', array['search_path=""']
-    ),
     pg_catalog.jsonb_build_object(
       'name', 'remove_organization_group_membership_for_administration',
       'owner', 'postgres', 'securityDefiner', true, 'volatility', 'v',
@@ -165,10 +154,6 @@ select is(
 select ok(
   pg_catalog.has_function_privilege(
     'vortex_request',
-    'vortex_access.prepare_organization_role_metadata_change_for_administration(uuid,bigint,uuid)',
-    'EXECUTE'
-  ) and pg_catalog.has_function_privilege(
-    'vortex_request',
     'vortex_access.retire_organization_group_for_administration(uuid,bigint,uuid)',
     'EXECUTE'
   ) and pg_catalog.has_function_privilege(
@@ -177,7 +162,7 @@ select ok(
     'EXECUTE'
   ) and pg_catalog.has_function_privilege(
     'vortex_request',
-    'vortex_access.revise_organization_role_metadata_for_administration(uuid,bigint,text,text,jsonb,uuid)',
+    'vortex_access.revise_organization_role_metadata_for_administration(uuid,bigint,text,text,uuid)',
     'EXECUTE'
   ) and pg_catalog.has_function_privilege(
     'vortex_request',
@@ -190,10 +175,6 @@ select ok(
 select ok(
   not pg_catalog.has_function_privilege(
     caller.role_name,
-    'vortex_access.prepare_organization_role_metadata_change_for_administration(uuid,bigint,uuid)',
-    'EXECUTE'
-  ) and not pg_catalog.has_function_privilege(
-    caller.role_name,
     'vortex_access.retire_organization_group_for_administration(uuid,bigint,uuid)',
     'EXECUTE'
   ) and not pg_catalog.has_function_privilege(
@@ -202,7 +183,7 @@ select ok(
     'EXECUTE'
   ) and not pg_catalog.has_function_privilege(
     caller.role_name,
-    'vortex_access.revise_organization_role_metadata_for_administration(uuid,bigint,text,text,jsonb,uuid)',
+    'vortex_access.revise_organization_role_metadata_for_administration(uuid,bigint,text,text,uuid)',
     'EXECUTE'
   ) and not pg_catalog.has_function_privilege(
     caller.role_name,
@@ -686,25 +667,6 @@ where version.organization_id = '24100000-0000-4000-8000-000000000001';
 select pg_temp.install_structural_reduction_context(
   '44100000-0000-4000-8000-000000000002',
   '54100000-0000-4000-8000-000000000002',
-  'a4100000-0000-4000-8000-000000000023'
-);
-set local role vortex_request;
-select results_eq(
-  $$select outcome, candidate_basis is null, organization_id, access_version
-    from vortex_access.prepare_organization_role_metadata_change_for_administration(
-      '64100000-0000-4000-8000-000000000011', 1,
-      'b4100000-0000-4000-8000-000000000023'
-    )$$,
-  $$select 'refused'::text, true,
-      '24100000-0000-4000-8000-000000000001'::uuid, checkpoint.access_version
-    from structural_reduction_versions as checkpoint
-    where checkpoint.step = 'metadata_revision'$$,
-  'metadata preparation records a clean refusal without disclosing private policy evidence'
-);
-reset role;
-select pg_temp.install_structural_reduction_context(
-  '44100000-0000-4000-8000-000000000002',
-  '54100000-0000-4000-8000-000000000002',
   'a4100000-0000-4000-8000-000000000033'
 );
 set local role vortex_request;
@@ -713,21 +675,7 @@ select results_eq(
     from vortex_access.revise_organization_role_metadata_for_administration(
     '64100000-0000-4000-8000-000000000011', 1,
     'Reviewed role renamed', 'Revised metadata with unchanged authority.',
-    jsonb_build_object(
-      'contractVersion', '1.0.0',
-      'candidate', jsonb_build_object(
-        'operation', 'revise_metadata_policy',
-        'organizationId', '24100000-0000-4000-8000-000000000001',
-        'roleId', '64100000-0000-4000-8000-000000000011',
-        'expectedRoleRevision', 1,
-        'key', 'reviewed_role', 'label', 'Reviewed role renamed',
-        'description', 'Revised metadata with unchanged authority.',
-        'privilegeClassification', 'privileged',
-        'assignmentPolicy', jsonb_build_object('kind', 'standing')
-      ),
-      'roleCandidateFingerprint',
-        'sha256:fed12065425113be3d4deb76876c7b71cdbc5150c7aa99c3bc5ecadc023ec0c8'
-    ), 'b4100000-0000-4000-8000-000000000033')$$,
+    'b4100000-0000-4000-8000-000000000033')$$,
   $$select 'refused'::text, true,
       '24100000-0000-4000-8000-000000000001'::uuid, checkpoint.access_version
     from structural_reduction_versions as checkpoint
@@ -743,27 +691,6 @@ select pg_temp.install_structural_reduction_context(
 );
 set local role vortex_request;
 select results_eq(
-  $$select candidate_basis ->> 'operation',
-      candidate_basis ->> 'organizationId', candidate_basis ->> 'roleId',
-      (candidate_basis ->> 'expectedRoleRevision')::bigint,
-      candidate_basis ->> 'key',
-      candidate_basis #>> '{assignmentPolicy,kind}',
-      organization_id, access_version
-    from vortex_access.prepare_organization_role_metadata_change_for_administration(
-      '64100000-0000-4000-8000-000000000011', 1,
-      'b4100000-0000-4000-8000-000000000024'
-    )$$,
-  $$select 'revise_metadata_policy'::text,
-      '24100000-0000-4000-8000-000000000001'::text,
-      '64100000-0000-4000-8000-000000000011'::text,
-      1::bigint, 'reviewed_role'::text, 'standing'::text,
-      '24100000-0000-4000-8000-000000000001'::uuid,
-      checkpoint.access_version
-    from structural_reduction_versions as checkpoint
-    where checkpoint.step = 'metadata_revision'$$,
-  'authorized preparation returns the exact locked role basis without changing Access'
-);
-select results_eq(
   $$select role_summary ->> 'label',
       (role_summary ->> 'liveRevision')::bigint,
       (role_summary ->> 'acceptedPermissionCount')::bigint,
@@ -771,23 +698,9 @@ select results_eq(
     from vortex_access.revise_organization_role_metadata_for_administration(
       '64100000-0000-4000-8000-000000000011', 1,
       'Reviewed role renamed', 'Revised metadata with unchanged authority.',
-      jsonb_build_object(
-        'contractVersion', '1.0.0',
-        'candidate', jsonb_build_object(
-          'operation', 'revise_metadata_policy',
-          'organizationId', '24100000-0000-4000-8000-000000000001',
-          'roleId', '64100000-0000-4000-8000-000000000011',
-          'expectedRoleRevision', 1,
-          'key', 'reviewed_role', 'label', 'Reviewed role renamed',
-          'description', 'Revised metadata with unchanged authority.',
-          'privilegeClassification', 'privileged',
-          'assignmentPolicy', jsonb_build_object('kind', 'standing')
-        ),
-        'roleCandidateFingerprint',
-          'sha256:fed12065425113be3d4deb76876c7b71cdbc5150c7aa99c3bc5ecadc023ec0c8'
-      ), 'b4100000-0000-4000-8000-000000000024')$$,
+      'b4100000-0000-4000-8000-000000000024')$$,
   $$select 'Reviewed role renamed'::text, 2::bigint, 2::bigint,
-      checkpoint.access_version + 1
+      checkpoint.access_version
     from structural_reduction_versions as checkpoint
     where checkpoint.step = 'metadata_revision'$$,
   'metadata revision returns the safe current role summary with unchanged accepted count'
@@ -852,23 +765,9 @@ select throws_ok(
   $$select * from vortex_access.revise_organization_role_metadata_for_administration(
     '64100000-0000-4000-8000-000000000011', 2,
     'Rolled back label', 'This metadata must roll back with Activity failure.',
-    jsonb_build_object(
-      'contractVersion', '1.0.0',
-      'candidate', jsonb_build_object(
-        'operation', 'revise_metadata_policy',
-        'organizationId', '24100000-0000-4000-8000-000000000001',
-        'roleId', '64100000-0000-4000-8000-000000000011',
-        'expectedRoleRevision', 2,
-        'key', 'reviewed_role', 'label', 'Rolled back label',
-        'description', 'This metadata must roll back with Activity failure.',
-        'privilegeClassification', 'privileged',
-        'assignmentPolicy', jsonb_build_object('kind', 'standing')
-      ),
-      'roleCandidateFingerprint',
-        'sha256:3dfdee3d8118f74645a2d1c10511ce0950b90941c618bad1b02c8e1121fa69af'
-    ), 'b4100000-0000-4000-8000-000000000025')$$,
+    'b4100000-0000-4000-8000-000000000025')$$,
   '22023'::char(5), 'Activity identity already records different evidence',
-  'Activity collision rolls back role metadata and its Access increment'
+  'Activity collision rolls back role metadata without changing Access'
 );
 reset role;
 

@@ -2827,7 +2827,6 @@ select ok(
 )
 from (values
   ('vortex_record.record_reference_counters', 'INSERT'),
-  ('vortex_record.record_data_versions', 'UPDATE'),
   ('vortex_record.relationship_edges', 'INSERT'),
   ('record_data.rt_b4750000000040008000000000000002', 'INSERT'),
   ('record_data.rt_b4750000000040008000000000000002', 'UPDATE')
@@ -3607,7 +3606,7 @@ select ok(
   ) and not pg_catalog.has_table_privilege(
     candidate.role_name, 'vortex_event.event_outbox', 'SELECT,INSERT,UPDATE,DELETE'
   ) and not pg_catalog.has_table_privilege(
-    candidate.role_name, 'vortex_record.save_command_receipts', 'SELECT,INSERT,UPDATE,DELETE'
+    candidate.role_name, 'vortex_record.command_receipts', 'SELECT,INSERT,UPDATE,DELETE'
   ),
   candidate.role_name || ' has no raw Activity, Event outbox or receipt access'
 )
@@ -3689,7 +3688,7 @@ select is((
     stored.state, stored.operation, stored.concurrency_number::text,
     activity.outcome, activity.action,
     event.envelope #>> '{descriptor,eventKind}')
-  from vortex_record.save_command_receipts as stored
+  from vortex_record.command_receipts as stored
   join vortex_activity.organization_activity_entries as activity
     on activity.organization_id = stored.organization_id
     and activity.activity_id = 'a4750000-0000-4000-8000-000000000102'
@@ -3861,7 +3860,7 @@ select is((
   select pg_catalog.concat_ws('|', stored.concurrency_number::text,
     pg_catalog.count(distinct activity.activity_id)::text,
     pg_catalog.count(distinct event.occurrence_id)::text)
-  from vortex_record.save_command_receipts as stored
+  from vortex_record.command_receipts as stored
   left join vortex_activity.organization_activity_entries as activity
     on activity.organization_id = stored.organization_id
     and activity.activity_id = 'a4750000-0000-4000-8000-000000000132'
@@ -3956,7 +3955,7 @@ select is((
 ), '2|Updated once|0|1', 'both refused updates leave scalar values and both edges unchanged');
 select is((
   select pg_catalog.concat_ws('|',
-    (select pg_catalog.count(*) from vortex_record.save_command_receipts
+    (select pg_catalog.count(*) from vortex_record.command_receipts
       where command_id in ('a4750000-0000-4000-8000-000000000141',
         'a4750000-0000-4000-8000-000000000151')),
     (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
@@ -4121,7 +4120,7 @@ select is((
   'forbidden final relationship facts leave the source Record and edge unchanged');
 select is((
   select pg_catalog.concat_ws('|',
-    (select pg_catalog.count(*) from vortex_record.save_command_receipts
+    (select pg_catalog.count(*) from vortex_record.command_receipts
       where command_id in ('a4750000-0000-4000-8000-000000000161',
         'a4750000-0000-4000-8000-000000000171')),
     (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
@@ -4185,7 +4184,7 @@ select is((
   select pg_catalog.concat_ws('|',
     (select pg_catalog.count(*) from record_data.rt_b4750000000040008000000000000002
       where f_f4750000000040008000000000000021 = 'Rolled back base record'),
-    (select pg_catalog.count(*) from vortex_record.save_command_receipts
+    (select pg_catalog.count(*) from vortex_record.command_receipts
       where command_id = 'a4750000-0000-4000-8000-000000000121'),
     (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
       where activity_id = 'a4750000-0000-4000-8000-000000000122'),
@@ -4222,7 +4221,7 @@ drop trigger force_base_queue_failure on pgmq.q_vortex_event_occurrences;
 select is((
   select pg_catalog.concat_ws('|', stored.concurrency_number::text,
     stored.f_f4750000000040008000000000000021,
-    (select pg_catalog.count(*) from vortex_record.save_command_receipts
+    (select pg_catalog.count(*) from vortex_record.command_receipts
       where command_id = 'a4750000-0000-4000-8000-000000000201'),
     (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
       where activity_id = 'a4750000-0000-4000-8000-000000000202'),
@@ -4249,7 +4248,7 @@ grant execute on function pg_temp.force_base_receipt_completion_failure()
   to vortex_record_adapter;
 set local role vortex_record_adapter;
 create trigger force_base_receipt_completion_failure
-before update on vortex_record.save_command_receipts
+before update on vortex_record.command_receipts
 for each row execute function pg_temp.force_base_receipt_completion_failure();
 reset role;
 select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
@@ -4269,12 +4268,12 @@ select throws_ok(
 reset role;
 set local role vortex_record_adapter;
 drop trigger force_base_receipt_completion_failure
-  on vortex_record.save_command_receipts;
+  on vortex_record.command_receipts;
 reset role;
 select is((
   select pg_catalog.concat_ws('|', stored.concurrency_number::text,
     stored.f_f4750000000040008000000000000021,
-    (select pg_catalog.count(*) from vortex_record.save_command_receipts
+    (select pg_catalog.count(*) from vortex_record.command_receipts
       where command_id = 'a4750000-0000-4000-8000-000000000211'),
     (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
       where activity_id = 'a4750000-0000-4000-8000-000000000212'),
@@ -4595,7 +4594,7 @@ select is(
 );
 select is((
   select pg_catalog.concat_ws('|',
-    (select pg_catalog.count(*)::text from vortex_record.save_command_receipts
+    (select pg_catalog.count(*)::text from vortex_record.command_receipts
       where command_id = 'a4750000-0000-4000-8000-000000000307'::uuid),
     (select pg_catalog.count(*)::text from vortex_activity.organization_activity_entries
       where activity_id = 'a4750000-0000-4000-8000-000000000308'::uuid),
@@ -4650,7 +4649,7 @@ select is(
 );
 select is((
   select pg_catalog.concat_ws('|',
-    (select pg_catalog.count(*)::text from vortex_record.save_command_receipts
+    (select pg_catalog.count(*)::text from vortex_record.command_receipts
       where command_id = 'a4750000-0000-4000-8000-000000000310'::uuid),
     (select pg_catalog.count(*)::text from vortex_activity.organization_activity_entries
       where activity_id = 'a4750000-0000-4000-8000-000000000311'::uuid),
@@ -4711,7 +4710,7 @@ select is((
       where edge.relationship_id = :'relationship_cross_two'::uuid
         and edge.from_record_id = stored.record_id
         and edge.to_record_id = 'd5750000-0000-4000-8000-000000000021'::uuid),
-    (select pg_catalog.count(*)::text from vortex_record.save_command_receipts
+    (select pg_catalog.count(*)::text from vortex_record.command_receipts
       where command_id = 'a4750000-0000-4000-8000-000000000358'::uuid),
     (select pg_catalog.count(*)::text from vortex_activity.organization_activity_entries
       where activity_id = 'a4750000-0000-4000-8000-000000000359'::uuid),
@@ -4758,7 +4757,7 @@ select is((
       where edge.relationship_id = :'relationship_cross'::uuid
         and edge.from_record_id = stored.record_id
         and edge.to_record_id = :'relationship_cross_target_id'::uuid),
-    (select pg_catalog.count(*)::text from vortex_record.save_command_receipts
+    (select pg_catalog.count(*)::text from vortex_record.command_receipts
       where command_id in ('a4750000-0000-4000-8000-000000000346'::uuid,
         'a4750000-0000-4000-8000-000000000349'::uuid)),
     (select pg_catalog.count(*)::text from vortex_activity.organization_activity_entries
@@ -5196,7 +5195,7 @@ select is((
       where edge.relationship_id = :'relationship_inherited_account'::uuid
         and edge.from_record_id = stored.record_id
         and edge.to_record_id = 'd5750000-0000-4000-8000-000000000013'::uuid),
-    (select pg_catalog.count(*)::text from vortex_record.save_command_receipts
+    (select pg_catalog.count(*)::text from vortex_record.command_receipts
       where command_id = 'a4750000-0000-4000-8000-000000000352'::uuid),
     (select pg_catalog.count(*)::text from vortex_activity.organization_activity_entries
       where activity_id = 'a4750000-0000-4000-8000-000000000353'::uuid),
@@ -5328,7 +5327,7 @@ select is((
   select pg_catalog.concat_ws('|',
     (select pg_catalog.count(*) from record_data.rt_b4750000000040008000000000000001
       where f_f4750000000040008000000000000001 = 'Revoked Group must refuse'),
-    (select pg_catalog.count(*) from vortex_record.save_command_receipts
+    (select pg_catalog.count(*) from vortex_record.command_receipts
       where command_id = 'a4750000-0000-4000-8000-000000000222'),
     (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
       where activity_id = 'a4750000-0000-4000-8000-000000000223'
@@ -5338,24 +5337,7 @@ select is((
 ), '0|0|0|0',
   'the unavailable Group selection writes no Record, receipt, Activity or Event');
 
--- ============================================================================
--- #475: one fixed ownership transfer.  The permission is separate from update;
--- the terminal writer alone can touch owner columns and it commits its own
--- Activity, reassigned Event/queue and receipt.
--- ============================================================================
-
-select ok(
-  pg_catalog.has_function_privilege(
-    'vortex_runtime',
-    'vortex_record.transfer_record_ownership(uuid,uuid,uuid,bigint,text,uuid,uuid,uuid)',
-    'EXECUTE'
-  ) and not pg_catalog.has_function_privilege(
-    'vortex_request',
-    'vortex_record.transfer_record_ownership(uuid,uuid,uuid,bigint,text,uuid,uuid,uuid)',
-    'EXECUTE'
-  ),
-  'only the trusted server role can invoke the fixed ownership transfer writer'
-);
+-- The private offboarding entry remains unavailable to runtime and request roles.
 select ok(
   not pg_catalog.has_function_privilege(
     'vortex_runtime',
@@ -5367,96 +5349,6 @@ select ok(
   'runtime and request roles cannot forge the transfer Activity or owner-target facts'
 );
 
-select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
-select concurrency_number as ownership_transfer_concurrency_number
-from record_data.rt_b4750000000040008000000000000001
-where record_id = 'd5750000-0000-4000-8000-000000000007' \gset
-create temporary table ownership_transfer_before on commit drop as
-select concurrency_number, created_by, updated_by
-from record_data.rt_b4750000000040008000000000000001
-where record_id = 'd5750000-0000-4000-8000-000000000007';
-set local role vortex_runtime;
-create temporary table ownership_transfer_result on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000471'::uuid,
-  :'type_s'::uuid, 'd5750000-0000-4000-8000-000000000007'::uuid,
-  :'ownership_transfer_concurrency_number'::bigint,
-  'group', '84750000-0000-4000-8000-000000000003'::uuid,
-  'a4750000-0000-4000-8000-000000000472'::uuid,
-  'a4750000-0000-4000-8000-000000000473'::uuid
-) as result;
-reset role;
-select is((select result ->> 'outcome' from ownership_transfer_result), 'transferred',
-  'the dedicated current transfer permission can transfer one compatible Group-owned record');
-select is((
-  select pg_catalog.concat_ws('|', owner_organisation_account_id, owner_group_id,
-    concurrency_number::text, created_by::text, updated_by::text)
-  from record_data.rt_b4750000000040008000000000000001
-  where record_id = 'd5750000-0000-4000-8000-000000000007'
-), (
-  select pg_catalog.concat_ws('|', null::uuid, '84750000-0000-4000-8000-000000000003'::uuid,
-    (concurrency_number + 1)::text, created_by::text, :'all_account')
-  from ownership_transfer_before
-), 'transfer changes only owner, revision and current changer; creator remains historical');
-select is((
-  select pg_catalog.concat_ws('|', receipt.state, activity.outcome, activity.action,
-    event.envelope #>> '{descriptor,eventKind}',
-    (select pg_catalog.count(*) from pgmq.q_vortex_event_occurrences as queued
-      where queued.message ->> 'occurrenceId' = event.occurrence_id::text)::text)
-  from vortex_record.save_command_receipts as receipt
-  join vortex_activity.organization_activity_entries as activity
-    on activity.organization_id = receipt.organization_id
-    and activity.activity_id = 'a4750000-0000-4000-8000-000000000472'::uuid
-  join vortex_event.event_outbox as event
-    on event.organization_id = receipt.organization_id
-    and event.occurrence_id = 'a4750000-0000-4000-8000-000000000473'::uuid
-  where receipt.command_id = 'a4750000-0000-4000-8000-000000000471'::uuid
-), 'completed|completed|transfer_record_ownership|reassigned|1',
-  'owner change, content-free Activity, reassigned Event, queue and receipt commit together');
-
-set local role vortex_runtime;
-create temporary table ownership_transfer_replay on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000471'::uuid,
-  :'type_s'::uuid, 'd5750000-0000-4000-8000-000000000007'::uuid,
-  :'ownership_transfer_concurrency_number'::bigint,
-  'group', '84750000-0000-4000-8000-000000000003'::uuid,
-  'a4750000-0000-4000-8000-000000000474'::uuid,
-  'a4750000-0000-4000-8000-000000000475'::uuid
-) as result;
-reset role;
-select is((select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'replayed')
-  from ownership_transfer_replay), 'transferred|true',
-  'an exact response-lost retry is replayed without exposing ownership metadata');
-select is((
-  select pg_catalog.concat_ws('|',
-    (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
-      where activity_id in ('a4750000-0000-4000-8000-000000000472'::uuid,
-        'a4750000-0000-4000-8000-000000000474'::uuid)),
-    (select pg_catalog.count(*) from vortex_event.event_outbox
-      where occurrence_id in ('a4750000-0000-4000-8000-000000000473'::uuid,
-        'a4750000-0000-4000-8000-000000000475'::uuid))
-  )
-), '1|1', 'an exact transfer retry adds no Activity or Event effect');
-
-set local role vortex_runtime;
-create temporary table ownership_transfer_conflicting_retry on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000471'::uuid,
-  :'type_s'::uuid, 'd5750000-0000-4000-8000-000000000007'::uuid,
-  :'ownership_transfer_concurrency_number'::bigint,
-  'group', '84750000-0000-4000-8000-000000000002'::uuid,
-  'a4750000-0000-4000-8000-000000000476'::uuid,
-  'a4750000-0000-4000-8000-000000000477'::uuid
-) as result;
-reset role;
-select is((select result ->> 'reasonCode' from ownership_transfer_conflicting_retry),
-  'command_identity_conflict', 'conflicting command-id reuse safely refuses');
-
--- The offboarding entry is deliberately not a runtime capability.  These
--- controlled prerequisite rows let real protected transfer operations prove
--- its no-read result, retained-row source proof and detached-installation
--- stored-definition branch without introducing #407 inventory or batching.
 select ok(
   not pg_catalog.has_function_privilege(
     'vortex_runtime',
@@ -5488,14 +5380,6 @@ insert into record_data.rt_b4750000000040008000000000000002 (
   f_f4750000000040008000000000000026
 ) values
   (:'org_one', :'module_one', :'type_c', :'storage_c',
-    'd5750000-0000-4000-8000-000000000081', :'app_one', 1, :'related_account',
-    'active', 1, pg_catalog.statement_timestamp(), :'all_account',
-    pg_catalog.statement_timestamp(), :'all_account', null, null, 'Transfer-only result',
-    pg_catalog.jsonb_build_object('recordTypeId', :'type_s',
-      'recordId', 'd5750000-0000-4000-8000-000000000004'),
-    'no read is required', pg_catalog.jsonb_build_object('recordTypeId', :'type_s',
-      'recordId', 'd5750000-0000-4000-8000-000000000005')),
-  (:'org_one', :'module_one', :'type_c', :'storage_c',
     'd5750000-0000-4000-8000-000000000082', :'app_one', 1, :'owner_account',
     'soft_deleted', 1, pg_catalog.statement_timestamp(), :'all_account',
     pg_catalog.statement_timestamp(), :'all_account', pg_catalog.statement_timestamp(), :'all_account', 'Retained transfer',
@@ -5512,76 +5396,6 @@ insert into record_data.rt_b4750000000040008000000000000002 (
     'disabled installation', pg_catalog.jsonb_build_object('recordTypeId', :'type_s',
       'recordId', 'd5750000-0000-4000-8000-000000000005'));
 reset role;
-
--- A transfer-only actor has no read permission for this row.  The operation
--- must still commit and return its fixed undisclosed confirmation.
-select pg_temp.adapter_role(:'org_one', :'app_one', '74750000-0000-4000-8000-0000000000f0',
-  'adapter_transfer_only', array['e4750000-0000-4000-8000-00000000001d']::uuid[]);
-select pg_temp.adapter_assign(:'org_one', '74750000-0000-4000-8000-0000000000f1',
-  '74750000-0000-4000-8000-0000000000f0', :'outsider_account');
-select pg_temp.adapter_context(:'org_one', :'app_one', :'outsider_account');
-set local role vortex_request;
-select is(vortex_record.read_record(:'type_c'::uuid,
-  'd5750000-0000-4000-8000-000000000081'::uuid) ->> 'outcome', 'refused',
-  'the transfer-only actor cannot read the record before transfer');
-reset role;
-set local role vortex_runtime;
-create temporary table ownership_transfer_no_read_result on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000481'::uuid,
-  :'type_c'::uuid, 'd5750000-0000-4000-8000-000000000081'::uuid, 1,
-  'organization_account', :'reparent_account'::uuid,
-  'a4750000-0000-4000-8000-000000000482'::uuid,
-  'a4750000-0000-4000-8000-000000000483'::uuid
-) as result;
-reset role;
-select is((select pg_catalog.concat_ws('|', result ->> 'outcome',
-  result ->> 'recordId', result ->> 'concurrencyNumber')
-  from ownership_transfer_no_read_result),
-  'transferred|d5750000-0000-4000-8000-000000000081|2',
-  'a transfer-only actor receives the safe committed result without a post-write read');
-
--- A queue failure occurs after the owner update, Activity and Event insert are
--- attempted.  The one protected transaction must roll every one of those
--- effects back, including the completed-receipt transition.
-create function pg_temp.force_ownership_transfer_queue_failure()
-returns trigger language plpgsql set search_path = '' as $function$
-begin
-  raise exception using errcode = 'P4753', message = 'forced ownership transfer queue failure';
-end
-$function$;
-create trigger force_ownership_transfer_queue_failure
-before insert on pgmq.q_vortex_event_occurrences
-for each row execute function pg_temp.force_ownership_transfer_queue_failure();
-select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
-set local role vortex_runtime;
-select throws_ok(
-  pg_catalog.format(
-    'select vortex_record.transfer_record_ownership(%L::uuid,%L::uuid,%L::uuid,2,''organization_account'',%L::uuid,%L::uuid,%L::uuid)',
-    'a4750000-0000-4000-8000-000000000493', :'type_c',
-    'd5750000-0000-4000-8000-000000000081', :'related_account',
-    'a4750000-0000-4000-8000-000000000494', 'a4750000-0000-4000-8000-000000000495'
-  ),
-  'P4753'::text, 'forced ownership transfer queue failure'::text,
-  'a queue failure escapes the fixed ownership writer'
-);
-reset role;
-drop trigger force_ownership_transfer_queue_failure on pgmq.q_vortex_event_occurrences;
-select is((
-  select pg_catalog.concat_ws('|', stored.concurrency_number::text,
-    stored.owner_organisation_account_id::text,
-    (select pg_catalog.count(*) from vortex_record.save_command_receipts
-      where command_id = 'a4750000-0000-4000-8000-000000000493'::uuid),
-    (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
-      where activity_id = 'a4750000-0000-4000-8000-000000000494'::uuid),
-    (select pg_catalog.count(*) from vortex_event.event_outbox
-      where occurrence_id = 'a4750000-0000-4000-8000-000000000495'::uuid),
-    (select pg_catalog.count(*) from pgmq.q_vortex_event_occurrences
-      where message ->> 'occurrenceId' = 'a4750000-0000-4000-8000-000000000495'))
-  from record_data.rt_b4750000000040008000000000000002 as stored
-  where stored.record_id = 'd5750000-0000-4000-8000-000000000081'
-), pg_catalog.concat_ws('|', '2', :'reparent_account', '0', '0', '0', '0'),
-  'transfer queue failure rolls back owner, revision, receipt, Activity, Event and queue');
 
 -- The private entry accepts a retained row only while the locked row proves
 -- its exact source account.  It neither restores the lifecycle nor grants a
@@ -5613,7 +5427,7 @@ select is((
     event.envelope #>> '{descriptor,eventKind}',
     (select pg_catalog.count(*) from pgmq.q_vortex_event_occurrences as queued
       where queued.message ->> 'occurrenceId' = event.occurrence_id::text)::text)
-  from vortex_record.save_command_receipts as receipt
+  from vortex_record.command_receipts as receipt
   join vortex_activity.organization_activity_entries as activity
     on activity.organization_id = receipt.organization_id
     and activity.activity_id = 'a4750000-0000-4000-8000-000000000485'::uuid
@@ -5641,656 +5455,6 @@ select is((select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 're
   from ownership_transfer_wrong_source), 'refused|owner_unavailable',
   'the offboarding entry requires the exact stored source account');
 
--- ============================================================================
--- #475: the refusals the fixed ownership transfer promises. Every refused
--- shape is built through its owning writer, the exact refusal code is
--- asserted, and the stored owner, revision, lifecycle and current changer are
--- asserted unchanged together with the absence of a receipt, Activity,
--- reassigned Event and queue entry. The withdrawn-authority case is the one
--- deliberate exception: #41 requires exactly one refusal Activity entry about
--- the context organisation, and nothing else.
--- ============================================================================
-
-create function pg_temp.transfer_refusal_effects(
-  p_command_id uuid,
-  p_activity_id uuid,
-  p_occurrence_id uuid
-)
-returns text
-language sql
-stable
-set search_path = ''
-as $function$
-  select pg_catalog.concat_ws('|',
-    (select pg_catalog.count(*) from vortex_record.save_command_receipts as receipt
-      where receipt.command_id = p_command_id)::text,
-    (select pg_catalog.count(*) from vortex_activity.organization_activity_entries as activity
-      where activity.activity_id = p_activity_id)::text,
-    (select pg_catalog.count(*) from vortex_event.event_outbox as event
-      where event.occurrence_id = p_occurrence_id)::text,
-    (select pg_catalog.count(*) from pgmq.q_vortex_event_occurrences as queued
-      where queued.message ->> 'occurrenceId' = p_occurrence_id::text)::text)
-$function$;
-
-create function pg_temp.transfer_refusal_state(p_table text, p_record_id uuid)
-returns text
-language plpgsql
-stable
-set search_path = ''
-as $function$
-declare
-  state_value text;
-begin
-  execute pg_catalog.format(
-    'select pg_catalog.concat_ws(''|'',
-       coalesce(stored.owner_organisation_account_id::text, ''none''),
-       coalesce(stored.owner_group_id::text, ''none''),
-       stored.concurrency_number::text, stored.lifecycle_state,
-       stored.created_by::text, stored.updated_by::text)
-     from record_data.%I as stored where stored.record_id = $1', p_table)
-  into state_value using p_record_id;
-  return state_value;
-end
-$function$;
-
--- Everything a transfer must not grant: the target account's Group
--- memberships, role assignments, current permission catalogue reach and the
--- organisations it holds an account in.
-create function pg_temp.transfer_refusal_grants(p_account_id uuid)
-returns text
-language sql
-stable
-set search_path = ''
-as $function$
-  select pg_catalog.concat_ws('|',
-    coalesce((select pg_catalog.string_agg(
-        pg_catalog.concat_ws(':', membership.membership_id::text,
-          membership.group_id::text, membership.state, membership.revision::text),
-        ',' order by membership.membership_id)
-      from vortex_access.organization_group_memberships as membership
-      where membership.organization_account_id = p_account_id), 'none'),
-    coalesce((select pg_catalog.string_agg(
-        pg_catalog.concat_ws(':', assignment.role_assignment_id::text,
-          assignment.role_id::text, assignment.state, assignment.revision::text),
-        ',' order by assignment.role_assignment_id)
-      from vortex_access.organization_role_assignments as assignment
-      where assignment.organization_account_id = p_account_id), 'none'),
-    coalesce((select pg_catalog.string_agg(
-        pg_catalog.concat_ws(':', account.organization_id::text, account.state,
-          account.revision::text),
-        ',' order by account.organization_id)
-      from vortex_identity.organization_accounts as account
-      where account.organization_account_id = p_account_id), 'none'),
-    (select pg_catalog.count(*) from vortex_access.organization_role_permission_entries
-      as entry where entry.role_id in (
-        select assignment.role_id from vortex_access.organization_role_assignments as assignment
-        where assignment.organization_account_id = p_account_id
-          and assignment.state = 'live'))::text,
-    (select pg_catalog.count(*) from vortex_access.organization_direct_record_shares as share
-      where share.organization_account_id = p_account_id)::text)
-$function$;
-
--- The records under test are created through the protected save boundary, so
--- every refusal below refuses a shape the real writer produced. The Group
--- selection is the reparent target Group, because the earlier terminal-
--- eligibility proof has already removed this fixture's other Group membership.
-select pg_temp.adapter_context(:'org_one', :'app_one', :'reparent_account');
-set local role vortex_runtime;
-create temporary table transfer_refusal_shared_create on commit drop as
-select vortex_record.save_base_record(
-  'a4750000-0000-4000-8000-000000000501'::uuid,
-  'create', :'type_s'::uuid, null, null,
-  pg_catalog.jsonb_build_object(:'f_text', 'Transfer refusal shared record'),
-  pg_catalog.jsonb_build_object(:'f_text', 'Transfer refusal shared record'),
-  '84750000-0000-4000-8000-000000000004'::uuid,
-  'a4750000-0000-4000-8000-000000000502'::uuid,
-  'a4750000-0000-4000-8000-000000000503'::uuid
-) as result;
-reset role;
-select is((select result ->> 'outcome' from transfer_refusal_shared_create), 'saved',
-  'the refusal fixture creates its Group-owned record through the protected save');
-select result ->> 'recordId' as transfer_refusal_shared_id,
-  result ->> 'concurrencyNumber' as transfer_refusal_shared_revision
-from transfer_refusal_shared_create \gset
-
-select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
-set local role vortex_runtime;
-create temporary table transfer_refusal_contained_create on commit drop as
-select vortex_record.save_base_record(
-  'a4750000-0000-4000-8000-000000000504'::uuid,
-  'create', :'type_c'::uuid, null, null,
-  pg_catalog.jsonb_build_object(
-    :'f_title', 'Transfer refusal contained record',
-    :'f_link_required', pg_catalog.jsonb_build_object(
-      'recordTypeId', :'type_s', 'recordId', :'transfer_refusal_shared_id')),
-  pg_catalog.jsonb_build_object(
-    :'f_title', 'Transfer refusal contained record',
-    :'f_link_required', pg_catalog.jsonb_build_object(
-      'recordTypeId', :'type_s', 'recordId', :'transfer_refusal_shared_id')),
-  null,
-  'a4750000-0000-4000-8000-000000000505'::uuid,
-  'a4750000-0000-4000-8000-000000000506'::uuid
-) as result;
-create temporary table transfer_refusal_inherited_create on commit drop as
-select vortex_record.save_base_record_with_relationship_totals(
-  'a4750000-0000-4000-8000-000000000507'::uuid,
-  'create', :'type_i'::uuid, null, null,
-  pg_catalog.jsonb_build_object(
-    :'f_inherited_title', 'Transfer refusal inherited child',
-    :'f_inherited_owner', pg_catalog.jsonb_build_object(
-      'recordTypeId', :'type_s', 'recordId', :'transfer_refusal_shared_id')),
-  pg_catalog.jsonb_build_object(
-    :'f_inherited_title', 'Transfer refusal inherited child',
-    :'f_inherited_owner', pg_catalog.jsonb_build_object(
-      'recordTypeId', :'type_s', 'recordId', :'transfer_refusal_shared_id')),
-  null,
-  'a4750000-0000-4000-8000-000000000508'::uuid,
-  'a4750000-0000-4000-8000-000000000509'::uuid,
-  '[]'::jsonb
-) as result;
-create temporary table transfer_refusal_unowned_create on commit drop as
-select vortex_record.save_base_record(
-  'a4750000-0000-4000-8000-00000000050a'::uuid,
-  'create', :'type_unowned'::uuid, null, null,
-  pg_catalog.jsonb_build_object(:'f_unowned_title', 'Transfer refusal unowned record'),
-  pg_catalog.jsonb_build_object(:'f_unowned_title', 'Transfer refusal unowned record'),
-  null,
-  'a4750000-0000-4000-8000-00000000050b'::uuid,
-  'a4750000-0000-4000-8000-00000000050c'::uuid
-) as result;
-create temporary table transfer_refusal_grant_create on commit drop as
-select vortex_record.save_base_record(
-  'a4750000-0000-4000-8000-00000000050d'::uuid,
-  'create', :'type_c'::uuid, null, null,
-  pg_catalog.jsonb_build_object(
-    :'f_title', 'Transfer grants nothing record',
-    :'f_link_required', pg_catalog.jsonb_build_object(
-      'recordTypeId', :'type_s', 'recordId', :'transfer_refusal_shared_id')),
-  pg_catalog.jsonb_build_object(
-    :'f_title', 'Transfer grants nothing record',
-    :'f_link_required', pg_catalog.jsonb_build_object(
-      'recordTypeId', :'type_s', 'recordId', :'transfer_refusal_shared_id')),
-  null,
-  'a4750000-0000-4000-8000-00000000050e'::uuid,
-  'a4750000-0000-4000-8000-00000000050f'::uuid
-) as result;
-reset role;
-select is((
-  select pg_catalog.concat_ws('|',
-    (select result ->> 'outcome' from transfer_refusal_contained_create),
-    (select result ->> 'outcome' from transfer_refusal_inherited_create),
-    (select result ->> 'outcome' from transfer_refusal_unowned_create),
-    (select result ->> 'outcome' from transfer_refusal_grant_create))
-), 'saved|saved|saved|saved',
-  'the refusal fixture creates its account-owned, inherited and ownership-disabled records');
-select result ->> 'recordId' as transfer_refusal_contained_id,
-  result ->> 'concurrencyNumber' as transfer_refusal_contained_revision
-from transfer_refusal_contained_create \gset
-select result ->> 'recordId' as transfer_refusal_inherited_id,
-  result ->> 'concurrencyNumber' as transfer_refusal_inherited_revision
-from transfer_refusal_inherited_create \gset
-select result ->> 'recordId' as transfer_refusal_unowned_id,
-  result ->> 'concurrencyNumber' as transfer_refusal_unowned_revision
-from transfer_refusal_unowned_create \gset
-select result ->> 'recordId' as transfer_refusal_grant_id,
-  result ->> 'concurrencyNumber' as transfer_refusal_grant_revision
-from transfer_refusal_grant_create \gset
-
-create temporary table transfer_refusal_before on commit drop as
-select pg_temp.transfer_refusal_state(
-    'rt_b4750000000040008000000000000001', :'transfer_refusal_shared_id'::uuid) as shared_state,
-  pg_temp.transfer_refusal_state(
-    'rt_b4750000000040008000000000000002', :'transfer_refusal_contained_id'::uuid) as contained_state,
-  pg_temp.transfer_refusal_state(
-    'rt_b4750000000040008000000000000003', :'transfer_refusal_inherited_id'::uuid) as inherited_state,
-  pg_temp.transfer_refusal_state(
-    'rt_b475000000004000800000000000000d', :'transfer_refusal_unowned_id'::uuid) as unowned_state,
-  pg_temp.transfer_refusal_state(
-    'rt_b4750000000040008000000000000011',
-    'd5750000-0000-4000-8000-000000000022'::uuid) as foreign_state;
-select is((select pg_catalog.concat_ws('|', inherited_state, unowned_state)
-  from transfer_refusal_before),
-  pg_catalog.concat_ws('|',
-    pg_catalog.concat_ws('|', 'none', 'none', :'transfer_refusal_inherited_revision',
-      'active', :'all_account', :'all_account'),
-    pg_catalog.concat_ws('|', 'none', 'none', :'transfer_refusal_unowned_revision',
-      'active', :'all_account', :'all_account')),
-  'the inherited child and the ownership-disabled record store no owner at all');
-
--- Case 1, target direction: an account or Group of another organisation is
--- never an acceptable owner, whichever organisation the caller is acting in.
-select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
-set local role vortex_runtime;
-create temporary table transfer_refusal_foreign_group on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000511'::uuid,
-  :'type_s'::uuid, :'transfer_refusal_shared_id'::uuid,
-  :'transfer_refusal_shared_revision'::bigint,
-  'group', '84750000-0000-4000-8000-000000000002'::uuid,
-  'a4750000-0000-4000-8000-000000000512'::uuid,
-  'a4750000-0000-4000-8000-000000000513'::uuid
-) as result;
-create temporary table transfer_refusal_foreign_account on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000514'::uuid,
-  :'type_c'::uuid, :'transfer_refusal_contained_id'::uuid,
-  :'transfer_refusal_contained_revision'::bigint,
-  'organization_account', :'other_account'::uuid,
-  'a4750000-0000-4000-8000-000000000515'::uuid,
-  'a4750000-0000-4000-8000-000000000516'::uuid
-) as result;
-reset role;
-select is((
-  select pg_catalog.concat_ws('|',
-    (select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
-      from transfer_refusal_foreign_group),
-    (select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
-      from transfer_refusal_foreign_account))
-), 'refused|owner_unavailable|refused|owner_unavailable',
-  'a Group or account of another organisation cannot acquire ownership');
-select is((
-  select pg_catalog.concat_ws('|',
-    pg_temp.transfer_refusal_state('rt_b4750000000040008000000000000001',
-      :'transfer_refusal_shared_id'::uuid),
-    pg_temp.transfer_refusal_state('rt_b4750000000040008000000000000002',
-      :'transfer_refusal_contained_id'::uuid),
-    pg_temp.transfer_refusal_effects('a4750000-0000-4000-8000-000000000511'::uuid,
-      'a4750000-0000-4000-8000-000000000512'::uuid,
-      'a4750000-0000-4000-8000-000000000513'::uuid),
-    pg_temp.transfer_refusal_effects('a4750000-0000-4000-8000-000000000514'::uuid,
-      'a4750000-0000-4000-8000-000000000515'::uuid,
-      'a4750000-0000-4000-8000-000000000516'::uuid))
-), (
-  select pg_catalog.concat_ws('|', shared_state, contained_state, '0|0|0|0', '0|0|0|0')
-  from transfer_refusal_before
-), 'a foreign owner target leaves owner, revision and attribution unchanged and writes nothing');
-
--- Case 1, actor direction: organisation two holds real transfer authority over
--- its own record type. It still cannot reach organisation one's row of that
--- exact type, and organisation one's own row is untouched.
-select pg_temp.adapter_context(:'org_two', :'app_three', :'other_account');
-set local role vortex_runtime;
-create temporary table transfer_refusal_foreign_actor on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000517'::uuid,
-  :'type_s_two'::uuid, 'd5750000-0000-4000-8000-000000000022'::uuid, 1,
-  'group', '84750000-0000-4000-8000-000000000002'::uuid,
-  'a4750000-0000-4000-8000-000000000518'::uuid,
-  'a4750000-0000-4000-8000-000000000519'::uuid
-) as result;
-create temporary table transfer_refusal_foreign_target on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-00000000051a'::uuid,
-  :'type_s_two'::uuid, 'd5750000-0000-4000-8000-000000000021'::uuid, 1,
-  'group', '84750000-0000-4000-8000-000000000001'::uuid,
-  'a4750000-0000-4000-8000-00000000051b'::uuid,
-  'a4750000-0000-4000-8000-00000000051c'::uuid
-) as result;
-reset role;
-select is((select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
-  from transfer_refusal_foreign_actor), 'refused|record_unavailable',
-  'transfer authority held in another organisation cannot reach this organisation''s row');
-select is((select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
-  from transfer_refusal_foreign_target), 'refused|owner_unavailable',
-  'the reverse direction refuses organisation one''s Group as an owner target');
-select is((
-  select pg_catalog.concat_ws('|',
-    pg_temp.transfer_refusal_state('rt_b4750000000040008000000000000011',
-      'd5750000-0000-4000-8000-000000000022'::uuid),
-    pg_temp.transfer_refusal_state('rt_b4750000000040008000000000000011',
-      'd5750000-0000-4000-8000-000000000021'::uuid),
-    pg_temp.transfer_refusal_effects('a4750000-0000-4000-8000-000000000517'::uuid,
-      'a4750000-0000-4000-8000-000000000518'::uuid,
-      'a4750000-0000-4000-8000-000000000519'::uuid),
-    pg_temp.transfer_refusal_effects('a4750000-0000-4000-8000-00000000051a'::uuid,
-      'a4750000-0000-4000-8000-00000000051b'::uuid,
-      'a4750000-0000-4000-8000-00000000051c'::uuid))
-), (
-  select pg_catalog.concat_ws('|', foreign_state,
-    pg_catalog.concat_ws('|', 'none', '84750000-0000-4000-8000-000000000002', '1',
-      'active', '64750000-0000-4000-8000-0000000000a2', '64750000-0000-4000-8000-0000000000a2'),
-    '0|0|0|0', '0|0|0|0')
-  from transfer_refusal_before
-), 'neither cross-organisation direction changes a row or writes any effect');
-
--- A record type outside the caller's own active installation is not reachable
--- at all: the operation raises rather than acting, and rolls its receipt back.
-select pg_temp.adapter_context(:'org_two', :'app_three', :'other_account');
-set local role vortex_runtime;
-select throws_ok(
-  pg_catalog.format(
-    'select vortex_record.transfer_record_ownership(%L::uuid,%L::uuid,%L::uuid,%s,''group'',%L::uuid,%L::uuid,%L::uuid)',
-    'a4750000-0000-4000-8000-00000000051d', :'type_s',
-    :'transfer_refusal_shared_id', :'transfer_refusal_shared_revision',
-    '84750000-0000-4000-8000-000000000002',
-    'a4750000-0000-4000-8000-00000000051e', 'a4750000-0000-4000-8000-00000000051f'
-  ),
-  '55000'::text, 'Record type is not part of the active installation'::text,
-  'another organisation''s record type is not part of this caller''s installation'
-);
-reset role;
-select is(pg_temp.transfer_refusal_effects('a4750000-0000-4000-8000-00000000051d'::uuid,
-  'a4750000-0000-4000-8000-00000000051e'::uuid,
-  'a4750000-0000-4000-8000-00000000051f'::uuid), '0|0|0|0',
-  'the unreachable record type leaves no receipt, Activity, Event or queue entry');
-
--- Case 2: the record type's own ownership mode fixes the acceptable target
--- kind. An account-only type refuses a Group, a Group-only type refuses an
--- account, and both refusals name no target detail.
-select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
-set local role vortex_runtime;
-create temporary table transfer_refusal_group_into_account_type on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000521'::uuid,
-  :'type_c'::uuid, :'transfer_refusal_contained_id'::uuid,
-  :'transfer_refusal_contained_revision'::bigint,
-  'group', '84750000-0000-4000-8000-000000000001'::uuid,
-  'a4750000-0000-4000-8000-000000000522'::uuid,
-  'a4750000-0000-4000-8000-000000000523'::uuid
-) as result;
-create temporary table transfer_refusal_account_into_group_type on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000524'::uuid,
-  :'type_s'::uuid, :'transfer_refusal_shared_id'::uuid,
-  :'transfer_refusal_shared_revision'::bigint,
-  'organization_account', :'share_account'::uuid,
-  'a4750000-0000-4000-8000-000000000525'::uuid,
-  'a4750000-0000-4000-8000-000000000526'::uuid
-) as result;
-reset role;
-select is((
-  select pg_catalog.concat_ws('|',
-    (select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
-      from transfer_refusal_group_into_account_type),
-    (select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
-      from transfer_refusal_account_into_group_type))
-), 'refused|owner_unavailable|refused|owner_unavailable',
-  'an account-only type refuses a Group target and a Group-only type refuses an account');
-select is((
-  select pg_catalog.concat_ws('|',
-    pg_temp.transfer_refusal_state('rt_b4750000000040008000000000000002',
-      :'transfer_refusal_contained_id'::uuid),
-    pg_temp.transfer_refusal_state('rt_b4750000000040008000000000000001',
-      :'transfer_refusal_shared_id'::uuid),
-    pg_temp.transfer_refusal_effects('a4750000-0000-4000-8000-000000000521'::uuid,
-      'a4750000-0000-4000-8000-000000000522'::uuid,
-      'a4750000-0000-4000-8000-000000000523'::uuid),
-    pg_temp.transfer_refusal_effects('a4750000-0000-4000-8000-000000000524'::uuid,
-      'a4750000-0000-4000-8000-000000000525'::uuid,
-      'a4750000-0000-4000-8000-000000000526'::uuid))
-), (
-  select pg_catalog.concat_ws('|', contained_state, shared_state, '0|0|0|0', '0|0|0|0')
-  from transfer_refusal_before
-), 'an incompatible target kind leaves both rows and every effect untouched');
-
--- Case 3: an inactive target cannot acquire ownership. The same account is
--- suspended and then closed for deletion through the owning account-lifecycle
--- writer; a retired Group is refused the same way.
-select pg_temp.adapter_context(:'org_one', :'app_one', '64750000-0000-4000-8000-0000000000a1');
-select is((select changed.state from vortex_access.change_organization_account_state(
-    :'share_account',
-    (select account.revision from vortex_identity.organization_accounts as account
-      where account.organization_account_id = :'share_account'),
-    'suspended') as changed), 'suspended',
-  'the fixture suspends the prospective owner through the account-lifecycle writer');
-select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
-set local role vortex_runtime;
-create temporary table transfer_refusal_suspended_target on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000531'::uuid,
-  :'type_c'::uuid, :'transfer_refusal_contained_id'::uuid,
-  :'transfer_refusal_contained_revision'::bigint,
-  'organization_account', :'share_account'::uuid,
-  'a4750000-0000-4000-8000-000000000532'::uuid,
-  'a4750000-0000-4000-8000-000000000533'::uuid
-) as result;
-reset role;
-select is((select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
-  from transfer_refusal_suspended_target), 'refused|owner_unavailable',
-  'a suspended account cannot acquire ownership');
-
-select pg_temp.adapter_context(:'org_one', :'app_one', '64750000-0000-4000-8000-0000000000a1');
-select is((select changed.state from vortex_access.change_organization_account_state(
-    :'share_account',
-    (select account.revision from vortex_identity.organization_accounts as account
-      where account.organization_account_id = :'share_account'),
-    'closed') as changed), 'closed',
-  'the fixture then closes the same account for deletion through the same writer');
-select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
-set local role vortex_runtime;
-create temporary table transfer_refusal_closed_target on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000534'::uuid,
-  :'type_c'::uuid, :'transfer_refusal_contained_id'::uuid,
-  :'transfer_refusal_contained_revision'::bigint,
-  'organization_account', :'share_account'::uuid,
-  'a4750000-0000-4000-8000-000000000535'::uuid,
-  'a4750000-0000-4000-8000-000000000536'::uuid
-) as result;
-reset role;
-select is((select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
-  from transfer_refusal_closed_target), 'refused|owner_unavailable',
-  'an account closing for deletion cannot acquire new ownership');
-
-select pg_temp.adapter_clear_context();
-select * from vortex_access.coordinate_organization_group_change(
-  'create_group', :'org_one', '84750000-0000-4000-8000-000000000005', null,
-  'adapter_retired_target', 'Adapter retired target group', :'actor',
-  'c4750000-0000-4000-8000-000000000057'
-);
-select is((select change.state from vortex_access.coordinate_organization_group_change(
-    'retire_group', :'org_one', '84750000-0000-4000-8000-000000000005', 1,
-    null, null, :'actor', 'c4750000-0000-4000-8000-000000000058') as change),
-  'retired', 'the fixture retires the prospective Group owner through its owning writer');
-select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
-set local role vortex_runtime;
-create temporary table transfer_refusal_retired_target on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000537'::uuid,
-  :'type_s'::uuid, :'transfer_refusal_shared_id'::uuid,
-  :'transfer_refusal_shared_revision'::bigint,
-  'group', '84750000-0000-4000-8000-000000000005'::uuid,
-  'a4750000-0000-4000-8000-000000000538'::uuid,
-  'a4750000-0000-4000-8000-000000000539'::uuid
-) as result;
-reset role;
-select is((select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
-  from transfer_refusal_retired_target), 'refused|owner_unavailable',
-  'a retired Group cannot acquire ownership');
-select is((
-  select pg_catalog.concat_ws('|',
-    pg_temp.transfer_refusal_state('rt_b4750000000040008000000000000002',
-      :'transfer_refusal_contained_id'::uuid),
-    pg_temp.transfer_refusal_state('rt_b4750000000040008000000000000001',
-      :'transfer_refusal_shared_id'::uuid),
-    pg_temp.transfer_refusal_effects('a4750000-0000-4000-8000-000000000531'::uuid,
-      'a4750000-0000-4000-8000-000000000532'::uuid,
-      'a4750000-0000-4000-8000-000000000533'::uuid),
-    pg_temp.transfer_refusal_effects('a4750000-0000-4000-8000-000000000534'::uuid,
-      'a4750000-0000-4000-8000-000000000535'::uuid,
-      'a4750000-0000-4000-8000-000000000536'::uuid),
-    pg_temp.transfer_refusal_effects('a4750000-0000-4000-8000-000000000537'::uuid,
-      'a4750000-0000-4000-8000-000000000538'::uuid,
-      'a4750000-0000-4000-8000-000000000539'::uuid))
-), (
-  select pg_catalog.concat_ws('|', contained_state, shared_state,
-    '0|0|0|0', '0|0|0|0', '0|0|0|0')
-  from transfer_refusal_before
-), 'every inactive owner target leaves the rows and all effects untouched');
-
--- Case 4: an ownership-disabled record type refuses transfer outright. The
--- actor holds a declared all-records transfer permission for this type, so the
--- refusal is the ownership mode's and not a missing permission's. Its
--- provisioned table also forbids a non-null owner, so this refusal is the only
--- thing between the command and a constraint violation.
-select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
-set local role vortex_runtime;
-create temporary table transfer_refusal_unowned_account on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000541'::uuid,
-  :'type_unowned'::uuid, :'transfer_refusal_unowned_id'::uuid,
-  :'transfer_refusal_unowned_revision'::bigint,
-  'organization_account', :'reparent_account'::uuid,
-  'a4750000-0000-4000-8000-000000000542'::uuid,
-  'a4750000-0000-4000-8000-000000000543'::uuid
-) as result;
-create temporary table transfer_refusal_unowned_group on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000544'::uuid,
-  :'type_unowned'::uuid, :'transfer_refusal_unowned_id'::uuid,
-  :'transfer_refusal_unowned_revision'::bigint,
-  'group', '84750000-0000-4000-8000-000000000001'::uuid,
-  'a4750000-0000-4000-8000-000000000545'::uuid,
-  'a4750000-0000-4000-8000-000000000546'::uuid
-) as result;
-reset role;
-select is((
-  select pg_catalog.concat_ws('|',
-    (select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
-      from transfer_refusal_unowned_account),
-    (select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
-      from transfer_refusal_unowned_group))
-), 'refused|ownership_unavailable|refused|ownership_unavailable',
-  'an ownership-disabled record type refuses transfer to an account or a Group');
-select is((
-  select pg_catalog.concat_ws('|',
-    pg_temp.transfer_refusal_state('rt_b475000000004000800000000000000d',
-      :'transfer_refusal_unowned_id'::uuid),
-    pg_temp.transfer_refusal_effects('a4750000-0000-4000-8000-000000000541'::uuid,
-      'a4750000-0000-4000-8000-000000000542'::uuid,
-      'a4750000-0000-4000-8000-000000000543'::uuid),
-    pg_temp.transfer_refusal_effects('a4750000-0000-4000-8000-000000000544'::uuid,
-      'a4750000-0000-4000-8000-000000000545'::uuid,
-      'a4750000-0000-4000-8000-000000000546'::uuid))
-), (
-  select pg_catalog.concat_ws('|', unowned_state, '0|0|0|0', '0|0|0|0')
-  from transfer_refusal_before
-), 'the ownership-disabled record keeps both owner columns null and writes nothing');
-
--- Case 6: an inherited child follows its authoritative parent. It is not
--- transferable in its own right, and no owner is ever copied into it. The
--- actor holds a declared all-records transfer permission for the inherited
--- type, so this is the ownership mode refusing and not the permission.
-select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
-set local role vortex_runtime;
-create temporary table transfer_refusal_inherited_child on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000551'::uuid,
-  :'type_i'::uuid, :'transfer_refusal_inherited_id'::uuid,
-  :'transfer_refusal_inherited_revision'::bigint,
-  'organization_account', :'reparent_account'::uuid,
-  'a4750000-0000-4000-8000-000000000552'::uuid,
-  'a4750000-0000-4000-8000-000000000553'::uuid
-) as result;
-create temporary table transfer_refusal_inherited_group on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000554'::uuid,
-  :'type_i'::uuid, :'transfer_refusal_inherited_id'::uuid,
-  :'transfer_refusal_inherited_revision'::bigint,
-  'group', '84750000-0000-4000-8000-000000000001'::uuid,
-  'a4750000-0000-4000-8000-000000000555'::uuid,
-  'a4750000-0000-4000-8000-000000000556'::uuid
-) as result;
-reset role;
-select is((
-  select pg_catalog.concat_ws('|',
-    (select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
-      from transfer_refusal_inherited_child),
-    (select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
-      from transfer_refusal_inherited_group))
-), 'refused|ownership_unavailable|refused|ownership_unavailable',
-  'an inherited child is not transferable in its own right');
-select is((
-  select pg_catalog.concat_ws('|',
-    pg_temp.transfer_refusal_state('rt_b4750000000040008000000000000003',
-      :'transfer_refusal_inherited_id'::uuid),
-    pg_temp.transfer_refusal_effects('a4750000-0000-4000-8000-000000000551'::uuid,
-      'a4750000-0000-4000-8000-000000000552'::uuid,
-      'a4750000-0000-4000-8000-000000000553'::uuid),
-    pg_temp.transfer_refusal_effects('a4750000-0000-4000-8000-000000000554'::uuid,
-      'a4750000-0000-4000-8000-000000000555'::uuid,
-      'a4750000-0000-4000-8000-000000000556'::uuid))
-), (
-  select pg_catalog.concat_ws('|', inherited_state, '0|0|0|0', '0|0|0|0')
-  from transfer_refusal_before
-), 'the refused inherited child keeps both owner columns null and writes nothing');
-
--- Case 5: authority is rechecked at the terminal mutation. This actor already
--- completed a real transfer above with exactly this role; the assignment is
--- withdrawn through its owning writer and the next transfer refuses. #41's
--- one-entry rule means exactly one refusal Activity about the organisation
--- and no other effect.
-select pg_temp.adapter_clear_context();
-select is((select revoked.state from vortex_access.coordinate_organization_role_assignment_change(
-    'revoke', :'org_one', '74750000-0000-4000-8000-0000000000f1', 1,
-    null, null, null, null, null, null, null, null,
-    :'actor', 'c4750000-0000-4000-8000-000000000059') as revoked),
-  'revoked', 'the fixture withdraws the transfer-only authority through its owning writer');
-select pg_temp.adapter_context(:'org_one', :'app_one', :'outsider_account');
-set local role vortex_runtime;
-create temporary table transfer_refusal_withdrawn on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000561'::uuid,
-  :'type_c'::uuid, :'transfer_refusal_contained_id'::uuid,
-  :'transfer_refusal_contained_revision'::bigint,
-  'organization_account', :'reparent_account'::uuid,
-  'a4750000-0000-4000-8000-000000000562'::uuid,
-  'a4750000-0000-4000-8000-000000000563'::uuid
-) as result;
-reset role;
-select is((select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
-  from transfer_refusal_withdrawn), 'refused_recorded|record_unavailable',
-  'withdrawn transfer authority is rechecked at the mutation and refuses');
-select is((
-  select pg_catalog.concat_ws('|',
-    pg_temp.transfer_refusal_state('rt_b4750000000040008000000000000002',
-      :'transfer_refusal_contained_id'::uuid),
-    pg_temp.transfer_refusal_effects('a4750000-0000-4000-8000-000000000561'::uuid,
-      'a4750000-0000-4000-8000-000000000562'::uuid,
-      'a4750000-0000-4000-8000-000000000563'::uuid))
-), (
-  select pg_catalog.concat_ws('|', contained_state, '0|1|0|0') from transfer_refusal_before
-), 'the withdrawn-authority refusal changes no row and writes exactly one Activity entry');
-select is((
-  select pg_catalog.concat_ws('|', activity.outcome, activity.action,
-    activity.actor_id::text, pg_catalog.array_to_string(activity.subject_ids, ','),
-    pg_catalog.cardinality(activity.changed_field_ids)::text)
-  from vortex_activity.organization_activity_entries as activity
-  where activity.activity_id = 'a4750000-0000-4000-8000-000000000562'::uuid
-), pg_catalog.concat_ws('|', 'refused', 'transfer_record_ownership', :'outsider_account',
-  :'org_one', '0'),
-  'the single refusal entry is about the context organisation and names no record or owner');
-
--- Case 7: a completed transfer grants the new owner nothing. The target holds
--- no membership of, role in or share on anything it did not already hold, and
--- gains no further organisation scope.
-select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
-create temporary table transfer_grant_before on commit drop as
-select pg_temp.transfer_refusal_grants(:'exact_account'::uuid) as grants;
-set local role vortex_runtime;
-create temporary table transfer_grant_result on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000571'::uuid,
-  :'type_c'::uuid, :'transfer_refusal_grant_id'::uuid,
-  :'transfer_refusal_grant_revision'::bigint,
-  'organization_account', :'exact_account'::uuid,
-  'a4750000-0000-4000-8000-000000000572'::uuid,
-  'a4750000-0000-4000-8000-000000000573'::uuid
-) as result;
-reset role;
-select is((select result ->> 'outcome' from transfer_grant_result), 'transferred',
-  'an active same-organisation account of the compatible kind does acquire ownership');
-select is(
-  pg_temp.transfer_refusal_state('rt_b4750000000040008000000000000002',
-    :'transfer_refusal_grant_id'::uuid),
-  pg_catalog.concat_ws('|', :'exact_account', 'none',
-    (:'transfer_refusal_grant_revision'::bigint + 1)::text, 'active',
-    :'all_account', :'all_account'),
-  'the completed transfer changes only the owner, the revision and the current changer');
-select is(pg_temp.transfer_refusal_grants(:'exact_account'::uuid),
-  (select grants from transfer_grant_before),
-  'the new owner gains no Group membership, role assignment, permission or organisation scope');
-
 -- Detaching is performed through the existing lifecycle writer.  The same
 -- private single-record entry then consumes the detached stored declaration;
 -- it does not reactivate the Application or change the row lifecycle.
@@ -6301,25 +5465,6 @@ select is((vortex_module.detach_application_installation(
   :'ownership_transfer_app_one_bindings'::jsonb
 ) ->> 'state'), 'detached', 'the fixture disables the complete installed binding set');
 reset role;
--- Ordinary transfer is active-only.  A detached row with an intentionally
--- wrong revision remains unavailable rather than returning its current
--- revision through the public conflict shape.
-select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
-set local role vortex_runtime;
-create temporary table ownership_transfer_public_detached_refusal on commit drop as
-select vortex_record.transfer_record_ownership(
-  'a4750000-0000-4000-8000-000000000496'::uuid,
-  :'type_c'::uuid, 'd5750000-0000-4000-8000-000000000083'::uuid, 99,
-  'organization_account', :'owner_account'::uuid,
-  'a4750000-0000-4000-8000-000000000497'::uuid,
-  'a4750000-0000-4000-8000-000000000498'::uuid
-) as result;
-reset role;
-select is((select pg_catalog.concat_ws('|', result ->> 'outcome',
-  result ->> 'reasonCode', coalesce(result ->> 'concurrencyNumber', ''))
-  from ownership_transfer_public_detached_refusal),
-  'refused|record_unavailable|',
-  'ordinary transfer never discloses a detached record revision');
 select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
 set local role vortex_record_adapter;
 create temporary table ownership_transfer_detached_result on commit drop as
@@ -6344,7 +5489,7 @@ select is((
     event.envelope #>> '{descriptor,eventKind}',
     (select pg_catalog.count(*) from pgmq.q_vortex_event_occurrences as queued
       where queued.message ->> 'occurrenceId' = event.occurrence_id::text)::text)
-  from vortex_record.save_command_receipts as receipt
+  from vortex_record.command_receipts as receipt
   join vortex_activity.organization_activity_entries as activity
     on activity.organization_id = receipt.organization_id
     and activity.activity_id = 'a4750000-0000-4000-8000-000000000491'::uuid
