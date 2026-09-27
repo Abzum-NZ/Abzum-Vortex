@@ -3,6 +3,7 @@ import {
   flowMaximumProtectedOperations,
   flowMaximumRunFlowDepth,
   flowMaximumTaskOutputPathDepth,
+  flowJsonMemberType,
   flowTaskChildLists,
   flowTaskRegistry,
   parseExactDecimal,
@@ -342,15 +343,7 @@ const declaredAnswerType = (
     )
       return undefined;
     const value = object[name]!;
-    const type: "text" | "yes_no" | "whole_number" | "decimal_number" | "json" =
-      typeof value === "string"
-        ? "text"
-        : typeof value === "boolean"
-          ? "yes_no"
-          : typeof value === "number"
-            ? Number.isSafeInteger(value) ? "whole_number" : "decimal_number"
-            : "json";
-    member = { kind: "literal", literal: { type, value } };
+    member = { kind: "literal", literal: { type: flowJsonMemberType(value), value } };
   }
   return evaluateValue(member, state, activation, flow, taskId).type;
 };

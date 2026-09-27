@@ -40,6 +40,16 @@ export const flowMaximumTaskCount = 100;
 export const flowMaximumTaskNestingDepth = 5;
 /** A task output may select a bounded sequence of named fields from a JSON output. */
 export const flowMaximumTaskOutputPathDepth = 5;
+
+/** The declared type of one JSON object member when its literal shape is known. */
+export const flowJsonMemberType = (
+  value: JsonValue,
+): "text" | "yes_no" | "whole_number" | "decimal_number" | "json" => {
+  if (typeof value === "string") return "text";
+  if (typeof value === "boolean") return "yes_no";
+  if (typeof value === "number") return Number.isSafeInteger(value) ? "whole_number" : "decimal_number";
+  return "json";
+};
 export const flowMaximumForEachItemsDurable = 1_000;
 export const flowMaximumForEachItemsOther = 100;
 export const flowMaximumRunFlowDepth = 3;

@@ -1,5 +1,6 @@
 import {
   flowLiteralSchema,
+  flowJsonMemberType,
   flowMaximumForEachItemsDurable,
   flowMaximumForEachItemsOther,
   flowMaximumServerSeconds,
@@ -168,15 +169,6 @@ const describe = (accepted: readonly string[]): string => accepted.join(" or ");
 
 const isTextLiteral = (value: FlowValue): boolean =>
   value.kind === "literal" && value.literal.type === "text" && typeof value.literal.value === "string";
-
-const jsonMemberType = (
-  value: unknown,
-): "text" | "yes_no" | "whole_number" | "decimal_number" | "json" => {
-  if (typeof value === "string") return "text";
-  if (typeof value === "boolean") return "yes_no";
-  if (typeof value === "number") return Number.isSafeInteger(value) ? "whole_number" : "decimal_number";
-  return "json";
-};
 
 // ─── The validator ─────────────────────────────────────────────────────────────────────────────
 
@@ -421,7 +413,7 @@ export function validateFlow(
               Object.hasOwn(object, name)
             ) {
               const value = object[name]!;
-              member = { kind: "literal", literal: { type: jsonMemberType(value), value } };
+              member = { kind: "literal", literal: { type: flowJsonMemberType(value), value } };
               continue;
             }
             add(
