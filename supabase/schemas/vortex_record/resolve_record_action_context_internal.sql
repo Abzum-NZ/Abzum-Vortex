@@ -31,6 +31,7 @@ declare
 begin
   if p_record_type_id is null
     or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_action_kind is null
     or p_action_kind not in ('create', 'read', 'update', 'delete', 'restore') then
     raise exception using errcode = '22023', message = 'Record action selector is invalid';
   end if;
