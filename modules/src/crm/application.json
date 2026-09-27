@@ -3437,56 +3437,6 @@
                                                    },
                                                    "slots": {}
                                                  },
-                                                 "input_crm_opportunity_edit_value": {
-                                                   "block": {
-                                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
-                                                     "release_version": "1.0.0"
-                                                   },
-                                                   "settings": {
-                                                     "field": {
-                                                       "kind": "field_reference",
-                                                       "field": "vortex.crm.opportunities:opportunity.value"
-                                                     }
-                                                   },
-                                                   "theme_overrides": {},
-                                                   "responsive": {
-                                                     "desktop": {
-                                                       "visible": true,
-                                                       "width": {
-                                                         "kind": "fill"
-                                                       },
-                                                       "height": {
-                                                         "kind": "content"
-                                                       }
-                                                     }
-                                                   },
-                                                   "slots": {}
-                                                 },
-                                                 "input_crm_opportunity_edit_discount_percent": {
-                                                   "block": {
-                                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
-                                                     "release_version": "1.0.0"
-                                                   },
-                                                   "settings": {
-                                                     "field": {
-                                                       "kind": "field_reference",
-                                                       "field": "vortex.crm.opportunities:opportunity.discount_percent"
-                                                     }
-                                                   },
-                                                   "theme_overrides": {},
-                                                   "responsive": {
-                                                     "desktop": {
-                                                       "visible": true,
-                                                       "width": {
-                                                         "kind": "fill"
-                                                       },
-                                                       "height": {
-                                                         "kind": "content"
-                                                       }
-                                                     }
-                                                   },
-                                                   "slots": {}
-                                                 },
                                                  "input_crm_opportunity_edit_probability": {
                                                    "block": {
                                                      "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
@@ -3572,8 +3522,6 @@
                                                    "input_crm_opportunity_edit_name",
                                                    "input_crm_opportunity_edit_company",
                                                    "input_crm_opportunity_edit_primary_contact",
-                                                   "input_crm_opportunity_edit_value",
-                                                   "input_crm_opportunity_edit_discount_percent",
                                                    "input_crm_opportunity_edit_probability",
                                                    "input_crm_opportunity_edit_expected_close_date",
                                                    "submit_crm_opportunity_edit"
