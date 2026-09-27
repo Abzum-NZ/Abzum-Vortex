@@ -14,6 +14,7 @@ export * from "./application-flow-bindings";
 export * from "./flow-contracts";
 export * from "./form-continuation-contracts";
 export * from "./flow-invocation-contracts";
+export * from "./flow-test-run-contracts";
 export * from "./flow-source-contracts";
 export * from "./flow-task-registry";
 export * from "./default-flow-sources";
