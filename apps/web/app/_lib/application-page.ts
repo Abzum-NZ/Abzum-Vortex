@@ -228,6 +228,59 @@ const requestState = (
   return { sort, filters, search: first(parameters[`search.${placementId}`]) ?? null };
 };
 
+const requestDependencies = (): HumanOrganizationRequestDependencies => ({
+  identityAuthorityId: getIdentityAuthorityConfiguration().authorityId,
+  telemetry,
+});
+
+/** The exact installed runtime context, read once under the person's own verified request scope. */
+const loadInstalledContext = (
+  session: IdentitySession,
+  dependencies: HumanOrganizationRequestDependencies,
+  selection: OrganizationSelectionCandidate,
+) =>
+  createHumanOrganizationRequestService(dependencies).run(
+    session,
+    selection,
+    async (transaction, scope) => {
+      if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
+      return createHumanInstalledRuntimeContextLoader({
+        activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+        releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
+          installedReleaseCatalogue,
+          transaction,
+        ),
+        scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+      }).load();
+    },
+  );
+
+/**
+ * The installed release's theme for one application the viewer may open, so a page shown in place
+ * of an addressed page (its not-found experience) renders in that application's own theme. It
+ * reads under the person's own request scope like the page itself; when the read does not settle
+ * the caller keeps the platform default rather than failing the page.
+ */
+export const loadApplicationTheme = async (
+  session: IdentitySession,
+  address: Readonly<{
+    read: Extract<PermittedApplicationsRead, { kind: "available" }>;
+    application: PermittedApplication;
+  }>,
+): Promise<ApplicationPageModel["theme"] | undefined> => {
+  try {
+    const loaded = await loadInstalledContext(session, requestDependencies(), {
+      organizationId: address.read.organizationId,
+      applicationRootId: address.application.applicationRootId,
+    });
+    return loaded.kind === "available"
+      ? loaded.value.releaseSet.application.content.theme
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 export const loadApplicationPage = async (
   session: IdentitySession,
   address: Readonly<{
@@ -239,30 +292,15 @@ export const loadApplicationPage = async (
   }>,
   parameters: SearchParameters,
 ): Promise<ApplicationPageResult> => {
-  const { authorityId } = getIdentityAuthorityConfiguration();
+  const dependencies = requestDependencies();
   const continuationKey = getQueryContinuationKey();
-  const dependencies: HumanOrganizationRequestDependencies = {
-    identityAuthorityId: authorityId,
-    telemetry,
-  };
   const selection: OrganizationSelectionCandidate = {
     organizationId: address.read.organizationId,
     applicationRootId: address.application.applicationRootId,
   };
 
   // The installed context is read once, under the person's own verified request scope.
-  const requests = createHumanOrganizationRequestService(dependencies);
-  const loaded = await requests.run(session, selection, async (transaction, scope) => {
-    if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-    return createHumanInstalledRuntimeContextLoader({
-      activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
-      releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-        installedReleaseCatalogue,
-        transaction,
-      ),
-      scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
-    }).load();
-  });
+  const loaded = await loadInstalledContext(session, dependencies, selection);
   if (loaded.kind !== "available") return loaded;
   const context = loaded.value;
   const application = context.releaseSet.application;
