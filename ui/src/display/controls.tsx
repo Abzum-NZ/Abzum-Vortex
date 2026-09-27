@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState, type ReactElement } from "react";
-import { ChevronDownIcon, MoreHorizontalIcon } from "lucide-react";
+import { Icon } from "../icons/icon";
 import type { RecordsTableActionContract } from "@vortex/contracts";
 import { Button } from "../components/button";
 import { Checkbox } from "../components/checkbox";
@@ -286,7 +286,7 @@ export function RowActionsMenu({
           />
         }
       >
-        <MoreHorizontalIcon />
+        <Icon name="more-horizontal" />
       </DropdownMenuTrigger>
       {/* The menu is portalled, but React still bubbles its clicks through the row; choosing a
           command is not a request to open the row itself. */}
@@ -404,7 +404,7 @@ function BooleanFilterControl({
         }
       >
         {current}
-        <ChevronDownIcon data-icon="inline-end" />
+        <Icon name="chevron-down" data-icon="inline-end" />
       </DropdownMenuTrigger>
       <DropdownMenuContent>
         <DropdownMenuRadioGroup value={value} onValueChange={(next: string) => onCommit(next)}>

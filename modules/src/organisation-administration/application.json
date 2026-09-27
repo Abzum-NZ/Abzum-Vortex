@@ -235,7 +235,21 @@
         "record_type": "vortex.organisation_administration:organization_invitation",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
-      }
+      },
+    {
+      "id": "event_new_notice",
+      "key": "vortex.app.events.vortex_app_organisation_administration_new_notice",
+      "record_type": "vortex.organisation_administration:organisation_notice",
+      "carries": [],
+      "personal_or_sensitive_values_allowed": false
+    },
+    {
+      "id": "event_new_privacy_request",
+      "key": "vortex.app.events.vortex_app_organisation_administration_new_privacy_request",
+      "record_type": "vortex.organisation_administration:privacy_request_case",
+      "carries": [],
+      "personal_or_sensitive_values_allowed": false
+    }
     ],
     "public_addresses": [],
     "platform_block_dependencies": [],
@@ -1479,11 +1493,13 @@
                   },
                   "slots": {},
                   "query": "vortex.organisation_administration:organisation_notices"
-                }
+                },
+        "button_new_notice": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.organisation_administration.organisation_notice.record_notice", "settings": {"label": {"kind": "text", "value": "New notice"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
               },
               "order": {
                 "desktop": [
-                  "notices_table"
+                  "notices_table",
+            "button_new_notice"
                 ]
               }
             }
@@ -1754,11 +1770,13 @@
                   },
                   "slots": {},
                   "query": "vortex.organisation_administration:privacy_request_cases"
-                }
+                },
+        "button_new_privacy_request": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.organisation_administration.privacy_request_case.record_privacy_request", "settings": {"label": {"kind": "text", "value": "New privacy request"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
               },
               "order": {
                 "desktop": [
-                  "privacy_cases_table"
+                  "privacy_cases_table",
+            "button_new_privacy_request"
                 ]
               }
             }
@@ -2405,7 +2423,69 @@
         },
         "errors": [],
         "finally": []
-      }
+      },
+    {
+      "contractVersion": "1.0.0",
+      "id": "navigate_new_notice",
+      "key": "navigate_new_notice",
+      "description": "Opens the organisation notice form.",
+      "labels": {
+        "name": "New notice"
+      },
+      "execution": "interactive",
+      "runAs": {
+        "kind": "initiator"
+      },
+      "inputs": {},
+      "tasks": [
+        {
+          "id": "open_page",
+          "type": "interface.navigate",
+          "version": "1.0.0",
+          "properties": {
+            "page": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "record_organisation_notice"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {}
+    },
+    {
+      "contractVersion": "1.0.0",
+      "id": "navigate_new_privacy_request",
+      "key": "navigate_new_privacy_request",
+      "description": "Opens the privacy request form.",
+      "labels": {
+        "name": "New privacy request"
+      },
+      "execution": "interactive",
+      "runAs": {
+        "kind": "initiator"
+      },
+      "inputs": {},
+      "tasks": [
+        {
+          "id": "open_page",
+          "type": "interface.navigate",
+          "version": "1.0.0",
+          "properties": {
+            "page": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "record_privacy_request_case"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {}
+    }
     ],
     "flow_bindings": [
       {
@@ -2556,7 +2636,23 @@
             "name": "record"
           }
         }
-      }
+      },
+    {
+      "id": "binding_new_notice",
+      "control": "button_new_notice",
+      "event_id": "event_new_notice",
+      "event": "action",
+      "flow": "navigate_new_notice",
+      "inputs": {}
+    },
+    {
+      "id": "binding_new_privacy_request",
+      "control": "button_new_privacy_request",
+      "event_id": "event_new_privacy_request",
+      "event": "action",
+      "flow": "navigate_new_privacy_request",
+      "inputs": {}
+    }
     ]
   }
 }

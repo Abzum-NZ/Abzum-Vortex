@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Icon } from "@vortex/ui/icons";
 import { AuthShell } from "../_components/auth-shell";
 
 type SuccessPageProps = Readonly<{ searchParams: Promise<{ state?: string }> }>;
@@ -23,10 +24,10 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
       }
     >
       <div
-        className="flex size-12 items-center justify-center rounded-full bg-primary text-2xl font-semibold text-primary-foreground"
+        className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground"
         aria-hidden="true"
       >
-        ✓
+        <Icon name="check" className="size-6" />
       </div>
     </AuthShell>
   );
