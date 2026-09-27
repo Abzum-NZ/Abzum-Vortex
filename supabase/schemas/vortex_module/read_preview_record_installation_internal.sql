@@ -16,7 +16,11 @@ begin
     return null;
   end if;
 
-  context_value := vortex_access.validated_human_request_context();
+  begin
+    context_value := vortex_module.assert_preview_installation_authority_internal();
+  exception when insufficient_privilege then
+    return null;
+  end;
   select preview.* into preview_row
   from vortex_module.preview_installations as preview
   where preview.preview_installation_id = p_preview_installation_id
@@ -25,7 +29,8 @@ begin
     and preview.previewer_identity_id = (context_value ->> 'identityId')::uuid
     and preview.previewer_organization_account_id =
       (context_value ->> 'organizationAccountId')::uuid
-    and preview.expires_at > pg_catalog.statement_timestamp();
+    and preview.expires_at > pg_catalog.statement_timestamp()
+  for key share;
   if not found then
     return null;
   end if;

@@ -14,7 +14,7 @@ import {
   timestampSchema,
 } from "./identifiers";
 
-export const previewInstallationIdSchema = z
+const previewInstallationIdSchema = z
   .uuid()
   .refine((value) => value !== "00000000-0000-0000-0000-000000000000");
 

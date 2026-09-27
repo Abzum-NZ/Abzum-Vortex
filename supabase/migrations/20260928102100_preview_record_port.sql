@@ -98,7 +98,11 @@ begin
     return null;
   end if;
 
-  context_value := vortex_access.validated_human_request_context();
+  begin
+    context_value := vortex_module.assert_preview_installation_authority_internal();
+  exception when insufficient_privilege then
+    return null;
+  end;
   select preview.* into preview_row
   from vortex_module.preview_installations as preview
   where preview.preview_installation_id = p_preview_installation_id
@@ -107,7 +111,8 @@ begin
     and preview.previewer_identity_id = (context_value ->> 'identityId')::uuid
     and preview.previewer_organization_account_id =
       (context_value ->> 'organizationAccountId')::uuid
-    and preview.expires_at > pg_catalog.statement_timestamp();
+    and preview.expires_at > pg_catalog.statement_timestamp()
+  for key share;
   if not found then
     return null;
   end if;
@@ -4678,8 +4683,16 @@ begin
   preview_installation :=
     vortex_record.read_current_preview_installation_internal();
   if preview_installation is not null then
-    return pg_catalog.jsonb_build_object(
-      'outcome', 'refused', 'reasonCode', 'unsupported_relationship_total_save'
+    if preview_installation ->> 'outcome' = 'refused'
+      or p_parent_mutations is distinct from '[]'::jsonb then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'unsupported_relationship_total_save'
+      );
+    end if;
+    return vortex_record.save_base_record(
+      p_command_id, p_operation, p_record_type_id, p_record_id,
+      p_expected_concurrency_number, p_submitted_values, p_final_values,
+      p_selected_group_id, p_activity_id, p_occurrence_id
     );
   end if;
   if pg_catalog.jsonb_typeof(p_parent_mutations) <> 'array' then

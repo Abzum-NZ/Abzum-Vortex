@@ -588,9 +588,7 @@ const persist = async (
     return candidate as StoredResult;
   }
 
-  const rows =
-    command.previewInstallationId === undefined
-      ? await transaction.query<SaveRow>`
+  const rows = await transaction.query<SaveRow>`
       select vortex_record.save_base_record_with_relationship_totals(
         ${command.commandId}::uuid,
         ${command.operation}::text,
@@ -604,21 +602,7 @@ const persist = async (
         ${occurrenceId}::uuid,
         ${JSON.stringify(parentMutations)}::text::jsonb
       ) as result
-      `
-      : await transaction.query<SaveRow>`
-      select vortex_record.save_base_record(
-        ${command.commandId}::uuid,
-        ${command.operation}::text,
-        ${command.recordTypeId}::uuid,
-        ${command.operation === "update" ? command.recordId : null}::uuid,
-        ${command.operation === "update" ? command.expectedConcurrencyNumber : null}::bigint,
-        ${JSON.stringify(command.submittedValues)}::text::jsonb,
-        ${JSON.stringify(finalValues)}::text::jsonb,
-        ${command.operation === "create" ? (command.selectedOwnerGroupId ?? null) : null}::uuid,
-        ${activityId}::uuid,
-        ${occurrenceId}::uuid
-      ) as result
-      `;
+  `;
   const candidate = one(rows).result;
   if (typeof candidate !== "object" || candidate === null)
     throw new Error("RECORD_SAVE_RESULT_INVALID");

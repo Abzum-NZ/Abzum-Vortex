@@ -18,7 +18,10 @@ import {
 } from "./identifiers";
 import { recordLinkValueV2Schema } from "./module-field-values-v2";
 import { safeErrorResponseSchema } from "./operation-contracts";
-import { previewInstallationIdSchema } from "./preview-installation-contracts";
+
+const previewRecordInstallationIdSchema = z
+  .uuid()
+  .refine((value) => value !== "00000000-0000-0000-0000-000000000000");
 
 const sharedScopeFields = {
   organizationId: organizationIdSchema,
@@ -53,7 +56,7 @@ const saveRecordCommandFields = {
   commandId: platformIdSchema,
   recordTypeId: recordTypeIdSchema,
   submittedValues: submittedRecordValuesSchema,
-  previewInstallationId: previewInstallationIdSchema.optional(),
+  previewInstallationId: previewRecordInstallationIdSchema.optional(),
 };
 
 export const saveRecordCommandV2Schema = z.discriminatedUnion("operation", [
@@ -470,7 +473,7 @@ export type SaveRecordCommandV2 = z.infer<typeof saveRecordCommandV2Schema>;
 export const previewRecordReadCommandV1Schema = z
   .object({
     contractVersion: z.literal("1.0.0"),
-    previewInstallationId: previewInstallationIdSchema,
+    previewInstallationId: previewRecordInstallationIdSchema,
     recordTypeId: recordTypeIdSchema,
     recordId: recordIdSchema,
   })
