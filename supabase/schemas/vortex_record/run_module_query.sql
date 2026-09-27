@@ -932,6 +932,7 @@ begin
 end
 $function$;
 
+alter function vortex_record.run_module_query(uuid,uuid,bigint,jsonb,jsonb,integer,jsonb,jsonb,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,

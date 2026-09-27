@@ -227,8 +227,46 @@ function readDefinition(statement) {
     signature:
       close === -1 ? null : inputSignature(statement.code.slice(openParenthesis + 1, close)),
     dollarQuoted: dollarQuotedBody.test(statement.code),
+    orReplace: /^create\s+or\s+replace\s+function\b/i.test(statement.code),
     block: normalizeBlock(statement.text),
   };
+}
+
+function readFunctionOwner(statement) {
+  const header = /^\s*alter\s+function\s+([a-z_][a-z0-9_]*)\s*\.\s*([a-z_][a-z0-9_]*)\s*\(/i.exec(
+    statement.code,
+  );
+  if (!header) return null;
+  const openParenthesis = header[0].lastIndexOf("(");
+  const close = closingParenthesis(statement.code, openParenthesis);
+  if (close === -1) return null;
+  const owner = /^\s*owner\s+to\s+([a-z_][a-z0-9_]*)\s*;?\s*$/i.exec(
+    statement.code.slice(close + 1),
+  );
+  if (!owner) return null;
+  return {
+    schema: header[1].toLowerCase(),
+    name: header[2].toLowerCase(),
+    signature: inputSignature(statement.code.slice(openParenthesis + 1, close)),
+    owner: owner[1].toLowerCase(),
+  };
+}
+
+function readRoleCommand(statement) {
+  const code = statement.code.trim();
+  if (/^reset\s+role\s*;?$/i.test(code)) return { kind: "reset" };
+  const set = /^set\s+(local\s+)?role\s+([a-z_][a-z0-9_]*|current_user|session_user|none)\s*;?$/i.exec(
+    code,
+  );
+  if (!set) return null;
+  return { kind: set[1] ? "local" : "session", role: set[2].toLowerCase() };
+}
+
+function readTransactionCommand(statement) {
+  const code = statement.code.trim();
+  if (/^(?:begin|start\s+transaction)\s*;?$/i.test(code)) return "begin";
+  if (/^(?:commit|end|rollback)\s*;?$/i.test(code)) return "end";
+  return null;
 }
 
 // Reads the functions named by `drop function [if exists] a.f(...), b.g(...)`.
@@ -301,11 +339,28 @@ function readCanonical(item, errors) {
   const privilege = new RegExp(String.raw`^(?:grant|revoke)\b[\s\S]*?\bon\s+${target}`, "i");
   let hasComment = false;
   let hasPrivilege = false;
+  let ownerStatementCount = 0;
+  let owner = "postgres";
   for (const statement of statements) {
     if (statement === definitions[0]) continue;
+    const recordedOwner = readFunctionOwner(statement);
     if (comment.test(statement.code)) hasComment = true;
     else if (privilege.test(statement.code)) hasPrivilege = true;
-    else {
+    else if (recordedOwner) {
+      ownerStatementCount += 1;
+      if (ownerStatementCount > 1) {
+        errors.push(`${item.file} may carry at most one owner statement for ${key}`);
+      }
+      if (
+        recordedOwner.schema !== item.schema ||
+        recordedOwner.name !== item.name ||
+        recordedOwner.signature !== definition.signature
+      ) {
+        errors.push(`${item.file} owner statement must name ${key}(${definition.signature})`);
+      } else {
+        owner = recordedOwner.owner;
+      }
+    } else {
       errors.push(
         `${item.file} may only hold ${key}'s definition, comment and privileges; found: ${statement.code.trim().split("\n")[0]}`,
       );
@@ -313,6 +368,7 @@ function readCanonical(item, errors) {
   }
   if (!hasComment) errors.push(`${item.file} must carry comment on function ${key}`);
   if (!hasPrivilege) errors.push(`${item.file} must carry the grant and revoke on function ${key}`);
+  definition.owner = owner;
   return definition;
 }
 
@@ -339,9 +395,11 @@ export async function validateSqlCanonical(root) {
   }
 
   // Replays every migration in order so each function's live signatures and latest complete
-  // definition are known, whichever era defined them.
+  // definition and owner are known, whichever era defined them.
   const signatures = new Map();
   const latest = new Map();
+  const owners = new Map();
+  const governedOwnerChanges = new Map();
   for (const file of await listFiles(migrationsDirectory, false)) {
     const relative = path.relative(root, file);
     const match = migrationPattern.exec(path.basename(file));
@@ -358,7 +416,62 @@ export async function validateSqlCanonical(root) {
       );
     }
 
+    let currentRole = "postgres";
+    let sessionRole = "postgres";
     for (const statement of statements) {
+      const transaction = readTransactionCommand(statement);
+      if (transaction === "begin") continue;
+      if (transaction === "end") {
+        currentRole = sessionRole;
+        continue;
+      }
+
+      const roleCommand = readRoleCommand(statement);
+      if (roleCommand?.kind === "reset") {
+        currentRole = "postgres";
+        sessionRole = "postgres";
+        continue;
+      }
+      if (roleCommand) {
+        const role =
+          roleCommand.role === "current_user"
+            ? currentRole
+            : roleCommand.role === "session_user" || roleCommand.role === "none"
+              ? "postgres"
+              : roleCommand.role;
+        if (roleCommand.kind === "local") currentRole = role;
+        else {
+          currentRole = role;
+          sessionRole = role;
+        }
+        continue;
+      }
+
+      const ownerChange = readFunctionOwner(statement);
+      if (ownerChange) {
+        const key = functionKey(ownerChange.schema, ownerChange.name);
+        const live = signatures.get(key);
+        if (live?.size > 0 && !live.has(ownerChange.signature)) {
+          errors.push(
+            `${relative} changes the owner of ${key}(${ownerChange.signature}) without a matching live signature`,
+          );
+        }
+        const previousOwner = owners.get(key) ?? "postgres";
+        owners.set(key, ownerChange.owner);
+        if (governed && previousOwner !== ownerChange.owner) {
+          governedOwnerChanges.set(key, { file: relative });
+        }
+        continue;
+      }
+      if (
+        governed &&
+        /^\s*alter\s+function\b/i.test(statement.code) &&
+        /\bowner\s+to\b/i.test(statement.code)
+      ) {
+        errors.push(`${relative} has an invalid alter function owner statement`);
+        continue;
+      }
+
       const creates = anyDefinitionHeader.test(statement.code);
       const definition = creates ? readDefinition(statement) : null;
       if (creates && !definition) {
@@ -374,6 +487,8 @@ export async function validateSqlCanonical(root) {
         for (const drop of readDrops(statement)) {
           const key = functionKey(drop.schema, drop.name);
           signatures.delete(key);
+          owners.delete(key);
+          governedOwnerChanges.delete(key);
           latest.set(key, { file: relative, governed, dropped: true });
         }
         if (governed && definitionPatch.test(statement.code)) {
@@ -413,6 +528,7 @@ export async function validateSqlCanonical(root) {
       }
       live.add(definition.signature);
       signatures.set(key, live);
+      if (!definition.orReplace || !owners.has(key)) owners.set(key, currentRole);
       latest.set(key, { file: relative, governed, dropped: false, block: definition.block });
     }
   }
@@ -424,6 +540,13 @@ export async function validateSqlCanonical(root) {
     const [schema, name] = key.split(".");
     errors.push(
       `${state.file} defines ${key} without a canonical file supabase/schemas/${schema}/${name}.sql`,
+    );
+  }
+  for (const [key, state] of governedOwnerChanges) {
+    if (!owners.has(key) || canonicalByKey.has(key)) continue;
+    const [schema, name] = key.split(".");
+    errors.push(
+      `${state.file} changes the owner of ${key} without a canonical file supabase/schemas/${schema}/${name}.sql`,
     );
   }
   for (const [key, item] of canonicalByKey) {
@@ -438,6 +561,12 @@ export async function validateSqlCanonical(root) {
     } else if (state.block !== item.definition.block) {
       errors.push(
         `${item.file} differs from ${key} as last installed by ${state.file}; a canonical change needs a migration carrying the identical complete definition`,
+      );
+    }
+    const replayedOwner = owners.get(key) ?? "postgres";
+    if (item.definition.owner !== replayedOwner) {
+      errors.push(
+        `${item.file} records owner ${item.definition.owner} for ${key}, but migration replay leaves it owned by ${replayedOwner}`,
       );
     }
   }
