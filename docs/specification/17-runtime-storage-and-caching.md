@@ -20,7 +20,7 @@ executes there. Measure sign-in and protected-page request durations after deliv
 do not remove access checks, add authority caches or change database pooling merely
 to compensate for an avoidable cross-region connection. The measured repair is
 tracked in [#347](https://github.com/Abzum-NZ/Abzum-Vortex/issues/347) and its
-[acceptance plan](../build-plan/testing-sign-in-performance.md).
+[#347 sign-in performance work](https://github.com/Abzum-NZ/Abzum-Vortex/issues/347).
 
 ```mermaid
 flowchart LR
@@ -95,7 +95,7 @@ The codebase is divided into sixteen named services. These are package and owner
 
 Each service owns its tables and public contract. Another service calls that contract rather than reading the owner's tables. Dependency direction and build order are defined in the [revised build plan](../build-plan/README.md).
 
-The shared [Activity foundation](../build-plan/issue-252-activity-foundation.md) is a private database composition boundary below these services, not a seventeenth service. It owns the single `vortex_activity` history store and an owner-only append function. Protected owning operations compose that function inside their transactions; raw runtime/request and Data API roles receive no append or read authority. Later permitted Activity views use this same store through their protected boundary.
+The shared [Activity foundation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252) is a private database composition boundary below these services, not a seventeenth service. It owns the single `vortex_activity` history store and an owner-only append function. Protected owning operations compose that function inside their transactions; raw runtime/request and Data API roles receive no append or read authority. Later permitted Activity views use this same store through their protected boundary.
 
 The Identity service uses the private `vortex_identity` schema. Tenant, organisation, identity-projection, organisation-account, and invitation relations enable and force row-level security, expose no direct policy or table grant, and are inaccessible through Supabase Data API roles. `vortex_runtime` receives Identity schema usage and execution only for exact pre-request operations: ensure a verified identity projection during bootstrap, read that projection without mutation during normal session resolution, return the minimum safe organisation launcher, and resolve one exact active organisation-account scope for Access. Runtime invitation acceptance is available only through the private `vortex_access` schema. Access calls owner-only Identity operations and owns the atomic account-scope plus current-version composition; it never reads Identity relations. Invitation activation/reactivation and the required organisation Access-version change commit or roll back together. The former standalone runtime version read and rich organisation-account list are revoked. `vortex_runtime` receives no Access table, generic increment, initialisation or administrative lifecycle authority. Invitation administration and account lifecycle remain owner-only until protected administration composes their authorisation. `vortex_request` receives no Identity access; it receives Access schema usage and execution only for the exact live human-context validator. Trigger functions remain non-executable by runtime roles.
 
@@ -344,9 +344,9 @@ explicitly pinned shared Modules, without a general cross-organisation definitio
 lookup. Ordinary discovery does not require installation-management permission
 and grants no record access. It refuses a detached target. Unrelated detached
 history does not invalidate a complete current installation. See the
-[active installation read plan](../build-plan/issue-43-active-installation-read.md).
+[active installation read plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43).
 
-The [Application lifecycle permission](../build-plan/issue-64-application-runtime.md)
+The [Application lifecycle permission](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64)
 is the organisation-scoped platform permission
 `platform.organization.applications.manage`. The operation binds the exact
 application and additionally checks delegated management of its complete affected
@@ -407,7 +407,7 @@ The provisioner accepts the declared current Module source/validation pair and
 uses its exact-value field storage model and graph definitions consistently.
 Rule changes do not create a separate record table or relabel a published release.
 Remove obsolete pair selectors with [Module consolidation #548](https://github.com/Abzum-NZ/Abzum-Vortex/issues/548);
-the [storage owner](../build-plan/issue-45-module3-storage-compatibility.md) retains
+the [storage owner](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) retains
 the existing allocation and installation responsibilities.
 
 An unchanged retry of the original first-provision command may return the same
@@ -567,11 +567,11 @@ The [Access service](04-access-and-permissions.md) owns access versions. The [Re
 - [Vercel cache invalidation](https://vercel.com/docs/cli/cache) may reclaim old entries but is not the security mechanism.
 - Private page responses instruct browsers and shared networks not to store them.
 
-Implement [permission-safe query caching #39](../build-plan/issue-39-permission-safe-query-caching.md)
-with the actual [query engine #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54)
-in Phase 5, before [live refresh #56](https://github.com/Abzum-NZ/Abzum-Vortex/issues/56).
+Implement [permission-safe query caching #39](https://github.com/Abzum-NZ/Abzum-Vortex/issues/39)
+with the actual [query engine #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54).
+Native dependencies govern its order relative to [live refresh #56](https://github.com/Abzum-NZ/Abzum-Vortex/issues/56).
 No dormant Phase 3 cache framework or duplicate version counter is required.
-The [application runtime #64](../build-plan/issue-64-application-runtime.md) owns
+The [application runtime #64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) owns
 its later immutable-definition and resolved-application cache integration.
 
 ### Grant cache invalidation

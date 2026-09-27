@@ -497,4 +497,4 @@ Component data execution supports Query/Transform/Write/Query/Return, viewer-saf
 | Accessible editor, simulated preview trace, scoped refresh, stale response removal and same controls through MCP, including form Continue, Cancel and Submit | [#59](https://github.com/Abzum-NZ/Abzum-Vortex/issues/59), [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64), [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68), [#200](https://github.com/Abzum-NZ/Abzum-Vortex/issues/200) |
 | Complete declared flows in definition-driven examples, with no business-specific core branches | [#74](https://github.com/Abzum-NZ/Abzum-Vortex/issues/74), [#251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251) and their later capability owners |
 
-The [delivery plan](../../build-plan/frontend-rule-designer.md) records the dependency order and exact issue updates. This feature does not pre-empt unfinished Access work or require infrastructure maintenance.
+The linked GitHub issues record delivery ownership and dependencies. This feature does not pre-empt unfinished Access work or require infrastructure maintenance.

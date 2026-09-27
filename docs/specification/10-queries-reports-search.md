@@ -42,7 +42,7 @@ through a JavaScript floating-point number, including in continuation tokens or
 returned totals. Text fields containing the same characters remain text.
 
 Money results retain both exact amount and resolved currency. Amount comparisons
-follow the [Rule semantics](../build-plan/issue-44-record-field-values.md):
+follow the [Rule semantics](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44):
 equality includes currency, and ordering amounts across currencies is refused.
 The existing mixed-currency total refusal below remains unchanged. Query, Rule
 and database-backed conditions must agree for the same typed operands. Formatting

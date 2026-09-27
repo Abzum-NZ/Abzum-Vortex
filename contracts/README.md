@@ -2,11 +2,11 @@
 
 [Platform specification](../docs/specification/README.md) · [Data-contract appendix](../docs/specification/appendices/data-contracts.md) · [Phase 1 build plan](../docs/build-plan/README.md#phases) · [Validation-error author guide](VALIDATION_ERRORS.md)
 
-This package is the database-free definition language shared by the Vortex services. It exports both the strict, readable authored-source boundary and the complete canonical runtime contracts with platform-issued identifiers. Neither layer contains installed definition names or behaviour. The snake-case JSON under `testing/fixtures` is non-shipping input that proves the production parser and compiler against a dependency-complete example set.
+This package is the database-free definition language shared by the Vortex services. It exports both the strict, readable authored-source boundary and the complete canonical runtime contracts with platform-issued identifiers. Neither layer contains installed definition names or behaviour. The snake-case JSON under `testing/fixtures` is a non-shipping reference example; it is not a development completion gate.
 
 Every schema rejects unknown properties. A schema file can depend only on this package's lower-level files and Zod; it cannot import browser, server, database, Supabase, Kestra, or service code.
 
-Reference inspection follows declared schemas through `walkDefinitionContract`, not arbitrary property names. Reuse `jsonValueSchema` for opaque data; its contents are validated and fingerprinted but are never reference positions. Semantic inspection visits declared object properties, not user-defined record-map keys. Publication and version comparison share `unresolvedRecordTypeReferencePaths`; genuine unresolved references still fail. See [#258 evidence](../docs/evidence/issue-258/README.md) and [Zod's documented schema traversal](https://zod.dev/packages/core#internals).
+Reference inspection follows declared schemas through `walkDefinitionContract`, not arbitrary property names. Reuse `jsonValueSchema` for opaque data; its contents are validated and fingerprinted but are never reference positions. Semantic inspection visits declared object properties, not user-defined record-map keys. Publication and version comparison share `unresolvedRecordTypeReferencePaths`; genuine unresolved references still fail. See [#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258) and [Zod's documented schema traversal](https://zod.dev/packages/core#internals).
 
 | Export group | Layer | Governing specification | Source |
 |---|---|---|---|
@@ -42,4 +42,4 @@ Assignment-change commands distinguish granting a new exact reviewed role from r
 
 Role-change candidates distinguish editing local details from explicitly accepting permissions. Canonical preparation binds the exact proposed operation and any affected-assignment review; it does not read current authority or grant access. Current-source verification, complete-set comparison, atomic storage and protected caller checks remain separate requirements. Neither a candidate fingerprint nor a successful schema parse completes the governed IAM journey.
 
-`pnpm test` checks every catalogue member, strict union, source document, identity/account boundary, grant invariant, secret reference, safe error and compilation handoff. `pnpm fixtures` parses and compiles all thirteen definition documents through shipping code, validates their complete dependency graph, and separately proves non-shipping scenarios and storage evidence. Both commands are included in `pnpm verify`.
+The repository retains `pnpm test`, `pnpm fixtures` and `pnpm verify` as tooling references. They are not completion gates for the current development fleet; follow [agent coordination](../docs/build-plan/agent-coordination.md).

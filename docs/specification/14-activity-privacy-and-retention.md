@@ -38,7 +38,7 @@ Failures before a local organisation/account scope is established cannot nominat
 an organisation to log in. Failure to record Activity never makes an operation
 successful or permits a claim that the refusal was recorded.
 
-[Access Activity integration #41](../build-plan/issue-41-access-activity.md) connects
+[Access Activity integration #41](https://github.com/Abzum-NZ/Abzum-Vortex/issues/41) connects
 this behavior to real Phase 3 owners without duplicating existing success entries.
 [Activity views #115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115) owns later
 permitted browsing, aggregate read evidence and remaining service integrations.
@@ -130,7 +130,7 @@ Privacy administrators act within one organisation. A tenant administrator may c
 
 [Activity append #252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252) is delivered before Access/Record operations require atomic success evidence. Failed mutations create no success activity. A supported owner may record a clean pre-write permission refusal in that request transaction; other failures record nothing. [#115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115) adds permitted views and complete service coverage to the same boundary.
 
-The [foundation plan](../build-plan/issue-252-activity-foundation.md) defines one private append-only store, not a new runtime service. Its append function is owner-only; no browser, Data API, runtime or request role can append or read entries directly. A protected owning operation derives scope, actor and action and appends successful evidence inside its existing mutation transaction. It may append a clean pre-write refusal in that transaction using only established local identifiers. Logging failure cannot convert refusal into success. This task proves the reusable composition; it does not claim that every existing service has already integrated it.
+The [Activity foundation issue](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252) owns one private append-only store, not a new runtime service. Its append function is owner-only; no browser, Data API, runtime or request role can append or read entries directly. A protected owning operation derives scope, actor and action and appends successful evidence inside its existing mutation transaction. It may append a clean pre-write refusal in that transaction using only established local identifiers. Logging failure cannot convert refusal into success. This foundation does not claim that every existing service has already integrated it.
 
 [File-removal eligibility #253](https://github.com/Abzum-NZ/Abzum-Vortex/issues/253) supplies current recovery/hold checks before automated purge. [#117](https://github.com/Abzum-NZ/Abzum-Vortex/issues/117) extends selection policies and all-store handling, not a duplicate deletion engine. Complete organisation archive/restore follows these policies in [#255](https://github.com/Abzum-NZ/Abzum-Vortex/issues/255).
 

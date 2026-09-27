@@ -2,11 +2,20 @@
 
 [Specification index](../README.md) · [Data contracts](data-contracts.md) · [Build plan](../../build-plan/README.md)
 
-## Open choices — reviewed 12 September 2026
+## Open choices — authority ledgers, 25 September 2026
 
-None. The owner approved creator/current-membership Group ownership and automatic deadline refresh. Permanent requirements, including account transfer and record lifecycle limits, are in [record ownership and lifecycle](record-ownership-and-lifecycle.md). Delivery gaps remain on the GitHub tasks, not here.
+The [authority-ledger design record](../../build-plan/authority-ledgers-design-2026-09-25.md#0-decisions-for-the-owner-coordinator-please-relay) asks four questions. Its recommendations are proposals, not owner approvals. Until the owner decides, the current [Access specification](../04-access-and-permissions.md) and [Architecture Decision 11](../../build-plan/architecture-decisions-2026-09-25.md#decision-11--building-installing-and-system-applications-are-permission-gated) govern implementation.
 
-Resolved choices have been incorporated into the permanent requirements, contracts, examples, acceptance tests, build phases, and linked GitHub work. They are intentionally absent here so implementation cannot mistake a resolved option for an open question.
+| Question for the product owner | Options and consequence | Recommendation and affected work |
+| --- | --- | --- |
+| Q1: Should delegation move from `organization_delegation_authorities` to a separate scope carried by management roles? | A role-carried scope changes authority for every holder when the role changes; the current ledger grants and replaces scope per holder. | Adopt only with separate acceptance for delegation and use, a direct non-expiring steward catalogue scope, and all [B1 safeguards](../../build-plan/authority-ledgers-design-2026-09-25.md#52-removable-only-if-the-owner-agrees-each-changes-a-merged-specification). Spec 04 and the delegation writers/readers would change. |
+| Q2: Should tenant powers move to tenant-scoped ordinary roles in one assignment ledger? | This changes the current separate tenant-authority model, adds tenant scope to assignments and must preserve subset, expiry, self-grant and permanent-manager checks. | Keep the seven-key tenant ledger for now. A different answer changes [spec 04](../04-access-and-permissions.md) and its tenant grant path. |
+| Q3: Should privileged activation become a time-bounded standing assignment created by a flow? | A bare assignment loses eligibility-without-use, self-activation/deactivation, membership pinning and continuity; rebuilding those checks recreates an activation ledger. | Keep activations under [the privileged-access contract](groups-and-privileged-access.md). A different answer changes that contract and #1052. |
+| Q4: Should the 13-permission permanent-steward set move from SQL to catalogue data? | Catalogue data could define the set, but a release must refuse empty or silently reduced protection. | Optional; preserve the current safeguard until the owner accepts a catalogue-release rule. |
+
+The owner previously approved creator/current-membership Group ownership and automatic deadline refresh. Permanent requirements, including account transfer and record lifecycle limits, are in [record ownership and lifecycle](record-ownership-and-lifecycle.md). Delivery gaps remain on the GitHub tasks, not here.
+
+Resolved choices have been incorporated into the permanent requirements, contracts, examples, build phases and linked GitHub work. They are intentionally absent here so implementation cannot mistake a resolved option for an open question.
 
 Credentials, service access, environment health, one-time deployment or destructive-operation approval, and implementation findings are not product decisions. Track them in the responsible delivery issue or runbook, with their owner and evidence. Add them here only if two viable answers would materially change a permanent product requirement or architecture.
 

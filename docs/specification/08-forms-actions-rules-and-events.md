@@ -132,9 +132,9 @@ Conditions may refer to:
 
 Relationship traversal is limited and validated. Conditions cannot execute code or network calls.
 
-The early [record-visibility foundation #36](../build-plan/issue-36-ownership-and-visibility.md) supplies the shared typed Boolean evaluator using the existing condition contract. It validates the complete tree and declared inputs before evaluating truth: invalid or missing input cannot become an allowance through negation or a short-circuited branch. Values are compared without implicit type conversion, and pure evaluation and PostgreSQL restrictions use the same tested meaning. The [condition builder #57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57) later adds authoring and general-rule extensions to that same implementation; the operators listed conceptually above are not a claim that all extensions already ship.
+The early [record-visibility foundation #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) supplies the shared typed Boolean evaluator using the existing condition contract. It validates the complete tree and declared inputs before evaluating truth: invalid or missing input cannot become an allowance through negation or a short-circuited branch. Values are compared without implicit type conversion, and pure evaluation and PostgreSQL restrictions use the same tested meaning. The [condition builder #57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57) later adds authoring and general-rule extensions to that same implementation; the operators listed conceptually above are not a claim that all extensions already ship.
 
-The current Module contract supplies the [exact-value Rule semantics](../build-plan/issue-44-record-field-values.md)
+The current Module contract supplies the [exact-value Rule semantics](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44)
 needed by its field definitions. Select them from the trusted owning Module
 contract, not from how an incoming value looks or the containing Application's
 version. Keep the same condition tree and error meanings. Decimal and money
@@ -151,7 +151,7 @@ and input mappings must have compatible declared formats. A containing
 Application's format version cannot turn an exact decimal into a floating-point
 number, reinterpret money currency, or turn ordinary text into a number. Compile
 and validate these consumers with the same owning helpers described in the
-[field-value plan](../build-plan/issue-44-record-field-values.md).
+[field-value plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44).
 
 A workflow input bound to a record field retains its declared allowed record
 types. The field's possible targets must fit within that declaration; downstream
@@ -159,7 +159,7 @@ tasks use the declaration when checking their own accepted targets. Historical
 canonical inputs that omitted this metadata use the owning field's targets.
 These type declarations never grant access to the referenced records.
 
-The [Rule package](../../runtime/rule/package.json) is a shared, contracts-only package below Definition and Access in the enforced dependency graph. Both reuse its pure evaluator; the existing Definition entry delegates to it. This does not introduce another service, expression language, database connection or browser-side authority. Actual database parity remains an explicit acceptance requirement of [record visibility](../build-plan/issue-36-ownership-and-visibility.md), not something established by pure tests alone.
+The [Rule package](../../runtime/rule/package.json) is a shared, contracts-only package below Definition and Access in the enforced dependency graph. Both reuse its pure evaluator; the existing Definition entry delegates to it. This does not introduce another service, expression language, database connection or browser-side authority. Record visibility still requires the same semantics in publication, protected reads and database enforcement.
 
 ## Events
 
@@ -207,7 +207,7 @@ flowchart LR
     O --> T[Record, activity and event commit together]
 ```
 
-The [system-field/action/event plan](../build-plan/issue-50-system-fields-actions-events.md)
+The [system-field/action/event plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50)
 separates this installation handoff from actual occurrence delivery and preserves
 the existing service dependency direction.
 

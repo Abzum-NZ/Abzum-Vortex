@@ -131,7 +131,7 @@ flowchart LR
 
 ### Reading an installed Application
 
-The separate [installed-Application reader](../build-plan/issue-43-active-installation-read.md)
+The separate [installed-Application reader](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43)
 starts from the verified request's locally owned Application, not an arbitrary
 foreign definition chosen by a caller. It follows that exact release's Module
 dependencies recursively. If the Application uses Module A and A uses a shared

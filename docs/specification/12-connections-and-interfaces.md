@@ -108,7 +108,7 @@ and requires a major interface version under [#103](https://github.com/Abzum-NZ/
 This input descriptor does not make arbitrary structured outputs or exact
 decimal/money interface types available.
 
-When an interface operation binds a published Frontend Flow, it invokes that exact versioned flow and its configured node sequence rather than an alternate handler. Each protected node uses its owning service and effective-actor Access transaction. A specified account or system actor requires separate exact execution authority; neither an interface credential nor a service-role credential can choose or impersonate it.
+When an interface operation binds a published flow, it invokes that exact versioned flow and its configured task list rather than an alternate handler. Each protected task uses its owning service and the flow's verified run-as authority. A specified account or System actor requires separate exact execution authority; neither an interface credential nor a service-role credential can choose or impersonate it.
 
 ## Governed MCP access
 
@@ -163,7 +163,7 @@ When the person's browser supports the WebMCP model-context interface, the open 
 - The caller is the person's current organisation account, not a new “AI identity.” Requested client scope can only narrow that account's current permissions. Switching organisation or application requires an explicit authorised context change.
 - Permission, role, grant, account or session revocation changes the next resource read or tool call. Cached tool lists and resources cannot preserve withdrawn data or actions.
 - A changing operation uses the same duplicate protection, expected record or draft revision, validation, activity history, limits and safe refusal as the web interface.
-- Invoking a Frontend Flow uses its exact published nodes and execution bindings. The MCP caller cannot replace a node actor, supply execution delegation, bypass the effective actor's checks, or receive values outside the caller's own current viewer-safe projection.
+- Invoking a flow uses its exact published tasks and verified run-as binding. The MCP caller cannot replace its actor, supply execution delegation, bypass the effective actor's checks, or receive values outside the caller's own current viewer-safe projection.
 - If the interface requires confirmation, reauthentication or a human-only external authorization step, MCP returns the same pending requirement. The client may use supported [elicitation](https://modelcontextprotocol.io/specification/2026-07-28/client/elicitation); credentials and other secrets use a Vortex-hosted URL flow and never pass through the MCP client.
 - Vortex does not request MCP sampling, host a model, supply model credentials, or decide what an external client does next. This preserves the [no embedded AI](01-purpose-and-scope.md#product-boundaries) boundary.
 
@@ -192,7 +192,7 @@ sequenceDiagram
 ```
 
 - Pairing is visible in the web interface, expires, and can be ended immediately by the person. An MCP client never receives a browser cookie, DOM handle or unrestricted browser-control channel.
-- Navigation and local view controls use the stable identifiers in the semantic interface map. Once the private form-draft and typed binding runtimes owned by [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68) and [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) are delivered, form filling updates the same private, revisioned draft used by the browser. Invoking an application action enters its exact published frontend-flow binding; operation nodes call the protected owning service and update the interface from its confirmed result. MCP does not synthesize a pointer click or skip the configured required inputs/path. A presentation-only flow returns its message or view outcome without a business save, including when no browser is paired.
+- Navigation and local view controls use the stable identifiers in the semantic interface map. Once the private form-draft and typed binding runtimes owned by [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68) and [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) are delivered, form filling updates the same private, revisioned draft used by the browser. Invoking an application action enters its exact published flow binding; protected tasks call the owning service and update the interface from its confirmed result. MCP does not synthesize a pointer click or skip the configured required inputs/path. A presentation-only flow returns its message or view outcome without a business save, including when no browser is paired.
 - Each command names the expected interface-state revision. A stale command is refused so a delayed agent action cannot move the person backward, replace newer form input or act on a record that is no longer current.
 - Purely visual details such as animation progress, pixel position and hover decoration are not mirrored. The connected interface still applies its ordinary accessible loading, focus, motion and error behaviour.
 
@@ -204,7 +204,7 @@ The reverse is also controlled: the MCP parity surface does not expose a hidden 
 
 ### Build applications through the same designer capabilities
 
-An authorised external client can create an application, select its module dependencies, compose pages and components, create/select/copy/edit/link Frontend Flows, configure triggers, conditions, nodes, flow variables and form mappings, inspect references and validation, preview, publish and install through the same governed authoring operations as the App Builder. [Flow-first authoring](appendices/frontend-rule-designer.md#mcp-app-authoring-and-invocation) is part of parity, not a later application-specific agent API.
+An authorised external client can create an application, select its module dependencies, compose pages and components, create/select/copy/edit/link flows, configure triggers, conditions, tasks, flow variables and form mappings, inspect references and validation, preview, publish and install through the same governed authoring operations as the App Builder. [Flow-first authoring](appendices/frontend-rule-designer.md#mcp-app-authoring-and-invocation) is part of parity, not a later application-specific agent API.
 
 Use stable application/page/component/flow identities and expected application-draft revisions. A headless author uses semantic edits, not canvas coordinates, scripts or unrestricted JSON writes. Flow sharing/copying and default generation behave identically through UI and MCP. Preview is non-mutating business simulation. Existing publication, installation, confirmation and human-only requirements remain intact. An agent receives no independent approval or permission-grant power and cannot invoke a lower-level helper to bypass a required application journey.
 

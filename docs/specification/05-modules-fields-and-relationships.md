@@ -141,7 +141,7 @@ There is no separate duration type in this release. Each calendar page explicitl
 
 The Record engine must preserve the meaning of values from form entry through
 save, read, conditions, calculations and queries. A display format is not the
-stored value. The [field-runtime plan](../build-plan/issue-44-record-field-values.md)
+stored value. The [field-runtime plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44)
 records the coordinated contract and consumer changes; these requirements do not
 claim that Record execution is already delivered.
 
@@ -213,7 +213,7 @@ explicit product operations.
 
 Every calculation is a [formula](appendices/frontend-rule-designer.md#formulas): one typed JSON expression tree over a closed operator catalogue, never text. A value that depends on the current time, such as whether a deadline has passed, is a read-time computed field: it is computed whenever it is read and is never stored, and queries that use it bypass the data-result cache ([17](17-runtime-storage-and-caching.md#cache-model)). Stored calculations and relationship totals never depend on it. [Scheduled time-based calculations](appendices/record-ownership-and-lifecycle.md#scheduled-time-based-calculations) defines read-time evaluation and how overdue escalations run as durable flows with a `Schedule` trigger.
 
-The [calculation-engine plan](../build-plan/issue-48-calculation-engine.md) defines
+The [calculation-engine plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48) defines
 the first executable arithmetic and missing-value meanings. Decimal/money
 calculations and average totals declare result precision from zero to twelve
 decimal places and use half-even rounding once at the final result. Ordinary
@@ -242,7 +242,7 @@ different from computing from a redacted subset or refusing a permitted save.
 - Supported operations are count, sum, minimum, maximum, and average where the source type permits them. Count produces a whole number; sum, minimum, and maximum preserve the compatible source-field type; average produces a decimal number, or money when averaging money. Publication checks the declared result against the referenced field instead of treating every calculated or total value as a number.
 - A money total is valid only when every included non-empty value uses one currency. A mixed-currency total is refused with a stable internal diagnostic identifying the currency codes present; caller-visible errors must not reveal hidden inputs. Vortex never silently converts or splits the total.
 
-The [relationship-total delivery plan](../build-plan/issue-48-calculation-engine.md)
+The [relationship-total delivery plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48)
 defines the executable meanings. Count counts filtered related records; field
 operations ignore absent/null inputs but do not silently ignore invalid values.
 Empty count and dimensionless sum are zero; empty minimum, maximum and average
@@ -259,7 +259,7 @@ refer back to themselves. A type-level cycle is not automatically a forbidden
 record-level cycle. The protected save checks the actual record/field dependency
 graph, updates affected old/new parents and dependent totals atomically, and
 refuses a real cycle without partial changes. Follow the reviewed
-[integrated totals rules](../build-plan/issue-48-calculation-engine.md).
+[integrated totals rules](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48).
 
 ## Relationships
 

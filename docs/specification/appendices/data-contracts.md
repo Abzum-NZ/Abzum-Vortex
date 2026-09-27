@@ -234,7 +234,7 @@ Organisation-owned roles may select exact permissions from several registered ap
 
 A permission has `permission_id`, permanent `key`, label, description, owner kind and owner identifier, optional record type, action kind, optional named action, and `administrative` flag. A module or application definition owns a complete permission declaration containing every field except the owner kind and identifier, which are unambiguously supplied by the containing definition. The live permission catalogue adds that owner context; it does not invent or alter permission meaning.
 
-[Field access #37](../../build-plan/issue-37-field-access.md) adds immutable `fieldPolicy` to exact record permissions: canonical unique `readableFieldIds` and `changeableFieldIds`, with changeable a subset of readable. Empty lists are valid. Authored `field_policy` references resolve only within that permission's exact record type; non-record permissions cannot supply this policy. Newly published record permissions require it, while historical canonical declarations remain parseable without it and contribute no field authority. Preserve their original bytes and meaning fingerprint. Adding or changing policy uses the existing meaning and major-version comparison, including absent-to-empty changes; no automatic acceptance or new counter is introduced.
+[Field access #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) adds immutable `fieldPolicy` to exact record permissions: canonical unique `readableFieldIds` and `changeableFieldIds`, with changeable a subset of readable. Empty lists are valid. Authored `field_policy` references resolve only within that permission's exact record type; non-record permissions cannot supply this policy. Newly published record permissions require it, while historical canonical declarations remain parseable without it and contribute no field authority. Preserve their original bytes and meaning fingerprint. Adding or changing policy uses the existing meaning and major-version comparison, including absent-to-empty changes; no automatic acceptance or new counter is introduced.
 
 Only complete current record-permission contributions supply a field policy. Intersect each direct-share route with its own field bounds before union; a missing or empty policy contributes no fields and does not veto another complete contribution. The trusted catalogue/record decision supplies this policy, never the request. A field list cannot authorise a different action. These [composition rules](../04-access-and-permissions.md#field-access) must agree in contracts, compiler, catalogue, TypeScript and database proofs.
 
@@ -427,10 +427,10 @@ record-level policy. Record types, fields, sharing, public callers and remote po
 cannot be smuggled in as extra fields or treated as implemented. Their required
 policies refuse until their owning tasks extend the same boundary. Contract tests
 prove shape and separation, not effective permission, database execution or a usable
-interface. The [#34 implementation plan](../../build-plan/issue-34-access-decision.md)
+interface. The [#34 implementation plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34)
 defines the remaining evaluation, integration and verification work.
 
-The [record-access extension #35](../../build-plan/issue-35-row-policy-composition.md)
+The [record-access extension #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35)
 adds a separate trusted record declaration with exact application, module, record
 type and installed storage binding, plus canonical alternative permission identities.
 Permission-only eligibility is still not authority over any particular row. Final
@@ -439,7 +439,7 @@ bound by the trusted record adapter. The final allowed result carries only compl
 permission-and-row contributions and expires at the earliest deadline among those
 reported contributions. Each contribution retains its exact permission owner and
 matched route; direct-share contributions retain their own field bounds. The
-[field-access consumer #37](../../build-plan/issue-37-field-access.md) checks the exact
+[field-access consumer #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) checks the exact
 record target before applying those bounds. No new decision token or reusable
 capability is introduced. These contracts describe the extension being built, not
 proof that record policies or field enforcement have already shipped.
@@ -535,7 +535,7 @@ Unique values remain reserved while `lifecycle_state` is `soft_deleted` or `remo
 Forms, flow tasks, imports and MCP use one strict create/update command, defined
 in the [Record contracts](../../../contracts/src/records.ts) and delivered through
 [save pipeline #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47). The
-[implementation plan](../../build-plan/issue-47-save-command.md) distinguishes the
+[implementation plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) distinguishes the
 contract prerequisite from the protected save implementation.
 
 Both operations carry contract version `2.0.0`, command identifier, record-type
@@ -715,7 +715,7 @@ including an allowed table block, without expanding the Page format. Typed recor
 references and organisation-account references remain distinct. A consumer resolves input/value semantics from the
 exact owning Module contract, not from a string or object's appearance.
 
-[Row-policy composition #35](../../build-plan/issue-35-row-policy-composition.md) extends that permission binding without rewriting published content: keep authored `permission` and compiled `permissionKey` for one permission; use mutually exclusive authored `permission_alternatives` and compiled `permissionKeys` for two or more unique, canonically ordered alternatives. Every alternative resolves to its exact declaring owner and the same subject record type and action meaning. Named alternatives additionally share the same declaring owner; matching names in different modules do not establish the same authority. An application action may reference a bound module's permissions, so the action's containing application is not automatically the permission owner. Each alternative must independently supply both current authority and its own complete record scope; an interface exposure permission cannot substitute for either. The action's flow execution remains owned by [page/action bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), not this metadata extension.
+[Row-policy composition #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35) extends that permission binding without rewriting published content: keep authored `permission` and compiled `permissionKey` for one permission; use mutually exclusive authored `permission_alternatives` and compiled `permissionKeys` for two or more unique, canonically ordered alternatives. Every alternative resolves to its exact declaring owner and the same subject record type and action meaning. Named alternatives additionally share the same declaring owner; matching names in different modules do not establish the same authority. An application action may reference a bound module's permissions, so the action's containing application is not automatically the permission owner. Each alternative must independently supply both current authority and its own complete record scope; an interface exposure permission cannot substitute for either. The action's flow execution remains owned by [page/action bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), not this metadata extension.
 
 A **rule** is a flow with a `BeforeSave` trigger and the `transaction` execution kind. It declares identifier, owner/subject context, an explicit contract version, typed inputs and variables, an optional entry condition, a priority, registered versioned tasks and declared terminal outcomes. The [Frontend Rule Designer contract](frontend-rule-designer.md#one-flow-language) governs the complete versioned extension and fixtures. Rules move to the one flow representation for authoring and execution through the [one flow language mapping](../08-forms-actions-rules-and-events.md#one-flow-language-mapping); afterwards no separate rule-graph reader or conversion path remains. Module rules retain their record-only context; application rules can additionally refer to owned pages, forms and flows. There is no separate permission-approval rule.
 
@@ -743,7 +743,7 @@ Canonical columns use key order while rows retain their meaningful order. Cell
 validation reuses existing value codecs; decimal-looking text is not guessed to
 be a number. Assignment to a record table additionally obeys that field's own
 constraints. Flow data descriptors do not duplicate storage settings or grant
-write authority. See the [typed-value delivery plan](../../build-plan/issue-58-shared-rule-graph-foundation.md).
+write authority. See the [typed-value delivery plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58).
 
 Flow publication validates value shapes and declared reference targets, including
 variable defaults. The owning Record save enforces field-specific currency,
@@ -765,7 +765,7 @@ currency, and ordering across different currencies is refused rather than treate
 as false. Authored values normalize before canonical evaluation; an explicitly
 declared `number` parameter uses finite-double meaning. Definition publication
 validation, Rule-interpreter execution and database-backed permission conditions apply the
-same declared operand semantics. The [coordinated implementation plan](../../build-plan/issue-44-record-field-values.md)
+same declared operand semantics. The [coordinated implementation plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44)
 tracks that complete delivery; standalone schemas do not establish runtime support.
 
 ## Definition publication storage contract
@@ -901,7 +901,7 @@ The server may page resources with opaque cursors and announce that resource or 
 
 ## Activity and retention contracts
 
-An activity entry has organisation, activity identifier, time, actor kind and identifier, action, subject identifiers, safe changed-field identifiers, source, correlation and outcome. Actor kinds are `identity`, `organization_account`, `system` and `public_session`; anonymous session attribution is not identity verification. Federation is a source, not a separate principal kind. Identifier lists are unique and canonically ordered. The activity identifier is the duplicate identity within the organisation: exact retries return the existing entry, and conflicting reuse refuses. The content-free append contract has no arbitrary payload or retained-detail reference. Separately governed value history is outside this foundation; see the [Activity plan](../../build-plan/issue-252-activity-foundation.md).
+An activity entry has organisation, activity identifier, time, actor kind and identifier, action, subject identifiers, safe changed-field identifiers, source, correlation and outcome. Actor kinds are `identity`, `organization_account`, `system` and `public_session`; anonymous session attribution is not identity verification. Federation is a source, not a separate principal kind. Identifier lists are unique and canonically ordered. The activity identifier is the duplicate identity within the organisation: exact retries return the existing entry, and conflicting reuse refuses. The content-free append contract has no arbitrary payload or retained-detail reference. Separately governed value history is outside this foundation; see the [Activity plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252).
 
 For a flow task using specified-account or system execution, the owning operation records its ordinary activity under the effective actor. When an initiating organisation account exists, the separate execution-delegation use records an initiator-account entry under the same correlation identifier. A system-started flow instead records its actual verified system actor and cause without inventing a human initiator. These entries use this existing append contract; no flow-specific activity store, envelope or copied authority evidence is introduced.
 
