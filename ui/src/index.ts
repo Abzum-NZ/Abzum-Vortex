@@ -268,11 +268,13 @@ export {
 
 // Launcher List Payload & Binding Contracts
 export {
+  applicationLauncherQueryRowsToListValues,
   linkTilesToListValues,
   parsePermittedApplicationsLauncherProjection,
   permittedApplicationsToListValues,
   readLauncherSettings,
   resolveLauncherListContext,
+  type ApplicationLauncherQueryRow,
   type LauncherListContext,
   type LauncherRenderProps,
   type LauncherSettings,

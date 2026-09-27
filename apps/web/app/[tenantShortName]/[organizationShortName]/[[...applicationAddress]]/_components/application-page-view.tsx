@@ -8,6 +8,7 @@ import {
   createFormBlockRuntime,
   createFullPlatformComponentRegistry,
   equalFormValue,
+  APPLICATION_LAUNCHER_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
   PageLayoutRenderer,
   UnsavedWorkProvider,
@@ -216,6 +217,32 @@ const formOwnersByPlacement = (
   return owners;
 };
 
+/** Finds launcher placements whose row actions open through the addressed server action. */
+const applicationLauncherPlacementIds = (page: Readonly<Record<string, unknown>>): Set<string> => {
+  const placementIds = new Set<string>();
+  const visit = (slot: unknown): void => {
+    if (!isRecord(slot) || !isRecord(slot.placements)) return;
+    for (const [placementId, candidate] of Object.entries(slot.placements)) {
+      if (!isRecord(candidate)) continue;
+      const block = candidate.block;
+      if (
+        isRecord(block) &&
+        typeof block.blockId === "string" &&
+        block.blockId.toLowerCase() === APPLICATION_LAUNCHER_BLOCK_RELEASE.blockId.toLowerCase()
+      )
+        placementIds.add(placementId);
+      if (isRecord(candidate.slots))
+        for (const child of Object.values(candidate.slots)) visit(child);
+    }
+  };
+  const composition = page.composition;
+  if (!isRecord(composition)) return placementIds;
+  if ("main" in composition) visit(composition.main);
+  else if (isRecord(composition.stepContent))
+    for (const child of Object.values(composition.stepContent)) visit(child);
+  return placementIds;
+};
+
 /**
  * Finds the binding an event identity names. A legacy row action that names no control matches only
  * when the placement declares exactly one row-action binding, so it never guesses between several.
@@ -231,24 +258,32 @@ const bindingFor = (
 };
 
 /**
- * Renders one installed application page and carries out what its people do on it. Every
- * declared component event goes to the one flow endpoint with the exact installation and binding
- * the page was rendered from; the page then refreshes so the affected view shows the persisted
- * result. Nothing here decides permission or runs an operation itself.
+ * Renders one installed application page and carries out what its people do on it. Declared flow
+ * events go to the one flow endpoint with the exact installation and binding the page was rendered
+ * from. Application launcher row actions go to the server-side permitted-application recheck. The
+ * page then refreshes or navigates after the server confirms the action.
  */
 export function ApplicationPageView({
   model,
-}: Readonly<{ model: ApplicationPageModel }>): ReactElement {
+  onOpenApplication,
+}: Readonly<{
+  model: ApplicationPageModel;
+  onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
+}>): ReactElement {
   return (
     <UnsavedWorkProvider>
-      <ApplicationPageViewContent model={model} />
+      <ApplicationPageViewContent model={model} onOpenApplication={onOpenApplication} />
     </UnsavedWorkProvider>
   );
 }
 
 function ApplicationPageViewContent({
   model,
-}: Readonly<{ model: ApplicationPageModel }>): ReactElement {
+  onOpenApplication,
+}: Readonly<{
+  model: ApplicationPageModel;
+  onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
+}>): ReactElement {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -297,6 +332,10 @@ function ApplicationPageViewContent({
   const application = model.invocation;
   const subject = model.subject;
   const formOwners = useMemo(() => formOwnersByPlacement(model.page), [model.page]);
+  const launcherPlacements = useMemo(
+    () => applicationLauncherPlacementIds(model.page),
+    [model.page],
+  );
   const basePath = `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(application.applicationKey)}`;
   const pageKeyOf = useMemo(
     () => new Map(model.pages.map((page) => [page.pageId.toLowerCase(), page.key])),
@@ -617,8 +656,15 @@ function ApplicationPageViewContent({
       // Display callbacks belong only to a placement with projected data; a control placement's
       // own parser refuses an event name it does not declare, so they are never added to a form.
       if (data !== undefined) {
+        if (launcherPlacements.has(placementId))
+          events.row_action = (event: DisplaySemanticEvent) => {
+            if (event.event === "row_action" && !busy) void onOpenApplication(event);
+          };
         for (const kind of ["row_clicked", "row_action", "bulk_action", "inline_edit"] as const)
-          if (bindings.some((binding) => binding.event === kind))
+          if (
+            (kind !== "row_action" || !launcherPlacements.has(placementId)) &&
+            bindings.some((binding) => binding.event === kind)
+          )
             events[kind] = (event: DisplaySemanticEvent) => {
               const binding = bindingFor(bindings, event);
               if (binding !== undefined && !busy)
@@ -745,6 +791,7 @@ function ApplicationPageViewContent({
     formBlock,
     formFeedback,
     formOwners,
+    launcherPlacements,
     model.bindings,
     model.data,
     model.editFormBaselines,
@@ -753,6 +800,7 @@ function ApplicationPageViewContent({
     selection,
     setQuery,
     subject,
+    onOpenApplication,
   ]);
 
   return (

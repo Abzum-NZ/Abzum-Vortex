@@ -13,6 +13,11 @@ import {
   type ProtectedQueryRow,
 } from "@vortex/query";
 import {
+  APPLICATION_LAUNCHER_BLOCK_RELEASE,
+  applicationLauncherQueryRowsToListValues,
+  type ApplicationLauncherQueryRow,
+} from "@vortex/ui";
+import {
   createPageSubjectReader,
   createRecordsTableQueryResolver,
   createStoredNavigationProjectionService,
@@ -40,6 +45,7 @@ import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";
 import { getQueryContinuationKey } from "./query-continuation-key";
+import { loadPermittedApplicationsAtAddress } from "./organization-context";
 import { humanOrganizationRequestDependencies, humanOrganizationRequests } from "./server-composition";
 
 /**
@@ -309,6 +315,8 @@ const coerceInput = (raw: string, type: string): JsonValue | undefined => {
 type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][number];
 type ModuleQuery = ModuleRelease["content"]["queries"][number];
 
+const MAXIMUM_LAUNCHER_QUERY_ROWS = 10_000;
+
 const findModuleQuery = (
   context: InstalledRuntimeContext,
   queryId: string,
@@ -327,6 +335,25 @@ const fieldLabelsOf = (module: ModuleRelease): Record<string, string> =>
     ),
   );
 
+const isApplicationLauncherPlacement = (placement: unknown): boolean => {
+  if (!isRecord(placement) || !isRecord(placement.block)) return false;
+  return (
+    typeof placement.block.blockId === "string" &&
+    sameId(placement.block.blockId, APPLICATION_LAUNCHER_BLOCK_RELEASE.blockId)
+  );
+};
+
+const launcherCellKey = (
+  settings: Readonly<Record<string, BlockPropertyValueV2Contract>>,
+  settingKey: string,
+  fallback: string,
+): string => {
+  const value = settings[settingKey];
+  return isRecord(value) && value.kind === "text" && typeof value.value === "string"
+    ? value.value
+    : fallback;
+};
+
 /**
  * Logs one data placement that could not be loaded, server side only: the application, page and
  * placement identities that are already in the address, and a fixed reason code. Never a message,
@@ -343,7 +370,10 @@ const logPlacementFailure = (
     | "subject_refused"
     | "detail_command_invalid"
     | "detail_query_unavailable"
-    | "detail_query_refused",
+    | "detail_query_refused"
+    | "launcher_query_invalid"
+    | "launcher_query_unavailable"
+    | "launcher_query_refused",
 ): void => {
   console.error(
     `[page] data placement not loaded: application=${address.application.key} page=${address.pageKey} placement=${placementId} reason=${reason}`,
@@ -499,6 +529,17 @@ export const loadApplicationPage = async (
     (subjectRead ??= subjects.read(session, selection, { recordTypeId, recordId }));
 
   const placements = collectPlacements(page);
+  const hasQueryBoundLauncher = placements.some(
+    ({ placement }) =>
+      isApplicationLauncherPlacement(placement) && typeof placement.queryId === "string",
+  );
+  const permittedApplicationsRead = hasQueryBoundLauncher
+    ? await loadPermittedApplicationsAtAddress(
+        session,
+        address.tenantShortName,
+        address.organizationShortName,
+      )
+    : undefined;
   const data: Record<string, PageDataState> = {};
   const bindings: Record<string, PlacementFlowBinding[]> = {};
   for (const { placementId, placement } of placements) {
@@ -529,9 +570,16 @@ export const loadApplicationPage = async (
       data[placementId] = { status: "error" };
       continue;
     }
-    if (tableContract === undefined && detailContract === undefined) continue;
-
     const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
+    const queryBoundLauncher = isApplicationLauncherPlacement(placement) && queryId !== undefined;
+    if (tableContract === undefined && detailContract === undefined && !queryBoundLauncher) continue;
+    if (queryBoundLauncher && permittedApplicationsRead?.kind !== "available") {
+      data[placementId] =
+        permittedApplicationsRead?.kind === "temporarily_unavailable"
+          ? { status: "error" }
+          : { status: "refused", reason: "not_permitted" };
+      continue;
+    }
 
     // A Record detail on a detail or public page that binds no query reads its page subject: the
     // one record the page's own address names, of the page's declared record type, through the
@@ -590,6 +638,103 @@ export const loadApplicationPage = async (
     const inputType = (input: string): string | undefined =>
       bound.query.inputs.find((declared) => declared.key === input)?.type;
     const fieldLabels = fieldLabelsOf(bound.module);
+
+    if (queryBoundLauncher) {
+      const inputValues: Record<string, JsonValue> = {};
+      for (const declared of bound.query.inputs) {
+        const raw = first(parameters[declared.key]);
+        const value = raw === undefined ? undefined : coerceInput(raw, declared.type);
+        if (value !== undefined) inputValues[declared.key] = value;
+      }
+      const command = protectedQueryCommandSchema.safeParse({
+        moduleRootId: bound.module.rootId,
+        queryId: bound.query.queryId,
+        inputValues,
+        requestedFieldIds: bound.query.selectedFieldIds,
+        requestedSystemFieldKeys: [],
+        sort: [],
+        sortableFieldIds: [],
+        filterableFieldIds: [],
+        searchableFieldIds: [],
+        pageSize: bound.query.pageSize,
+      });
+      if (!command.success) {
+        logPlacementFailure(address, placementId, "launcher_query_invalid");
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+
+      const queryRows: ProtectedQueryRow[] = [];
+      const seenContinuationTokens = new Set<string>();
+      let continuationToken: string | undefined;
+      let failure: "unavailable" | "refused" | "too_many_rows" | undefined;
+      do {
+        const result = await queries.run(session, selection, {
+          ...command.data,
+          ...(continuationToken === undefined ? {} : { continuationToken }),
+        });
+        if (result.kind === "temporarily_unavailable") {
+          failure = "unavailable";
+          break;
+        }
+        if (result.kind !== "available" || result.value.outcome !== "completed") {
+          failure = "refused";
+          break;
+        }
+        queryRows.push(...result.value.rows);
+        if (queryRows.length > MAXIMUM_LAUNCHER_QUERY_ROWS) {
+          failure = "too_many_rows";
+          break;
+        }
+        const nextToken = result.value.nextContinuationToken;
+        if (nextToken !== undefined && seenContinuationTokens.has(nextToken)) {
+          failure = "too_many_rows";
+          break;
+        }
+        if (nextToken !== undefined) seenContinuationTokens.add(nextToken);
+        continuationToken = nextToken;
+      } while (continuationToken !== undefined);
+
+      if (failure !== undefined) {
+        logPlacementFailure(
+          address,
+          placementId,
+          failure === "unavailable" ? "launcher_query_unavailable" : "launcher_query_refused",
+        );
+        data[placementId] =
+          failure === "unavailable"
+            ? { status: "error" }
+            : { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+
+      const fieldKeys = new Map(
+        bound.module.content.recordTypes.flatMap((recordType) =>
+          recordType.fields.map((field) => [String(field.fieldId).toLowerCase(), field.key] as const),
+        ),
+      );
+      const launcherRows: ApplicationLauncherQueryRow[] = queryRows.map((row) => {
+        const cells: Record<string, { kind: "text"; text: string }> = {};
+        for (const [fieldId, value] of Object.entries(row.values)) {
+          const fieldKey = fieldKeys.get(fieldId.toLowerCase());
+          if (fieldKey !== undefined && typeof value === "string")
+            cells[fieldKey] = { kind: "text", text: value };
+        }
+        const key = cells.key;
+        return { applicationKey: key?.kind === "text" ? key.text : undefined, cells };
+      });
+      const permittedApplicationKeys = permittedApplicationsRead.applications.map(
+        (application) => application.key,
+      );
+      const values = applicationLauncherQueryRowsToListValues(
+        launcherRows,
+        permittedApplicationKeys,
+        launcherCellKey(settings, "name_key", "name"),
+        launcherCellKey(settings, "icon_key", "icon"),
+      );
+      data[placementId] = { status: "ready", values };
+      continue;
+    }
 
     if (tableContract !== undefined) {
       const pageParameters: Record<string, JsonValue> = {};
