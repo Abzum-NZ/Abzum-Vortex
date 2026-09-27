@@ -17,7 +17,7 @@ Where these sections conflict with this document, this document wins until each 
 | --- | --- | --- |
 | [03](../specification/03-composition-and-publication.md) §Definition ownership and versions (packages are derived, not a third kind) | Decision 7 | package specification issue |
 | [16](../specification/16-copying-sharing-import-export.md) §Definition packages (packages are derived; version ranges apply only across clusters) | Decision 7 | #722 |
-| [Platform permission catalogue](../specification/appendices/platform-permission-catalogue.md) (adds the builder permissions in 1.2.0) | Decision 11 | builder permissions issue |
+| [Platform permission catalogue](../specification/appendices/platform-permission-catalogue.md) (current catalogue version 1.4.0, including the builder permissions) | Decision 11 | builder permissions issue |
 
 ## Summary
 
@@ -322,7 +322,7 @@ There is no agent-only path. Every definition an agent produces follows the same
 
 ## Decision 11 — Building, installing and system applications are permission-gated
 
-**The new permissions.** Platform permission catalogue 1.2.0 adds:
+**The new permissions.** Platform permission catalogue 1.4.0 adds:
 - `platform.organization.definition_drafts.manage` — change module and application drafts;
 - `platform.organization.definition_releases.manage` — publish releases;
 - `platform.organization.custom_code.manage` — needed in addition to `platform.organization.applications.manage` to install, upgrade or uninstall packages that bundle custom components or scripts;
