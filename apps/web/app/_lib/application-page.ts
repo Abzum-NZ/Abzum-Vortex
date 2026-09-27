@@ -859,10 +859,13 @@ export const loadApplicationPage = async (
         continue;
       }
       const timeZone = organizationSettings.value.settings.timeZone;
-      const recordTypeId = String(bound.query.recordType.recordTypeId);
-      const recordType = bound.module.content.recordTypes.find((candidate) =>
-        sameId(String(candidate.recordTypeId), recordTypeId),
-      );
+      const recordTypeReference = bound.query.recordType;
+      const recordType =
+        recordTypeReference.state === "resolved"
+          ? bound.module.content.recordTypes.find((candidate) =>
+              sameId(String(candidate.recordTypeId), String(recordTypeReference.recordTypeId)),
+            )
+          : undefined;
       const fieldById = new Map(
         (recordType?.fields ?? []).map((field) => [String(field.fieldId).toLowerCase(), field]),
       );
@@ -981,17 +984,14 @@ export const loadApplicationPage = async (
       }
 
       const items = arranged.items.map((item) => {
-        const valueKey = Object.keys(item.values).find((key) =>
+        const titleValue = Object.entries(item.values).find(([key]) =>
           sameId(key, calendarContract.itemTitleFieldId),
-        );
+        )?.[1];
         return {
           recordId: item.recordId,
           start: item.start,
           end: item.end,
-          title: calendarTitle(
-            valueKey === undefined ? undefined : item.values[valueKey],
-            titleField,
-          ),
+          title: calendarTitle(titleValue, titleField),
         };
       });
       const truncated = queryResult.value.nextContinuationToken !== undefined;
