@@ -677,11 +677,14 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     // The subject is supplied by the browser. A fresh read under this initiator's request scope
     // verifies the exact record type and identity before either protected change is attempted.
     // The record service still checks change or action permission inside its own transaction.
-    if (plan.kind === "action" || (plan.kind === "save" && plan.command.operation === "update")) {
-      const subject = await dependencies.subjects!.read(run.session, run.selection, {
-        recordTypeId: plan.command.recordTypeId,
-        recordId: plan.command.recordId,
-      });
+    const target =
+      plan.kind === "action"
+        ? { recordTypeId: plan.command.recordTypeId, recordId: plan.command.recordId }
+        : plan.kind === "save" && plan.command.operation === "update"
+          ? { recordTypeId: plan.command.recordTypeId, recordId: plan.command.recordId }
+          : undefined;
+    if (target !== undefined) {
+      const subject = await dependencies.subjects!.read(run.session, run.selection, target);
       if (subject !== "read")
         return {
           result: { outcome: subject === "refused" ? "refused" : "failed" },
