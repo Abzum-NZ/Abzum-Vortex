@@ -17,11 +17,11 @@ import {
   type BuilderTargetFacts,
 } from "@vortex/definition";
 import type { RequestDatabaseTransaction } from "@vortex/db";
-import { runOrganizationAccessOperation } from "./organization-access-decision";
 import {
-  platformPermissionCatalogue,
-  platformPermissionCatalogueOwnerId,
-} from "./platform-permission-catalogue";
+  platformPermissionDeclarations,
+  platformPermissionOwnerId,
+} from "@vortex/modules";
+import { runOrganizationAccessOperation } from "./organization-access-decision";
 
 /**
  * The trusted source of target facts. It is answered from server evidence about the exact root in
@@ -46,7 +46,7 @@ export type BuilderAuthorityDependencies = Readonly<{
 
 /** The exact permission identity is looked up in the platform catalogue, never taken as input. */
 const declarationForPermission = (key: BuilderPermissionKey): OrganizationAccessDeclaration => {
-  const permission = platformPermissionCatalogue.permissions.find((entry) => entry.key === key);
+  const permission = platformPermissionDeclarations.find((entry) => entry.key === key);
   if (permission === undefined) throw unavailableError(unavailableCode);
   return organizationAccessDeclarationSchema.parse({
     operationKey: permission.key,
@@ -54,7 +54,7 @@ const declarationForPermission = (key: BuilderPermissionKey): OrganizationAccess
     target: { kind: "organization" },
     requiredPermission: {
       ownerKind: "platform",
-      ownerId: platformPermissionCatalogueOwnerId,
+      ownerId: platformPermissionOwnerId,
       permissionId: permission.permissionId,
     },
     recentAuthentication: { kind: "none" },
@@ -71,7 +71,7 @@ const declarationForAcceptance = (
   permissions: readonly BuilderConferredPermission[],
   recentAuthentication: boolean,
 ): OrganizationAccessDeclaration => {
-  const applications = platformPermissionCatalogue.permissions.find(
+  const applications = platformPermissionDeclarations.find(
     (entry) => entry.key === "platform.organization.applications.manage",
   );
   if (applications === undefined) throw unavailableError(unavailableCode);
@@ -81,7 +81,7 @@ const declarationForAcceptance = (
     target: { kind: "organization" },
     requiredPermission: {
       ownerKind: "platform",
-      ownerId: platformPermissionCatalogueOwnerId,
+      ownerId: platformPermissionOwnerId,
       permissionId: applications.permissionId,
     },
     recentAuthentication: recentAuthentication ? builderRecentAuthentication : { kind: "none" },

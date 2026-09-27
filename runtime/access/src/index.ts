@@ -108,11 +108,6 @@ export {
   type BuilderTargetFactsReader,
 } from "./builder-authority";
 export {
-  platformPermissionCatalogue,
-  platformPermissionCatalogueOwnerId,
-  platformPermissionCatalogueVersion,
-} from "./platform-permission-catalogue";
-export {
   createPermissionRegistryPrivateRepository,
   PermissionRegistryRepositoryError,
   permissionRegistryRepositoryErrorCodes,
