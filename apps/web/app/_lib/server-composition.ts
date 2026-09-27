@@ -14,5 +14,8 @@ export const humanOrganizationRequestDependencies = (
   identityAuthorityId: IdentityAuthorityId = getIdentityAuthorityConfiguration().authorityId,
 ): HumanOrganizationRequestDependencies => ({ identityAuthorityId, telemetry: appTelemetry });
 
+export const humanOrganizationRequestsFor = (dependencies: HumanOrganizationRequestDependencies) =>
+  createHumanOrganizationRequestService(dependencies);
+
 export const humanOrganizationRequests = (identityAuthorityId?: IdentityAuthorityId) =>
-  createHumanOrganizationRequestService(humanOrganizationRequestDependencies(identityAuthorityId));
+  humanOrganizationRequestsFor(humanOrganizationRequestDependencies(identityAuthorityId));

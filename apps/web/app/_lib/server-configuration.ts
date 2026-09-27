@@ -1,7 +1,9 @@
 import "server-only";
 
+export const optionalEnvironmentValue = (name: string): string | undefined => process.env[name];
+
 export const requiredEnvironmentValue = (name: string): string => {
-  const value = process.env[name];
+  const value = optionalEnvironmentValue(name);
   if (!value || value.trim().length === 0)
     throw new Error(`Missing required server configuration: ${name}`);
   return value;
