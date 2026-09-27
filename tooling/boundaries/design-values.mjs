@@ -15,7 +15,7 @@ const skippedDirectories = new Set([
   "__generated__",
   "__tests__",
 ]);
-const styleFilePattern = /(?:^|\/)(?:styles?|[^/]+[-.]styles?)\.(?:cjs|js|jsx|mjs|ts|tsx)$/i;
+const styleFilePattern = /(?:^|\/)(?:styles?|[^/]+[-.](?:css|styles?))\.(?:cjs|js|jsx|mjs|ts|tsx)$/i;
 const themeSourceFiles = new Set([
   "ui/src/theme/theme-variables.ts",
   "ui/src/theme/theme-styles.ts",
@@ -163,7 +163,7 @@ function isInsideDesignObject(code, position, kind, identifiers) {
 
 function styledIdentifiers(code) {
   const identifiers = new Set();
-  const attributePattern = /(?<![\w-])(?:className|class|style)\s*=\s*\{([^}]*)/giu;
+  const attributePattern = /(?<![\w-])(?:className|class|style|fill|stroke|strokeWidth|color|backgroundColor|borderColor|width|height)\s*=\s*\{([^}]*)/giu;
   const identifierPattern = /\b[A-Za-z_$][\w$]*\b/gu;
   const keywords = new Set(["class", "className", "false", "style", "true"]);
   for (const match of code.matchAll(attributePattern)) {
@@ -187,7 +187,7 @@ function isInsideTailwindValue(view, span, index) {
   const closing = view.lastIndexOf("]", index);
   if (opening < tokenStart || opening <= closing) return false;
   const prefix = view.slice(tokenStart, opening);
-  return tailwindArbitraryValuePattern.test(prefix);
+  return tailwindArbitraryValuePattern.test(prefix) || cssDeclarationPattern.test(view.slice(opening + 1, index));
 }
 
 function isInsideStyleCall(code, position) {
