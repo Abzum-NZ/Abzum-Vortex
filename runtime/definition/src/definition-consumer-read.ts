@@ -51,11 +51,10 @@ export class DefinitionConsumerReadError extends Error {
   }
 }
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 const moduleDependencyTargetSchema = z
   .object({
     rootId: moduleRootIdSchema,
-    releaseRevision: javascriptSafeRevisionSchema,
+    releaseRevision: revisionSchema,
     releaseVersion: stableDefinitionReleaseVersionSchema,
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,
@@ -68,7 +67,7 @@ export const storedConsumerReleaseEvidenceSchema = z
     kind: z.enum(["module", "application"]),
     key: z.string(),
     rootId: z.uuid(),
-    releaseRevision: javascriptSafeRevisionSchema,
+    releaseRevision: revisionSchema,
     releaseVersion: stableDefinitionReleaseVersionSchema,
     sourceContractVersion: semanticVersionSchema,
     validationContractVersion: semanticVersionSchema,
@@ -193,7 +192,10 @@ export const verifyDefinitionCatalogueDependencies = async (
         return "invalid";
       continue;
     }
-    if (dependency.kind === "protected_operation" && dependency.operation.owner.kind === "platform_service") {
+    if (
+      dependency.kind === "protected_operation" &&
+      dependency.operation.owner.kind === "platform_service"
+    ) {
       if (validationContractVersion !== "2.0.0") return "invalid";
       const release = await catalogue.readPlatformServiceOperationRelease?.(
         dependency.operation.owner.serviceId,

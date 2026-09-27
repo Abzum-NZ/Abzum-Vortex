@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  sameId,
   builderKeySchema,
   containedComponentIdSchema,
   eventIdSchema,
@@ -38,8 +39,6 @@ import {
  * code, so the event dispatch layer (#584) can refuse or reload instead of running a half-filled
  * flow. Event dispatch, result freshness and presentation remain outside this module.
  */
-
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 /** The one closed context vocabulary a component can carry into a bound flow. */
 export const componentRecordReferenceSchema = z
@@ -172,15 +171,11 @@ export type ResolvedComponentQueryInputs = Readonly<{
 }>;
 
 export type ComponentQueryInputsResolution =
-  | ResolvedComponentQueryInputs
-  | ComponentContextMismatch;
+  ResolvedComponentQueryInputs | ComponentContextMismatch;
 
 const maximumSuppliedCharacters = 65_536;
 
-const mismatch = (
-  code: ComponentContextMismatchCode,
-  field?: string,
-): ComponentContextMismatch =>
+const mismatch = (code: ComponentContextMismatchCode, field?: string): ComponentContextMismatch =>
   field === undefined ? { kind: "mismatch", code } : { kind: "mismatch", code, field };
 
 /** Value types that name or grant authority. A surface may never supply these itself. */
@@ -211,7 +206,10 @@ const selectionContextEvents: ReadonlySet<ComponentSemanticEventKind> = new Set(
  * current row; a bulk or selection event carries the current selection; every other data or action
  * event carries the page subject, one of its declared related records, or no record at all.
  */
-const contextMatchesEvent = (event: ComponentSemanticEventKind, context: ComponentContext): boolean => {
+const contextMatchesEvent = (
+  event: ComponentSemanticEventKind,
+  context: ComponentContext,
+): boolean => {
   if (rowContextEvents.has(event)) return context.kind === "current_row";
   if (selectionContextEvents.has(event)) return context.kind === "current_selection";
   return (
@@ -228,15 +226,10 @@ const contextRecordTypeId = (context: ComponentContext): string | undefined =>
       ? context.selection.recordTypeId
       : context.record.recordTypeId;
 
-const singleContextRecord = (
-  context: ComponentContext,
-): ComponentRecordReference | undefined =>
+const singleContextRecord = (context: ComponentContext): ComponentRecordReference | undefined =>
   context.kind === "no_record" || context.kind === "current_selection" ? undefined : context.record;
 
-const recordTypeAllowed = (
-  declaration: FlowInputDeclaration,
-  recordTypeId: string,
-): boolean =>
+const recordTypeAllowed = (declaration: FlowInputDeclaration, recordTypeId: string): boolean =>
   declaration.recordTypeIds === undefined ||
   declaration.recordTypeIds.some((allowed) => sameId(allowed, recordTypeId));
 
@@ -287,7 +280,11 @@ const withinSupplied = (value: unknown): boolean => {
 };
 
 /** Flow input names that receive the trusted revision, record type or capabilities of the context. */
-const contextFieldInputs: ReadonlySet<string> = new Set(["revision", "record_type_id", "capabilities"]);
+const contextFieldInputs: ReadonlySet<string> = new Set([
+  "revision",
+  "record_type_id",
+  "capabilities",
+]);
 
 /** Whether the trusted context, never the surface, fills this flow input. */
 const contextFilledInput = (flowInputName: string, declaration: FlowInputDeclaration): boolean =>
@@ -365,10 +362,7 @@ const resolveCallerInput = (
   return { kind: "omitted" };
 };
 
-const flowById = (
-  installed: InstalledRuntimeContext,
-  flowId: string,
-): FlowDefinition | undefined =>
+const flowById = (installed: InstalledRuntimeContext, flowId: string): FlowDefinition | undefined =>
   installed.releaseSet.application.content.flows.find((flow) => sameId(String(flow.id), flowId));
 
 const bindingFor = (
@@ -377,7 +371,8 @@ const bindingFor = (
   eventId: string,
 ): ComponentFlowBinding | undefined =>
   installed.releaseSet.application.content.flowBindings.find(
-    (binding) => sameId(String(binding.controlId), controlId) && sameId(String(binding.eventId), eventId),
+    (binding) =>
+      sameId(String(binding.controlId), controlId) && sameId(String(binding.eventId), eventId),
   );
 
 /**
@@ -466,7 +461,8 @@ const coerceQueryValue = (raw: unknown, declaredType: QueryInputDeclaration["typ
     const value = Number(raw);
     return raw.trim() !== "" && Number.isFinite(value) ? value : undefined;
   }
-  if (declaredType === "boolean") return raw === "true" ? true : raw === "false" ? false : undefined;
+  if (declaredType === "boolean")
+    return raw === "true" ? true : raw === "false" ? false : undefined;
   return raw;
 };
 
@@ -552,7 +548,8 @@ export function resolveComponentQueryInputs(
     const raw =
       parameter.source === "fixed"
         ? parameter.fixedValue
-        : parameter.pageParameter === undefined || !Object.hasOwn(pageParameters, parameter.pageParameter)
+        : parameter.pageParameter === undefined ||
+            !Object.hasOwn(pageParameters, parameter.pageParameter)
           ? undefined
           : pageParameters[parameter.pageParameter];
     if (raw === undefined) {

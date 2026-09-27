@@ -2,7 +2,9 @@ import "server-only";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import {
+  sameId,
   applicationRootIdSchema,
+  canonicalJson,
   correlationIdSchema,
   identityIdSchema,
   organizationAccountIdSchema,
@@ -99,8 +101,7 @@ export const retainedRunAuthoritySchema = z
       .min(1)
       .max(100)
       .refine(
-        (nodes) =>
-          new Set(nodes.map((node) => node.nodeId.toLowerCase())).size === nodes.length,
+        (nodes) => new Set(nodes.map((node) => node.nodeId.toLowerCase())).size === nodes.length,
         { message: "Each node of the retained release appears once" },
       ),
   })
@@ -188,15 +189,6 @@ export type DurableActorContextDependencies = Readonly<{
   permitTerminalForReplay?: boolean;
 }>;
 
-const canonicalJson = (value: unknown): string => {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, member]) => member !== undefined)
-    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
-  return `{${entries.map(([key, member]) => `${JSON.stringify(key)}:${canonicalJson(member)}`).join(",")}}`;
-};
-
 /**
  * The exact bytes an envelope proof covers: every envelope field except the
  * proof itself, as canonical JSON with sorted keys. The signing flow and this
@@ -220,8 +212,6 @@ const proofMatches = (presented: string, expected: string): boolean => {
   const right = Buffer.from(expected, "utf8");
   return left.length === right.length && timingSafeEqual(left, right);
 };
-
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 const refused = (reason: DurableActorRefusalReason): DurableActorContextResolution => ({
   outcome: "refused",

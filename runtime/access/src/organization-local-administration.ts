@@ -2,6 +2,10 @@ import "server-only";
 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
+  unavailableError,
+  databaseTimestamp,
+  databaseRevision,
+  sameId,
   activityIdSchema,
   closeOrganizationAccountCommandSchema,
   closeOrganizationAccountResultSchema,
@@ -57,6 +61,8 @@ import {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "./human-organization-request";
+
+const unavailableCode = "ORGANIZATION_LOCAL_ADMINISTRATION_UNAVAILABLE";
 
 type AccountPageRow = DatabaseRow & {
   organization_id: unknown;
@@ -129,23 +135,9 @@ type ProfileChangeRow = DatabaseRow & {
 export type OrganizationLocalAdministrationDependencies = HumanOrganizationRequestDependencies &
   Readonly<{ generateInvitationSecret?: () => string; activityId?: () => string }>;
 
-const unavailable = (): Error => new Error("ORGANIZATION_LOCAL_ADMINISTRATION_UNAVAILABLE");
-
-const sameUuid = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
-
-const revision = (value: unknown): unknown => {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
-  return value;
-};
-
-const timestamp = (value: unknown): unknown =>
-  value instanceof Date && Number.isFinite(value.valueOf()) ? value.toISOString() : value;
-
 const normalizeRevision = (value: unknown): unknown =>
   typeof value === "object" && value !== null
-    ? { ...value, revision: revision((value as { revision?: unknown }).revision) }
+    ? { ...value, revision: databaseRevision((value as { revision?: unknown }).revision) }
     : value;
 
 const normalizeInvitation = (value: unknown): unknown => {
@@ -153,20 +145,22 @@ const normalizeInvitation = (value: unknown): unknown => {
   const invitation = value as Record<string, unknown>;
   return {
     ...invitation,
-    createdAt: timestamp(invitation.createdAt),
-    invitedAt: timestamp(invitation.invitedAt),
-    expiresAt: timestamp(invitation.expiresAt),
-    ...(invitation.revokedAt === undefined ? {} : { revokedAt: timestamp(invitation.revokedAt) }),
+    createdAt: databaseTimestamp(invitation.createdAt),
+    invitedAt: databaseTimestamp(invitation.invitedAt),
+    expiresAt: databaseTimestamp(invitation.expiresAt),
+    ...(invitation.revokedAt === undefined
+      ? {}
+      : { revokedAt: databaseTimestamp(invitation.revokedAt) }),
     ...(invitation.acceptedAt === undefined
       ? {}
-      : { acceptedAt: timestamp(invitation.acceptedAt) }),
-    changedAt: timestamp(invitation.changedAt),
-    revision: revision(invitation.revision),
+      : { acceptedAt: databaseTimestamp(invitation.acceptedAt) }),
+    changedAt: databaseTimestamp(invitation.changedAt),
+    revision: databaseRevision(invitation.revision),
   };
 };
 
 const requireOne = <Row>(rows: readonly Row[]): Row => {
-  if (rows.length !== 1 || rows[0] === undefined) throw unavailable();
+  if (rows.length !== 1 || rows[0] === undefined) throw unavailableError(unavailableCode);
   return rows[0];
 };
 
@@ -179,8 +173,8 @@ const matchesScope = (
   accessVersion: number,
 ): boolean =>
   typeof row.organization_id === "string" &&
-  sameUuid(row.organization_id, organizationId) &&
-  revision(row.access_version) === accessVersion;
+  sameId(row.organization_id, organizationId) &&
+  databaseRevision(row.access_version) === accessVersion;
 
 export const createOrganizationLocalAdministrationService = (
   dependencies: OrganizationLocalAdministrationDependencies,
@@ -208,10 +202,10 @@ export const createOrganizationLocalAdministrationService = (
       operation: row.operation,
       organizationId: row.organization_id,
       organizationAccountId: row.organization_account_id,
-      revision: revision(row.revision),
+      revision: databaseRevision(row.revision),
       correlationId: row.correlation_id,
-      acceptedAt: timestamp(row.accepted_at),
-      accessVersion: revision(row.access_version),
+      acceptedAt: databaseTimestamp(row.accepted_at),
+      accessVersion: databaseRevision(row.access_version),
     });
     const checked = result as {
       outcome: "accepted" | "replayed";
@@ -222,13 +216,13 @@ export const createOrganizationLocalAdministrationService = (
       accessVersion: number;
     };
     if (
-      !sameUuid(checked.organizationId, scope.organizationId) ||
-      !sameUuid(checked.organizationAccountId, expected.organizationAccountId) ||
+      !sameId(checked.organizationId, scope.organizationId) ||
+      !sameId(checked.organizationAccountId, expected.organizationAccountId) ||
       checked.operation !== expected.operation ||
       checked.revision !== expected.revision ||
       (checked.outcome === "accepted" && checked.accessVersion !== scope.accessVersion + 1)
     )
-      throw unavailable();
+      throw unavailableError(unavailableCode);
     return result;
   };
 
@@ -248,10 +242,10 @@ export const createOrganizationLocalAdministrationService = (
       operation: row.operation,
       organizationId: row.organization_id,
       invitationId: row.invitation_id,
-      revision: revision(row.revision),
+      revision: databaseRevision(row.revision),
       correlationId: row.correlation_id,
-      acceptedAt: timestamp(row.accepted_at),
-      accessVersion: revision(row.access_version),
+      acceptedAt: databaseTimestamp(row.accepted_at),
+      accessVersion: databaseRevision(row.access_version),
       ...(row.outcome === "accepted" && invitationSecret !== undefined ? { invitationSecret } : {}),
     });
     const checked = result as {
@@ -263,14 +257,14 @@ export const createOrganizationLocalAdministrationService = (
       accessVersion: number;
     };
     if (
-      !sameUuid(checked.organizationId, scope.organizationId) ||
+      !sameId(checked.organizationId, scope.organizationId) ||
       (expected.invitationId !== undefined &&
-        !sameUuid(checked.invitationId, expected.invitationId)) ||
+        !sameId(checked.invitationId, expected.invitationId)) ||
       checked.operation !== expected.operation ||
       checked.revision !== expected.revision ||
       (checked.outcome === "accepted" && checked.accessVersion !== scope.accessVersion)
     )
-      throw unavailable();
+      throw unavailableError(unavailableCode);
     return result;
   };
 
@@ -298,14 +292,14 @@ export const createOrganizationLocalAdministrationService = (
           !matchesScope(row, scope.organizationId, scope.accessVersion) ||
           !Array.isArray(row.accounts)
         )
-          throw unavailable();
+          throw unavailableError(unavailableCode);
         return listOrganizationAccountsResultSchema.parse({
           accounts: row.accounts.map(normalizeRevision),
           ...(row.next_after_organization_account_id === null ||
           row.next_after_organization_account_id === undefined
             ? {}
             : { nextAfterOrganizationAccountId: row.next_after_organization_account_id }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
       });
     },
@@ -327,19 +321,20 @@ export const createOrganizationLocalAdministrationService = (
             )
           `,
         );
-        if (!matchesScope(row, scope.organizationId, scope.accessVersion)) throw unavailable();
+        if (!matchesScope(row, scope.organizationId, scope.accessVersion))
+          throw unavailableError(unavailableCode);
         const result = readOrganizationAccountResultSchema.parse({
           outcome: row.outcome,
           ...(row.account_summary === null || row.account_summary === undefined
             ? {}
             : { account: normalizeRevision(row.account_summary) }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
         if (
           result.outcome === "available" &&
-          !sameUuid(result.account.organizationAccountId, command.data.organizationAccountId)
+          !sameId(result.account.organizationAccountId, command.data.organizationAccountId)
         )
-          throw unavailable();
+          throw unavailableError(unavailableCode);
         return result;
       });
     },
@@ -367,20 +362,20 @@ export const createOrganizationLocalAdministrationService = (
           !matchesScope(row, scope.organizationId, scope.accessVersion) ||
           !Array.isArray(row.invitations)
         )
-          throw unavailable();
+          throw unavailableError(unavailableCode);
         const result = listOrganizationInvitationsResultSchema.parse({
           invitations: row.invitations.map(normalizeInvitation),
           ...(row.next_after_invitation_id === null || row.next_after_invitation_id === undefined
             ? {}
             : { nextAfterInvitationId: row.next_after_invitation_id }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
         if (
           result.invitations.some(
-            (invitation) => !sameUuid(invitation.organizationId, scope.organizationId),
+            (invitation) => !sameId(invitation.organizationId, scope.organizationId),
           )
         )
-          throw unavailable();
+          throw unavailableError(unavailableCode);
         return result;
       });
     },
@@ -402,20 +397,21 @@ export const createOrganizationLocalAdministrationService = (
             )
           `,
         );
-        if (!matchesScope(row, scope.organizationId, scope.accessVersion)) throw unavailable();
+        if (!matchesScope(row, scope.organizationId, scope.accessVersion))
+          throw unavailableError(unavailableCode);
         const result = readOrganizationInvitationResultSchema.parse({
           outcome: row.outcome,
           ...(row.invitation === null || row.invitation === undefined
             ? {}
             : { invitation: normalizeInvitation(row.invitation) }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
         if (
           result.outcome === "available" &&
-          (!sameUuid(result.invitation.organizationId, scope.organizationId) ||
-            !sameUuid(result.invitation.invitationId, command.data.invitationId))
+          (!sameId(result.invitation.organizationId, scope.organizationId) ||
+            !sameId(result.invitation.invitationId, command.data.invitationId))
         )
-          throw unavailable();
+          throw unavailableError(unavailableCode);
         return result;
       });
     },
@@ -435,22 +431,25 @@ export const createOrganizationLocalAdministrationService = (
             from vortex_access.read_organization_runtime_settings_for_administration()
           `,
         );
-        if (!matchesScope(row, scope.organizationId, scope.accessVersion)) throw unavailable();
+        if (!matchesScope(row, scope.organizationId, scope.accessVersion))
+          throw unavailableError(unavailableCode);
         if (row.outcome === "unavailable")
           return readOrganizationRuntimeSettingsResultSchema.parse({
             outcome: "unavailable",
-            accessVersion: revision(row.access_version),
+            accessVersion: databaseRevision(row.access_version),
           });
-        if (typeof row.settings !== "object" || row.settings === null) throw unavailable();
+        if (typeof row.settings !== "object" || row.settings === null)
+          throw unavailableError(unavailableCode);
         const settings = organizationRuntimeSettingsSchema.parse({
           ...row.settings,
-          revision: revision((row.settings as { revision?: unknown }).revision),
+          revision: databaseRevision((row.settings as { revision?: unknown }).revision),
         });
-        if (!sameUuid(settings.organizationId, scope.organizationId)) throw unavailable();
+        if (!sameId(settings.organizationId, scope.organizationId))
+          throw unavailableError(unavailableCode);
         return readOrganizationRuntimeSettingsResultSchema.parse({
           outcome: row.outcome,
           settings,
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
       });
     },
@@ -575,20 +574,20 @@ export const createOrganizationLocalAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
+          !sameId(row.organization_id, scope.organizationId) ||
           typeof row.organization_account_id !== "string" ||
-          !sameUuid(row.organization_account_id, command.data.organizationAccountId) ||
-          revision(row.access_version) !== scope.accessVersion
+          !sameId(row.organization_account_id, command.data.organizationAccountId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion
         )
-          throw unavailable();
+          throw unavailableError(unavailableCode);
         const result = updateOwnProfileResultSchema.parse({
           outcome: row.outcome,
           operation: row.operation,
           organizationId: row.organization_id,
           organizationAccountId: row.organization_account_id,
           correlationId: row.correlation_id,
-          acceptedAt: timestamp(row.accepted_at),
-          accessVersion: revision(row.access_version),
+          acceptedAt: databaseTimestamp(row.accepted_at),
+          accessVersion: databaseRevision(row.access_version),
           ...(row.outcome === "accepted" &&
           row.account_summary !== null &&
           row.account_summary !== undefined
@@ -597,10 +596,10 @@ export const createOrganizationLocalAdministrationService = (
         });
         if (
           result.outcome === "accepted" &&
-          (!sameUuid(result.account.organizationAccountId, command.data.organizationAccountId) ||
+          (!sameId(result.account.organizationAccountId, command.data.organizationAccountId) ||
             result.account.revision !== command.data.expectedRevision + 1)
         )
-          throw unavailable();
+          throw unavailableError(unavailableCode);
         return result;
       });
     },
@@ -618,7 +617,7 @@ export const createOrganizationLocalAdministrationService = (
       return requests.runChange(session, selection, async (transaction, scope) => {
         const invitationSecret = generateInvitationSecret();
         if (Buffer.byteLength(invitationSecret, "utf8") < 32 || invitationSecret.length > 2_000)
-          throw unavailable();
+          throw unavailableError(unavailableCode);
         const row = requireOne(
           await transaction.query<InvitationChangeRow>`
             select * from vortex_access.create_organization_invitation_for_administration(

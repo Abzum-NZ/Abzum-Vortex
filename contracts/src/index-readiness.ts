@@ -14,8 +14,6 @@ const nonNilUuidSchema = z
     message: "An index identity cannot be the nil UUID",
   });
 
-const jsonSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
-
 /** An exact field index is either a uniqueness requirement or advisory performance. */
 export const indexPurposeSchema = z.enum(["uniqueness", "performance"]);
 export type IndexPurpose = z.infer<typeof indexPurposeSchema>;
@@ -39,7 +37,7 @@ export const indexReadinessEntrySchema = z
     desiredDefinitionFingerprint: fingerprintSchema,
     observedState: indexObservedStateSchema,
     recordedObservedState: indexObservedStateSchema.nullable(),
-    observedRevision: jsonSafeRevisionSchema.nullable(),
+    observedRevision: revisionSchema.nullable(),
     ready: z.boolean(),
   })
   .strict()
@@ -65,7 +63,7 @@ export const indexReadinessSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: jsonSafeRevisionSchema,
+    applicationReleaseRevision: revisionSchema,
     indexes: z.array(indexReadinessEntrySchema).max(100_000),
     uniquenessReady: z.boolean(),
     performanceAdvisory: z.literal(true),

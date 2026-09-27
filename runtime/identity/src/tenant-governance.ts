@@ -2,6 +2,8 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import {
+  databaseTimestamp,
+  databaseRevision,
   archiveTenantOrganizationCommandSchema,
   archiveTenantOrganizationResultSchema,
   changeTenantAdministratorCommandSchema,
@@ -60,11 +62,11 @@ import {
 import {
   withRuntimeTransaction,
   type DatabaseRow,
-  type RuntimeDatabaseTransaction,
+  type RequestDatabaseTransaction,
 } from "@vortex/db";
 
 type Runner = <Result>(
-  operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 /**
  * Every tenant command reads its acting person from the transaction's bound request context
@@ -100,13 +102,6 @@ type OrganizationCreationRow = DatabaseRow & {
   correlation_id: unknown;
   accepted_at: unknown;
 };
-const timestamp = (value: unknown) => (value instanceof Date ? value.toISOString() : value);
-const revision = (value: unknown) =>
-  typeof value === "bigint"
-    ? Number(value)
-    : typeof value === "string" && /^[1-9][0-9]*$/.test(value)
-      ? Number(value)
-      : value;
 const fingerprint = (command: object) =>
   `sha256:${createHash("sha256").update(JSON.stringify(command), "utf8").digest("hex")}`;
 const databaseCode = (error: unknown) =>
@@ -152,15 +147,15 @@ const hierarchyEntry = (row: DatabaseRow) =>
     shortName: row.short_name,
     displayName: row.display_name,
     state: row.state,
-    revision: revision(row.revision),
+    revision: databaseRevision(row.revision),
   });
 const assignmentEntry = (row: DatabaseRow) => ({
   assignmentId: row.assignment_id,
   identityId: row.identity_id,
   capabilities: row.capability_keys,
-  startsAt: timestamp(row.starts_at),
-  ...(row.expires_at == null ? {} : { expiresAt: timestamp(row.expires_at) }),
-  revision: revision(row.revision),
+  startsAt: databaseTimestamp(row.starts_at),
+  ...(row.expires_at == null ? {} : { expiresAt: databaseTimestamp(row.expires_at) }),
+  revision: databaseRevision(row.revision),
   outcome: row.outcome,
 });
 const mutationResult = (row: MutationRow | undefined) =>
@@ -168,30 +163,30 @@ const mutationResult = (row: MutationRow | undefined) =>
     outcome: row.outcome,
     operation: row.operation,
     assignmentId: row.assignment_id,
-    revision: revision(row.revision),
+    revision: databaseRevision(row.revision),
     correlationId: row.correlation_id,
-    acceptedAt: timestamp(row.accepted_at),
+    acceptedAt: databaseTimestamp(row.accepted_at),
   };
 const organizationMutationResult = (row: OrganizationMutationRow | undefined) =>
   row && {
     outcome: row.outcome,
     operation: row.operation,
     organizationId: row.organization_id,
-    revision: revision(row.revision),
+    revision: databaseRevision(row.revision),
     correlationId: row.correlation_id,
-    acceptedAt: timestamp(row.accepted_at),
+    acceptedAt: databaseTimestamp(row.accepted_at),
   };
 const organizationCreationResult = (row: OrganizationCreationRow | undefined) =>
   row && {
     outcome: row.outcome,
     operation: row.operation,
     organizationId: row.organization_id,
-    organizationRevision: revision(row.organization_revision),
+    organizationRevision: databaseRevision(row.organization_revision),
     organizationAccountId: row.organization_account_id,
-    organizationAccountRevision: revision(row.organization_account_revision),
-    accessVersion: revision(row.access_version),
+    organizationAccountRevision: databaseRevision(row.organization_account_revision),
+    accessVersion: databaseRevision(row.access_version),
     correlationId: row.correlation_id,
-    acceptedAt: timestamp(row.accepted_at),
+    acceptedAt: databaseTimestamp(row.accepted_at),
   };
 
 export const createTenantGovernanceService = (

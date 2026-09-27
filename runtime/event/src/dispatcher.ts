@@ -5,7 +5,7 @@ import { actorIdSchema, type EventOccurrenceEnvelopeV2 } from "@vortex/contracts
 import {
   withRuntimeTransaction,
   type DatabaseRow,
-  type RuntimeDatabaseTransaction,
+  type RequestDatabaseTransaction,
 } from "@vortex/db";
 import {
   createEventConsumerProgressRepository,
@@ -165,7 +165,7 @@ export interface EventDispatcher {
 }
 
 export type EventDispatcherTransactionRunner = <Result>(
-  operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 
 export type EventDispatcherDependencies = Readonly<{
@@ -345,8 +345,9 @@ export const createEventDispatcherGrantReader = (
   Object.freeze({
     async resolve(): Promise<EventDispatcherGrantAuthority> {
       try {
-        const rows = await run((transaction) =>
-          transaction.query<GrantRow>`
+        const rows = await run(
+          (transaction) =>
+            transaction.query<GrantRow>`
             select vortex_access.resolve_event_dispatcher_actor() as result
           `,
         );
@@ -373,7 +374,10 @@ const registrationInvalid = (): never => {
 const registerConsumers = (
   adapters: readonly EventConsumerAdapter[],
 ): ReadonlyMap<string, RegisteredConsumer> => {
-  if (!Array.isArray(adapters) || adapters.length > eventDispatcherLimits.maximumRegisteredConsumers)
+  if (
+    !Array.isArray(adapters) ||
+    adapters.length > eventDispatcherLimits.maximumRegisteredConsumers
+  )
     return registrationInvalid();
   const registered = new Map<string, RegisteredConsumer>();
   for (const adapter of adapters) {
@@ -450,7 +454,11 @@ const validateDispatchInput = (candidate: unknown): ValidatedDispatch => {
 
 type ConsumerOutcome =
   | Readonly<{ kind: "completed" }>
-  | Readonly<{ kind: "failed"; terminal: boolean; failureCode: EventDeliveryFailureClassification }>;
+  | Readonly<{
+      kind: "failed";
+      terminal: boolean;
+      failureCode: EventDeliveryFailureClassification;
+    }>;
 
 // Anything other than an exact, known outcome is unsafe: it is never taken as
 // completion, and is reported to #640 as an unclassified retryable failure.
@@ -513,7 +521,9 @@ const dispatchStatus = (tally: Tally): EventDispatchStatus => {
  * renewed immediately before its consumer runs, so a claim whose lease lapsed
  * (and may have been reclaimed by a concurrent dispatch) is never invoked.
  */
-export const createEventDispatcher = (dependencies: EventDispatcherDependencies): EventDispatcher => {
+export const createEventDispatcher = (
+  dependencies: EventDispatcherDependencies,
+): EventDispatcher => {
   const consumers = registerConsumers(dependencies.consumers);
   const run: EventDispatcherTransactionRunner =
     dependencies.runtimeTransaction ?? withRuntimeTransaction;
