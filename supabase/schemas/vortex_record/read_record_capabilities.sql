@@ -14,6 +14,7 @@ declare
   read_decision jsonb;
   read_bounds jsonb;
   readable_field_ids jsonb;
+  meta jsonb;
   changeable_field_ids jsonb := '[]'::jsonb;
   actions text[] := array[]::text[];
   action_kind text;
@@ -45,6 +46,41 @@ begin
     read_loaded, p_record_type_id, p_record_id,
     read_bounds -> 'readableFieldIds', read_bounds -> 'readableFieldIds', '[]'::jsonb
   );
+
+  meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'read');
+  if meta #>> '{recordType,key}' = 'organization_settings'
+    and meta #>> '{recordType,systemProjection,protectedView}' =
+      'organization_runtime_settings'
+    and coalesce((meta #> '{recordType,standardActions}') ? 'update', false)
+    and exists (
+      select 1
+      from vortex_definition.roots as root
+      where root.root_id = (meta ->> 'moduleRootId')::uuid
+        and root.kind = 'module'
+        and root.key = 'vortex.organisation_administration'
+    ) then
+    if vortex_access.organization_runtime_settings_manage_is_current() then
+      select coalesce(
+        pg_catalog.jsonb_agg(projected.value order by projected.value), '[]'::jsonb
+      )
+      into changeable_field_ids
+      from pg_catalog.jsonb_array_elements_text(readable_field_ids) as projected(value)
+      join pg_catalog.jsonb_array_elements(meta #> '{recordType,fields}') as field(value)
+        on pg_catalog.lower(field.value ->> 'fieldId') = pg_catalog.lower(projected.value)
+      where field.value ->> 'key' not in ('organization_id', 'revision')
+        and field.value ->> 'type' not in (
+          'reference_number', 'table', 'link', 'link_to_one_of_several', 'total',
+          'attachment', 'calculation'
+        );
+      if pg_catalog.jsonb_array_length(changeable_field_ids) > 0 then
+        actions := array['update'];
+      end if;
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'changeableFieldIds', changeable_field_ids,
+      'actions', pg_catalog.to_jsonb(actions)
+    );
+  end if;
 
   -- Each record action kind is decided exactly as its own writer decides it: the
   -- same fact loader for that action kind and the same complete exact-record
