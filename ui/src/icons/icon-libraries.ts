@@ -1,4 +1,4 @@
-import { SHADCN_ICON_LIBRARIES, type ShadcnIconLibrary } from "@vortex/contracts";
+import { SHADCN_ICON_LIBRARIES, isShadcnIconLibrary, type ShadcnIconLibrary } from "@vortex/contracts";
 import type { PRESET_ICON_LIBRARIES } from "shadcn/preset";
 
 import type { VortexIconAdapter } from "./icon-names";
@@ -37,7 +37,8 @@ const loadedAdapters = new Map<ShadcnIconLibrary, Promise<VortexIconAdapter>>();
  * The adapter of one icon library, loaded once. The same promise is returned on every call, so a
  * component reading it with `use` suspends only until the library's chunk first arrives.
  */
-export function loadIconAdapter(library: ShadcnIconLibrary): Promise<VortexIconAdapter> {
+export function loadIconAdapter(library: string): Promise<VortexIconAdapter> {
+  if (!isShadcnIconLibrary(library)) throw new Error("Unknown icon library");
   let adapter = loadedAdapters.get(library);
   if (adapter === undefined) {
     adapter = ADAPTER_LOADERS[library]().then((module) => module.icons);

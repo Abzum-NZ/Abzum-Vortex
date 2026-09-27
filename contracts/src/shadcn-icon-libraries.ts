@@ -31,6 +31,9 @@ export const DEFAULT_SHADCN_ICON_LIBRARY: ShadcnIconLibrary = "lucide";
 export const isShadcnIconLibrary = (id: string | null | undefined): id is ShadcnIconLibrary =>
   (SHADCN_ICON_LIBRARIES as readonly (string | null | undefined)[]).includes(id);
 
-/** The icon library a selection renders with: the one it names, or the catalogue default. */
-export const resolveShadcnIconLibrary = (id?: string | null): ShadcnIconLibrary =>
-  isShadcnIconLibrary(id) ? id : DEFAULT_SHADCN_ICON_LIBRARY;
+/** The selected icon library, or the default when no library was authored. */
+export const resolveShadcnIconLibrary = (id?: string | null): ShadcnIconLibrary => {
+  if (id == null) return DEFAULT_SHADCN_ICON_LIBRARY;
+  if (!isShadcnIconLibrary(id)) throw new Error("Unknown icon library");
+  return id;
+};
