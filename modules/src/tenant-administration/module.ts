@@ -1,6 +1,5 @@
 import {
   moduleSourceDocumentSchema,
-  tenantStructuralCapabilityKeys,
   type ModuleSourceDocument,
 } from "@vortex/contracts";
 
