@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useMemo, useState, type ReactElement } from "react";
+import { useCallback, useId, useMemo, useRef, useState, type ReactElement } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   createFlowInvokeClient,
@@ -26,6 +26,21 @@ import { Field, FieldGroup } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
 import type { ApplicationPageModel, PlacementFlowBinding } from "../../../../_lib/application-page";
+import type {
+  GuidedFormAbandonRequest,
+  GuidedFormConfirmRequest,
+  GuidedFormConfirmResult,
+  GuidedFormStepActionResult,
+  GuidedFormStepRequest,
+} from "../../../../_lib/guided-form-steps";
+
+type GuidedFormActions = Readonly<{
+  advance: (request: GuidedFormStepRequest) => Promise<GuidedFormStepActionResult>;
+  confirm: (request: GuidedFormConfirmRequest) => Promise<GuidedFormConfirmResult>;
+  abandon: (
+    request: GuidedFormAbandonRequest,
+  ) => Promise<Readonly<{ kind: "abandoned" | "conflict" | "unavailable" | "temporarily_unavailable" }>>;
+}>;
 
 /**
  * The full component flow binding the browser runtime expects. A {@link PlacementFlowBinding} carries
@@ -177,7 +192,11 @@ const formOwnersByPlacement = (
 ): Readonly<Record<string, string>> => {
   const owners: Record<string, string> = {};
   const visit = (slot: unknown, formOwner?: string): void => {
-    if (!isRecord(slot) || !isRecord(slot.placements)) return;
+    if (!isRecord(slot)) return;
+    if (!isRecord(slot.placements)) {
+      for (const child of Object.values(slot)) visit(child, formOwner);
+      return;
+    }
     for (const [placementId, candidate] of Object.entries(slot.placements)) {
       if (!isRecord(candidate)) continue;
       const block = candidate.block;
@@ -198,6 +217,24 @@ const formOwnersByPlacement = (
   else if (isRecord(composition.stepContent))
     for (const child of Object.values(composition.stepContent)) visit(child);
   return owners;
+};
+
+const placementIdsInSlot = (candidate: unknown): ReadonlySet<string> => {
+  const result = new Set<string>();
+  const visit = (slot: unknown): void => {
+    if (!isRecord(slot)) return;
+    if (!isRecord(slot.placements)) {
+      for (const child of Object.values(slot)) visit(child);
+      return;
+    }
+    for (const [placementId, placement] of Object.entries(slot.placements)) {
+      result.add(placementId);
+      if (isRecord(placement) && isRecord(placement.slots))
+        for (const child of Object.values(placement.slots)) visit(child);
+    }
+  };
+  visit(candidate);
+  return result;
 };
 
 /**
@@ -222,7 +259,8 @@ const bindingFor = (
  */
 export function ApplicationPageView({
   model,
-}: Readonly<{ model: ApplicationPageModel }>): ReactElement {
+  guidedFormActions,
+}: Readonly<{ model: ApplicationPageModel; guidedFormActions: GuidedFormActions }>): ReactElement {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -230,10 +268,38 @@ export function ApplicationPageView({
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
   const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormNotice>>>({});
   const [busy, setBusy] = useState(false);
+  const requestedStepId = useRef<string | undefined>(undefined);
+  const guidedSubmitInFlight = useRef(false);
 
   const application = model.invocation;
   const subject = model.subject;
   const formOwners = useMemo(() => formOwnersByPlacement(model.page), [model.page]);
+  const guidedActivePlacementIds = useMemo(() => {
+    const guidedForm = model.guidedForm;
+    const composition = model.page.composition;
+    if (!guidedForm || !isRecord(composition) || !isRecord(composition.stepContent))
+      return undefined;
+    return placementIdsInSlot(composition.stepContent[guidedForm.activeStepId]);
+  }, [model.guidedForm, model.page]);
+  const guidedActiveFormIds = useMemo(
+    () =>
+        guidedActivePlacementIds === undefined
+        ? []
+        : [...guidedActivePlacementIds].filter(
+            (placementId) => formOwners[placementId] === placementId,
+          ),
+    [formOwners, guidedActivePlacementIds],
+  );
+  const guidedAddress = useMemo(
+    () => ({
+      tenantShortName: application.tenantShortName,
+      organizationShortName: application.organizationShortName,
+      applicationKey: application.applicationKey,
+      pageKey: application.pageKey,
+      ...(subject === undefined ? {} : { subjectRecordId: subject.recordId }),
+    }),
+    [application, subject],
+  );
   const basePath = `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(application.applicationKey)}`;
   const pageKeyOf = useMemo(
     () => new Map(model.pages.map((page) => [page.pageId.toLowerCase(), page.key])),
@@ -365,6 +431,7 @@ export function ApplicationPageView({
     async (
       dispatch: Promise<FlowDispatchResult | undefined>,
       formPlacementId?: string,
+      afterAccepted?: () => Promise<Notice | undefined>,
     ) => {
       setBusy(true);
       setNotice(undefined);
@@ -404,7 +471,20 @@ export function ApplicationPageView({
         }
         if (server.kind === "finished") {
           setSelection({});
-          showResult(finishedNotice(server.descriptor.outcome, server.failure?.code));
+          let resultNotice = finishedNotice(server.descriptor.outcome, server.failure?.code);
+          if (
+            (server.descriptor.outcome === "completed" ||
+              server.descriptor.outcome === "committed" ||
+              server.descriptor.outcome === "background_pending") &&
+            afterAccepted !== undefined
+          ) {
+            try {
+              resultNotice = (await afterAccepted()) ?? resultNotice;
+            } catch {
+              resultNotice = unavailableNotice;
+            }
+          }
+          showResult(resultNotice);
           return router.refresh();
         }
         if (server.kind === "refused") {
@@ -424,6 +504,173 @@ export function ApplicationPageView({
       }
     },
     [router],
+  );
+
+  const guidedSummaryStepId = useMemo(() => {
+    if (!Array.isArray(model.page.steps)) return undefined;
+    const summary = model.page.steps.find(
+      (step) => isRecord(step) && step.summary === true && typeof step.id === "string",
+    );
+    return isRecord(summary) && typeof summary.id === "string" ? summary.id : undefined;
+  }, [model.page]);
+  const guidedPreviousStepId = useMemo(() => {
+    const activeStepId = model.guidedForm?.activeStepId;
+    if (activeStepId === undefined || !Array.isArray(model.page.steps)) return undefined;
+    const activeIndex = model.page.steps.findIndex(
+      (step) => isRecord(step) && step.id === activeStepId,
+    );
+    if (activeIndex <= 0) return undefined;
+    const previous = model.page.steps[activeIndex - 1];
+    return isRecord(previous) && typeof previous.id === "string" ? previous.id : undefined;
+  }, [model.guidedForm?.activeStepId, model.page]);
+
+  const advanceGuidedStep = useCallback(
+    async (stepId: string, values: Readonly<Record<string, unknown>>, requested?: string) => {
+      const guidedForm = model.guidedForm;
+      if (guidedForm === undefined || busy) return;
+      setBusy(true);
+      setNotice(undefined);
+      try {
+        const result = await guidedFormActions.advance({
+          address: guidedAddress,
+          draftId: guidedForm.draftId,
+          expectedRevision: guidedForm.revision,
+          stepId,
+          ...(requested === undefined ? {} : { requestedStepId: requested }),
+          values,
+        });
+        if (result.kind === "updated" || result.kind === "unchanged") {
+          if (result.kind === "updated" && !result.valid && result.activeStepId === stepId)
+            setNotice({ tone: "problem", text: "Review the fields in this step before continuing." });
+          setQuery((parameters) => {
+            if (result.activeStepId === result.computedStepId) parameters.delete("step");
+            else parameters.set("step", result.activeStepId);
+          });
+          return;
+        }
+        if (result.kind === "conflict") {
+          setNotice({ tone: "problem", text: "This draft changed in another session. Review the latest step." });
+          router.refresh();
+          return;
+        }
+        setNotice(unavailableNotice);
+      } catch {
+        setNotice(unavailableNotice);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, guidedAddress, guidedFormActions, model.guidedForm, router, setQuery],
+  );
+
+  const requestGuidedStep = useCallback(
+    (requested?: string) => {
+      const guidedForm = model.guidedForm;
+      if (guidedForm === undefined || busy) return;
+      requestedStepId.current = requested;
+      const boundSummaryFormId =
+        guidedForm.activeStepId === guidedSummaryStepId
+          ? guidedActiveFormIds.find((placementId) =>
+              (model.bindings[placementId] ?? []).some(
+                (binding) =>
+                  binding.event === "form_submit" &&
+                  binding.flowId.toLowerCase() === guidedForm.flowId.toLowerCase(),
+              ),
+            )
+          : undefined;
+      const activeFormId = boundSummaryFormId ?? guidedActiveFormIds[0];
+      const activeForm =
+        activeFormId === undefined
+          ? undefined
+          : [...document.querySelectorAll<HTMLFormElement>(
+              'form[data-vortex-control="form-container"]',
+            )].find((form) => form.dataset.vortexPlacementId === activeFormId);
+      if (activeForm !== undefined) {
+        activeForm.requestSubmit();
+        return;
+      }
+      requestedStepId.current = undefined;
+      void advanceGuidedStep(guidedForm.activeStepId, {}, requested);
+    },
+    [
+      advanceGuidedStep,
+      busy,
+      guidedActiveFormIds,
+      guidedSummaryStepId,
+      model.bindings,
+      model.guidedForm,
+    ],
+  );
+
+  const submitGuidedSummary = useCallback(
+    async (placementId: string, binding: PlacementFlowBinding) => {
+      const guidedForm = model.guidedForm;
+      if (
+        guidedForm === undefined ||
+        guidedSummaryStepId === undefined ||
+        guidedForm.activeStepId !== guidedSummaryStepId ||
+        binding.flowId.toLowerCase() !== guidedForm.flowId.toLowerCase() ||
+        busy ||
+        guidedSubmitInFlight.current
+      )
+        return;
+      guidedSubmitInFlight.current = true;
+      setBusy(true);
+      setNotice(undefined);
+      let flowStarted = false;
+      try {
+        const confirmed = await guidedFormActions.confirm({
+          address: guidedAddress,
+          draftId: guidedForm.draftId,
+          expectedRevision: guidedForm.revision,
+          stepId: guidedForm.activeStepId,
+        });
+        if (confirmed.kind !== "confirmed") {
+          setNotice(
+            confirmed.kind === "conflict"
+              ? { tone: "problem", text: "This draft changed in another session. Review the latest step." }
+              : unavailableNotice,
+          );
+          if (confirmed.kind === "conflict") router.refresh();
+          return;
+        }
+        const afterAccepted = async (): Promise<Notice | undefined> => {
+          const abandoned = await guidedFormActions.abandon({
+            address: guidedAddress,
+            draftId: guidedForm.draftId,
+            expectedRevision: guidedForm.revision,
+          });
+          return abandoned.kind === "abandoned"
+            ? undefined
+            : {
+                tone: "problem",
+                text: "The submission finished, but the saved draft could not be cleared. Refresh before submitting again.",
+              };
+        };
+        const dispatch = formBlock.submit(
+          asComponentBinding(placementId, binding),
+          confirmed.values,
+        );
+        flowStarted = true;
+        await applyDispatch(dispatch, placementId, afterAccepted);
+      } catch {
+        setNotice(unavailableNotice);
+      } finally {
+        guidedSubmitInFlight.current = false;
+        if (!flowStarted) setBusy(false);
+      }
+    },
+    [
+      applyDispatch,
+      busy,
+      formBlock,
+      guidedAddress,
+      guidedFormActions,
+      guidedSummaryStepId,
+      guidedSubmitInFlight,
+      model.guidedForm,
+      router,
+    ],
   );
 
   /**
@@ -453,7 +700,11 @@ export function ApplicationPageView({
       ...Object.keys(model.data),
       ...Object.keys(model.bindings),
       ...Object.keys(formFeedback),
+      ...guidedActiveFormIds,
     ]);
+    if (guidedActivePlacementIds !== undefined)
+      for (const placementId of placementIds)
+        if (!guidedActivePlacementIds.has(placementId)) placementIds.delete(placementId);
     for (const placementId of placementIds) {
       const data = model.data[placementId];
       const bindings = model.bindings[placementId] ?? [];
@@ -462,7 +713,7 @@ export function ApplicationPageView({
         formOwners[placementId] === placementId ? formFeedback[placementId] : undefined;
       // Display callbacks belong only to a placement with projected data; a control placement's
       // own parser refuses an event name it does not declare, so they are never added to a form.
-      if (data !== undefined) {
+      if (data !== undefined && model.guidedForm === undefined) {
         for (const kind of ["row_clicked", "row_action", "bulk_action", "inline_edit"] as const)
           if (bindings.some((binding) => binding.event === kind))
             events[kind] = (event: DisplaySemanticEvent) => {
@@ -506,7 +757,7 @@ export function ApplicationPageView({
       // form it reports the form's current values. A record page also supplies its verified page
       // subject for declared navigation bindings; the binding receives only the inputs it declares.
       const actionBinding = bindingOfEvent(bindings, "action");
-      if (actionBinding !== undefined)
+      if (actionBinding !== undefined && model.guidedForm === undefined)
         events.action = (event: ControlSemanticEvent) => {
           if (event.event !== "action" || event.intent !== "activate" || busy) return;
           return runBinding(placementId, actionBinding, {
@@ -517,9 +768,24 @@ export function ApplicationPageView({
       // A form container emits its one submission for a gesture; it runs the bound flow once
       // through the runtime, which resumes every pause with the server-issued continuation.
       const submitBinding = bindings.find((binding) => binding.event === "form_submit");
-      if (submitBinding !== undefined)
+      if (
+        submitBinding !== undefined ||
+        (model.guidedForm !== undefined && formOwners[placementId] === placementId)
+      )
         events.form_submit = (event: ControlSemanticEvent) => {
           if (event.event !== "form_submit" || busy) return;
+          if (model.guidedForm !== undefined) {
+            const requested = requestedStepId.current;
+            requestedStepId.current = undefined;
+            if (model.guidedForm.activeStepId === guidedSummaryStepId) {
+              if (submitBinding === undefined) setNotice(unavailableNotice);
+              else void submitGuidedSummary(placementId, submitBinding);
+            }
+            else
+              void advanceGuidedStep(model.guidedForm.activeStepId, event.values, requested);
+            return;
+          }
+          if (submitBinding === undefined) return;
           const baseline = model.editFormBaselines[placementId];
           const values =
             baseline === undefined
@@ -544,13 +810,13 @@ export function ApplicationPageView({
           );
         };
       const readyBinding = bindings.find((binding) => binding.event === "form_ready");
-      if (readyBinding !== undefined)
+      if (readyBinding !== undefined && model.guidedForm === undefined)
         events.form_ready = (event: ControlSemanticEvent) => {
           if (event.event !== "form_ready" || busy) return;
           void applyDispatch(formBlock.ready(asComponentBinding(placementId, readyBinding)));
         };
       const resetBinding = bindings.find((binding) => binding.event === "form_reset");
-      if (resetBinding !== undefined)
+      if (resetBinding !== undefined && model.guidedForm === undefined)
         events.form_reset = (event: ControlSemanticEvent) => {
           if (event.event !== "form_reset" || busy) return;
           setFormFeedback((current) => {
@@ -587,9 +853,15 @@ export function ApplicationPageView({
     formBlock,
     formFeedback,
     formOwners,
+    guidedActivePlacementIds,
+    guidedActiveFormIds,
+    guidedSummaryStepId,
+    advanceGuidedStep,
+    submitGuidedSummary,
     model.bindings,
     model.data,
     model.editFormBaselines,
+    model.guidedForm,
     router,
     runBinding,
     selection,
@@ -613,7 +885,20 @@ export function ApplicationPageView({
         projectedNavigation={model.navigation}
         resolvePageHref={resolvePageHref}
         currentPageId={model.pageId}
+        activeStepId={model.guidedForm?.activeStepId}
         runtimeInputs={runtimeInputs}
+        guidedStepNavigation={
+          model.guidedForm === undefined
+            ? undefined
+            : {
+                disabled: busy,
+                onBack: () => {
+                  if (guidedPreviousStepId !== undefined)
+                    requestGuidedStep(guidedPreviousStepId);
+                },
+                onNext: () => requestGuidedStep(),
+              }
+        }
       />
       {intentHostElement}
     </>
