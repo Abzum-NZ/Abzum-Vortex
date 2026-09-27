@@ -141,6 +141,78 @@ begin
     );
   end if;
 
+  if meta -> 'recordType' ? 'systemProjection' then
+    if p_operation <> 'update'
+      or meta #>> '{recordType,key}' <> 'organization_settings'
+      or meta #>> '{recordType,systemProjection,protectedView}' <>
+        'organization_runtime_settings'
+      or not exists (
+        select 1
+        from vortex_definition.roots as root
+        where root.root_id = (meta ->> 'moduleRootId')::uuid
+          and root.kind = 'module'
+          and root.key = 'vortex.organisation_administration'
+      )
+      or p_record_id is distinct from
+        (meta -> 'context' ->> 'organizationId')::uuid then
+      return pg_catalog.jsonb_build_object('outcome', 'refused');
+    end if;
+
+    -- The one writable system projection is prepared through its protected
+    -- read model. The final write still goes only through the closed settings
+    -- writer registered by Record; ordinary projected records remain refused.
+    loaded := vortex_record.load_record_access_facts_internal(
+      p_record_type_id, 'read', p_record_id, null
+    );
+    if loaded ->> 'outcome' <> 'loaded' then
+      return pg_catalog.jsonb_build_object('outcome', 'refused');
+    end if;
+    if (loaded ->> 'concurrencyNumber')::bigint <> p_expected_concurrency_number then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'conflict',
+        'concurrencyNumber', loaded -> 'concurrencyNumber',
+        'correlationId', meta -> 'context' -> 'correlationId'
+      );
+    end if;
+    decision := vortex_access.evaluate_organization_record_access_internal(
+      loaded -> 'declaration', p_record_id, loaded -> 'facts'
+    );
+    if decision ->> 'outcome' <> 'allowed' then
+      perform vortex_record.append_base_save_activity_internal(
+        p_activity_id, 'update', organization_id_value,
+        array[]::uuid[], 'refused'
+      );
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused_recorded',
+        'correlationId', correlation_id_value
+      );
+    end if;
+    bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+    bounds := bounds || pg_catalog.jsonb_build_object(
+      'readableFieldIds', vortex_record.organization_settings_readable_field_ids_internal(
+        p_record_type_id, decision, bounds -> 'readableFieldIds'
+      )
+    );
+    bounds := bounds || pg_catalog.jsonb_build_object(
+      'readableFieldIds', vortex_record.filter_calculated_readable_field_ids(
+        loaded -> 'facts' -> 'recordTypes', p_record_type_id,
+        bounds -> 'readableFieldIds'
+      )
+    );
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'prepared',
+      'recordType', meta -> 'recordType',
+      'beforeSaveRules', vortex_record.before_save_rules_for_record_type_internal(
+        (meta ->> 'moduleRootId')::uuid,
+        (meta ->> 'moduleReleaseRevision')::bigint,
+        p_record_type_id
+      ),
+      'correlationId', correlation_id_value,
+      'readableFieldIds', bounds -> 'readableFieldIds',
+      'existingValues', loaded -> 'fieldValues'
+    );
+  end if;
+
   if p_operation = 'update' then
     loaded := vortex_record.load_record_access_facts_internal(
       p_record_type_id, 'update', p_record_id, p_expected_concurrency_number

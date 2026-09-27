@@ -2868,7 +2868,14 @@ export const organisationAdministrationModule: ModuleSourceDocument =
       ],
       events: [],
       flows: [],
-      extension_points: [],
+      extension_points: [
+        {
+          id: "ext_organization_settings_fields",
+          key: "organization_settings_fields",
+          record_type: "organization_settings",
+          accepts: ["field"],
+        },
+      ],
       sharing_conditions: [],
       queries: [
         {
