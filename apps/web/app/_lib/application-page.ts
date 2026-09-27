@@ -1,6 +1,10 @@
 import "server-only";
 
-import type { HumanOrganizationRequestDependencies } from "@vortex/access";
+import {
+  readCurrentOrganizationRuntimeSettingsAfterAuthorization,
+  runOrganizationAccessOperation,
+  type HumanOrganizationRequestDependencies,
+} from "@vortex/access";
 import {
   createHumanInstalledRuntimeContextLoader,
   type InstalledRuntimeContext,
@@ -19,6 +23,7 @@ import {
   createStoredPageCapabilityService,
   projectRecordDetailData,
   type PageSubjectReadResult,
+  type PrivateFormDraftFieldValidation,
   type ProjectedNavigation,
 } from "@vortex/page";
 import {
@@ -29,10 +34,13 @@ import {
   recordIdSchema,
   readRecordsTableContract,
   richTextDocumentV2Schema,
+  timestampSchema,
+  organizationRuntimeSettingsSchema,
   type ApplicationShellV2,
   type BlockPropertyValueV2Contract,
   type IdentitySession,
   type JsonValue,
+  type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
@@ -40,6 +48,20 @@ import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";
 import { getQueryContinuationKey } from "./query-continuation-key";
+import {
+  computeGuidedFormStepId,
+  getGuidedFormFlowId,
+  getGuidedFormRecordType,
+  getGuidedFormStepFields,
+  getGuidedFormVisiblePlacementIds,
+  guidedFormDraftScope,
+  guidedFormInitialValues,
+  guidedFormInputData,
+  earlierGuidedStepId,
+  openGuidedFormDraft,
+  visibleGuidedFormValues,
+  visibleGuidedFormValidation,
+} from "./guided-form-steps";
 import { humanOrganizationRequestDependencies, humanOrganizationRequests } from "./server-composition";
 
 /**
@@ -74,6 +96,15 @@ export type ApplicationPageModel = Readonly<{
   bindings: Readonly<Record<string, readonly PlacementFlowBinding[]>>;
   /** Displayed values of readable edit fields, used only to omit unchanged fields on submit. */
   editFormBaselines: Readonly<Record<string, Readonly<Record<string, JsonValue>>>>;
+  guidedForm?: Readonly<{
+    draftId: string;
+    revision: number;
+    flowId: string;
+    activeStepId: string;
+    computedStepId: string;
+    values: Readonly<Record<string, JsonValue>>;
+    validation: Readonly<Record<string, PrivateFormDraftFieldValidation>>;
+  }>;
   /** Permitted pages of this application, so a menu or navigate intent can be turned into an address. */
   pages: readonly Readonly<{ pageId: string; key: string }>[];
   /**
@@ -96,6 +127,7 @@ export type ApplicationPageModel = Readonly<{
     tenantShortName: string;
     organizationShortName: string;
     applicationKey: string;
+    pageKey: string;
     installationRevision: number;
     releaseKey: string;
   }>;
@@ -122,6 +154,42 @@ const sameId = (left: string, right: string): boolean => left.toLowerCase() === 
 
 const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
   typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
+
+type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][number];
+type ModuleField = ModuleRelease["content"]["recordTypes"][number]["fields"][number];
+type PermissionEntry = InstalledRuntimeContext["permissionRegistration"]["entries"][number];
+type DateTimeZones = { personTimeZone?: string; organizationTimeZone?: string };
+
+const fieldForPlacement = (
+  placement: Readonly<Record<string, unknown>>,
+  modules: InstalledRuntimeContext["releaseSet"]["modules"],
+): Readonly<{ module: ModuleRelease; field: ModuleField }> | undefined => {
+  const settings = placement.settings;
+  if (!isRecord(settings) || !isRecord(settings.field)) return undefined;
+  const reference = settings.field;
+  if (reference.kind !== "field_reference" || typeof reference.fieldId !== "string")
+    return undefined;
+  for (const module of modules)
+    for (const recordType of module.content.recordTypes) {
+      const field = recordType.fields.find((candidate) =>
+        sameId(String(candidate.fieldId), reference.fieldId as string),
+      );
+      if (field !== undefined) return { module, field };
+    }
+  return undefined;
+};
+
+const fieldControl = (placement: Readonly<Record<string, unknown>>): string | undefined => {
+  const settings = placement.settings;
+  const block = placement.block;
+  return isRecord(settings) && isRecord(block) &&
+    typeof block.blockId === "string" &&
+    sameId(block.blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) &&
+    isRecord(settings.control) && settings.control.kind === "choice" &&
+    typeof settings.control.value === "string"
+    ? settings.control.value
+    : undefined;
+};
 
 /** Every placement of the projected page with its stable identity, in document order. */
 const collectPlacements = (
@@ -164,6 +232,7 @@ const projectEditField = (
   placement: Readonly<Record<string, unknown>>,
   recordType: InstalledRuntimeContext["releaseSet"]["modules"][number]["content"]["recordTypes"][number],
   values: Readonly<Record<string, JsonValue>>,
+  dateTimeZones: DateTimeZones,
 ): Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined => {
   const settings = placement.settings;
   const block = placement.block;
@@ -228,6 +297,14 @@ const projectEditField = (
       }
       kind = "date_input";
       break;
+    case "date_time":
+      if (
+        stored !== null &&
+        !(typeof stored === "string" && timestampSchema.safeParse(stored).success)
+      )
+        return undefined;
+      kind = "date_time_input";
+      break;
     case "choice":
       if (stored !== null && typeof stored !== "string") return undefined;
       if (stored !== null) {
@@ -248,6 +325,47 @@ const projectEditField = (
       }
       kind = "choice_input";
       break;
+    case "several_choices": {
+      const selected = stored === null ? [] : stored;
+      if (
+        !Array.isArray(selected) ||
+        selected.length > 200 ||
+        !selected.every((choice) => typeof choice === "string") ||
+        new Set(selected).size !== selected.length
+      )
+        return undefined;
+      const options = settings.options;
+      if (
+        !isRecord(options) ||
+        options.kind !== "list" ||
+        !Array.isArray(options.items)
+      )
+        return undefined;
+      const optionItems: unknown[] = options.items;
+      if (
+        !selected.every((choice) =>
+          optionItems.some(
+            (item) =>
+              isRecord(item) &&
+              isRecord(item.properties) &&
+              isRecord(item.properties.key) &&
+              item.properties.key.value === choice,
+          ),
+        )
+      )
+        return undefined;
+      const maximumSelections = settings.maximum_selections;
+      if (
+        isRecord(maximumSelections) &&
+        maximumSelections.kind === "number" &&
+        typeof maximumSelections.value === "number" &&
+        selected.length > maximumSelections.value
+      )
+        return undefined;
+      displayed = selected;
+      kind = "several_choices_input";
+      break;
+    }
     case "link":
       if (
         stored !== null &&
@@ -284,8 +402,17 @@ const projectEditField = (
   }
   return {
     key: field.key,
-    value: displayed,
-    data: { status: "ready", values: { kind, value: displayed } },
+    value:
+      kind === "text_input" &&
+      stored === null &&
+      isRecord(settings.input_type) &&
+      settings.input_type.value === "email"
+        ? null
+        : displayed,
+    data: {
+      status: "ready",
+      values: { kind, value: displayed, ...(kind === "date_time_input" ? dateTimeZones : {}) },
+    },
   };
 };
 
@@ -306,7 +433,6 @@ const coerceInput = (raw: string, type: string): JsonValue | undefined => {
   }
 };
 
-type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][number];
 type ModuleQuery = ModuleRelease["content"]["queries"][number];
 
 const findModuleQuery = (
@@ -471,7 +597,133 @@ export const loadApplicationPage = async (
   if (projectedPage.kind !== "available") return projectedPage;
   // An undefined projection is the page refused for this viewer: never an empty page.
   if (projectedPage.value === undefined) return { kind: "unavailable" };
-  const page = projectedPage.value;
+  // The page capability projection is authoritative, but its derived choice settings still
+  // contain every declared option. Work on a copy so gated options never reach the browser.
+  const page = structuredClone(projectedPage.value);
+  const placements = collectPlacements(page);
+  const choicePlacements: Array<{
+    options: Record<string, unknown>;
+    items: unknown[];
+    permissionKeys: readonly (string | undefined)[];
+  }> = [];
+  const gatedPermissions = new Map<string, PermissionEntry>();
+  let needsDateTimeZones = false;
+  for (const { placement } of placements) {
+    const control = fieldControl(placement);
+    if (control === "date_time") needsDateTimeZones = true;
+    if (control !== "choice" && control !== "several_choices") continue;
+    const source = fieldForPlacement(placement, context.releaseSet.modules);
+    const settings = placement.settings;
+    const options = isRecord(settings) ? settings.options : undefined;
+    if (
+      source === undefined ||
+      (source.field.type !== "choice" && source.field.type !== "several_choices") ||
+      source.field.type !== control ||
+      !isRecord(options) ||
+      options.kind !== "list" ||
+      !Array.isArray(options.items) ||
+      options.items.length !== source.field.settings.options.length
+    )
+      return { kind: "temporarily_unavailable" };
+    const permissionKeys: Array<string | undefined> = [];
+    for (const [index, declared] of source.field.settings.options.entries()) {
+      const item = options.items[index];
+      if (
+        !isRecord(item) ||
+        !isRecord(item.properties) ||
+        !isRecord(item.properties.key) ||
+        !isRecord(item.properties.label) ||
+        item.properties.key.value !== declared.value ||
+        item.properties.label.value !== declared.label
+      )
+        return { kind: "temporarily_unavailable" };
+      const permissionId = declared.requiredPermissionId;
+      if (permissionId === undefined) {
+        permissionKeys.push(undefined);
+        continue;
+      }
+      const key = `${String(source.module.rootId).toLowerCase()}:${String(permissionId).toLowerCase()}`;
+      const matches = context.permissionRegistration.entries.filter(
+        (entry) =>
+          entry.ownerKind === "module" &&
+          sameId(String(entry.ownerId), String(source.module.rootId)) &&
+          sameId(String(entry.permission.permissionId), String(permissionId)),
+      );
+      if (matches.length !== 1 || matches[0] === undefined)
+        return { kind: "temporarily_unavailable" };
+      gatedPermissions.set(key, matches[0]);
+      permissionKeys.push(key);
+    }
+    choicePlacements.push({ options, items: options.items, permissionKeys });
+  }
+
+  let dateTimeZones: DateTimeZones = {};
+  let allowedPermissions = new Set<string>();
+  if (needsDateTimeZones || gatedPermissions.size > 0) {
+    const authorized = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
+      session,
+      selection,
+      async (transaction, scope) => {
+        const zones: DateTimeZones = {};
+        if (needsDateTimeZones) {
+          const profileRows = await transaction.query<{ time_zone: unknown }>`
+            select time_zone from vortex_access.read_own_profile()
+          `;
+          if (profileRows.length !== 1 || profileRows[0] === undefined)
+            throw new Error("PAGE_PROFILE_TIME_ZONE_UNAVAILABLE");
+          const profileZone = profileRows[0].time_zone;
+          if (profileZone !== null) {
+            const parsed = organizationRuntimeSettingsSchema.shape.timeZone.safeParse(profileZone);
+            if (!parsed.success) throw new Error("PAGE_PROFILE_TIME_ZONE_UNAVAILABLE");
+            zones.personTimeZone = parsed.data;
+          }
+          const organizationSettings =
+            await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction);
+          if (organizationSettings !== undefined)
+            zones.organizationTimeZone = organizationSettings.timeZone;
+        }
+        const allowed: string[] = [];
+        for (const [key, entry] of gatedPermissions) {
+          const declaration: OrganizationAccessDeclaration = {
+            operationKey: "application.page.field_choice.view",
+            action: {
+              actionKind: entry.permission.actionKind,
+              ...(entry.permission.namedAction === undefined
+                ? {}
+                : { namedAction: entry.permission.namedAction }),
+            },
+            target: { kind: "application", applicationRootId: context.applicationRootId },
+            requiredPermission: {
+              applicationRootId: entry.applicationRootId,
+              ownerKind: entry.ownerKind,
+              ownerId: entry.ownerId,
+              permissionId: entry.permission.permissionId,
+            },
+            recentAuthentication: { kind: "none" },
+            authority: { kind: "permission" },
+          };
+          const decision = await runOrganizationAccessOperation(
+            transaction,
+            scope,
+            declaration,
+            async () => true,
+          );
+          if (decision.outcome === "completed") allowed.push(key);
+        }
+        return { zones, allowed, accessVersion: scope.accessVersion };
+      },
+    );
+    if (authorized.kind !== "available") return authorized;
+    if (page.accessVersion !== authorized.value.accessVersion)
+      return { kind: "temporarily_unavailable" };
+    dateTimeZones = authorized.value.zones;
+    allowedPermissions = new Set(authorized.value.allowed);
+  }
+  for (const choice of choicePlacements)
+    choice.options.items = choice.items.filter((_, index) => {
+      const key = choice.permissionKeys[index];
+      return key === undefined || allowedPermissions.has(key);
+    });
 
   const navigation = await createStoredNavigationProjectionService({
     ...dependencies,
@@ -489,17 +741,29 @@ export const loadApplicationPage = async (
   const subjectType =
     (pageDefinition.type === "detail" ||
       pageDefinition.type === "public" ||
-      pageDefinition.type === "form") &&
+      pageDefinition.type === "form" ||
+      pageDefinition.type === "guided_form") &&
     pageDefinition.recordType?.state === "resolved"
       ? pageDefinition.recordType
       : undefined;
   const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
+  if (
+    pageDefinition.type === "guided_form" &&
+    first(parameters[pageSubjectParameter]) !== undefined &&
+    !subjectId.success
+  )
+    return { kind: "unavailable" };
   let subjectRead: Promise<PageSubjectReadResult> | undefined;
   const readSubject = (recordTypeId: string, recordId: string): Promise<PageSubjectReadResult> =>
     (subjectRead ??= subjects.read(session, selection, { recordTypeId, recordId }));
 
-  const placements = collectPlacements(page);
   const data: Record<string, PageDataState> = {};
+  for (const { placementId, placement } of placements)
+    if (fieldControl(placement) === "date_time")
+      data[placementId] = {
+        status: "ready",
+        values: { kind: "date_time_input", ...dateTimeZones },
+      };
   const bindings: Record<string, PlacementFlowBinding[]> = {};
   for (const { placementId, placement } of placements) {
     const held = application.content.flowBindings.filter((binding) =>
@@ -693,9 +957,80 @@ export const loadApplicationPage = async (
       ? { recordId: String(subjectRow.row.recordId), revision: subjectRow.row.revision }
       : undefined;
 
-  // An edit form is the form whose installed submit binding takes a page record. Its fields are
-  // projected from the same authorized subject read used for the page revision, and only from the
-  // form's visible, declared fields on that record type. An incomplete read disables the form.
+  let guidedForm: ApplicationPageModel["guidedForm"];
+  if (pageDefinition.type === "guided_form") {
+    const subjectCandidate = first(parameters[pageSubjectParameter]);
+    if (subjectCandidate !== undefined) {
+      if (subjectRow?.kind === "temporarily_unavailable")
+        return { kind: "temporarily_unavailable" };
+      if (subjectRow?.kind !== "read" || subject === undefined)
+        return { kind: "unavailable" };
+    }
+    const recordType = getGuidedFormRecordType(pageDefinition, context.releaseSet.modules);
+    if (recordType === undefined) return { kind: "unavailable" };
+    const shells = context.releaseSet.application.content.shells;
+    const declaredStepFields = getGuidedFormStepFields(
+      pageDefinition,
+      recordType,
+      shells,
+    );
+    const visiblePlacementIds = getGuidedFormVisiblePlacementIds(page, shells);
+    const stepFields = getGuidedFormStepFields(
+      pageDefinition,
+      recordType,
+      shells,
+      page,
+    );
+    const flowId = getGuidedFormFlowId(page, application.content.flowBindings, shells);
+    if (
+      declaredStepFields === undefined ||
+      visiblePlacementIds === undefined ||
+      stepFields === undefined ||
+      declaredStepFields.some((step) =>
+        step.fields.some(
+          (field) => field.required && !visiblePlacementIds.has(field.placementId.toLowerCase()),
+        ),
+      ) ||
+      flowId === undefined
+    )
+      return { kind: "unavailable" };
+    const draftScope = guidedFormDraftScope(
+      String(pageDefinition.pageId),
+      flowId,
+      subject?.recordId,
+    );
+    const openedDraft = await openGuidedFormDraft(
+      session,
+      selection,
+      draftScope,
+      guidedFormInitialValues(
+        stepFields,
+        subjectRow?.kind === "read" ? subjectRow.row.values : undefined,
+      ),
+    );
+    if (openedDraft.kind !== "available") return openedDraft;
+    const values = visibleGuidedFormValues(openedDraft.draft, stepFields);
+    const computedStepId = computeGuidedFormStepId(stepFields, openedDraft.draft.validation);
+    if (computedStepId === undefined) return { kind: "unavailable" };
+    const activeStepId = earlierGuidedStepId(
+      stepFields,
+      computedStepId,
+      first(parameters.step),
+    );
+    Object.assign(data, guidedFormInputData(page, recordType, values, dateTimeZones));
+    guidedForm = {
+      draftId: String(openedDraft.draft.draftId),
+      revision: openedDraft.draft.revision,
+      flowId,
+      activeStepId,
+      computedStepId,
+      values,
+      validation: visibleGuidedFormValidation(openedDraft.draft.validation, stepFields),
+    };
+  }
+
+  // Detail and ordinary form edit surfaces project their fields from the authorized subject read.
+  // Guided-form fields instead come from the person's revisioned draft above.
   const editFormBaselines: Record<string, Record<string, JsonValue>> = {};
   const subjectRecordType = context.releaseSet.modules
     .flatMap((module) => module.content.recordTypes)
@@ -704,53 +1039,60 @@ export const loadApplicationPage = async (
         subjectType !== undefined &&
         sameId(String(recordType.recordTypeId), String(subjectType.recordTypeId)),
     );
-  for (const { placementId, placement } of placements) {
-    const block = placement.block;
-    if (
-      !isRecord(block) ||
-      typeof block.blockId !== "string" ||
-      !sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
-    )
-      continue;
-    const editBinding = bindings[placementId]?.some(
-      (binding) => binding.event === "form_submit" && binding.callerInputs.includes("record"),
-    );
-    if (!editBinding) continue;
-    if (subjectRow?.kind !== "read" || subject === undefined || subjectRecordType === undefined) {
-      data[placementId] = { status: "disabled", reason: "Record unavailable" };
-      continue;
-    }
-    const fields = placements.filter((entry) => {
-      if (entry.formId !== placementId || entry.placementId === placementId) return false;
-      const fieldBlock = entry.placement.block;
-      if (!isRecord(fieldBlock) || typeof fieldBlock.blockId !== "string") return false;
-      const blockId = fieldBlock.blockId;
-      return (
-        sameId(blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) ||
-        Object.values(FIELD_INPUT_CONTROL_RELEASES).some((release) =>
-          sameId(release.blockId, blockId),
-        )
+  if (pageDefinition.type !== "guided_form") {
+    for (const { placementId, placement } of placements) {
+      const block = placement.block;
+      if (
+        !isRecord(block) ||
+        typeof block.blockId !== "string" ||
+        !sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
+      )
+        continue;
+      const editBinding = bindings[placementId]?.some(
+        (binding) => binding.event === "form_submit" && binding.callerInputs.includes("record"),
       );
-    });
-    const baseline: Record<string, JsonValue> = {};
-    const projected: Record<string, PageDataState> = {};
-    let complete = true;
-    for (const entry of fields) {
-      const field = projectEditField(entry.placement, subjectRecordType, subjectRow.row.values);
-      if (field === undefined || Object.hasOwn(baseline, field.key)) {
-        complete = false;
-        break;
+      if (!editBinding) continue;
+      if (subjectRow?.kind !== "read" || subject === undefined || subjectRecordType === undefined) {
+        data[placementId] = { status: "disabled", reason: "Record unavailable" };
+        continue;
       }
-      baseline[field.key] = field.value;
-      projected[entry.placementId] = field.data;
+      const fields = placements.filter((entry) => {
+        if (entry.formId !== placementId || entry.placementId === placementId) return false;
+        const fieldBlock = entry.placement.block;
+        if (!isRecord(fieldBlock) || typeof fieldBlock.blockId !== "string") return false;
+        const blockId = fieldBlock.blockId;
+        return (
+          sameId(blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) ||
+          Object.values(FIELD_INPUT_CONTROL_RELEASES).some((release) =>
+            sameId(release.blockId, blockId),
+          )
+        );
+      });
+      const baseline: Record<string, JsonValue> = {};
+      const projected: Record<string, PageDataState> = {};
+      let complete = true;
+      for (const entry of fields) {
+        const field = projectEditField(
+          entry.placement,
+          subjectRecordType,
+          subjectRow.row.values,
+          dateTimeZones,
+        );
+        if (field === undefined || Object.hasOwn(baseline, field.key)) {
+          complete = false;
+          break;
+        }
+        baseline[field.key] = field.value;
+        projected[entry.placementId] = field.data;
+      }
+      if (!complete) {
+        data[placementId] = { status: "disabled", reason: "Record unavailable" };
+        continue;
+      }
+      Object.assign(data, projected);
+      data[placementId] = { status: "ready", values: { kind: "form" } };
+      editFormBaselines[placementId] = baseline;
     }
-    if (!complete) {
-      data[placementId] = { status: "disabled", reason: "Record unavailable" };
-      continue;
-    }
-    Object.assign(data, projected);
-    data[placementId] = { status: "ready", values: { kind: "form" } };
-    editFormBaselines[placementId] = baseline;
   }
 
   const permittedKeys = new Set(address.application.pageKeys);
@@ -765,6 +1107,7 @@ export const loadApplicationPage = async (
       data,
       bindings,
       editFormBaselines,
+      ...(guidedForm === undefined ? {} : { guidedForm }),
       pages: application.content.pages
         .filter((candidate) => permittedKeys.has(candidate.key))
         .map((candidate) => ({ pageId: candidate.pageId, key: candidate.key })),
@@ -783,6 +1126,7 @@ export const loadApplicationPage = async (
         tenantShortName: address.tenantShortName,
         organizationShortName: address.organizationShortName,
         applicationKey: address.application.key,
+        pageKey: address.pageKey,
         installationRevision: context.applicationReleaseRevision,
         releaseKey: [
           application.releaseVersion,

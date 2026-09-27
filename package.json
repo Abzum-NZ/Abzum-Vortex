@@ -7,16 +7,6 @@
   "engines": {
     "node": "24"
   },
-  "workspaces": [
-    "apps/*",
-    "contracts",
-    "db",
-    "runtime/*",
-    "ui",
-    "studio",
-    "modules",
-    "testing"
-  ],
   "scripts": {
     "dev": "turbo run dev --filter=@vortex/web",
     "auth:local:prepare": "node tooling/supabase/ensure-local-signing-key.mjs",
@@ -38,6 +28,7 @@
     "typecheck": "turbo run typecheck",
     "boundaries": "node tooling/boundaries/check.mjs",
     "catalogue:fingerprints": "node tooling/generate-catalogue-fingerprints.mjs",
+    "catalogue:shadcn": "node tooling/import-shadcn-theme-catalogue.mjs",
     "styles:emit": "node tooling/emit-style-stylesheets.mjs",
     "fonts:emit": "node tooling/emit-font-assets.mjs",
     "test": "vitest run",

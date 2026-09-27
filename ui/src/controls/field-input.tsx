@@ -15,7 +15,9 @@ import { RichTextInput } from "./rich-text-input";
 import { NumberInput } from "./number-input";
 import { BooleanInput } from "./boolean-input";
 import { DateInput } from "./date-input";
+import { DateTimeInput } from "./date-time-input";
 import { ChoiceInput } from "./choice-input";
+import { SeveralChoicesInput } from "./several-choices-input";
 
 export type FieldInputProps = ControlRenderProps<FieldInputPayload>;
 
@@ -35,7 +37,9 @@ const COMPONENTS: Readonly<Record<FieldInputControlKey, FieldInputComponent>> = 
   number: NumberInput as unknown as FieldInputComponent,
   boolean: BooleanInput as unknown as FieldInputComponent,
   date: DateInput as unknown as FieldInputComponent,
+  date_time: DateTimeInput as unknown as FieldInputComponent,
   choice: ChoiceInput as unknown as FieldInputComponent,
+  several_choices: SeveralChoicesInput as unknown as FieldInputComponent,
   link: LinkInput as unknown as FieldInputComponent,
 });
 
@@ -47,7 +51,9 @@ const EXPECTED_PAYLOAD_KIND: Readonly<Record<FieldInputControlKey, FieldInputPay
     number: "number_input",
     boolean: "boolean_input",
     date: "date_input",
+    date_time: "date_time_input",
     choice: "choice_input",
+    several_choices: "several_choices_input",
     link: "link_input",
   });
 
