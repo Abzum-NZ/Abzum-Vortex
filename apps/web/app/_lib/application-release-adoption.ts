@@ -150,5 +150,12 @@ export const adoptApplicationRelease = async (
     activation.applicationReleaseRevision <= activation.expectedActiveReleaseRevision
   )
     throw new ApplicationInstallationCoordinatorError("APPLICATION_INSTALLATION_STALE");
-  await coordinator().activate(session, activation);
+  const installationCoordinator = coordinator();
+  await installationCoordinator.prepare(session, {
+    organizationId: activation.organizationId,
+    applicationRootId: activation.applicationRootId,
+    applicationReleaseRevision: activation.applicationReleaseRevision,
+    expectedActiveReleaseRevision: activation.expectedActiveReleaseRevision,
+  });
+  await installationCoordinator.activate(session, activation);
 };

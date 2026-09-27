@@ -72,8 +72,8 @@ import { z } from "zod";
  *
  * A first installation is prepared before it is activated: `prepare` commits the registration and
  * the provisioned (inactive) storage, so the installer can store the initial record-type lifecycle
- * policies the activation gate requires. An upgrade cannot pre-provision a Module its active
- * release still binds, so its storage is prepared inside the atomic switch.
+ * policies the activation gate requires. An upgrade stages a separate exact-release binding while
+ * the previous release stays active, then atomically promotes that binding during activation.
  *
  * Withdrawal is one transaction: detach the active binding set (storage and records are retained),
  * append its Activity, then withdraw the permission registration through the Access coordinator,
@@ -118,6 +118,7 @@ export const applicationInstallationPreparationRequestSchema = z
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
     applicationReleaseRevision: revisionSchema,
+    expectedActiveReleaseRevision: revisionSchema.nullable().optional(),
   })
   .strict();
 
@@ -275,6 +276,17 @@ export type ApplicationInstallationCoordinatorDependencies<InstalledEvents> = Re
 
 type BindingRow = Readonly<{ bindings: unknown }>;
 type AccessRow = Readonly<{ access_change: unknown }>;
+type DiscardPreparedRow = Readonly<{ discarded: unknown }>;
+
+const discardPreparedResultSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: revisionSchema,
+    changed: z.boolean(),
+    moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).max(10_000),
+  })
+  .strict();
 
 const installationBindingsSchema = z
   .object({
@@ -282,6 +294,7 @@ const installationBindingsSchema = z
     applicationRootId: applicationRootIdSchema,
     registeredReleaseRevision: revisionSchema.nullable(),
     moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).max(10_000),
+    stagedModuleBindings: z.array(moduleInstallationBindingEvidenceSchema).max(10_000),
   })
   .strict();
 
@@ -410,6 +423,11 @@ const readInstallationBindings = async (
       (binding) =>
         !sameId(binding.organizationId, parsed.data.organizationId) ||
         !sameId(binding.applicationRootId, applicationRootId),
+    ) ||
+    parsed.data.stagedModuleBindings.some(
+      (binding) =>
+        !sameId(binding.organizationId, parsed.data.organizationId) ||
+        !sameId(binding.applicationRootId, applicationRootId),
     )
   )
     throw fail("APPLICATION_INSTALLATION_FAILED");
@@ -417,6 +435,35 @@ const readInstallationBindings = async (
   if (!sameId(parsed.data.organizationId, organizationId))
     throw fail("APPLICATION_INSTALLATION_REFUSED");
   return parsed.data;
+};
+
+const discardPreparedInstallation = async (
+  transaction: InstallerTransaction,
+  organizationId: OrganizationId,
+  applicationRootId: ApplicationRootId,
+  applicationReleaseRevision: number,
+): Promise<ModuleInstallationBindingEvidence[]> => {
+  const rows = await transaction.query<DiscardPreparedRow>`
+    select vortex_module.discard_prepared_application_installation(
+      ${applicationRootId}::uuid,
+      ${applicationReleaseRevision}::bigint
+    ) as discarded
+  `;
+  const parsed = rows.length === 1 ? discardPreparedResultSchema.safeParse(rows[0]?.discarded) : null;
+  if (
+    parsed === null ||
+    !parsed.success ||
+    !sameId(parsed.data.organizationId, organizationId) ||
+    !sameId(parsed.data.applicationRootId, applicationRootId) ||
+    parsed.data.applicationReleaseRevision !== applicationReleaseRevision ||
+    parsed.data.moduleBindings.some(
+      (binding) =>
+        !sameId(binding.organizationId, organizationId) ||
+        !sameId(binding.applicationRootId, applicationRootId),
+    )
+  )
+    throw fail("APPLICATION_INSTALLATION_FAILED");
+  return parsed.data.moduleBindings;
 };
 
 /** The single active release, if any. Mixed active releases are never guessed between. */
@@ -911,9 +958,9 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
 
   return Object.freeze({
     /**
-     * Prepares one exact release for first installation: aligns the permission registration and
-     * commits provisioned, inactive storage for every pinned Module release. Nothing becomes
-     * active, and an installation with an active release is refused as stale.
+     * Prepares one exact release for first installation or upgrade. First installs commit
+     * provisioned bindings for lifecycle-policy setup; upgrades stage bindings separately while
+     * the previous release stays active.
      */
     async prepare(
       session: IdentitySession,
@@ -927,8 +974,9 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       const exact = await readExactRelease(verifiedSession.data, request);
       const { pins } = exact;
 
-      // 1. Access must name the release before its provisioned setup can be administered.
-      const accessChanged = await inInstallerTransaction(
+      // 1. First installs need their registration before lifecycle-policy setup. During an
+      //    upgrade, keep Access aligned with the release that is still serving until activation.
+      const accessPreparation = await inInstallerTransaction(
         verifiedSession.data,
         request.organizationId,
         installOperation(request.applicationRootId, exact, false),
@@ -939,18 +987,52 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             request.applicationRootId,
           );
           requireNotDraining(state);
-          if (activeRelease(state) !== null) throw fail("APPLICATION_INSTALLATION_STALE");
-          return alignAccess(
-            transaction,
-            authority,
-            state,
-            request.applicationRootId,
-            request.applicationReleaseRevision,
-            exact,
-            "accept_role_templates",
-          );
+          const active = activeRelease(state);
+          if (
+            (active?.releaseRevision ?? null) !==
+              (request.expectedActiveReleaseRevision ?? null) ||
+            (active !== null && request.applicationReleaseRevision <= active.releaseRevision)
+          )
+            throw fail("APPLICATION_INSTALLATION_STALE");
+          if (
+            state.stagedModuleBindings.some(
+              (binding) => binding.applicationReleaseRevision !== request.applicationReleaseRevision,
+            )
+          )
+            throw fail("APPLICATION_INSTALLATION_STALE");
+          const accessChanged = active === null
+            ? await alignAccess(
+                transaction,
+                authority,
+                state,
+                request.applicationRootId,
+                request.applicationReleaseRevision,
+                exact,
+                "accept_role_templates",
+              )
+            : false;
+          return {
+            accessChanged,
+            previousApplicationReleaseRevision: active?.releaseRevision ?? null,
+            restorePreviousRelease:
+              active !== null && state.registeredReleaseRevision !== active.releaseRevision,
+          };
         },
       );
+
+      if (
+        accessPreparation.restorePreviousRelease &&
+        accessPreparation.previousApplicationReleaseRevision !== null
+      )
+        await restoreAccessToActiveRelease(
+          verifiedSession.data,
+          {
+            ...request,
+            expectedActiveReleaseRevision:
+              accessPreparation.previousApplicationReleaseRevision,
+          },
+          accessPreparation.previousApplicationReleaseRevision,
+        );
 
       // 2. Commit inactive storage for the complete pin set.
       return inInstallerTransaction(
@@ -964,14 +1046,23 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             request.applicationRootId,
           );
           requireNotDraining(state);
-          if (activeRelease(state) !== null) throw fail("APPLICATION_INSTALLATION_STALE");
-          // A still-provisioned binding outside this pin set would block its activation, and the
-          // fixed operations cannot detach an inactive binding.
+          const active = activeRelease(state);
+          if (
+            (active?.releaseRevision ?? null) !==
+              (request.expectedActiveReleaseRevision ?? null) ||
+            (active?.releaseRevision ?? null) !==
+              accessPreparation.previousApplicationReleaseRevision ||
+            (active !== null && request.applicationReleaseRevision <= active.releaseRevision)
+          )
+            throw fail("APPLICATION_INSTALLATION_STALE");
+
           const pinned = new Set(pins.map((pin) => pin.moduleRootId));
           if (
             state.moduleBindings.some(
               (binding) =>
-                binding.state !== "detached" &&
+                (active === null
+                  ? binding.state !== "detached"
+                  : binding.state === "provisioned") &&
                 !pinned.has(canonicalModuleRootId(binding.moduleRootId)),
             )
           )
@@ -985,7 +1076,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           );
           return {
             outcome:
-              accessChanged || provisioned.some((result) => result.changed)
+              accessPreparation.accessChanged || provisioned.some((result) => result.changed)
                 ? "prepared"
                 : "unchanged",
             organizationId: state.organizationId,
@@ -1003,6 +1094,76 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           } satisfies ApplicationInstallationPreparationResult;
         },
       );
+    },
+
+    /** Removes an inactive candidate after a failed prepare or bundle build. */
+    async discardPreparation(
+      session: IdentitySession,
+      requestCandidate: ApplicationInstallationPreparationRequest,
+    ): Promise<void> {
+      const verifiedSession = identitySessionSchema.safeParse(session);
+      const parsed = applicationInstallationPreparationRequestSchema.safeParse(requestCandidate);
+      if (!verifiedSession.success || !parsed.success)
+        throw fail("INVALID_APPLICATION_INSTALLATION_COMMAND");
+      const request = parsed.data;
+      const exact = await readExactRelease(verifiedSession.data, request);
+
+      const previousApplicationReleaseRevision = await inInstallerTransaction(
+        verifiedSession.data,
+        request.organizationId,
+        installOperation(request.applicationRootId, exact, false),
+        async (transaction) => {
+          const state = await readInstallationBindings(
+            transaction,
+            request.organizationId,
+            request.applicationRootId,
+          );
+          requireNotDraining(state);
+          const active = activeRelease(state);
+          if (active?.releaseRevision === request.applicationReleaseRevision)
+            throw fail("APPLICATION_INSTALLATION_STALE");
+
+          const staged = state.stagedModuleBindings.some(
+            (binding) => binding.applicationReleaseRevision === request.applicationReleaseRevision,
+          );
+          const provisioned = state.moduleBindings.some(
+            (binding) =>
+              binding.applicationReleaseRevision === request.applicationReleaseRevision &&
+              binding.state === "provisioned",
+          );
+          if (staged || provisioned)
+            await discardPreparedInstallation(
+              transaction,
+              request.organizationId,
+              request.applicationRootId,
+              request.applicationReleaseRevision,
+            );
+
+          if (
+            active === null &&
+            state.registeredReleaseRevision === request.applicationReleaseRevision
+          )
+            await changeAccess(
+              transaction,
+              newActivityId(),
+              request.applicationRootId,
+              "withdraw",
+              null,
+            );
+
+          return active?.releaseRevision ?? null;
+        },
+      );
+
+      if (previousApplicationReleaseRevision !== null)
+        await restoreAccessToActiveRelease(
+          verifiedSession.data,
+          {
+            ...request,
+            expectedActiveReleaseRevision: previousApplicationReleaseRevision,
+          },
+          previousApplicationReleaseRevision,
+        );
     },
 
     /**
@@ -1056,7 +1217,8 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           installedEvents: installedEvents(releaseSet, alreadyActive),
         };
 
-      // 2. Switch atomically: detach the prior release, prepare storage, activate, record Activity.
+      // 2. Switch atomically: detach the prior release, promote prepared storage, activate and
+      //    record Activity.
       let switched: Omit<
         ApplicationInstallationActivationResult<InstalledEvents>,
         "installedEvents"
@@ -1082,9 +1244,8 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
               };
 
             const lifecycle = createApplicationInstallationLifecycleRepository(transaction);
-            const current = currentBindingRevisions(state);
             if (active !== null) {
-              const detached = requireLifecycleResult(
+              requireLifecycleResult(
                 await lifecycle.detach({
                   applicationRootId: request.applicationRootId,
                   applicationReleaseRevision: active.releaseRevision,
@@ -1094,16 +1255,48 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
                 active.releaseRevision,
                 "detached",
               );
-              for (const binding of detached.moduleBindings)
-                current.set(canonicalModuleRootId(binding.moduleRootId), binding.bindingRevision);
             }
 
-            const provisioned = await provisionPins(transaction, request, pins, current);
+            let expectedTargetBindings: ExpectedModuleBinding[];
+            if (active !== null) {
+              const staged = byModuleRoot(
+                state.stagedModuleBindings.filter(
+                  (binding) =>
+                    binding.applicationReleaseRevision === request.applicationReleaseRevision,
+                ),
+              );
+              if (
+                staged.length !== pins.length ||
+                staged.some(
+                  (binding, index) =>
+                    binding.state !== "provisioned" ||
+                    !sameId(binding.moduleRootId, pins[index]!.moduleRootId) ||
+                    binding.moduleReleaseRevision !== pins[index]!.moduleReleaseRevision,
+                )
+              )
+                throw fail("APPLICATION_INSTALLATION_INCOMPLETE");
+              expectedTargetBindings = expectedBindings(staged);
+            } else {
+              if (
+                state.stagedModuleBindings.some(
+                  (binding) =>
+                    binding.applicationReleaseRevision === request.applicationReleaseRevision,
+                )
+              )
+                throw fail("APPLICATION_INSTALLATION_STALE");
+              const provisioned = await provisionPins(
+                transaction,
+                request,
+                pins,
+                currentBindingRevisions(state),
+              );
+              expectedTargetBindings = expectedBindings(provisioned);
+            }
             const activated = requireLifecycleResult(
               await lifecycle.activate({
                 applicationRootId: request.applicationRootId,
                 applicationReleaseRevision: request.applicationReleaseRevision,
-                expectedModuleBindings: expectedBindings(provisioned),
+                expectedModuleBindings: expectedTargetBindings,
               }),
               request.applicationRootId,
               request.applicationReleaseRevision,
@@ -1141,10 +1334,10 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     },
 
     /**
-     * Withdraws exactly the named release. Bindings are detached, never deleted, so stored
-     * records remain; a prepared release that never became active keeps its inactive storage. The
-     * Access coordinator preserves final-steward, supplier and continuity safeguards. A draining
-     * installation is refused: its uninstall owns what happens to it next.
+     * Withdraws exactly the named release. Active bindings are detached while stored records
+     * remain; a prepared candidate is discarded without disturbing a different active release.
+     * The Access coordinator preserves final-steward, supplier and continuity safeguards. A
+     * draining installation is refused: its uninstall owns what happens to it next.
      */
     async withdraw(
       session: IdentitySession,
@@ -1157,7 +1350,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       const request = parsed.data;
       const packageFacts = await readReleaseSet(verifiedSession.data, request);
 
-      return inInstallerTransaction(
+      const withdrawal = await inInstallerTransaction(
         verifiedSession.data,
         request.organizationId,
         {
@@ -1175,28 +1368,82 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           );
           requireNotDraining(state);
           const active = activeRelease(state);
-          if (
-            active !== null
-              ? active.releaseRevision !== request.applicationReleaseRevision
-              : state.registeredReleaseRevision !== null &&
-                state.registeredReleaseRevision !== request.applicationReleaseRevision
-          )
-            throw fail("APPLICATION_INSTALLATION_STALE");
           const releaseBindings = byModuleRoot(
             state.moduleBindings.filter(
               (binding) =>
                 binding.applicationReleaseRevision === request.applicationReleaseRevision,
             ),
           );
-          // The active set, or a retried withdrawal's already detached set. A prepared release
-          // was never active, so only its registration is withdrawn; a retry finds it withdrawn.
+          const stagedBindings = byModuleRoot(
+            state.stagedModuleBindings.filter(
+              (binding) =>
+                binding.applicationReleaseRevision === request.applicationReleaseRevision,
+            ),
+          );
+
+          if (active !== null && active.releaseRevision !== request.applicationReleaseRevision) {
+            if (stagedBindings.length === 0) throw fail("APPLICATION_INSTALLATION_STALE");
+            const discardedBindings = await discardPreparedInstallation(
+              transaction,
+              request.organizationId,
+              request.applicationRootId,
+              request.applicationReleaseRevision,
+            );
+            return {
+              result: {
+                outcome: "withdrawn" as const,
+                organizationId: state.organizationId,
+                applicationRootId: request.applicationRootId,
+                applicationReleaseRevision: request.applicationReleaseRevision,
+                moduleBindings: discardedBindings,
+              } satisfies ApplicationInstallationWithdrawalResult,
+              restoreActiveReleaseRevision: active.releaseRevision,
+            };
+          }
+
+          if (
+            active === null &&
+            state.registeredReleaseRevision !== null &&
+            state.registeredReleaseRevision !== request.applicationReleaseRevision
+          )
+            throw fail("APPLICATION_INSTALLATION_STALE");
+
+          if (releaseBindings.length === 0 && stagedBindings.length === 0 &&
+            state.registeredReleaseRevision === null)
+            throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
+
+          let discardedBindings: ModuleInstallationBindingEvidence[] | null = null;
+          if (
+            active === null &&
+            (stagedBindings.length > 0 ||
+              releaseBindings.some((binding) => binding.state === "provisioned"))
+          )
+            discardedBindings = await discardPreparedInstallation(
+              transaction,
+              request.organizationId,
+              request.applicationRootId,
+              request.applicationReleaseRevision,
+            );
+
+          // The active set, or a retried withdrawal's already detached set.
           const detachable =
             active?.bindings ?? releaseBindings.filter((binding) => binding.state === "detached");
-          if (releaseBindings.length === 0 && state.registeredReleaseRevision === null)
-            throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
 
           let detached: ApplicationInstallationLifecycleResult | null = null;
           if (detachable.length > 0) {
+            const abandonedReleaseRevisions = new Set(
+              state.stagedModuleBindings
+                .map((binding) => binding.applicationReleaseRevision)
+                .filter((releaseRevision) => releaseRevision !== request.applicationReleaseRevision),
+            );
+            for (const releaseRevision of abandonedReleaseRevisions)
+              await discardPreparedInstallation(
+                transaction,
+                request.organizationId,
+                request.applicationRootId,
+                releaseRevision,
+              );
+
             detached = requireLifecycleResult(
               await createApplicationInstallationLifecycleRepository(transaction).detach({
                 applicationRootId: request.applicationRootId,
@@ -1227,17 +1474,30 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           );
 
           return {
-            outcome:
-              detached?.changed === true || access.outcome === "changed"
-                ? "withdrawn"
-                : "unchanged",
-            organizationId: state.organizationId,
-            applicationRootId: request.applicationRootId,
-            applicationReleaseRevision: request.applicationReleaseRevision,
-            moduleBindings: detached?.moduleBindings ?? releaseBindings,
-          } satisfies ApplicationInstallationWithdrawalResult;
+            result: {
+              outcome:
+                detached?.changed === true || access.outcome === "changed"
+                  ? "withdrawn"
+                  : "unchanged",
+              organizationId: state.organizationId,
+              applicationRootId: request.applicationRootId,
+              applicationReleaseRevision: request.applicationReleaseRevision,
+              moduleBindings: detached?.moduleBindings ?? discardedBindings ?? releaseBindings,
+            } satisfies ApplicationInstallationWithdrawalResult,
+            restoreActiveReleaseRevision: null,
+          };
         },
       );
+      if (withdrawal.restoreActiveReleaseRevision !== null)
+        await restoreAccessToActiveRelease(
+          verifiedSession.data,
+          {
+            ...request,
+            expectedActiveReleaseRevision: withdrawal.restoreActiveReleaseRevision,
+          },
+          withdrawal.restoreActiveReleaseRevision,
+        );
+      return withdrawal.result;
     },
 
     /**
@@ -1293,6 +1553,17 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           const drainable =
             active?.bindings ?? releaseBindings.filter((binding) => binding.state === "draining");
           if (drainable.length === 0) throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
+
+          const abandonedReleaseRevisions = new Set(
+            state.stagedModuleBindings.map((binding) => binding.applicationReleaseRevision),
+          );
+          for (const releaseRevision of abandonedReleaseRevisions)
+            await discardPreparedInstallation(
+              transaction,
+              request.organizationId,
+              request.applicationRootId,
+              releaseRevision,
+            );
 
           const drained = await drainInstallation(
             transaction,
