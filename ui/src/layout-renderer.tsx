@@ -16,6 +16,7 @@ import {
   createVortexStyleRootProps,
   resolvePlacementTheme,
   resolveVortexStyleSelection,
+  VortexFontStylesheets,
   VortexStyleRoot,
   VortexStyleStylesheet,
   type ApplicationThemeV2,
@@ -566,6 +567,10 @@ function PlacementView({
       className={combinedClassName}
       style={combinedStyle}
     >
+      {/* A re-themed placement may paint another font; its links join the application's. */}
+      {placementTheme.style === undefined ? null : (
+        <VortexFontStylesheets tokens={placementTheme.scope.inherited} />
+      )}
       {visible ? (
         <Component
           {...parsedInputs}
@@ -897,6 +902,7 @@ export function PageLayoutRenderer({
       {...(breakpoint === undefined ? { [LIVE_LAYOUT_SCOPE_ATTRIBUTE]: liveLayoutScope } : {})}
     >
       <VortexStyleStylesheet style={vortexStyle.style} />
+      <VortexFontStylesheets tokens={applicationTokens} />
       <style href="vortex-ui-styles" precedence="default">
         {ALL_UI_STYLES_CSS}
       </style>
