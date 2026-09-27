@@ -37,7 +37,20 @@ import {
 import { Field, FieldGroup } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
-import type { ApplicationPageModel, PlacementFlowBinding } from "../../../../_lib/application-page";
+import type {
+  ApplicationPageModel,
+  PageDataState,
+  PlacementFlowBinding,
+} from "../../../../_lib/application-page";
+import {
+  isCurrentComponentRequestGeneration,
+  nextComponentRequestGeneration,
+  type ComponentRequestGeneration,
+} from "@vortex/app/component-result-state";
+import { containedComponentIdSchema } from "@vortex/contracts";
+import { rereadApplicationPlacements } from "../placement-refresh-action";
+
+type EditFormBaseline = ApplicationPageModel["editFormBaselines"][string];
 import type {
   GuidedFormAbandonRequest,
   GuidedFormConfirmRequest,
@@ -270,8 +283,8 @@ const bindingFor = (
 /**
  * Renders one installed application page and carries out what its people do on it. Every
  * declared component event goes to the one flow endpoint with the exact installation and binding
- * the page was rendered from; the page then refreshes so the affected view shows the persisted
- * result. Nothing here decides permission or runs an operation itself.
+ * the page was rendered from; after a write, only data placements affected by that source are
+ * re-read. Nothing here decides permission or runs an operation itself.
  */
 export function ApplicationPageView({
   model,
@@ -291,10 +304,21 @@ function ApplicationPageViewContent({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const currentSearch = searchParams.toString();
   const [selection, setSelection] = useState<Readonly<Record<string, readonly string[]>>>({});
+  const [refreshedPlacementData, setRefreshedPlacementData] = useState<
+    | Readonly<{
+        navigationKey: string;
+        data: Readonly<Record<string, PageDataState>>;
+        editFormBaselines: Readonly<Record<string, EditFormBaseline | null>>;
+        subject?: ApplicationPageModel["subject"] | null;
+      }>
+    | undefined
+  >(undefined);
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
   const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormNotice>>>({});
   const [busy, setBusy] = useState(false);
+  const [completedGuidedNavigationKey, setCompletedGuidedNavigationKey] = useState<string>();
   const requestedStepId = useRef<string | undefined>(undefined);
   const guidedSubmitInFlight = useRef(false);
   const [leavePromptOpen, setLeavePromptOpen] = useState(false);
@@ -336,8 +360,45 @@ function ApplicationPageViewContent({
   const { hasUnsavedWork, guard: unsavedWork } = useUnsavedWorkGuard(confirmDiscardUnsavedWork);
 
   const application = model.invocation;
-  const subject = model.subject;
   const formOwners = useMemo(() => formOwnersByPlacement(model.page), [model.page]);
+  const serverDataRef = useRef(model.data);
+  const serverDataGenerationRef = useRef(0);
+  if (serverDataRef.current !== model.data) {
+    serverDataRef.current = model.data;
+    serverDataGenerationRef.current += 1;
+  }
+  const navigationBase = JSON.stringify([
+    pathname,
+    currentSearch,
+    model.pageId,
+    application.installationRevision,
+    application.releaseKey,
+    serverDataGenerationRef.current,
+  ]);
+  const navigationSequenceRef = useRef(0);
+  const placementRequestsRef = useRef<{
+    base: string;
+    key: string;
+    generations: Map<string, ComponentRequestGeneration>;
+  }>({ base: "", key: "", generations: new Map<string, ComponentRequestGeneration>() });
+  if (placementRequestsRef.current.base !== navigationBase) {
+    navigationSequenceRef.current += 1;
+    placementRequestsRef.current = {
+      base: navigationBase,
+      key: `${navigationBase}:${navigationSequenceRef.current}`,
+      generations: new Map(),
+    };
+  }
+  const navigationKey = placementRequestsRef.current.key;
+  const guidedFormCompleted = completedGuidedNavigationKey === navigationKey;
+  const subject =
+    refreshedPlacementData?.navigationKey === navigationKey &&
+    refreshedPlacementData.subject !== undefined
+      ? refreshedPlacementData.subject ?? undefined
+      : model.subject;
+  const currentPageKey = model.pages.find(
+    (page) => page.pageId.toLowerCase() === model.pageId.toLowerCase(),
+  )?.key;
   const guidedActivePlacementIds = useMemo(() => {
     const guidedForm = model.guidedForm;
     const composition = model.page.composition;
@@ -376,6 +437,167 @@ function ApplicationPageViewContent({
     },
     [basePath, pageKeyOf],
   );
+  const refreshPlacements = useCallback(
+    async (placementIds: readonly string[]): Promise<void> => {
+      const pageKey = currentPageKey;
+      const requestScope = placementRequestsRef.current;
+      // A callback retained by an earlier page must not start a read in the new page's scope.
+      if (pageKey === undefined || requestScope.key !== navigationKey) return;
+
+      const requests = new Map<string, ComponentRequestGeneration>();
+      for (const placementId of new Set(placementIds)) {
+        const parsedId = containedComponentIdSchema.safeParse(placementId);
+        if (!parsedId.success) continue;
+        const key = parsedId.data.toLowerCase();
+        const request = nextComponentRequestGeneration(
+          requestScope.generations.get(key),
+          parsedId.data,
+          requestScope.key,
+        );
+        requestScope.generations.set(key, request);
+        requests.set(key, request);
+      }
+      if (requests.size === 0) return;
+
+      const loadedData = new Map<string, PageDataState>();
+      const loadedBaselines = new Map<string, EditFormBaseline | null>();
+      const loadedSubjects = new Map<string, ApplicationPageModel["subject"] | null>();
+      const requestEntries = [...requests.entries()];
+      for (let offset = 0; offset < requestEntries.length; offset += 500) {
+        if (placementRequestsRef.current.key !== requestScope.key) return;
+        const batch = requestEntries
+          .slice(offset, offset + 500)
+          .filter(([key, request]) =>
+            isCurrentComponentRequestGeneration(requestScope.generations.get(key), request),
+          );
+        if (batch.length === 0) continue;
+
+        let result: Awaited<ReturnType<typeof rereadApplicationPlacements>>;
+        try {
+          result = await rereadApplicationPlacements(
+            {
+              tenantShortName: application.tenantShortName,
+              organizationShortName: application.organizationShortName,
+              applicationKey: application.applicationKey,
+              pageKey,
+              search: currentSearch,
+            },
+            batch.map(([, request]) => request.componentId),
+          );
+        } catch {
+          result = { kind: "temporarily_unavailable" };
+        }
+        if (placementRequestsRef.current.key !== requestScope.key) return;
+
+        for (const [key, request] of batch) {
+          if (
+            !isCurrentComponentRequestGeneration(requestScope.generations.get(key), request)
+          )
+            continue;
+          const data =
+            result.kind === "available"
+              ? Object.entries(result.data).find(([candidate]) => candidate.toLowerCase() === key)?.[1]
+              : undefined;
+          const baseline =
+            result.kind === "available"
+              ? Object.entries(result.editFormBaselines).find(
+                  ([candidate]) => candidate.toLowerCase() === key,
+                )?.[1] ?? null
+              : null;
+          loadedData.set(key, data ?? { status: "error" });
+          loadedBaselines.set(key, baseline);
+          const displayKey =
+            Object.keys(model.data).find((candidate) => candidate.toLowerCase() === key) ??
+            request.componentId;
+          if (Object.hasOwn(model.editFormBaselines, displayKey) || baseline !== null)
+            loadedSubjects.set(key, result.kind === "available" ? result.subject : null);
+        }
+      }
+
+      const accepted: {
+        key: string;
+        request: ComponentRequestGeneration;
+        placementId: string;
+        data: PageDataState;
+        editFormBaseline: EditFormBaseline | null;
+        subject?: ApplicationPageModel["subject"] | null;
+      }[] = [];
+      for (const [key, request] of requests) {
+        if (
+          !loadedData.has(key) ||
+          !isCurrentComponentRequestGeneration(requestScope.generations.get(key), request)
+        )
+          continue;
+        const displayKey =
+          Object.keys(model.data).find((candidate) => candidate.toLowerCase() === key) ??
+          request.componentId;
+        accepted.push({
+          key,
+          request,
+          placementId: displayKey,
+          data: loadedData.get(key) ?? { status: "error" },
+          editFormBaseline: loadedBaselines.get(key) ?? null,
+          ...(loadedSubjects.has(key) ? { subject: loadedSubjects.get(key) } : {}),
+        });
+      }
+      if (accepted.length === 0) return;
+      setRefreshedPlacementData((current) => {
+        const liveScope = placementRequestsRef.current;
+        if (liveScope?.key !== requestScope.key) return current;
+        const data = { ...(current?.navigationKey === requestScope.key ? current.data : {}) };
+        const editFormBaselines = {
+          ...(current?.navigationKey === requestScope.key ? current.editFormBaselines : {}),
+        };
+        let subject = current?.navigationKey === requestScope.key ? current.subject : undefined;
+        let changed = false;
+        for (const entry of accepted) {
+          if (!isCurrentComponentRequestGeneration(liveScope.generations.get(entry.key), entry.request))
+            continue;
+          data[entry.placementId] = entry.data;
+          editFormBaselines[entry.placementId] = entry.editFormBaseline;
+          if (entry.subject !== undefined) subject = entry.subject;
+          changed = true;
+        }
+        return changed
+          ? { navigationKey: requestScope.key, data, editFormBaselines, subject }
+          : current;
+      });
+    },
+    [application, currentPageKey, currentSearch, model.data, model.editFormBaselines, navigationKey],
+  );
+  const refreshTargetsForBinding = useCallback(
+    (bindingId: string): readonly string[] => {
+      const match = Object.entries(model.refreshPlacementsByBinding).find(
+        ([candidate]) => candidate.toLowerCase() === bindingId.toLowerCase(),
+      );
+      return match?.[1] ?? [];
+    },
+    [model.refreshPlacementsByBinding],
+  );
+  const currentData = useMemo(
+    () =>
+      refreshedPlacementData?.navigationKey === navigationKey
+        ? { ...model.data, ...refreshedPlacementData.data }
+        : model.data,
+    [model.data, navigationKey, refreshedPlacementData],
+  );
+  const currentEditFormBaselines = useMemo(() => {
+    const baselines = { ...model.editFormBaselines };
+    if (refreshedPlacementData?.navigationKey === navigationKey)
+      for (const [placementId, baseline] of Object.entries(
+        refreshedPlacementData.editFormBaselines,
+      )) {
+        if (baseline === null) delete baselines[placementId];
+        else baselines[placementId] = baseline;
+      }
+    return baselines;
+  }, [model.editFormBaselines, navigationKey, refreshedPlacementData]);
+
+  useEffect(() => {
+    setBusy(false);
+    setNotice(undefined);
+    setFormFeedback({});
+  }, [navigationKey]);
 
   useEffect(() => {
     if (!hasUnsavedWork) return;
@@ -580,7 +802,7 @@ function ApplicationPageViewContent({
   /**
    * Reports a server-driven flow's safe outcome for any gesture. The runtime already carried out
    * every pause through a continuation and every presentation intent through the host; only the
-   * final outcome is shown, and the page re-reads the persisted data whatever the flow reported. A
+   * final outcome is shown, and affected placements re-read their persisted data after a write. A
    * gesture the form block ignored because the same binding is already running leaves the page as
    * that run set it.
    */
@@ -589,7 +811,10 @@ function ApplicationPageViewContent({
       dispatch: Promise<FlowDispatchResult | undefined>,
       formPlacementId?: string,
       afterAccepted?: () => Promise<Notice | undefined>,
+      sourceBindingId?: string,
     ) => {
+      const isCurrentNavigation = (): boolean =>
+        placementRequestsRef.current.key === navigationKey;
       setBusy(true);
       setNotice(undefined);
       if (formPlacementId !== undefined)
@@ -613,6 +838,7 @@ function ApplicationPageViewContent({
       let settles = true;
       try {
         const result = await dispatch;
+        if (!isCurrentNavigation()) return;
         if (result === undefined) {
           settles = false;
           return;
@@ -623,17 +849,15 @@ function ApplicationPageViewContent({
         }
         const server = result.result;
         if (server.kind === "reload") {
-          setSelection({});
           return router.refresh();
         }
         if (server.kind === "finished") {
-          setSelection({});
           let resultNotice = finishedNotice(server.descriptor.outcome, server.failure?.code);
           if (
-            (server.descriptor.outcome === "completed" ||
-              server.descriptor.outcome === "committed" ||
-              server.descriptor.outcome === "background_pending") &&
-            afterAccepted !== undefined
+            afterAccepted !== undefined &&
+            ["completed", "committed", "background_pending"].includes(
+              server.descriptor.outcome,
+            )
           ) {
             try {
               resultNotice = (await afterAccepted()) ?? resultNotice;
@@ -641,8 +865,23 @@ function ApplicationPageViewContent({
               resultNotice = unavailableNotice;
             }
           }
+          if (!isCurrentNavigation()) return;
           showResult(resultNotice);
-          return router.refresh();
+          // A finished guided-form submission may have abandoned its draft. Keep the journey
+          // visible but inactive until a new page load establishes the next draft.
+          if (
+            model.guidedForm !== undefined &&
+            (afterAccepted !== undefined ||
+              server.descriptor.commit === "confirmed" ||
+              server.descriptor.commit === "partial")
+          )
+            setCompletedGuidedNavigationKey(navigationKey);
+          if (
+            (server.descriptor.commit === "confirmed" || server.descriptor.commit === "partial") &&
+            sourceBindingId !== undefined
+          )
+            void refreshPlacements(refreshTargetsForBinding(sourceBindingId));
+          return;
         }
         if (server.kind === "refused") {
           showResult(unavailableNotice);
@@ -651,16 +890,19 @@ function ApplicationPageViewContent({
         if (server.kind === "abandoned") {
           // The run may have committed a step before the answer was lost: never report nothing.
           showResult(outcomeNotices.uncertain ?? unavailableNotice);
-          return router.refresh();
+          if (model.guidedForm !== undefined) setCompletedGuidedNavigationKey(navigationKey);
+          if (sourceBindingId !== undefined)
+            void refreshPlacements(refreshTargetsForBinding(sourceBindingId));
+          return;
         }
         showResult(unavailableNotice);
       } catch {
-        showResult(unavailableNotice);
+        if (isCurrentNavigation()) showResult(unavailableNotice);
       } finally {
-        if (settles) setBusy(false);
+        if (settles && isCurrentNavigation()) setBusy(false);
       }
     },
-    [router],
+    [model.guidedForm, navigationKey, refreshPlacements, refreshTargetsForBinding, router],
   );
 
   const guidedSummaryStepId = useMemo(() => {
@@ -684,7 +926,7 @@ function ApplicationPageViewContent({
   const advanceGuidedStep = useCallback(
     async (stepId: string, values: Readonly<Record<string, unknown>>, requested?: string) => {
       const guidedForm = model.guidedForm;
-      if (guidedForm === undefined || busy) return;
+      if (guidedForm === undefined || busy || guidedFormCompleted) return;
       setBusy(true);
       setNotice(undefined);
       try {
@@ -721,13 +963,22 @@ function ApplicationPageViewContent({
         setBusy(false);
       }
     },
-    [busy, guidedAddress, guidedFormActions, model.guidedForm, router, searchParams, setQuery],
+    [
+      busy,
+      guidedAddress,
+      guidedFormActions,
+      guidedFormCompleted,
+      model.guidedForm,
+      router,
+      searchParams,
+      setQuery,
+    ],
   );
 
   const requestGuidedStep = useCallback(
     (requested?: string) => {
       const guidedForm = model.guidedForm;
-      if (guidedForm === undefined || busy) return;
+      if (guidedForm === undefined || busy || guidedFormCompleted) return;
       if (requested !== undefined && guidedForm.activeStepId === guidedSummaryStepId) {
         void advanceGuidedStep(guidedForm.activeStepId, {}, requested);
         return;
@@ -760,6 +1011,7 @@ function ApplicationPageViewContent({
     [
       advanceGuidedStep,
       busy,
+      guidedFormCompleted,
       guidedActiveFormIds,
       guidedSummaryStepId,
       model.bindings,
@@ -768,7 +1020,11 @@ function ApplicationPageViewContent({
   );
 
   const submitGuidedSummary = useCallback(
-    async (placementId: string, binding: PlacementFlowBinding) => {
+    async (
+      placementId: string,
+      binding: PlacementFlowBinding,
+      submittedValues: Readonly<Record<string, unknown>>,
+    ) => {
       const guidedForm = model.guidedForm;
       if (
         guidedForm === undefined ||
@@ -776,6 +1032,7 @@ function ApplicationPageViewContent({
         guidedForm.activeStepId !== guidedSummaryStepId ||
         binding.flowId.toLowerCase() !== guidedForm.flowId.toLowerCase() ||
         busy ||
+        guidedFormCompleted ||
         guidedSubmitInFlight.current
       )
         return;
@@ -800,6 +1057,7 @@ function ApplicationPageViewContent({
           return;
         }
         const afterAccepted = async (): Promise<Notice | undefined> => {
+          unsavedWorkRegistry?.markSaved(placementId, submittedValues);
           const abandoned = await guidedFormActions.abandon({
             address: guidedAddress,
             draftId: guidedForm.draftId,
@@ -817,7 +1075,7 @@ function ApplicationPageViewContent({
           { $guidedFormConfirmation: confirmed.proof },
         );
         flowStarted = true;
-        await applyDispatch(dispatch, placementId, afterAccepted);
+        await applyDispatch(dispatch, placementId, afterAccepted, binding.bindingId);
       } catch {
         setNotice(unavailableNotice);
       } finally {
@@ -831,10 +1089,12 @@ function ApplicationPageViewContent({
       formBlock,
       guidedAddress,
       guidedFormActions,
+      guidedFormCompleted,
       guidedSummaryStepId,
       guidedSubmitInFlight,
       model.guidedForm,
       router,
+      unsavedWorkRegistry,
     ],
   );
 
@@ -853,6 +1113,8 @@ function ApplicationPageViewContent({
           ),
         ),
         formOwners[placementId],
+        undefined,
+        binding.bindingId,
       ),
     [applyDispatch, formOwners, flowRuntime],
   );
@@ -862,7 +1124,7 @@ function ApplicationPageViewContent({
     // A placement may hold bindings (a form submits) without holding projected data, so both key
     // sets are wired: every placement with data or with a flow binding receives its callbacks.
     const placementIds = new Set([
-      ...Object.keys(model.data),
+      ...Object.keys(currentData),
       ...Object.keys(model.bindings),
       ...Object.keys(formFeedback),
       ...guidedActiveFormIds,
@@ -871,7 +1133,10 @@ function ApplicationPageViewContent({
       for (const placementId of placementIds)
         if (!guidedActivePlacementIds.has(placementId)) placementIds.delete(placementId);
     for (const placementId of placementIds) {
-      const data = model.data[placementId];
+      const data =
+        guidedFormCompleted && guidedActiveFormIds.includes(placementId)
+          ? ({ status: "disabled", reason: "Refresh to start another form." } as const)
+          : currentData[placementId];
       const bindings = model.bindings[placementId] ?? [];
       const events: EventHandlers = {};
       const flowFeedback =
@@ -886,7 +1151,9 @@ function ApplicationPageViewContent({
               if (binding !== undefined && !busy)
                 void runBinding(placementId, binding, suppliedValues(event));
             };
-        events.refresh = () => router.refresh();
+        events.refresh = () => {
+          void refreshPlacements([placementId]);
+        };
         events.selection_changed = (event: DisplaySemanticEvent) => {
           if (event.event !== "selection_changed") return;
           setSelection((current) => {
@@ -938,20 +1205,20 @@ function ApplicationPageViewContent({
         (model.guidedForm !== undefined && formOwners[placementId] === placementId)
       )
         events.form_submit = (event: ControlSemanticEvent) => {
-          if (event.event !== "form_submit" || busy) return;
+          if (event.event !== "form_submit" || busy || guidedFormCompleted) return;
           if (model.guidedForm !== undefined) {
             const requested = requestedStepId.current;
             requestedStepId.current = undefined;
             if (model.guidedForm.activeStepId === guidedSummaryStepId) {
               if (submitBinding === undefined) setNotice(unavailableNotice);
-              else void submitGuidedSummary(placementId, submitBinding);
+              else void submitGuidedSummary(placementId, submitBinding, event.values);
             }
             else
               void advanceGuidedStep(model.guidedForm.activeStepId, event.values, requested);
             return;
           }
           if (submitBinding === undefined) return;
-          const baseline = model.editFormBaselines[placementId];
+          const baseline = currentEditFormBaselines[placementId];
           const values =
             baseline === undefined
               ? event.values
@@ -976,13 +1243,20 @@ function ApplicationPageViewContent({
           void applyDispatch(
             formBlock.submit(asComponentBinding(placementId, submitBinding), values),
             placementId,
+            undefined,
+            submitBinding.bindingId,
           );
         };
       const readyBinding = bindings.find((binding) => binding.event === "form_ready");
       if (readyBinding !== undefined && model.guidedForm === undefined)
         events.form_ready = (event: ControlSemanticEvent) => {
           if (event.event !== "form_ready" || busy) return;
-          void applyDispatch(formBlock.ready(asComponentBinding(placementId, readyBinding)));
+          void applyDispatch(
+            formBlock.ready(asComponentBinding(placementId, readyBinding)),
+            undefined,
+            undefined,
+            readyBinding.bindingId,
+          );
         };
       const resetBinding = bindings.find((binding) => binding.event === "form_reset");
       if (resetBinding !== undefined && model.guidedForm === undefined)
@@ -994,7 +1268,12 @@ function ApplicationPageViewContent({
             delete next[placementId];
             return next;
           });
-          void applyDispatch(formBlock.reset(asComponentBinding(placementId, resetBinding)));
+          void applyDispatch(
+            formBlock.reset(asComponentBinding(placementId, resetBinding)),
+            undefined,
+            undefined,
+            resetBinding.bindingId,
+          );
         };
       if (data === undefined) {
         if (Object.keys(events).length > 0 || flowFeedback !== undefined)
@@ -1022,16 +1301,19 @@ function ApplicationPageViewContent({
     formBlock,
     formFeedback,
     formOwners,
+    currentData,
+    currentEditFormBaselines,
     guidedActivePlacementIds,
     guidedActiveFormIds,
+    guidedFormCompleted,
     guidedSummaryStepId,
     advanceGuidedStep,
     submitGuidedSummary,
     model.bindings,
     model.data,
-    model.editFormBaselines,
     model.guidedForm,
     router,
+    refreshPlacements,
     runBinding,
     selection,
     setQuery,
@@ -1065,7 +1347,7 @@ function ApplicationPageViewContent({
           ? {}
           : {
               guidedStepNavigation: {
-                  disabled: busy,
+                  disabled: busy || guidedFormCompleted,
                   onBack: () => {
                     if (guidedPreviousStepId !== undefined)
                       requestGuidedStep(guidedPreviousStepId);
