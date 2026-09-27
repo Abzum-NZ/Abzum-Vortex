@@ -117,6 +117,8 @@ export type DateInputPayload = Readonly<{
 export type DateTimeInputPayload = Readonly<{
   kind: "date_time_input";
   value?: string | null;
+  personTimeZone?: string;
+  organizationTimeZone?: string;
   error?: string;
 }>;
 
@@ -518,16 +520,31 @@ export const parseDateTimeInputPayload = (
       `Expected 'date_time_input' projected values, got '${String(record.kind)}'`,
       location,
     );
-  requireExactKeys(record, ["kind", "value", "error"], location);
+  requireExactKeys(record, ["kind", "value", "personTimeZone", "organizationTimeZone", "error"], location);
   if (
     record.value !== undefined &&
     record.value !== null &&
     !(typeof record.value === "string" && timestampSchema.safeParse(record.value).success)
   )
     fail("A date-time value must be an offset-bearing ISO timestamp or null", location);
+  for (const key of ["personTimeZone", "organizationTimeZone"] as const) {
+    const zone = record[key];
+    if (zone === undefined) continue;
+    if (typeof zone !== "string" || zone.length > 100 || zone.length === 0)
+      fail("A date-time zone must be a valid IANA time zone", location);
+    try {
+      new Intl.DateTimeFormat("en", { timeZone: zone });
+    } catch {
+      fail("A date-time zone must be a valid IANA time zone", location);
+    }
+  }
   return Object.freeze({
     kind: "date_time_input",
     ...(record.value === undefined ? {} : { value: record.value as string | null }),
+    ...(record.personTimeZone === undefined ? {} : { personTimeZone: record.personTimeZone as string }),
+    ...(record.organizationTimeZone === undefined
+      ? {}
+      : { organizationTimeZone: record.organizationTimeZone as string }),
     ...optionalError(record, location),
   });
 };

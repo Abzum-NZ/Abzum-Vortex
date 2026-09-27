@@ -1,9 +1,8 @@
 "use client";
 
-import type { ChangeEvent, ReactElement } from "react";
+import { useEffect, useState, type ChangeEvent, type ReactElement } from "react";
 import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
-import { useDateFormatOptions } from "../display/date-format-context";
 import type { DateTimeInputPayload } from "./projected-data";
 import {
   readControlSettings,
@@ -129,13 +128,16 @@ const toStoredInstant = (raw: string, timeZone: string): string | undefined => {
 };
 
 /**
- * Collects a time-zone-aware instant. The field's declared UTC policy is explicit; person and
- * organization policies use the effective zone supplied by the surrounding application shell.
+ * Collects a time-zone-aware instant using the field's declared display policy. The browser
+ * resolves the person's fallback zone after hydration when no profile zone is stored.
  */
 export function DateTimeInput(props: DateTimeInputProps): ReactElement {
   const context = resolveControlContext<DateTimeInputPayload>(props, ["field_changed"]);
   const settings = readControlSettings(props, context.location);
-  const dateFormat = useDateFormatOptions();
+  const [browserTimeZone, setBrowserTimeZone] = useState<string>();
+  useEffect(() => {
+    setBrowserTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  }, []);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();
   const label = context.accessibleName ?? props.metadata.name;
@@ -150,9 +152,14 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
   const note = inactiveNote(context);
   const timeZonePolicy = settings.choice<"person" | "organization" | "utc">(
     "display_time_zone",
-    "person",
+    "utc",
   );
-  const timeZone = timeZonePolicy === "utc" ? "UTC" : (dateFormat.timeZone ?? "UTC");
+  const timeZone =
+    timeZonePolicy === "person"
+      ? (context.values?.personTimeZone ?? browserTimeZone ?? "UTC")
+      : timeZonePolicy === "organization"
+        ? (context.values?.organizationTimeZone ?? "UTC")
+        : "UTC";
   // A malformed supplied zone must never reinterpret a person's input as UTC.
   formatterFor(timeZone);
   const help = [authoredHelp, `Time zone: ${timeZone}.`].filter(Boolean).join(" ");
