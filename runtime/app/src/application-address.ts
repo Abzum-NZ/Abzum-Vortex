@@ -5,6 +5,7 @@ import {
   applicationExperienceStateSchema,
   applicationRootIdSchema,
   applicationShellV2Schema,
+  applicationThemeV2Schema,
   builderKeySchema,
   identityAuthorityIdSchema,
   identitySessionSchema,
@@ -95,6 +96,7 @@ const applicationCandidateSchema = z
       .max(3)
       .optional(),
     shells: z.array(applicationShellV2Schema).max(100).optional(),
+    theme: applicationThemeV2Schema.optional(),
     roles: z
       .array(
         z
@@ -138,14 +140,15 @@ export const permittedApplicationSchema = z
 
 /**
  * One application experience page the viewer may be shown in place of a page they cannot open:
- * the viewer may open that page itself, it is presentation-only, and it carries only the shell it
- * renders in.
+ * the viewer may open that page itself, it is presentation-only, and it carries only the shell and
+ * release theme it renders in.
  */
 export const applicationExperienceSchema = z
   .object({
     state: applicationExperienceStateSchema,
     page: pageDefinitionV2Schema,
     shells: z.array(applicationShellV2Schema).max(1),
+    theme: applicationThemeV2Schema.optional(),
   })
   .strict();
 
@@ -307,6 +310,7 @@ const permittedApplication = async (
             page: experience.page,
             shells:
               shellId === undefined ? [] : shells.filter((shell) => sameId(shell.shellId, shellId)),
+            ...(candidate.theme === undefined ? {} : { theme: candidate.theme }),
           });
         });
 
