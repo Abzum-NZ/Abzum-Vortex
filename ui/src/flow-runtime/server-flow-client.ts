@@ -1,7 +1,11 @@
 import {
   flowBindingInvocationSchema,
+  formContinuationReceiptSchema,
+  formContinuationTargetSchema,
   type FlowBindingInvocation,
   type FormContinuationAnswer,
+  type FormContinuationReceipt,
+  type FormContinuationTarget,
   type JsonValue,
 } from "@vortex/contracts";
 import { isFlowIntent, type FlowIntent } from "./intents";
@@ -26,9 +30,9 @@ export type FlowInstallationContext = Readonly<{
  */
 export type FlowResumeEvidence = Readonly<{
   /** The exact paused target (#544): installation, release, flow, node, awaiting form and receipt. */
-  target?: unknown;
+  target?: FormContinuationTarget;
   /** The run receipt: which run and how many protected effects it has committed. */
-  receipt?: unknown;
+  receipt?: FormContinuationReceipt;
 }>;
 
 export type ServerFlowResponse =
@@ -48,8 +52,8 @@ export type ServerFlowResponse =
       intents: readonly FlowIntent[];
       continuation: string;
       expiresAt: string;
-      target?: unknown;
-      receipt?: unknown;
+      target?: FormContinuationTarget;
+      receipt?: FormContinuationReceipt;
     }>
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "unavailable" }>;
@@ -105,8 +109,16 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         : unavailable;
     case "intent": {
       const intents = parseIntents(candidate.intents);
+      const target = candidate.target === undefined
+        ? undefined
+        : formContinuationTargetSchema.safeParse(candidate.target);
+      const receipt = candidate.receipt === undefined
+        ? undefined
+        : formContinuationReceiptSchema.safeParse(candidate.receipt);
       if (
         intents === undefined ||
+        target?.success === false ||
+        receipt?.success === false ||
         typeof candidate.runId !== "string" ||
         (candidate.awaiting !== "form" && candidate.awaiting !== "confirm") ||
         typeof candidate.continuation !== "string" ||
@@ -120,8 +132,8 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         intents,
         continuation: candidate.continuation,
         expiresAt: candidate.expiresAt,
-        ...(isRecord(candidate.target) ? { target: candidate.target } : {}),
-        ...(isRecord(candidate.receipt) ? { receipt: candidate.receipt } : {}),
+        ...(target?.success ? { target: target.data } : {}),
+        ...(receipt?.success ? { receipt: receipt.data } : {}),
       };
     }
     case "result": {
