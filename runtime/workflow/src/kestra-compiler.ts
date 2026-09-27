@@ -184,6 +184,7 @@ export const kestraFlowCompilerRefusalReasons = [
   "not_durable",
   "unsupported_trigger",
   "unsupported_task",
+  "unsupported_task_output_path",
   "unresolved_child_flow_revision",
   "duplicate_switch_case",
   "template_text",
@@ -1091,7 +1092,7 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
 
   // Only durable flows run on Kestra; every other execution kind runs in Vortex.
   if (definition.execution !== "durable") return refused("not_durable");
-  if (hasTaskOutputFieldPath(definition)) return refused("unsupported_node");
+  if (hasTaskOutputFieldPath(definition)) return refused("unsupported_task_output_path");
 
   const namespace = installationNamespace(identity);
   const id = generatedFlowId(identity, definition.id, identity.workflowRevision);

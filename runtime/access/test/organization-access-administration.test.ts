@@ -51,36 +51,6 @@ const serviceFor = (result: readonly DatabaseRow[]) => {
   return { calls, service };
 };
 
-const serviceForSequence = (results: readonly (readonly DatabaseRow[])[]) => {
-  const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
-  let queryIndex = 0;
-  const service = createOrganizationAccessAdministrationService({
-    identityAuthorityId: id(6),
-    clock: () => new Date("2026-09-06T01:00:00.000Z"),
-    correlationId: () => id(7),
-    groupId: () => id(20),
-    activityId: () => id(21),
-    resolvedRequestTransaction: async (resolve, operation) => {
-      const resolved = await resolve({
-        query: async () => [selectedScope] as never,
-      } satisfies RuntimeDatabaseTransaction);
-      const transaction: RequestDatabaseTransaction = {
-        query: async <Row extends DatabaseRow>(
-          strings: TemplateStringsArray,
-          ...values: readonly DatabaseValue[]
-        ) => {
-          calls.push({ text: strings.join("$value"), values });
-          const result = results[queryIndex];
-          queryIndex += 1;
-          return (result ?? []) as readonly Row[];
-        },
-      };
-      return operation(transaction, resolved.scope);
-    },
-  });
-  return { calls, service };
-};
-
 describe("organization Access administration", () => {
   it("creates a Group with trusted identities and binds the safe result", async () => {
     const { calls, service } = serviceFor([
@@ -324,16 +294,14 @@ describe("organization Access administration", () => {
     }
   });
 
-  it("stops role metadata revision after preparation records a refusal", async () => {
-    const { calls, service } = serviceForSequence([
-      [
-        {
-          outcome: "refused",
-          organization_id: id(2),
-          candidate_basis: null,
-          access_version: 7,
-        },
-      ],
+  it("returns a recorded role metadata refusal from the current operation", async () => {
+    const { calls, service } = serviceFor([
+      {
+        outcome: "refused",
+        organization_id: id(2),
+        role_summary: null,
+        access_version: 7,
+      },
     ]);
 
     await expect(
@@ -349,54 +317,8 @@ describe("organization Access administration", () => {
       ),
     ).resolves.toEqual({ kind: "unavailable" });
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.values).toEqual([id(40), 1, id(21)]);
-  });
-
-  it("maps a revision refusal reached after successful role metadata preparation", async () => {
-    const { calls, service } = serviceForSequence([
-      [
-        {
-          outcome: "completed",
-          organization_id: id(2),
-          candidate_basis: {
-            operation: "revise_metadata_policy",
-            organizationId: id(2),
-            roleId: id(40),
-            expectedRoleRevision: 1,
-            key: "reviewed_role",
-            label: "Old label",
-            description: "Old description.",
-            privilegeClassification: "privileged",
-            assignmentPolicy: { kind: "standing" },
-          },
-          access_version: 7,
-        },
-      ],
-      [
-        {
-          outcome: "refused",
-          organization_id: id(2),
-          role_summary: null,
-          access_version: 7,
-        },
-      ],
-    ]);
-
-    await expect(
-      service.reviseRoleMetadata(
-        verifiedSession,
-        { organizationId: id(2) },
-        {
-          roleId: id(40),
-          expectedRoleRevision: 1,
-          label: "New label",
-          description: "New description.",
-        },
-      ),
-    ).resolves.toEqual({ kind: "unavailable" });
-    expect(calls).toHaveLength(2);
-    expect(calls[0]?.values[2]).toBe(id(21));
-    expect(calls[1]?.values[5]).toBe(id(21));
+    expect(calls[0]?.text).toContain("revise_organization_role_metadata_for_administration");
+    expect(calls[0]?.values).toEqual([id(40), 1, "New label", "New description.", id(21)]);
   });
 
   it("retires a Group without caller-selected affected authority", async () => {
@@ -461,61 +383,31 @@ describe("organization Access administration", () => {
     expect(calls[0]?.values).toEqual([id(30), 1, id(21)]);
   });
 
-  it("prepares canonical role metadata evidence inside the protected change transaction", async () => {
-    const { calls, service } = serviceForSequence([
-      [
-        {
-          outcome: "completed",
-          organization_id: id(2).toUpperCase(),
-          candidate_basis: {
-            operation: "revise_metadata_policy",
-            organizationId: id(2).toUpperCase(),
-            roleId: id(40).toUpperCase(),
-            expectedRoleRevision: 1,
-            key: "reviewed_role",
-            label: "Old label",
-            description: "Old description.",
-            privilegeClassification: "privileged",
-            assignmentPolicy: {
-              kind: "activation_required",
-              activationPolicy: {
-                selection: "existing",
-                reference: {
-                  activationPolicyId: id(41),
-                  revision: 2,
-                  fingerprint: `sha256:${"a".repeat(64)}`,
-                },
-              },
-            },
+  it("revises role metadata through the single protected operation", async () => {
+    const { calls, service } = serviceFor([
+      {
+        outcome: "completed",
+        organization_id: id(2),
+        role_summary: {
+          roleId: id(40),
+          key: "reviewed_role",
+          label: "New label",
+          roleKind: "custom",
+          lifecycle: "active",
+          liveRevision: 2,
+          privilegeClassification: "privileged",
+          assignmentPolicy: {
+            kind: "activation_required",
+            maximumActivationDurationSeconds: 3600,
+            reasonRequired: true,
+            recentAuthentication: { kind: "multi_factor", maximumAgeSeconds: 900 },
+            independentApprovalRequired: false,
           },
-          access_version: "7",
+          source: { kind: "custom" },
+          acceptedPermissionCount: 2,
         },
-      ],
-      [
-        {
-          outcome: "completed",
-          organization_id: id(2),
-          role_summary: {
-            roleId: id(40),
-            key: "reviewed_role",
-            label: "New label",
-            roleKind: "custom",
-            lifecycle: "active",
-            liveRevision: 2,
-            privilegeClassification: "privileged",
-            assignmentPolicy: {
-              kind: "activation_required",
-              maximumActivationDurationSeconds: 3600,
-              reasonRequired: true,
-              recentAuthentication: { kind: "multi_factor", maximumAgeSeconds: 900 },
-              independentApprovalRequired: false,
-            },
-            source: { kind: "custom" },
-            acceptedPermissionCount: 2,
-          },
-          access_version: "8",
-        },
-      ],
+        access_version: "7",
+      },
     ]);
 
     await expect(
@@ -531,29 +423,11 @@ describe("organization Access administration", () => {
       ),
     ).resolves.toMatchObject({
       kind: "available",
-      value: { role: { roleId: id(40), label: "New label", liveRevision: 2 }, accessVersion: 8 },
+      value: { role: { roleId: id(40), label: "New label", liveRevision: 2 }, accessVersion: 7 },
     });
-    expect(calls).toHaveLength(2);
-    expect(calls[0]?.text).toContain(
-      "prepare_organization_role_metadata_change_for_administration",
-    );
-    expect(calls[0]?.values).toEqual([id(40), 1, id(21)]);
-    expect(calls[1]?.text).toContain("revise_organization_role_metadata_for_administration");
-    expect(calls[1]?.values.slice(0, 4)).toEqual([id(40), 1, "New label", "New description."]);
-    const prepared = JSON.parse(String(calls[1]?.values[4]));
-    expect(prepared).toMatchObject({
-      contractVersion: "1.0.0",
-      candidate: {
-        operation: "revise_metadata_policy",
-        label: "New label",
-        description: "New description.",
-        assignmentPolicy: {
-          activationPolicy: { reference: { activationPolicyId: id(41), revision: 2 } },
-        },
-      },
-    });
-    expect(prepared.roleCandidateFingerprint).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(calls[1]?.values[5]).toBe(id(21));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.text).toContain("revise_organization_role_metadata_for_administration");
+    expect(calls[0]?.values).toEqual([id(40), 1, "New label", "New description.", id(21)]);
   });
 
   it("retires one role using canonical evidence derived only from the exact command", async () => {
@@ -595,7 +469,7 @@ describe("organization Access administration", () => {
     expect(calls[0]?.values[3]).toBe(id(21));
   });
 
-  it("refuses malformed structural commands and mismatched private preparation", async () => {
+  it("refuses malformed structural commands and mismatched role results", async () => {
     const malformed = serviceFor([]);
     await expect(
       malformed.service.retireGroup(
@@ -613,24 +487,24 @@ describe("organization Access administration", () => {
     ).resolves.toEqual({ kind: "unavailable" });
     expect(malformed.calls).toHaveLength(0);
 
-    const mismatched = serviceForSequence([
-      [
-        {
-          organization_id: id(2),
-          candidate_basis: {
-            operation: "revise_metadata_policy",
-            organizationId: id(2),
-            roleId: id(99),
-            expectedRoleRevision: 1,
-            key: "reviewed_role",
-            label: "Old label",
-            description: "Old description.",
-            privilegeClassification: "privileged",
-            assignmentPolicy: { kind: "standing" },
-          },
-          access_version: 7,
+    const mismatched = serviceFor([
+      {
+        outcome: "completed",
+        organization_id: id(2),
+        role_summary: {
+          roleId: id(99),
+          key: "reviewed_role",
+          label: "New label",
+          roleKind: "custom",
+          lifecycle: "active",
+          liveRevision: 2,
+          privilegeClassification: "privileged",
+          assignmentPolicy: { kind: "standing" },
+          source: { kind: "custom" },
+          acceptedPermissionCount: 2,
         },
-      ],
+        access_version: 7,
+      },
     ]);
     await expect(
       mismatched.service.reviseRoleMetadata(

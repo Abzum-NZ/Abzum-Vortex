@@ -4221,7 +4221,7 @@
                          "contractVersion": "1.0.0",
                          "id": "crm_form_flow_5",
                          "key": "crm_form_flow_5",
-                         "description": "Saves the submitted form onto the record being edited through the one Save record task.",
+                         "description": "Saves the edited company and returns to its detail page.",
                          "labels": {
                              "name": "Continue Edit company"
                          },
@@ -4267,6 +4267,26 @@
                                          "reference": {
                                              "source": "input",
                                              "name": "values"
+                                         }
+                                     }
+                                 }
+                             },
+                             {
+                                 "id": "return_to_detail",
+                                 "type": "interface.navigate",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "page": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "crm_company_detail"
+                                         }
+                                     },
+                                     "parameters": {
+                                         "kind": "map",
+                                         "entries": {
+                                             "record_id": "{{ inputs.record }}"
                                          }
                                      }
                                  }
@@ -4351,7 +4371,7 @@
                          "contractVersion": "1.0.0",
                          "id": "crm_form_flow_7",
                          "key": "crm_form_flow_7",
-                         "description": "Saves the submitted form onto the record being edited through the one Save record task.",
+                         "description": "Saves the edited contact and returns to its detail page.",
                          "labels": {
                              "name": "Continue Edit contact"
                          },
@@ -4397,6 +4417,26 @@
                                          "reference": {
                                              "source": "input",
                                              "name": "values"
+                                         }
+                                     }
+                                 }
+                             },
+                             {
+                                 "id": "return_to_detail",
+                                 "type": "interface.navigate",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "page": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "crm_contact_detail"
+                                         }
+                                     },
+                                     "parameters": {
+                                         "kind": "map",
+                                         "entries": {
+                                             "record_id": "{{ inputs.record }}"
                                          }
                                      }
                                  }
@@ -4481,7 +4521,7 @@
                          "contractVersion": "1.0.0",
                          "id": "crm_form_flow_9",
                          "key": "crm_form_flow_9",
-                         "description": "Saves the submitted form onto the record being edited through the one Save record task.",
+                         "description": "Saves the edited lead and returns to its detail page.",
                          "labels": {
                              "name": "Continue Edit lead"
                          },
@@ -4527,6 +4567,26 @@
                                          "reference": {
                                              "source": "input",
                                              "name": "values"
+                                         }
+                                     }
+                                 }
+                             },
+                             {
+                                 "id": "return_to_detail",
+                                 "type": "interface.navigate",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "page": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "crm_lead_detail"
+                                         }
+                                     },
+                                     "parameters": {
+                                         "kind": "map",
+                                         "entries": {
+                                             "record_id": "{{ inputs.record }}"
                                          }
                                      }
                                  }
