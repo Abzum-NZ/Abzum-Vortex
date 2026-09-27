@@ -58,7 +58,8 @@ It also fails when:
   governed migration changes a function's owner without its canonical file;
 - a canonical file differs from the definition its function was last installed with, has no
   installing migration, or describes a function a later migration drops;
-- a canonical file holds anything other than its one definition, comment and privileges.
+- a canonical file holds anything other than its one definition, comment, optional owner statement
+  and privileges.
 
 Migrations before `20260925000000` are historical: they are read but never reported. Functions they
 installed gain a canonical file when they are next changed or rebaselined. Session helpers in
