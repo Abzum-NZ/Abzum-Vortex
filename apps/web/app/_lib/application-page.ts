@@ -29,6 +29,7 @@ import {
   recordIdSchema,
   readRecordsTableContract,
   richTextDocumentV2Schema,
+  timestampSchema,
   type ApplicationShellV2,
   type BlockPropertyValueV2Contract,
   type IdentitySession,
@@ -228,6 +229,14 @@ const projectEditField = (
       }
       kind = "date_input";
       break;
+    case "date_time":
+      if (
+        stored !== null &&
+        !(typeof stored === "string" && timestampSchema.safeParse(stored).success)
+      )
+        return undefined;
+      kind = "date_time_input";
+      break;
     case "choice":
       if (stored !== null && typeof stored !== "string") return undefined;
       if (stored !== null) {
@@ -248,6 +257,41 @@ const projectEditField = (
       }
       kind = "choice_input";
       break;
+    case "several_choices": {
+      const selected = stored === null ? [] : stored;
+      if (
+        !Array.isArray(selected) ||
+        selected.length > 200 ||
+        !selected.every((choice) => typeof choice === "string") ||
+        new Set(selected).size !== selected.length
+      )
+        return undefined;
+      const options = settings.options;
+      if (
+        !isRecord(options) ||
+        options.kind !== "list" ||
+        !Array.isArray(options.items) ||
+        !selected.every((choice) =>
+          options.items.some(
+            (item) =>
+              isRecord(item) &&
+              isRecord(item.properties) &&
+              isRecord(item.properties.key) &&
+              item.properties.key.value === choice,
+          ),
+        )
+      )
+        return undefined;
+      const maximumSelections = settings.maximum_selections;
+      if (
+        maximumSelections?.kind === "number" &&
+        selected.length > maximumSelections.value
+      )
+        return undefined;
+      displayed = selected;
+      kind = "several_choices_input";
+      break;
+    }
     case "link":
       if (
         stored !== null &&
