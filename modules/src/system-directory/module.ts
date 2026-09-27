@@ -15,8 +15,9 @@ import directorySource from "./sources/system-directory.directory.json";
  * registry is keyed by view alone, so this module adds a read surface rather than a second copy
  * of the data.
  *
- * Every change to a projected row still goes through the registered protected operation the
- * administration modules bind, and this module deliberately exposes no write path.
+ * Application flow bindings surface the platform's protected operations as the only writes to
+ * protected facts. Each operation rechecks current authority, the target revision and its
+ * safeguard; this module deliberately exposes no write path.
  */
 export const systemDirectoryModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
   directorySource,
