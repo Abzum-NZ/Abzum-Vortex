@@ -75,9 +75,9 @@ export const kestraProtectedOperationContractVersion = "1.0.0";
 
 /**
  * The single generic Kestra callback task every effect, every condition and
- * every formula compiles to. It is a platform-provided task (issue #664 owns
- * the endpoint it reaches): it signs the envelope with the fixed callback key
- * and calls the protected-operation endpoint exactly once per attempt.
+ * every formula compiles to. The platform plugin merges resolved typed inputs
+ * and evaluator scope into the #664 request contract, signs it with the fixed
+ * callback key, and calls the protected-operation endpoint once per attempt.
  */
 export const kestraProtectedCallbackTaskType = "io.kestra.plugin.vortex.ProtectedCallback";
 
@@ -87,6 +87,11 @@ export const kestraProtectedCallbackTaskType = "io.kestra.plugin.vortex.Protecte
  * and never an operational delivery, database or provider secret.
  */
 export const kestraCallbackKeyReference = "{{ secret('VORTEX_WORKFLOW_CALLBACK_KEY') }}";
+
+/** Runtime values issued by Kestra or the trusted Vortex start dispatcher. */
+const kestraRunIdReference = "{{ labels.vortex_run_id }}";
+const kestraAttemptReference = "{{ taskrun.attemptsCount + 1 }}";
+const kestraDuplicateProtectionKeyReference = "{{ taskrun.id }}";
 
 /** The operator key the evaluator callback uses for every condition and formula. */
 export const kestraEvaluatorOperationKey = "workflow.evaluate";
@@ -113,9 +118,10 @@ export type KestraProtectedOperationBinding = Readonly<
 >;
 
 /**
- * The envelope fields Vortex binds and signs per execution attempt. The
- * compiler never supplies them: no run, attempt, time, duplicate key or caller
- * proof exists at compile time.
+ * The envelope fields Vortex binds and signs per execution attempt. The static
+ * binding never supplies them: the compiled task carries trusted runtime
+ * references for run, attempt and duplicate key, while the plugin creates the
+ * timestamps and proof immediately before sending the request.
  */
 export const kestraProtectedOperationRuntimeFields = [
   "runId",
@@ -378,12 +384,9 @@ type CallbackContext = {
 };
 
 type CallbackRuntimeValues = Readonly<{
-  inputs?: JsonValue;
+  resolvedInputs?: JsonValue;
   runtimeScope?: JsonValue;
 }>;
-
-/** The compiler-generated reference to the current loop item, sent with every callback in a loop. */
-const loopItemReference = "{{ taskrun.value }}";
 
 /**
  * The compiler-generated reference to one evaluator callback's result. Inside a loop body Kestra
@@ -413,9 +416,9 @@ const callbackBinding = (
 });
 
 /**
- * One generic protected callback carrying the signed envelope binding and the
- * fixed JSON binding. The #1442 callback plugin will place the typed `inputs`
- * and `runtimeScope` values into the signed request. The static binding stays
+ * One generic protected callback carrying the compiler-owned binding and the
+ * fixed JSON contract. The plugin adds runtime identity, typed inputs and
+ * evaluator scope before signing the request. The static binding stays
  * raw-wrapped so builder text is never evaluated as template text.
  */
 const protectedCallbackTask = (
@@ -430,6 +433,9 @@ const protectedCallbackTask = (
 ): KestraCompiledTask => {
   const binding = callbackBinding(ctx, nodeId, operationKey, inputs);
   ctx.allowedTemplateTokens.add(kestraCallbackKeyReference);
+  ctx.allowedTemplateTokens.add(kestraRunIdReference);
+  ctx.allowedTemplateTokens.add(kestraAttemptReference);
+  ctx.allowedTemplateTokens.add(kestraDuplicateProtectionKeyReference);
   ctx.nodes.push({
     taskId,
     nodeId: binding.nodeId as string,
@@ -437,19 +443,20 @@ const protectedCallbackTask = (
     taskType,
     ...(operation === undefined ? {} : { operation }),
   });
-  if (ctx.insideLoop) ctx.allowedTemplateTokens.add(loopItemReference);
   return {
     id: taskId,
     type: kestraProtectedCallbackTaskType,
     envelope: rawJson(binding as unknown as JsonValue),
     callbackKey: kestraCallbackKeyReference,
-    ...(runtimeValues.inputs === undefined
+    runId: kestraRunIdReference,
+    attempt: kestraAttemptReference,
+    duplicateProtectionKey: kestraDuplicateProtectionKeyReference,
+    ...(runtimeValues.resolvedInputs === undefined
       ? {}
-      : { inputs: runtimeValues.inputs }),
+      : { resolvedInputs: runtimeValues.resolvedInputs }),
     ...(runtimeValues.runtimeScope === undefined
       ? {}
       : { runtimeScope: runtimeValues.runtimeScope }),
-    ...(ctx.insideLoop ? { loopItem: loopItemReference } : {}),
   };
 };
 
@@ -564,8 +571,7 @@ const evaluateValue = (
   const taskId = kestraTaskId("e", seed);
   const runtimeScope = evaluatorRuntimeScope(ctx, value);
   const task = protectedCallbackTask(ctx, taskId, derivedNodeId(ctx, taskId), kestraEvaluatorOperationKey, {
-    expression: jsonOf(value),
-    ...limits,
+    properties: { expression: jsonOf(value), ...limits },
   }, "workflow.evaluate", undefined, { runtimeScope });
   return { tasks: [task], reference: resultReference(ctx, taskId) };
 };
@@ -911,9 +917,11 @@ const compileControlTask = (
     case "wait_for_person": {
       const taskId = kestraTaskId("t", task.id);
       const request = protectedCallbackTask(ctx, taskId, derivedNodeId(ctx, task.id), kestraHumanTaskOperationKey, {
-        form_id: jsonOf(task.formId),
-        assignee: jsonOf(task.assignee),
-        inputs: jsonOf(task.inputs),
+        properties: {
+          form_id: jsonOf(task.formId),
+          assignee: jsonOf(task.assignee),
+          inputs: jsonOf(task.inputs),
+        },
       });
       const onResume = Object.keys(task.inputs)
         .sort()
@@ -954,7 +962,7 @@ const compileRegisteredTask = (
         taskId,
         derivedNodeId(ctx, task.id),
         kestraEvaluatorOperationKey,
-        { expression: jsonOf(expression) },
+        { properties: { expression: jsonOf(expression) } },
         "workflow.evaluate",
         undefined,
         { runtimeScope: evaluatorRuntimeScope(ctx, expression) },
@@ -1008,7 +1016,7 @@ const compileRegisteredTask = (
         operationId: registered.release.operationId,
         releaseVersion: registered.release.releaseVersion,
       },
-      { inputs: evaluatedInputs?.reference ?? {} },
+      { resolvedInputs: evaluatedInputs?.reference ?? {} },
     );
     return ok([...(evaluatedInputs?.tasks ?? []), callback]);
   }
@@ -1326,6 +1334,8 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
     vortex_environment: identity.environment,
     vortex_organization_id: identity.organizationId,
     vortex_application_root_id: identity.applicationRootId,
+    // Execution start replaces this invalid placeholder with the retained Vortex run UUID.
+    vortex_run_id: "set_by_vortex_start_dispatcher",
     vortex_application_version: identity.applicationVersion,
     vortex_installation_revision: String(identity.installationRevision),
     vortex_workflow_id: definition.id,

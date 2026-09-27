@@ -1,0 +1,52 @@
+plugins {
+    id 'java-library'
+    id 'com.gradleup.shadow' version '8.3.6'
+}
+
+group = 'io.kestra.plugin'
+description = 'Vortex protected callback task for Kestra'
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+dependencies {
+    compileOnly enforcedPlatform("io.kestra:platform:${kestraVersion}")
+    annotationProcessor enforcedPlatform("io.kestra:platform:${kestraVersion}")
+
+    compileOnly "io.kestra:core:${kestraVersion}"
+    annotationProcessor "io.kestra:processor:${kestraVersion}"
+
+    compileOnly 'org.projectlombok:lombok:1.18.36'
+    annotationProcessor 'org.projectlombok:lombok:1.18.36'
+
+    implementation 'io.github.erdtman:java-json-canonicalization:1.1'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs.add('-parameters')
+}
+
+jar {
+    manifest {
+        attributes(
+            'X-Kestra-Name': project.name,
+            'X-Kestra-Title': 'Vortex',
+            'X-Kestra-Group': project.group + '.vortex',
+            'X-Kestra-Description': project.description,
+            'X-Kestra-Version': project.version
+        )
+    }
+}
+
+shadowJar {
+    archiveClassifier.set('')
+    mergeServiceFiles()
+}

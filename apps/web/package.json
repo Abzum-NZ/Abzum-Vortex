@@ -2,9 +2,6 @@
   "name": "@vortex/web",
   "version": "0.0.0",
   "private": true,
-  "exports": {
-    ".": "./src/foundation.ts"
-  },
   "scripts": {
     "dev": "next dev -H 127.0.0.1",
     "build": "next build",
@@ -23,20 +20,15 @@
     "@vortex/ui": "workspace:*",
     "@vortex/access": "workspace:*",
     "@vortex/app": "workspace:*",
-    "@vortex/connection": "workspace:*",
     "@vortex/db": "workspace:*",
     "@vortex/definition": "workspace:*",
     "@vortex/event": "workspace:*",
     "@vortex/file": "workspace:*",
     "@vortex/identity": "workspace:*",
-    "@vortex/interface": "workspace:*",
     "@vortex/module": "workspace:*",
     "@vortex/page": "workspace:*",
     "@vortex/query": "workspace:*",
     "@vortex/record": "workspace:*",
-    "@vortex/rule": "workspace:*",
-    "@vortex/search": "workspace:*",
-    "@vortex/theme": "workspace:*",
     "@vortex/workflow": "workspace:*",
     "zod": "4.6.5"
   },
